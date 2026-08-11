@@ -21,6 +21,7 @@ import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { PurchasesModule } from './modules/purchases/purchases.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     UsersModule,
     InventoryModule,
     SalesModule,
+    PurchasesModule,
     AccountingModule,
     AnalyticsModule,
     BillingModule,

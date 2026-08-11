@@ -9,3 +9,4 @@ export * from './billing';
 export * from './super-admin';
 export * from './finance';
 export * from './dashboard';
+export * from './purchases';

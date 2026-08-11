@@ -16,7 +16,9 @@ import {
   Users,
   Settings,
   Crown,
-  Palette,
+  Receipt,
+  RotateCcw,
+  Truck,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -25,11 +27,13 @@ export function Sidebar() {
 
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/sales/purchases', label: 'Xaridlar', icon: ShoppingBag },
+    { href: '/purchases', label: '📦 Xaridlar / Kirim', icon: ShoppingBag },
+    { href: '/purchases/expenses', label: '🚚 Qo‘shimcha xarajatlar', icon: Receipt },
+    { href: '/purchases/returns', label: '↩️ Qaytarishlar', icon: RotateCcw },
+    { href: '/purchases/suppliers', label: '👥 Yetkazib beruvchilar', icon: UserCheck },
     { href: '/sales', label: 'Sotuvlar', icon: ShoppingCart },
     { href: '/inventory/products', label: 'Tovarlar', icon: PackageCheck },
     { href: '/inventory', label: 'Ombor', icon: Package },
-    { href: '/sales/counterparties', label: 'Kontragentlar', icon: UserCheck },
     { href: '/finance', label: 'Moliya', icon: Wallet },
     { href: '/production', label: 'Ishlab chiqarish', icon: Factory },
     { href: '/analytics', label: 'Hisobotlar', icon: BarChart3 },

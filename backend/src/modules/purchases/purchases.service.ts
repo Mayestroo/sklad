@@ -1,0 +1,965 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../../common/prisma';
+import { CreatePurchaseReceiptDto } from './dto/create-purchase-receipt.dto';
+import { FilterPurchaseReceiptsDto } from './dto/filter-purchase-receipts.dto';
+import { CreatePurchaseExpenseDto, ExpenseAllocationMethodDto } from './dto/create-purchase-expense.dto';
+import { CreatePurchaseReturnDto } from './dto/create-purchase-return.dto';
+import {
+  Prisma,
+  PurchaseDocStatus,
+  PurchasePaymentStatus,
+  PurchaseReturnStatus,
+  ReturnDocStatus,
+  ExpenseAllocationMethod,
+  ExpenseType,
+} from '@prisma/client';
+
+@Injectable()
+export class PurchasesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // ─── RECEIPT NUMBER GENERATOR ─────────────────────────────────
+
+  private async generateDocNumber(tenantId: string): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `PUR-${year}-`;
+    const count = await this.prisma.purchaseReceipt.count({
+      where: {
+        tenantId,
+        docNumber: { startsWith: prefix },
+      },
+    });
+    const nextNum = (count + 1).toString().padStart(4, '0');
+    return `${prefix}${nextNum}`;
+  }
+
+  private async generateReturnNumber(tenantId: string): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `PRET-${year}-`;
+    const count = await this.prisma.purchaseReturn.count({
+      where: {
+        tenantId,
+        returnNumber: { startsWith: prefix },
+      },
+    });
+    const nextNum = (count + 1).toString().padStart(4, '0');
+    return `${prefix}${nextNum}`;
+  }
+
+  // ─── RECEIPTS ─────────────────────────────────────────────────
+
+  async findAllReceipts(tenantId: string, filters: FilterPurchaseReceiptsDto) {
+    const {
+      search,
+      counterpartyId,
+      warehouseId,
+      status,
+      currency,
+      dateFrom,
+      dateTo,
+      minAmount,
+      maxAmount,
+    } = filters;
+
+    const where: Prisma.PurchaseReceiptWhereInput = {
+      tenantId,
+    };
+
+    if (search) {
+      where.OR = [
+        { docNumber: { contains: search, mode: 'insensitive' } },
+        { counterparty: { name: { contains: search, mode: 'insensitive' } } },
+        { comment: { contains: search, mode: 'insensitive' } },
+        { gtdNumber: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (counterpartyId) where.counterpartyId = counterpartyId;
+    if (warehouseId) where.warehouseId = warehouseId;
+    if (status) where.status = status as PurchaseDocStatus;
+    if (currency) where.currency = currency;
+
+    if (dateFrom || dateTo) {
+      where.docDate = {};
+      if (dateFrom) where.docDate.gte = new Date(dateFrom);
+      if (dateTo) where.docDate.lte = new Date(dateTo);
+    }
+
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      where.totalAmount = {};
+      if (minAmount !== undefined) where.totalAmount.gte = minAmount;
+      if (maxAmount !== undefined) where.totalAmount.lte = maxAmount;
+    }
+
+    return this.prisma.purchaseReceipt.findMany({
+      where,
+      include: {
+        counterparty: true,
+        warehouse: true,
+        createdBy: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        postedBy: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        expenses: true,
+        returns: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOneReceipt(tenantId: string, id: string) {
+    const receipt = await this.prisma.purchaseReceipt.findFirst({
+      where: { id, tenantId },
+      include: {
+        counterparty: true,
+        warehouse: true,
+        createdBy: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        postedBy: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        expenses: {
+          include: {
+            supplier: true,
+          },
+        },
+        returns: {
+          include: {
+            items: {
+              include: { product: true },
+            },
+          },
+        },
+        batches: true,
+      },
+    });
+
+    if (!receipt) {
+      throw new NotFoundException('Xarid hujjati topilmadi');
+    }
+
+    return receipt;
+  }
+
+  async createReceipt(tenantId: string, userId: string, dto: CreatePurchaseReceiptDto) {
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('Xarid hujjatida kamida bitta tovar bo\'lishi shart');
+    }
+
+    const docNumber = await this.generateDocNumber(tenantId);
+    const exchangeRate = dto.exchangeRate || 1;
+
+    let subtotalAmount = 0;
+    let discountAmount = 0;
+    let vatAmount = 0;
+
+    const preparedItems = dto.items.map((item) => {
+      const qty = item.quantity;
+      const weight = item.weight || 0;
+      const unitPrice = item.unitPrice;
+      const disc = item.discount || 0;
+      const vatRate = item.vatRate || 0;
+
+      const itemSubtotal = qty * unitPrice;
+      const itemAfterDisc = Math.max(0, itemSubtotal - disc);
+      const itemVat = (itemAfterDisc * vatRate) / 100;
+      const itemTotal = itemAfterDisc + itemVat;
+
+      subtotalAmount += itemSubtotal;
+      discountAmount += disc;
+      vatAmount += itemVat;
+
+      const landedCost = qty > 0 ? itemTotal / qty : 0;
+
+      return {
+        productId: item.productId,
+        quantity: qty,
+        weight: weight,
+        unitPrice: unitPrice,
+        discount: disc,
+        vatRate: vatRate,
+        vatAmount: itemVat,
+        totalPrice: itemTotal,
+        allocatedExpenses: 0,
+        landedCost: landedCost,
+      };
+    });
+
+    const totalAmount = subtotalAmount - discountAmount + vatAmount;
+
+    const receipt = await this.prisma.purchaseReceipt.create({
+      data: {
+        tenantId,
+        docNumber,
+        docDate: dto.docDate ? new Date(dto.docDate) : new Date(),
+        counterpartyId: dto.counterpartyId,
+        warehouseId: dto.warehouseId,
+        currency: dto.currency || 'UZS',
+        exchangeRate: exchangeRate,
+        contractNumber: dto.contractNumber || null,
+        contractDate: dto.contractDate ? new Date(dto.contractDate) : null,
+        comment: dto.comment || null,
+        status: PurchaseDocStatus.DRAFT,
+        paymentStatus: PurchasePaymentStatus.UNPAID,
+        returnStatus: PurchaseReturnStatus.NONE,
+        subtotalAmount,
+        discountAmount,
+        vatAmount,
+        additionalExpensesTotal: 0,
+        totalAmount,
+        paidAmount: 0,
+        gtdNumber: dto.gtdNumber || null,
+        gtdDate: dto.gtdDate ? new Date(dto.gtdDate) : null,
+        customsPost: dto.customsPost || null,
+        createdById: userId,
+        items: {
+          create: preparedItems,
+        },
+      },
+      include: {
+        counterparty: true,
+        warehouse: true,
+        items: { include: { product: true } },
+      },
+    });
+
+    if (dto.postImmediately) {
+      return this.postReceipt(tenantId, userId, receipt.id);
+    }
+
+    return receipt;
+  }
+
+  async updateReceipt(tenantId: string, id: string, dto: CreatePurchaseReceiptDto) {
+    const existing = await this.prisma.purchaseReceipt.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Xarid hujjati topilmadi');
+    }
+
+    if (existing.status !== PurchaseDocStatus.DRAFT) {
+      throw new BadRequestException('Faqat qoralama holatidagi xarid hujjatlarini tahrirlash mumkin');
+    }
+
+    const exchangeRate = dto.exchangeRate || existing.exchangeRate;
+
+    let subtotalAmount = 0;
+    let discountAmount = 0;
+    let vatAmount = 0;
+
+    const preparedItems = dto.items.map((item) => {
+      const qty = item.quantity;
+      const weight = item.weight || 0;
+      const unitPrice = item.unitPrice;
+      const disc = item.discount || 0;
+      const vatRate = item.vatRate || 0;
+
+      const itemSubtotal = qty * unitPrice;
+      const itemAfterDisc = Math.max(0, itemSubtotal - disc);
+      const itemVat = (itemAfterDisc * vatRate) / 100;
+      const itemTotal = itemAfterDisc + itemVat;
+
+      subtotalAmount += itemSubtotal;
+      discountAmount += disc;
+      vatAmount += itemVat;
+
+      const landedCost = qty > 0 ? itemTotal / qty : 0;
+
+      return {
+        productId: item.productId,
+        quantity: qty,
+        weight: weight,
+        unitPrice: unitPrice,
+        discount: disc,
+        vatRate: vatRate,
+        vatAmount: itemVat,
+        totalPrice: itemTotal,
+        allocatedExpenses: 0,
+        landedCost: landedCost,
+      };
+    });
+
+    const totalAmount = subtotalAmount - discountAmount + vatAmount + Number(existing.additionalExpensesTotal);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.purchaseReceiptItem.deleteMany({
+        where: { receiptId: id },
+      });
+
+      return tx.purchaseReceipt.update({
+        where: { id },
+        data: {
+          counterpartyId: dto.counterpartyId,
+          warehouseId: dto.warehouseId,
+          docDate: dto.docDate ? new Date(dto.docDate) : existing.docDate,
+          currency: dto.currency || existing.currency,
+          exchangeRate: exchangeRate,
+          contractNumber: dto.contractNumber ?? existing.contractNumber,
+          contractDate: dto.contractDate ? new Date(dto.contractDate) : existing.contractDate,
+          comment: dto.comment ?? existing.comment,
+          gtdNumber: dto.gtdNumber ?? existing.gtdNumber,
+          gtdDate: dto.gtdDate ? new Date(dto.gtdDate) : existing.gtdDate,
+          customsPost: dto.customsPost ?? existing.customsPost,
+          subtotalAmount,
+          discountAmount,
+          vatAmount,
+          totalAmount,
+          items: {
+            create: preparedItems,
+          },
+        },
+        include: {
+          counterparty: true,
+          warehouse: true,
+          items: { include: { product: true } },
+          expenses: true,
+        },
+      });
+    });
+  }
+
+  // ─── POSTING & UNPOSTING ──────────────────────────────────────
+
+  async postReceipt(tenantId: string, userId: string, id: string) {
+    const receipt = await this.prisma.purchaseReceipt.findFirst({
+      where: { id, tenantId },
+      include: {
+        items: { include: { product: true } },
+        counterparty: true,
+        expenses: true,
+      },
+    });
+
+    if (!receipt) {
+      throw new NotFoundException('Xarid hujjati topilmadi');
+    }
+
+    if (receipt.status !== PurchaseDocStatus.DRAFT) {
+      throw new BadRequestException('Ushbu hujjat allaqachon tasdiqlangan yoki bekor qilingan');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Update stock levels & create batches
+      for (const item of receipt.items) {
+        const stockLevel = await tx.stockLevel.findUnique({
+          where: {
+            tenantId_warehouseId_productId: {
+              tenantId,
+              warehouseId: receipt.warehouseId,
+              productId: item.productId,
+            },
+          },
+        });
+
+        if (stockLevel) {
+          await tx.stockLevel.update({
+            where: { id: stockLevel.id },
+            data: {
+              quantity: { increment: item.quantity },
+            },
+          });
+        } else {
+          await tx.stockLevel.create({
+            data: {
+              tenantId,
+              warehouseId: receipt.warehouseId,
+              productId: item.productId,
+              quantity: item.quantity,
+              reservedQuantity: 0,
+            },
+          });
+        }
+
+        // Create product batch record
+        await tx.productBatch.create({
+          data: {
+            tenantId,
+            productId: item.productId,
+            warehouseId: receipt.warehouseId,
+            receiptId: receipt.id,
+            batchNumber: `${receipt.docNumber}-${item.id.substring(0, 6)}`,
+            initialQty: item.quantity,
+            remainingQty: item.quantity,
+            purchasePrice: item.unitPrice,
+            landedCost: item.landedCost,
+          },
+        });
+      }
+
+      // 2. Increase supplier debt
+      await tx.counterparty.update({
+        where: { id: receipt.counterpartyId },
+        data: {
+          debtBalance: { increment: receipt.totalAmount },
+        },
+      });
+
+      // 3. Accounting journal entries according to BHMS / NAS Standard
+      // Debit 2910 (Inventory / Goods): Net goods cost + allocated expenses
+      // Debit 4410 (Input VAT / Kiruvchi QQS): VAT amount
+      // Credit 6010 (Accounts Payable / Yetkazib beruvchiga qarz): Total Amount
+      const entryCount = await tx.journalEntry.count({ where: { tenantId } });
+      const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
+
+      const inventoryAcc = await tx.account.findFirst({
+        where: { tenantId, code: '2910' },
+      });
+      const vatAcc = await tx.account.findFirst({
+        where: { tenantId, code: '4410' },
+      });
+      const supplierAcc = await tx.account.findFirst({
+        where: { tenantId, code: '6010' },
+      });
+
+      if (inventoryAcc && supplierAcc) {
+        const netGoodsCost = Number(receipt.subtotalAmount) - Number(receipt.discountAmount) + Number(receipt.additionalExpensesTotal);
+        const vatSum = Number(receipt.vatAmount);
+
+        const journalLines: any[] = [
+          {
+            debitAccountId: inventoryAcc.id,
+            creditAccountId: supplierAcc.id,
+            amount: netGoodsCost,
+            description: `Kiruvchi tovarlar va taqsimlangan xarajatlar qiymati (№ ${receipt.docNumber})`,
+          },
+        ];
+
+        if (vatSum > 0 && vatAcc) {
+          journalLines.push({
+            debitAccountId: vatAcc.id,
+            creditAccountId: supplierAcc.id,
+            amount: vatSum,
+            description: `Hisobga olingan kiruvchi QQS (№ ${receipt.docNumber})`,
+          });
+        }
+
+        await tx.journalEntry.create({
+          data: {
+            tenantId,
+            entryNumber,
+            entryDate: receipt.docDate,
+            description: `Tovar qabul qilish № ${receipt.docNumber} (${receipt.counterparty.name})`,
+            sourceDocType: 'PurchaseReceipt',
+            sourceDocId: receipt.id,
+            lines: {
+              create: journalLines,
+            },
+          },
+        });
+      }
+
+      // 4. Record Audit Log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'PurchaseReceipt',
+          entityId: receipt.id,
+          action: 'UPDATE',
+          oldValue: { status: 'DRAFT' },
+          newValue: { status: 'POSTED', postedAt: new Date() },
+        },
+      });
+
+      // 5. Update purchase receipt status
+      return tx.purchaseReceipt.update({
+        where: { id: receipt.id },
+        data: {
+          status: PurchaseDocStatus.POSTED,
+          postedById: userId,
+          postedAt: new Date(),
+        },
+        include: {
+          counterparty: true,
+          warehouse: true,
+          items: { include: { product: true } },
+          expenses: true,
+          batches: true,
+        },
+      });
+    });
+  }
+
+  async unpostReceipt(tenantId: string, userId: string, id: string) {
+    const receipt = await this.prisma.purchaseReceipt.findFirst({
+      where: { id, tenantId },
+      include: {
+        items: true,
+        counterparty: true,
+      },
+    });
+
+    if (!receipt) {
+      throw new NotFoundException('Xarid hujjati topilmadi');
+    }
+
+    if (receipt.status !== PurchaseDocStatus.POSTED) {
+      throw new BadRequestException('Faqat tasdiqlangan hujjatlarni bekor qilish mumkin');
+    }
+
+    // Safety validation for linked payments & returns
+    if (Number(receipt.paidAmount) > 0 || receipt.paymentStatus !== PurchasePaymentStatus.UNPAID) {
+      throw new BadRequestException(`Ushbu xarid hujjati bo'yicha to'lovlar kiritilgan (To'langan: ${receipt.paidAmount} ${receipt.currency}). Hujjatni bekor qilishdan avval Moliya modulida unga bog'liq to'lovlarni o'chiring.`);
+    }
+
+    if (receipt.returnStatus !== PurchaseReturnStatus.NONE) {
+      throw new BadRequestException("Ushbu xarid hujjati bo'yicha to'liq yoki qisman qaytarish rasmiylashtirilgan. Avval qaytaruv hujjatlarini o'chiring.");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Decrement stock levels & delete batches
+      for (const item of receipt.items) {
+        const stockLevel = await tx.stockLevel.findUnique({
+          where: {
+            tenantId_warehouseId_productId: {
+              tenantId,
+              warehouseId: receipt.warehouseId,
+              productId: item.productId,
+            },
+          },
+        });
+
+        if (stockLevel) {
+          const newQty = Math.max(0, Number(stockLevel.quantity) - Number(item.quantity));
+          await tx.stockLevel.update({
+            where: { id: stockLevel.id },
+            data: { quantity: newQty },
+          });
+        }
+      }
+
+      await tx.productBatch.deleteMany({
+        where: { receiptId: id },
+      });
+
+      // 2. Reduce supplier debt
+      await tx.counterparty.update({
+        where: { id: receipt.counterpartyId },
+        data: {
+          debtBalance: { decrement: receipt.totalAmount },
+        },
+      });
+
+      // 3. Remove journal entries
+      await tx.journalEntry.deleteMany({
+        where: { tenantId, sourceDocType: 'PurchaseReceipt', sourceDocId: id },
+      });
+
+      // 4. Audit Log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'PurchaseReceipt',
+          entityId: receipt.id,
+          action: 'UPDATE',
+          oldValue: { status: receipt.status },
+          newValue: { status: 'DRAFT' },
+        },
+      });
+
+      // 5. Update status
+      return tx.purchaseReceipt.update({
+        where: { id },
+        data: {
+          status: PurchaseDocStatus.DRAFT,
+          postedById: null,
+          postedAt: null,
+        },
+        include: {
+          counterparty: true,
+          warehouse: true,
+          items: { include: { product: true } },
+          expenses: true,
+        },
+      });
+    });
+  }
+
+  async deleteReceipt(tenantId: string, id: string) {
+    const receipt = await this.prisma.purchaseReceipt.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!receipt) {
+      throw new NotFoundException('Xarid hujjati topilmadi');
+    }
+
+    if (receipt.status !== PurchaseDocStatus.DRAFT) {
+      throw new BadRequestException('Faqat qoralama holatidagi xarid hujjatlarini o\'chirish mumkin');
+    }
+
+    await this.prisma.purchaseReceipt.delete({
+      where: { id },
+    });
+
+    return { success: true, message: 'Xarid hujjati muvaffaqiyatli o\'chirildi' };
+  }
+
+  // ─── ADDITIONAL EXPENSES & LANDED COST (BY AMOUNT / BY QUANTITY / BY WEIGHT) ─
+
+  async addExpense(tenantId: string, dto: CreatePurchaseExpenseDto) {
+    const receipt = await this.prisma.purchaseReceipt.findFirst({
+      where: { id: dto.receiptId, tenantId },
+      include: {
+        items: {
+          include: { product: true },
+        },
+        expenses: true,
+      },
+    });
+
+    if (!receipt) {
+      throw new NotFoundException('Xarid hujjati topilmadi');
+    }
+
+    const allocationMethod = dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
+
+    return this.prisma.$transaction(async (tx) => {
+      // Create expense
+      const expense = await tx.purchaseExpense.create({
+        data: {
+          tenantId,
+          receiptId: dto.receiptId,
+          expenseType: dto.expenseType as ExpenseType,
+          supplierId: dto.supplierId || null,
+          amount: dto.amount,
+          currency: dto.currency || 'UZS',
+          allocationMethod: allocationMethod as ExpenseAllocationMethod,
+          comment: dto.comment || null,
+        },
+      });
+
+      // Recalculate total additional expenses for this receipt
+      const allExpenses = await tx.purchaseExpense.findMany({
+        where: { receiptId: dto.receiptId },
+      });
+
+      const totalExpensesAmount = allExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      const subtotalAmount = Number(receipt.subtotalAmount);
+      const totalQuantity = receipt.items.reduce((sum, i) => sum + Number(i.quantity), 0);
+
+      // Total weight for BY_WEIGHT allocation
+      const totalWeight = receipt.items.reduce((sum, i) => {
+        const unitWeight = Number(i.weight) > 0 ? Number(i.weight) : (Number(i.product?.weight) || 1);
+        return sum + Number(i.quantity) * unitWeight;
+      }, 0);
+
+      // Allocate expenses among items
+      for (const item of receipt.items) {
+        let allocatedForItem = 0;
+        const itemQty = Number(item.quantity);
+        const itemTotal = Number(item.totalPrice);
+        const unitWeight = Number(item.weight) > 0 ? Number(item.weight) : (Number(item.product?.weight) || 1);
+        const itemWeightTotal = itemQty * unitWeight;
+
+        if (allocationMethod === ExpenseAllocationMethod.BY_AMOUNT && subtotalAmount > 0) {
+          allocatedForItem = (itemTotal / subtotalAmount) * totalExpensesAmount;
+        } else if (allocationMethod === ExpenseAllocationMethod.BY_QUANTITY && totalQuantity > 0) {
+          allocatedForItem = (itemQty / totalQuantity) * totalExpensesAmount;
+        } else if (allocationMethod === ExpenseAllocationMethod.BY_WEIGHT && totalWeight > 0) {
+          allocatedForItem = (itemWeightTotal / totalWeight) * totalExpensesAmount;
+        } else {
+          allocatedForItem = totalExpensesAmount / receipt.items.length;
+        }
+
+        const newLandedCost = itemQty > 0 ? (itemTotal + allocatedForItem) / itemQty : 0;
+
+        await tx.purchaseReceiptItem.update({
+          where: { id: item.id },
+          data: {
+            allocatedExpenses: allocatedForItem,
+            landedCost: newLandedCost,
+          },
+        });
+
+        // Update product batch landed cost if created
+        if (receipt.status === PurchaseDocStatus.POSTED) {
+          await tx.productBatch.updateMany({
+            where: { receiptId: receipt.id, productId: item.productId },
+            data: { landedCost: newLandedCost },
+          });
+        }
+      }
+
+      // Update total amount on receipt
+      const newTotalAmount = Number(receipt.subtotalAmount) - Number(receipt.discountAmount) + Number(receipt.vatAmount) + totalExpensesAmount;
+
+      const updatedReceipt = await tx.purchaseReceipt.update({
+        where: { id: receipt.id },
+        data: {
+          additionalExpensesTotal: totalExpensesAmount,
+          totalAmount: newTotalAmount,
+        },
+        include: {
+          items: { include: { product: true } },
+          expenses: { include: { supplier: true } },
+        },
+      });
+
+      return { expense, receipt: updatedReceipt };
+    });
+  }
+
+  async findAllExpenses(tenantId: string) {
+    return this.prisma.purchaseExpense.findMany({
+      where: { tenantId },
+      include: {
+        receipt: {
+          include: { counterparty: true },
+        },
+        supplier: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // ─── RETURNS TO SUPPLIER ──────────────────────────────────────
+
+  async createReturn(tenantId: string, userId: string, dto: CreatePurchaseReturnDto) {
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('Qaytarish hujjatida kamida bitta tovar bo\'lishi shart');
+    }
+
+    const returnNumber = await this.generateReturnNumber(tenantId);
+    let totalAmount = 0;
+
+    const preparedItems = dto.items.map((i) => {
+      const lineTotal = i.quantity * i.unitPrice;
+      totalAmount += lineTotal;
+      return {
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        totalPrice: lineTotal,
+      };
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const pReturn = await tx.purchaseReturn.create({
+        data: {
+          tenantId,
+          returnNumber,
+          returnDate: dto.returnDate ? new Date(dto.returnDate) : new Date(),
+          receiptId: dto.receiptId || null,
+          counterpartyId: dto.counterpartyId,
+          warehouseId: dto.warehouseId,
+          currency: dto.currency || 'UZS',
+          reason: dto.reason || null,
+          status: ReturnDocStatus.POSTED,
+          totalAmount,
+          createdById: userId,
+          items: {
+            create: preparedItems,
+          },
+        },
+        include: {
+          counterparty: true,
+          warehouse: true,
+          receipt: true,
+          items: { include: { product: true } },
+        },
+      });
+
+      // 1. Decrement warehouse stock
+      for (const item of dto.items) {
+        const stockLevel = await tx.stockLevel.findUnique({
+          where: {
+            tenantId_warehouseId_productId: {
+              tenantId,
+              warehouseId: dto.warehouseId,
+              productId: item.productId,
+            },
+          },
+        });
+
+        if (stockLevel) {
+          const newQty = Math.max(0, Number(stockLevel.quantity) - item.quantity);
+          await tx.stockLevel.update({
+            where: { id: stockLevel.id },
+            data: { quantity: newQty },
+          });
+        }
+      }
+
+      // 2. Reduce supplier debt
+      await tx.counterparty.update({
+        where: { id: dto.counterpartyId },
+        data: {
+          debtBalance: { decrement: totalAmount },
+        },
+      });
+
+      // 3. Update main receipt returnStatus if linked
+      if (dto.receiptId) {
+        const receipt = await tx.purchaseReceipt.findUnique({
+          where: { id: dto.receiptId },
+          include: { returns: true },
+        });
+
+        if (receipt) {
+          const totalReturned = receipt.returns.reduce((sum, r) => sum + Number(r.totalAmount), 0) + totalAmount;
+          const returnStatus = totalReturned >= Number(receipt.totalAmount)
+            ? PurchaseReturnStatus.FULLY_RETURNED
+            : PurchaseReturnStatus.PARTIALLY_RETURNED;
+
+          await tx.purchaseReceipt.update({
+            where: { id: dto.receiptId },
+            data: { returnStatus },
+          });
+        }
+      }
+
+      // 4. Audit Log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: pReturn.id,
+          action: 'CREATE',
+          newValue: { returnNumber, totalAmount },
+        },
+      });
+
+      return pReturn;
+    });
+  }
+
+  async findAllReturns(tenantId: string) {
+    return this.prisma.purchaseReturn.findMany({
+      where: { tenantId },
+      include: {
+        counterparty: true,
+        warehouse: true,
+        receipt: true,
+        createdBy: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+        items: { include: { product: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // ─── SUPPLIER PROFILE & STATS ─────────────────────────────────
+
+  async getSupplierProfile(tenantId: string, supplierId: string) {
+    const supplier = await this.prisma.counterparty.findFirst({
+      where: { id: supplierId, tenantId },
+    });
+
+    if (!supplier) {
+      throw new NotFoundException('Yetkazib beruvchi topilmadi');
+    }
+
+    const receipts = await this.prisma.purchaseReceipt.findMany({
+      where: { tenantId, counterpartyId: supplierId },
+      include: { warehouse: true, items: { include: { product: true } } },
+      orderBy: { docDate: 'desc' },
+    });
+
+    const returns = await this.prisma.purchaseReturn.findMany({
+      where: { tenantId, counterpartyId: supplierId },
+      include: { warehouse: true, items: { include: { product: true } } },
+      orderBy: { returnDate: 'desc' },
+    });
+
+    const payments = await this.prisma.financeTransaction.findMany({
+      where: {
+        tenantId,
+        counterpartyId: supplierId,
+        direction: 'EXPENSE',
+      },
+      include: { account: true, transactionType: true },
+      orderBy: { transactionDate: 'desc' },
+    });
+
+    const totalPurchased = receipts.reduce((sum, r) => sum + Number(r.totalAmount), 0);
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const totalReturned = returns.reduce((sum, ret) => sum + Number(ret.totalAmount), 0);
+
+    return {
+      supplier,
+      metrics: {
+        totalPurchased,
+        totalPaid,
+        totalReturned,
+        debtBalance: Number(supplier.debtBalance),
+      },
+      receipts,
+      returns,
+      payments,
+    };
+  }
+
+  async getSummaryStats(tenantId: string) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const monthlyReceipts = await this.prisma.purchaseReceipt.aggregate({
+      where: {
+        tenantId,
+        docDate: { gte: startOfMonth },
+        status: PurchaseDocStatus.POSTED,
+      },
+      _sum: { totalAmount: true },
+      _count: { id: true },
+    });
+
+    const suppliersWithDebt = await this.prisma.counterparty.aggregate({
+      where: {
+        tenantId,
+        type: { in: ['SUPPLIER', 'BOTH'] },
+        debtBalance: { gt: 0 },
+      },
+      _sum: { debtBalance: true },
+      _count: { id: true },
+    });
+
+    const monthlyReturns = await this.prisma.purchaseReturn.aggregate({
+      where: {
+        tenantId,
+        returnDate: { gte: startOfMonth },
+      },
+      _sum: { totalAmount: true },
+      _count: { id: true },
+    });
+
+    const activeSuppliers = await this.prisma.counterparty.count({
+      where: {
+        tenantId,
+        type: { in: ['SUPPLIER', 'BOTH'] },
+      },
+    });
+
+    return {
+      monthlyPurchasesTotal: Number(monthlyReceipts._sum.totalAmount || 0),
+      monthlyPurchasesCount: monthlyReceipts._count.id,
+      totalSupplierDebt: Number(suppliersWithDebt._sum.debtBalance || 0),
+      suppliersWithDebtCount: suppliersWithDebt._count.id,
+      monthlyReturnsTotal: Number(monthlyReturns._sum.totalAmount || 0),
+      monthlyReturnsCount: monthlyReturns._count.id,
+      activeSuppliersCount: activeSuppliers,
+    };
+  }
+}
