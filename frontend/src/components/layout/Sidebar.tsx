@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 import {
@@ -19,19 +20,47 @@ import {
   Receipt,
   RotateCcw,
   Truck,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 
 export function Sidebar() {
   const t = useTranslations('nav');
   const pathname = usePathname();
 
-  const navItems = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/purchases', label: '📦 Xaridlar / Kirim', icon: ShoppingBag },
-    { href: '/purchases/expenses', label: '🚚 Qo‘shimcha xarajatlar', icon: Receipt },
-    { href: '/purchases/returns', label: '↩️ Qaytarishlar', icon: RotateCcw },
-    { href: '/purchases/suppliers', label: '👥 Yetkazib beruvchilar', icon: UserCheck },
-    { href: '/sales', label: 'Sotuvlar', icon: ShoppingCart },
+  const isPurchasesActive = pathname.startsWith('/purchases');
+  const [isPurchasesOpen, setIsPurchasesOpen] = useState(isPurchasesActive);
+
+  const isSalesActive = pathname.startsWith('/sales');
+  const [isSalesOpen, setIsSalesOpen] = useState(isSalesActive);
+
+  useEffect(() => {
+    if (isPurchasesActive) {
+      setIsPurchasesOpen(true);
+    }
+  }, [isPurchasesActive]);
+
+  useEffect(() => {
+    if (isSalesActive) {
+      setIsSalesOpen(true);
+    }
+  }, [isSalesActive]);
+
+  const purchasesSubItems = [
+    { href: '/purchases', label: 'Xaridlar / Kirim', icon: ShoppingBag },
+    { href: '/purchases/expenses', label: 'Qo‘shimcha xarajatlar', icon: Receipt },
+    { href: '/purchases/returns', label: 'Qaytarishlar', icon: RotateCcw },
+    { href: '/purchases/suppliers', label: 'Yetkazib beruvchilar', icon: UserCheck },
+  ];
+
+  const salesSubItems = [
+    { href: '/sales', label: 'Sotuvlar / Tovar sotish', icon: ShoppingCart },
+    { href: '/sales/returns', label: 'Mijozdan qaytarish', icon: RotateCcw },
+    { href: '/sales/customers', label: 'Mijozlar', icon: UserCheck },
+    { href: '/sales/prices', label: 'Narxlar va chegirmalar', icon: Receipt },
+  ];
+
+  const bottomNavItems = [
     { href: '/inventory/products', label: 'Tovarlar', icon: PackageCheck },
     { href: '/inventory', label: 'Ombor', icon: Package },
     { href: '/finance', label: 'Moliya', icon: Wallet },
@@ -97,7 +126,189 @@ export function Sidebar() {
 
       {/* Navigation List */}
       <nav style={{ flex: 1, padding: 'var(--space-4) var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', overflowY: 'auto' }}>
-        {navItems.map((item) => {
+        {/* Dashboard */}
+        <Link
+          href="/"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 'var(--text-sm)',
+            fontWeight: pathname === '/' ? 'var(--font-semibold)' : 'var(--font-medium)',
+            color: pathname === '/' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+            backgroundColor: pathname === '/' ? 'var(--color-primary-50)' : 'transparent',
+            textDecoration: 'none',
+            transition: 'all var(--transition-fast)',
+          }}
+        >
+          <LayoutDashboard size={18} style={{ color: pathname === '/' ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
+          <span>Dashboard</span>
+        </Link>
+
+        {/* Purchases Dropdown Group */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setIsPurchasesOpen((prev) => !prev)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: 'var(--text-sm)',
+              fontWeight: isPurchasesActive ? 'var(--font-semibold)' : 'var(--font-medium)',
+              color: isPurchasesActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+              backgroundColor: isPurchasesActive && !isPurchasesOpen ? 'var(--color-primary-50)' : 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              textAlign: 'left',
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <ShoppingBag size={18} style={{ color: isPurchasesActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
+              <span>Xaridlar</span>
+            </div>
+            {isPurchasesOpen ? (
+              <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+            ) : (
+              <ChevronRight size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+            )}
+          </button>
+
+          {/* Purchases Sub-items */}
+          {isPurchasesOpen && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                marginTop: '2px',
+                marginLeft: '12px',
+                paddingLeft: '12px',
+                borderLeft: '2px solid var(--color-border-light)',
+              }}
+            >
+              {purchasesSubItems.map((sub) => {
+                const SubIcon = sub.icon;
+                const isSubActive =
+                  sub.href === '/purchases'
+                    ? pathname === '/purchases'
+                    : pathname === sub.href || pathname.startsWith(`${sub.href}/`);
+
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
+                      color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                      backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
+                      textDecoration: 'none',
+                      transition: 'all var(--transition-fast)',
+                    }}
+                  >
+                    <SubIcon size={15} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
+                    <span>{sub.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Sales Dropdown Group */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setIsSalesOpen((prev) => !prev)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: 'var(--text-sm)',
+              fontWeight: isSalesActive ? 'var(--font-semibold)' : 'var(--font-medium)',
+              color: isSalesActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+              backgroundColor: isSalesActive && !isSalesOpen ? 'var(--color-primary-50)' : 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              textAlign: 'left',
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <ShoppingCart size={18} style={{ color: isSalesActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
+              <span>Sotuvlar</span>
+            </div>
+            {isSalesOpen ? (
+              <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+            ) : (
+              <ChevronRight size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+            )}
+          </button>
+
+          {/* Sales Sub-items */}
+          {isSalesOpen && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                marginTop: '2px',
+                marginLeft: '12px',
+                paddingLeft: '12px',
+                borderLeft: '2px solid var(--color-border-light)',
+              }}
+            >
+              {salesSubItems.map((sub) => {
+                const SubIcon = sub.icon;
+                const isSubActive =
+                  sub.href === '/sales'
+                    ? pathname === '/sales'
+                    : pathname === sub.href || pathname.startsWith(`${sub.href}/`);
+
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
+                      color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                      backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
+                      textDecoration: 'none',
+                      transition: 'all var(--transition-fast)',
+                    }}
+                  >
+                    <SubIcon size={15} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
+                    <span>{sub.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom items */}
+        {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
 

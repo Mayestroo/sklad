@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Truck, Plus, FileText, Building2 } from 'lucide-react';
-import { PurchaseOrder } from '@shared/types';
+import { PurchaseReceipt as PurchaseOrder } from '@shared/types';
 
 export default function PurchasesPage() {
   const tCommon = useTranslations('common');
@@ -67,9 +67,9 @@ export default function PurchasesPage() {
               <tbody>
                 {purchases.map((p) => (
                   <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)', fontFamily: 'var(--font-mono)' }}>{p.orderNumber}</td>
-                    <td style={{ padding: '12px' }}>{p.counterparty?.name || '—'}</td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{formatDate(p.orderDate, locale)}</td>
+                    <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)', fontFamily: 'var(--font-mono)' }}>{(p as any).orderNumber || p.docNumber}</td>
+                    <td style={{ padding: '12px' }}>{(p as any).counterparty?.name || '—'}</td>
+                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{formatDate((p as any).orderDate || p.docDate, locale)}</td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                       {formatCurrency(Number(p.totalAmount), locale)}
                     </td>

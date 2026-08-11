@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import { Deal, Counterparty } from '@shared/types';
+import { Counterparty } from '@shared/types';
+type Deal = any;
 
 const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] = [
   { slug: 'LEAD', nameUz: 'Lidlar (Yangi)', nameRu: 'Лиды (Новые)', color: 'var(--color-primary-600)' },

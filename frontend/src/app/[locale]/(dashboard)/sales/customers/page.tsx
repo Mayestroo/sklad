@@ -1,341 +1,254 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Select';
-import {
-  Users,
-  Plus,
-  Building2,
-  Phone,
-  Mail,
-  FileText,
-  CreditCard,
-  X,
-  AlertCircle,
-} from 'lucide-react';
-import { Counterparty } from '@shared/types';
+import { Users, Search, DollarSign, Eye } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+
+interface Customer {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  type: string;
+  debtBalance: number;
+}
+
+interface CustomerProfile {
+  customer: Customer;
+  metrics: {
+    totalSales: number;
+    totalPaid: number;
+    totalReturned: number;
+    debtBalance: number;
+    totalCogs: number;
+    grossProfit: number;
+  };
+  invoices: any[];
+  returns: any[];
+  payments: any[];
+}
 
 export default function CustomersPage() {
-  const t = useTranslations('sales');
-  const tCommon = useTranslations('common');
-  const locale = useLocale() as 'uz' | 'ru';
   const { token, company } = useAuth();
 
-  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER' | 'BOTH'>('CUSTOMER');
-  const [name, setName] = useState('');
-  const [inn, setInn] = useState('');
-  const [mfo, setMfo] = useState('');
-  const [bankAccount, setBankAccount] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [address, setAddress] = useState('');
-
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-
-  // Payment Modal State
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedCounterparty, setSelectedCounterparty] = useState<Counterparty | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME'>('BANK_TRANSFER');
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentComment, setPaymentComment] = useState('');
-  const [paymentLoading, setPaymentLoading] = useState(false);
-
-  const fetchData = async () => {
-    if (!token || !company) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await apiFetch<Counterparty[]>('/sales/counterparties', {
-        token,
-        tenantId: company.id,
-        locale,
-      });
-      setCounterparties(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [token, company]);
-
-  const handleCreateCounterparty = async (e: FormEvent) => {
-    e.preventDefault();
+  const fetchCustomers = () => {
     if (!token || !company) return;
-    setCreateError(null);
-    setCreateLoading(true);
-
-    try {
-      await apiFetch<any>('/sales/counterparties', {
-        method: 'POST',
-        token,
-        tenantId: company.id,
-        locale,
-        body: JSON.stringify({
-          type,
-          name,
-          inn: inn || undefined,
-          mfo: mfo || undefined,
-          bankAccount: bankAccount || undefined,
-          bankName: bankName || undefined,
-          phone: phone || undefined,
-          email: email || undefined,
-          address: address || undefined,
-        }),
-      });
-
-      setShowModal(false);
-      setName('');
-      setInn('');
-      setMfo('');
-      setBankAccount('');
-      fetchData();
-    } catch (err: any) {
-      setCreateError(err.message || 'Failed to create counterparty');
-    } finally {
-      setCreateLoading(false);
-    }
+    setLoading(true);
+    apiFetch<Customer[]>('/counterparties?type=CUSTOMER', {
+      token: token || undefined,
+      tenantId: company.id,
+    })
+      .then(setCustomers)
+      .catch(console.error)
+      .finally(() => setLoading(false));
   };
 
-  const handleRegisterPayment = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!token || !company || !selectedCounterparty || paymentAmount <= 0) return;
-    setPaymentLoading(true);
+  useEffect(() => { fetchCustomers(); }, [token, company]);
 
+  const handleViewProfile = async (customer: Customer) => {
+    if (!token || !company) return;
+    setSelectedCustomer(customer);
+    setProfileLoading(true);
     try {
-      await apiFetch<any>('/sales/payments', {
-        method: 'POST',
-        token,
+      const data = await apiFetch<CustomerProfile>(`/sales/customers/${customer.id}/profile`, {
+        token: token || undefined,
         tenantId: company.id,
-        locale,
-        body: JSON.stringify({
-          counterpartyId: selectedCounterparty.id,
-          method: paymentMethod,
-          amount: paymentAmount,
-          comment: paymentComment || undefined,
-        }),
       });
-
-      setShowPaymentModal(false);
-      setSelectedCounterparty(null);
-      setPaymentAmount(0);
-      fetchData();
+      setProfile(data);
     } catch (err) {
       console.error(err);
+      setProfile(null);
     } finally {
-      setPaymentLoading(false);
+      setProfileLoading(false);
     }
   };
+
+  const filtered = customers.filter((c) =>
+    !search ||
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.phone?.includes(search) ||
+    c.email?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalDebt = customers.reduce((s, c) => s + Number(c.debtBalance || 0), 0);
+  const customersWithDebt = customers.filter((c) => Number(c.debtBalance) > 0).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Kontragentlar Ma&apos;lumotnomasi
-          </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Mijozlar, Yetkazib beruvchilar, STIR/INN (9 xonali) va MFO bank rekvizitlari
-          </p>
-        </div>
-
-        <Button variant="primary" onClick={() => setShowModal(true)}>
-          <Plus size={16} />
-          Yangi Kontragent
-        </Button>
+      {/* Header */}
+      <div>
+        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          Mijozlar
+        </h1>
+        <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
+          Mijozlar ro'yxati, qarz holati va sotuv tarixi
+        </p>
       </div>
 
-      {/* Directory Table */}
+      {/* Summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-4)' }}>
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Users size={18} color="var(--color-primary-600)" />
+            </div>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Jami mijozlar</span>
+          </div>
+          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700 }}>{customers.length}</div>
+        </Card>
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <DollarSign size={18} color="#f59e0b" />
+            </div>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Umumiy qarz</span>
+          </div>
+          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(totalDebt, 'UZS')}</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{customersWithDebt} ta mijozda</div>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <Card style={{ padding: 'var(--space-4)' }}>
+        <div style={{ position: 'relative', maxWidth: 400 }}>
+          <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
+          <input
+            id="customer-search-input"
+            placeholder="Ism, telefon yoki email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px 8px 34px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', boxSizing: 'border-box' }}
+          />
+        </div>
+      </Card>
+
+      {/* Table */}
       <Card>
-        {loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
-        ) : counterparties.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <Users size={40} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>Kontragentlar mavjud emas</div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>NOMI</th>
-                  <th style={{ padding: '12px' }}>TURI</th>
-                  <th style={{ padding: '12px' }}>STIR (INN)</th>
-                  <th style={{ padding: '12px' }}>MFO / BANK</th>
-                  <th style={{ padding: '12px' }}>TELEFON / E-MAIL</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>DEBITORLIK QARZI</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>AMALLAR</th>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                {['Mijoz nomi', 'Telefon', 'Email', 'Qarz balansi', 'Tur', 'Amallar'].map((h) => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>Yuklanmoqda...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>
+                    <Users size={36} style={{ margin: '0 auto 10px', opacity: 0.3, display: 'block' }} />
+                    Mijozlar topilmadi
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {counterparties.map((c) => {
-                  const debt = Number(c.debtBalance);
+              ) : (
+                filtered.map((c) => {
+                  const debt = Number(c.debtBalance || 0);
                   return (
                     <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)' }}>{c.name}</td>
-                      <td style={{ padding: '12px' }}>
-                        {c.type === 'CUSTOMER' ? <Badge variant="info">Mijoz</Badge> : c.type === 'SUPPLIER' ? <Badge variant="warning">Yetkazib beruvchi</Badge> : <Badge variant="neutral">Ikkalasi</Badge>}
+                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{c.name}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.phone || '—'}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: debt > 0 ? 600 : 400, color: debt > 0 ? '#f59e0b' : 'var(--color-text-secondary)' }}>
+                        {debt > 0 ? formatCurrency(debt, 'UZS') : '—'}
                       </td>
-                      <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{c.inn || '—'}</td>
-                      <td style={{ padding: '12px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                        {c.mfo ? `MFO: ${c.mfo}` : ''} {c.bankName ? `(${c.bankName})` : ''}
+                      <td style={{ padding: '12px 14px' }}>
+                        <Badge variant={c.type === 'BOTH' ? 'warning' : 'neutral'}>
+                          {c.type === 'CUSTOMER' ? 'Mijoz' : c.type === 'BOTH' ? 'Mijoz & Yetk.' : c.type}
+                        </Badge>
                       </td>
-                      <td style={{ padding: '12px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                        {c.phone || c.email || '—'}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: debt > 0 ? 'var(--color-error-600)' : 'var(--color-success-600)' }} className="tabular-nums">
-                        {formatCurrency(debt, locale)}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>
-                        <Button variant="outline" size="sm" onClick={() => { setSelectedCounterparty(c); setPaymentAmount(debt > 0 ? debt : 0); setShowPaymentModal(true); }}>
-                          <CreditCard size={14} /> To&apos;lov Qabul Qilish
-                        </Button>
+                      <td style={{ padding: '12px 14px' }}>
+                        <button
+                          id={`view-customer-${c.id}`}
+                          onClick={() => handleViewProfile(c)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
+                        >
+                          <Eye size={13} /> Profil
+                        </button>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
-      {/* New Counterparty Modal */}
-      {showModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 'var(--space-4)' }}>
-          <div style={{ width: '100%', maxWidth: '580px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>Yangi Kontragent (Mijoz / Yetkazib beruvchi)</h3>
-              <button type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
+      {/* Customer Profile Modal */}
+      {selectedCustomer && (
+        <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`Mijoz: ${selectedCustomer.name}`} size="xl">
+          {profileLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>Yuklanmoqda...</div>
+          ) : profile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
+                {[
+                  { label: 'Jami sotuv', value: formatCurrency(profile.metrics.totalSales, 'UZS'), color: undefined },
+                  { label: 'To\'langan', value: formatCurrency(profile.metrics.totalPaid, 'UZS'), color: '#10b981' },
+                  { label: 'Qarz', value: formatCurrency(profile.metrics.debtBalance, 'UZS'), color: '#f59e0b' },
+                  { label: 'Qaytarishlar', value: formatCurrency(profile.metrics.totalReturned, 'UZS'), color: '#ef4444' },
+                  { label: 'Yalpi foyda', value: formatCurrency(profile.metrics.grossProfit, 'UZS'), color: profile.metrics.grossProfit >= 0 ? '#10b981' : '#ef4444' },
+                ].map((m) => (
+                  <div key={m.label} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</div>
+                    <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {profile.invoices.length > 0 && (
+                <div>
+                  <h3 style={{ fontWeight: 600, marginBottom: 10 }}>So'nggi sotuvlar</h3>
+                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--color-bg-subtle)' }}>
+                          {['Hujjat №', 'Sana', 'Summa', 'Holat'].map((h) => (
+                            <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {profile.invoices.slice(0, 8).map((inv: any) => (
+                          <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                            <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{inv.invoiceNumber}</td>
+                            <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate)}</td>
+                            <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(inv.totalAmount), inv.currency || 'UZS')}</td>
+                            <td style={{ padding: '8px 12px' }}>
+                              <Badge variant={inv.status === 'POSTED' ? 'success' : inv.status === 'DRAFT' ? 'warning' : 'error'}>
+                                {inv.status === 'POSTED' ? 'Tasdiqlangan' : inv.status === 'DRAFT' ? 'Qoralama' : inv.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {createError && (
-              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
-                {createError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateCounterparty} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <Select
-                label="Turi *"
-                options={[
-                  { value: 'CUSTOMER', label: 'Mijoz (Customer)' },
-                  { value: 'SUPPLIER', label: 'Yetkazib beruvchi (Supplier)' },
-                  { value: 'BOTH', label: 'Ikkalasi (Both)' },
-                ]}
-                value={type}
-                onChange={(val) => setType(val as any)}
-              />
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Tashkilot / Shaxs Nomi *</label>
-                <input type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="OOO 'Universal Trade'" style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>STIR / INN (9 xonali)</label>
-                  <input type="text" maxLength={9} value={inn} onChange={(e) => setInn(e.target.value)} placeholder="309876543" style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Bank MFO (5 xonali)</label>
-                  <input type="text" maxLength={5} value={mfo} onChange={(e) => setMfo(e.target.value)} placeholder="00440" style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Hisob Raqam (20 xonali)</label>
-                <input type="text" maxLength={20} value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="20208000900123456001" style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Telefon</label>
-                  <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="info@company.uz" style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>{tCommon('cancel')}</Button>
-                <Button type="submit" variant="primary" disabled={createLoading}>{createLoading ? tCommon('loading') : tCommon('save')}</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Registration Modal */}
-      {showPaymentModal && selectedCounterparty && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 'var(--space-4)' }}>
-          <div style={{ width: '100%', maxWidth: '460px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>To&apos;lovni Ro&apos;yxatga Olish</h3>
-              <button type="button" onClick={() => setShowPaymentModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
-            </div>
-
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-              Kontragent: <strong>{selectedCounterparty.name}</strong><br />
-              Joriy Qarzdorlik: <strong style={{ color: 'var(--color-error-600)' }}>{formatCurrency(Number(selectedCounterparty.debtBalance), locale)}</strong>
-            </div>
-
-            <form onSubmit={handleRegisterPayment} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <Select
-                label="To'lov Usuli"
-                options={[
-                  { value: 'BANK_TRANSFER', label: 'Bank O\'tkazmasi (Расчётный счёт)' },
-                  { value: 'CASH', label: 'Naqd Pul (Касса)' },
-                  { value: 'CARD', label: 'Plastik Karta (Uzcard / Humo)' },
-                  { value: 'CLICK', label: 'Click' },
-                  { value: 'PAYME', label: 'Payme' },
-                ]}
-                value={paymentMethod}
-                onChange={(val) => setPaymentMethod(val as any)}
-              />
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>To&apos;lov Summasi (So&apos;m) *</label>
-                <input type="number" min={1} required value={paymentAmount} onChange={(e) => setPaymentAmount(Number(e.target.value))} style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Izoh</label>
-                <input type="text" value={paymentComment} onChange={(e) => setPaymentComment(e.target.value)} placeholder="To'lov topshiriqnomasi №..." style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowPaymentModal(false)}>{tCommon('cancel')}</Button>
-                <Button type="submit" variant="primary" disabled={paymentLoading}>{paymentLoading ? tCommon('loading') : 'To\'lovni Tasdiqlash'}</Button>
-              </div>
-            </form>
-          </div>
-        </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>Ma'lumot yuklanmadi</div>
+          )}
+        </Modal>
       )}
     </div>
   );

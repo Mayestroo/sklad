@@ -60,13 +60,13 @@ export class PaymentsService {
         if (invoice) {
           const newPaidAmount = Number(invoice.paidAmount) + dto.amount;
           const totalAmount = Number(invoice.totalAmount);
-          const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIALLY_PAID';
+          const newPaymentStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIALLY_PAID';
 
           await tx.salesInvoice.update({
             where: { id: dto.invoiceId },
             data: {
               paidAmount: newPaidAmount,
-              status: newStatus,
+              paymentStatus: newPaymentStatus as any,
             },
           });
         }

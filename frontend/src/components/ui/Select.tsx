@@ -11,6 +11,7 @@ export interface SelectOption {
 }
 
 interface CustomSelectProps {
+  id?: string;
   label?: string;
   options: SelectOption[];
   value: string;
@@ -22,6 +23,7 @@ interface CustomSelectProps {
 }
 
 export function Select({
+  id,
   label,
   options,
   value,

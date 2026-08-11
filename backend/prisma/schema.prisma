@@ -178,6 +178,30 @@ enum ExpenseAllocationMethod {
   BY_WEIGHT
 }
 
+enum SalesDocStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum SalesPaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum SalesReturnStatus {
+  NONE
+  PARTIALLY_RETURNED
+  FULLY_RETURNED
+}
+
+enum SalesReturnDocStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
 enum ReturnDocStatus {
   DRAFT
   POSTED
@@ -229,6 +253,8 @@ model Company {
   purchaseExpenses     PurchaseExpense[]
   purchaseReturns      PurchaseReturn[]
   productBatches       ProductBatch[]
+  salesReturns         SalesReturn[]
+  priceLists           PriceList[]
 
   @@map("companies")
 }
@@ -346,12 +372,14 @@ model User {
   auditLogs          AuditLog[]
   createdInventoryDocs InventoryDocument[]
   createdTransfers   StockTransfer[]
-  createdInvoices    SalesInvoice[]
   assignedDeals      Deal[]
   supportTickets     SupportTicket[]
   createdPurchaseReceipts PurchaseReceipt[] @relation("CreatedPurchaseReceipts")
   postedPurchaseReceipts  PurchaseReceipt[] @relation("PostedPurchaseReceipts")
   createdPurchaseReturns  PurchaseReturn[]  @relation("CreatedPurchaseReturns")
+  createdSalesInvoices SalesInvoice[] @relation("CreatedSalesInvoices")
+  postedSalesInvoices  SalesInvoice[] @relation("PostedSalesInvoices")
+  createdSalesReturns  SalesReturn[]  @relation("CreatedSalesReturns")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -455,6 +483,7 @@ model Warehouse {
   salesInvoices SalesInvoice[]
   purchaseReceipts PurchaseReceipt[]
   purchaseReturns  PurchaseReturn[]
+  salesReturns     SalesReturn[]
   productBatches   ProductBatch[]
 
   @@index([tenantId])
@@ -568,6 +597,8 @@ model Product {
   purchaseReceiptItems PurchaseReceiptItem[]
   purchaseReturnItems  PurchaseReturnItem[]
   productBatches       ProductBatch[]
+  salesReturnItems     SalesReturnItem[]
+  productPrices        ProductPrice[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
@@ -725,6 +756,7 @@ model Counterparty {
   purchaseReceipts    PurchaseReceipt[]
   purchaseReturns     PurchaseReturn[]
   purchaseExpenses    PurchaseExpense[]
+  salesReturns        SalesReturn[]
 
   @@index([tenantId])
   @@index([tenantId, inn])
@@ -764,46 +796,145 @@ model SalesOrderItem {
 }
 
 model SalesInvoice {
-  id             String         @id @default(uuid())
-  tenantId       String         @map("tenant_id")
-  warehouseId    String         @map("warehouse_id")
-  counterpartyId String         @map("counterparty_id")
-  invoiceNumber  String         @map("invoice_number")
-  status         InvoiceStatus  @default(DRAFT)
-  invoiceDate    DateTime       @default(now()) @map("invoice_date")
-  subtotalAmount Decimal        @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
-  vatAmount      Decimal        @default(0) @db.Decimal(15, 2) @map("vat_amount")
-  totalAmount    Decimal        @default(0) @db.Decimal(15, 2) @map("total_amount")
-  paidAmount     Decimal        @default(0) @db.Decimal(15, 2) @map("paid_amount")
-  createdById    String?        @map("created_by_id")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  id             String             @id @default(uuid())
+  tenantId       String             @map("tenant_id")
+  warehouseId    String             @map("warehouse_id")
+  counterpartyId String             @map("counterparty_id")
+  invoiceNumber  String             @map("invoice_number")
+  status         SalesDocStatus     @default(DRAFT)
+  paymentStatus  SalesPaymentStatus @default(UNPAID) @map("payment_status")
+  returnStatus   SalesReturnStatus  @default(NONE) @map("return_status")
+  invoiceDate    DateTime           @default(now()) @map("invoice_date")
+  currency       String             @default("UZS")
+  exchangeRate   Decimal            @default(1) @db.Decimal(15, 4) @map("exchange_rate")
+  contractNumber String?            @map("contract_number")
+  contractDate   DateTime?          @map("contract_date")
+  paymentTerms   String?            @map("payment_terms")
+  comment        String?
+  subtotalAmount Decimal            @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
+  discountAmount Decimal            @default(0) @db.Decimal(15, 2) @map("discount_amount")
+  vatAmount      Decimal            @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  totalAmount    Decimal            @default(0) @db.Decimal(15, 2) @map("total_amount")
+  paidAmount     Decimal            @default(0) @db.Decimal(15, 2) @map("paid_amount")
+  totalCogs      Decimal            @default(0) @db.Decimal(15, 2) @map("total_cogs")
+  grossProfit    Decimal            @default(0) @db.Decimal(15, 2) @map("gross_profit")
+  createdById    String?            @map("created_by_id")
+  postedById     String?            @map("posted_by_id")
+  postedAt       DateTime?          @map("posted_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
 
   company      Company            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   warehouse    Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   counterparty Counterparty       @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
-  createdBy    User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy    User?              @relation("CreatedSalesInvoices", fields: [createdById], references: [id], onDelete: SetNull)
+  postedBy     User?              @relation("PostedSalesInvoices", fields: [postedById], references: [id], onDelete: SetNull)
   items        SalesInvoiceItem[]
   payments     Payment[]
+  returns      SalesReturn[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId])
+  @@index([tenantId, counterpartyId])
+  @@index([tenantId, status])
   @@map("sales_invoices")
 }
 
 model SalesInvoiceItem {
-  id         String       @id @default(uuid())
-  invoiceId  String       @map("invoice_id")
-  productId  String       @map("product_id")
-  quantity   Decimal      @db.Decimal(15, 3)
-  unitPrice  Decimal      @db.Decimal(15, 2) @map("unit_price")
-  vatAmount  Decimal      @default(0) @db.Decimal(15, 2) @map("vat_amount")
-  totalPrice Decimal      @db.Decimal(15, 2) @map("total_price")
+  id              String       @id @default(uuid())
+  invoiceId       String       @map("invoice_id")
+  productId       String       @map("product_id")
+  quantity        Decimal      @db.Decimal(15, 3)
+  unitPrice       Decimal      @db.Decimal(15, 2) @map("unit_price")
+  discount        Decimal      @default(0) @db.Decimal(15, 2)
+  vatRate         Decimal      @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount       Decimal      @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  totalPrice      Decimal      @db.Decimal(15, 2) @map("total_price")
+  unitCogs        Decimal      @default(0) @db.Decimal(15, 2) @map("unit_cogs")
+  lineCogs        Decimal      @default(0) @db.Decimal(15, 2) @map("line_cogs")
+  lineGrossProfit Decimal      @default(0) @db.Decimal(15, 2) @map("line_gross_profit")
+  isBelowCost     Boolean      @default(false) @map("is_below_cost")
 
   invoice SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@map("sales_invoice_items")
+}
+
+model SalesReturn {
+  id             String               @id @default(uuid())
+  tenantId       String               @map("tenant_id")
+  returnNumber   String               @map("return_number")
+  returnDate     DateTime             @default(now()) @map("return_date")
+  invoiceId      String?              @map("invoice_id")
+  counterpartyId String               @map("counterparty_id")
+  warehouseId    String               @map("warehouse_id")
+  currency       String               @default("UZS")
+  reason         String?
+  status         SalesReturnDocStatus @default(POSTED)
+  totalAmount    Decimal              @default(0) @db.Decimal(15, 2) @map("total_amount")
+  totalCogs      Decimal              @default(0) @db.Decimal(15, 2) @map("total_cogs")
+  createdById    String?              @map("created_by_id")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  company      Company           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty Counterparty      @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse         @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  invoice      SalesInvoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdBy    User?             @relation("CreatedSalesReturns", fields: [createdById], references: [id], onDelete: SetNull)
+  items        SalesReturnItem[]
+
+  @@unique([tenantId, returnNumber])
+  @@index([tenantId])
+  @@map("sales_returns")
+}
+
+model SalesReturnItem {
+  id         String      @id @default(uuid())
+  returnId   String      @map("return_id")
+  productId  String      @map("product_id")
+  quantity   Decimal     @db.Decimal(15, 3)
+  unitPrice  Decimal     @db.Decimal(15, 2) @map("unit_price")
+  totalPrice Decimal     @db.Decimal(15, 2) @map("total_price")
+  unitCogs   Decimal     @default(0) @db.Decimal(15, 2) @map("unit_cogs")
+  lineCogs   Decimal     @default(0) @db.Decimal(15, 2) @map("line_cogs")
+
+  return  SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  product Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("sales_return_items")
+}
+
+model PriceList {
+  id        String         @id @default(uuid())
+  tenantId  String         @map("tenant_id")
+  name      Json
+  currency  String         @default("UZS")
+  isDefault Boolean        @default(false) @map("is_default")
+  isActive  Boolean        @default(true) @map("is_active")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  company Company        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prices  ProductPrice[]
+
+  @@index([tenantId])
+  @@map("price_lists")
+}
+
+model ProductPrice {
+  id          String   @id @default(uuid())
+  priceListId String   @map("price_list_id")
+  productId   String   @map("product_id")
+  price       Decimal  @db.Decimal(15, 2)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([priceListId, productId])
+  @@map("product_prices")
 }
 
 model PurchaseOrder {
