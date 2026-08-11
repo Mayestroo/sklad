@@ -1,4 +1,4 @@
-import { PrismaClient, PermissionAction, UnitOfMeasure } from '@prisma/client';
+import { PrismaClient, PermissionAction, UnitOfMeasure, TransactionDirection } from '.prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
@@ -43,7 +43,7 @@ async function main() {
   console.log('  ✅ Tax rates seeded');
 
   // ─── 3. System Permissions ───────────────────────────────────────
-  const modules = ['dashboard', 'inventory', 'sales', 'accounting', 'analytics', 'billing', 'settings', 'users'];
+  const modules = ['dashboard', 'inventory', 'sales', 'accounting', 'analytics', 'billing', 'settings', 'users', 'finance'];
   const actions: PermissionAction[] = ['VIEW', 'CREATE', 'EDIT', 'DELETE'];
 
   const permissionDescriptions: Record<string, Record<string, { uz: string; ru: string }>> = {
@@ -70,6 +70,12 @@ async function main() {
     },
     analytics: {
       VIEW: { uz: 'Tahlillarni ko\'rish', ru: 'Просмотр аналитики' },
+    },
+    finance: {
+      VIEW: { uz: 'Moliyani ko\'rish', ru: 'Просмотр финансов' },
+      CREATE: { uz: 'Moliya operatsiyalarini yaratish', ru: 'Создание финансовых операций' },
+      EDIT: { uz: 'Moliya operatsiyalarini tahrirlash', ru: 'Редактирование финансовых операций' },
+      DELETE: { uz: 'Moliya operatsiyalarini o\'chirish', ru: 'Удаление финансовых операций' },
     },
     billing: {
       VIEW: { uz: 'Billingni ko\'rish', ru: 'Просмотр биллинга' },
@@ -409,6 +415,37 @@ async function main() {
     },
   });
   console.log('  ✅ Demo Counterparties created');
+
+  // ─── System TransactionTypes ──────────────────────────────────────
+  const systemTransactionTypes = [
+    // Income types
+    { direction: TransactionDirection.INCOME, name: { uz: "Mijozdan to'lov", ru: 'Оплата от клиента' } },
+    { direction: TransactionDirection.INCOME, name: { uz: 'Kontragentdan qaytarilgan pul', ru: 'Возврат от контрагента' } },
+    { direction: TransactionDirection.INCOME, name: { uz: 'Kredit (qarz olindi)', ru: 'Кредит (получен заём)' } },
+    { direction: TransactionDirection.INCOME, name: { uz: "Ta'sischi kiritgan mablag'", ru: 'Взнос учредителя' } },
+    { direction: TransactionDirection.INCOME, name: { uz: 'Boshqa kirim', ru: 'Прочий приход' } },
+    // Expense types
+    { direction: TransactionDirection.EXPENSE, name: { uz: "Tovar uchun to'lov", ru: 'Оплата за товар' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: "Ta'minotchiga to'lov", ru: 'Оплата поставщику' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: 'Soliq', ru: 'Налоги' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: 'Oylik maosh', ru: 'Заработная плата' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: 'Ijara', ru: 'Аренда' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: 'Transport', ru: 'Транспорт' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: 'Reklama', ru: 'Реклама' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: 'Bank xizmati', ru: 'Банковские услуги' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: "Kreditni qaytarish (qarz to'lash)", ru: 'Погашение кредита' } },
+    { direction: TransactionDirection.EXPENSE, name: { uz: 'Boshqa chiqim', ru: 'Прочий расход' } },
+  ];
+
+  for (const tt of systemTransactionTypes) {
+    const existing = await prisma.transactionType.findFirst({
+      where: { tenantId: null, isSystem: true, direction: tt.direction, name: { equals: tt.name } },
+    });
+    if (!existing) {
+      await prisma.transactionType.create({ data: { ...tt, isSystem: true } as any });
+    }
+  }
+  console.log('  ✅ System TransactionTypes seeded');
 
   console.log('🎉 Seed completed successfully!');
 }

@@ -2,11 +2,12 @@ import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/co
 import { ProductsService } from './products.service';
 import { CreateProductDto } from '../dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/inventory/products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}

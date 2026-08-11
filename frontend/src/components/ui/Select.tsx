@@ -64,7 +64,9 @@ export function Select({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '10px 14px',
+          padding: '8px 12px',
+          height: '38px',
+          boxSizing: 'border-box',
           fontSize: 'var(--text-sm)',
           borderRadius: 'var(--radius-md)',
           border: error
@@ -102,7 +104,9 @@ export function Select({
             position: 'absolute',
             top: 'calc(100% + 4px)',
             left: 0,
-            right: 0,
+            minWidth: '100%',
+            width: 'max-content',
+            maxWidth: '320px',
             zIndex: 50,
             maxHeight: '260px',
             overflowY: 'auto',
@@ -131,6 +135,7 @@ export function Select({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: '12px',
                   width: '100%',
                   padding: '8px 12px',
                   borderRadius: 'var(--radius-sm)',
@@ -144,6 +149,7 @@ export function Select({
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'background-color var(--transition-fast)',
+                  whiteSpace: 'nowrap',
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected) {
@@ -156,18 +162,18 @@ export function Select({
                   }
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
                   {option.icon}
                   <div>
-                    <div>{option.label}</div>
+                    <div style={{ whiteSpace: 'nowrap' }}>{option.label}</div>
                     {option.description && (
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
                         {option.description}
                       </div>
                     )}
                   </div>
                 </div>
-                {isSelected && <Check size={16} style={{ color: 'var(--color-primary-600)' }} />}
+                {isSelected && <Check size={16} style={{ color: 'var(--color-primary-600)', flexShrink: 0 }} />}
               </button>
             );
           })}

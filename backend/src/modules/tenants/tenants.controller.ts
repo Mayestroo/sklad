@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -20,21 +21,14 @@ export class TenantsController {
     return this.tenantsService.findAll();
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tenantsService.findById(id);
-  }
-
   // Branch Endpoints
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Get('branches')
-  @RequirePermissions('settings:view')
   findAllBranches(@CurrentTenant() tenantId: string) {
     return this.tenantsService.findAllBranches(tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
   @Post('branches')
   @RequirePermissions('settings:edit')
   createBranch(
@@ -45,14 +39,13 @@ export class TenantsController {
   }
 
   // Warehouse Endpoints
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard)
   @Get('warehouses')
-  @RequirePermissions('settings:view')
   findAllWarehouses(@CurrentTenant() tenantId: string) {
     return this.tenantsService.findAllWarehouses(tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
   @Post('warehouses')
   @RequirePermissions('settings:edit')
   createWarehouse(
@@ -60,5 +53,11 @@ export class TenantsController {
     @Body() body: { branchId?: string; name: { uz: string; ru: string }; address?: string; phone?: string },
   ) {
     return this.tenantsService.createWarehouse(tenantId, body.branchId || null, body.name, body.address, body.phone);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.tenantsService.findById(id);
   }
 }

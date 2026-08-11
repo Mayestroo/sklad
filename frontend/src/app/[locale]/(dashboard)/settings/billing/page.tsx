@@ -98,9 +98,6 @@ export default function BillingSettingsPage() {
         <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
           Tariflar va Obuna Sozlamalari (Billing & Subscription)
         </h1>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-          Tizim obunasi holati, Click/Payme orqali to&apos;lov qilish va xizmat paketlarini boshqarish
-        </p>
       </div>
 
       {loading ? (

@@ -84,9 +84,6 @@ export default function AnalyticsPage() {
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             BI Analitika va Rahbar Dashboardi (Executive BI)
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Real-vaqtdagi sotuvlar, sof foyda rentabelligi, tovarlar aylanishi va moliyaviy ko&apos;rsatkichlar
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>

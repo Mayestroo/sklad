@@ -7,7 +7,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const Input: React.FC<InputProps> = ({ label, error, style, ...props }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: style?.width || '100%' }}>
       {label && (
         <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
           {label}

@@ -60,9 +60,6 @@ export default function AccountingPage() {
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             Ikki Yo&apos;lama Buxgalteriya va OSV Hisoboti (BHMS / NAS)
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            O&apos;zbekiston Respublikasi Buxgalteriya Hisobi Milliy Standartlari bo&apos;yicha Oborotno-Saldovaya Vedomost
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>

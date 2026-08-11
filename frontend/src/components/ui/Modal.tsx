@@ -33,7 +33,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
           width: '100%',
           maxWidth: '520px',
           boxShadow: 'var(--shadow-xl)',
-          overflow: 'hidden',
+          overflow: 'visible',
           display: 'flex',
           flexDirection: 'column',
         }}

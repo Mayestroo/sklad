@@ -2,11 +2,12 @@ import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from '../dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/inventory/categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}

@@ -19,6 +19,8 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { FinanceModule } from './modules/finance/finance.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -52,6 +54,8 @@ import { AuditModule } from './modules/audit/audit.module';
     AnalyticsModule,
     BillingModule,
     SuperAdminModule,
+    FinanceModule,
+    DashboardModule,
   ],
 })
 export class AppModule implements NestModule {

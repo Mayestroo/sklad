@@ -79,9 +79,6 @@ export default function SecurityPage() {
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             Xavfsizlik, Zaxira Nusxalash va Qonuniy Muvofiqlik (Security & Compliance)
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Tenant ma&apos;lumotlari izolatsiyasi, avtomatik PostgreSQL zaxira tizimi va O&apos;zbekiston Respublikasi ZRU-547 Qonuni
-          </p>
         </div>
 
         <Button variant="primary" onClick={handleTriggerBackup} disabled={backupLoading}>

@@ -79,10 +79,10 @@ export default function InventoryPage() {
         }),
       ]);
 
-      setProducts(prodsData);
-      setCategories(catsData);
-      setWarehouses(whData);
-      setLowStockAlerts(alertData);
+      setProducts(Array.isArray(prodsData) ? prodsData : []);
+      setCategories(Array.isArray(catsData) ? catsData : []);
+      setWarehouses(Array.isArray(whData) ? whData : []);
+      setLowStockAlerts(Array.isArray(alertData) ? alertData : []);
     } catch (err) {
       console.error('Failed to load inventory data:', err);
     } finally {
@@ -110,9 +110,13 @@ export default function InventoryPage() {
     }
   };
 
+  const safeProducts = Array.isArray(products) ? products : [];
+  const safeWarehouses = Array.isArray(warehouses) ? warehouses : [];
+  const safeCategories = Array.isArray(categories) ? categories : [];
+
   const filteredProducts = filterLowStockOnly
-    ? products.filter((p) => (p as any).isLowStock)
-    : products;
+    ? safeProducts.filter((p) => (p as any).isLowStock)
+    : safeProducts;
 
   const getLocalizedName = (name: any) => {
     if (!name) return '';
@@ -121,12 +125,12 @@ export default function InventoryPage() {
 
   const warehouseOptions = [
     { value: '', label: 'Barcha Omborlar' },
-    ...warehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) })),
+    ...safeWarehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) })),
   ];
 
   const categoryOptions = [
     { value: '', label: 'Barcha kategoriyalar' },
-    ...categories.map((c) => ({ value: c.id, label: getLocalizedName(c.name) })),
+    ...safeCategories.map((c) => ({ value: c.id, label: getLocalizedName(c.name) })),
   ];
 
   return (
@@ -137,9 +141,6 @@ export default function InventoryPage() {
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             {t('title')}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            MoySklad — Nomenklatura, multi-ombor va real-vaqt qoldiqlari
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>

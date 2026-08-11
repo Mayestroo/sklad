@@ -119,9 +119,6 @@ export default function BranchesSettingsPage() {
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             Filiallar va Omborxonalar Tuzilmasi (Hierarchy)
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Tashkilotning hududiy filiallari va tarmoq omborxonalarini boshqarish
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>

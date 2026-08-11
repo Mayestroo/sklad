@@ -7,3 +7,5 @@ export * from './accounting';
 export * from './analytics';
 export * from './billing';
 export * from './super-admin';
+export * from './finance';
+export * from './dashboard';

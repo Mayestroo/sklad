@@ -181,9 +181,6 @@ export default function SalesPage() {
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             Sotuv va Hisob-fakturalar (E-Faktura)
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Mijozlar buyurtmalari, 12% QQS hisob-fakturalari va to&apos;lovlar monitoringi
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>

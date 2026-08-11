@@ -154,9 +154,6 @@ export default function UsersPage() {
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             Foydalanuvchilar va Rollar
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Kompaniya xodimlarini boshqarish va rollarni biriktirish
-          </p>
         </div>
 
         {hasPermission('users:create') && (

@@ -1,11 +1,12 @@
 import { Controller, Get, Post, Body, Param, Put, UseGuards } from '@nestjs/common';
 import { SuperAdminService } from './super-admin.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/super-admin')
 export class SuperAdminController {
   constructor(private readonly superAdminService: SuperAdminService) {}

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -14,14 +15,14 @@ export class BillingController {
     return this.billingService.getPlans();
   }
 
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
   @Get('status')
   @RequirePermissions('settings:view')
   getSubscriptionStatus(@CurrentTenant() tenantId: string) {
     return this.billingService.getSubscriptionStatus(tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
   @Post('checkout')
   @RequirePermissions('settings:edit')
   createCheckout(
@@ -31,7 +32,7 @@ export class BillingController {
     return this.billingService.createCheckout(tenantId, body.planId, body.method);
   }
 
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
   @Get('history')
   @RequirePermissions('settings:view')
   getPaymentHistory(@CurrentTenant() tenantId: string) {
