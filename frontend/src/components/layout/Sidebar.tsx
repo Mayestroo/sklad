@@ -61,6 +61,7 @@ export function Sidebar() {
   ];
 
   const bottomNavItems = [
+    { href: '/counterparties', label: 'Kontragentlar', icon: Users },
     { href: '/inventory/products', label: 'Tovarlar', icon: PackageCheck },
     { href: '/inventory', label: 'Ombor', icon: Package },
     { href: '/finance', label: 'Moliya', icon: Wallet },
