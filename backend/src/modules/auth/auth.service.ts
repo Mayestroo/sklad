@@ -125,8 +125,14 @@ export class AuthService {
    * User Login with Email & Password
    */
   async login(dto: LoginDto, ipAddress?: string): Promise<AuthResponse> {
+    const cleanEmail = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({
-      where: { email: dto.email },
+      where: {
+        email: {
+          equals: cleanEmail,
+          mode: 'insensitive',
+        },
+      },
       include: {
         company: true,
         userRoles: {

@@ -244,6 +244,12 @@ async function main() {
       });
     }
     console.log('  ✅ Demo Admin User "admin@orient.uz" (Parol: Admin123!) created');
+  } else {
+    await prisma.user.update({
+      where: { id: adminUser.id },
+      data: { passwordHash: hashedPassword, isActive: true },
+    });
+    console.log('  ✅ Demo Admin User "admin@orient.uz" password updated to "Admin123!"');
   }
 
   // ─── 6. Demo Branch & Warehouses ─────────────────────────────────
