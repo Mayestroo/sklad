@@ -12,6 +12,8 @@ export class PrismaService
     const connectionString =
       process.env.DATABASE_URL ||
       'postgresql://crm_user:crm_password@localhost:5432/crm_dev?schema=public';
+    const maskedUrl = connectionString.replace(/:[^:@]+@/, ':****@');
+    console.log(`[PRISMA_INIT] Connecting to Database URL: ${maskedUrl}`);
     const isCloudDb =
       connectionString.includes('neon.tech') ||
       connectionString.includes('sslmode=require');
