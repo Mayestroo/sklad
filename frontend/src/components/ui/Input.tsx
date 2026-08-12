@@ -19,7 +19,7 @@ export const Input: React.FC<InputProps> = ({ label, error, style, ...props }) =
           fontSize: 'var(--text-sm)',
           borderRadius: 'var(--radius-md)',
           border: error ? '1px solid var(--color-error-600)' : '1px solid var(--color-border)',
-          backgroundColor: 'var(--color-bg-primary)',
+          backgroundColor: 'var(--color-bg-input)',
           color: 'var(--color-text-primary)',
           outline: 'none',
           width: '100%',

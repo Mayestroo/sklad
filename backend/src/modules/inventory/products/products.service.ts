@@ -151,4 +151,18 @@ export class ProductsService {
       })
       .filter((p) => p.isLowStock);
   }
+
+  async findStockLevels(tenantId: string, warehouseId?: string) {
+    const where: any = { tenantId };
+    if (warehouseId) {
+      where.warehouseId = warehouseId;
+    }
+    return this.prisma.stockLevel.findMany({
+      where,
+      include: {
+        product: true,
+        warehouse: true,
+      },
+    });
+  }
 }

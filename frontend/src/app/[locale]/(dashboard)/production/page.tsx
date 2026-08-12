@@ -59,22 +59,12 @@ const DEMO_PRODUCTION_ORDERS: ProductionOrder[] = [
     estimatedCost: 21600000,
     rawMaterialsCount: 3,
   },
-  {
-    id: '3',
-    orderNumber: 'PRD-2026-003',
-    productName: 'Plastik Shisha Idish 1.5L (Preforma)',
-    quantity: 5000,
-    unit: 'dona',
-    status: 'DRAFT',
-    startDate: '2026-08-12',
-    targetDate: '2026-08-18',
-    estimatedCost: 7500000,
-    rawMaterialsCount: 2,
-  },
 ];
 
 export default function ProductionPage() {
-  const locale = (useLocale() as 'uz' | 'ru') || 'uz';
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
+
   const [orders, setOrders] = useState<ProductionOrder[]>(DEMO_PRODUCTION_ORDERS);
   const [modalOpen, setModalOpen] = useState(false);
   const [newProduct, setNewProduct] = useState('');
@@ -90,7 +80,7 @@ export default function ProductionPage() {
       orderNumber: `PRD-2026-00${orders.length + 1}`,
       productName: newProduct,
       quantity: Number(newQty),
-      unit: 'dona',
+      unit: isRu ? 'шт' : 'dona',
       status: 'IN_PROGRESS',
       startDate: new Date().toISOString().slice(0, 10),
       targetDate: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10),
@@ -108,13 +98,13 @@ export default function ProductionPage() {
   const getStatusBadge = (status: ProductionOrder['status']) => {
     switch (status) {
       case 'COMPLETED':
-        return <Badge variant="success"><CheckCircle2 size={12} style={{ marginRight: 4 }} /> Bajarildi</Badge>;
+        return <Badge variant="success"><CheckCircle2 size={12} style={{ marginRight: 4 }} /> {isRu ? 'Выполнено' : 'Bajarildi'}</Badge>;
       case 'IN_PROGRESS':
-        return <Badge variant="warning"><Clock size={12} style={{ marginRight: 4 }} /> Jarayonda</Badge>;
+        return <Badge variant="warning"><Clock size={12} style={{ marginRight: 4 }} /> {isRu ? 'В процессе' : 'Jarayonda'}</Badge>;
       case 'DRAFT':
-        return <Badge variant="info"><Layers size={12} style={{ marginRight: 4 }} /> Qoralama</Badge>;
+        return <Badge variant="info"><Layers size={12} style={{ marginRight: 4 }} /> {isRu ? 'Черновик' : 'Qoralama'}</Badge>;
       case 'CANCELLED':
-        return <Badge variant="error"><AlertCircle size={12} style={{ marginRight: 4 }} /> Bekor qilingan</Badge>;
+        return <Badge variant="error"><AlertCircle size={12} style={{ marginRight: 4 }} /> {isRu ? 'Отменено' : 'Bekor qilingan'}</Badge>;
     }
   };
 
@@ -128,12 +118,12 @@ export default function ProductionPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Ishlab chiqarish (Production & Assembly)
+            {isRu ? 'Производство и Сборка (Production & Assembly)' : 'Ishlab chiqarish (Production & Assembly)'}
           </h1>
         </div>
 
         <Button variant="primary" onClick={() => setModalOpen(true)}>
-          <Plus size={16} /> Ishlab chiqarish buyurtmasi
+          <Plus size={16} /> {isRu ? 'Заказ на производство' : 'Ishlab chiqarish buyurtmasi'}
         </Button>
       </div>
 
@@ -144,9 +134,9 @@ export default function ProductionPage() {
             <Clock size={22} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Jarayondagi buyurtmalar</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Заказы в процессе' : 'Jarayondagi buyurtmalar'}</div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {inProgressCount} ta
+              {inProgressCount} {isRu ? 'зак.' : 'ta'}
             </div>
           </div>
         </Card>
@@ -156,9 +146,9 @@ export default function ProductionPage() {
             <CheckCircle2 size={22} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Bajarilgan buyurtmalar</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Выполненные заказы' : 'Bajarilgan buyurtmalar'}</div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {completedCount} ta
+              {completedCount} {isRu ? 'зак.' : 'ta'}
             </div>
           </div>
         </Card>
@@ -168,7 +158,7 @@ export default function ProductionPage() {
             <Factory size={22} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Jami rejalashtirilgan tan narx</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Плановая себестоимость' : 'Jami rejalashtirilgan tan narx'}</div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
               {formatCurrency(totalCost, locale)}
             </div>
@@ -179,18 +169,18 @@ export default function ProductionPage() {
       {/* Orders Table */}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', fontWeight: 'var(--font-semibold)' }}>
-          Ishlab chiqarish buyurtmalari jurnali
+          {isRu ? 'Журнал производственных заказов' : 'Ishlab chiqarish buyurtmalari jurnali'}
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
           <thead>
             <tr style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-              <th style={{ padding: '12px 16px' }}>Buyurtma №</th>
-              <th style={{ padding: '12px 16px' }}>Mahsulot Nomi</th>
-              <th style={{ padding: '12px 16px' }}>Miqdori</th>
-              <th style={{ padding: '12px 16px' }}>Reja Tan Narxi</th>
-              <th style={{ padding: '12px 16px' }}>Boshlanish Sanasi</th>
-              <th style={{ padding: '12px 16px' }}>Tugash Sanasi</th>
-              <th style={{ padding: '12px 16px' }}>Holat</th>
+              <th style={{ padding: '12px 16px' }}>{isRu ? '№ Заказа' : 'Buyurtma №'}</th>
+              <th style={{ padding: '12px 16px' }}>{isRu ? 'Наименование товара' : 'Mahsulot Nomi'}</th>
+              <th style={{ padding: '12px 16px' }}>{isRu ? 'Количество' : 'Miqdori'}</th>
+              <th style={{ padding: '12px 16px' }}>{isRu ? 'Плановая себестоимость' : 'Reja Tan Narxi'}</th>
+              <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата начала' : 'Boshlanish Sanasi'}</th>
+              <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата окончания' : 'Tugash Sanasi'}</th>
+              <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holat'}</th>
             </tr>
           </thead>
           <tbody>
@@ -210,17 +200,17 @@ export default function ProductionPage() {
       </Card>
 
       {/* Modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Yangi ishlab chiqarish buyurtmasi">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isRu ? 'Новый заказ на производство' : 'Yangi ishlab chiqarish buyurtmasi'}>
         <form onSubmit={handleCreateOrder} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Input
-            label="Chiqariladigan Mahsulot Nomi"
-            placeholder="Masalan: Gazlangan suv 1.5L"
+            label={isRu ? 'Наименование производимого товара' : 'Chiqariladigan Mahsulot Nomi'}
+            placeholder={isRu ? 'Например: Газированная вода 1.5л' : 'Masalan: Gazlangan suv 1.5L'}
             value={newProduct}
             onChange={(e) => setNewProduct(e.target.value)}
             required
           />
           <Input
-            label="Rejalashtirilgan Miqdor"
+            label={isRu ? 'Планируемое количество' : 'Rejalashtirilgan Miqdor'}
             type="number"
             placeholder="100"
             value={newQty}
@@ -228,15 +218,15 @@ export default function ProductionPage() {
             required
           />
           <Input
-            label="Taxminiy Tan Narx (UZS)"
+            label={isRu ? 'Ориентировочная себестоимость (UZS)' : 'Taxminiy Tan Narx (UZS)'}
             type="number"
             placeholder="5000000"
             value={newCost}
             onChange={(e) => setNewCost(e.target.value)}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Bekor qilish</Button>
-            <Button type="submit" variant="primary">Buyurtma Yaratish</Button>
+            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button type="submit" variant="primary">{isRu ? 'Создать заказ' : 'Buyurtma Yaratish'}</Button>
           </div>
         </form>
       </Modal>

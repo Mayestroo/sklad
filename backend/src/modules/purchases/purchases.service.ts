@@ -16,6 +16,7 @@ import {
   ReturnDocStatus,
   ExpenseAllocationMethod,
   ExpenseType,
+  TransactionDirection,
 } from '@prisma/client';
 
 @Injectable()
@@ -592,6 +593,156 @@ export class PurchasesService {
           expenses: true,
         },
       });
+    });
+  }
+
+  // ─── PAY PURCHASE RECEIPT ─────────────────────────────────────
+
+  async payPurchaseReceipt(
+    tenantId: string,
+    userId: string,
+    id: string,
+    dto: { amount: number; cashAccountId: string; note?: string; paymentDate?: string },
+  ) {
+    const receipt = await this.prisma.purchaseReceipt.findFirst({
+      where: { id, tenantId },
+      include: { counterparty: true },
+    });
+
+    if (!receipt) {
+      throw new NotFoundException('Xarid hujjati topilmadi');
+    }
+
+    if (receipt.status !== PurchaseDocStatus.POSTED) {
+      throw new BadRequestException('Faqat tasdiqlangan hujjatlar uchun to\'lov kiritish mumkin');
+    }
+
+    if (receipt.paymentStatus === PurchasePaymentStatus.PAID) {
+      throw new BadRequestException('Ushbu hujjat to\'liq to\'langan');
+    }
+
+    const cashAccount = await this.prisma.cashAccount.findFirst({
+      where: { id: dto.cashAccountId, tenantId, isActive: true },
+    });
+
+    if (!cashAccount) {
+      throw new NotFoundException('Kassa hisobi topilmadi');
+    }
+
+    if (cashAccount.currency !== receipt.currency) {
+      throw new BadRequestException(
+        `Kassa valyutasi (${cashAccount.currency}) hujjat valyutasiga (${receipt.currency}) mos kelmaydi. To'lov faqat ${receipt.currency} kassasidan amalga oshirilishi mumkin.`,
+      );
+    }
+
+    if (Number(cashAccount.balance) < dto.amount) {
+      throw new BadRequestException(
+        `Kassada mablag' yetarli emas. Mavjud: ${cashAccount.balance} ${cashAccount.currency}, To'lov: ${dto.amount} ${receipt.currency}`,
+      );
+    }
+
+    const paymentDate = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
+    const remaining = Number(receipt.totalAmount) - Number(receipt.paidAmount);
+    const payAmount = Math.min(dto.amount, remaining);
+
+    if (payAmount <= 0) {
+      throw new BadRequestException('To\'lov summasi noto\'g\'ri');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const newPaidAmount = Number(receipt.paidAmount) + payAmount;
+      const newPaymentStatus =
+        newPaidAmount >= Number(receipt.totalAmount)
+          ? PurchasePaymentStatus.PAID
+          : PurchasePaymentStatus.PARTIALLY_PAID;
+
+      // 1. Update receipt paidAmount and paymentStatus
+      const updatedReceipt = await tx.purchaseReceipt.update({
+        where: { id },
+        data: {
+          paidAmount: newPaidAmount,
+          paymentStatus: newPaymentStatus,
+        },
+        include: { counterparty: true, warehouse: true },
+      });
+
+      // 2. Decrement CashAccount balance
+      await tx.cashAccount.update({
+        where: { id: dto.cashAccountId },
+        data: { balance: { decrement: payAmount } },
+      });
+
+      // 3. Decrease counterparty debt
+      await tx.counterparty.update({
+        where: { id: receipt.counterpartyId },
+        data: { debtBalance: { decrement: payAmount } },
+      });
+
+      // 4. Create Finance Transaction (EXPENSE)
+      const txCount = await tx.financeTransaction.count({ where: { tenantId } });
+      const txNumber = `FT-${new Date().getFullYear()}-${(txCount + 1).toString().padStart(5, '0')}`;
+
+      await tx.financeTransaction.create({
+        data: {
+          tenantId,
+          docNumber: txNumber,
+          direction: TransactionDirection.EXPENSE,
+          amount: payAmount,
+          currency: cashAccount.currency,
+          transactionDate: paymentDate,
+          comment: dto.note || `Yetkazib beruvchiga to'lov: ${receipt.counterparty.name} (${receipt.docNumber})`,
+          accountId: dto.cashAccountId,
+          counterpartyId: receipt.counterpartyId,
+          sourceDocType: 'PurchaseReceipt',
+          sourceDocId: receipt.id,
+          createdById: userId,
+        },
+      });
+
+      // 5. Accounting Journal: Debit 6010 (Yetkazib beruvchiga qarz) / Credit 5010 (Kassa)
+      const supplierAcc = await tx.account.findFirst({ where: { tenantId, code: '6010' } });
+      const cashAcc = await tx.account.findFirst({ where: { tenantId, code: '5010' } });
+
+      if (supplierAcc && cashAcc) {
+        const jeCount = await tx.journalEntry.count({ where: { tenantId } });
+        const jeNumber = `JE-${new Date().getFullYear()}-${(jeCount + 1).toString().padStart(5, '0')}`;
+
+        await tx.journalEntry.create({
+          data: {
+            tenantId,
+            entryNumber: jeNumber,
+            entryDate: paymentDate,
+            description: `To'lov: ${receipt.docNumber} — ${receipt.counterparty.name}`,
+            sourceDocType: 'PurchasePayment',
+            sourceDocId: receipt.id,
+            lines: {
+              create: [
+                {
+                  debitAccountId: supplierAcc.id,
+                  creditAccountId: cashAcc.id,
+                  amount: payAmount,
+                  description: 'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim',
+                },
+              ],
+            },
+          },
+        });
+      }
+
+      // 6. Audit Log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'PurchaseReceipt',
+          entityId: id,
+          action: 'UPDATE',
+          oldValue: { paymentStatus: receipt.paymentStatus, paidAmount: receipt.paidAmount },
+          newValue: { paymentStatus: newPaymentStatus, paidAmount: newPaidAmount },
+        },
+      });
+
+      return updatedReceipt;
     });
   }
 

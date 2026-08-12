@@ -23,9 +23,9 @@ import {
 import { InventoryDocument, Product } from '@shared/types';
 
 export default function InventoryDocumentsPage() {
-  const t = useTranslations('inventory');
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
   const [documents, setDocuments] = useState<InventoryDocument[]>([]);
@@ -48,27 +48,27 @@ export default function InventoryDocumentsPage() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Print Document Modal State
+  // Print Preview
   const [printDoc, setPrintDoc] = useState<InventoryDocument | null>(null);
 
   const fetchData = async () => {
     if (!token || !company) return;
     setLoading(true);
+
     try {
-      const [docsData, prodsData, tenantData] = await Promise.all([
+      const [docs, prods, whs] = await Promise.all([
         apiFetch<InventoryDocument[]>('/inventory/documents', { token, tenantId: company.id, locale }),
         apiFetch<Product[]>('/inventory/products', { token, tenantId: company.id, locale }),
-        apiFetch<any>(`/tenants/${company.id}`, { token, tenantId: company.id, locale }),
+        apiFetch<any[]>('/tenants/warehouses', { token, tenantId: company.id, locale }),
       ]);
-
-      setDocuments(docsData);
-      setProducts(prodsData);
-      if (tenantData?.warehouses) {
-        setWarehouses(tenantData.warehouses);
-        if (tenantData.warehouses.length > 0) setWarehouseId(tenantData.warehouses[0].id);
+      setDocuments(docs || []);
+      setProducts(prods || []);
+      setWarehouses(whs || []);
+      if (whs && whs.length > 0 && !warehouseId) {
+        setWarehouseId(whs[0].id);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load inventory docs:', err);
     } finally {
       setLoading(false);
     }
@@ -76,24 +76,15 @@ export default function InventoryDocumentsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [token, company]);
+  }, [token, company, locale]);
 
   const handleAddItem = () => {
     if (!selectedProductId || quantity <= 0) return;
-    const prod = products.find((p) => p.id === selectedProductId);
-    if (!prod) return;
+    const p = products.find((prod) => prod.id === selectedProductId);
+    if (!p) return;
+    const name = p.name[locale] || p.name.ru || p.name.uz;
 
-    const prodName = prod.name[locale] || prod.name.uz || prod.name.ru;
-    setItems((prev) => [
-      ...prev,
-      {
-        productId: selectedProductId,
-        productName: prodName,
-        quantity,
-        unitPrice: unitPrice || Number(prod.costPrice) || 0,
-      },
-    ]);
-
+    setItems((prev) => [...prev, { productId: p.id, productName: name, quantity, unitPrice }]);
     setSelectedProductId('');
     setQuantity(1);
     setUnitPrice(0);
@@ -105,12 +96,21 @@ export default function InventoryDocumentsPage() {
 
   const handleCreateDocument = async (e: FormEvent) => {
     e.preventDefault();
-    if (!token || !company || items.length === 0) return;
-    setCreateError(null);
+    if (!token || !company) return;
+    if (!warehouseId) {
+      setCreateError(isRu ? 'Выберите склад' : 'Omborni tanlang');
+      return;
+    }
+    if (items.length === 0) {
+      setCreateError(isRu ? 'Добавьте хотя бы один товар' : 'Kamida bitta tovar pozitsiyasini qo\'shing');
+      return;
+    }
+
     setCreateLoading(true);
+    setCreateError(null);
 
     try {
-      await apiFetch<any>('/inventory/documents', {
+      await apiFetch('/inventory/documents', {
         method: 'POST',
         token,
         tenantId: company.id,
@@ -132,7 +132,7 @@ export default function InventoryDocumentsPage() {
       setComment('');
       fetchData();
     } catch (err: any) {
-      setCreateError(err.message || 'Failed to post inventory document');
+      setCreateError(err.message || (isRu ? 'Ошибка создания документа' : 'Failed to post inventory document'));
     } finally {
       setCreateLoading(false);
     }
@@ -145,30 +145,30 @@ export default function InventoryDocumentsPage() {
   const getDocTypeBadge = (type: string) => {
     switch (type) {
       case 'INBOUND':
-        return <Badge variant="success">Kirim (Inbound)</Badge>;
+        return <Badge variant="success">{isRu ? 'Приход (Inbound)' : 'Kirim (Inbound)'}</Badge>;
       case 'OUTBOUND':
-        return <Badge variant="error">Chiqim (Outbound)</Badge>;
+        return <Badge variant="error">{isRu ? 'Расход (Outbound)' : 'Chiqim (Outbound)'}</Badge>;
       case 'STOCKTAKING':
-        return <Badge variant="warning">Inventarizatsiya</Badge>;
+        return <Badge variant="warning">{isRu ? 'Инвентаризация' : 'Inventarizatsiya'}</Badge>;
       default:
         return <Badge variant="neutral">{type}</Badge>;
     }
   };
 
   const getDocTypeName = (type: string) => {
-    if (type === 'INBOUND') return locale === 'uz' ? 'TOVAR QABUL QILISH DALOLATNOMASI (KIRIM)' : 'АКТ ПРИЁМА ТОВАРОВ (ПРИХОД)';
-    if (type === 'OUTBOUND') return locale === 'uz' ? 'TOVAR HISOBDAN CHIQARISH DALOLATNOMASI (CHIQIM)' : 'АКТ СПИСАНИЯ ТОВАРОВ (РАСХОД)';
-    return locale === 'uz' ? 'INVENTARIZATSIYA HISOBOTI' : 'АКТ ИНВЕНТАРИЗАЦИИ';
+    if (type === 'INBOUND') return isRu ? 'АКТ ПРИЁМА ТОВАРОВ (ПРИХОД)' : 'TOVAR QABUL QILISH DALOLATNOMASI (KIRIM)';
+    if (type === 'OUTBOUND') return isRu ? 'АКТ СПИСАНИЯ ТОВАРОВ (РАСХОД)' : 'TOVAR HISOBDAN CHIQARISH DALOLATNOMASI (CHIQIM)';
+    return isRu ? 'АКТ ИНВЕНТАРИЗАЦИИ' : 'INVENTARIZATSIYA HISOBOTI';
   };
 
   const warehouseOptions = warehouses.map((w) => ({
     value: w.id,
-    label: w.name[locale] || w.name.uz,
+    label: w.name[locale] || w.name.ru || w.name.uz,
   }));
 
   const productOptions = products.map((p) => ({
     value: p.id,
-    label: `${p.name[locale] || p.name.uz} (${p.sku})`,
+    label: `${p.name[locale] || p.name.ru || p.name.uz} (${p.sku})`,
   }));
 
   return (
@@ -177,16 +177,16 @@ export default function InventoryDocumentsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Ombor Hujjatlari
+            {isRu ? 'Складские Документы' : 'Ombor Hujjatlari'}
           </h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Kirim (Tushum), Chiqim (Hisobdan chiqarish) va Inventarizatsiya amallari
+            {isRu ? 'Приход (Поступление), Расход (Списание) и Инвентаризация' : 'Kirim (Tushum), Chiqim (Hisobdan chiqarish) va Inventarizatsiya amallari'}
           </p>
         </div>
 
         <Button variant="primary" onClick={() => setShowModal(true)}>
           <Plus size={16} />
-          Hujjat Rasmiylashtirish
+          {isRu ? 'Оформить документ' : 'Hujjat Rasmiylashtirish'}
         </Button>
       </div>
 
@@ -199,20 +199,20 @@ export default function InventoryDocumentsPage() {
         ) : documents.length === 0 ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <FileText size={40} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>Hujjatlar mavjud emas</div>
+            <div>{isRu ? 'Документы отсутствуют' : 'Hujjatlar mavjud emas'}</div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>HUJJAT №</th>
-                  <th style={{ padding: '12px' }}>TURI</th>
-                  <th style={{ padding: '12px' }}>OMBORXONA</th>
-                  <th style={{ padding: '12px' }}>SANA</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>UMUMIY SUMMA</th>
-                  <th style={{ padding: '12px', textAlign: 'center' }}>HOLAT</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>CHOP ETISH</th>
+                  <th style={{ padding: '12px' }}>{isRu ? '№ ДОКУМЕНТА' : 'HUJJAT №'}</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'ТИП' : 'TURI'}</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'СКЛАД' : 'OMBORXONA'}</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ОБЩАЯ СУММА' : 'UMUMIY SUMMA'}</th>
+                  <th style={{ padding: '12px', textAlign: 'center' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ПЕЧАТЬ' : 'CHOP ETISH'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,7 +223,7 @@ export default function InventoryDocumentsPage() {
                     </td>
                     <td style={{ padding: '12px' }}>{getDocTypeBadge(doc.docType)}</td>
                     <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {(doc as any).warehouse?.name?.[locale] || (doc as any).warehouse?.name?.uz || 'Ombor'}
+                      {(doc as any).warehouse?.name?.[locale] || (doc as any).warehouse?.name?.ru || (doc as any).warehouse?.name?.uz || 'Ombor'}
                     </td>
                     <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
                       {formatDate(doc.docDate, locale)}
@@ -232,12 +232,12 @@ export default function InventoryDocumentsPage() {
                       {formatCurrency(Number(doc.totalAmount), locale)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
-                      <Badge variant="success">O&apos;tkazilgan</Badge>
+                      <Badge variant="success">{isRu ? 'Проведён' : 'O\'tkazilgan'}</Badge>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
                       <Button variant="outline" size="sm" onClick={() => setPrintDoc(doc)}>
                         <Printer size={14} />
-                        Chop etish
+                        {isRu ? 'Печать' : 'Chop etish'}
                       </Button>
                     </td>
                   </tr>
@@ -253,7 +253,7 @@ export default function InventoryDocumentsPage() {
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 'var(--space-4)' }}>
           <div style={{ width: '100%', maxWidth: '640px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>Yangi Ombor Hujjati</h3>
+              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Новый складской документ' : 'Yangi Ombor Hujjati'}</h3>
               <button type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
@@ -268,28 +268,28 @@ export default function InventoryDocumentsPage() {
             <form onSubmit={handleCreateDocument} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                 <Select
-                  label="Hujjat Turi"
+                  label={isRu ? 'Тип документа' : 'Hujjat Turi'}
                   options={[
-                    { value: 'INBOUND', label: 'Kirim (Inbound - Tushum)' },
-                    { value: 'OUTBOUND', label: 'Chiqim (Outbound - Chiqarish)' },
-                    { value: 'STOCKTAKING', label: 'Inventarizatsiya (Tuzatish)' },
+                    { value: 'INBOUND', label: isRu ? 'Приход (Inbound)' : 'Kirim (Inbound - Tushum)' },
+                    { value: 'OUTBOUND', label: isRu ? 'Расход (Outbound)' : 'Chiqim (Outbound - Chiqarish)' },
+                    { value: 'STOCKTAKING', label: isRu ? 'Инвентаризация (Корректировка)' : 'Inventarizatsiya (Tuzatish)' },
                   ]}
                   value={docType}
                   onChange={(val) => setDocType(val as any)}
                 />
 
                 <Select
-                  label="Omborxona"
+                  label={isRu ? 'Склад' : 'Omborxona'}
                   options={warehouseOptions}
                   value={warehouseId}
                   onChange={(val) => setWarehouseId(val)}
-                  placeholder="Omborni tanlang"
+                  placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
                 />
               </div>
 
               {/* Line Item Entry Block */}
               <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)' }}>Pozitsiya qo&apos;shish</div>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)' }}>{isRu ? 'Добавить позицию' : 'Pozitsiya qo\'shish'}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 'var(--space-2)', alignItems: 'end' }}>
                   <Select
                     options={productOptions}
@@ -299,11 +299,11 @@ export default function InventoryDocumentsPage() {
                       const p = products.find((prod) => prod.id === val);
                       if (p) setUnitPrice(Number(p.costPrice) || 0);
                     }}
-                    placeholder="Mahsulotni tanlang..."
+                    placeholder={isRu ? 'Выберите товар...' : 'Mahsulotni tanlang...'}
                   />
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>Miqdori</label>
+                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Кол-во' : 'Miqdori'}</label>
                     <input
                       type="number"
                       min={0.001}
@@ -314,7 +314,7 @@ export default function InventoryDocumentsPage() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>Birlik Narxi</label>
+                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</label>
                     <input
                       type="number"
                       min={0}
@@ -335,10 +335,10 @@ export default function InventoryDocumentsPage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)', textAlign: 'left' }}>
                     <thead style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
                       <tr>
-                        <th style={{ padding: '8px' }}>Mahsulot</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Miqdori</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Narxi</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Jami</th>
+                        <th style={{ padding: '8px' }}>{isRu ? 'Товар' : 'Mahsulot'}</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Кол-во' : 'Miqdori'}</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Цена' : 'Narxi'}</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Итого' : 'Jami'}</th>
                         <th style={{ padding: '8px', textAlign: 'center' }}></th>
                       </tr>
                     </thead>
@@ -362,12 +362,12 @@ export default function InventoryDocumentsPage() {
               )}
 
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Izoh</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>{isRu ? 'Комментарий' : 'Izoh'}</label>
                 <input
                   type="text"
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Hujjat bo'yicha qo'shimcha izoh..."
+                  placeholder={isRu ? 'Дополнительные примечания к документу...' : 'Hujjat bo\'yicha qo\'shimcha izoh...'}
                   style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
                 />
               </div>
@@ -377,7 +377,7 @@ export default function InventoryDocumentsPage() {
                   {tCommon('cancel')}
                 </Button>
                 <Button type="submit" variant="primary" disabled={createLoading || items.length === 0}>
-                  {createLoading ? tCommon('loading') : 'Rasmiylashtirish va O\'tkazish'}
+                  {createLoading ? tCommon('loading') : (isRu ? 'Провести документ' : 'Rasmiylashtirish va O\'tkazish')}
                 </Button>
               </div>
             </form>
@@ -392,26 +392,26 @@ export default function InventoryDocumentsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #000', paddingBottom: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
               <div>
                 <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)' }}>{getDocTypeName(printDoc.docType)}</h2>
-                <div style={{ fontSize: 'var(--text-sm)', color: '#666' }}>Hujjat №: {printDoc.docNumber} | Sana: {formatDate(printDoc.docDate, locale)}</div>
+                <div style={{ fontSize: 'var(--text-sm)', color: '#666' }}>{isRu ? 'Документ №:' : 'Hujjat №:'} {printDoc.docNumber} | {isRu ? 'Дата:' : 'Sana:'} {formatDate(printDoc.docDate, locale)}</div>
               </div>
               <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                 <Button variant="primary" size="sm" onClick={handlePrint}>
-                  <Printer size={14} /> Chop etish (Print)
+                  <Printer size={14} /> {isRu ? 'Печать' : 'Chop etish (Print)'}
                 </Button>
                 <Button variant="secondary" size="sm" onClick={() => setPrintDoc(null)}>
-                  Yopish
+                  {isRu ? 'Закрыть' : 'Yopish'}
                 </Button>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)', fontSize: 'var(--text-xs)' }}>
               <div>
-                <strong>Tashkilot:</strong> {(company as any)?.name?.[locale] || (company as any)?.name?.uz || 'Demo Company'}<br />
-                <strong>Omborxona:</strong> {(printDoc as any)?.warehouse?.name?.[locale] || (printDoc as any)?.warehouse?.name?.uz || 'Asosiy Ombor'}
+                <strong>{isRu ? 'Организация:' : 'Tashkilot:'}</strong> {(company as any)?.name?.[locale] || (company as any)?.name?.ru || (company as any)?.name?.uz || 'Demo Company'}<br />
+                <strong>{isRu ? 'Склад:' : 'Omborxona:'}</strong> {(printDoc as any)?.warehouse?.name?.[locale] || (printDoc as any)?.warehouse?.name?.ru || (printDoc as any)?.warehouse?.name?.uz || 'Asosiy Ombor'}
               </div>
               <div>
-                <strong>Tuzuvchi:</strong> {(printDoc as any)?.createdBy?.firstName} {(printDoc as any)?.createdBy?.lastName}<br />
-                <strong>Holati:</strong> Tasdiqlangan / O&apos;tkazilgan (POSTED)
+                <strong>{isRu ? 'Составитель:' : 'Tuzuvchi:'}</strong> {(printDoc as any)?.createdBy?.firstName} {(printDoc as any)?.createdBy?.lastName}<br />
+                <strong>{isRu ? 'Статус:' : 'Holati:'}</strong> {isRu ? 'Проведён (POSTED)' : 'Tasdiqlangan / O\'tkazilgan (POSTED)'}
               </div>
             </div>
 
@@ -420,18 +420,18 @@ export default function InventoryDocumentsPage() {
               <thead>
                 <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '1px solid #ccc' }}>
                   <th style={{ padding: '8px', textAlign: 'left' }}>№</th>
-                  <th style={{ padding: '8px', textAlign: 'left' }}>Mahsulot</th>
+                  <th style={{ padding: '8px', textAlign: 'left' }}>{isRu ? 'Товар' : 'Mahsulot'}</th>
                   <th style={{ padding: '8px', textAlign: 'left' }}>SKU</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>Miqdori</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>Birlik Narxi</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>Jami</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Кол-во' : 'Miqdori'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Итого' : 'Jami'}</th>
                 </tr>
               </thead>
               <tbody>
                 {(printDoc.items || []).map((item, i) => (
                   <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '8px' }}>{i + 1}</td>
-                    <td style={{ padding: '8px', fontWeight: 'bold' }}>{(item.product as any)?.name?.[locale] || (item.product as any)?.name?.uz}</td>
+                    <td style={{ padding: '8px', fontWeight: 'bold' }}>{(item.product as any)?.name?.[locale] || (item.product as any)?.name?.ru || (item.product as any)?.name?.uz}</td>
                     <td style={{ padding: '8px' }}>{(item.product as any)?.sku}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{Number(item.quantity)}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(Number(item.unitPrice), locale)}</td>
@@ -442,9 +442,9 @@ export default function InventoryDocumentsPage() {
             </table>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #000', paddingTop: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: '#666' }}>Imzo: _________________________</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: '#666' }}>{isRu ? 'Подпись:' : 'Imzo:'} _________________________</div>
               <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-                Jami: {formatCurrency(Number(printDoc.totalAmount), locale)}
+                {isRu ? 'Итого:' : 'Jami:'} {formatCurrency(Number(printDoc.totalAmount), locale)}
               </div>
             </div>
           </div>

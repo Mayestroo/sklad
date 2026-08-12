@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
@@ -44,6 +45,9 @@ export function SupplierProfileDrawer({
   supplierId,
 }: SupplierProfileDrawerProps) {
   const { token, company } = useAuth();
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
+
   const [data, setData] = useState<SupplierProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'info' | 'receipts' | 'payments' | 'returns'>('info');
@@ -55,11 +59,12 @@ export function SupplierProfileDrawer({
     apiFetch<SupplierProfileData>(`/purchases/suppliers/${supplierId}`, {
       token,
       tenantId: company.id,
+      locale,
     })
       .then(setData)
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [token, company, supplierId]);
+  }, [token, company, supplierId, locale]);
 
   if (!supplierId) return null;
 
@@ -67,16 +72,16 @@ export function SupplierProfileDrawer({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={data?.supplier.name || 'Yetkazib beruvchi profili'}
+      title={data?.supplier.name || (isRu ? 'Профиль поставщика' : 'Yetkazib beruvchi profili')}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '800px', width: '100%' }}>
         {loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            Profil yuklanmoqda...
+            {isRu ? 'Загрузка профиля...' : 'Profil yuklanmoqda...'}
           </div>
         ) : !data ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            Ma&apos;lumot topilmadi
+            {isRu ? 'Данные не найдены' : 'Ma\'lumot topilmadi'}
           </div>
         ) : (
           <>
@@ -92,19 +97,25 @@ export function SupplierProfileDrawer({
               }}
             >
               <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Jami Xaridlar Summasi</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Общая сумма закупок' : 'Jami Xaridlar Summasi'}
+                </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(data.metrics.totalPurchased, 'uz')} UZS
+                  {formatCurrency(data.metrics.totalPurchased, locale)}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>To&apos;langan Summa</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Оплаченная сумма' : 'To\'langan Summa'}
+                </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
-                  {formatCurrency(data.metrics.totalPaid, 'uz')} UZS
+                  {formatCurrency(data.metrics.totalPaid, locale)}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Bizning Qarzimiz</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Наш долг' : 'Bizning Qarzimiz'}
+                </div>
                 <div
                   style={{
                     fontSize: 'var(--text-lg)',
@@ -113,7 +124,7 @@ export function SupplierProfileDrawer({
                   }}
                   className="tabular-nums"
                 >
-                  {formatCurrency(data.metrics.debtBalance, 'uz')} UZS
+                  {formatCurrency(data.metrics.debtBalance, locale)}
                 </div>
               </div>
             </div>
@@ -134,7 +145,7 @@ export function SupplierProfileDrawer({
                   fontSize: 'var(--text-sm)',
                 }}
               >
-                Rekvizitlar & Shartnomalar
+                {isRu ? 'Реквизиты и договоры' : 'Rekvizitlar & Shartnomalar'}
               </button>
               <button
                 type="button"
@@ -150,7 +161,7 @@ export function SupplierProfileDrawer({
                   fontSize: 'var(--text-sm)',
                 }}
               >
-                Xaridlar Tarixi ({data.receipts.length})
+                {isRu ? 'История закупок' : 'Xaridlar Tarixi'} ({data.receipts.length})
               </button>
               <button
                 type="button"
@@ -166,7 +177,7 @@ export function SupplierProfileDrawer({
                   fontSize: 'var(--text-sm)',
                 }}
               >
-                To&apos;lovlar Tarixi ({data.payments.length})
+                {isRu ? 'История платежей' : 'To\'lovlar Tarixi'} ({data.payments.length})
               </button>
               <button
                 type="button"
@@ -182,7 +193,7 @@ export function SupplierProfileDrawer({
                   fontSize: 'var(--text-sm)',
                 }}
               >
-                Qaytarishlar ({data.returns.length})
+                {isRu ? 'Возвраты' : 'Qaytarishlar'} ({data.returns.length})
               </button>
             </div>
 
@@ -190,20 +201,20 @@ export function SupplierProfileDrawer({
             {activeTab === 'info' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
                 <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>STIR / INN</div>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>ИНН / STIR</div>
                   <strong style={{ fontSize: 'var(--text-base)' }}>{data.supplier.inn || '—'}</strong>
                 </div>
                 <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>Telefon</div>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{isRu ? 'Телефон' : 'Telefon'}</div>
                   <strong>{data.supplier.phone || '—'}</strong>
                 </div>
                 <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>Bank Hisob raqami / MFO</div>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{isRu ? 'Расчётный счёт / МФО' : 'Bank Hisob raqami / MFO'}</div>
                   <div>{data.supplier.bankAccount || '—'}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>MFO: {data.supplier.mfo || '—'} ({data.supplier.bankName || ''})</div>
                 </div>
                 <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>Yuridik Manzil</div>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{isRu ? 'Юридический адрес' : 'Yuridik Manzil'}</div>
                   <div>{data.supplier.address || '—'}</div>
                 </div>
               </div>
@@ -214,19 +225,19 @@ export function SupplierProfileDrawer({
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
                   <thead>
                     <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ padding: '8px' }}>HUJJAT №</th>
-                      <th style={{ padding: '8px' }}>SANA</th>
-                      <th style={{ padding: '8px', textAlign: 'right' }}>SUMMA</th>
-                      <th style={{ padding: '8px', textAlign: 'center' }}>HOLAT</th>
+                      <th style={{ padding: '8px' }}>{isRu ? '№ ДОКУМЕНТА' : 'HUJJAT №'}</th>
+                      <th style={{ padding: '8px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
+                      <th style={{ padding: '8px', textAlign: 'center' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.receipts.map((r) => (
                       <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                         <td style={{ padding: '8px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>{r.docNumber}</td>
-                        <td style={{ padding: '8px' }}>{formatDate(r.docDate, 'uz')}</td>
+                        <td style={{ padding: '8px' }}>{formatDate(r.docDate, locale)}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                          {formatCurrency(Number(r.totalAmount), 'uz')} {r.currency}
+                          {formatCurrency(Number(r.totalAmount), locale)} {r.currency}
                         </td>
                         <td style={{ padding: '8px', textAlign: 'center' }}>
                           <Badge variant={r.status === 'POSTED' ? 'success' : 'neutral'}>{r.status}</Badge>
@@ -243,20 +254,20 @@ export function SupplierProfileDrawer({
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
                   <thead>
                     <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ padding: '8px' }}>SANA</th>
-                      <th style={{ padding: '8px' }}>SCHET / KASSA</th>
-                      <th style={{ padding: '8px' }}>IZOH</th>
-                      <th style={{ padding: '8px', textAlign: 'right' }}>TO&apos;LANGAN SUMMA</th>
+                      <th style={{ padding: '8px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
+                      <th style={{ padding: '8px' }}>{isRu ? 'СЧЁТ / касса' : 'SCHET / KASSA'}</th>
+                      <th style={{ padding: '8px' }}>{isRu ? 'КОММЕНТАРИЙ' : 'IZOH'}</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN SUMMA'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.payments.map((p) => (
                       <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                        <td style={{ padding: '8px' }}>{formatDate(p.transactionDate, 'uz')}</td>
-                        <td style={{ padding: '8px' }}>{p.account?.name?.uz || 'Kassa'}</td>
-                        <td style={{ padding: '8px' }}>{p.comment || 'Yetkazib beruvchiga to\'lov'}</td>
+                        <td style={{ padding: '8px' }}>{formatDate(p.transactionDate, locale)}</td>
+                        <td style={{ padding: '8px' }}>{typeof p.account?.name === 'object' ? (p.account?.name[locale] || p.account?.name?.uz) : (p.account?.name || (isRu ? 'Касса' : 'Kassa'))}</td>
+                        <td style={{ padding: '8px' }}>{p.comment || (isRu ? 'Оплата поставщику' : 'Yetkazib beruvchiga to\'lov')}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
-                          {formatCurrency(Number(p.amount), 'uz')} {p.currency}
+                          {formatCurrency(Number(p.amount), locale)} {p.currency}
                         </td>
                       </tr>
                     ))}
@@ -270,20 +281,20 @@ export function SupplierProfileDrawer({
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
                   <thead>
                     <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ padding: '8px' }}>QAYTARISH №</th>
-                      <th style={{ padding: '8px' }}>SANA</th>
-                      <th style={{ padding: '8px' }}>SABABI</th>
-                      <th style={{ padding: '8px', textAlign: 'right' }}>SUMMA</th>
+                      <th style={{ padding: '8px' }}>{isRu ? '№ ВОЗВРАТА' : 'QAYTARISH №'}</th>
+                      <th style={{ padding: '8px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
+                      <th style={{ padding: '8px' }}>{isRu ? 'ПРИЧИНА' : 'SABABI'}</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.returns.map((ret) => (
                       <tr key={ret.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                         <td style={{ padding: '8px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>{ret.returnNumber}</td>
-                        <td style={{ padding: '8px' }}>{formatDate(ret.returnDate, 'uz')}</td>
+                        <td style={{ padding: '8px' }}>{formatDate(ret.returnDate, locale)}</td>
                         <td style={{ padding: '8px' }}>{ret.reason || '—'}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                          -{formatCurrency(Number(ret.totalAmount), 'uz')} {ret.currency}
+                          -{formatCurrency(Number(ret.totalAmount), locale)} {ret.currency}
                         </td>
                       </tr>
                     ))}

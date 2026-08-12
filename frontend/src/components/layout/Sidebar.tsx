@@ -47,31 +47,39 @@ export function Sidebar() {
   }, [isSalesActive]);
 
   const purchasesSubItems = [
-    { href: '/purchases', label: 'Xaridlar / Kirim', icon: ShoppingBag },
-    { href: '/purchases/expenses', label: 'Qo‘shimcha xarajatlar', icon: Receipt },
-    { href: '/purchases/returns', label: 'Qaytarishlar', icon: RotateCcw },
-    { href: '/purchases/suppliers', label: 'Yetkazib beruvchilar', icon: UserCheck },
+    { href: '/purchases', label: t('purchases'), icon: ShoppingBag },
+    { href: '/purchases/expenses', label: t('purchasesExpenses'), icon: Receipt },
+    { href: '/purchases/returns', label: t('purchasesReturns'), icon: RotateCcw },
+    { href: '/purchases/suppliers', label: t('suppliers'), icon: UserCheck },
   ];
 
   const salesSubItems = [
-    { href: '/sales', label: 'Sotuvlar / Tovar sotish', icon: ShoppingCart },
-    { href: '/sales/returns', label: 'Mijozdan qaytarish', icon: RotateCcw },
-    { href: '/sales/customers', label: 'Mijozlar', icon: UserCheck },
-    { href: '/sales/prices', label: 'Narxlar va chegirmalar', icon: Receipt },
+    { href: '/sales', label: t('salesOverview'), icon: ShoppingCart },
+    { href: '/sales/returns', label: t('salesReturns'), icon: RotateCcw },
+    { href: '/sales/customers', label: t('customers'), icon: UserCheck },
+    { href: '/sales/prices', label: t('prices'), icon: Receipt },
   ];
 
   const bottomNavItems = [
-    { href: '/counterparties', label: 'Kontragentlar', icon: Users },
-    { href: '/inventory/products', label: 'Tovarlar', icon: PackageCheck },
-    { href: '/inventory', label: 'Ombor', icon: Package },
-    { href: '/finance', label: 'Moliya', icon: Wallet },
-    { href: '/production', label: 'Ishlab chiqarish', icon: Factory },
-    { href: '/analytics', label: 'Hisobotlar', icon: BarChart3 },
-    { href: '/accounting', label: 'Buxgalteriya', icon: BookOpen },
-    { href: '/users', label: 'Foydalanuvchilar', icon: Users },
-    { href: '/settings/branches', label: 'Sozlamalar', icon: Settings },
-    { href: '/super-admin', label: 'Super-Admin', icon: Crown },
+    { href: '/counterparties', label: t('counterparties'), icon: Users },
+    { href: '/products', label: t('products'), icon: PackageCheck },
+    { href: '/inventory', label: t('inventory'), icon: Package },
+    { href: '/finance', label: t('finance'), icon: Wallet },
+    { href: '/production', label: t('production'), icon: Factory },
+    { href: '/analytics', label: t('analytics'), icon: BarChart3 },
+    { href: '/accounting', label: t('accounting'), icon: BookOpen },
+    { href: '/users', label: t('users'), icon: Users },
+    { href: '/settings/branches', label: t('settings'), icon: Settings },
+    { href: '/super-admin', label: t('superAdmin'), icon: Crown },
   ];
+
+  const itemBaseStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-sans)',
+    fontSize: 'var(--text-sm)',
+    lineHeight: 'var(--leading-normal)',
+    borderRadius: 'var(--radius-md)',
+    transition: 'all var(--transition-fast)',
+  };
 
   return (
     <aside
@@ -111,15 +119,16 @@ export function Sidebar() {
             justifyContent: 'center',
             fontWeight: 'var(--font-bold)',
             fontSize: 'var(--text-lg)',
+            fontFamily: 'var(--font-sans)',
           }}
         >
           C
         </div>
         <div>
-          <div style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-base)', lineHeight: 1.2 }}>
+          <div style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-base)', lineHeight: 1.2, fontFamily: 'var(--font-sans)' }}>
             CRM SaaS
           </div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-sans)' }}>
             MoySklad + 1C
           </div>
         </div>
@@ -131,21 +140,25 @@ export function Sidebar() {
         <Link
           href="/"
           style={{
+            ...itemBaseStyle,
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--space-3)',
             padding: '10px 14px',
-            borderRadius: 'var(--radius-md)',
-            fontSize: 'var(--text-sm)',
             fontWeight: pathname === '/' ? 'var(--font-semibold)' : 'var(--font-medium)',
             color: pathname === '/' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
             backgroundColor: pathname === '/' ? 'var(--color-primary-50)' : 'transparent',
             textDecoration: 'none',
-            transition: 'all var(--transition-fast)',
+          }}
+          onMouseEnter={(e) => {
+            if (pathname !== '/') e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
+          }}
+          onMouseLeave={(e) => {
+            if (pathname !== '/') e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
           <LayoutDashboard size={18} style={{ color: pathname === '/' ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-          <span>Dashboard</span>
+          <span>{t('dashboard')}</span>
         </Link>
 
         {/* Purchases Dropdown Group */}
@@ -154,25 +167,23 @@ export function Sidebar() {
             type="button"
             onClick={() => setIsPurchasesOpen((prev) => !prev)}
             style={{
+              ...itemBaseStyle,
               width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '10px 14px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 'var(--text-sm)',
               fontWeight: isPurchasesActive ? 'var(--font-semibold)' : 'var(--font-medium)',
               color: isPurchasesActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
               backgroundColor: isPurchasesActive && !isPurchasesOpen ? 'var(--color-primary-50)' : 'transparent',
               border: 'none',
               cursor: 'pointer',
               textAlign: 'left',
-              transition: 'all var(--transition-fast)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <ShoppingBag size={18} style={{ color: isPurchasesActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-              <span>Xaridlar</span>
+              <span>{t('purchases')}</span>
             </div>
             {isPurchasesOpen ? (
               <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)' }} />
@@ -206,17 +217,16 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     style={{
+                      ...itemBaseStyle,
                       display: 'flex',
                       alignItems: 'center',
                       gap: 'var(--space-2)',
                       padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
                       fontSize: 'var(--text-xs)',
                       fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
                       color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
                       backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
                       textDecoration: 'none',
-                      transition: 'all var(--transition-fast)',
                     }}
                   >
                     <SubIcon size={15} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
@@ -234,25 +244,23 @@ export function Sidebar() {
             type="button"
             onClick={() => setIsSalesOpen((prev) => !prev)}
             style={{
+              ...itemBaseStyle,
               width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '10px 14px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 'var(--text-sm)',
               fontWeight: isSalesActive ? 'var(--font-semibold)' : 'var(--font-medium)',
               color: isSalesActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
               backgroundColor: isSalesActive && !isSalesOpen ? 'var(--color-primary-50)' : 'transparent',
               border: 'none',
               cursor: 'pointer',
               textAlign: 'left',
-              transition: 'all var(--transition-fast)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <ShoppingCart size={18} style={{ color: isSalesActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-              <span>Sotuvlar</span>
+              <span>{t('sales')}</span>
             </div>
             {isSalesOpen ? (
               <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)' }} />
@@ -286,17 +294,16 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     style={{
+                      ...itemBaseStyle,
                       display: 'flex',
                       alignItems: 'center',
                       gap: 'var(--space-2)',
                       padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
                       fontSize: 'var(--text-xs)',
                       fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
                       color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
                       backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
                       textDecoration: 'none',
-                      transition: 'all var(--transition-fast)',
                     }}
                   >
                     <SubIcon size={15} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
@@ -318,17 +325,21 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               style={{
+                ...itemBaseStyle,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 'var(--space-3)',
                 padding: '10px 14px',
-                borderRadius: 'var(--radius-md)',
-                fontSize: 'var(--text-sm)',
                 fontWeight: isActive ? 'var(--font-semibold)' : 'var(--font-medium)',
                 color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
                 backgroundColor: isActive ? 'var(--color-primary-50)' : 'transparent',
                 textDecoration: 'none',
-                transition: 'all var(--transition-fast)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
               <Icon size={18} style={{ color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
@@ -345,6 +356,7 @@ export function Sidebar() {
           borderTop: '1px solid var(--color-border-light)',
           fontSize: 'var(--text-xs)',
           color: 'var(--color-text-tertiary)',
+          fontFamily: 'var(--font-sans)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>

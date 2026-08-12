@@ -33,6 +33,7 @@ import {
 export default function AnalyticsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | 'quarter' | 'year'>('month');
@@ -48,23 +49,23 @@ export default function AnalyticsPage() {
     if (!token || !company) return;
     setLoading(true);
     try {
-      const [kpiData, trendData, catData, topData, clientData, ratioData] = await Promise.all([
-        apiFetch<KpiSummary>('/analytics/kpi', { token, tenantId: company.id, locale }),
-        apiFetch<SalesTrendDataPoint[]>('/analytics/sales-trend', { token, tenantId: company.id, locale }),
-        apiFetch<CategoryBreakdownItem[]>('/analytics/categories', { token, tenantId: company.id, locale }),
-        apiFetch<TopProductItem[]>('/analytics/top-products?limit=10', { token, tenantId: company.id, locale }),
-        apiFetch<any[]>('/analytics/top-clients?limit=5', { token, tenantId: company.id, locale }),
-        apiFetch<FinancialRatios>('/analytics/ratios', { token, tenantId: company.id, locale }),
+      const opts = { token, tenantId: company.id, locale };
+      const [k, t, c, tp, tc, r] = await Promise.all([
+        apiFetch<KpiSummary>(`/analytics/kpi-summary?range=${timeRange}`, opts),
+        apiFetch<SalesTrendDataPoint[]>(`/analytics/sales-trend?range=${timeRange}`, opts),
+        apiFetch<CategoryBreakdownItem[]>(`/analytics/category-breakdown?range=${timeRange}`, opts),
+        apiFetch<TopProductItem[]>(`/analytics/top-products?range=${timeRange}&limit=10`, opts),
+        apiFetch<any[]>(`/analytics/top-clients?range=${timeRange}&limit=5`, opts).catch(() => []),
+        apiFetch<FinancialRatios>(`/analytics/financial-ratios`, opts),
       ]);
-
-      setKpi(kpiData);
-      setTrend(trendData);
-      setCategories(catData);
-      setTopProducts(topData);
-      setTopClients(clientData);
-      setRatios(ratioData);
+      setKpi(k);
+      setTrend(t || []);
+      setCategories(c || []);
+      setTopProducts(tp || []);
+      setTopClients(tc || []);
+      setRatios(r);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load BI Analytics data:', err);
     } finally {
       setLoading(false);
     }
@@ -72,7 +73,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [token, company, timeRange]);
+  }, [token, company, timeRange, locale]);
 
   const maxTrendRevenue = Math.max(...trend.map((t) => t.revenue), 1);
 
@@ -82,7 +83,7 @@ export default function AnalyticsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            BI Analitika va Rahbar Dashboardi (Executive BI)
+            {isRu ? 'BI-Аналитика и Дашборд Руководителя' : 'BI Analitika va Rahbar Dashboardi (Executive BI)'}
           </h1>
         </div>
 
@@ -106,13 +107,21 @@ export default function AnalyticsPage() {
                   boxShadow: timeRange === range ? 'var(--shadow-sm)' : 'none',
                 }}
               >
-                {range === 'today' ? 'Bugun' : range === 'week' ? 'Shu hafta' : range === 'month' ? 'Shu oy' : range === 'quarter' ? 'Shu chorak' : 'Yillik'}
+                {range === 'today'
+                  ? (isRu ? 'Сегодня' : 'Bugun')
+                  : range === 'week'
+                  ? (isRu ? 'Эта неделя' : 'Shu hafta')
+                  : range === 'month'
+                  ? (isRu ? 'Этот месяц' : 'Shu oy')
+                  : range === 'quarter'
+                  ? (isRu ? 'Квартал' : 'Shu chorak')
+                  : (isRu ? 'Год' : 'Yillik')}
               </button>
             ))}
           </div>
 
           <Button variant="outline" onClick={() => window.print()}>
-            <Printer size={16} /> Hisobot Chop etish
+            <Printer size={16} /> {isRu ? 'Печать отчёта' : 'Hisobot Chop etish'}
           </Button>
         </div>
       </div>
@@ -127,65 +136,77 @@ export default function AnalyticsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
             <Card style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.05) 0%, rgba(79,70,229,0.01) 100%)', borderLeft: '4px solid var(--color-primary-600)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>JAMI SOTUV TUSHUMI</div>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'ОБЩАЯ ВЫРУЧКА ОТ ПРОДАЖ' : 'JAMI SOTUV TUSHUMI'}
+                </div>
                 <TrendingUp size={18} style={{ color: 'var(--color-primary-600)' }} />
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: '8px' }} className="tabular-nums">
                 {formatCurrency(kpi?.totalRevenue || 0, locale)}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <ArrowUpRight size={14} /> <span>Shartnomalar bo&apos;yicha yig&apos;indi</span>
+                <ArrowUpRight size={14} /> <span>{isRu ? 'Сумма по документам реализации' : 'Shartnomalar bo\'yicha yig\'indi'}</span>
               </div>
             </Card>
 
             <Card style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(16,185,129,0.01) 100%)', borderLeft: '4px solid var(--color-success-600)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>SOF FOYDA RENTABELLIGI</div>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'РЕНТАБЕЛЬНОСТЬ ЧИСТОЙ ПРИБЫЛИ' : 'SOF FOYDA RENTABELLIGI'}
+                </div>
                 <Badge variant="success">+{kpi?.netProfitMargin || 0}% Margin</Badge>
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '8px' }} className="tabular-nums">
                 {formatCurrency(kpi?.grossProfit || 0, locale)}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                Sotuv tushumi minus tovarlar tannarxi (COGS)
+                {isRu ? 'Выручка минус себестоимость (COGS)' : 'Sotuv tushumi minus tovarlar tannarxi (COGS)'}
               </div>
             </Card>
 
             <Card style={{ borderLeft: '4px solid var(--color-warning-600)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>DEBITORLIK (MIJOZLAR QARZI)</div>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
+                {isRu ? 'ДЕБИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'DEBITORLIK (MIJOZLAR QARZI)'}
+              </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)', marginTop: '8px' }} className="tabular-nums">
                 {formatCurrency(kpi?.totalAccountsReceivable || 0, locale)}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                Mijozlardan kelib tushishi kutilayotgan mablag&apos;
+                {isRu ? 'Ожидаемые поступления от клиентов' : 'Mijozlardan kelib tushishi kutilayotgan mablag\'}'}
               </div>
             </Card>
 
-            <Card style={{ borderLeft: '4px solid #8b5cf6' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>OMBOR QOLDIQLARI QIYMATI</div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#8b5cf6', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.inventoryValuation || 0, locale)}
+            <Card style={{ borderLeft: '4px solid var(--color-error-600)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
+                {isRu ? 'КРЕДИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'KREDITORLIK (POSTAVSHIKLAR QARZI)'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', marginTop: '8px' }} className="tabular-nums">
+                {formatCurrency(kpi?.totalAccountsPayable || 0, locale)}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                Barcha omborlardagi tovarlar tan narxi summasi
+                {isRu ? 'Задолженность перед поставщиками' : 'Yetkazib beruvchilar oldidagi qarzimiz'}
               </div>
             </Card>
           </div>
 
-          {/* Charts Row */}
+          {/* Analytics Charts Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-6)' }}>
-            {/* Sales & Profit Trend Interactive SVG Chart */}
+            {/* Sales Trend Bar Chart */}
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>Sotuvlar va Foyda Oylik Dinamikasi</h3>
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Tushum va yalpi foyda o&apos;sish grafigi</p>
+                  <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>
+                    {isRu ? 'Динамика продаж и прибыли' : 'Sotuvlar va Foyda Oylik Dinamikasi'}
+                  </h3>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                    {isRu ? 'График роста выручки и валовой прибыли' : 'Tushum va yalpi foyda o\'sish grafigi'}
+                  </p>
                 </div>
               </div>
 
               {trend.length === 0 ? (
                 <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                  Grafik ma&apos;lumotlari hali shakllanmagan
+                  {isRu ? 'Данные для графика отсутствуют' : 'Grafik ma\'lumotlari hali shakllanmagan'}
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-4)', height: '220px', paddingTop: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)' }}>
@@ -219,20 +240,26 @@ export default function AnalyticsPage() {
             {/* Category Breakdown Donut / Progress list */}
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div>
-                <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>Kategoriyalar Taqsimoti</h3>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Sotuv tushumining tovar turlari bo&apos;yicha ulushi</p>
+                <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>
+                  {isRu ? 'Распределение по категориям' : 'Kategoriyalar Taqsimoti'}
+                </h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Доля выручки по категориям товаров' : 'Sotuv tushumining tovar turlari bo\'yicha ulushi'}
+                </p>
               </div>
 
               {categories.length === 0 ? (
                 <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                  Kategoriya ma&apos;lumotlari mavjud emas
+                  {isRu ? 'Данные по категориям отсутствуют' : 'Kategoriya ma\'lumotlari mavjud emas'}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                   {categories.map((cat) => (
                     <div key={cat.categoryId} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)' }}>
-                        <span style={{ fontWeight: 'var(--font-medium)' }}>{cat.categoryName[locale] || cat.categoryName.uz}</span>
+                        <span style={{ fontWeight: 'var(--font-medium)' }}>
+                          {cat.categoryName[locale] || cat.categoryName.ru || cat.categoryName.uz}
+                        </span>
                         <span style={{ fontWeight: 'var(--font-bold)' }}>{cat.percentage}% ({formatCurrency(cat.revenue, locale)})</span>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
@@ -250,13 +277,17 @@ export default function AnalyticsPage() {
             {/* Top 10 Best-Selling Products Table */}
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div>
-                <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>Top 10 Eng Xaridorgir Mahsulotlar (Bestsellers)</h3>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Sotuv hajmi va tushum bo&apos;yicha etakchilar</p>
+                <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>
+                  {isRu ? 'Топ-10 популярных товаров (Bestsellers)' : 'Top 10 Eng Xaridorgir Mahsulotlar (Bestsellers)'}
+                </h3>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Лидеры по объёму продаж и выручке' : 'Sotuv hajmi va tushum bo\'yicha etakchilar'}
+                </p>
               </div>
 
               {topProducts.length === 0 ? (
                 <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                  Sotuvlar tarixi mavjud emas
+                  {isRu ? 'История продаж отсутствует' : 'Sotuvlar tarixi mavjud emas'}
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
@@ -264,17 +295,19 @@ export default function AnalyticsPage() {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)' }}>
                         <th style={{ padding: '8px' }}>№</th>
-                        <th style={{ padding: '8px' }}>MAHSULOT NOMI</th>
+                        <th style={{ padding: '8px' }}>{isRu ? 'НАИМЕНОВАНИЕ ТОВАРА' : 'MAHSULOT NOMI'}</th>
                         <th style={{ padding: '8px' }}>SKU</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>SOTILGAN MIQDOR</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>JAMI TUSHUM</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'ПРОДАНО' : 'SOTILGAN MIQDOR'}</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'ОБЩАЯ ВЫРУЧКА' : 'JAMI TUSHUM'}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {topProducts.map((p, idx) => (
                         <tr key={p.productId} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                           <td style={{ padding: '8px', fontWeight: 'bold' }}>{idx + 1}</td>
-                          <td style={{ padding: '8px', fontWeight: 'var(--font-semibold)' }}>{p.productName[locale] || p.productName.uz}</td>
+                          <td style={{ padding: '8px', fontWeight: 'var(--font-semibold)' }}>
+                            {p.productName[locale] || p.productName.ru || p.productName.uz}
+                          </td>
                           <td style={{ padding: '8px', fontFamily: 'var(--font-mono)' }}>{p.sku}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{p.totalQuantity} {p.unitOfMeasure}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
@@ -293,19 +326,27 @@ export default function AnalyticsPage() {
               {/* Top Clients */}
               <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 <div>
-                  <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>Asosiy Mijozlar (Top Clients)</h3>
-                  <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>Eng ko&apos;p tushum keltirgan mijozlar</p>
+                  <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
+                    {isRu ? 'Ключевые клиенты' : 'Asosiy Mijozlar (Top Clients)'}
+                  </h3>
+                  <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                    {isRu ? 'Клиенты с наибольшей выручкой' : 'Eng ko\'p tushum keltirgan mijozlar'}
+                  </p>
                 </div>
 
                 {topClients.length === 0 ? (
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', textAlign: 'center', padding: '12px' }}>Mijozlar tarixi mavjud emas</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', textAlign: 'center', padding: '12px' }}>
+                    {isRu ? 'История клиентов отсутствует' : 'Mijozlar tarixi mavjud emas'}
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {topClients.map((client, idx) => (
                       <div key={client.counterpartyId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
                         <div>
                           <div style={{ fontWeight: 'bold' }}>{idx + 1}. {client.name}</div>
-                          <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{client.invoiceCount} ta faktura {client.inn ? `| STIR: ${client.inn}` : ''}</div>
+                          <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>
+                            {client.invoiceCount} {isRu ? 'счетов' : 'ta faktura'} {client.inn ? `| ИНН: ${client.inn}` : ''}
+                          </div>
                         </div>
                         <div style={{ fontWeight: 'bold', color: 'var(--color-success-600)' }} className="tabular-nums">
                           {formatCurrency(client.totalSpent, locale)}
@@ -319,28 +360,36 @@ export default function AnalyticsPage() {
               {/* Financial Ratios Cards */}
               <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 <div>
-                  <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>Moliyaviy Ko&apos;rsatkichlar (Ratios)</h3>
+                  <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
+                    {isRu ? 'Финансовые показатели (Ratios)' : 'Moliyaviy Ko\'rsatkichlar (Ratios)'}
+                  </h3>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', fontSize: 'var(--text-xs)' }}>
                   <div style={{ padding: '8px 12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>SOF AYLANMA MABLAG&apos; (WORKING CAPITAL)</div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                      {isRu ? 'ЧИСТЫЙ ОБОРОТНЫЙ КАПИТАЛ' : 'SOF AYLANMA MABLAG\' (WORKING CAPITAL)'}
+                    </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
                       {formatCurrency(ratios?.workingCapital || 0, locale)}
                     </div>
                   </div>
 
                   <div style={{ padding: '8px 12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>TOVARLAR AYLANISH DAVRI (INVENTORY DAYS)</div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                      {isRu ? 'ОБОРАЧИВАЕМОСТЬ ЗАПАСОВ (ДНЕЙ)' : 'TOVARLAR AYLANISH DAVRI (INVENTORY DAYS)'}
+                    </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {ratios?.inventoryTurnoverDays || 0} Kun
+                      {ratios?.inventoryTurnoverDays || 0} {isRu ? 'дн' : 'Kun'}
                     </div>
                   </div>
 
                   <div style={{ padding: '8px 12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>QARZDORLIK YIG&apos;ISH MUDDATI (AR DAYS)</div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                      {isRu ? 'ПЕРИОД СБОРА ДЕБИТОРКИ (ДНЕЙ)' : 'QARZDORLIK YIG\'ISH MUDDATI (AR DAYS)'}
+                    </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                      {ratios?.arCollectionDays || 0} Kun
+                      {ratios?.arCollectionDays || 0} {isRu ? 'дн' : 'Kun'}
                     </div>
                   </div>
                 </div>

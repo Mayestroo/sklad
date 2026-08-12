@@ -20,8 +20,8 @@ export function Button({
     switch (variant) {
       case 'primary':
         return {
-          backgroundColor: 'var(--color-primary-600)',
-          color: '#ffffff',
+          backgroundColor: 'var(--color-btn-primary-bg, var(--color-primary-600))',
+          color: 'var(--color-btn-primary-text, #ffffff)',
           border: 'none',
         };
       case 'secondary':

@@ -1,26 +1,26 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { Select, SelectOption } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { Building2, Warehouse as WarehouseIcon, Plus, MapPin, Phone, CheckCircle2 } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { GitBranch, Warehouse, Plus, Building2, MapPin, Phone } from 'lucide-react';
 
-export default function BranchesSettingsPage() {
-  const tCommon = useTranslations('common');
-  const locale = useLocale() as 'uz' | 'ru';
+export default function BranchesPage() {
   const { token, company } = useAuth();
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
 
   const [branches, setBranches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal states
+  // Modals state
   const [branchModalOpen, setBranchModalOpen] = useState(false);
   const [warehouseModalOpen, setWarehouseModalOpen] = useState(false);
 
@@ -42,9 +42,12 @@ export default function BranchesSettingsPage() {
     setLoading(true);
     try {
       const data = await apiFetch<any[]>('/tenants/branches', { token, tenantId: company.id, locale });
-      setBranches(data);
+      setBranches(data || []);
+      if (data && data.length > 0) {
+        setSelectedBranchId(data[0].id);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load branches:', err);
     } finally {
       setLoading(false);
     }
@@ -52,17 +55,17 @@ export default function BranchesSettingsPage() {
 
   useEffect(() => {
     fetchBranches();
-  }, [token, company]);
+  }, [token, company, locale]);
 
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !company || !branchNameUz) return;
+    if (!token || !company) return;
     try {
       await apiFetch('/tenants/branches', {
+        method: 'POST',
         token,
         tenantId: company.id,
         locale,
-        method: 'POST',
         body: JSON.stringify({
           name: { uz: branchNameUz, ru: branchNameRu || branchNameUz },
           address: branchAddress,
@@ -73,23 +76,24 @@ export default function BranchesSettingsPage() {
       setBranchNameUz('');
       setBranchNameRu('');
       setBranchAddress('');
+      setBranchIsMain(false);
       fetchBranches();
-    } catch (err: any) {
-      alert(err.message || 'Error creating branch');
+    } catch (err) {
+      alert(isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik');
     }
   };
 
   const handleCreateWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !company || !warehouseNameUz) return;
+    if (!token || !company) return;
     try {
       await apiFetch('/tenants/warehouses', {
+        method: 'POST',
         token,
         tenantId: company.id,
         locale,
-        method: 'POST',
         body: JSON.stringify({
-          branchId: selectedBranchId || null,
+          branchId: selectedBranchId,
           name: { uz: warehouseNameUz, ru: warehouseNameRu || warehouseNameUz },
           address: warehouseAddress,
           phone: warehousePhone,
@@ -101,84 +105,96 @@ export default function BranchesSettingsPage() {
       setWarehouseAddress('');
       setWarehousePhone('');
       fetchBranches();
-    } catch (err: any) {
-      alert(err.message || 'Error creating warehouse');
+    } catch (err) {
+      alert(isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik');
     }
   };
 
-  const branchOptions = [
-    { value: '', label: '-- Filialga biriktirmaslik (Mustaqil Ombor) --' },
-    ...branches.map((b) => ({ value: b.id, label: b.name[locale] || b.name.uz })),
-  ];
+  const branchOptions: SelectOption[] = branches.map((b) => ({
+    value: b.id,
+    label: typeof b.name === 'object' ? (b.name[locale] || b.name.uz || b.name.ru) : b.name,
+  }));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Filiallar va Omborxonalar Tuzilmasi (Hierarchy)
+            {isRu ? 'Филиалы и Склады' : 'Filiallar va Omborxonalar'}
           </h1>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+            {isRu ? 'Управление структурой филиалов и складов компании' : 'Kompaniyaning filiallar va omborxonalar tuzilmasini boshqarish'}
+          </p>
         </div>
-
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <Button variant="outline" onClick={() => setWarehouseModalOpen(true)}>
-            <WarehouseIcon size={16} /> Omborxona Qo&apos;shish
+          <Button variant="secondary" onClick={() => setBranchModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <GitBranch size={16} /> {isRu ? 'Новый филиал' : 'Yangi Filial'}
           </Button>
-          <Button variant="primary" onClick={() => setBranchModalOpen(true)}>
-            <Plus size={16} /> Yangi Filial Yaratish
+          <Button variant="primary" onClick={() => setWarehouseModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Warehouse size={16} /> {isRu ? 'Новый склад' : 'Yangi Omborxona'}
           </Button>
         </div>
       </div>
 
-      {/* Branches List */}
+      {/* Content */}
       {loading ? (
-        <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-          {tCommon('loading')}
-        </div>
+        <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+          {isRu ? 'Загрузка структуры...' : 'Filiallar yuklanmoqda...'}
+        </Card>
       ) : branches.length === 0 ? (
         <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-          <Building2 size={40} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-          <div>Hozircha filiallar kiritilmagan</div>
+          {isRu ? 'Филиалы еще не созданы' : 'Hozircha filiallar yaratilmagan.'}
         </Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
           {branches.map((branch) => (
-            <Card key={branch.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', borderTop: branch.isMain ? '4px solid var(--color-primary-600)' : '1px solid var(--color-border)' }}>
+            <Card key={branch.id} style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <Building2 size={20} style={{ color: 'var(--color-primary-600)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Building2 size={20} />
+                  </div>
                   <div>
-                    <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-                      {branch.name[locale] || branch.name.uz}
+                    <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {typeof branch.name === 'object' ? (branch.name[locale] || branch.name.uz || branch.name.ru) : branch.name}
+                      {branch.isMain && <Badge variant="success">{isRu ? 'Главный' : 'Bosh Filial'}</Badge>}
                     </h3>
                     {branch.address && (
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                         <MapPin size={12} /> {branch.address}
-                      </div>
+                      </p>
                     )}
                   </div>
                 </div>
-                {branch.isMain && <Badge variant="success">Bosh Filial (Main)</Badge>}
               </div>
 
-              {/* Warehouses list under branch */}
-              <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
-                  BOG&apos;LANGAN OMBORXONALAR ({branch.warehouses?.length || 0}):
-                </div>
+              <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
+                <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Warehouse size={14} /> {isRu ? 'Склады филиала' : 'Filial Omborxonalari'} ({branch.warehouses?.length || 0})
+                </h4>
                 {branch.warehouses && branch.warehouses.length > 0 ? (
-                  branch.warehouses.map((wh: any) => (
-                    <div key={wh.id} style={{ padding: '8px 12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <WarehouseIcon size={16} style={{ color: 'var(--color-text-secondary)' }} />
-                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)' }}>{wh.name[locale] || wh.name.uz}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                    {branch.warehouses.map((wh: any) => (
+                      <div key={wh.id} style={{ padding: 'var(--space-2) var(--space-3)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
+                            {typeof wh.name === 'object' ? (wh.name[locale] || wh.name.uz || wh.name.ru) : wh.name}
+                          </div>
+                          {wh.phone && (
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Phone size={10} /> {wh.phone}
+                            </div>
+                          )}
+                        </div>
+                        {wh.isMain && <Badge variant="neutral">{isRu ? 'Главный склад' : 'Asosiy Ombor'}</Badge>}
                       </div>
-                      {wh.phone && <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>{wh.phone}</span>}
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 ) : (
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>Omborxonalar yo&apos;q</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                    {isRu ? 'Склады отсутствуют' : 'Omborxonalar yo\'q'}
+                  </div>
                 )}
               </div>
             </Card>
@@ -187,38 +203,38 @@ export default function BranchesSettingsPage() {
       )}
 
       {/* Add Branch Modal */}
-      <Modal isOpen={branchModalOpen} onClose={() => setBranchModalOpen(false)} title="Yangi Filial Yaratish">
+      <Modal isOpen={branchModalOpen} onClose={() => setBranchModalOpen(false)} title={isRu ? 'Создание филиала' : 'Yangi Filial Yaratish'}>
         <form onSubmit={handleCreateBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <Input label="Filial Nomi (O'zbekcha)" value={branchNameUz} onChange={(e) => setBranchNameUz(e.target.value)} required />
-          <Input label="Название Филиала (Русский)" value={branchNameRu} onChange={(e) => setBranchNameRu(e.target.value)} />
-          <Input label="Manzili (Address)" value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} />
+          <Input label={isRu ? 'Название филиала (Узбекский)' : "Filial Nomi (O'zbekcha)"} value={branchNameUz} onChange={(e) => setBranchNameUz(e.target.value)} required />
+          <Input label={isRu ? 'Название филиала (Русский)' : 'Название Филиала (Русский)'} value={branchNameRu} onChange={(e) => setBranchNameRu(e.target.value)} />
+          <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} />
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
             <input type="checkbox" checked={branchIsMain} onChange={(e) => setBranchIsMain(e.target.checked)} />
-            <span>Bosh filial deb belgilash (Main Branch)</span>
+            <span>{isRu ? 'Отметить как главный филиал' : 'Bosh filial deb belgilash (Main Branch)'}</span>
           </label>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-            <Button type="button" variant="outline" onClick={() => setBranchModalOpen(false)}>Bekor qilish</Button>
-            <Button type="submit" variant="primary">Saqlash</Button>
+            <Button type="button" variant="outline" onClick={() => setBranchModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button type="submit" variant="primary">{isRu ? 'Сохранить' : 'Saqlash'}</Button>
           </div>
         </form>
       </Modal>
 
       {/* Add Warehouse Modal */}
-      <Modal isOpen={warehouseModalOpen} onClose={() => setWarehouseModalOpen(false)} title="Yangi Omborxona Biriktirish">
+      <Modal isOpen={warehouseModalOpen} onClose={() => setWarehouseModalOpen(false)} title={isRu ? 'Привязка нового склада' : 'Yangi Omborxona Biriktirish'}>
         <form onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <Select
-            label="Tegishli Filialni Tanlang:"
+            label={isRu ? 'Выберите филиал:' : 'Tegishli Filialni Tanlang:'}
             options={branchOptions}
             value={selectedBranchId}
             onChange={(val) => setSelectedBranchId(val)}
           />
-          <Input label="Ombor Nomi (O'zbekcha)" value={warehouseNameUz} onChange={(e) => setWarehouseNameUz(e.target.value)} required />
-          <Input label="Название Склада (Русский)" value={warehouseNameRu} onChange={(e) => setWarehouseNameRu(e.target.value)} />
-          <Input label="Manzili (Address)" value={warehouseAddress} onChange={(e) => setWarehouseAddress(e.target.value)} />
-          <Input label="Telefon (Phone)" value={warehousePhone} onChange={(e) => setWarehousePhone(e.target.value)} />
+          <Input label={isRu ? 'Название склада (Узбекский)' : "Ombor Nomi (O'zbekcha)"} value={warehouseNameUz} onChange={(e) => setWarehouseNameUz(e.target.value)} required />
+          <Input label={isRu ? 'Название склада (Русский)' : 'Название Склада (Русский)'} value={warehouseNameRu} onChange={(e) => setWarehouseNameRu(e.target.value)} />
+          <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={warehouseAddress} onChange={(e) => setWarehouseAddress(e.target.value)} />
+          <Input label={isRu ? 'Телефон' : 'Telefon (Phone)'} value={warehousePhone} onChange={(e) => setWarehousePhone(e.target.value)} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-            <Button type="button" variant="outline" onClick={() => setWarehouseModalOpen(false)}>Bekor qilish</Button>
-            <Button type="submit" variant="primary">Saqlash</Button>
+            <Button type="button" variant="outline" onClick={() => setWarehouseModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button type="submit" variant="primary">{isRu ? 'Сохранить' : 'Saqlash'}</Button>
           </div>
         </form>
       </Modal>

@@ -1,32 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select, SelectOption } from '@/components/ui/Select';
-import { DatePicker } from '@/components/ui/DatePicker';
-import { Badge } from '@/components/ui/Badge';
-import {
-  ShoppingBag,
-  Plus,
-  Filter,
-  Eye,
-  Truck,
-  RotateCcw,
-  Building2,
-  Search,
-  RefreshCw,
-  FileText,
-} from 'lucide-react';
-import { PurchaseReceipt, PurchaseSummaryStats } from '@shared/types';
-import { PurchaseReceiptModal } from '@/components/purchases/PurchaseReceiptModal';
-import { PurchaseReceiptDetailModal } from '@/components/purchases/PurchaseReceiptDetailModal';
 import { AllocateExpenseModal } from '@/components/purchases/AllocateExpenseModal';
 import { CreateReturnModal } from '@/components/purchases/CreateReturnModal';
+import { PayPurchaseModal } from '@/components/purchases/PayPurchaseModal';
+import { PurchaseReceiptDetailModal } from '@/components/purchases/PurchaseReceiptDetailModal';
+import { PurchaseReceiptModal } from '@/components/purchases/PurchaseReceiptModal';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { Select, SelectOption } from '@/components/ui/Select';
+import { useAuth } from '@/context/AuthContext';
+import { useLocale } from 'next-intl';
+import { apiFetch } from '@/lib/api';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import { PurchaseReceipt, PurchaseSummaryStats } from '@shared/types';
+import {
+  Building2,
+  CreditCard,
+  Eye,
+  Filter,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShoppingBag,
+  Truck
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface CounterpartyItem {
   id: string;
@@ -40,6 +41,8 @@ interface WarehouseItem {
 
 export default function PurchasesPage() {
   const { token, company } = useAuth();
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
 
   const [stats, setStats] = useState<PurchaseSummaryStats | null>(null);
   const [receipts, setReceipts] = useState<PurchaseReceipt[]>([]);
@@ -64,12 +67,14 @@ export default function PurchasesPage() {
   const [detailReceipt, setDetailReceipt] = useState<PurchaseReceipt | null>(null);
   const [expenseReceipt, setExpenseReceipt] = useState<PurchaseReceipt | null>(null);
   const [returnReceipt, setReturnReceipt] = useState<PurchaseReceipt | null>(null);
+  const [payReceipt, setPayReceipt] = useState<PurchaseReceipt | null>(null);
 
   const fetchStats = () => {
     if (!token || !company) return;
     apiFetch<PurchaseSummaryStats>('/purchases/summary', {
       token: token || undefined,
       tenantId: company?.id ? company.id : undefined,
+      locale,
     })
       .then(setStats)
       .catch((err) => console.error(err));
@@ -91,6 +96,7 @@ export default function PurchasesPage() {
     apiFetch<PurchaseReceipt[]>(`/purchases/receipts?${query.toString()}`, {
       token: token || undefined,
       tenantId: company?.id ? company.id : undefined,
+      locale,
     })
       .then((res) => setReceipts(res || []))
       .catch((err) => console.error(err))
@@ -98,26 +104,29 @@ export default function PurchasesPage() {
   };
 
   useEffect(() => {
-    if (!token || !company) return;
-
     fetchStats();
     fetchReceipts();
+  }, [token, company, locale]);
 
-    // Fetch suppliers & warehouses
+  useEffect(() => {
+    if (!token || !company) return;
+
     apiFetch<CounterpartyItem[]>('/sales/counterparties', {
       token: token || undefined,
       tenantId: company?.id ? company.id : undefined,
+      locale,
     })
       .then((res) => setCounterparties(res || []))
       .catch((err) => console.error(err));
 
-    apiFetch<WarehouseItem[]>('/inventory/warehouses', {
+    apiFetch<WarehouseItem[]>('/tenants/warehouses', {
       token: token || undefined,
       tenantId: company?.id ? company.id : undefined,
+      locale,
     })
       .then((res) => setWarehouses(res || []))
       .catch((err) => console.error(err));
-  }, [token, company]);
+  }, [token, company, locale]);
 
   const handleApplyFilter = () => {
     fetchReceipts();
@@ -133,17 +142,17 @@ export default function PurchasesPage() {
     setDateTo('');
     setTimeout(() => {
       fetchReceipts();
-    }, 50);
+    }, 0);
   };
 
   const getDocStatusBadge = (st: string) => {
     switch (st) {
       case 'DRAFT':
-        return <Badge variant="warning">Qoralama</Badge>;
+        return <Badge variant="warning">{isRu ? 'Черновик' : 'Qoralama'}</Badge>;
       case 'POSTED':
-        return <Badge variant="success">Tasdiqlangan</Badge>;
+        return <Badge variant="success">{isRu ? 'Проведён' : 'Tasdiqlangan'}</Badge>;
       case 'CANCELLED':
-        return <Badge variant="error">Bekor qilingan</Badge>;
+        return <Badge variant="error">{isRu ? 'Отменён' : 'Bekor qilingan'}</Badge>;
       default:
         return <Badge variant="neutral">{st}</Badge>;
     }
@@ -152,11 +161,11 @@ export default function PurchasesPage() {
   const getPaymentBadge = (pst: string) => {
     switch (pst) {
       case 'UNPAID':
-        return <Badge variant="error">To&apos;lanmagan</Badge>;
+        return <Badge variant="error">{isRu ? 'Не оплачен' : 'To‘lanmagan'}</Badge>;
       case 'PARTIALLY_PAID':
-        return <Badge variant="warning">Qisman to&apos;langan</Badge>;
+        return <Badge variant="warning">{isRu ? 'Частично оплачен' : 'Qisman to‘langan'}</Badge>;
       case 'PAID':
-        return <Badge variant="success">To&apos;liq to&apos;langan</Badge>;
+        return <Badge variant="success">{isRu ? 'Оплачен' : 'To‘liq to‘langan'}</Badge>;
       default:
         return null;
     }
@@ -165,9 +174,9 @@ export default function PurchasesPage() {
   const getReturnBadge = (rst: string) => {
     switch (rst) {
       case 'PARTIALLY_RETURNED':
-        return <Badge variant="warning">Qisman qaytarilgan</Badge>;
+        return <Badge variant="warning">{isRu ? 'Частичный возврат' : 'Qisman qaytarilgan'}</Badge>;
       case 'FULLY_RETURNED':
-        return <Badge variant="error">To&apos;liq qaytarilgan</Badge>;
+        return <Badge variant="error">{isRu ? 'Полный возврат' : 'To‘liq qaytarilgan'}</Badge>;
       default:
         return null;
     }
@@ -176,24 +185,24 @@ export default function PurchasesPage() {
   const getProductName = (name: any) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
-    return name.uz || name.ru || Object.values(name)[0] || '—';
+    return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
   };
 
   const supplierOptions: SelectOption[] = [
-    { value: '', label: 'Barcha Yetkazib beruvchilar' },
+    { value: '', label: isRu ? 'Все поставщики' : 'Barcha Yetkazib beruvchilar' },
     ...counterparties.map((c) => ({ value: c.id, label: c.name })),
   ];
 
   const warehouseOptions: SelectOption[] = [
-    { value: '', label: 'Barcha Omborlar' },
+    { value: '', label: isRu ? 'Все склады' : 'Barcha Omborlar' },
     ...warehouses.map((w) => ({ value: w.id, label: getProductName(w.name) })),
   ];
 
   const statusOptions: SelectOption[] = [
-    { value: '', label: 'Barcha Holatlar' },
-    { value: 'DRAFT', label: 'Qoralama' },
-    { value: 'POSTED', label: 'Tasdiqlangan' },
-    { value: 'CANCELLED', label: 'Bekor qilingan' },
+    { value: '', label: isRu ? 'Все статусы' : 'Barcha Holatlar' },
+    { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+    { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
+    { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
   ];
 
   const hasActiveFilters = Boolean(search || counterpartyId || warehouseId || status || dateFrom || dateTo);
@@ -204,14 +213,14 @@ export default function PurchasesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Xaridlar va Tovar Qabul Qilish
+            {isRu ? 'Закупки и Приход Товаров' : 'Xaridlar va Tovar Qabul Qilish'}
           </h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-            Yetkazib beruvchilardan tovar kirim qilish, tannarx (`Landed Cost`) shakllantirish va qarzdorlik hisobi
+            {isRu ? 'Приход товаров от поставщиков, формирование себестоимости (Landed Cost) и учёт задолженности' : 'Yetkazib beruvchilardan tovar kirim qilish, tannarx (`Landed Cost`) shakllantirish va qarzdorlik hisobi'}
           </p>
         </div>
         <Button onClick={() => { setSelectedReceipt(null); setIsCreateOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
-          <Plus size={18} /> Yangi Xarid Hujjati
+          <Plus size={18} /> {isRu ? 'Новый приходный документ' : 'Yangi Xarid Hujjati'}
         </Button>
       </div>
 
@@ -222,12 +231,14 @@ export default function PurchasesPage() {
             <ShoppingBag size={24} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Shu Oydagi Xaridlar</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Закупки за месяц' : 'Shu Oydagi Xaridlar'}
+            </div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyPurchasesTotal || 0, 'uz')} UZS
+              {formatCurrency(stats?.monthlyPurchasesTotal || 0, locale)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {stats?.monthlyPurchasesCount || 0} ta hujjat
+              {stats?.monthlyPurchasesCount || 0} {isRu ? 'документов' : 'ta hujjat'}
             </div>
           </div>
         </Card>
@@ -237,12 +248,14 @@ export default function PurchasesPage() {
             <Building2 size={24} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Yetkazib Beruvchilarga Qarzimiz</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Долг поставщикам' : 'Yetkazib Beruvchilarga Qarzimiz'}
+            </div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#ef4444', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.totalSupplierDebt || 0, 'uz')} UZS
+              {formatCurrency(stats?.totalSupplierDebt || 0, locale)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {stats?.suppliersWithDebtCount || 0} ta kontragent oldida
+              {stats?.suppliersWithDebtCount || 0} {isRu ? 'контрагентам' : 'ta kontragent oldida'}
             </div>
           </div>
         </Card>
@@ -252,12 +265,14 @@ export default function PurchasesPage() {
             <RotateCcw size={24} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Qaytarishlar (Shu oy)</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Возвраты (За месяц)' : 'Qaytarishlar (Shu oy)'}
+            </div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#f59e0b', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyReturnsTotal || 0, 'uz')} UZS
+              {formatCurrency(stats?.monthlyReturnsTotal || 0, locale)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {stats?.monthlyReturnsCount || 0} ta qaytaruv
+              {stats?.monthlyReturnsCount || 0} {isRu ? 'возвратов' : 'ta qaytaruv'}
             </div>
           </div>
         </Card>
@@ -267,12 +282,14 @@ export default function PurchasesPage() {
             <Truck size={24} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Faol Yetkazib Beruvchilar</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Активные поставщики' : 'Faol Yetkazib Beruvchilar'}
+            </div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#10b981', marginTop: '2px' }} className="tabular-nums">
-              {stats?.activeSuppliersCount || 0} ta
+              {stats?.activeSuppliersCount || 0} {isRu ? 'пост.' : 'ta'}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              Ro&apos;yxatdan o&apos;tgan hamkorlar
+              {isRu ? 'Зарегистрированные партнёры' : 'Ro‘yxatdan o‘tgan hamkorlar'}
             </div>
           </div>
         </Card>
@@ -283,12 +300,12 @@ export default function PurchasesPage() {
         {/* Row 1: Search Input */}
         <div>
           <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-            Qidiruv (Hujjat №, GTD, Izoh...)
+            {isRu ? 'Поиск (№ Документа, ГТД, Комментарий...)' : 'Qidiruv (Hujjat №, GTD, Izoh...)'}
           </div>
           <div style={{ position: 'relative' }}>
             <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
             <input
-              placeholder="Qidirish uchun hujjat raqami, GTD yoki izohni kiriting..."
+              placeholder={isRu ? 'Введите № документа, ГТД или комментарий...' : 'Qidirish uchun hujjat raqami, GTD yoki izohni kiriting...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -318,7 +335,9 @@ export default function PurchasesPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Yetkazib beruvchi</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Поставщик' : 'Yetkazib beruvchi'}
+            </div>
             <Select
               options={supplierOptions}
               value={counterpartyId}
@@ -327,7 +346,9 @@ export default function PurchasesPage() {
           </div>
 
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Ombor</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Склад' : 'Ombor'}
+            </div>
             <Select
               options={warehouseOptions}
               value={warehouseId}
@@ -336,7 +357,9 @@ export default function PurchasesPage() {
           </div>
 
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Hujjat holati</div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Статус документа' : 'Hujjat holati'}
+            </div>
             <Select
               options={statusOptions}
               value={status}
@@ -345,21 +368,25 @@ export default function PurchasesPage() {
           </div>
 
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Sanadan</div>
-            <DatePicker value={dateFrom} onChange={(val) => setDateFrom(val)} placeholder="Sanadan..." />
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'С даты' : 'Sanadan'}
+            </div>
+            <DatePicker value={dateFrom} onChange={(val) => setDateFrom(val)} placeholder={isRu ? 'С даты...' : 'Sanadan...'} />
           </div>
 
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Sanagacha</div>
-            <DatePicker value={dateTo} onChange={(val) => setDateTo(val)} placeholder="Sanagacha..." />
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'По дату' : 'Sanagacha'}
+            </div>
+            <DatePicker value={dateTo} onChange={(val) => setDateTo(val)} placeholder={isRu ? 'По дату...' : 'Sanagacha...'} />
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
             <Button variant="secondary" onClick={handleApplyFilter} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '38px' }}>
-              <Filter size={15} /> Filtr
+              <Filter size={15} /> {isRu ? 'Фильтр' : 'Filtr'}
             </Button>
             {hasActiveFilters && (
-              <Button variant="secondary" onClick={handleResetFilters} title="Tozalash" style={{ padding: '0 12px', height: '38px', color: 'var(--color-text-secondary)' }}>
+              <Button variant="secondary" onClick={handleResetFilters} title={isRu ? 'Сбросить' : 'Tozalash'} style={{ padding: '0 12px', height: '38px', color: 'var(--color-text-secondary)' }}>
                 <RefreshCw size={14} />
               </Button>
             )}
@@ -372,27 +399,47 @@ export default function PurchasesPage() {
         {loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
-            <div>Yuklanmoqda...</div>
+            <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
           </div>
         ) : receipts.length === 0 ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <ShoppingBag size={48} style={{ margin: '0 auto var(--space-3)', opacity: 0.3 }} />
-            <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>Xarid hujjatlari topilmadi</div>
-            <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>Yangi xarid hujjatini yaratish uchun yuqoridagi tugmani bosing</div>
+            <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? 'Документы закупок не найдены' : 'Xarid hujjatlari topilmadi'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
+              {isRu ? 'Нажмите кнопку выше, чтобы создать новый документ закупки' : 'Yangi xarid hujjatini yaratish uchun yuqoridagi tugmani bosing'}
+            </div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>HUJJAT № / SANA</th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>YETKAZIB BERUVCHI</th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>OMBOR</th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>GTD / IMPORT</th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>JAMI SUMMA</th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>XARAJATLAR</th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>HOLATI & TO&apos;LOV</th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>AMALLAR</th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? '№ ДОКУМЕНТА / ДАТА' : 'HUJJAT № / SANA'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? 'ПОСТАВЩИК' : 'YETKAZIB BERUVCHI'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? 'СКЛАД' : 'OMBOR'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                    {isRu ? 'ГТД / ИМПОРТ' : 'GTD / IMPORT'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ОБЩАЯ СУММА' : 'JAMI SUMMA'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ДОП. РАСХОДЫ' : 'XARAJATLAR'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                    {isRu ? 'СТАТУС И ОПЛАТА' : 'HOLATI & TO‘LOV'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -411,14 +458,14 @@ export default function PurchasesPage() {
                         {r.docNumber}
                       </div>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-                        {formatDate(r.docDate, 'uz')}
+                        {formatDate(r.docDate, locale)}
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{r.counterparty?.name || '—'}</div>
                       {r.contractNumber && (
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
-                          Shartnoma: № {r.contractNumber}
+                          {isRu ? 'Договор' : 'Shartnoma'}: № {r.contractNumber}
                         </div>
                       )}
                     </td>
@@ -433,10 +480,10 @@ export default function PurchasesPage() {
                       )}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                      {formatCurrency(Number(r.totalAmount), 'uz')} {r.currency}
+                      {formatCurrency(Number(r.totalAmount), locale)} {r.currency}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? '#f59e0b' : 'var(--color-text-tertiary)' }} className="tabular-nums">
-                      {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), 'uz')}` : '—'}
+                      {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), locale)}` : '—'}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
@@ -447,8 +494,24 @@ export default function PurchasesPage() {
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                        {r.status === 'POSTED' && r.paymentStatus !== 'PAID' && (
+                          <Button
+                            size="sm"
+                            onClick={() => setPayReceipt(r)}
+                            style={{
+                              backgroundColor: 'var(--color-success-50)',
+                              color: 'var(--color-success-600)',
+                              border: '1px solid var(--color-success-100)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <CreditCard size={14} /> {isRu ? 'Оплатить' : 'To‘lash'}
+                          </Button>
+                        )}
                         <Button size="sm" variant="secondary" onClick={() => setDetailReceipt(r)} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Eye size={14} /> Ko&apos;rish
+                          <Eye size={14} /> {isRu ? 'Просмотр' : 'Ko‘rish'}
                         </Button>
                         {r.status === 'DRAFT' && (
                           <Button
@@ -459,7 +522,7 @@ export default function PurchasesPage() {
                               setIsCreateOpen(true);
                             }}
                           >
-                            Tahrirlash
+                            {isRu ? 'Редактировать' : 'Tahrirlash'}
                           </Button>
                         )}
                       </div>
@@ -502,6 +565,10 @@ export default function PurchasesPage() {
             setDetailReceipt(null);
             setReturnReceipt(r);
           }}
+          onOpenPay={(r) => {
+            setDetailReceipt(null);
+            setPayReceipt(r);
+          }}
         />
       )}
 
@@ -522,6 +589,18 @@ export default function PurchasesPage() {
           isOpen={!!returnReceipt}
           onClose={() => setReturnReceipt(null)}
           receipt={returnReceipt}
+          onSuccess={() => {
+            fetchStats();
+            fetchReceipts();
+          }}
+        />
+      )}
+
+      {payReceipt && (
+        <PayPurchaseModal
+          isOpen={!!payReceipt}
+          onClose={() => setPayReceipt(null)}
+          receipt={payReceipt}
           onSuccess={() => {
             fetchStats();
             fetchReceipts();

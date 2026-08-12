@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { Plus, Tag, Edit3, Check } from 'lucide-react';
 
@@ -31,6 +32,7 @@ interface Product {
 export default function PricesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
 
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -49,73 +51,87 @@ export default function PricesPage() {
   const [savingPrice, setSavingPrice] = useState<string | null>(null);
 
   const getProductName = (p: Product) =>
-    typeof p.name === 'object' ? (p.name[locale] || p.name.uz || '') : (p.name || '');
+    typeof p.name === 'object' ? (p.name[locale] || p.name.ru || p.name.uz || '') : (p.name || '');
 
   const fetchData = () => {
     if (!token || !company) return;
     setLoading(true);
     Promise.all([
-      apiFetch<PriceList[]>('/sales/price-lists', { token: token || undefined, tenantId: company.id }),
-      apiFetch<Product[]>('/inventory/products', { token: token || undefined, tenantId: company.id }),
+      apiFetch<PriceList[]>('/sales/price-lists', { token: token || undefined, tenantId: company.id, locale }),
+      apiFetch<Product[]>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }),
     ])
-      .then(([pl, pr]) => {
-        setPriceLists(pl);
-        setProducts(pr);
-        if (pl.length > 0 && !selectedPL) setSelectedPL(pl[0]);
-        else if (pl.length > 0 && selectedPL) {
-          const updated = pl.find((p) => p.id === selectedPL.id);
-          if (updated) setSelectedPL(updated);
+      .then(([pls, prods]) => {
+        setPriceLists(pls || []);
+        setProducts(prods || []);
+        if (pls && pls.length > 0 && !selectedPL) {
+          setSelectedPL(pls[0]);
         }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchData(); }, [token, company]);
+  useEffect(() => { fetchData(); }, [token, company, locale]);
 
   const handleCreatePL = async () => {
     if (!token || !company || !newPLNameUz) return;
     setCreateLoading(true);
     try {
-      await apiFetch('/sales/price-lists', {
+      const created = await apiFetch<PriceList>('/sales/price-lists', {
         method: 'POST',
         token: token || undefined,
         tenantId: company.id,
-        body: JSON.stringify({ name: { uz: newPLNameUz, ru: newPLNameRu || newPLNameUz }, currency: newPLCurrency, isDefault: newPLDefault }),
+        locale,
+        body: JSON.stringify({
+          name: { uz: newPLNameUz, ru: newPLNameRu || newPLNameUz },
+          currency: newPLCurrency,
+          isDefault: newPLDefault,
+        }),
       });
       setShowCreatePL(false);
       setNewPLNameUz('');
       setNewPLNameRu('');
+      setNewPLDefault(false);
       fetchData();
+      if (created) setSelectedPL(created);
     } catch (err: any) {
-      alert(err?.message || 'Xatolik');
+      alert(err?.message || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
     } finally {
       setCreateLoading(false);
     }
   };
 
-  const getPriceForProduct = (productId: string) => {
-    if (!selectedPL) return 0;
-    const entry = selectedPL.prices?.find((p) => p.productId === productId);
-    return entry ? entry.price : 0;
+  const getPriceForProduct = (productId: string): number => {
+    if (!selectedPL || !selectedPL.prices) return 0;
+    const item = selectedPL.prices.find((p) => p.productId === productId);
+    return item ? Number(item.price) : 0;
   };
 
   const startEdit = (productId: string) => {
-    const current = getPriceForProduct(productId);
-    setEditingPrices((prev) => ({ ...prev, [productId]: current }));
+    const currentPrice = getPriceForProduct(productId);
+    const prod = products.find((p) => p.id === productId);
+    setEditingPrices((prev) => ({
+      ...prev,
+      [productId]: currentPrice > 0 ? currentPrice : Number(prod?.salePrice || 0),
+    }));
   };
 
   const handleSavePrice = async (productId: string) => {
-    if (!token || !company || !selectedPL) return;
-    const price = editingPrices[productId];
-    if (price === undefined) return;
+    if (!selectedPL || !token || !company) return;
+    const priceVal = editingPrices[productId];
+    if (priceVal === undefined) return;
     setSavingPrice(productId);
+
     try {
-      await apiFetch(`/sales/price-lists/${selectedPL.id}/prices/${productId}`, {
+      await apiFetch(`/sales/price-lists/${selectedPL.id}/items`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company.id,
-        body: JSON.stringify({ price }),
+        locale,
+        body: JSON.stringify({
+          productId,
+          price: Number(priceVal),
+        }),
       });
       setEditingPrices((prev) => {
         const next = { ...prev };
@@ -124,7 +140,7 @@ export default function PricesPage() {
       });
       fetchData();
     } catch (err: any) {
-      alert(err?.message || 'Narxni saqlashda xatolik');
+      alert(err?.message || (isRu ? 'Ошибка сохранения цены' : 'Narxni saqlashda xatolik'));
     } finally {
       setSavingPrice(null);
     }
@@ -136,14 +152,14 @@ export default function PricesPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            Narxlar va chegirmalar
+            {isRu ? 'Цены и прайс-листы' : 'Narxlar va chegirmalar'}
           </h1>
           <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            Har bir mijoz guruhi uchun alohida narx jadvalini boshqaring
+            {isRu ? 'Управление прайс-листами для различных групп клиентов' : 'Har bir mijoz guruhi uchun alohida narx jadvalini boshqaring'}
           </p>
         </div>
         <Button id="create-price-list-btn" onClick={() => setShowCreatePL(true)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Plus size={16} /> Yangi narx jadvali
+          <Plus size={16} /> {isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'}
         </Button>
       </div>
 
@@ -151,16 +167,16 @@ export default function PricesPage() {
         {/* Price list tabs */}
         <Card style={{ padding: 'var(--space-3)' }}>
           <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-            Narx jadvallari
+            {isRu ? 'Прайс-листы' : 'Narx jadvallari'}
           </div>
           {priceLists.length === 0 ? (
             <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-              Narx jadvali yo'q
+              {isRu ? 'Прайс-листы отсутствуют' : 'Narx jadvali yo\'q'}
             </div>
           ) : (
             priceLists.map((pl) => {
               const isActive = selectedPL?.id === pl.id;
-              const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.uz) : pl.name;
+              const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
               return (
                 <button
                   key={pl.id}
@@ -187,7 +203,7 @@ export default function PricesPage() {
                   <div>
                     <div>{plName}</div>
                     <div style={{ fontSize: 11, color: isActive ? 'var(--color-primary-500)' : 'var(--color-text-secondary)', marginTop: 2 }}>
-                      {pl.currency} {pl.isDefault ? '• Asosiy' : ''}
+                      {pl.currency} {pl.isDefault ? (isRu ? '• Основной' : '• Asosiy') : ''}
                     </div>
                   </div>
                 </button>
@@ -200,22 +216,22 @@ export default function PricesPage() {
         <Card>
           {!selectedPL ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-              Narx jadvalini tanlang
+              {isRu ? 'Выберите прайс-лист' : 'Narx jadvalini tanlang'}
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontWeight: 600 }}>
-                  {typeof selectedPL.name === 'object' ? (selectedPL.name[locale] || selectedPL.name.uz) : selectedPL.name}
+                  {typeof selectedPL.name === 'object' ? (selectedPL.name[locale] || selectedPL.name.ru || selectedPL.name.uz) : selectedPL.name}
                 </h3>
                 <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                  {selectedPL.currency} • {products.length} ta tovar
+                  {selectedPL.currency} • {products.length} {isRu ? 'товаров' : 'ta tovar'}
                 </span>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    {['Tovar', 'SKU', 'Asosiy narx', 'Jadval narxi', ''].map((h) => (
+                    {[isRu ? 'Товар' : 'Tovar', 'SKU', isRu ? 'Базовая цена' : 'Asosiy narx', isRu ? 'Цена в прайсе' : 'Jadval narxi', ''].map((h) => (
                       <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>
                         {h}
                       </th>
@@ -233,7 +249,7 @@ export default function PricesPage() {
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', fontWeight: 500 }}>{getProductName(prod)}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{prod.sku || '—'}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)' }}>
-                          {formatCurrency(Number(prod.salePrice || 0), selectedPL.currency)}
+                          {formatCurrency(Number(prod.salePrice || 0), locale)}
                         </td>
                         <td style={{ padding: '10px 14px' }}>
                           {isEditing ? (
@@ -248,7 +264,7 @@ export default function PricesPage() {
                             />
                           ) : (
                             <span style={{ fontWeight: listPrice > 0 ? 600 : 400, color: listPrice > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                              {listPrice > 0 ? formatCurrency(listPrice, selectedPL.currency) : '—'}
+                              {listPrice > 0 ? formatCurrency(listPrice, locale) : '—'}
                             </span>
                           )}
                         </td>
@@ -258,9 +274,20 @@ export default function PricesPage() {
                               id={`save-price-${prod.id}`}
                               onClick={() => handleSavePrice(prod.id)}
                               disabled={isSaving}
-                              style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 4 }}
+                              style={{
+                                background: 'var(--color-success-50)',
+                                color: 'var(--color-success-600)',
+                                border: '1px solid var(--color-success-100)',
+                                borderRadius: 'var(--radius-sm)',
+                                padding: '5px 10px',
+                                cursor: 'pointer',
+                                fontSize: 'var(--text-sm)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
                             >
-                              <Check size={13} /> {isSaving ? '...' : 'Saqlash'}
+                              <Check size={13} /> {isSaving ? '...' : (isRu ? 'Сохранить' : 'Saqlash')}
                             </button>
                           ) : (
                             <button
@@ -268,7 +295,7 @@ export default function PricesPage() {
                               onClick={() => startEdit(prod.id)}
                               style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}
                             >
-                              <Edit3 size={12} /> Narx kiritish
+                              <Edit3 size={12} /> {isRu ? 'Указать цену' : 'Narx kiritish'}
                             </button>
                           )}
                         </td>
@@ -284,31 +311,29 @@ export default function PricesPage() {
 
       {/* Create Price List Modal */}
       {showCreatePL && (
-        <Modal isOpen={true} onClose={() => setShowCreatePL(false)} title="Yangi narx jadvali" size="md">
+        <Modal isOpen={true} onClose={() => setShowCreatePL(false)} title={isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'} size="md">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <Input id="pl-name-uz" label="Nomi (O'zbekcha) *" value={newPLNameUz} onChange={(e) => setNewPLNameUz(e.target.value)} placeholder="Mas. Chakana narxlar" />
-            <Input id="pl-name-ru" label="Nomi (Ruscha)" value={newPLNameRu} onChange={(e) => setNewPLNameRu(e.target.value)} placeholder="Mas. Розничные цены" />
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, marginBottom: 6 }}>Valyuta</label>
-              <select
-                id="pl-currency"
-                value={newPLCurrency}
-                onChange={(e) => setNewPLCurrency(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
-              >
-                <option value="UZS">UZS (So'm)</option>
-                <option value="USD">USD (Dollar)</option>
-                <option value="EUR">EUR (Evro)</option>
-              </select>
-            </div>
+            <Input id="pl-name-uz" label={isRu ? 'Название (Узбекский) *' : 'Nomi (O\'zbekcha) *'} value={newPLNameUz} onChange={(e) => setNewPLNameUz(e.target.value)} placeholder={isRu ? 'Напр. Розница' : 'Mas. Chakana narxlar'} />
+            <Input id="pl-name-ru" label={isRu ? 'Название (Русский)' : 'Nomi (Ruscha)'} value={newPLNameRu} onChange={(e) => setNewPLNameRu(e.target.value)} placeholder={isRu ? 'Напр. Розничные цены' : 'Mas. Розничные цены'} />
+            <Select
+              id="pl-currency"
+              label={isRu ? 'Валюта' : 'Valyuta'}
+              value={newPLCurrency}
+              onChange={(val) => setNewPLCurrency(val)}
+              options={[
+                { value: 'UZS', label: "UZS (So'm)" },
+                { value: 'USD', label: 'USD (Dollar)' },
+                { value: 'EUR', label: 'EUR (Evro)' },
+              ]}
+            />
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
               <input id="pl-is-default" type="checkbox" checked={newPLDefault} onChange={(e) => setNewPLDefault(e.target.checked)} style={{ width: 16, height: 16 }} />
-              <span style={{ fontSize: 'var(--text-sm)' }}>Asosiy narx jadvali sifatida belgilash</span>
+              <span style={{ fontSize: 'var(--text-sm)' }}>{isRu ? 'Установить как основной прайс-лист' : 'Asosiy narx jadvali sifatida belgilash'}</span>
             </label>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)' }}>
-              <Button id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>Bekor qilish</Button>
+              <Button id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
               <Button id="submit-pl-btn" onClick={handleCreatePL} disabled={createLoading || !newPLNameUz}>
-                {createLoading ? 'Saqlanmoqda...' : 'Saqlash'}
+                {createLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
               </Button>
             </div>
           </div>

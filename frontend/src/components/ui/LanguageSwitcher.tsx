@@ -11,6 +11,7 @@ export function LanguageSwitcher() {
 
   const toggleLanguage = (newLocale: 'uz' | 'ru') => {
     if (newLocale === locale) return;
+    document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
     router.replace(pathname, { locale: newLocale });
   };
 

@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Plus, Trash2, AlertTriangle } from 'lucide-react';
 
 interface CounterpartyOption {
@@ -54,153 +55,189 @@ export function CreateSalesInvoiceModal({
 }: CreateSalesInvoiceModalProps) {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
 
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Header form fields
+  // Header fields
   const [counterpartyId, setCounterpartyId] = useState(counterparties[0]?.id || '');
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id || '');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [currency, setCurrency] = useState('UZS');
   const [contractNumber, setContractNumber] = useState('');
   const [comment, setComment] = useState('');
-  const [postImmediately, setPostImmediately] = useState(false);
+  const [postImmediately, setPostImmediately] = useState(true);
 
-  // Item rows
+  // Line items
   const [items, setItems] = useState<ItemRow[]>([]);
 
-  // Stock levels cache (warehouseId+productId → qty)
-  const [stockMap, setStockMap] = useState<Record<string, number>>({});
-
+  // Fetch catalog products
   useEffect(() => {
     if (!token || !company) return;
     apiFetch<ProductOption[]>('/inventory/products', {
       token: token || undefined,
       tenantId: company.id,
+      locale,
     })
-      .then(setProducts)
+      .then((res) => setProducts(res || []))
       .catch(console.error);
-  }, [token, company]);
+  }, [token, company, locale]);
 
-  // Reload stock when warehouse changes
+  // Fetch stock levels when warehouse changes
   useEffect(() => {
     if (!token || !company || !warehouseId) return;
     apiFetch<any[]>(`/inventory/stock-levels?warehouseId=${warehouseId}`, {
       token: token || undefined,
       tenantId: company.id,
+      locale,
     })
-      .then((levels) => {
-        const map: Record<string, number> = {};
-        levels.forEach((sl) => {
-          map[sl.productId] = Number(sl.quantity);
-        });
-        setStockMap(map);
+      .then((stockList) => {
+        const stockMap = new Map<string, number>();
+        (stockList || []).forEach((s) => stockMap.set(s.productId, Number(s.quantity || 0)));
+
+        setItems((prev) =>
+          prev.map((row) => ({
+            ...row,
+            _stock: stockMap.get(row.productId) ?? 0,
+          }))
+        );
       })
       .catch(console.error);
-  }, [warehouseId, token, company]);
+  }, [warehouseId, token, company, locale]);
 
-  const getProductName = (p: ProductOption) =>
-    typeof p.name === 'object' ? (p.name[locale] || p.name.uz || p.name.ru || '') : (p.name || '');
+  const getProductName = (p: ProductOption) => {
+    if (!p.name) return '';
+    return typeof p.name === 'object' ? (p.name[locale] || p.name.uz || p.name.ru || '') : p.name;
+  };
 
   const addItem = () => {
     setItems((prev) => [
       ...prev,
-      { productId: '', quantity: 1, unitPrice: 0, discount: 0, vatRate: 12, _name: '', _costPrice: 0, _stock: 0 },
+      {
+        productId: '',
+        quantity: 1,
+        unitPrice: 0,
+        discount: 0,
+        vatRate: 0,
+        _name: '',
+        _costPrice: 0,
+        _stock: 0,
+      },
     ]);
   };
 
-  const removeItem = (idx: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+  const removeItem = (index: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateItem = (idx: number, field: keyof ItemRow, value: any) => {
+  const updateItem = (index: number, field: keyof ItemRow, value: any) => {
     setItems((prev) => {
       const next = [...prev];
+      const row = { ...next[index], [field]: value };
+
       if (field === 'productId') {
         const prod = products.find((p) => p.id === value);
-        next[idx] = {
-          ...next[idx],
-          productId: value,
-          unitPrice: prod ? Number(prod.salePrice || 0) : 0,
-          _name: prod ? getProductName(prod) : '',
-          _costPrice: prod ? Number(prod.costPrice || 0) : 0,
-          _stock: stockMap[value] || 0,
-        };
-      } else {
-        next[idx] = { ...next[idx], [field]: value };
+        if (prod) {
+          row._name = getProductName(prod);
+          row._costPrice = Number(prod.costPrice || 0);
+          row.unitPrice = Number(prod.salePrice || 0);
+        }
       }
+
+      next[index] = row;
       return next;
     });
   };
 
   const calcLineTotal = (item: ItemRow) => {
-    const sub = item.quantity * item.unitPrice;
-    const afterDisc = Math.max(0, sub - item.discount);
-    const vat = (afterDisc * item.vatRate) / 100;
-    return afterDisc + vat;
+    const base = item.quantity * item.unitPrice - item.discount;
+    const withVat = base * (1 + item.vatRate / 100);
+    return Math.max(0, withVat);
   };
 
-  const totalAmount = items.reduce((s, i) => s + calcLineTotal(i), 0);
+  const totalAmount = items.reduce((sum, item) => sum + calcLineTotal(item), 0);
 
   const handleSubmit = async () => {
-    if (!token || !company) return;
-    if (!counterpartyId) { setError('Mijozni tanlang'); return; }
-    if (!warehouseId) { setError('Ombor tanlang'); return; }
-    if (items.length === 0) { setError('Kamida bitta tovar qo\'shing'); return; }
-    if (items.some((i) => !i.productId)) { setError('Barcha qatorlarda tovar tanlanishi shart'); return; }
-    if (items.some((i) => i.quantity <= 0)) { setError('Miqdor noldan katta bo\'lishi shart'); return; }
-    if (items.some((i) => i.unitPrice <= 0)) { setError('Sotuv narxi noldan katta bo\'lishi shart'); return; }
-
-    // Warning if selling below cost
-    const belowCostItems = items.filter((i) => i._costPrice > 0 && i.unitPrice < i._costPrice);
-    if (belowCostItems.length > 0) {
-      const names = belowCostItems.map((i) => i._name || i.productId).join(', ');
-      if (!confirm(`⚠️ Quyidagi tovarlar tannarxidan past narxda sotilmoqda:\n${names}\n\nDavom ettirasizmi?`)) {
+    if (!counterpartyId) {
+      setError(isRu ? 'Выберите клиента' : 'Mijozni tanlang');
+      return;
+    }
+    if (!warehouseId) {
+      setError(isRu ? 'Выберите склад' : 'Omborni tanlang');
+      return;
+    }
+    if (items.length === 0) {
+      setError(isRu ? 'Добавьте хотя бы один товар' : 'Kamida bitta tovar qo\'shing');
+      return;
+    }
+    for (const item of items) {
+      if (!item.productId) {
+        setError(isRu ? 'Выберите товар во всех строках' : 'Barcha qatorlarda tovar tanlanishi shart');
+        return;
+      }
+      if (item.quantity <= 0) {
+        setError(isRu ? 'Количество товара должно быть больше 0' : 'Tovar miqdori 0 dan katta bo\'lishi kerak');
         return;
       }
     }
 
     setLoading(true);
     setError(null);
+
+    const payload = {
+      counterpartyId,
+      warehouseId,
+      invoiceDate,
+      currency,
+      contractNumber: contractNumber || undefined,
+      comment: comment || undefined,
+      items: items.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        discount: i.discount,
+        vatRate: i.vatRate,
+      })),
+    };
+
     try {
-      await apiFetch('/sales/invoices', {
+      const created = await apiFetch<any>('/sales/invoices', {
         method: 'POST',
         token: token || undefined,
-        tenantId: company.id,
-        body: JSON.stringify({
-          counterpartyId,
-          warehouseId,
-          invoiceDate,
-          currency,
-          contractNumber: contractNumber || undefined,
-          comment: comment || undefined,
-          postImmediately,
-          items: items.map((i) => ({
-            productId: i.productId,
-            quantity: Number(i.quantity),
-            unitPrice: Number(i.unitPrice),
-            discount: Number(i.discount),
-            vatRate: Number(i.vatRate),
-          })),
-        }),
+        tenantId: company?.id,
+        locale,
+        body: JSON.stringify(payload),
       });
+
+      if (postImmediately && created && created.id) {
+        await apiFetch(`/sales/invoices/${created.id}/post`, {
+          method: 'POST',
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
+        });
+      }
+
       onCreated();
     } catch (err: any) {
-      setError(err?.message || 'Xatolik yuz berdi');
+      setError(err?.message || (isRu ? 'Ошибка сохранения' : 'Saqlashda xato yuz berdi'));
     } finally {
       setLoading(false);
     }
   };
 
-  const counterpartyOptions: SelectOption[] = counterparties.map((c) => ({ value: c.id, label: c.name }));
+  const counterpartyOptions: SelectOption[] = counterparties.map((c) => ({
+    value: c.id,
+    label: c.name,
+  }));
   const warehouseOptions: SelectOption[] = warehouses.map((w) => ({
     value: w.id,
     label: typeof w.name === 'object' ? (w.name[locale] || w.name.uz || '') : w.name,
   }));
   const productOptions: SelectOption[] = [
-    { value: '', label: '— Tovar tanlang —' },
+    { value: '', label: isRu ? '— Выберите товар —' : '— Tovar tanlang —' },
     ...products.map((p) => ({ value: p.id, label: `${getProductName(p)} (${p.sku || '—'})` })),
   ];
 
@@ -208,36 +245,34 @@ export function CreateSalesInvoiceModal({
     <Modal
       isOpen={true}
       onClose={onClose}
-      title="Yangi sotuv hujjati"
-      size="xl"
+      title={isRu ? 'Новый документ продажи' : 'Yangi sotuv hujjati'}
+      size="2xl"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {/* Header fields */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
           <Select
             id="modal-counterparty-select"
-            label="Mijoz *"
+            label={isRu ? 'Клиент *' : 'Mijoz *'}
             value={counterpartyId}
             onChange={(val) => setCounterpartyId(val)}
             options={counterpartyOptions}
           />
           <Select
             id="modal-warehouse-select"
-            label="Ombor *"
+            label={isRu ? 'Склад *' : 'Ombor *'}
             value={warehouseId}
             onChange={(val) => setWarehouseId(val)}
             options={warehouseOptions}
           />
-          <Input
-            id="modal-invoice-date"
-            label="Sana *"
-            type="date"
+          <DatePicker
+            label={isRu ? 'Дата *' : 'Sana *'}
             value={invoiceDate}
-            onChange={(e) => setInvoiceDate(e.target.value)}
+            onChange={(val) => setInvoiceDate(val)}
           />
           <Select
             id="modal-currency-select"
-            label="Valyuta"
+            label={isRu ? 'Валюта' : 'Valyuta'}
             value={currency}
             onChange={(val) => setCurrency(val)}
             options={[
@@ -248,17 +283,17 @@ export function CreateSalesInvoiceModal({
           />
           <Input
             id="modal-contract-number"
-            label="Shartnoma raqami"
+            label={isRu ? '№ Договора' : 'Shartnoma raqami'}
             value={contractNumber}
             onChange={(e) => setContractNumber(e.target.value)}
             placeholder="12345"
           />
           <Input
             id="modal-comment"
-            label="Izoh"
+            label={isRu ? 'Комментарий' : 'Izoh'}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Ixtiyoriy izoh..."
+            placeholder={isRu ? 'Необязательный комментарий...' : 'Ixtiyoriy izoh...'}
           />
         </div>
 
@@ -266,23 +301,26 @@ export function CreateSalesInvoiceModal({
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <h3 style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>
-              Tovarlar ro'yxati
+              {isRu ? 'Список товаров' : 'Tovarlar ro\'yxati'}
             </h3>
             <Button id="add-item-btn" size="sm" variant="secondary" onClick={addItem}>
-              <Plus size={14} style={{ marginRight: 4 }} /> Qo'shish
+              <Plus size={14} style={{ marginRight: 4 }} /> {isRu ? 'Добавить' : 'Qo\'shish'}
             </Button>
           </div>
 
           {items.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '24px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-secondary)' }}>
-              Tovar qo'shish uchun yuqoridagi "Qo'shish" tugmasini bosing
+              {isRu ? 'Нажмите "Добавить" выше, чтобы добавить товар' : 'Tovar qo\'shish uchun yuqoridagi "Qo\'shish" tugmasini bosing'}
             </div>
           ) : (
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflowX: 'auto', minHeight: '260px', paddingBottom: '100px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border)' }}>
-                    {['Tovar', 'Miqdor', 'Narx', 'Chegirma', 'QQS %', 'Jami', ''].map((h) => (
+                    {(isRu
+                      ? ['Товар', 'Кол-во', 'Цена', 'Скидка', 'НДС %', 'Итого', '']
+                      : ['Tovar', 'Miqdor', 'Narx', 'Chegirma', 'QQS %', 'Jami', '']
+                    ).map((h) => (
                       <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
                         {h}
                       </th>
@@ -298,28 +336,27 @@ export function CreateSalesInvoiceModal({
                     return (
                       <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)', background: belowCost ? 'rgba(239,68,68,0.04)' : '' }}>
                         <td style={{ padding: '6px 10px', minWidth: 200 }}>
-                          <select
+                          <Select
                             id={`item-product-${idx}`}
                             value={item.productId}
-                            onChange={(e) => updateItem(idx, 'productId', e.target.value)}
-                            style={{ width: '100%', padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
-                          >
-                            {productOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
+                            onChange={(val) => updateItem(idx, 'productId', val)}
+                            options={productOptions}
+                            size="sm"
+                          />
                           {item.productId && (
                             <div style={{ display: 'flex', gap: 8, marginTop: 3, fontSize: 11 }}>
                               {belowCost && (
                                 <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 2 }}>
-                                  <AlertTriangle size={10} /> Tannarxdan past!
+                                  <AlertTriangle size={10} /> {isRu ? 'Ниже себестоимости!' : 'Tannarxdan past!'}
                                 </span>
                               )}
                               {overStock && (
                                 <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 2 }}>
-                                  <AlertTriangle size={10} /> Ombor: {item._stock}
+                                  <AlertTriangle size={10} /> {isRu ? 'Склад:' : 'Ombor:'} {item._stock}
                                 </span>
                               )}
                               {!belowCost && !overStock && item._stock > 0 && (
-                                <span style={{ color: 'var(--color-text-secondary)' }}>Ombor: {item._stock}</span>
+                                <span style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Склад:' : 'Ombor:'} {item._stock}</span>
                               )}
                             </div>
                           )}
@@ -345,7 +382,7 @@ export function CreateSalesInvoiceModal({
                           />
                           {item._costPrice > 0 && (
                             <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginTop: 2 }}>
-                              Tan.: {formatCurrency(item._costPrice, currency)}
+                              {isRu ? 'Себест.:' : 'Tan.:'} {formatCurrency(item._costPrice, locale)}
                             </div>
                           )}
                         </td>
@@ -371,7 +408,7 @@ export function CreateSalesInvoiceModal({
                           />
                         </td>
                         <td style={{ padding: '6px 10px', width: 120, fontWeight: 600, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>
-                          {formatCurrency(lineTotal, currency)}
+                          {formatCurrency(lineTotal, locale)}
                         </td>
                         <td style={{ padding: '6px 8px', width: 40 }}>
                           <button
@@ -389,10 +426,10 @@ export function CreateSalesInvoiceModal({
                 <tfoot>
                   <tr style={{ background: 'var(--color-bg-subtle)', borderTop: '2px solid var(--color-border)' }}>
                     <td colSpan={5} style={{ padding: '10px', textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-                      Jami summa:
+                      {isRu ? 'Итоговая сумма:' : 'Jami summa:'}
                     </td>
                     <td colSpan={2} style={{ padding: '10px', fontWeight: 700, fontSize: 'var(--text-base)' }}>
-                      {formatCurrency(totalAmount, currency)}
+                      {formatCurrency(totalAmount, locale)}
                     </td>
                   </tr>
                 </tfoot>
@@ -413,9 +450,9 @@ export function CreateSalesInvoiceModal({
             style={{ width: 16, height: 16, accentColor: 'var(--color-primary-600)' }}
           />
           <div>
-            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>Darhol tasdiqlash</div>
+            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{isRu ? 'Провести сразу' : 'Darhol tasdiqlash'}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-              Saqlash bilan birga ombor qoldig'ini ayirib, COGS hisoblanadi
+              {isRu ? 'При сохранении сразу списать со склада и рассчитать COGS' : 'Saqlash bilan birga ombor qoldig\'ini ayirib, COGS hisoblanadi'}
             </div>
           </div>
         </label>
@@ -431,10 +468,10 @@ export function CreateSalesInvoiceModal({
         {/* Actions */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)' }}>
           <Button id="cancel-create-btn" variant="secondary" onClick={onClose} disabled={loading}>
-            Bekor qilish
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button id="submit-create-btn" onClick={handleSubmit} disabled={loading || items.length === 0}>
-            {loading ? 'Saqlanmoqda...' : (postImmediately ? 'Saqlash va Tasdiqlash' : 'Saqlash (Qoralama)')}
+            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (postImmediately ? (isRu ? 'Сохранить и провести' : 'Saqlash va Tasdiqlash') : (isRu ? 'Сохранить (Черновик)' : 'Saqlash (Qoralama)'))}
           </Button>
         </div>
       </div>

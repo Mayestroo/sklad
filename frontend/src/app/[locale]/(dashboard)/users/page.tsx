@@ -37,7 +37,8 @@ interface StaffUser {
 export default function UsersPage() {
   const t = useTranslations('nav');
   const tCommon = useTranslations('common');
-  const locale = useLocale();
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
 
   const [users, setUsers] = useState<StaffUser[]>([]);
@@ -58,16 +59,15 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     if (!token || !company) return;
     setLoading(true);
-    setError(null);
     try {
-      const data = await apiFetch<StaffUser[]>('/users', {
+      const data = await apiFetch<StaffUser[]>('/users/staff', {
         token,
         tenantId: company.id,
         locale,
       });
-      setUsers(data);
+      setUsers(data || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load users');
+      setError(err.message || (isRu ? 'Ошибка загрузки пользователей' : 'Foydalanuvchilarni yuklashda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -75,16 +75,16 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, [token, company]);
+  }, [token, company, locale]);
 
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !company) return;
-    setCreateError(null);
     setCreateLoading(true);
+    setCreateError(null);
 
     try {
-      await apiFetch<any>('/users', {
+      await apiFetch('/users/invite', {
         method: 'POST',
         token,
         tenantId: company.id,
@@ -106,7 +106,7 @@ export default function UsersPage() {
       setLastName('');
       fetchUsers();
     } catch (err: any) {
-      setCreateError(err.message || 'Failed to create user');
+      setCreateError(err.message || (isRu ? 'Ошибка создания сотрудника' : 'Xodim qo‘shishda xatolik'));
     } finally {
       setCreateLoading(false);
     }
@@ -115,7 +115,7 @@ export default function UsersPage() {
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     if (!token || !company) return;
     try {
-      await apiFetch<any>(`/users/${userId}`, {
+      await apiFetch(`/users/${userId}/status`, {
         method: 'PATCH',
         token,
         tenantId: company.id,
@@ -126,7 +126,7 @@ export default function UsersPage() {
       });
       fetchUsers();
     } catch (err: any) {
-      alert(err.message || 'Status update failed');
+      alert(err.message || (isRu ? 'Ошибка обновления статуса' : 'Status update failed'));
     }
   };
 
@@ -152,14 +152,14 @@ export default function UsersPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Foydalanuvchilar va Rollar
+            {isRu ? 'Пользователи и Роли' : 'Foydalanuvchilar va Rollar'}
           </h1>
         </div>
 
         {hasPermission('users:create') && (
           <Button variant="primary" onClick={() => setShowModal(true)}>
             <UserPlus size={16} />
-            Xodim qo&apos;shish
+            {isRu ? 'Добавить сотрудника' : 'Xodim qo‘shish'}
           </Button>
         )}
       </div>
@@ -180,12 +180,12 @@ export default function UsersPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>XODIM</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'СОТРУДНИК' : 'XODIM'}</th>
                   <th style={{ padding: '12px' }}>EMAIL</th>
-                  <th style={{ padding: '12px' }}>ROLI</th>
-                  <th style={{ padding: '12px' }}>TIL</th>
-                  <th style={{ padding: '12px' }}>HOLAT</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>AMALLAR</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'РОЛЬ' : 'ROLI'}</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'ЯЗЫК' : 'TIL'}</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -211,9 +211,9 @@ export default function UsersPage() {
                     </td>
                     <td style={{ padding: '12px' }}>
                       {user.isActive ? (
-                        <Badge variant="success">Faol</Badge>
+                        <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge>
                       ) : (
-                        <Badge variant="error">Nofaol</Badge>
+                        <Badge variant="neutral">{isRu ? 'Неактивный' : 'Nofaol'}</Badge>
                       )}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
@@ -223,7 +223,7 @@ export default function UsersPage() {
                           size="sm"
                           onClick={() => toggleUserStatus(user.id, user.isActive)}
                         >
-                          {user.isActive ? 'Deaktivatsiya' : 'Aktivlashtirish'}
+                          {user.isActive ? (isRu ? 'Деактивировать' : 'Deaktivatsiya') : (isRu ? 'Активировать' : 'Aktivlashtirish')}
                         </Button>
                       )}
                     </td>
@@ -261,7 +261,9 @@ export default function UsersPage() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>Yangi xodim biriktirish</h3>
+              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>
+                {isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'}
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
@@ -280,7 +282,9 @@ export default function UsersPage() {
             <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Ism</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                    {isRu ? 'Имя' : 'Ism'}
+                  </label>
                   <input
                     type="text"
                     required
@@ -291,7 +295,9 @@ export default function UsersPage() {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Familiya</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                    {isRu ? 'Фамилия' : 'Familiya'}
+                  </label>
                   <input
                     type="text"
                     required
@@ -316,7 +322,9 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Vaqtinchalik Parol</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                  {isRu ? 'Временный пароль' : 'Vaqtinchalik Parol'}
+                </label>
                 <input
                   type="password"
                   required
@@ -330,20 +338,20 @@ export default function UsersPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                 <Select
-                  label="Tizim Roli"
+                  label={isRu ? 'Системная роль' : 'Tizim Roli'}
                   options={[
                     { value: 'company_admin', label: 'Company Admin' },
-                    { value: 'accountant', label: 'Buxgalter (Accountant)' },
-                    { value: 'warehouse_manager', label: 'Ombor menejeri' },
-                    { value: 'salesperson', label: 'Sotuvchi (Salesperson)' },
-                    { value: 'viewer', label: 'Faqat ko\'rish (Viewer)' },
+                    { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
+                    { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
+                    { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
+                    { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
                   ]}
                   value={roleSlug}
                   onChange={(val) => setRoleSlug(val)}
                 />
 
                 <Select
-                  label="Afzal Til"
+                  label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
                   options={[
                     { value: 'uz', label: 'O\'zbekcha (UZ)' },
                     { value: 'ru', label: 'Русский (RU)' },
@@ -358,7 +366,7 @@ export default function UsersPage() {
                   {tCommon('cancel')}
                 </Button>
                 <Button type="submit" variant="primary" disabled={createLoading}>
-                  {createLoading ? tCommon('loading') : 'Biriktirish'}
+                  {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
                 </Button>
               </div>
             </form>

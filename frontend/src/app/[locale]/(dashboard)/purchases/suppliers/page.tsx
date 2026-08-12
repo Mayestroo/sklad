@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -23,6 +24,8 @@ interface Counterparty {
 }
 
 export default function SuppliersPage() {
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
   const [suppliers, setSuppliers] = useState<Counterparty[]>([]);
@@ -35,7 +38,7 @@ export default function SuppliersPage() {
     if (!token || !company) return;
     setLoading(true);
 
-    apiFetch<Counterparty[]>('/sales/counterparties', { token, tenantId: company.id })
+    apiFetch<Counterparty[]>('/sales/counterparties', { token, tenantId: company.id, locale })
       .then((res) => {
         const filtered = (res || []).filter(
           (c) => c.type === 'SUPPLIER' || c.type === 'BOTH'
@@ -49,7 +52,7 @@ export default function SuppliersPage() {
   useEffect(() => {
     if (!token || !company) return;
     fetchSuppliers();
-  }, [token, company]);
+  }, [token, company, locale]);
 
   const filteredSuppliers = suppliers.filter(
     (s) =>
@@ -66,10 +69,10 @@ export default function SuppliersPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            👥 Yetkazib Beruvchilar Katalogi va Shartnomalar
+            {isRu ? 'Каталог Поставщиков и Договоры' : 'Yetkazib Beruvchilar Katalogi va Shartnomalar'}
           </h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Barcha yetkazib beruvchilar ro&apos;yxati, rekvizitlari, shartnomalari, xaridlar va o&apos;zaro qarzdorlik balansi
+            {isRu ? 'Список поставщиков, реквизиты, договоры, история закупок и баланс задолженности' : 'Barcha yetkazib beruvchilar ro\'yxati, rekvizitlari, shartnomalari, xaridlar va o\'zaro qarzdorlik balansi'}
           </p>
         </div>
       </div>
@@ -81,9 +84,9 @@ export default function SuppliersPage() {
             <Building2 size={24} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Jami Yetkazib Beruvchilar</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего поставщиков' : 'Jami Yetkazib Beruvchilar'}</div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {suppliers.length} ta
+              {suppliers.length} {isRu ? 'пост.' : 'ta'}
             </div>
           </div>
         </Card>
@@ -93,9 +96,9 @@ export default function SuppliersPage() {
             <Building2 size={24} />
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Umumiy Bizning Qarzimiz</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Наш общий долг' : 'Umumiy Bizning Qarzimiz'}</div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-600)' }} className="tabular-nums">
-              {formatCurrency(totalDebt, 'uz')} UZS
+              {formatCurrency(totalDebt, locale)}
             </div>
           </div>
         </Card>
@@ -103,7 +106,7 @@ export default function SuppliersPage() {
 
       <Card style={{ padding: 'var(--space-4)' }}>
         <Input
-          placeholder="Yetkazib beruvchi nomi, STIR, telefon bo'yicha qidiruv..."
+          placeholder={isRu ? 'Поиск по названию, ИНН, телефону...' : 'Yetkazib beruvchi nomi, STIR, telefon bo\'yicha qidiruv...'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -113,23 +116,23 @@ export default function SuppliersPage() {
       <Card>
         {loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            Yuklanmoqda...
+            {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
           </div>
         ) : filteredSuppliers.length === 0 ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <Building2 size={44} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>Yetkazib beruvchilar topilmadi</div>
+            <div>{isRu ? 'Поставщики не найдены' : 'Yetkazib beruvchilar topilmadi'}</div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-xs)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}>
-                  <th style={{ padding: '12px' }}>NOMI</th>
-                  <th style={{ padding: '12px' }}>STIR (INN)</th>
-                  <th style={{ padding: '12px' }}>TELEFON / MANZIL</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>BIZNING QARZIMIZ</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>AMALLAR</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'НАИМЕНОВАНИЕ' : 'NOMI'}</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'ИНН (STIR)' : 'STIR (INN)'}</th>
+                  <th style={{ padding: '12px' }}>{isRu ? 'ТЕЛЕФОН / АДРЕС' : 'TELEFON / MANZIL'}</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'НАШ ДОЛГ' : 'BIZNING QARZIMIZ'}</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,7 +144,7 @@ export default function SuppliersPage() {
                         {s.name}
                         {s.type === 'BOTH' && (
                           <span style={{ marginLeft: '6px' }}>
-                            <Badge variant="neutral">Hamkor & Xaridor</Badge>
+                            <Badge variant="neutral">{isRu ? 'Поставщик и Покупатель' : 'Hamkor & Xaridor'}</Badge>
                           </span>
                         )}
                       </td>
@@ -158,11 +161,11 @@ export default function SuppliersPage() {
                         }}
                         className="tabular-nums"
                       >
-                        {formatCurrency(debt, 'uz')} UZS
+                        {formatCurrency(debt, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <Button size="sm" variant="secondary" onClick={() => setSelectedSupplierId(s.id)}>
-                          <Eye size={14} style={{ marginRight: '4px' }} /> Profil va Tarix
+                          <Eye size={14} style={{ marginRight: '4px' }} /> {isRu ? 'Профиль и история' : 'Profil va Tarix'}
                         </Button>
                       </td>
                     </tr>

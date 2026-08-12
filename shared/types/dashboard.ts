@@ -49,7 +49,14 @@ export interface CashFlowPoint {
   expense: number;
 }
 
+export interface CashFlowByCurrency {
+  currency: string;
+  series: CashFlowPoint[];
+}
+
 export interface DashboardCashFlow {
+  seriesByCurrency: CashFlowByCurrency[];
+  /** @deprecated use seriesByCurrency instead */
   series: CashFlowPoint[];
   granularity: 'day' | 'week' | 'month';
 }

@@ -262,7 +262,7 @@ export class FinanceService {
 
   async createTransfer(tenantId: string, dto: CreateTransferDto, createdById?: string) {
     if (dto.fromAccountId === dto.toAccountId) {
-      throw new BadRequestException('Source and destination accounts must be different');
+      throw new BadRequestException('Chiquvchi va qabul qiluvchi hisoblar har xil bo\'lishi shart');
     }
 
     const [fromAccount, toAccount] = await Promise.all([
@@ -270,8 +270,41 @@ export class FinanceService {
       this.prisma.cashAccount.findFirst({ where: { id: dto.toAccountId, tenantId } }),
     ]);
 
-    if (!fromAccount) throw new NotFoundException('Source cash account not found');
-    if (!toAccount) throw new NotFoundException('Destination cash account not found');
+    if (!fromAccount) throw new NotFoundException('Chiquvchi kassa hisobi topilmadi');
+    if (!toAccount) throw new NotFoundException('Qabul qiluvchi kassa hisobi topilmadi');
+
+    const fromAmount = Number(dto.amount);
+    if (fromAmount <= 0) {
+      throw new BadRequestException('Miqdor musbat bo\'lishi kerak');
+    }
+
+    if (Number(fromAccount.balance) < fromAmount) {
+      throw new BadRequestException(
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${fromAccount.balance} ${fromAccount.currency}`,
+      );
+    }
+
+    const fromCurrency = fromAccount.currency;
+    const toCurrency = toAccount.currency;
+
+    let toAmount = fromAmount;
+    let autoComment = dto.comment || '';
+
+    if (fromCurrency !== toCurrency) {
+      if (dto.targetAmount && dto.targetAmount > 0) {
+        toAmount = Number(dto.targetAmount);
+      } else if (dto.exchangeRate && dto.exchangeRate > 0) {
+        toAmount = fromAmount * Number(dto.exchangeRate);
+      } else {
+        throw new BadRequestException(
+          `Turli valyutadagi hisoblar uchun konvertatsiya kursi yoki yakuniy summa kiritilishi shart (${fromCurrency} -> ${toCurrency})`,
+        );
+      }
+
+      const calcRate = dto.exchangeRate || toAmount / fromAmount;
+      const conversionNote = `Konvertatsiya: ${fromAmount} ${fromCurrency} -> ${toAmount} ${toCurrency} (Kurs: ${calcRate})`;
+      autoComment = autoComment ? `${autoComment} | ${conversionNote}` : conversionNote;
+    }
 
     const tx = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.financeTransaction.create({
@@ -280,10 +313,10 @@ export class FinanceService {
           direction: TransactionDirection.TRANSFER,
           accountId: dto.fromAccountId,
           transferToId: dto.toAccountId,
-          amount: dto.amount,
-          currency: dto.currency,
+          amount: fromAmount,
+          currency: fromCurrency,
           transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
-          comment: dto.comment,
+          comment: autoComment,
           createdById,
         },
         include: { account: true, transferToAccount: true },
@@ -292,13 +325,13 @@ export class FinanceService {
       // Deduct from source
       await tx.cashAccount.update({
         where: { id: dto.fromAccountId },
-        data: { balance: { decrement: dto.amount } },
+        data: { balance: { decrement: fromAmount } },
       });
 
       // Add to destination
       await tx.cashAccount.update({
         where: { id: dto.toAccountId },
-        data: { balance: { increment: dto.amount } },
+        data: { balance: { increment: toAmount } },
       });
 
       return transaction;

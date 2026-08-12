@@ -94,6 +94,17 @@ export class PurchasesController {
     return this.purchasesService.unpostReceipt(tenantId, user?.id, id);
   }
 
+  @Post('receipts/:id/pay')
+  @RequirePermissions('inventory:edit')
+  async payReceipt(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: { amount: number; cashAccountId: string; note?: string; paymentDate?: string },
+  ) {
+    return this.purchasesService.payPurchaseReceipt(tenantId, user?.id, id, dto);
+  }
+
   @Delete('receipts/:id')
   @RequirePermissions('inventory:delete')
   async deleteReceipt(

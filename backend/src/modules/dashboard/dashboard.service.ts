@@ -205,9 +205,13 @@ export class DashboardService {
       select: { direction: true, amount: true, currency: true, transactionDate: true },
     });
 
-    const seriesMap: Record<string, { income: number; expense: number }> = {};
+    // Group by currency → then by period
+    const byCurrency: Record<string, Record<string, { income: number; expense: number }>> = {};
 
     transactions.forEach((tx) => {
+      const currency = tx.currency;
+      if (!byCurrency[currency]) byCurrency[currency] = {};
+
       const d = new Date(tx.transactionDate);
       let key: string;
       if (granularity === 'month') {
@@ -220,19 +224,26 @@ export class DashboardService {
         key = d.toISOString().slice(0, 10);
       }
 
-      if (!seriesMap[key]) seriesMap[key] = { income: 0, expense: 0 };
+      if (!byCurrency[currency][key]) byCurrency[currency][key] = { income: 0, expense: 0 };
       if (tx.direction === TransactionDirection.INCOME) {
-        seriesMap[key].income += Number(tx.amount);
+        byCurrency[currency][key].income += Number(tx.amount);
       } else {
-        seriesMap[key].expense += Number(tx.amount);
+        byCurrency[currency][key].expense += Number(tx.amount);
       }
     });
 
-    const series = Object.entries(seriesMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([period, data]) => ({ period, ...data }));
+    const seriesByCurrency = Object.entries(byCurrency).map(([currency, periodMap]) => ({
+      currency,
+      series: Object.entries(periodMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([period, data]) => ({ period, ...data })),
+    }));
 
-    return { series, granularity };
+    // Legacy flat series: UZS only (or first currency if no UZS)
+    const uzsEntry = seriesByCurrency.find((e) => e.currency === 'UZS');
+    const legacySeries = uzsEntry?.series ?? seriesByCurrency[0]?.series ?? [];
+
+    return { seriesByCurrency, series: legacySeries, granularity };
   }
 
   // ─── /api/dashboard/transactions ─────────────────────────────────

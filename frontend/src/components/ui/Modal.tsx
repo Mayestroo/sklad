@@ -6,7 +6,7 @@ export interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
 }
 
 const sizeMap: Record<string, string> = {
@@ -15,6 +15,8 @@ const sizeMap: Record<string, string> = {
   lg: '720px',
   xl: '900px',
   '2xl': '1100px',
+  '3xl': '1280px',
+  full: '95vw',
 };
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
@@ -38,7 +40,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     >
       <div
         style={{
-          backgroundColor: 'var(--color-bg-primary)',
+          backgroundColor: 'var(--color-bg-secondary)',
           borderRadius: 'var(--radius-lg)',
           width: '100%',
           maxWidth: sizeMap[size] || '560px',
@@ -49,10 +51,11 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
           maxHeight: '90vh',
           overflowY: 'auto',
           margin: 'auto',
+          border: '1px solid var(--color-border)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--color-bg-primary)', zIndex: 1 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--color-bg-secondary)', zIndex: 1 }}>
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>{title}</h3>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}>
             <X size={18} />

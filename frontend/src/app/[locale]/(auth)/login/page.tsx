@@ -5,9 +5,8 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Button } from '@/components/ui/Button';
-import { Lock, Mail, Building2, AlertCircle } from 'lucide-react';
+import { Lock, Mail, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -62,38 +61,11 @@ export default function LoginPage() {
           padding: 'var(--space-8)',
         }}
       >
-        {/* Top Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--color-primary-600)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'var(--font-bold)',
-                fontSize: 'var(--text-xl)',
-              }}
-            >
-              C
-            </div>
-            <span style={{ fontWeight: 'var(--font-bold)', fontSize: 'var(--text-lg)' }}>CRM SaaS</span>
-          </div>
-          <LanguageSwitcher />
-        </div>
-
         {/* Title */}
-        <div style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ marginBottom: 'var(--space-6)', textAlign: 'center' }}>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             {t('login')}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-            MoySklad + 1C Unified SaaS Platforma
-          </p>
         </div>
 
         {/* Error Alert */}

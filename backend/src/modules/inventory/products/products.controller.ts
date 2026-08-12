@@ -40,6 +40,24 @@ export class ProductsController {
     return this.productsService.findByBarcode(tenantId, code);
   }
 
+  @Get('/api/inventory/stock-levels')
+  @RequirePermissions('inventory:view')
+  findStockLevelsRoot(
+    @CurrentTenant() tenantId: string,
+    @Query('warehouseId') warehouseId?: string,
+  ) {
+    return this.productsService.findStockLevels(tenantId, warehouseId);
+  }
+
+  @Get('stock-levels')
+  @RequirePermissions('inventory:view')
+  findStockLevels(
+    @CurrentTenant() tenantId: string,
+    @Query('warehouseId') warehouseId?: string,
+  ) {
+    return this.productsService.findStockLevels(tenantId, warehouseId);
+  }
+
   @Get(':id')
   @RequirePermissions('inventory:view')
   findById(@CurrentTenant() tenantId: string, @Param('id') id: string) {

@@ -36,12 +36,13 @@ export function DatePicker({
   label,
   value,
   onChange,
-  placeholder = 'Sana tanlang...',
+  placeholder,
   disabled = false,
   style,
   error,
 }: DatePickerProps) {
   const locale = (useLocale() as 'uz' | 'ru') || 'uz';
+  const effectivePlaceholder = placeholder ?? (locale === 'ru' ? 'Выберите дату...' : 'Sana tanlang...');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -186,7 +187,7 @@ export function DatePicker({
               textOverflow: 'ellipsis',
             }}
           >
-            {value ? formatDisplayDate(value, locale) : placeholder}
+            {value ? formatDisplayDate(value, locale) : effectivePlaceholder}
           </span>
         </div>
 
@@ -352,7 +353,7 @@ export function DatePicker({
                 cursor: 'pointer',
               }}
             >
-              Tozalash
+              {locale === 'ru' ? 'Очистить' : 'Tozalash'}
             </button>
             <button
               type="button"
@@ -366,7 +367,7 @@ export function DatePicker({
                 cursor: 'pointer',
               }}
             >
-              Bugun
+              {locale === 'ru' ? 'Сегодня' : 'Bugun'}
             </button>
           </div>
         </div>

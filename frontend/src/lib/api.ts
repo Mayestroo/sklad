@@ -37,10 +37,16 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     let errorMessage = `API Error: ${response.status} ${response.statusText}`;
     try {
       const errorText = await response.text();
-      if (errorText) {
         const errorData = JSON.parse(errorText);
-        errorMessage = errorData.message || errorMessage;
-      }
+        if (errorData.details) {
+          errorMessage = Array.isArray(errorData.details)
+            ? errorData.details.join('; ')
+            : String(errorData.details);
+        } else if (errorData.message) {
+          errorMessage = Array.isArray(errorData.message)
+            ? errorData.message.join('; ')
+            : errorData.message;
+        }
     } catch {
       // ignore parse error
     }

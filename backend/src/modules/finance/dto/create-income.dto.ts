@@ -1,37 +1,47 @@
-import { IsString, IsNumber, IsOptional, IsDateString, IsPositive } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsDateString, IsPositive, IsNotEmpty } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
 export class CreateIncomeDto {
   @IsString()
+  @IsNotEmpty()
   accountId: string;
 
+  @Type(() => Number)
   @IsNumber()
   @IsPositive()
   amount: number;
 
   @IsString()
+  @IsNotEmpty()
   currency: string;
 
-  @IsDateString()
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @IsDateString()
   transactionDate?: string;
 
-  @IsString()
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @IsString()
   counterpartyId?: string;
 
-  @IsString()
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @IsString()
   transactionTypeId?: string;
 
-  @IsString()
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @IsString()
   comment?: string;
 
-  @IsString()
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @IsString()
   sourceDocType?: string;
 
-  @IsString()
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @IsString()
   sourceDocId?: string;
 }

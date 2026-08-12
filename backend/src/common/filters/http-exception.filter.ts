@@ -62,9 +62,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const resp = exceptionResponse as any;
       // Handle class-validator errors
       if (Array.isArray(resp.message)) {
-        message =
-          ERROR_MESSAGES['VALIDATION_ERROR']?.[locale] ||
-          'Validation error';
+        message = resp.message.join('; ');
         details = resp.message;
       } else {
         message = resp.message || this.getLocalizedMessage(status, locale);

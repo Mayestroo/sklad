@@ -43,6 +43,7 @@ export function SalesInvoiceDetailModal({
 }: SalesInvoiceDetailModalProps) {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
 
   const grossProfit = Number(invoice.grossProfit || 0);
   const totalAmount = Number(invoice.totalAmount || 0);
@@ -57,25 +58,27 @@ export function SalesInvoiceDetailModal({
         method: 'POST',
         token: token || undefined,
         tenantId: company.id,
+        locale,
       });
       onAction();
     } catch (err: any) {
-      alert(err?.message || 'Tasdiqlashda xato');
+      alert(err?.message || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xato'));
     }
   };
 
   const handleUnpost = async () => {
     if (!token || !company) return;
-    if (!confirm('Hujjatni bekor qilmoqchimisiz? Ombor qoldig\'i tiklanadi.')) return;
+    if (!confirm(isRu ? 'Отменить проведение документа? Остатки товаров вернутся на склад.' : 'Hujjatni bekor qilmoqchimisiz? Ombor qoldig\'i tiklanadi.')) return;
     try {
       await apiFetch(`/sales/invoices/${invoice.id}/unpost`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company.id,
+        locale,
       });
       onAction();
     } catch (err: any) {
-      alert(err?.message || 'Bekor qilishda xato');
+      alert(err?.message || (isRu ? 'Ошибка отмены' : 'Bekor qilishda xato'));
     }
   };
 
@@ -92,21 +95,21 @@ export function SalesInvoiceDetailModal({
     <Modal
       isOpen={true}
       onClose={onClose}
-      title={`Sotuv № ${invoice.invoiceNumber}`}
+      title={`${isRu ? 'Продажа №' : 'Sotuv №'} ${invoice.invoiceNumber}`}
       size="xl"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
         {/* Status row */}
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
           <Badge variant={statusBadgeVariant[invoice.status] || 'default'}>
-            {invoice.status === 'DRAFT' ? 'Qoralama' : invoice.status === 'POSTED' ? 'Tasdiqlangan' : 'Bekor qilingan'}
+            {invoice.status === 'DRAFT' ? (isRu ? 'Черновик' : 'Qoralama') : invoice.status === 'POSTED' ? (isRu ? 'Проведён' : 'Tasdiqlangan') : (isRu ? 'Отменён' : 'Bekor qilingan')}
           </Badge>
           <Badge variant={paymentBadgeVariant[invoice.paymentStatus] || 'default'}>
-            {invoice.paymentStatus === 'UNPAID' ? 'To\'lanmagan' : invoice.paymentStatus === 'PARTIALLY_PAID' ? 'Qisman to\'langan' : 'To\'langan'}
+            {invoice.paymentStatus === 'UNPAID' ? (isRu ? 'Не оплачен' : 'To\'lanmagan') : invoice.paymentStatus === 'PARTIALLY_PAID' ? (isRu ? 'Частично оплачен' : 'Qisman to\'langan') : (isRu ? 'Оплачен' : 'To\'langan')}
           </Badge>
           {invoice.returnStatus && invoice.returnStatus !== 'NONE' && (
             <Badge variant="warning">
-              {invoice.returnStatus === 'PARTIALLY_RETURNED' ? 'Qisman qaytarilgan' : 'To\'liq qaytarilgan'}
+              {invoice.returnStatus === 'PARTIALLY_RETURNED' ? (isRu ? 'Частичный возврат' : 'Qisman qaytarilgan') : (isRu ? 'Полный возврат' : 'To\'liq qaytarilgan')}
             </Badge>
           )}
         </div>
@@ -114,11 +117,11 @@ export function SalesInvoiceDetailModal({
         {/* Meta info */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>Mijoz</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>{isRu ? 'Клиент' : 'Mijoz'}</div>
             <div style={{ fontWeight: 600 }}>{counterpartyData?.name || '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>Ombor</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>{isRu ? 'Склад' : 'Ombor'}</div>
             <div style={{ fontWeight: 600 }}>
               {warehouseData
                 ? typeof warehouseData.name === 'object'
@@ -128,22 +131,22 @@ export function SalesInvoiceDetailModal({
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>Sana</div>
-            <div style={{ fontWeight: 600 }}>{formatDate(invoice.invoiceDate)}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>{isRu ? 'Дата' : 'Sana'}</div>
+            <div style={{ fontWeight: 600 }}>{formatDate(invoice.invoiceDate, locale)}</div>
           </div>
           <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>Valyuta</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>{isRu ? 'Валюта' : 'Valyuta'}</div>
             <div style={{ fontWeight: 600 }}>{invoice.currency}</div>
           </div>
           {invoice.contractNumber && (
             <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>Shartnoma №</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>{isRu ? '№ Договора' : 'Shartnoma №'}</div>
               <div style={{ fontWeight: 600 }}>{invoice.contractNumber}</div>
             </div>
           )}
           {createdByData && (
             <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>Yaratuvchi</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>{isRu ? 'Создатель' : 'Yaratuvchi'}</div>
               <div style={{ fontWeight: 600 }}>{createdByData.firstName} {createdByData.lastName}</div>
             </div>
           )}
@@ -159,30 +162,30 @@ export function SalesInvoiceDetailModal({
           padding: 'var(--space-4)',
         }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Jami summa</div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4 }}>{formatCurrency(totalAmount, invoice.currency)}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Общая сумма' : 'Jami summa'}</div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4 }}>{formatCurrency(totalAmount, locale)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>To'langan</div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#10b981' }}>{formatCurrency(paidAmount, invoice.currency)}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Оплачено' : 'To\'langan'}</div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#10b981' }}>{formatCurrency(paidAmount, locale)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Qoldiq qarz</div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#f59e0b' }}>{formatCurrency(totalAmount - paidAmount, invoice.currency)}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Остаток долга' : 'Qoldiq qarz'}</div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#f59e0b' }}>{formatCurrency(totalAmount - paidAmount, locale)}</div>
           </div>
           {invoice.status === 'POSTED' && (
             <>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>COGS (tannarx)</div>
-                <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: 'var(--color-text-secondary)' }}>{formatCurrency(totalCogs, invoice.currency)}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'COGS (себестоимость)' : 'COGS (tannarx)'}</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: 'var(--color-text-secondary)' }}>{formatCurrency(totalCogs, locale)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Yalpi foyda</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Валовая прибыль' : 'Yalpi foyda'}</div>
                 <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: grossProfit >= 0 ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   {grossProfit >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                  {formatCurrency(grossProfit, invoice.currency)}
+                  {formatCurrency(grossProfit, locale)}
                 </div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>Marja: {margin}%</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{isRu ? 'Маржа:' : 'Marja:'} {margin}%</div>
               </div>
             </>
           )}
@@ -191,12 +194,15 @@ export function SalesInvoiceDetailModal({
         {/* Items table */}
         {itemsData.length > 0 && (
           <div>
-            <h3 style={{ fontWeight: 600, marginBottom: 10, fontSize: 'var(--text-base)' }}>Tovarlar</h3>
+            <h3 style={{ fontWeight: 600, marginBottom: 10, fontSize: 'var(--text-base)' }}>{isRu ? 'Товары' : 'Tovarlar'}</h3>
             <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--color-bg-subtle)' }}>
-                    {['Tovar', 'Miqdor', 'Narx', 'QQS%', 'Jami', ...(invoice.status === 'POSTED' ? ['Tannarx', 'Foyda', ''] : [])].map((h) => (
+                    {(isRu
+                      ? ['Товар', 'Кол-во', 'Цена', 'НДС%', 'Итого', ...(invoice.status === 'POSTED' ? ['Себестоимость', 'Прибыль', ''] : [])]
+                      : ['Tovar', 'Miqdor', 'Narx', 'QQS%', 'Jami', ...(invoice.status === 'POSTED' ? ['Tannarx', 'Foyda', ''] : [])]
+                    ).map((h) => (
                       <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>
                         {h}
                       </th>
@@ -217,21 +223,21 @@ export function SalesInvoiceDetailModal({
                           {productName}
                           {isBelowCost && (
                             <span style={{ marginLeft: 6, color: '#ef4444', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                              <AlertTriangle size={10} /> Tannarxdan past
+                              <AlertTriangle size={10} /> {isRu ? 'Ниже себестоимости' : 'Tannarxdan past'}
                             </span>
                           )}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{Number(item.quantity)}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{formatCurrency(Number(item.unitPrice), invoice.currency)}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{formatCurrency(Number(item.unitPrice), locale)}</td>
                         <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{Number(item.vatRate)}%</td>
-                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(item.totalPrice), invoice.currency)}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(item.totalPrice), locale)}</td>
                         {invoice.status === 'POSTED' && (
                           <>
                             <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                              {formatCurrency(Number(item.lineCogs || 0), invoice.currency)}
+                              {formatCurrency(Number(item.lineCogs || 0), locale)}
                             </td>
                             <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', fontWeight: 600, color: lineGrossProfit >= 0 ? '#10b981' : '#ef4444' }}>
-                              {formatCurrency(lineGrossProfit, invoice.currency)}
+                              {formatCurrency(lineGrossProfit, locale)}
                             </td>
                             <td style={{ padding: '10px 12px', fontSize: 11, color: 'var(--color-text-secondary)' }}>
                               {totalAmount > 0 ? `${((Number(item.totalPrice) / totalAmount) * 100).toFixed(1)}%` : ''}
@@ -250,23 +256,30 @@ export function SalesInvoiceDetailModal({
         {/* Comment */}
         {invoice.comment && (
           <div style={{ background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            <strong>Izoh:</strong> {invoice.comment}
+            <strong>{isRu ? 'Комментарий:' : 'Izoh:'}</strong> {invoice.comment}
           </div>
         )}
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)', flexWrap: 'wrap' }}>
           <Button id="print-invoice-btn" variant="secondary" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Printer size={14} /> Chop etish
+            <Printer size={14} /> {isRu ? 'Печать' : 'Chop etish'}
           </Button>
 
           {invoice.status === 'DRAFT' && (
             <Button
               id="post-from-detail-btn"
               onClick={handlePost}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#10b981', color: '#fff' }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: 'var(--color-success-50)',
+                color: 'var(--color-success-600)',
+                border: '1px solid var(--color-success-100)',
+              }}
             >
-              <CheckCircle size={14} /> Tasdiqlash
+              <CheckCircle size={14} /> {isRu ? 'Провести' : 'Tasdiqlash'}
             </Button>
           )}
 
@@ -277,12 +290,12 @@ export function SalesInvoiceDetailModal({
               onClick={handleUnpost}
               style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b' }}
             >
-              <XCircle size={14} /> Tasdiqlashni bekor qilish
+              <XCircle size={14} /> {isRu ? 'Отменить проведение' : 'Tasdiqlashni bekor qilish'}
             </Button>
           )}
 
           <Button id="close-detail-btn" variant="secondary" onClick={onClose}>
-            Yopish
+            {isRu ? 'Закрыть' : 'Yopish'}
           </Button>
         </div>
       </div>

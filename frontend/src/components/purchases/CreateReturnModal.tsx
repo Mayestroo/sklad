@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { PurchaseReceipt } from '@shared/types';
+import { formatCurrency } from '@/lib/utils';
 
 interface CreateReturnModalProps {
   isOpen: boolean;
@@ -22,6 +25,8 @@ export function CreateReturnModal({
   onSuccess,
 }: CreateReturnModalProps) {
   const { token, company } = useAuth();
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
 
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
   const [reason, setReason] = useState('');
@@ -30,19 +35,25 @@ export function CreateReturnModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const getProductName = (name: any) => {
+    if (!name) return '—';
+    if (typeof name === 'string') return name;
+    return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
+  };
+
   useEffect(() => {
     if (receipt && receipt.items) {
       setReturnItems(
         receipt.items.map((i) => ({
           productId: i.productId,
-          name: typeof i.product?.name === 'string' ? i.product.name : i.product?.name?.uz || i.product?.name?.ru || 'Tovar',
+          name: getProductName(i.product?.name),
           maxQty: Number(i.quantity),
           returnQty: 0,
           unitPrice: Number(i.unitPrice),
         }))
       );
     }
-  }, [receipt]);
+  }, [receipt, locale]);
 
   if (!receipt) return null;
 
@@ -71,7 +82,7 @@ export function CreateReturnModal({
       }));
 
     if (itemsToReturn.length === 0) {
-      setError('Kamida bitta tovar qaytarish miqdorini kiriting');
+      setError(isRu ? 'Укажите количество для возврата хотя бы для одного товара' : 'Kamida bitta tovar qaytarish miqdorini kiriting');
       return;
     }
 
@@ -81,6 +92,7 @@ export function CreateReturnModal({
       await apiFetch('/purchases/returns', {
         token: token || undefined,
         tenantId: company?.id || undefined,
+        locale,
         method: 'POST',
         body: JSON.stringify({
           receiptId: receipt.id,
@@ -96,7 +108,7 @@ export function CreateReturnModal({
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'Qaytarishni rasmiylashtirishda xatolik');
+      setError(err?.message || (isRu ? 'Ошибка при оформлении возврата' : 'Qaytarishni rasmiylashtirishda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -108,7 +120,7 @@ export function CreateReturnModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Yetkazib Beruvchiga Tovarni Qaytarish: ${receipt.docNumber}`}
+      title={`${isRu ? 'Возврат товара поставщику: Документ №' : 'Yetkazib Beruvchiga Tovarni Qaytarish:'} ${receipt.docNumber}`}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '650px', width: '100%' }}>
         {error && (
@@ -126,38 +138,37 @@ export function CreateReturnModal({
         )}
 
         <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
-          <div><strong>Yetkazib beruvchi:</strong> {receipt.counterparty?.name}</div>
-          <div><strong>Ombor:</strong> {typeof receipt.warehouse?.name === 'string' ? receipt.warehouse.name : receipt.warehouse?.name?.uz || '—'}</div>
+          <div><strong>{isRu ? 'Поставщик:' : 'Yetkazib beruvchi:'}</strong> {receipt.counterparty?.name}</div>
+          <div><strong>{isRu ? 'Склад:' : 'Ombor:'}</strong> {getProductName(receipt.warehouse?.name)}</div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-3)' }}>
+          <DatePicker
+            label={isRu ? 'Дата возврата *' : 'Qaytarish Sanasi *'}
+            value={returnDate}
+            onChange={(val) => setReturnDate(val)}
+          />
           <div>
             <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
-              Qaytarish Sanasi *
+              {isRu ? 'Причина возврата' : 'Qaytarish Sababi'}
             </label>
-            <Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-          </div>
-          <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
-              Qaytarish Sababi
-            </label>
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Masalan: Brak, Yaroqsiz tovar yoki shartnoma buzilishi" />
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isRu ? 'Например: Брак, дефект или нарушение договора' : 'Masalan: Brak, Yaroqsiz tovar yoki shartnoma buzilishi'} />
           </div>
         </div>
 
         <div>
           <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: 'var(--space-2)', display: 'block' }}>
-            Qaytariladigan Miqdorlar
+            {isRu ? 'Возвращаемое количество' : 'Qaytariladigan Miqdorlar'}
           </label>
           <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
               <thead>
                 <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th style={{ padding: '8px', textAlign: 'left' }}>TOVAR</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>QABUL MIQDORI</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '110px' }}>QAYTARISH MIQDORI</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '120px' }}>XARID NARXI</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '130px' }}>SUMMA</th>
+                  <th style={{ padding: '8px', textAlign: 'left' }}>{isRu ? 'ТОВАР' : 'TOVAR'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>{isRu ? 'ПРИНЯТО' : 'QABUL MIQDORI'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '110px' }}>{isRu ? 'ВОЗВРАТ' : 'QAYTARISH MIQDORI'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '120px' }}>{isRu ? 'ЦЕНА ЗАКУПКИ' : 'XARID NARXI'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '130px' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,9 +187,9 @@ export function CreateReturnModal({
                         style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)' }}
                       />
                     </td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{item.unitPrice.toLocaleString()} {receipt.currency}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale)} {receipt.currency}</td>
                     <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
-                      {(item.returnQty * item.unitPrice).toLocaleString()} {receipt.currency}
+                      {formatCurrency(item.returnQty * item.unitPrice, locale)} {receipt.currency}
                     </td>
                   </tr>
                 ))}
@@ -188,18 +199,18 @@ export function CreateReturnModal({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', backgroundColor: 'var(--color-warning-50)', borderRadius: 'var(--radius-md)' }}>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning-900)' }}>Qaytariladigan Jami Summa (Qarzimiz kamayadi):</span>
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning-900)' }}>{isRu ? 'Общая сумма возврата (уменьшит долг):' : 'Qaytariladigan Jami Summa (Qarzimiz kamayadi):'}</span>
           <strong style={{ fontSize: 'var(--text-lg)', color: 'var(--color-warning-900)' }}>
-            {returnTotal.toLocaleString()} {receipt.currency}
+            {formatCurrency(returnTotal, locale)} {receipt.currency}
           </strong>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
           <Button variant="secondary" onClick={onClose} disabled={loading}>
-            Bekor qilish
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button variant="danger" onClick={handleSubmit} disabled={loading || returnTotal <= 0}>
-            {loading ? 'Rasmiylashtirilmoqda...' : 'Qaytarishni Tasdiqlash'}
+            {loading ? (isRu ? 'Оформление...' : 'Rasmiylashtirilmoqda...') : (isRu ? 'Подтвердить возврат' : 'Qaytarishni Tasdiqlash')}
           </Button>
         </div>
       </div>

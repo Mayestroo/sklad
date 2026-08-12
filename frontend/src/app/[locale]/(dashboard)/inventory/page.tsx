@@ -118,59 +118,61 @@ export default function InventoryPage() {
     ? safeProducts.filter((p) => (p as any).isLowStock)
     : safeProducts;
 
+  const isRu = locale === 'ru';
+
   const getLocalizedName = (name: any) => {
     if (!name) return '';
-    return name[locale] || name.uz || name.ru || '';
+    return name[locale] || name.ru || name.uz || '';
   };
 
   const warehouseOptions = [
-    { value: '', label: 'Barcha Omborlar' },
+    { value: '', label: isRu ? 'Все склады' : 'Barcha Omborlar' },
     ...safeWarehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) })),
   ];
 
   const categoryOptions = [
-    { value: '', label: 'Barcha kategoriyalar' },
+    { value: '', label: isRu ? 'Все категории' : 'Barcha kategoriyalar' },
     ...safeCategories.map((c) => ({ value: c.id, label: getLocalizedName(c.name) })),
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {t('title')}
+            {isRu ? 'Управление складом и остатками' : t('title')}
           </h1>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <Link href="/settings/branches" style={{ textDecoration: 'none' }}>
             <Button variant="outline">
               <Building2 size={16} />
-              Filial va Omborlar
+              {isRu ? 'Филиалы и Склады' : 'Filial va Omborlar'}
             </Button>
           </Link>
           <Link href="/inventory/transfers" style={{ textDecoration: 'none' }}>
             <Button variant="outline">
               <ArrowRightLeft size={16} />
-              Omborlararo Transfer
+              {isRu ? 'Перемещение' : 'Omborlararo Transfer'}
             </Button>
           </Link>
           <Button variant="outline" onClick={() => setShowScanner(true)}>
             <QrCode size={16} />
-            Shtrix-kod skaner
+            {isRu ? 'Сканер штрихкода' : 'Shtrix-kod skaner'}
           </Button>
           <Link href="/inventory/documents" style={{ textDecoration: 'none' }}>
             <Button variant="secondary">
               <FileText size={16} />
-              Hujjatlar (Kirim/Chiqim)
+              {isRu ? 'Документы' : 'Hujjatlar (Kirim/Chiqim)'}
             </Button>
           </Link>
           {hasPermission('inventory:create') && (
-            <Link href="/inventory/products/new" style={{ textDecoration: 'none' }}>
+            <Link href="/products/new" style={{ textDecoration: 'none' }}>
               <Button variant="primary">
                 <Plus size={16} />
-                {t('addProduct')}
+                {isRu ? 'Добавить товар' : t('addProduct')}
               </Button>
             </Link>
           )}
@@ -231,6 +233,8 @@ export default function InventoryPage() {
                 fontSize: 'var(--text-sm)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-bg-input)',
+                color: 'var(--color-text-primary)',
                 outline: 'none',
               }}
             />

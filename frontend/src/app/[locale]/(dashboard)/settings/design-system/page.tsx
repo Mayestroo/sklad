@@ -119,16 +119,16 @@ export default function DesignSystemPage() {
               onChange={(val) => setSelectedPlan(val)}
             />
 
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', color: 'var(--color-text-secondary)' }}>
-                Native HTML Select (Styled)
-              </label>
-              <select style={{ width: '100%' }}>
-                <option value="1">Omborxona №1 (Toshkent)</option>
-                <option value="2">Omborxona №2 (Samarqand)</option>
-                <option value="3">Omborxona №3 (Farg&apos;ona)</option>
-              </select>
-            </div>
+            <Select
+              label="Omborxona tanlang (Searchable Select)"
+              options={[
+                { value: '1', label: 'Omborxona №1 (Toshkent)' },
+                { value: '2', label: 'Omborxona №2 (Samarqand)' },
+                { value: '3', label: "Omborxona №3 (Farg'ona)" },
+              ]}
+              value="1"
+              onChange={() => {}}
+            />
           </div>
         </div>
 

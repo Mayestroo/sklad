@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setUser(null);
       setCompany(null);
+      router.push('/login');
     };
 
     window.addEventListener('crm_unauthorized', handleUnauthorized);

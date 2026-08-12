@@ -26,18 +26,10 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   const messages = await getMessages();
 
   return (
-    <html lang={locale} suppressHydrationWarning>
-      <head>
-        <title>CRM SaaS — Unified MoySklad + 1C Platform (Uzbekistan)</title>
-        <meta name="description" content="Multi-tenant SaaS platform combining warehouse management and double-entry accounting natively in Uzbek and Russian." />
-      </head>
-      <body suppressHydrationWarning>
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          <AuthProvider>
-            <AppShell>{children}</AppShell>
-          </AuthProvider>
-        </NextIntlClientProvider>
-      </body>
-    </html>
+    <NextIntlClientProvider locale={locale} messages={messages}>
+      <AuthProvider>
+        <AppShell>{children}</AppShell>
+      </AuthProvider>
+    </NextIntlClientProvider>
   );
 }

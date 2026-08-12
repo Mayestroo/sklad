@@ -3,13 +3,22 @@
  * Supporting Uzbek (uz-UZ) and Russian (ru-RU) locales
  */
 
-export function formatCurrency(amount: number, locale: string = 'uz'): string {
+export function formatCurrency(amount: number, locale: string = 'uz', currency?: string): string {
   const formatted = new Intl.NumberFormat(locale === 'uz' ? 'uz-UZ' : 'ru-RU', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount || 0);
 
-  return `${formatted} ${locale === 'uz' ? "so'm" : 'сум'}`;
+  if (!currency) {
+    return `${formatted} ${locale === 'uz' ? "so'm" : 'сум'}`;
+  }
+
+  const curUpper = currency.toUpperCase();
+  if (curUpper === 'UZS' || curUpper === "SO'M" || curUpper === 'SOM') {
+    return `${formatted} ${locale === 'uz' ? "so'm" : 'сум'}`;
+  }
+
+  return `${formatted} ${currency}`;
 }
 
 const UZ_MONTHS_SHORT = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
