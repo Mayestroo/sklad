@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
+import { autoSeedIfEmpty } from './seed-helper';
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -27,6 +29,7 @@ export class PrismaService
 
   async onModuleInit() {
     await this.$connect();
+    await autoSeedIfEmpty(this);
   }
 
   async onModuleDestroy() {
