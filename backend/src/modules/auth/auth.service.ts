@@ -241,13 +241,14 @@ export class AuthService {
         locale: user.preferredLanguage as any,
       };
 
+      const jwtExpiration = this.configService.get<string>('JWT_EXPIRATION', '1d');
       const accessToken = this.jwtService.sign(newPayload, {
-        expiresIn: '15m',
+        expiresIn: jwtExpiration as any,
       });
 
       return {
         accessToken,
-        expiresIn: 900, // 15 minutes
+        expiresIn: 86400, // 1 day in seconds
       };
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
@@ -326,8 +327,9 @@ export class AuthService {
       locale: user.preferredLanguage,
     };
 
+    const jwtExpiration = this.configService.get<string>('JWT_EXPIRATION', '1d');
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '15m',
+      expiresIn: jwtExpiration as any,
     });
 
     const refreshToken = this.jwtService.sign(payload, {
@@ -356,7 +358,7 @@ export class AuthService {
       tokens: {
         accessToken,
         refreshToken,
-        expiresIn: 900,
+        expiresIn: 86400, // 1 day in seconds
       },
     };
   }

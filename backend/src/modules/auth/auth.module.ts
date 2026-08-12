@@ -14,7 +14,7 @@ import { JwtStrategy } from '../../common/guards/jwt.strategy';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET', 'dev-jwt-secret-change-me-in-production'),
-        signOptions: { expiresIn: '15m' },
+        signOptions: { expiresIn: configService.get<string>('JWT_EXPIRATION', '1d') as any },
       }),
     }),
   ],
