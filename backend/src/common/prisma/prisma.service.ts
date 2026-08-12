@@ -12,7 +12,13 @@ export class PrismaService
     const connectionString =
       process.env.DATABASE_URL ||
       'postgresql://crm_user:crm_password@localhost:5432/crm_dev?schema=public';
-    const pool = new Pool({ connectionString });
+    const isCloudDb =
+      connectionString.includes('neon.tech') ||
+      connectionString.includes('sslmode=require');
+    const pool = new Pool({
+      connectionString,
+      ssl: isCloudDb ? { rejectUnauthorized: false } : undefined,
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
   }
