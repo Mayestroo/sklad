@@ -127,12 +127,7 @@ export class AuthService {
   async login(dto: LoginDto, ipAddress?: string): Promise<AuthResponse> {
     const cleanEmail = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({
-      where: {
-        email: {
-          equals: cleanEmail,
-          mode: 'insensitive',
-        },
-      },
+      where: { email: cleanEmail },
       include: {
         company: true,
         userRoles: {
@@ -149,10 +144,11 @@ export class AuthService {
       },
     });
 
-    console.log(`[LOGIN_ATTEMPT] Email: "${cleanEmail}" (raw: "${dto.email}")`);
+    console.log(`[LOGIN_ATTEMPT] CleanEmail: "${cleanEmail}" (raw: "${dto.email}")`);
 
     if (!user) {
-      console.log(`[LOGIN_FAILED] No user found with email: "${cleanEmail}"`);
+      const totalUsers = await this.prisma.user.count();
+      console.log(`[LOGIN_FAILED] No user found with email: "${cleanEmail}". Total users in DB: ${totalUsers}`);
       throw new UnauthorizedException('Invalid email or password');
     }
 
