@@ -149,20 +149,28 @@ export class AuthService {
       },
     });
 
+    console.log(`[LOGIN_ATTEMPT] Email: "${cleanEmail}" (raw: "${dto.email}")`);
+
     if (!user) {
+      console.log(`[LOGIN_FAILED] No user found with email: "${cleanEmail}"`);
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    console.log(`[LOGIN_USER_FOUND] User ID: ${user.id}, email: ${user.email}, isActive: ${user.isActive}`);
+
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
+      console.log(`[LOGIN_FAILED] Password comparison failed for user: "${cleanEmail}"`);
       throw new UnauthorizedException('Invalid email or password');
     }
 
     if (!user.isActive) {
+      console.log(`[LOGIN_FAILED] User account inactive: "${cleanEmail}"`);
       throw new UnauthorizedException('User account is deactivated');
     }
 
     if (user.company.status === 'BLOCKED') {
+      console.log(`[LOGIN_FAILED] Company blocked for user: "${cleanEmail}"`);
       throw new UnauthorizedException('Company account is suspended or blocked');
     }
 
