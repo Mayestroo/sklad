@@ -478,7 +478,7 @@ export default function PurchasesPage() {
                       )}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                      {formatCurrency(Number(r.totalAmount), locale)} {r.currency}
+                      {formatCurrency(Number(r.totalAmount), locale, r.currency)}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? '#f59e0b' : 'var(--color-text-tertiary)' }} className="tabular-nums">
                       {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), locale)}` : '—'}

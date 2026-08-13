@@ -1021,7 +1021,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               {isRu ? 'ИТОГО К ОПЛАТЕ:' : 'JAMI TO‘LANISHI KERAK:'}
             </span>
             <span style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-              {formatCurrency(totals.grandTotal, locale)} {currency}
+              {formatCurrency(totals.grandTotal, locale, currency)}
             </span>
           </div>
         </Card>

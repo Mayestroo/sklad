@@ -187,9 +187,9 @@ export function CreateReturnModal({
                         style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)' }}
                       />
                     </td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale)} {receipt.currency}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, receipt.currency)}</td>
                     <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
-                      {formatCurrency(item.returnQty * item.unitPrice, locale)} {receipt.currency}
+                      {formatCurrency(item.returnQty * item.unitPrice, locale, receipt.currency)}
                     </td>
                   </tr>
                 ))}
@@ -201,7 +201,7 @@ export function CreateReturnModal({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', backgroundColor: 'var(--color-warning-50)', borderRadius: 'var(--radius-md)' }}>
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning-900)' }}>{isRu ? 'Общая сумма возврата (уменьшит долг):' : 'Qaytariladigan Jami Summa (Qarzimiz kamayadi):'}</span>
           <strong style={{ fontSize: 'var(--text-lg)', color: 'var(--color-warning-900)' }}>
-            {formatCurrency(returnTotal, locale)} {receipt.currency}
+            {formatCurrency(returnTotal, locale, receipt.currency)}
           </strong>
         </div>
 

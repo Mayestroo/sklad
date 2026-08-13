@@ -178,7 +178,7 @@ export default function ExpensesPage() {
                         : (isRu ? 'По количеству' : 'Miqdor bo\'yicha')}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                      {formatCurrency(Number(exp.amount), locale)} {exp.currency}
+                      {formatCurrency(Number(exp.amount), locale, exp.currency)}
                     </td>
                   </tr>
                 ))}

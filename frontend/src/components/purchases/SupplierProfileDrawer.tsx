@@ -279,7 +279,7 @@ export function SupplierProfileDrawer({
                           <td style={{ padding: '10px 14px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>{r.docNumber}</td>
                           <td style={{ padding: '10px 14px' }}>{formatDate(r.docDate, locale)}</td>
                           <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                            {formatCurrency(Number(r.totalAmount), locale)} {r.currency}
+                            {formatCurrency(Number(r.totalAmount), locale, r.currency)}
                           </td>
                           <td style={{ padding: '10px 14px', textAlign: 'center' }}>
                             <Badge variant={r.status === 'POSTED' ? 'success' : 'neutral'}>{r.status}</Badge>
@@ -315,7 +315,7 @@ export function SupplierProfileDrawer({
                           <td style={{ padding: '10px 14px' }}>{typeof p.account?.name === 'object' ? (p.account?.name[locale] || p.account?.name?.uz) : (p.account?.name || (isRu ? 'Касса' : 'Kassa'))}</td>
                           <td style={{ padding: '10px 14px' }}>{p.comment || (isRu ? 'Оплата поставщику' : 'Yetkazib beruvchiga to\'lov')}</td>
                           <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
-                            {formatCurrency(Number(p.amount), locale)} {p.currency}
+                            {formatCurrency(Number(p.amount), locale, p.currency)}
                           </td>
                         </tr>
                       ))}
@@ -348,7 +348,7 @@ export function SupplierProfileDrawer({
                           <td style={{ padding: '10px 14px' }}>{formatDate(ret.returnDate, locale)}</td>
                           <td style={{ padding: '10px 14px' }}>{ret.reason || '—'}</td>
                           <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                            -{formatCurrency(Number(ret.totalAmount), locale)} {ret.currency}
+                            -{formatCurrency(Number(ret.totalAmount), locale, ret.currency)}
                           </td>
                         </tr>
                       ))}

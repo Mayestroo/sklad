@@ -121,7 +121,7 @@ export default function ReturnsPage() {
                       {ret.reason || (isRu ? 'Ненадлежащее качество' : 'Sifatiga mos kelmadi')}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-600)' }} className="tabular-nums">
-                      -{formatCurrency(Number(ret.totalAmount), locale)} {ret.currency}
+                      -{formatCurrency(Number(ret.totalAmount), locale, ret.currency)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       <Badge variant="warning">{isRu ? 'Возвращено' : 'Qaytarilgan'}</Badge>
