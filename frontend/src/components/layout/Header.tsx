@@ -58,7 +58,7 @@ export function Header() {
             fontWeight: 'var(--font-medium)',
           }}
         >
-          ⚡ {tAuth('trialDays')}
+          {tAuth('trialDays')}
         </div>
 
         {/* Theme Switcher (Light / Dark) */}

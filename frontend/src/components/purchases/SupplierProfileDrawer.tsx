@@ -73,8 +73,9 @@ export function SupplierProfileDrawer({
       isOpen={isOpen}
       onClose={onClose}
       title={data?.supplier.name || (isRu ? 'Профиль поставщика' : 'Yetkazib beruvchi profili')}
+      size="xl"
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '800px', width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', width: '100%' }}>
         {loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {isRu ? 'Загрузка профиля...' : 'Profil yuklanmoqda...'}
@@ -89,36 +90,56 @@ export function SupplierProfileDrawer({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: 'var(--space-3)',
-                padding: 'var(--space-4)',
-                backgroundColor: 'var(--color-bg-secondary)',
-                borderRadius: 'var(--radius-md)',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 'var(--space-4)',
               }}
             >
-              <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              <div
+                style={{
+                  padding: 'var(--space-4)',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
                   {isRu ? 'Общая сумма закупок' : 'Jami Xaridlar Summasi'}
                 </div>
-                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }} className="tabular-nums">
                   {formatCurrency(data.metrics.totalPurchased, locale)}
                 </div>
               </div>
-              <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+
+              <div
+                style={{
+                  padding: 'var(--space-4)',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
                   {isRu ? 'Оплаченная сумма' : 'To\'langan Summa'}
                 </div>
-                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
                   {formatCurrency(data.metrics.totalPaid, locale)}
                 </div>
               </div>
-              <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+
+              <div
+                style={{
+                  padding: 'var(--space-4)',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
                   {isRu ? 'Наш долг' : 'Bizning Qarzimiz'}
                 </div>
                 <div
                   style={{
-                    fontSize: 'var(--text-lg)',
+                    fontSize: 'var(--text-xl)',
                     fontWeight: 'var(--font-bold)',
                     color: data.metrics.debtBalance > 0 ? 'var(--color-danger-600)' : 'var(--color-text-primary)',
                   }}
@@ -130,19 +151,23 @@ export function SupplierProfileDrawer({
             </div>
 
             {/* Navigation Tabs */}
-            <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-1)', borderBottom: '1px solid var(--color-border)', overflowX: 'auto', paddingBottom: '1px' }}>
               <button
                 type="button"
                 onClick={() => setActiveTab('info')}
                 style={{
-                  padding: '8px 16px',
+                  padding: '10px 18px',
                   fontWeight: activeTab === 'info' ? 'var(--font-bold)' : 'var(--font-medium)',
                   color: activeTab === 'info' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
                   borderBottom: activeTab === 'info' ? '2px solid var(--color-primary-600)' : '2px solid transparent',
                   background: 'none',
-                  border: 'none',
                   cursor: 'pointer',
                   fontSize: 'var(--text-sm)',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {isRu ? 'Реквизиты и договоры' : 'Rekvizitlar & Shartnomalar'}
@@ -151,14 +176,18 @@ export function SupplierProfileDrawer({
                 type="button"
                 onClick={() => setActiveTab('receipts')}
                 style={{
-                  padding: '8px 16px',
+                  padding: '10px 18px',
                   fontWeight: activeTab === 'receipts' ? 'var(--font-bold)' : 'var(--font-medium)',
                   color: activeTab === 'receipts' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
                   borderBottom: activeTab === 'receipts' ? '2px solid var(--color-primary-600)' : '2px solid transparent',
                   background: 'none',
-                  border: 'none',
                   cursor: 'pointer',
                   fontSize: 'var(--text-sm)',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {isRu ? 'История закупок' : 'Xaridlar Tarixi'} ({data.receipts.length})
@@ -167,14 +196,18 @@ export function SupplierProfileDrawer({
                 type="button"
                 onClick={() => setActiveTab('payments')}
                 style={{
-                  padding: '8px 16px',
+                  padding: '10px 18px',
                   fontWeight: activeTab === 'payments' ? 'var(--font-bold)' : 'var(--font-medium)',
                   color: activeTab === 'payments' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
                   borderBottom: activeTab === 'payments' ? '2px solid var(--color-primary-600)' : '2px solid transparent',
                   background: 'none',
-                  border: 'none',
                   cursor: 'pointer',
                   fontSize: 'var(--text-sm)',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {isRu ? 'История платежей' : 'To\'lovlar Tarixi'} ({data.payments.length})
@@ -183,14 +216,18 @@ export function SupplierProfileDrawer({
                 type="button"
                 onClick={() => setActiveTab('returns')}
                 style={{
-                  padding: '8px 16px',
+                  padding: '10px 18px',
                   fontWeight: activeTab === 'returns' ? 'var(--font-bold)' : 'var(--font-medium)',
                   color: activeTab === 'returns' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
                   borderBottom: activeTab === 'returns' ? '2px solid var(--color-primary-600)' : '2px solid transparent',
                   background: 'none',
-                  border: 'none',
                   cursor: 'pointer',
                   fontSize: 'var(--text-sm)',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {isRu ? 'Возвраты' : 'Qaytarishlar'} ({data.returns.length})
@@ -199,107 +236,125 @@ export function SupplierProfileDrawer({
 
             {/* Tab Contents */}
             {activeTab === 'info' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
-                <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>ИНН / STIR</div>
-                  <strong style={{ fontSize: 'var(--text-base)' }}>{data.supplier.inn || '—'}</strong>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
+                <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>ИНН / STIR</div>
+                  <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{data.supplier.inn || '—'}</strong>
                 </div>
-                <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{isRu ? 'Телефон' : 'Telefon'}</div>
-                  <strong>{data.supplier.phone || '—'}</strong>
+                <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>{isRu ? 'Телефон' : 'Telefon'}</div>
+                  <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{data.supplier.phone || '—'}</strong>
                 </div>
-                <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{isRu ? 'Расчётный счёт / МФО' : 'Bank Hisob raqami / MFO'}</div>
-                  <div>{data.supplier.bankAccount || '—'}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>MFO: {data.supplier.mfo || '—'} ({data.supplier.bankName || ''})</div>
+                <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>{isRu ? 'Расчётный счёт / МФО' : 'Bank Hisob raqami / MFO'}</div>
+                  <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', display: 'block' }}>{data.supplier.bankAccount || '—'}</strong>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>MFO: {data.supplier.mfo || '—'} {data.supplier.bankName ? `(${data.supplier.bankName})` : ''}</div>
                 </div>
-                <div style={{ padding: 'var(--space-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{isRu ? 'Юридический адрес' : 'Yuridik Manzil'}</div>
-                  <div>{data.supplier.address || '—'}</div>
+                <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>{isRu ? 'Юридический адрес' : 'Yuridik Manzil'}</div>
+                  <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{data.supplier.address || '—'}</strong>
                 </div>
               </div>
             )}
 
             {activeTab === 'receipts' && (
-              <div style={{ overflowX: 'auto', maxHeight: '350px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ padding: '8px' }}>{isRu ? '№ ДОКУМЕНТА' : 'HUJJAT №'}</th>
-                      <th style={{ padding: '8px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
-                      <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
-                      <th style={{ padding: '8px', textAlign: 'center' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.receipts.map((r) => (
-                      <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                        <td style={{ padding: '8px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>{r.docNumber}</td>
-                        <td style={{ padding: '8px' }}>{formatDate(r.docDate, locale)}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                          {formatCurrency(Number(r.totalAmount), locale)} {r.currency}
-                        </td>
-                        <td style={{ padding: '8px', textAlign: 'center' }}>
-                          <Badge variant={r.status === 'POSTED' ? 'success' : 'neutral'}>{r.status}</Badge>
-                        </td>
+              <div style={{ overflowX: 'auto', maxHeight: '400px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                {data.receipts.length === 0 ? (
+                  <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                    {isRu ? 'Закупки отсутствуют' : 'Xaridlar tarixi mavjud emas'}
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? '№ ДОКУМЕНТА' : 'HUJJAT №'}</th>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data.receipts.map((r) => (
+                        <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                          <td style={{ padding: '10px 14px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>{r.docNumber}</td>
+                          <td style={{ padding: '10px 14px' }}>{formatDate(r.docDate, locale)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
+                            {formatCurrency(Number(r.totalAmount), locale)} {r.currency}
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                            <Badge variant={r.status === 'POSTED' ? 'success' : 'neutral'}>{r.status}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
 
             {activeTab === 'payments' && (
-              <div style={{ overflowX: 'auto', maxHeight: '350px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ padding: '8px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
-                      <th style={{ padding: '8px' }}>{isRu ? 'СЧЁТ / касса' : 'SCHET / KASSA'}</th>
-                      <th style={{ padding: '8px' }}>{isRu ? 'КОММЕНТАРИЙ' : 'IZOH'}</th>
-                      <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN SUMMA'}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.payments.map((p) => (
-                      <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                        <td style={{ padding: '8px' }}>{formatDate(p.transactionDate, locale)}</td>
-                        <td style={{ padding: '8px' }}>{typeof p.account?.name === 'object' ? (p.account?.name[locale] || p.account?.name?.uz) : (p.account?.name || (isRu ? 'Касса' : 'Kassa'))}</td>
-                        <td style={{ padding: '8px' }}>{p.comment || (isRu ? 'Оплата поставщику' : 'Yetkazib beruvchiga to\'lov')}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
-                          {formatCurrency(Number(p.amount), locale)} {p.currency}
-                        </td>
+              <div style={{ overflowX: 'auto', maxHeight: '400px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                {data.payments.length === 0 ? (
+                  <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                    {isRu ? 'Платежи отсутствуют' : 'To\'lovlar tarixi mavjud emas'}
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? 'СЧЁТ / касса' : 'SCHET / KASSA'}</th>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? 'КОММЕНТАРИЙ' : 'IZOH'}</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right' }}>{isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN SUMMA'}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data.payments.map((p) => (
+                        <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                          <td style={{ padding: '10px 14px' }}>{formatDate(p.transactionDate, locale)}</td>
+                          <td style={{ padding: '10px 14px' }}>{typeof p.account?.name === 'object' ? (p.account?.name[locale] || p.account?.name?.uz) : (p.account?.name || (isRu ? 'Касса' : 'Kassa'))}</td>
+                          <td style={{ padding: '10px 14px' }}>{p.comment || (isRu ? 'Оплата поставщику' : 'Yetkazib beruvchiga to\'lov')}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
+                            {formatCurrency(Number(p.amount), locale)} {p.currency}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
 
             {activeTab === 'returns' && (
-              <div style={{ overflowX: 'auto', maxHeight: '350px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                      <th style={{ padding: '8px' }}>{isRu ? '№ ВОЗВРАТА' : 'QAYTARISH №'}</th>
-                      <th style={{ padding: '8px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
-                      <th style={{ padding: '8px' }}>{isRu ? 'ПРИЧИНА' : 'SABABI'}</th>
-                      <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.returns.map((ret) => (
-                      <tr key={ret.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                        <td style={{ padding: '8px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>{ret.returnNumber}</td>
-                        <td style={{ padding: '8px' }}>{formatDate(ret.returnDate, locale)}</td>
-                        <td style={{ padding: '8px' }}>{ret.reason || '—'}</td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                          -{formatCurrency(Number(ret.totalAmount), locale)} {ret.currency}
-                        </td>
+              <div style={{ overflowX: 'auto', maxHeight: '400px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                {data.returns.length === 0 ? (
+                  <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                    {isRu ? 'Возвраты отсутствуют' : 'Qaytarishlar mavjud emas'}
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? '№ ВОЗВРАТА' : 'QAYTARISH №'}</th>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
+                        <th style={{ padding: '10px 14px' }}>{isRu ? 'ПРИЧИНА' : 'SABABI'}</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data.returns.map((ret) => (
+                        <tr key={ret.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                          <td style={{ padding: '10px 14px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>{ret.returnNumber}</td>
+                          <td style={{ padding: '10px 14px' }}>{formatDate(ret.returnDate, locale)}</td>
+                          <td style={{ padding: '10px 14px' }}>{ret.reason || '—'}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
+                            -{formatCurrency(Number(ret.totalAmount), locale)} {ret.currency}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
           </>

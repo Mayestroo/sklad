@@ -133,6 +133,7 @@ export function Select({
         flexDirection: 'column',
         gap: 'var(--space-1)',
         position: 'relative',
+        zIndex: isOpen ? 50 : 'auto',
         ...style,
       }}
     >
@@ -217,7 +218,7 @@ export function Select({
             bottom: openUpward ? 'calc(100% + 4px)' : 'auto',
             left: 0,
             minWidth: '100%',
-            zIndex: 100,
+            zIndex: 999,
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-border)',
             backgroundColor: 'var(--color-bg-secondary)',

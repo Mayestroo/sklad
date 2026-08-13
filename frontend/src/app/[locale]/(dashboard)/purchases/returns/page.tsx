@@ -46,7 +46,7 @@ export default function ReturnsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            ↩️ {isRu ? 'Возврат Товаров Поставщику (Purchase Returns)' : 'Yetkazib Beruvchiga Tovarni Qaytarish (Purchase Returns)'}
+            {isRu ? 'Возврат Товаров Поставщику (Purchase Returns)' : 'Yetkazib Beruvchiga Tovarni Qaytarish (Purchase Returns)'}
           </h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
             {isRu ? 'Документы возврата поставщику, история списания остатков и уменьшения задолженности' : 'Yetkazib beruvchiga yuborilgan qaytarish hujjatlari, ombor qoldig‘i va qarzdorlikni kamaytirish tarixi'}

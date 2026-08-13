@@ -3,8 +3,6 @@
 import { AllocateExpenseModal } from '@/components/purchases/AllocateExpenseModal';
 import { CreateReturnModal } from '@/components/purchases/CreateReturnModal';
 import { PayPurchaseModal } from '@/components/purchases/PayPurchaseModal';
-import { PurchaseReceiptDetailModal } from '@/components/purchases/PurchaseReceiptDetailModal';
-import { PurchaseReceiptModal } from '@/components/purchases/PurchaseReceiptModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,6 +10,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { PurchaseReceipt, PurchaseSummaryStats } from '@shared/types';
@@ -62,9 +61,6 @@ export default function PurchasesPage() {
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
 
   // Modals state
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null);
-  const [detailReceipt, setDetailReceipt] = useState<PurchaseReceipt | null>(null);
   const [expenseReceipt, setExpenseReceipt] = useState<PurchaseReceipt | null>(null);
   const [returnReceipt, setReturnReceipt] = useState<PurchaseReceipt | null>(null);
   const [payReceipt, setPayReceipt] = useState<PurchaseReceipt | null>(null);
@@ -219,9 +215,11 @@ export default function PurchasesPage() {
             {isRu ? 'Приход товаров от поставщиков, формирование себестоимости (Landed Cost) и учёт задолженности' : 'Yetkazib beruvchilardan tovar kirim qilish, tannarx (`Landed Cost`) shakllantirish va qarzdorlik hisobi'}
           </p>
         </div>
-        <Button onClick={() => { setSelectedReceipt(null); setIsCreateOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
-          <Plus size={18} /> {isRu ? 'Новый приходный документ' : 'Yangi Xarid Hujjati'}
-        </Button>
+        <Link href="/purchases/new">
+          <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
+            <Plus size={18} /> {isRu ? 'Новый приходный документ' : 'Yangi Xarid Hujjati'}
+          </Button>
+        </Link>
       </div>
 
       {/* Summary KPI Cards */}
@@ -510,20 +508,17 @@ export default function PurchasesPage() {
                             <CreditCard size={14} /> {isRu ? 'Оплатить' : 'To‘lash'}
                           </Button>
                         )}
-                        <Button size="sm" variant="secondary" onClick={() => setDetailReceipt(r)} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Eye size={14} /> {isRu ? 'Просмотр' : 'Ko‘rish'}
-                        </Button>
-                        {r.status === 'DRAFT' && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              setSelectedReceipt(r);
-                              setIsCreateOpen(true);
-                            }}
-                          >
-                            {isRu ? 'Редактировать' : 'Tahrirlash'}
+                        <Link href={`/purchases/${r.id}`}>
+                          <Button size="sm" variant="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Eye size={14} /> {isRu ? 'Просмотр' : 'Ko‘rish'}
                           </Button>
+                        </Link>
+                        {r.status === 'DRAFT' && (
+                          <Link href={`/purchases/${r.id}`}>
+                            <Button size="sm" variant="secondary">
+                              {isRu ? 'Редактировать' : 'Tahrirlash'}
+                            </Button>
+                          </Link>
                         )}
                       </div>
                     </td>
@@ -536,41 +531,6 @@ export default function PurchasesPage() {
       </Card>
 
       {/* Modals */}
-      {isCreateOpen && (
-        <PurchaseReceiptModal
-          isOpen={isCreateOpen}
-          onClose={() => setIsCreateOpen(false)}
-          onSuccess={() => {
-            fetchStats();
-            fetchReceipts();
-          }}
-          initialData={selectedReceipt}
-        />
-      )}
-
-      {detailReceipt && (
-        <PurchaseReceiptDetailModal
-          isOpen={!!detailReceipt}
-          onClose={() => setDetailReceipt(null)}
-          receipt={detailReceipt}
-          onRefresh={() => {
-            fetchStats();
-            fetchReceipts();
-          }}
-          onOpenAddExpense={(r) => {
-            setDetailReceipt(null);
-            setExpenseReceipt(r);
-          }}
-          onOpenReturn={(r) => {
-            setDetailReceipt(null);
-            setReturnReceipt(r);
-          }}
-          onOpenPay={(r) => {
-            setDetailReceipt(null);
-            setPayReceipt(r);
-          }}
-        />
-      )}
 
       {expenseReceipt && (
         <AllocateExpenseModal

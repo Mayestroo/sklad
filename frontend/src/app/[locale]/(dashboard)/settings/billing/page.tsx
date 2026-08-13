@@ -262,7 +262,7 @@ export default function BillingSettingsPage() {
                   fontSize: 'var(--text-sm)',
                 }}
               >
-                🔵 CLICK Evolution
+                CLICK Evolution
               </button>
 
               <button
@@ -278,7 +278,7 @@ export default function BillingSettingsPage() {
                   fontSize: 'var(--text-sm)',
                 }}
               >
-                🟢 PAYME Business
+                PAYME Business
               </button>
             </div>
           </div>
