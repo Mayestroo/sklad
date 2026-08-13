@@ -1,31 +1,59 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
 import { PricingPlan } from '../../../../shared/types';
 
 export const PLANS: PricingPlan[] = [
   {
     id: 'STARTER',
-    name: { uz: 'Starter (Boshlang\'ich)', ru: 'Starter (Базовый)' },
+    name: { uz: "Starter (Boshlang'ich)", ru: 'Starter (Базовый)' },
     priceMonthly: 490000,
     priceYearly: 4900000,
     features: [
-      { uz: 'Ombor va tovarlar hisobi (MoySklad)', ru: 'Склад и учёт товаров (MoySklad)' },
-      { uz: 'Hisob-faktura va sotuvlar bo\'limi', ru: 'Счета-фактуры и продажи' },
+      {
+        uz: 'Ombor va tovarlar hisobi (MoySklad)',
+        ru: 'Склад и учёт товаров (MoySklad)',
+      },
+      {
+        uz: "Hisob-faktura va sotuvlar bo'limi",
+        ru: 'Счета-фактуры и продажи',
+      },
       { uz: 'Bitta omborxona', ru: 'Один склад' },
-      { uz: 'Shtrix-kod skaner va PDF eksport', ru: 'Сканер штрих-кодов и экспорт PDF' },
+      {
+        uz: 'Shtrix-kod skaner va PDF eksport',
+        ru: 'Сканер штрих-кодов и экспорт PDF',
+      },
     ],
   },
   {
     id: 'PROFESSIONAL',
-    name: { uz: 'Professional (Buxgalteriya)', ru: 'Professional (Бухгалтерия)' },
+    name: {
+      uz: 'Professional (Buxgalteriya)',
+      ru: 'Professional (Бухгалтерия)',
+    },
     priceMonthly: 990000,
     priceYearly: 9900000,
     isPopular: true,
     features: [
-      { uz: 'Starter tarifi barcha imkoniyatlari', ru: 'Все возможности тарифа Starter' },
-      { uz: 'Milliy BHMS / NAS 1C Ikki yo\'lama buxgalteriya', ru: 'Национальная BHMS / NAS 1C Двойная бухгалтерия' },
-      { uz: 'Shakl 1 (Balans) va Shakl 2 (P&L) hisobotlar', ru: 'Отчёты Форма 1 (Баланс) и Форма 2 (P&L)' },
-      { uz: 'CRM Kanban quvuri va mijozlar tarixi', ru: 'CRM Канбан воронка и история клиентов' },
+      {
+        uz: 'Starter tarifi barcha imkoniyatlari',
+        ru: 'Все возможности тарифа Starter',
+      },
+      {
+        uz: "Milliy BHMS / NAS 1C Ikki yo'lama buxgalteriya",
+        ru: 'Национальная BHMS / NAS 1C Двойная бухгалтерия',
+      },
+      {
+        uz: 'Shakl 1 (Balans) va Shakl 2 (P&L) hisobotlar',
+        ru: 'Отчёты Форма 1 (Баланс) и Форма 2 (P&L)',
+      },
+      {
+        uz: 'CRM Kanban quvuri va mijozlar tarixi',
+        ru: 'CRM Канбан воронка и история клиентов',
+      },
     ],
   },
   {
@@ -34,10 +62,22 @@ export const PLANS: PricingPlan[] = [
     priceMonthly: 1990000,
     priceYearly: 19900000,
     features: [
-      { uz: 'Professional tarifi barcha imkoniyatlari', ru: 'Все возможности тарифа Professional' },
-      { uz: 'Ko\'p filialli (Multi-Branch) va Multi-Ombor tizimi', ru: 'Многофилиальная и многоскладская система' },
-      { uz: 'Yo\'ldagi tovarlar (In-Transit 2920) provodkalari', ru: 'Проводки товаров в пути (In-Transit 2920)' },
-      { uz: 'VIP texnik qo\'llab-quvvatlash va REST API', ru: 'VIP техподдержка и REST API' },
+      {
+        uz: 'Professional tarifi barcha imkoniyatlari',
+        ru: 'Все возможности тарифа Professional',
+      },
+      {
+        uz: "Ko'p filialli (Multi-Branch) va Multi-Ombor tizimi",
+        ru: 'Многофилиальная и многоскладская система',
+      },
+      {
+        uz: "Yo'ldagi tovarlar (In-Transit 2920) provodkalari",
+        ru: 'Проводки товаров в пути (In-Transit 2920)',
+      },
+      {
+        uz: "VIP texnik qo'llab-quvvatlash va REST API",
+        ru: 'VIP техподдержка и REST API',
+      },
     ],
   },
 ];
@@ -68,9 +108,21 @@ export class BillingService {
     let daysRemaining = 0;
 
     if (currentSub) {
-      daysRemaining = Math.max(0, Math.ceil((new Date(currentSub.endDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      daysRemaining = Math.max(
+        0,
+        Math.ceil(
+          (new Date(currentSub.endDate).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      );
     } else if (company.trialEndsAt) {
-      daysRemaining = Math.max(0, Math.ceil((new Date(company.trialEndsAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      daysRemaining = Math.max(
+        0,
+        Math.ceil(
+          (new Date(company.trialEndsAt).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      );
     }
 
     return {
@@ -78,7 +130,9 @@ export class BillingService {
       status: currentSub ? currentSub.status : company.status,
       plan: currentSub ? currentSub.plan : 'STARTER',
       trialEndsAt: company.trialEndsAt,
-      nextBillingAt: currentSub ? currentSub.nextBillingAt : company.trialEndsAt,
+      nextBillingAt: currentSub
+        ? currentSub.nextBillingAt
+        : company.trialEndsAt,
       daysRemaining,
     };
   }
@@ -133,7 +187,9 @@ export class BillingService {
     if (method === 'CLICK') {
       checkoutUrl = `https://my.click.uz/services/pay?service_id=${serviceId}&merchant_id=${merchantId}&amount=${amount}&transaction_param=${payment.id}`;
     } else if (method === 'PAYME') {
-      const base64Data = Buffer.from(`m=${process.env.PAYME_MERCHANT_ID || 'test_merchant'};ac.payment_id=${payment.id};a=${amount * 100}`).toString('base64');
+      const base64Data = Buffer.from(
+        `m=${process.env.PAYME_MERCHANT_ID || 'test_merchant'};ac.payment_id=${payment.id};a=${amount * 100}`,
+      ).toString('base64');
       checkoutUrl = `https://checkout.paycom.uz/${base64Data}`;
     } else {
       checkoutUrl = `/accounting/reports`;
@@ -175,7 +231,8 @@ export class BillingService {
       data: {
         status: 'PAID',
         paidAt: new Date(),
-        transactionId: payload.trans_id || payload.payme_trans_id || `TX-${Date.now()}`,
+        transactionId:
+          payload.trans_id || payload.payme_trans_id || `TX-${Date.now()}`,
       },
     });
 

@@ -102,7 +102,8 @@ export class AccountingReportsService {
         totalAssets,
         totalLiabilities,
         totalEquity: netProfit,
-        isBalanced: Math.abs(totalAssets - (totalLiabilities + netProfit)) < 0.01,
+        isBalanced:
+          Math.abs(totalAssets - (totalLiabilities + netProfit)) < 0.01,
       },
       profitLoss: {
         totalRevenue,

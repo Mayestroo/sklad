@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
 
@@ -23,12 +28,17 @@ export class PermissionsGuard implements CanActivate {
     }
 
     // Super Admin bypasses all checks
-    if (user.roles?.includes('super_admin') || user.roles?.includes('company_admin')) {
+    if (
+      user.roles?.includes('super_admin') ||
+      user.roles?.includes('company_admin')
+    ) {
       return true;
     }
 
     const userPermissions = new Set<string>(user.permissions || []);
-    const hasPermission = requiredPermissions.every((perm) => userPermissions.has(perm));
+    const hasPermission = requiredPermissions.every((perm) =>
+      userPermissions.has(perm),
+    );
 
     if (!hasPermission) {
       throw new ForbiddenException(

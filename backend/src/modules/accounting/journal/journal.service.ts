@@ -15,7 +15,9 @@ export class JournalService {
    */
   async createJournalEntry(tenantId: string, dto: CreateJournalEntryDto) {
     if (!dto.lines || dto.lines.length === 0) {
-      throw new BadRequestException('Journal entry must contain at least one line');
+      throw new BadRequestException(
+        'Journal entry must contain at least one line',
+      );
     }
 
     const entryNumber = await this.generateEntryNumber(tenantId);
@@ -126,7 +128,10 @@ export class JournalService {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const bankAccountCode = payment.method === 'CASH' ? '5010' : '5110';
-    const accBank = await this.accountsService.findByCode(tenantId, bankAccountCode);
+    const accBank = await this.accountsService.findByCode(
+      tenantId,
+      bankAccountCode,
+    );
     const acc4010 = await this.accountsService.findByCode(tenantId, '4010');
 
     if (!accBank || !acc4010) return;
@@ -180,7 +185,11 @@ export class JournalService {
    * Step 1: Auto-post Journal Entry when Stock Transfer is Shipped (Jo'natildi)
    * Dt 2920 (Yo'ldagi tovarlar / In-Transit) / Kt 2910 (Chiquvchi Ombor)
    */
-  async autoPostShipTransfer(tenantId: string, transfer: any, totalCostValue: number) {
+  async autoPostShipTransfer(
+    tenantId: string,
+    transfer: any,
+    totalCostValue: number,
+  ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const acc2920 = await this.accountsService.findByCode(tenantId, '2920');
@@ -207,7 +216,11 @@ export class JournalService {
    * Step 2: Auto-post Journal Entry when Stock Transfer is Received at Target Warehouse (Qabul qilindi)
    * Dt 2910 (Kiruvchi Ombor) / Kt 2920 (Yo'ldagi tovarlar / In-Transit)
    */
-  async autoPostReceiveTransfer(tenantId: string, transfer: any, totalCostValue: number) {
+  async autoPostReceiveTransfer(
+    tenantId: string,
+    transfer: any,
+    totalCostValue: number,
+  ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const acc2910 = await this.accountsService.findByCode(tenantId, '2910');

@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { EventsGateway } from '../../../common/websockets/events.gateway';
@@ -122,7 +126,10 @@ export class InventoryDocumentsService {
       try {
         await this.journalService.autoPostInboundDoc(tenantId, result);
       } catch (err) {
-        console.error('Failed to auto-post journal entry for inbound document:', err);
+        console.error(
+          'Failed to auto-post journal entry for inbound document:',
+          err,
+        );
       }
     }
 
@@ -190,12 +197,16 @@ export class InventoryDocumentsService {
     return doc;
   }
 
-  private async generateDocNumber(tenantId: string, docType: string): Promise<string> {
+  private async generateDocNumber(
+    tenantId: string,
+    docType: string,
+  ): Promise<string> {
     const count = await this.prisma.inventoryDocument.count({
       where: { tenantId, docType: docType as any },
     });
 
-    const prefix = docType === 'INBOUND' ? 'IN' : docType === 'OUTBOUND' ? 'OUT' : 'ST';
+    const prefix =
+      docType === 'INBOUND' ? 'IN' : docType === 'OUTBOUND' ? 'OUT' : 'ST';
     const nextSeq = (count + 1).toString().padStart(6, '0');
     return `${prefix}-${nextSeq}`;
   }

@@ -253,6 +253,7 @@ model Company {
   purchaseExpenses     PurchaseExpense[]
   purchaseReturns      PurchaseReturn[]
   productBatches       ProductBatch[]
+  counterpartyFolders  CounterpartyFolder[]
   salesReturns         SalesReturn[]
   priceLists           PriceList[]
 
@@ -742,11 +743,13 @@ model Counterparty {
   phone       String?
   email       String?
   address     String?
+  folderId    String?          @map("folder_id")
   debtBalance Decimal          @default(0) @db.Decimal(15, 2) @map("debt_balance")
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
   company             Company              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  folder              CounterpartyFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   salesOrders         SalesOrder[]
   salesInvoices       SalesInvoice[]
   purchaseOrders      PurchaseOrder[]
@@ -759,8 +762,24 @@ model Counterparty {
   salesReturns        SalesReturn[]
 
   @@index([tenantId])
+  @@index([tenantId, folderId])
   @@index([tenantId, inn])
   @@map("counterparties")
+}
+
+model CounterpartyFolder {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  color     String?  @default("#3b82f6")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company        Company        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparties Counterparty[]
+
+  @@index([tenantId])
+  @@map("counterparty_folders")
 }
 
 model SalesOrder {

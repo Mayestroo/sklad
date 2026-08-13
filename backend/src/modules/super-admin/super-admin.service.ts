@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
-import { GlobalMetrics, TenantCompanySummary, BackupMetadata } from '../../../../shared/types';
+import {
+  GlobalMetrics,
+  TenantCompanySummary,
+  BackupMetadata,
+} from '../../../../shared/types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -22,8 +26,12 @@ export class SuperAdminService {
       totalMrr += Number(sub.amount);
     });
 
-    const activeTenantsCount = companies.filter((c) => c.status === 'ACTIVE').length;
-    const trialTenantsCount = companies.filter((c) => c.status === 'TRIAL').length;
+    const activeTenantsCount = companies.filter(
+      (c) => c.status === 'ACTIVE',
+    ).length;
+    const trialTenantsCount = companies.filter(
+      (c) => c.status === 'TRIAL',
+    ).length;
 
     return {
       totalMrr,
@@ -96,7 +104,12 @@ export class SuperAdminService {
             tenantId: companyId,
             plan,
             status: 'ACTIVE',
-            amount: plan === 'STARTER' ? 490000 : plan === 'PROFESSIONAL' ? 990000 : 1990000,
+            amount:
+              plan === 'STARTER'
+                ? 490000
+                : plan === 'PROFESSIONAL'
+                  ? 990000
+                  : 1990000,
             currency: 'UZS',
             startDate: new Date(),
             endDate,
@@ -214,7 +227,10 @@ CREATE DATABASE IF NOT EXISTS crm_db;
           status: 'COMPLETED' as const,
         };
       })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
   }
 
   async getAuditLogs(tenantId?: string) {

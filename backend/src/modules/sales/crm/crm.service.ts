@@ -45,13 +45,19 @@ export class CrmService {
     const kanban: Record<string, any[]> = {};
 
     stages.forEach((stage) => {
-      kanban[stage] = deals.filter((d: { stage: DealStageSlug }) => d.stage === stage);
+      kanban[stage] = deals.filter(
+        (d: { stage: DealStageSlug }) => d.stage === stage,
+      );
     });
 
     return kanban;
   }
 
-  async updateDealStage(tenantId: string, dealId: string, stage: DealStageSlug) {
+  async updateDealStage(
+    tenantId: string,
+    dealId: string,
+    stage: DealStageSlug,
+  ) {
     const deal = await this.prisma.deal.findFirst({
       where: { id: dealId, tenantId },
     });

@@ -13,10 +13,7 @@ export class AuditController {
 
   @Get()
   @RequirePermissions('settings:view')
-  getLogs(
-    @CurrentTenant() tenantId: string,
-    @Query('limit') limit?: string,
-  ) {
+  getLogs(@CurrentTenant() tenantId: string, @Query('limit') limit?: string) {
     const take = limit ? parseInt(limit, 10) : 50;
     return this.auditService.findByTenant(tenantId, take);
   }

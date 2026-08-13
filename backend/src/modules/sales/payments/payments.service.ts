@@ -12,7 +12,11 @@ export class PaymentsService {
     private readonly journalService: JournalService,
   ) {}
 
-  async registerPayment(tenantId: string, dto: CreatePaymentDto, userId: string) {
+  async registerPayment(
+    tenantId: string,
+    dto: CreatePaymentDto,
+    userId: string,
+  ) {
     const counterparty = await this.prisma.counterparty.findFirst({
       where: { id: dto.counterpartyId, tenantId },
     });
@@ -60,7 +64,8 @@ export class PaymentsService {
         if (invoice) {
           const newPaidAmount = Number(invoice.paidAmount) + dto.amount;
           const totalAmount = Number(invoice.totalAmount);
-          const newPaymentStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIALLY_PAID';
+          const newPaymentStatus =
+            newPaidAmount >= totalAmount ? 'PAID' : 'PARTIALLY_PAID';
 
           await tx.salesInvoice.update({
             where: { id: dto.invoiceId },

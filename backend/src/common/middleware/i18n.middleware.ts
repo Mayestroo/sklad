@@ -12,9 +12,16 @@ const DEFAULT_LOCALE: SupportedLocale = 'uz';
  */
 @Injectable()
 export class I18nMiddleware implements NestMiddleware {
-  use(req: Request & { locale?: SupportedLocale }, _res: Response, next: NextFunction) {
+  use(
+    req: Request & { locale?: SupportedLocale },
+    _res: Response,
+    next: NextFunction,
+  ) {
     const acceptLang = req.headers['accept-language'] || '';
-    const requestedLocale = acceptLang.split(',')[0]?.split('-')[0]?.toLowerCase();
+    const requestedLocale = acceptLang
+      .split(',')[0]
+      ?.split('-')[0]
+      ?.toLowerCase();
 
     req.locale = SUPPORTED_LOCALES.includes(requestedLocale as SupportedLocale)
       ? (requestedLocale as SupportedLocale)

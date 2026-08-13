@@ -55,7 +55,12 @@ export class TenantsService {
   // BRANCH MANAGEMENT
   // ============================================
 
-  async createBranch(tenantId: string, name: { uz: string; ru: string }, address?: string, isMain?: boolean) {
+  async createBranch(
+    tenantId: string,
+    name: { uz: string; ru: string },
+    address?: string,
+    isMain?: boolean,
+  ) {
     return this.prisma.branch.create({
       data: {
         tenantId,

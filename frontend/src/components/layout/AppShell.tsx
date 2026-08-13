@@ -56,7 +56,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* Main Content Area */}
       <div style={{ marginLeft: 'var(--sidebar-width)', flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Header />
-        <main style={{ flex: 1, padding: 'var(--space-6)', maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
+        <main style={{ flex: 1, padding: 'var(--space-6)', maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}>
           {children}
         </main>
       </div>

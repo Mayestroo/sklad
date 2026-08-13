@@ -15,7 +15,9 @@ export class DashboardService {
 
   private dateRange(filters: DashboardFilters) {
     const now = new Date();
-    const from = filters.date_from ? new Date(filters.date_from) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const from = filters.date_from
+      ? new Date(filters.date_from)
+      : new Date(now.getFullYear(), now.getMonth(), 1);
     const to = filters.date_to ? new Date(filters.date_to + 'T23:59:59Z') : now;
     return { from, to };
   }
@@ -23,13 +25,14 @@ export class DashboardService {
   // ─── /api/dashboard ──────────────────────────────────────────────
 
   async getFullDashboard(tenantId: string, filters: DashboardFilters) {
-    const [finance, sales, debts, cashFlow, recentTransactions] = await Promise.all([
-      this.getFinanceKPIs(tenantId, filters),
-      this.getSalesKPIs(tenantId, filters),
-      this.getDebts(tenantId),
-      this.getCashFlow(tenantId, filters),
-      this.getRecentTransactions(tenantId, 10),
-    ]);
+    const [finance, sales, debts, cashFlow, recentTransactions] =
+      await Promise.all([
+        this.getFinanceKPIs(tenantId, filters),
+        this.getSalesKPIs(tenantId, filters),
+        this.getDebts(tenantId),
+        this.getCashFlow(tenantId, filters),
+        this.getRecentTransactions(tenantId, 10),
+      ]);
 
     return { finance, sales, debts, cashFlow, recentTransactions };
   }
@@ -51,7 +54,9 @@ export class DashboardService {
     const transactions = await this.prisma.financeTransaction.findMany({
       where: {
         ...whereBase,
-        direction: { in: [TransactionDirection.INCOME, TransactionDirection.EXPENSE] },
+        direction: {
+          in: [TransactionDirection.INCOME, TransactionDirection.EXPENSE],
+        },
       },
       select: { direction: true, amount: true, currency: true },
     });
@@ -59,7 +64,8 @@ export class DashboardService {
     // Group by currency
     const byCurrency: Record<string, { income: number; expense: number }> = {};
     for (const tx of transactions) {
-      if (!byCurrency[tx.currency]) byCurrency[tx.currency] = { income: 0, expense: 0 };
+      if (!byCurrency[tx.currency])
+        byCurrency[tx.currency] = { income: 0, expense: 0 };
       if (tx.direction === TransactionDirection.INCOME) {
         byCurrency[tx.currency].income += Number(tx.amount);
       } else {
@@ -67,17 +73,25 @@ export class DashboardService {
       }
     }
 
-    const summaryByCurrency = Object.entries(byCurrency).map(([currency, d]) => ({
-      currency,
-      totalIncome: d.income,
-      totalExpense: d.expense,
-      netCashFlow: d.income - d.expense,
-    }));
+    const summaryByCurrency = Object.entries(byCurrency).map(
+      ([currency, d]) => ({
+        currency,
+        totalIncome: d.income,
+        totalExpense: d.expense,
+        netCashFlow: d.income - d.expense,
+      }),
+    );
 
     // Account balances
     const accounts = await this.prisma.cashAccount.findMany({
       where: { tenantId, isActive: true },
-      select: { id: true, accountType: true, name: true, currency: true, balance: true },
+      select: {
+        id: true,
+        accountType: true,
+        name: true,
+        currency: true,
+        balance: true,
+      },
     });
 
     // Profit: gross = sales - COGS
@@ -91,7 +105,8 @@ export class DashboardService {
     invoices.forEach((inv) => {
       totalRevenue += Number(inv.totalAmount);
       inv.items.forEach((item) => {
-        totalCogs += Number(item.quantity) * (Number(item.product?.costPrice) || 0);
+        totalCogs +=
+          Number(item.quantity) * (Number(item.product?.costPrice) || 0);
       });
     });
 
@@ -198,15 +213,25 @@ export class DashboardService {
       where: {
         tenantId,
         isDeleted: false,
-        direction: { in: [TransactionDirection.INCOME, TransactionDirection.EXPENSE] },
+        direction: {
+          in: [TransactionDirection.INCOME, TransactionDirection.EXPENSE],
+        },
         transactionDate: { gte: from, lte: to },
         ...(filters.currency ? { currency: filters.currency } : {}),
       },
-      select: { direction: true, amount: true, currency: true, transactionDate: true },
+      select: {
+        direction: true,
+        amount: true,
+        currency: true,
+        transactionDate: true,
+      },
     });
 
     // Group by currency → then by period
-    const byCurrency: Record<string, Record<string, { income: number; expense: number }>> = {};
+    const byCurrency: Record<
+      string,
+      Record<string, { income: number; expense: number }>
+    > = {};
 
     transactions.forEach((tx) => {
       const currency = tx.currency;
@@ -224,7 +249,8 @@ export class DashboardService {
         key = d.toISOString().slice(0, 10);
       }
 
-      if (!byCurrency[currency][key]) byCurrency[currency][key] = { income: 0, expense: 0 };
+      if (!byCurrency[currency][key])
+        byCurrency[currency][key] = { income: 0, expense: 0 };
       if (tx.direction === TransactionDirection.INCOME) {
         byCurrency[currency][key].income += Number(tx.amount);
       } else {
@@ -232,12 +258,14 @@ export class DashboardService {
       }
     });
 
-    const seriesByCurrency = Object.entries(byCurrency).map(([currency, periodMap]) => ({
-      currency,
-      series: Object.entries(periodMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([period, data]) => ({ period, ...data })),
-    }));
+    const seriesByCurrency = Object.entries(byCurrency).map(
+      ([currency, periodMap]) => ({
+        currency,
+        series: Object.entries(periodMap)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([period, data]) => ({ period, ...data })),
+      }),
+    );
 
     // Legacy flat series: UZS only (or first currency if no UZS)
     const uzsEntry = seriesByCurrency.find((e) => e.currency === 'UZS');

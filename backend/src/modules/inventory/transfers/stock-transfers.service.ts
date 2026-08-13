@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { EventsGateway } from '../../../common/websockets/events.gateway';
@@ -17,9 +21,15 @@ export class StockTransfersService {
   /**
    * Create Stock Transfer Order (Draft status)
    */
-  async createTransfer(tenantId: string, dto: CreateStockTransferDto, userId: string) {
+  async createTransfer(
+    tenantId: string,
+    dto: CreateStockTransferDto,
+    userId: string,
+  ) {
     if (dto.sourceWarehouseId === dto.targetWarehouseId) {
-      throw new BadRequestException('Source and target warehouses cannot be identical');
+      throw new BadRequestException(
+        'Source and target warehouses cannot be identical',
+      );
     }
 
     const transferNumber = await this.generateTransferNumber(tenantId);
@@ -70,7 +80,9 @@ export class StockTransfersService {
     }
 
     if (transfer.status !== 'DRAFT') {
-      throw new BadRequestException(`Transfer cannot be shipped from status: ${transfer.status}`);
+      throw new BadRequestException(
+        `Transfer cannot be shipped from status: ${transfer.status}`,
+      );
     }
 
     let totalCostValue = 0;
@@ -130,9 +142,16 @@ export class StockTransfersService {
 
     // Auto-post NAS journal entry: Dt 2920 / Kt 2910
     try {
-      await this.journalService.autoPostShipTransfer(tenantId, updated, totalCostValue);
+      await this.journalService.autoPostShipTransfer(
+        tenantId,
+        updated,
+        totalCostValue,
+      );
     } catch (err) {
-      console.error('Failed to auto-post journal entry for ship transfer:', err);
+      console.error(
+        'Failed to auto-post journal entry for ship transfer:',
+        err,
+      );
     }
 
     // Audit log & WebSocket broadcast
@@ -142,7 +161,10 @@ export class StockTransfersService {
       entityType: 'StockTransfer',
       entityId: updated.id,
       action: 'UPDATE',
-      newValue: { status: 'IN_TRANSIT', transferNumber: updated.transferNumber },
+      newValue: {
+        status: 'IN_TRANSIT',
+        transferNumber: updated.transferNumber,
+      },
     });
 
     this.eventsGateway.notifyStockUpdate(tenantId, {
@@ -174,7 +196,9 @@ export class StockTransfersService {
     }
 
     if (transfer.status !== 'IN_TRANSIT') {
-      throw new BadRequestException(`Transfer cannot be received from status: ${transfer.status}`);
+      throw new BadRequestException(
+        `Transfer cannot be received from status: ${transfer.status}`,
+      );
     }
 
     let totalCostValue = 0;
@@ -234,9 +258,16 @@ export class StockTransfersService {
 
     // Auto-post NAS journal entry: Dt 2910 / Kt 2920
     try {
-      await this.journalService.autoPostReceiveTransfer(tenantId, updated, totalCostValue);
+      await this.journalService.autoPostReceiveTransfer(
+        tenantId,
+        updated,
+        totalCostValue,
+      );
     } catch (err) {
-      console.error('Failed to auto-post journal entry for receive transfer:', err);
+      console.error(
+        'Failed to auto-post journal entry for receive transfer:',
+        err,
+      );
     }
 
     // Audit log & WebSocket broadcast
@@ -272,7 +303,9 @@ export class StockTransfersService {
   }
 
   private async generateTransferNumber(tenantId: string): Promise<string> {
-    const count = await this.prisma.stockTransfer.count({ where: { tenantId } });
+    const count = await this.prisma.stockTransfer.count({
+      where: { tenantId },
+    });
     const nextSeq = (count + 1).toString().padStart(6, '0');
     return `TR-${nextSeq}`;
   }

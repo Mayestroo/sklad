@@ -44,31 +44,71 @@ export class PrismaService
     return this.$extends({
       query: {
         $allModels: {
-          async findMany({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async findMany({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }
             return query(args);
           },
-          async findFirst({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async findFirst({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }
             return query(args);
           },
-          async findUnique({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async findUnique({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               return query({ ...args, where: { ...args.where } });
             }
             return query(args);
           },
-          async create({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async create({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.data = { ...args.data, tenantId };
             }
             return query(args);
           },
-          async createMany({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async createMany({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               if (Array.isArray(args.data)) {
                 args.data = args.data.map((d: any) => ({
@@ -81,37 +121,85 @@ export class PrismaService
             }
             return query(args);
           },
-          async update({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async update({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }
             return query(args);
           },
-          async updateMany({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async updateMany({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }
             return query(args);
           },
-          async delete({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async delete({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }
             return query(args);
           },
-          async deleteMany({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async deleteMany({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }
             return query(args);
           },
-          async count({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async count({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }
             return query(args);
           },
-          async aggregate({ model, args, query }: { model?: string; args: any; query: (args: any) => Promise<any> }) {
+          async aggregate({
+            model,
+            args,
+            query,
+          }: {
+            model?: string;
+            args: any;
+            query: (args: any) => Promise<any>;
+          }) {
             if (isTenantScopedModel(model)) {
               args.where = { ...args.where, tenantId };
             }

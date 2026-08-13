@@ -12,15 +12,7 @@ import { AccountingReportsService } from './reports/accounting-reports.service';
     JournalController,
     AccountingReportsController,
   ],
-  providers: [
-    AccountsService,
-    JournalService,
-    AccountingReportsService,
-  ],
-  exports: [
-    AccountsService,
-    JournalService,
-    AccountingReportsService,
-  ],
+  providers: [AccountsService, JournalService, AccountingReportsService],
+  exports: [AccountsService, JournalService, AccountingReportsService],
 })
 export class AccountingModule {}

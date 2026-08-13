@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { CreateProductDto } from '../dto';
 
@@ -12,7 +16,9 @@ export class ProductsService {
     });
 
     if (existingSku) {
-      throw new ConflictException(`Product with SKU '${dto.sku}' already exists`);
+      throw new ConflictException(
+        `Product with SKU '${dto.sku}' already exists`,
+      );
     }
 
     return this.prisma.product.create({
@@ -71,7 +77,8 @@ export class ProductsService {
       return {
         ...p,
         totalStock,
-        isLowStock: Number(p.minStockAlert) > 0 && totalStock <= Number(p.minStockAlert),
+        isLowStock:
+          Number(p.minStockAlert) > 0 && totalStock <= Number(p.minStockAlert),
       };
     });
   }
@@ -100,7 +107,9 @@ export class ProductsService {
     return {
       ...product,
       totalStock,
-      isLowStock: Number(product.minStockAlert) > 0 && totalStock <= Number(product.minStockAlert),
+      isLowStock:
+        Number(product.minStockAlert) > 0 &&
+        totalStock <= Number(product.minStockAlert),
     };
   }
 
@@ -116,7 +125,9 @@ export class ProductsService {
     });
 
     if (!product) {
-      throw new NotFoundException(`Product with barcode '${barcode}' not found`);
+      throw new NotFoundException(
+        `Product with barcode '${barcode}' not found`,
+      );
     }
 
     return product;

@@ -42,7 +42,19 @@ export class SalesInvoicesService {
   // ─── INVOICES LIST & DETAIL ────────────────────────────────────
 
   async findAll(tenantId: string, filters: FilterSalesInvoicesDto) {
-    const { search, counterpartyId, warehouseId, status, paymentStatus, returnStatus, currency, dateFrom, dateTo, minAmount, maxAmount } = filters;
+    const {
+      search,
+      counterpartyId,
+      warehouseId,
+      status,
+      paymentStatus,
+      returnStatus,
+      currency,
+      dateFrom,
+      dateTo,
+      minAmount,
+      maxAmount,
+    } = filters;
 
     const where: Prisma.SalesInvoiceWhereInput = { tenantId };
 
@@ -56,7 +68,8 @@ export class SalesInvoicesService {
     if (counterpartyId) where.counterpartyId = counterpartyId;
     if (warehouseId) where.warehouseId = warehouseId;
     if (status) where.status = status as SalesDocStatus;
-    if (paymentStatus) where.paymentStatus = paymentStatus as SalesPaymentStatus;
+    if (paymentStatus)
+      where.paymentStatus = paymentStatus as SalesPaymentStatus;
     if (returnStatus) where.returnStatus = returnStatus as SalesReturnStatus;
     if (currency) where.currency = currency;
     if (dateFrom || dateTo) {
@@ -103,9 +116,15 @@ export class SalesInvoicesService {
 
   // ─── CREATE (DRAFT) ───────────────────────────────────────────
 
-  async createInvoice(tenantId: string, userId: string, dto: CreateSalesInvoiceDto) {
+  async createInvoice(
+    tenantId: string,
+    userId: string,
+    dto: CreateSalesInvoiceDto,
+  ) {
     if (!dto.items?.length) {
-      throw new BadRequestException('Sotuv hujjatida kamida bitta tovar bo\'lishi shart');
+      throw new BadRequestException(
+        "Sotuv hujjatida kamida bitta tovar bo'lishi shart",
+      );
     }
 
     const invoiceNumber = await this.generateInvoiceNumber(tenantId);
@@ -199,12 +218,20 @@ export class SalesInvoicesService {
 
     if (!invoice) throw new NotFoundException('Sotuv hujjati topilmadi');
     if (invoice.status !== SalesDocStatus.DRAFT) {
-      throw new BadRequestException('Hujjat allaqachon tasdiqlangan yoki bekor qilingan');
+      throw new BadRequestException(
+        'Hujjat allaqachon tasdiqlangan yoki bekor qilingan',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
       let totalCogs = 0;
-      const updatedItemData: Array<{ id: string; unitCogs: number; lineCogs: number; lineGrossProfit: number; isBelowCost: boolean }> = [];
+      const updatedItemData: Array<{
+        id: string;
+        unitCogs: number;
+        lineCogs: number;
+        lineGrossProfit: number;
+        isBelowCost: boolean;
+      }> = [];
 
       // 1. For each item: check stock, FIFO COGS calculation, stock deduction
       for (const item of invoice.items) {
@@ -224,7 +251,7 @@ export class SalesInvoicesService {
         const availableQty = stockLevel ? Number(stockLevel.quantity) : 0;
         if (availableQty < qty) {
           throw new BadRequestException(
-            `"${(item.product.name as any)?.uz || item.product.name}" uchun omborda yetarli miqdor yo'q. Mavjud: ${availableQty}, kerakli: ${qty}`
+            `"${(item.product.name as any)?.uz || item.product.name}" uchun omborda yetarli miqdor yo'q. Mavjud: ${availableQty}, kerakli: ${qty}`,
           );
         }
 
@@ -247,7 +274,10 @@ export class SalesInvoicesService {
 
           const batchAvail = Number(batch.remainingQty);
           const consumed = Math.min(batchAvail, remainingToConsume);
-          const batchCostPerUnit = Number(batch.landedCost) > 0 ? Number(batch.landedCost) : Number(batch.purchasePrice);
+          const batchCostPerUnit =
+            Number(batch.landedCost) > 0
+              ? Number(batch.landedCost)
+              : Number(batch.purchasePrice);
 
           totalItemCogs += consumed * batchCostPerUnit;
           remainingToConsume -= consumed;
@@ -260,7 +290,9 @@ export class SalesInvoicesService {
 
         // If no batches found (no purchase history), fallback to product costPrice
         if (batches.length === 0 || remainingToConsume > 0) {
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+          });
           const fallbackCost = Number(product?.costPrice || 0);
           totalItemCogs += remainingToConsume * fallbackCost;
         }
@@ -273,7 +305,13 @@ export class SalesInvoicesService {
 
         totalCogs += lineCogs;
 
-        updatedItemData.push({ id: item.id, unitCogs, lineCogs, lineGrossProfit, isBelowCost });
+        updatedItemData.push({
+          id: item.id,
+          unitCogs,
+          lineCogs,
+          lineGrossProfit,
+          isBelowCost,
+        });
 
         // Deduct stock
         await tx.stockLevel.update({
@@ -313,14 +351,25 @@ export class SalesInvoicesService {
       const entryCount = await tx.journalEntry.count({ where: { tenantId } });
       const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
 
-      const revenueAcc = await tx.account.findFirst({ where: { tenantId, code: '9010' } });
-      const receivableAcc = await tx.account.findFirst({ where: { tenantId, code: '4010' } });
-      const vatAcc = await tx.account.findFirst({ where: { tenantId, code: '6410' } });
-      const cogsAcc = await tx.account.findFirst({ where: { tenantId, code: '9110' } });
-      const inventoryAcc = await tx.account.findFirst({ where: { tenantId, code: '2910' } });
+      const revenueAcc = await tx.account.findFirst({
+        where: { tenantId, code: '9010' },
+      });
+      const receivableAcc = await tx.account.findFirst({
+        where: { tenantId, code: '4010' },
+      });
+      const vatAcc = await tx.account.findFirst({
+        where: { tenantId, code: '6410' },
+      });
+      const cogsAcc = await tx.account.findFirst({
+        where: { tenantId, code: '9110' },
+      });
+      const inventoryAcc = await tx.account.findFirst({
+        where: { tenantId, code: '2910' },
+      });
 
       if (revenueAcc && receivableAcc) {
-        const netRevenue = Number(invoice.totalAmount) - Number(invoice.vatAmount);
+        const netRevenue =
+          Number(invoice.totalAmount) - Number(invoice.vatAmount);
         const vatSum = Number(invoice.vatAmount);
         const journalLines: any[] = [];
 
@@ -407,13 +456,22 @@ export class SalesInvoicesService {
 
     if (!invoice) throw new NotFoundException('Sotuv hujjati topilmadi');
     if (invoice.status !== SalesDocStatus.POSTED) {
-      throw new BadRequestException('Faqat tasdiqlangan hujjatlarni bekor qilish mumkin');
+      throw new BadRequestException(
+        'Faqat tasdiqlangan hujjatlarni bekor qilish mumkin',
+      );
     }
-    if (Number(invoice.paidAmount) > 0 || invoice.paymentStatus !== SalesPaymentStatus.UNPAID) {
-      throw new BadRequestException('To\'lov mavjud hujjatni bekor qilib bo\'lmaydi. Avval Moliya modulida to\'lovlarni o\'chiring.');
+    if (
+      Number(invoice.paidAmount) > 0 ||
+      invoice.paymentStatus !== SalesPaymentStatus.UNPAID
+    ) {
+      throw new BadRequestException(
+        "To'lov mavjud hujjatni bekor qilib bo'lmaydi. Avval Moliya modulida to'lovlarni o'chiring.",
+      );
     }
     if (invoice.returnStatus !== SalesReturnStatus.NONE) {
-      throw new BadRequestException('Qaytarish mavjud hujjatni bekor qilib bo\'lmaydi. Avval qaytarish hujjatlarini o\'chiring.');
+      throw new BadRequestException(
+        "Qaytarish mavjud hujjatni bekor qilib bo'lmaydi. Avval qaytarish hujjatlarini o'chiring.",
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -451,7 +509,12 @@ export class SalesInvoicesService {
       // Reset COGS fields
       await tx.salesInvoiceItem.updateMany({
         where: { invoiceId: id },
-        data: { unitCogs: 0, lineCogs: 0, lineGrossProfit: 0, isBelowCost: false },
+        data: {
+          unitCogs: 0,
+          lineCogs: 0,
+          lineGrossProfit: 0,
+          isBelowCost: false,
+        },
       });
 
       await tx.auditLog.create({
@@ -487,23 +550,34 @@ export class SalesInvoicesService {
   // ─── DELETE ───────────────────────────────────────────────────
 
   async deleteInvoice(tenantId: string, id: string) {
-    const invoice = await this.prisma.salesInvoice.findFirst({ where: { id, tenantId } });
+    const invoice = await this.prisma.salesInvoice.findFirst({
+      where: { id, tenantId },
+    });
     if (!invoice) throw new NotFoundException('Sotuv hujjati topilmadi');
     if (invoice.status !== SalesDocStatus.DRAFT) {
-      throw new BadRequestException('Faqat qoralama holatdagi hujjatlarni o\'chirish mumkin');
+      throw new BadRequestException(
+        "Faqat qoralama holatdagi hujjatlarni o'chirish mumkin",
+      );
     }
     await this.prisma.salesInvoice.delete({ where: { id } });
-    return { success: true, message: 'Sotuv hujjati o\'chirildi' };
+    return { success: true, message: "Sotuv hujjati o'chirildi" };
   }
 
   // ─── CUSTOMER RETURNS ─────────────────────────────────────────
 
-  async createReturn(tenantId: string, userId: string, dto: CreateSalesReturnDto) {
-    if (!dto.items?.length) throw new BadRequestException('Qaytarish hujjatida kamida bitta tovar bo\'lishi shart');
+  async createReturn(
+    tenantId: string,
+    userId: string,
+    dto: CreateSalesReturnDto,
+  ) {
+    if (!dto.items?.length)
+      throw new BadRequestException(
+        "Qaytarish hujjatida kamida bitta tovar bo'lishi shart",
+      );
 
     const returnNumber = await this.generateReturnNumber(tenantId);
     let totalAmount = 0;
-    let totalCogs = 0;
+    const totalCogs = 0;
 
     const preparedItems = dto.items.map((i) => {
       const lineTotal = i.quantity * i.unitPrice;
@@ -586,10 +660,13 @@ export class SalesInvoicesService {
           include: { returns: true },
         });
         if (origInvoice) {
-          const totalReturned = origInvoice.returns.reduce((s, r) => s + Number(r.totalAmount), 0) + totalAmount;
-          const newReturnStatus = totalReturned >= Number(origInvoice.totalAmount)
-            ? SalesReturnStatus.FULLY_RETURNED
-            : SalesReturnStatus.PARTIALLY_RETURNED;
+          const totalReturned =
+            origInvoice.returns.reduce((s, r) => s + Number(r.totalAmount), 0) +
+            totalAmount;
+          const newReturnStatus =
+            totalReturned >= Number(origInvoice.totalAmount)
+              ? SalesReturnStatus.FULLY_RETURNED
+              : SalesReturnStatus.PARTIALLY_RETURNED;
           await tx.salesInvoice.update({
             where: { id: dto.invoiceId },
             data: { returnStatus: newReturnStatus },
@@ -640,7 +717,14 @@ export class SalesInvoicesService {
     });
   }
 
-  async createPriceList(tenantId: string, data: { name: { uz: string; ru: string }; currency?: string; isDefault?: boolean }) {
+  async createPriceList(
+    tenantId: string,
+    data: {
+      name: { uz: string; ru: string };
+      currency?: string;
+      isDefault?: boolean;
+    },
+  ) {
     return this.prisma.priceList.create({
       data: {
         tenantId,
@@ -651,9 +735,16 @@ export class SalesInvoicesService {
     });
   }
 
-  async upsertProductPrice(tenantId: string, priceListId: string, productId: string, price: number) {
+  async upsertProductPrice(
+    tenantId: string,
+    priceListId: string,
+    productId: string,
+    price: number,
+  ) {
     // Verify price list belongs to tenant
-    const pl = await this.prisma.priceList.findFirst({ where: { id: priceListId, tenantId } });
+    const pl = await this.prisma.priceList.findFirst({
+      where: { id: priceListId, tenantId },
+    });
     if (!pl) throw new NotFoundException('Narx jadvali topilmadi');
 
     return this.prisma.productPrice.upsert({
@@ -664,7 +755,11 @@ export class SalesInvoicesService {
     });
   }
 
-  async getProductPriceFromList(tenantId: string, priceListId: string, productId: string) {
+  async getProductPriceFromList(
+    tenantId: string,
+    priceListId: string,
+    productId: string,
+  ) {
     const pp = await this.prisma.productPrice.findUnique({
       where: { priceListId_productId: { priceListId, productId } },
     });
@@ -678,7 +773,11 @@ export class SalesInvoicesService {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const monthlySales = await this.prisma.salesInvoice.aggregate({
-      where: { tenantId, status: SalesDocStatus.POSTED, invoiceDate: { gte: startOfMonth } },
+      where: {
+        tenantId,
+        status: SalesDocStatus.POSTED,
+        invoiceDate: { gte: startOfMonth },
+      },
       _sum: { totalAmount: true, totalCogs: true, grossProfit: true },
       _count: { id: true },
     });
@@ -690,7 +789,11 @@ export class SalesInvoicesService {
     });
 
     const customerDebt = await this.prisma.counterparty.aggregate({
-      where: { tenantId, type: { in: ['CUSTOMER', 'BOTH'] }, debtBalance: { gt: 0 } },
+      where: {
+        tenantId,
+        type: { in: ['CUSTOMER', 'BOTH'] },
+        debtBalance: { gt: 0 },
+      },
       _sum: { debtBalance: true },
       _count: { id: true },
     });
@@ -715,7 +818,9 @@ export class SalesInvoicesService {
   // ─── CUSTOMER PROFILE ─────────────────────────────────────────
 
   async getCustomerProfile(tenantId: string, customerId: string) {
-    const customer = await this.prisma.counterparty.findFirst({ where: { id: customerId, tenantId } });
+    const customer = await this.prisma.counterparty.findFirst({
+      where: { id: customerId, tenantId },
+    });
     if (!customer) throw new NotFoundException('Mijoz topilmadi');
 
     const invoices = await this.prisma.salesInvoice.findMany({
@@ -737,7 +842,10 @@ export class SalesInvoicesService {
 
     const totalSales = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
     const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
-    const totalReturned = returns.reduce((s, r) => s + Number(r.totalAmount), 0);
+    const totalReturned = returns.reduce(
+      (s, r) => s + Number(r.totalAmount),
+      0,
+    );
     const totalCogs = invoices.reduce((s, i) => s + Number(i.totalCogs), 0);
     const grossProfit = invoices.reduce((s, i) => s + Number(i.grossProfit), 0);
 

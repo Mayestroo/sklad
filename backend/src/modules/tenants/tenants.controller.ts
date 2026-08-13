@@ -33,9 +33,19 @@ export class TenantsController {
   @RequirePermissions('settings:edit')
   createBranch(
     @CurrentTenant() tenantId: string,
-    @Body() body: { name: { uz: string; ru: string }; address?: string; isMain?: boolean },
+    @Body()
+    body: {
+      name: { uz: string; ru: string };
+      address?: string;
+      isMain?: boolean;
+    },
   ) {
-    return this.tenantsService.createBranch(tenantId, body.name, body.address, body.isMain);
+    return this.tenantsService.createBranch(
+      tenantId,
+      body.name,
+      body.address,
+      body.isMain,
+    );
   }
 
   // Warehouse Endpoints
@@ -50,9 +60,21 @@ export class TenantsController {
   @RequirePermissions('settings:edit')
   createWarehouse(
     @CurrentTenant() tenantId: string,
-    @Body() body: { branchId?: string; name: { uz: string; ru: string }; address?: string; phone?: string },
+    @Body()
+    body: {
+      branchId?: string;
+      name: { uz: string; ru: string };
+      address?: string;
+      phone?: string;
+    },
   ) {
-    return this.tenantsService.createWarehouse(tenantId, body.branchId || null, body.name, body.address, body.phone);
+    return this.tenantsService.createWarehouse(
+      tenantId,
+      body.branchId || null,
+      body.name,
+      body.address,
+      body.phone,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

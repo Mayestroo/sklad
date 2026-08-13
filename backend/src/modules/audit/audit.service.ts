@@ -24,8 +24,8 @@ export class AuditService {
           entityType: params.entityType,
           entityId: params.entityId,
           action: params.action,
-          oldValue: params.oldValue ? (params.oldValue as any) : undefined,
-          newValue: params.newValue ? (params.newValue as any) : undefined,
+          oldValue: params.oldValue ? params.oldValue : undefined,
+          newValue: params.newValue ? params.newValue : undefined,
           ipAddress: params.ipAddress,
         },
       });

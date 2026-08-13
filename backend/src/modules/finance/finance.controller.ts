@@ -46,7 +46,11 @@ export class FinanceController {
     @Query('date_to') date_to?: string,
     @Query('currency') currency?: string,
   ) {
-    return this.financeService.getSummary(tenantId, { date_from, date_to, currency });
+    return this.financeService.getSummary(tenantId, {
+      date_from,
+      date_to,
+      currency,
+    });
   }
 
   // ─── Journal ─────────────────────────────────────────────────

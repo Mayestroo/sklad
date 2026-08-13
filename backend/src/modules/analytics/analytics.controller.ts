@@ -35,7 +35,10 @@ export class AnalyticsController {
     @CurrentTenant() tenantId: string,
     @Query('limit') limit?: number,
   ) {
-    return this.analyticsService.getTopProducts(tenantId, limit ? Number(limit) : 10);
+    return this.analyticsService.getTopProducts(
+      tenantId,
+      limit ? Number(limit) : 10,
+    );
   }
 
   @Get('top-clients')
@@ -44,7 +47,10 @@ export class AnalyticsController {
     @CurrentTenant() tenantId: string,
     @Query('limit') limit?: number,
   ) {
-    return this.analyticsService.getTopClients(tenantId, limit ? Number(limit) : 5);
+    return this.analyticsService.getTopClients(
+      tenantId,
+      limit ? Number(limit) : 5,
+    );
   }
 
   @Get('ratios')

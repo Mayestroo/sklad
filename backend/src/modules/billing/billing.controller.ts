@@ -27,9 +27,17 @@ export class BillingController {
   @RequirePermissions('settings:edit')
   createCheckout(
     @CurrentTenant() tenantId: string,
-    @Body() body: { planId: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE'; method: 'CLICK' | 'PAYME' | 'BANK_TRANSFER' },
+    @Body()
+    body: {
+      planId: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
+      method: 'CLICK' | 'PAYME' | 'BANK_TRANSFER';
+    },
   ) {
-    return this.billingService.createCheckout(tenantId, body.planId, body.method);
+    return this.billingService.createCheckout(
+      tenantId,
+      body.planId,
+      body.method,
+    );
   }
 
   @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)

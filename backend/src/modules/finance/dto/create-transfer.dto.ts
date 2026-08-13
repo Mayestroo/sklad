@@ -1,4 +1,11 @@
-import { IsString, IsNumber, IsOptional, IsDateString, IsPositive, IsNotEmpty } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsDateString,
+  IsPositive,
+  IsNotEmpty,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
 export class CreateTransferDto {
@@ -16,14 +23,22 @@ export class CreateTransferDto {
   amount: number;
 
   @IsOptional()
-  @Transform(({ value }) => (value === '' || value === null || value === undefined ? undefined : Number(value)))
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined
+      ? undefined
+      : Number(value),
+  )
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
   targetAmount?: number;
 
   @IsOptional()
-  @Transform(({ value }) => (value === '' || value === null || value === undefined ? undefined : Number(value)))
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined
+      ? undefined
+      : Number(value),
+  )
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
@@ -35,11 +50,15 @@ export class CreateTransferDto {
 
   @IsDateString()
   @IsOptional()
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   transactionDate?: string;
 
   @IsString()
   @IsOptional()
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   comment?: string;
 }

@@ -49,7 +49,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     if (status === 500) {
-      console.error('🔥 [500 ERROR IN HANDLER]', request.method, request.url, exception);
+      console.error(
+        '🔥 [500 ERROR IN HANDLER]',
+        request.method,
+        request.url,
+        exception,
+      );
     }
 
     const exceptionResponse =
@@ -84,7 +89,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   private getLocalizedMessage(status: number, locale: string): string {
     const key = HttpStatus[status] || 'INTERNAL_SERVER_ERROR';
-    const localized = ERROR_MESSAGES[key] || ERROR_MESSAGES['INTERNAL_SERVER_ERROR'];
+    const localized =
+      ERROR_MESSAGES[key] || ERROR_MESSAGES['INTERNAL_SERVER_ERROR'];
     return localized?.[locale] || 'An error occurred';
   }
 }

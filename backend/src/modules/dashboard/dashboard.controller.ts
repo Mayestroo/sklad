@@ -20,7 +20,12 @@ export class DashboardController {
     @Query('currency') currency?: string,
     @Query('granularity') granularity?: 'day' | 'week' | 'month',
   ) {
-    return this.dashboardService.getFullDashboard(tenantId, { date_from, date_to, currency, granularity });
+    return this.dashboardService.getFullDashboard(tenantId, {
+      date_from,
+      date_to,
+      currency,
+      granularity,
+    });
   }
 
   @Get('finance')
@@ -31,7 +36,11 @@ export class DashboardController {
     @Query('date_to') date_to?: string,
     @Query('currency') currency?: string,
   ) {
-    return this.dashboardService.getFinanceKPIs(tenantId, { date_from, date_to, currency });
+    return this.dashboardService.getFinanceKPIs(tenantId, {
+      date_from,
+      date_to,
+      currency,
+    });
   }
 
   @Get('sales')
@@ -42,7 +51,11 @@ export class DashboardController {
     @Query('date_to') date_to?: string,
     @Query('granularity') granularity?: 'day' | 'week' | 'month',
   ) {
-    return this.dashboardService.getSalesKPIs(tenantId, { date_from, date_to, granularity });
+    return this.dashboardService.getSalesKPIs(tenantId, {
+      date_from,
+      date_to,
+      granularity,
+    });
   }
 
   @Get('debts')
@@ -60,7 +73,12 @@ export class DashboardController {
     @Query('currency') currency?: string,
     @Query('granularity') granularity?: 'day' | 'week' | 'month',
   ) {
-    return this.dashboardService.getCashFlow(tenantId, { date_from, date_to, currency, granularity });
+    return this.dashboardService.getCashFlow(tenantId, {
+      date_from,
+      date_to,
+      currency,
+      granularity,
+    });
   }
 
   @Get('transactions')
@@ -69,6 +87,9 @@ export class DashboardController {
     @CurrentTenant() tenantId: string,
     @Query('limit') limit?: number,
   ) {
-    return this.dashboardService.getRecentTransactions(tenantId, limit ? Number(limit) : 10);
+    return this.dashboardService.getRecentTransactions(
+      tenantId,
+      limit ? Number(limit) : 10,
+    );
   }
 }

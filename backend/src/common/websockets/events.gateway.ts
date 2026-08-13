@@ -33,7 +33,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     if (data.tenantId) {
       client.join(`tenant:${data.tenantId}`);
-      console.log(`🏢 Client ${client.id} joined room: tenant:${data.tenantId}`);
+      console.log(
+        `🏢 Client ${client.id} joined room: tenant:${data.tenantId}`,
+      );
       return { status: 'joined', room: `tenant:${data.tenantId}` };
     }
   }

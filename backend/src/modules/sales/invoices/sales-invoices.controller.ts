@@ -118,7 +118,12 @@ export class SalesInvoicesController {
   @RequirePermissions('sales:create')
   createPriceList(
     @CurrentTenant() tenantId: string,
-    @Body() body: { name: { uz: string; ru: string }; currency?: string; isDefault?: boolean },
+    @Body()
+    body: {
+      name: { uz: string; ru: string };
+      currency?: string;
+      isDefault?: boolean;
+    },
   ) {
     return this.service.createPriceList(tenantId, body);
   }
@@ -131,14 +136,22 @@ export class SalesInvoicesController {
     @Param('productId') productId: string,
     @Body('price') price: number,
   ) {
-    return this.service.upsertProductPrice(tenantId, priceListId, productId, price);
+    return this.service.upsertProductPrice(
+      tenantId,
+      priceListId,
+      productId,
+      price,
+    );
   }
 
   // ─── CUSTOMER PROFILE ─────────────────────────────────────────
 
   @Get('customers/:id/profile')
   @RequirePermissions('sales:view')
-  getCustomerProfile(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+  getCustomerProfile(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
     return this.service.getCustomerProfile(tenantId, id);
   }
 }

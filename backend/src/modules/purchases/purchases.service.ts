@@ -6,7 +6,10 @@ import {
 import { PrismaService } from '../../common/prisma';
 import { CreatePurchaseReceiptDto } from './dto/create-purchase-receipt.dto';
 import { FilterPurchaseReceiptsDto } from './dto/filter-purchase-receipts.dto';
-import { CreatePurchaseExpenseDto, ExpenseAllocationMethodDto } from './dto/create-purchase-expense.dto';
+import {
+  CreatePurchaseExpenseDto,
+  ExpenseAllocationMethodDto,
+} from './dto/create-purchase-expense.dto';
 import { CreatePurchaseReturnDto } from './dto/create-purchase-return.dto';
 import {
   Prisma,
@@ -159,9 +162,15 @@ export class PurchasesService {
     return receipt;
   }
 
-  async createReceipt(tenantId: string, userId: string, dto: CreatePurchaseReceiptDto) {
+  async createReceipt(
+    tenantId: string,
+    userId: string,
+    dto: CreatePurchaseReceiptDto,
+  ) {
     if (!dto.items || dto.items.length === 0) {
-      throw new BadRequestException('Xarid hujjatida kamida bitta tovar bo\'lishi shart');
+      throw new BadRequestException(
+        "Xarid hujjatida kamida bitta tovar bo'lishi shart",
+      );
     }
 
     const docNumber = await this.generateDocNumber(tenantId);
@@ -248,7 +257,11 @@ export class PurchasesService {
     return receipt;
   }
 
-  async updateReceipt(tenantId: string, id: string, dto: CreatePurchaseReceiptDto) {
+  async updateReceipt(
+    tenantId: string,
+    id: string,
+    dto: CreatePurchaseReceiptDto,
+  ) {
     const existing = await this.prisma.purchaseReceipt.findFirst({
       where: { id, tenantId },
     });
@@ -258,7 +271,9 @@ export class PurchasesService {
     }
 
     if (existing.status !== PurchaseDocStatus.DRAFT) {
-      throw new BadRequestException('Faqat qoralama holatidagi xarid hujjatlarini tahrirlash mumkin');
+      throw new BadRequestException(
+        'Faqat qoralama holatidagi xarid hujjatlarini tahrirlash mumkin',
+      );
     }
 
     const exchangeRate = dto.exchangeRate || existing.exchangeRate;
@@ -299,7 +314,11 @@ export class PurchasesService {
       };
     });
 
-    const totalAmount = subtotalAmount - discountAmount + vatAmount + Number(existing.additionalExpensesTotal);
+    const totalAmount =
+      subtotalAmount -
+      discountAmount +
+      vatAmount +
+      Number(existing.additionalExpensesTotal);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.purchaseReceiptItem.deleteMany({
@@ -315,7 +334,9 @@ export class PurchasesService {
           currency: dto.currency || existing.currency,
           exchangeRate: exchangeRate,
           contractNumber: dto.contractNumber ?? existing.contractNumber,
-          contractDate: dto.contractDate ? new Date(dto.contractDate) : existing.contractDate,
+          contractDate: dto.contractDate
+            ? new Date(dto.contractDate)
+            : existing.contractDate,
           comment: dto.comment ?? existing.comment,
           gtdNumber: dto.gtdNumber ?? existing.gtdNumber,
           gtdDate: dto.gtdDate ? new Date(dto.gtdDate) : existing.gtdDate,
@@ -355,7 +376,9 @@ export class PurchasesService {
     }
 
     if (receipt.status !== PurchaseDocStatus.DRAFT) {
-      throw new BadRequestException('Ushbu hujjat allaqachon tasdiqlangan yoki bekor qilingan');
+      throw new BadRequestException(
+        'Ushbu hujjat allaqachon tasdiqlangan yoki bekor qilingan',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -432,7 +455,10 @@ export class PurchasesService {
       });
 
       if (inventoryAcc && supplierAcc) {
-        const netGoodsCost = Number(receipt.subtotalAmount) - Number(receipt.discountAmount) + Number(receipt.additionalExpensesTotal);
+        const netGoodsCost =
+          Number(receipt.subtotalAmount) -
+          Number(receipt.discountAmount) +
+          Number(receipt.additionalExpensesTotal);
         const vatSum = Number(receipt.vatAmount);
 
         const journalLines: any[] = [
@@ -514,16 +540,25 @@ export class PurchasesService {
     }
 
     if (receipt.status !== PurchaseDocStatus.POSTED) {
-      throw new BadRequestException('Faqat tasdiqlangan hujjatlarni bekor qilish mumkin');
+      throw new BadRequestException(
+        'Faqat tasdiqlangan hujjatlarni bekor qilish mumkin',
+      );
     }
 
     // Safety validation for linked payments & returns
-    if (Number(receipt.paidAmount) > 0 || receipt.paymentStatus !== PurchasePaymentStatus.UNPAID) {
-      throw new BadRequestException(`Ushbu xarid hujjati bo'yicha to'lovlar kiritilgan (To'langan: ${receipt.paidAmount} ${receipt.currency}). Hujjatni bekor qilishdan avval Moliya modulida unga bog'liq to'lovlarni o'chiring.`);
+    if (
+      Number(receipt.paidAmount) > 0 ||
+      receipt.paymentStatus !== PurchasePaymentStatus.UNPAID
+    ) {
+      throw new BadRequestException(
+        `Ushbu xarid hujjati bo'yicha to'lovlar kiritilgan (To'langan: ${receipt.paidAmount} ${receipt.currency}). Hujjatni bekor qilishdan avval Moliya modulida unga bog'liq to'lovlarni o'chiring.`,
+      );
     }
 
     if (receipt.returnStatus !== PurchaseReturnStatus.NONE) {
-      throw new BadRequestException("Ushbu xarid hujjati bo'yicha to'liq yoki qisman qaytarish rasmiylashtirilgan. Avval qaytaruv hujjatlarini o'chiring.");
+      throw new BadRequestException(
+        "Ushbu xarid hujjati bo'yicha to'liq yoki qisman qaytarish rasmiylashtirilgan. Avval qaytaruv hujjatlarini o'chiring.",
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -540,7 +575,10 @@ export class PurchasesService {
         });
 
         if (stockLevel) {
-          const newQty = Math.max(0, Number(stockLevel.quantity) - Number(item.quantity));
+          const newQty = Math.max(
+            0,
+            Number(stockLevel.quantity) - Number(item.quantity),
+          );
           await tx.stockLevel.update({
             where: { id: stockLevel.id },
             data: { quantity: newQty },
@@ -602,7 +640,12 @@ export class PurchasesService {
     tenantId: string,
     userId: string,
     id: string,
-    dto: { amount: number; cashAccountId: string; note?: string; paymentDate?: string },
+    dto: {
+      amount: number;
+      cashAccountId: string;
+      note?: string;
+      paymentDate?: string;
+    },
   ) {
     const receipt = await this.prisma.purchaseReceipt.findFirst({
       where: { id, tenantId },
@@ -614,11 +657,13 @@ export class PurchasesService {
     }
 
     if (receipt.status !== PurchaseDocStatus.POSTED) {
-      throw new BadRequestException('Faqat tasdiqlangan hujjatlar uchun to\'lov kiritish mumkin');
+      throw new BadRequestException(
+        "Faqat tasdiqlangan hujjatlar uchun to'lov kiritish mumkin",
+      );
     }
 
     if (receipt.paymentStatus === PurchasePaymentStatus.PAID) {
-      throw new BadRequestException('Ushbu hujjat to\'liq to\'langan');
+      throw new BadRequestException("Ushbu hujjat to'liq to'langan");
     }
 
     const cashAccount = await this.prisma.cashAccount.findFirst({
@@ -641,12 +686,14 @@ export class PurchasesService {
       );
     }
 
-    const paymentDate = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
+    const paymentDate = dto.paymentDate
+      ? new Date(dto.paymentDate)
+      : new Date();
     const remaining = Number(receipt.totalAmount) - Number(receipt.paidAmount);
     const payAmount = Math.min(dto.amount, remaining);
 
     if (payAmount <= 0) {
-      throw new BadRequestException('To\'lov summasi noto\'g\'ri');
+      throw new BadRequestException("To'lov summasi noto'g'ri");
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -679,7 +726,9 @@ export class PurchasesService {
       });
 
       // 4. Create Finance Transaction (EXPENSE)
-      const txCount = await tx.financeTransaction.count({ where: { tenantId } });
+      const txCount = await tx.financeTransaction.count({
+        where: { tenantId },
+      });
       const txNumber = `FT-${new Date().getFullYear()}-${(txCount + 1).toString().padStart(5, '0')}`;
 
       await tx.financeTransaction.create({
@@ -690,7 +739,9 @@ export class PurchasesService {
           amount: payAmount,
           currency: cashAccount.currency,
           transactionDate: paymentDate,
-          comment: dto.note || `Yetkazib beruvchiga to'lov: ${receipt.counterparty.name} (${receipt.docNumber})`,
+          comment:
+            dto.note ||
+            `Yetkazib beruvchiga to'lov: ${receipt.counterparty.name} (${receipt.docNumber})`,
           accountId: dto.cashAccountId,
           counterpartyId: receipt.counterpartyId,
           sourceDocType: 'PurchaseReceipt',
@@ -700,8 +751,12 @@ export class PurchasesService {
       });
 
       // 5. Accounting Journal: Debit 6010 (Yetkazib beruvchiga qarz) / Credit 5010 (Kassa)
-      const supplierAcc = await tx.account.findFirst({ where: { tenantId, code: '6010' } });
-      const cashAcc = await tx.account.findFirst({ where: { tenantId, code: '5010' } });
+      const supplierAcc = await tx.account.findFirst({
+        where: { tenantId, code: '6010' },
+      });
+      const cashAcc = await tx.account.findFirst({
+        where: { tenantId, code: '5010' },
+      });
 
       if (supplierAcc && cashAcc) {
         const jeCount = await tx.journalEntry.count({ where: { tenantId } });
@@ -721,7 +776,8 @@ export class PurchasesService {
                   debitAccountId: supplierAcc.id,
                   creditAccountId: cashAcc.id,
                   amount: payAmount,
-                  description: 'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim',
+                  description:
+                    'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim',
                 },
               ],
             },
@@ -737,8 +793,14 @@ export class PurchasesService {
           entityType: 'PurchaseReceipt',
           entityId: id,
           action: 'UPDATE',
-          oldValue: { paymentStatus: receipt.paymentStatus, paidAmount: receipt.paidAmount },
-          newValue: { paymentStatus: newPaymentStatus, paidAmount: newPaidAmount },
+          oldValue: {
+            paymentStatus: receipt.paymentStatus,
+            paidAmount: receipt.paidAmount,
+          },
+          newValue: {
+            paymentStatus: newPaymentStatus,
+            paidAmount: newPaidAmount,
+          },
         },
       });
 
@@ -756,14 +818,19 @@ export class PurchasesService {
     }
 
     if (receipt.status !== PurchaseDocStatus.DRAFT) {
-      throw new BadRequestException('Faqat qoralama holatidagi xarid hujjatlarini o\'chirish mumkin');
+      throw new BadRequestException(
+        "Faqat qoralama holatidagi xarid hujjatlarini o'chirish mumkin",
+      );
     }
 
     await this.prisma.purchaseReceipt.delete({
       where: { id },
     });
 
-    return { success: true, message: 'Xarid hujjati muvaffaqiyatli o\'chirildi' };
+    return {
+      success: true,
+      message: "Xarid hujjati muvaffaqiyatli o'chirildi",
+    };
   }
 
   // ─── ADDITIONAL EXPENSES & LANDED COST (BY AMOUNT / BY QUANTITY / BY WEIGHT) ─
@@ -783,7 +850,8 @@ export class PurchasesService {
       throw new NotFoundException('Xarid hujjati topilmadi');
     }
 
-    const allocationMethod = dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
+    const allocationMethod =
+      dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
 
     return this.prisma.$transaction(async (tx) => {
       // Create expense
@@ -791,11 +859,11 @@ export class PurchasesService {
         data: {
           tenantId,
           receiptId: dto.receiptId,
-          expenseType: dto.expenseType as ExpenseType,
+          expenseType: dto.expenseType,
           supplierId: dto.supplierId || null,
           amount: dto.amount,
           currency: dto.currency || 'UZS',
-          allocationMethod: allocationMethod as ExpenseAllocationMethod,
+          allocationMethod: allocationMethod,
           comment: dto.comment || null,
         },
       });
@@ -805,13 +873,22 @@ export class PurchasesService {
         where: { receiptId: dto.receiptId },
       });
 
-      const totalExpensesAmount = allExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+      const totalExpensesAmount = allExpenses.reduce(
+        (sum, e) => sum + Number(e.amount),
+        0,
+      );
       const subtotalAmount = Number(receipt.subtotalAmount);
-      const totalQuantity = receipt.items.reduce((sum, i) => sum + Number(i.quantity), 0);
+      const totalQuantity = receipt.items.reduce(
+        (sum, i) => sum + Number(i.quantity),
+        0,
+      );
 
       // Total weight for BY_WEIGHT allocation
       const totalWeight = receipt.items.reduce((sum, i) => {
-        const unitWeight = Number(i.weight) > 0 ? Number(i.weight) : (Number(i.product?.weight) || 1);
+        const unitWeight =
+          Number(i.weight) > 0
+            ? Number(i.weight)
+            : Number(i.product?.weight) || 1;
         return sum + Number(i.quantity) * unitWeight;
       }, 0);
 
@@ -820,20 +897,34 @@ export class PurchasesService {
         let allocatedForItem = 0;
         const itemQty = Number(item.quantity);
         const itemTotal = Number(item.totalPrice);
-        const unitWeight = Number(item.weight) > 0 ? Number(item.weight) : (Number(item.product?.weight) || 1);
+        const unitWeight =
+          Number(item.weight) > 0
+            ? Number(item.weight)
+            : Number(item.product?.weight) || 1;
         const itemWeightTotal = itemQty * unitWeight;
 
-        if (allocationMethod === ExpenseAllocationMethod.BY_AMOUNT && subtotalAmount > 0) {
+        if (
+          allocationMethod === ExpenseAllocationMethod.BY_AMOUNT &&
+          subtotalAmount > 0
+        ) {
           allocatedForItem = (itemTotal / subtotalAmount) * totalExpensesAmount;
-        } else if (allocationMethod === ExpenseAllocationMethod.BY_QUANTITY && totalQuantity > 0) {
+        } else if (
+          allocationMethod === ExpenseAllocationMethod.BY_QUANTITY &&
+          totalQuantity > 0
+        ) {
           allocatedForItem = (itemQty / totalQuantity) * totalExpensesAmount;
-        } else if (allocationMethod === ExpenseAllocationMethod.BY_WEIGHT && totalWeight > 0) {
-          allocatedForItem = (itemWeightTotal / totalWeight) * totalExpensesAmount;
+        } else if (
+          allocationMethod === ExpenseAllocationMethod.BY_WEIGHT &&
+          totalWeight > 0
+        ) {
+          allocatedForItem =
+            (itemWeightTotal / totalWeight) * totalExpensesAmount;
         } else {
           allocatedForItem = totalExpensesAmount / receipt.items.length;
         }
 
-        const newLandedCost = itemQty > 0 ? (itemTotal + allocatedForItem) / itemQty : 0;
+        const newLandedCost =
+          itemQty > 0 ? (itemTotal + allocatedForItem) / itemQty : 0;
 
         await tx.purchaseReceiptItem.update({
           where: { id: item.id },
@@ -853,7 +944,11 @@ export class PurchasesService {
       }
 
       // Update total amount on receipt
-      const newTotalAmount = Number(receipt.subtotalAmount) - Number(receipt.discountAmount) + Number(receipt.vatAmount) + totalExpensesAmount;
+      const newTotalAmount =
+        Number(receipt.subtotalAmount) -
+        Number(receipt.discountAmount) +
+        Number(receipt.vatAmount) +
+        totalExpensesAmount;
 
       const updatedReceipt = await tx.purchaseReceipt.update({
         where: { id: receipt.id },
@@ -886,9 +981,15 @@ export class PurchasesService {
 
   // ─── RETURNS TO SUPPLIER ──────────────────────────────────────
 
-  async createReturn(tenantId: string, userId: string, dto: CreatePurchaseReturnDto) {
+  async createReturn(
+    tenantId: string,
+    userId: string,
+    dto: CreatePurchaseReturnDto,
+  ) {
     if (!dto.items || dto.items.length === 0) {
-      throw new BadRequestException('Qaytarish hujjatida kamida bitta tovar bo\'lishi shart');
+      throw new BadRequestException(
+        "Qaytarish hujjatida kamida bitta tovar bo'lishi shart",
+      );
     }
 
     const returnNumber = await this.generateReturnNumber(tenantId);
@@ -944,7 +1045,10 @@ export class PurchasesService {
         });
 
         if (stockLevel) {
-          const newQty = Math.max(0, Number(stockLevel.quantity) - item.quantity);
+          const newQty = Math.max(
+            0,
+            Number(stockLevel.quantity) - item.quantity,
+          );
           await tx.stockLevel.update({
             where: { id: stockLevel.id },
             data: { quantity: newQty },
@@ -968,10 +1072,13 @@ export class PurchasesService {
         });
 
         if (receipt) {
-          const totalReturned = receipt.returns.reduce((sum, r) => sum + Number(r.totalAmount), 0) + totalAmount;
-          const returnStatus = totalReturned >= Number(receipt.totalAmount)
-            ? PurchaseReturnStatus.FULLY_RETURNED
-            : PurchaseReturnStatus.PARTIALLY_RETURNED;
+          const totalReturned =
+            receipt.returns.reduce((sum, r) => sum + Number(r.totalAmount), 0) +
+            totalAmount;
+          const returnStatus =
+            totalReturned >= Number(receipt.totalAmount)
+              ? PurchaseReturnStatus.FULLY_RETURNED
+              : PurchaseReturnStatus.PARTIALLY_RETURNED;
 
           await tx.purchaseReceipt.update({
             where: { id: dto.receiptId },
@@ -1045,9 +1152,15 @@ export class PurchasesService {
       orderBy: { transactionDate: 'desc' },
     });
 
-    const totalPurchased = receipts.reduce((sum, r) => sum + Number(r.totalAmount), 0);
+    const totalPurchased = receipts.reduce(
+      (sum, r) => sum + Number(r.totalAmount),
+      0,
+    );
     const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalReturned = returns.reduce((sum, ret) => sum + Number(ret.totalAmount), 0);
+    const totalReturned = returns.reduce(
+      (sum, ret) => sum + Number(ret.totalAmount),
+      0,
+    );
 
     return {
       supplier,

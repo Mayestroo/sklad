@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma';
 import { AuditService } from '../audit/audit.service';
@@ -20,7 +25,9 @@ export class UsersService {
     });
 
     if (existing) {
-      throw new ConflictException('User with this email already exists in company');
+      throw new ConflictException(
+        'User with this email already exists in company',
+      );
     }
 
     // Resolve Role by slug
@@ -112,7 +119,12 @@ export class UsersService {
   /**
    * Update staff user role/status
    */
-  async updateUser(tenantId: string, userId: string, dto: UpdateUserDto, actorUserId: string) {
+  async updateUser(
+    tenantId: string,
+    userId: string,
+    dto: UpdateUserDto,
+    actorUserId: string,
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId },
       include: { userRoles: true },
@@ -125,7 +137,8 @@ export class UsersService {
     const updateData: any = {};
     if (dto.firstName) updateData.firstName = dto.firstName;
     if (dto.lastName) updateData.lastName = dto.lastName;
-    if (dto.preferredLanguage) updateData.preferredLanguage = dto.preferredLanguage;
+    if (dto.preferredLanguage)
+      updateData.preferredLanguage = dto.preferredLanguage;
     if (typeof dto.isActive === 'boolean') updateData.isActive = dto.isActive;
 
     // Role update

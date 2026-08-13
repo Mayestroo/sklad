@@ -28,24 +28,26 @@ export class FinanceService {
     const defaults = [
       {
         accountType: 'UZS_CASH' as const,
-        name: { uz: "Naqd pul (UZS)", ru: "Наличные (UZS)" },
+        name: { uz: 'Naqd pul (UZS)', ru: 'Наличные (UZS)' },
         currency: 'UZS',
       },
       {
         accountType: 'USD_CASH' as const,
-        name: { uz: "Naqd pul (USD)", ru: "Наличные (USD)" },
+        name: { uz: 'Naqd pul (USD)', ru: 'Наличные (USD)' },
         currency: 'USD',
       },
       {
         accountType: 'BANK' as const,
-        name: { uz: "Bank hisobi", ru: "Банковский счёт" },
+        name: { uz: 'Bank hisobi', ru: 'Банковский счёт' },
         currency: 'UZS',
       },
     ];
 
     for (const d of defaults) {
       await this.prisma.cashAccount.upsert({
-        where: { tenantId_accountType: { tenantId, accountType: d.accountType } },
+        where: {
+          tenantId_accountType: { tenantId, accountType: d.accountType },
+        },
         create: { tenantId, ...d },
         update: {},
       });
@@ -56,7 +58,10 @@ export class FinanceService {
 
   // ─── Summary ─────────────────────────────────────────────────
 
-  async getSummary(tenantId: string, filters: { date_from?: string; date_to?: string; currency?: string }) {
+  async getSummary(
+    tenantId: string,
+    filters: { date_from?: string; date_to?: string; currency?: string },
+  ) {
     const where: any = {
       tenantId,
       isDeleted: false,
@@ -64,8 +69,10 @@ export class FinanceService {
 
     if (filters.date_from || filters.date_to) {
       where.transactionDate = {};
-      if (filters.date_from) where.transactionDate.gte = new Date(filters.date_from);
-      if (filters.date_to) where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+      if (filters.date_from)
+        where.transactionDate.gte = new Date(filters.date_from);
+      if (filters.date_to)
+        where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
     }
 
     if (filters.currency) {
@@ -82,7 +89,8 @@ export class FinanceService {
 
     for (const tx of transactions) {
       if (tx.direction === TransactionDirection.TRANSFER) continue; // never counted
-      if (!byCurrency[tx.currency]) byCurrency[tx.currency] = { income: 0, expense: 0 };
+      if (!byCurrency[tx.currency])
+        byCurrency[tx.currency] = { income: 0, expense: 0 };
       if (tx.direction === TransactionDirection.INCOME) {
         byCurrency[tx.currency].income += Number(tx.amount);
       } else {
@@ -90,12 +98,14 @@ export class FinanceService {
       }
     }
 
-    const summaryByCurrency = Object.entries(byCurrency).map(([currency, data]) => ({
-      currency,
-      totalIncome: data.income,
-      totalExpense: data.expense,
-      netCashFlow: data.income - data.expense,
-    }));
+    const summaryByCurrency = Object.entries(byCurrency).map(
+      ([currency, data]) => ({
+        currency,
+        totalIncome: data.income,
+        totalExpense: data.expense,
+        netCashFlow: data.income - data.expense,
+      }),
+    );
 
     // Account balances
     const accounts = await this.getAccounts(tenantId);
@@ -126,14 +136,17 @@ export class FinanceService {
 
     if (filters.date_from || filters.date_to) {
       where.transactionDate = {};
-      if (filters.date_from) where.transactionDate.gte = new Date(filters.date_from);
-      if (filters.date_to) where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+      if (filters.date_from)
+        where.transactionDate.gte = new Date(filters.date_from);
+      if (filters.date_to)
+        where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
     }
     if (filters.accountId) where.accountId = filters.accountId;
     if (filters.direction) where.direction = filters.direction;
     if (filters.currency) where.currency = filters.currency;
     if (filters.counterpartyId) where.counterpartyId = filters.counterpartyId;
-    if (filters.transactionTypeId) where.transactionTypeId = filters.transactionTypeId;
+    if (filters.transactionTypeId)
+      where.transactionTypeId = filters.transactionTypeId;
     if (filters.amountMin || filters.amountMax) {
       where.amount = {};
       if (filters.amountMin) where.amount.gte = filters.amountMin;
@@ -166,7 +179,11 @@ export class FinanceService {
 
   // ─── Create Income ────────────────────────────────────────────
 
-  async createIncome(tenantId: string, dto: CreateIncomeDto, createdById?: string) {
+  async createIncome(
+    tenantId: string,
+    dto: CreateIncomeDto,
+    createdById?: string,
+  ) {
     const account = await this.prisma.cashAccount.findFirst({
       where: { id: dto.accountId, tenantId },
     });
@@ -180,7 +197,9 @@ export class FinanceService {
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
-          transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+          transactionDate: dto.transactionDate
+            ? new Date(dto.transactionDate)
+            : new Date(),
           counterpartyId: dto.counterpartyId,
           transactionTypeId: dto.transactionTypeId,
           comment: dto.comment,
@@ -213,7 +232,11 @@ export class FinanceService {
 
   // ─── Create Expense ───────────────────────────────────────────
 
-  async createExpense(tenantId: string, dto: CreateExpenseDto, createdById?: string) {
+  async createExpense(
+    tenantId: string,
+    dto: CreateExpenseDto,
+    createdById?: string,
+  ) {
     const account = await this.prisma.cashAccount.findFirst({
       where: { id: dto.accountId, tenantId },
     });
@@ -227,7 +250,9 @@ export class FinanceService {
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
-          transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+          transactionDate: dto.transactionDate
+            ? new Date(dto.transactionDate)
+            : new Date(),
           counterpartyId: dto.counterpartyId,
           transactionTypeId: dto.transactionTypeId,
           comment: dto.comment,
@@ -260,22 +285,34 @@ export class FinanceService {
 
   // ─── Create Transfer ──────────────────────────────────────────
 
-  async createTransfer(tenantId: string, dto: CreateTransferDto, createdById?: string) {
+  async createTransfer(
+    tenantId: string,
+    dto: CreateTransferDto,
+    createdById?: string,
+  ) {
     if (dto.fromAccountId === dto.toAccountId) {
-      throw new BadRequestException('Chiquvchi va qabul qiluvchi hisoblar har xil bo\'lishi shart');
+      throw new BadRequestException(
+        "Chiquvchi va qabul qiluvchi hisoblar har xil bo'lishi shart",
+      );
     }
 
     const [fromAccount, toAccount] = await Promise.all([
-      this.prisma.cashAccount.findFirst({ where: { id: dto.fromAccountId, tenantId } }),
-      this.prisma.cashAccount.findFirst({ where: { id: dto.toAccountId, tenantId } }),
+      this.prisma.cashAccount.findFirst({
+        where: { id: dto.fromAccountId, tenantId },
+      }),
+      this.prisma.cashAccount.findFirst({
+        where: { id: dto.toAccountId, tenantId },
+      }),
     ]);
 
-    if (!fromAccount) throw new NotFoundException('Chiquvchi kassa hisobi topilmadi');
-    if (!toAccount) throw new NotFoundException('Qabul qiluvchi kassa hisobi topilmadi');
+    if (!fromAccount)
+      throw new NotFoundException('Chiquvchi kassa hisobi topilmadi');
+    if (!toAccount)
+      throw new NotFoundException('Qabul qiluvchi kassa hisobi topilmadi');
 
     const fromAmount = Number(dto.amount);
     if (fromAmount <= 0) {
-      throw new BadRequestException('Miqdor musbat bo\'lishi kerak');
+      throw new BadRequestException("Miqdor musbat bo'lishi kerak");
     }
 
     if (Number(fromAccount.balance) < fromAmount) {
@@ -303,7 +340,9 @@ export class FinanceService {
 
       const calcRate = dto.exchangeRate || toAmount / fromAmount;
       const conversionNote = `Konvertatsiya: ${fromAmount} ${fromCurrency} -> ${toAmount} ${toCurrency} (Kurs: ${calcRate})`;
-      autoComment = autoComment ? `${autoComment} | ${conversionNote}` : conversionNote;
+      autoComment = autoComment
+        ? `${autoComment} | ${conversionNote}`
+        : conversionNote;
     }
 
     const tx = await this.prisma.$transaction(async (tx) => {
@@ -315,7 +354,9 @@ export class FinanceService {
           transferToId: dto.toAccountId,
           amount: fromAmount,
           currency: fromCurrency,
-          transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+          transactionDate: dto.transactionDate
+            ? new Date(dto.transactionDate)
+            : new Date(),
           comment: autoComment,
           createdById,
         },
@@ -342,7 +383,11 @@ export class FinanceService {
 
   // ─── Edit Transaction ─────────────────────────────────────────
 
-  async updateTransaction(tenantId: string, id: string, data: Partial<{ comment: string; transactionTypeId: string }>) {
+  async updateTransaction(
+    tenantId: string,
+    id: string,
+    data: Partial<{ comment: string; transactionTypeId: string }>,
+  ) {
     const existing = await this.prisma.financeTransaction.findFirst({
       where: { id, tenantId, isDeleted: false },
     });
@@ -419,10 +464,7 @@ export class FinanceService {
   async getTransactionTypes(tenantId: string) {
     return this.prisma.transactionType.findMany({
       where: {
-        OR: [
-          { tenantId },
-          { tenantId: null, isSystem: true },
-        ],
+        OR: [{ tenantId }, { tenantId: null, isSystem: true }],
       },
       orderBy: [{ direction: 'asc' }, { isSystem: 'desc' }],
     });

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { InventoryDocumentsService } from './inventory-documents.service';
 import { CreateInventoryDocDto } from '../dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -25,10 +33,7 @@ export class InventoryDocumentsController {
 
   @Get()
   @RequirePermissions('inventory:view')
-  findAll(
-    @CurrentTenant() tenantId: string,
-    @Query('type') docType?: string,
-  ) {
+  findAll(@CurrentTenant() tenantId: string, @Query('type') docType?: string) {
     return this.docsService.findAllByTenant(tenantId, docType);
   }
 

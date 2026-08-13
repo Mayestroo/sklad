@@ -20,7 +20,10 @@ export class JournalController {
 
   @Post()
   @RequirePermissions('accounting:create')
-  create(@CurrentTenant() tenantId: string, @Body() dto: CreateJournalEntryDto) {
+  create(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: CreateJournalEntryDto,
+  ) {
     return this.journalService.createJournalEntry(tenantId, dto);
   }
 }

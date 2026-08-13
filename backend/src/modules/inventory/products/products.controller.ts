@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from '../dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -36,7 +44,10 @@ export class ProductsController {
 
   @Get('barcode/:code')
   @RequirePermissions('inventory:view')
-  findByBarcode(@CurrentTenant() tenantId: string, @Param('code') code: string) {
+  findByBarcode(
+    @CurrentTenant() tenantId: string,
+    @Param('code') code: string,
+  ) {
     return this.productsService.findByBarcode(tenantId, code);
   }
 

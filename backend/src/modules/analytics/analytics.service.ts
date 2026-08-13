@@ -20,17 +20,22 @@ export class AnalyticsService {
       }),
     ]);
 
-    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
+    const totalRevenue = invoices.reduce(
+      (sum, inv) => sum + Number(inv.totalAmount),
+      0,
+    );
 
     let totalCogs = 0;
     invoices.forEach((inv) => {
       inv.items.forEach((item) => {
-        totalCogs += Number(item.quantity) * (Number(item.product?.costPrice) || 0);
+        totalCogs +=
+          Number(item.quantity) * (Number(item.product?.costPrice) || 0);
       });
     });
 
     const grossProfit = totalRevenue - totalCogs;
-    const netProfitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    const netProfitMargin =
+      totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
     let totalAccountsReceivable = 0;
     let totalAccountsPayable = 0;
@@ -45,7 +50,8 @@ export class AnalyticsService {
     });
 
     const inventoryValuation = stockLevels.reduce(
-      (sum, stock) => sum + Number(stock.quantity) * (Number(stock.product?.costPrice) || 0),
+      (sum, stock) =>
+        sum + Number(stock.quantity) * (Number(stock.product?.costPrice) || 0),
       0,
     );
 
@@ -66,7 +72,10 @@ export class AnalyticsService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const monthMap: Record<string, { revenue: number; cogs: number; profit: number }> = {};
+    const monthMap: Record<
+      string,
+      { revenue: number; cogs: number; profit: number }
+    > = {};
 
     invoices.forEach((inv) => {
       const date = new Date(inv.invoiceDate);
@@ -103,16 +112,25 @@ export class AnalyticsService {
       },
     });
 
-    const catMap: Record<string, { categoryId: string; categoryName: any; revenue: number }> = {};
+    const catMap: Record<
+      string,
+      { categoryId: string; categoryName: any; revenue: number }
+    > = {};
     let totalRevenue = 0;
 
     invoiceItems.forEach((item) => {
       const cat = item.product?.category;
       const catId = cat ? cat.id : 'uncategorized';
-      const catName = cat ? cat.name : { uz: 'Kategoriyasiz', ru: 'Без категории' };
+      const catName = cat
+        ? cat.name
+        : { uz: 'Kategoriyasiz', ru: 'Без категории' };
 
       if (!catMap[catId]) {
-        catMap[catId] = { categoryId: catId, categoryName: catName, revenue: 0 };
+        catMap[catId] = {
+          categoryId: catId,
+          categoryName: catName,
+          revenue: 0,
+        };
       }
 
       const itemRev = Number(item.totalPrice);
@@ -122,7 +140,8 @@ export class AnalyticsService {
 
     return Object.values(catMap).map((c) => ({
       ...c,
-      percentage: totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 100) : 0,
+      percentage:
+        totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 100) : 0,
     }));
   }
 
@@ -132,7 +151,17 @@ export class AnalyticsService {
       include: { product: true },
     });
 
-    const prodMap: Record<string, { productId: string; productName: any; sku: string; unitOfMeasure: string; totalQuantity: number; totalRevenue: number }> = {};
+    const prodMap: Record<
+      string,
+      {
+        productId: string;
+        productName: any;
+        sku: string;
+        unitOfMeasure: string;
+        totalQuantity: number;
+        totalRevenue: number;
+      }
+    > = {};
 
     invoiceItems.forEach((item) => {
       const p = item.product;
@@ -164,7 +193,16 @@ export class AnalyticsService {
       include: { counterparty: true },
     });
 
-    const clientMap: Record<string, { counterpartyId: string; name: string; inn: string | null; totalSpent: number; invoiceCount: number }> = {};
+    const clientMap: Record<
+      string,
+      {
+        counterpartyId: string;
+        name: string;
+        inn: string | null;
+        totalSpent: number;
+        invoiceCount: number;
+      }
+    > = {};
 
     invoices.forEach((inv) => {
       const c = inv.counterparty;
@@ -193,9 +231,21 @@ export class AnalyticsService {
     const kpi = await this.getKpiSummary(tenantId);
 
     // Working Capital = (Cash/Bank + Inventory + AR) - AP
-    const workingCapital = kpi.inventoryValuation + kpi.totalAccountsReceivable - kpi.totalAccountsPayable;
-    const inventoryTurnoverDays = kpi.grossProfit > 0 ? Math.round((kpi.inventoryValuation / (kpi.totalRevenue - kpi.grossProfit)) * 365) : 0;
-    const arCollectionDays = kpi.totalRevenue > 0 ? Math.round((kpi.totalAccountsReceivable / kpi.totalRevenue) * 365) : 0;
+    const workingCapital =
+      kpi.inventoryValuation +
+      kpi.totalAccountsReceivable -
+      kpi.totalAccountsPayable;
+    const inventoryTurnoverDays =
+      kpi.grossProfit > 0
+        ? Math.round(
+            (kpi.inventoryValuation / (kpi.totalRevenue - kpi.grossProfit)) *
+              365,
+          )
+        : 0;
+    const arCollectionDays =
+      kpi.totalRevenue > 0
+        ? Math.round((kpi.totalAccountsReceivable / kpi.totalRevenue) * 365)
+        : 0;
 
     return {
       workingCapital,

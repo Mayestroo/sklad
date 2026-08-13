@@ -14,8 +14,7 @@ export class TenantGuard implements CanActivate {
 
     // In production (Module 1), tenant_id comes from JWT.
     // For development, allow X-Tenant-Id header.
-    const tenantId =
-      request.user?.tenantId || request.headers['x-tenant-id'];
+    const tenantId = request.user?.tenantId || request.headers['x-tenant-id'];
 
     if (!tenantId) {
       return false;

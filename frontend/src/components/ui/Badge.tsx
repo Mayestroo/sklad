@@ -47,11 +47,12 @@ export function Badge({ variant = 'neutral', children }: BadgeProps) {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        padding: '2px 8px',
+        padding: '3px 10px',
         borderRadius: 'var(--radius-full)',
         fontSize: 'var(--text-xs)',
         fontWeight: 'var(--font-medium)',
-        lineHeight: 1.4,
+        lineHeight: 1.3,
+        whiteSpace: 'nowrap',
         ...getStyles(),
       }}
     >

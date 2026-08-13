@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, Put, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { SuperAdminService } from './super-admin.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
@@ -27,7 +35,11 @@ export class SuperAdminController {
   @RequirePermissions('settings:edit')
   updateTenant(
     @Param('id') id: string,
-    @Body() body: { status?: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'BLOCKED'; plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE' },
+    @Body()
+    body: {
+      status?: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
+      plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
+    },
   ) {
     return this.superAdminService.updateTenant(id, body.status, body.plan);
   }
@@ -40,7 +52,11 @@ export class SuperAdminController {
   @Post('announcements')
   @RequirePermissions('settings:edit')
   createAnnouncement(
-    @Body() body: { title: { uz: string; ru: string }; message: { uz: string; ru: string } },
+    @Body()
+    body: {
+      title: { uz: string; ru: string };
+      message: { uz: string; ru: string };
+    },
   ) {
     return this.superAdminService.createAnnouncement(body.title, body.message);
   }
@@ -53,10 +69,7 @@ export class SuperAdminController {
 
   @Post('tickets/:id/reply')
   @RequirePermissions('settings:edit')
-  replyTicket(
-    @Param('id') id: string,
-    @Body() body: { message: string },
-  ) {
+  replyTicket(@Param('id') id: string, @Body() body: { message: string }) {
     return this.superAdminService.replyTicket(id, body.message);
   }
 

@@ -100,9 +100,20 @@ export class PurchasesController {
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body() dto: { amount: number; cashAccountId: string; note?: string; paymentDate?: string },
+    @Body()
+    dto: {
+      amount: number;
+      cashAccountId: string;
+      note?: string;
+      paymentDate?: string;
+    },
   ) {
-    return this.purchasesService.payPurchaseReceipt(tenantId, user?.id, id, dto);
+    return this.purchasesService.payPurchaseReceipt(
+      tenantId,
+      user?.id,
+      id,
+      dto,
+    );
   }
 
   @Delete('receipts/:id')

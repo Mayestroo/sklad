@@ -1,4 +1,10 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateCounterpartyDto {
   @IsEnum(['CUSTOMER', 'SUPPLIER', 'BOTH'])
@@ -35,4 +41,8 @@ export class CreateCounterpartyDto {
   @IsString()
   @IsOptional()
   address?: string;
+
+  @IsString()
+  @IsOptional()
+  folderId?: string;
 }

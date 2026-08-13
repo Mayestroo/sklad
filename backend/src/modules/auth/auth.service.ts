@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -34,7 +39,9 @@ export class AuthService {
       where: { email: dto.adminEmail },
     });
     if (existingUser) {
-      throw new ConflictException('A user with this email address already exists');
+      throw new ConflictException(
+        'A user with this email address already exists',
+      );
     }
 
     // 3. Find system role "company_admin"
@@ -43,7 +50,9 @@ export class AuthService {
     });
 
     if (!companyAdminRole) {
-      throw new BadRequestException('System role company_admin not found. Run database seed first.');
+      throw new BadRequestException(
+        'System role company_admin not found. Run database seed first.',
+      );
     }
 
     // 4. Hash admin password
@@ -73,7 +82,8 @@ export class AuthService {
           passwordHash,
           firstName: dto.adminFirstName,
           lastName: dto.adminLastName,
-          preferredLanguage: dto.adminPreferredLanguage || dto.defaultLanguage || 'uz',
+          preferredLanguage:
+            dto.adminPreferredLanguage || dto.defaultLanguage || 'uz',
           isActive: true,
         },
       });
@@ -118,7 +128,12 @@ export class AuthService {
     });
 
     // 7. Generate Tokens and Return Response
-    return this.buildAuthResponse(result.user, result.company, ['company_admin'], ['*']);
+    return this.buildAuthResponse(
+      result.user,
+      result.company,
+      ['company_admin'],
+      ['*'],
+    );
   }
 
   /**
@@ -144,19 +159,30 @@ export class AuthService {
       },
     });
 
-    console.log(`[LOGIN_ATTEMPT] CleanEmail: "${cleanEmail}" (raw: "${dto.email}")`);
+    console.log(
+      `[LOGIN_ATTEMPT] CleanEmail: "${cleanEmail}" (raw: "${dto.email}")`,
+    );
 
     if (!user) {
       const totalUsers = await this.prisma.user.count();
-      console.log(`[LOGIN_FAILED] No user found with email: "${cleanEmail}". Total users in DB: ${totalUsers}`);
+      console.log(
+        `[LOGIN_FAILED] No user found with email: "${cleanEmail}". Total users in DB: ${totalUsers}`,
+      );
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    console.log(`[LOGIN_USER_FOUND] User ID: ${user.id}, email: ${user.email}, isActive: ${user.isActive}`);
+    console.log(
+      `[LOGIN_USER_FOUND] User ID: ${user.id}, email: ${user.email}, isActive: ${user.isActive}`,
+    );
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
-      console.log(`[LOGIN_FAILED] Password comparison failed for user: "${cleanEmail}"`);
+      console.log(
+        `[LOGIN_FAILED] Password comparison failed for user: "${cleanEmail}"`,
+      );
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -167,7 +193,9 @@ export class AuthService {
 
     if (user.company.status === 'BLOCKED') {
       console.log(`[LOGIN_FAILED] Company blocked for user: "${cleanEmail}"`);
-      throw new UnauthorizedException('Company account is suspended or blocked');
+      throw new UnauthorizedException(
+        'Company account is suspended or blocked',
+      );
     }
 
     // Update last login timestamp
@@ -206,10 +234,15 @@ export class AuthService {
   /**
    * Refresh Token Flow
    */
-  async refreshToken(dto: RefreshTokenDto): Promise<{ accessToken: string; expiresIn: number }> {
+  async refreshToken(
+    dto: RefreshTokenDto,
+  ): Promise<{ accessToken: string; expiresIn: number }> {
     try {
       const payload = this.jwtService.verify(dto.refreshToken, {
-        secret: this.configService.get('JWT_REFRESH_SECRET', 'dev-jwt-refresh-secret-change-me-in-production'),
+        secret: this.configService.get(
+          'JWT_REFRESH_SECRET',
+          'dev-jwt-refresh-secret-change-me-in-production',
+        ),
       });
 
       const user = await this.prisma.user.findUnique({
@@ -248,10 +281,13 @@ export class AuthService {
         email: user.email,
         roles: roleSlugs,
         permissions: Array.from(permissionSlugs),
-        locale: user.preferredLanguage as any,
+        locale: user.preferredLanguage,
       };
 
-      const jwtExpiration = this.configService.get<string>('JWT_EXPIRATION', '1d');
+      const jwtExpiration = this.configService.get<string>(
+        'JWT_EXPIRATION',
+        '1d',
+      );
       const accessToken = this.jwtService.sign(newPayload, {
         expiresIn: jwtExpiration as any,
       });
@@ -337,13 +373,19 @@ export class AuthService {
       locale: user.preferredLanguage,
     };
 
-    const jwtExpiration = this.configService.get<string>('JWT_EXPIRATION', '1d');
+    const jwtExpiration = this.configService.get<string>(
+      'JWT_EXPIRATION',
+      '1d',
+    );
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: jwtExpiration as any,
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get('JWT_REFRESH_SECRET', 'dev-jwt-refresh-secret-change-me-in-production'),
+      secret: this.configService.get(
+        'JWT_REFRESH_SECRET',
+        'dev-jwt-refresh-secret-change-me-in-production',
+      ),
       expiresIn: '7d',
     });
 

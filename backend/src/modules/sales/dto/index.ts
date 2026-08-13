@@ -1,4 +1,6 @@
 export * from './create-counterparty.dto';
+export * from './update-counterparty.dto';
+export * from './counterparty-folder.dto';
 export * from './create-sales-invoice.dto';
 export * from './filter-sales-invoices.dto';
 export * from './create-sales-return.dto';
