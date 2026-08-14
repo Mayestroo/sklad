@@ -28,7 +28,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const { token, company } = useAuth();
 
   const [name, setName] = useState('');
-  const [unitOfMeasure, setUnitOfMeasure] = useState('DONA');
+  const [unitOfMeasure, setUnitOfMeasure] = useState('piece');
   const [quantity, setQuantity] = useState<number | string>(1);
   const [costPrice, setCostPrice] = useState<number | string>('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
@@ -70,13 +70,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           ru: finalName,
         },
         sku: `PRD-${randomCode}`,
-        unitOfMeasure,
+        type: 'PRODUCT',
+        unitOfMeasure: unitOfMeasure || 'piece',
         costPrice: Number(costPrice) || 0,
-        sellingPrice: Number(sellingPrice) || 0,
-        minStock: 0,
-        weight: 1,
-        type: 'GOODS',
-        isActive: true,
+        salePrice: Number(sellingPrice) || 0,
+        minStockAlert: 0,
       };
 
       const res = await apiFetch('/inventory/products', {
@@ -100,7 +98,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
   const resetForm = () => {
     setName('');
-    setUnitOfMeasure('DONA');
+    setUnitOfMeasure('piece');
     setQuantity(1);
     setCostPrice('');
     setSellingPrice('');
@@ -108,29 +106,29 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   };
 
   const unitOptions = [
-    { value: 'DONA', label: isRu ? 'Штука (шт)' : 'Dona (dona)' },
-    { value: 'KG', label: isRu ? 'Килограмм (кг)' : 'Kilogramm (kg)' },
-    { value: 'LITR', label: isRu ? 'Литр (л)' : 'Litr (l)' },
-    { value: 'METR', label: isRu ? 'Метр (м)' : 'Metr (m)' },
-    { value: 'QUTI', label: isRu ? 'Коробка / Упаковка (уп)' : 'Quti / Blok' },
-    { value: 'PACHKA', label: isRu ? 'Пачка' : 'Pachka' },
+    { value: 'piece', label: isRu ? 'Штука (шт)' : 'Dona (dona)' },
+    { value: 'kg', label: isRu ? 'Килограмм (кг)' : 'Kilogramm (kg)' },
+    { value: 'liter', label: isRu ? 'Литр (л)' : 'Litr (l)' },
+    { value: 'meter', label: isRu ? 'Метр (м)' : 'Metr (m)' },
+    { value: 'box', label: isRu ? 'Коробка / Упаковка (уп)' : 'Quti / Blok' },
+    { value: 'pack', label: isRu ? 'Пачка' : 'Pachka' },
   ];
 
-  const isFractionalUnit = unitOfMeasure === 'KG' || unitOfMeasure === 'LITR' || unitOfMeasure === 'METR';
+  const isFractionalUnit = unitOfMeasure === 'kg' || unitOfMeasure === 'liter' || unitOfMeasure === 'meter';
 
   const getQuantityLabel = () => {
     switch (unitOfMeasure) {
-      case 'KG':
+      case 'kg':
         return isRu ? 'Количество (кг) *' : 'Soni (kg) *';
-      case 'LITR':
+      case 'liter':
         return isRu ? 'Количество (литр) *' : 'Soni (litr) *';
-      case 'METR':
+      case 'meter':
         return isRu ? 'Количество (метр) *' : 'Soni (metr) *';
-      case 'QUTI':
+      case 'box':
         return isRu ? 'Количество (коробок) *' : 'Soni (quti) *';
-      case 'PACHKA':
+      case 'pack':
         return isRu ? 'Количество (пачек) *' : 'Soni (pachka) *';
-      case 'DONA':
+      case 'piece':
       default:
         return isRu ? 'Количество (шт) *' : 'Soni (dona) *';
     }
