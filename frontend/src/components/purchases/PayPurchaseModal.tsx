@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { formatCurrency } from '@/lib/utils';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
 import { CreditCard, DollarSign, Calendar, FileText } from 'lucide-react';
@@ -314,23 +315,10 @@ export function PayPurchaseModal({
 
         {/* Payment date */}
         <div>
-          <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-            {isRu ? 'Дата оплаты' : 'To‘lov sanasi'}
-          </label>
-          <input
-            type="date"
+          <DatePicker
+            label={isRu ? 'Дата оплаты' : 'To‘lov sanasi'}
             value={paymentDate}
-            onChange={(e) => setPaymentDate(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-bg-input)',
-              color: 'var(--color-text-primary)',
-              fontSize: 'var(--text-sm)',
-              boxSizing: 'border-box',
-            }}
+            onChange={(val) => setPaymentDate(val)}
           />
         </div>
 

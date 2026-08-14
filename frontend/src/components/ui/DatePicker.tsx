@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocale } from 'next-intl';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface DatePickerProps {
+  id?: string;
   label?: string;
   value: string; // ISO date string 'YYYY-MM-DD' or ''
   onChange: (value: string) => void;
@@ -33,6 +35,7 @@ function formatDisplayDate(dateStr: string, locale: string): string {
 }
 
 export function DatePicker({
+  id,
   label,
   value,
   onChange,
@@ -43,8 +46,23 @@ export function DatePicker({
 }: DatePickerProps) {
   const locale = (useLocale() as 'uz' | 'ru') || 'uz';
   const effectivePlaceholder = placeholder ?? (locale === 'ru' ? 'Выберите дату...' : 'Sana tanlang...');
+  
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+    openUpward: boolean;
+  }>({ left: 0, width: 280, openUpward: false });
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Parse current value or use today for calendar view
   const parsedDate = value ? new Date(value + 'T00:00:00') : new Date();
@@ -62,16 +80,70 @@ export function DatePicker({
     }
   }, [value]);
 
+  const updatePosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldOpenUpward = spaceBelow < 340 && spaceAbove > 340;
+
+    setCoords({
+      left: Math.min(rect.left, window.innerWidth - 290),
+      width: 280,
+      top: shouldOpenUpward ? undefined : rect.bottom + 4,
+      bottom: shouldOpenUpward ? window.innerHeight - rect.top + 4 : undefined,
+      openUpward: shouldOpenUpward,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isOpen]);
+
   // Click outside listener
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
 
   // Calendar math
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -139,10 +211,12 @@ export function DatePicker({
     >
       {label && (
         <label
+          htmlFor={id}
           style={{
             fontSize: 'var(--text-xs)',
-            fontWeight: 'var(--font-medium)',
+            fontWeight: 500,
             color: 'var(--color-text-secondary)',
+            marginBottom: '2px',
           }}
         >
           {label}
@@ -151,7 +225,13 @@ export function DatePicker({
 
       {/* Input Trigger Button */}
       <div
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        id={id}
+        onClick={() => {
+          if (!disabled) {
+            if (!isOpen) updatePosition();
+            setIsOpen(!isOpen);
+          }
+        }}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -181,7 +261,7 @@ export function DatePicker({
           <span
             style={{
               fontSize: 'var(--text-sm)',
-              fontWeight: 'var(--font-medium)',
+              fontWeight: 500,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -191,7 +271,7 @@ export function DatePicker({
           </span>
         </div>
 
-        {value ? (
+        {value && !disabled ? (
           <button
             type="button"
             onClick={handleClear}
@@ -211,14 +291,16 @@ export function DatePicker({
         ) : null}
       </div>
 
-      {/* Calendar Dropdown Popup */}
-      {isOpen && (
+      {/* Calendar Portal Dropdown Popup */}
+      {isOpen && mounted && typeof document !== 'undefined' && createPortal(
         <div
+          ref={menuRef}
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
-            zIndex: 100,
+            position: 'fixed',
+            top: coords.top !== undefined ? `${coords.top}px` : 'auto',
+            bottom: coords.bottom !== undefined ? `${coords.bottom}px` : 'auto',
+            left: `${coords.left}px`,
+            zIndex: 99999,
             width: '280px',
             backgroundColor: 'var(--color-bg-secondary)',
             border: '1px solid var(--color-border)',
@@ -229,6 +311,7 @@ export function DatePicker({
             flexDirection: 'column',
             gap: '12px',
             fontFamily: 'inherit',
+            boxSizing: 'border-box',
             animation: 'fadeIn 0.15s ease forwards',
           }}
         >
@@ -370,7 +453,8 @@ export function DatePicker({
               {locale === 'ru' ? 'Сегодня' : 'Bugun'}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {error && (

@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -798,13 +799,10 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
           {/* Document Date */}
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Дата документа *' : 'Hujjat Sanasi *'}
-            </label>
-            <Input
-              type="date"
+            <DatePicker
+              label={isRu ? 'Дата документа *' : 'Hujjat Sanasi *'}
               value={docDate}
-              onChange={(e) => { markDirty(); setDocDate(e.target.value); }}
+              onChange={(val) => { markDirty(); setDocDate(val); }}
               disabled={isReadOnly}
             />
           </div>
@@ -823,13 +821,10 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                {isRu ? 'Дата договора' : 'Shartnoma sanasi'}
-              </label>
-              <Input
-                type="date"
+              <DatePicker
+                label={isRu ? 'Дата договора' : 'Shartnoma sanasi'}
                 value={contractDate}
-                onChange={(e) => { markDirty(); setContractDate(e.target.value); }}
+                onChange={(val) => { markDirty(); setContractDate(val); }}
                 disabled={isReadOnly}
               />
             </div>
@@ -917,13 +912,10 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                  {isRu ? 'Дата ГТД' : 'GTD sanasi'}
-                </label>
-                <Input
-                  type="date"
+                <DatePicker
+                  label={isRu ? 'Дата ГТД' : 'GTD sanasi'}
                   value={gtdDate}
-                  onChange={(e) => { markDirty(); setGtdDate(e.target.value); }}
+                  onChange={(val) => { markDirty(); setGtdDate(val); }}
                   disabled={isReadOnly}
                 />
               </div>
