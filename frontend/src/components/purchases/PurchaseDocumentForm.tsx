@@ -349,7 +349,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const saveDocument = async (): Promise<PurchaseReceipt | null> => {
     if (!token || !company) return null;
     if (!counterpartyId) {
-      setError(isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang');
+      setError(isRu ? 'Выберите контрагента' : 'Kontragentni tanlang');
       return null;
     }
     if (!warehouseId) {
@@ -734,19 +734,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         </h3>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
-          {/* Supplier */}
+          {/* Supplier / Counterparty */}
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Поставщик *' : 'Yetkazib beruvchi *'}
+              {isRu ? 'Контрагент *' : 'Kontragent *'}
             </label>
             <Select
               options={supplierOptions}
               value={counterpartyId}
               onChange={(val) => { markDirty(); setCounterpartyId(val); }}
-              placeholder={isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang'}
+              placeholder={isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickSupplierOpen(true) : undefined}
-              createNewLabel={isRu ? 'Создать поставщика' : 'Yangi yetkazib beruvchi'}
+              createNewLabel={isRu ? 'Добавить контрагента' : 'Kontragent qo‘shish'}
             />
             {(() => {
               const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);

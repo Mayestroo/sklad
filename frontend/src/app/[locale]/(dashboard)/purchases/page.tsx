@@ -334,7 +334,7 @@ export default function PurchasesPage() {
         >
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Поставщик' : 'Yetkazib beruvchi'}
+              {isRu ? 'Контрагент' : 'Kontragent'}
             </div>
             <Select
               options={supplierOptions}
