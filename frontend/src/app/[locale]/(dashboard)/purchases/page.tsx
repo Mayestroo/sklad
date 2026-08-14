@@ -433,7 +433,10 @@ export default function PurchasesPage() {
                     {isRu ? 'ДОП. РАСХОДЫ' : 'XARAJATLAR'}
                   </th>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
-                    {isRu ? 'СТАТУС И ОПЛАТА' : 'HOLATI & TO‘LOV'}
+                    {isRu ? 'СТАТУС' : 'HOLATI'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                    {isRu ? 'ОПЛАТА' : 'TO‘LOV'}
                   </th>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
                     {isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}
@@ -486,9 +489,11 @@ export default function PurchasesPage() {
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                         {getDocStatusBadge(r.status)}
-                        {getPaymentBadge(r.paymentStatus)}
-                        {getReturnBadge(r.returnStatus)}
+                        {r.returnStatus && getReturnBadge(r.returnStatus)}
                       </div>
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      {getPaymentBadge(r.paymentStatus)}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
