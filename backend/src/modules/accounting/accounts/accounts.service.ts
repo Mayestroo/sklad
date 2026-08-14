@@ -40,6 +40,15 @@ export const DEFAULT_NAS_ACCOUNTS = [
     isSystem: true,
   },
   {
+    code: '4410',
+    name: {
+      uz: 'Hisobga olinadigan kiruvchi QQS',
+      ru: 'Входящий НДС к зачёту',
+    },
+    type: 'ASSET' as const,
+    isSystem: true,
+  },
+  {
     code: '5010',
     name: { uz: 'Milliy valyutadagi kassa', ru: 'Касса в национальной валюте' },
     type: 'ASSET' as const,

@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { Link, useRouter } from '@/i18n/navigation';
+import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
-import { DatePicker } from '@/components/ui/DatePicker';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import {
   ArrowLeft,
   Plus,
@@ -26,31 +25,34 @@ import {
   ChevronUp,
   Barcode,
   Search,
-  Building2,
-  Calendar,
-  FileText,
   AlertCircle,
-  Package,
+  UserPlus,
+  PackagePlus,
+  Sparkles,
 } from 'lucide-react';
 import { PurchaseReceipt } from '@shared/types';
 import { PayPurchaseModal } from './PayPurchaseModal';
 import { AllocateExpenseModal } from './AllocateExpenseModal';
 import { CreateReturnModal } from './CreateReturnModal';
+import { QuickAddSupplierModal } from './QuickAddSupplierModal';
+import { QuickAddProductModal } from './QuickAddProductModal';
 
 interface CounterpartyOption {
   id: string;
   name: string;
   type: string;
+  debtBalance?: number;
+  inn?: string;
 }
 
 interface WarehouseOption {
   id: string;
-  name: any;
+  name: string | Record<string, string>;
 }
 
 interface ProductOption {
   id: string;
-  name: any;
+  name: string | Record<string, string>;
   sku: string;
   barcode?: string;
   costPrice: number;
@@ -80,7 +82,6 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [counterparties, setCounterparties] = useState<CounterpartyOption[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
 
   // Document Form State
   const [receiptId, setReceiptId] = useState<string | null>(initialData?.id || null);
@@ -136,6 +137,11 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [currentReceiptData, setCurrentReceiptData] = useState<PurchaseReceipt | null>(initialData || null);
 
+  // Quick Add Modals (for DRAFT creation)
+  const [isQuickSupplierOpen, setIsQuickSupplierOpen] = useState(false);
+  const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
+  const [quickProductSearch, setQuickProductSearch] = useState('');
+
   const isReadOnly = docStatus === 'POSTED' || docStatus === 'CANCELLED';
 
   // Mark form as dirty on modification
@@ -143,49 +149,43 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     if (!isDirty) setIsDirty(true);
   };
 
-  // Sync initialData if updated externally
-  useEffect(() => {
-    if (initialData) {
-      setCurrentReceiptData(initialData);
-      setReceiptId(initialData.id);
-      setDocNumber(initialData.docNumber);
-      setDocStatus(initialData.status);
-      setPaymentStatus(initialData.paymentStatus);
-      setCounterpartyId(initialData.counterpartyId);
-      setWarehouseId(initialData.warehouseId);
-      setDocDate(initialData.docDate ? initialData.docDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
-      setCurrency(initialData.currency || 'UZS');
-      setExchangeRate(Number(initialData.exchangeRate) || 1);
-      setContractNumber(initialData.contractNumber || '');
-      setContractDate(initialData.contractDate ? initialData.contractDate.slice(0, 10) : '');
-      setComment(initialData.comment || '');
-      setGtdNumber(initialData.gtdNumber || '');
-      setGtdDate(initialData.gtdDate ? initialData.gtdDate.slice(0, 10) : '');
-      setCustomsPost(initialData.customsPost || '');
+  const handleSupplierAdded = (newSupplier: { id: string; name: string; type: string; debtBalance?: number }) => {
+    markDirty();
+    setCounterparties((prev) => [...prev, newSupplier]);
+    setCounterpartyId(newSupplier.id);
+  };
 
-      if (initialData.gtdNumber || initialData.customsPost) {
-        setShowGtd(true);
-      }
-
-      if (initialData.items && initialData.items.length > 0) {
-        setItems(
-          initialData.items.map((i) => ({
-            productId: i.productId,
-            quantity: Number(i.quantity),
-            unitPrice: Number(i.unitPrice),
-            discount: Number(i.discount) || 0,
-            vatRate: Number(i.vatRate) || 0,
-          }))
-        );
-      }
-      setIsDirty(false);
+  const handleProductAdded = (newProduct: {
+    id: string;
+    name: Record<string, string> | string;
+    sku: string;
+    barcode?: string;
+    costPrice: number;
+    salePrice?: number;
+    unitOfMeasure?: string;
+  }) => {
+    markDirty();
+    setProducts((prev) => [...prev, newProduct]);
+    const emptyIndex = items.findIndex((i) => !i.productId);
+    if (emptyIndex !== -1) {
+      handleItemChange(emptyIndex, 'productId', newProduct.id);
+    } else {
+      setItems((prev) => [
+        ...prev,
+        {
+          productId: newProduct.id,
+          quantity: 1,
+          unitPrice: Number(newProduct.costPrice) || 0,
+          discount: 0,
+          vatRate: 12,
+        },
+      ]);
     }
-  }, [initialData]);
+  };
 
   // Fetch reference lists (Suppliers, Warehouses, Products)
   useEffect(() => {
     if (!token || !company) return;
-    setLoadingData(true);
 
     Promise.all([
       apiFetch<CounterpartyOption[]>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }),
@@ -206,9 +206,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
         setProducts(productsRes || []);
       })
-      .catch((err) => console.error('Data load error:', err))
-      .finally(() => setLoadingData(false));
-  }, [token, company, locale]);
+      .catch((err) => console.error('Data load error:', err));
+  }, [token, company, locale, counterpartyId, warehouseId, initialData]);
 
   // Unsaved changes window listener
   useEffect(() => {
@@ -222,7 +221,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: Record<string, string> | string | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -245,7 +244,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   };
 
   // Item field change
-  const handleItemChange = (index: number, field: keyof ItemRow, value: any) => {
+  const handleItemChange = (index: number, field: keyof ItemRow, value: string | number) => {
     markDirty();
     setItems((prev) => {
       const next = [...prev];
@@ -261,7 +260,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     });
   };
 
-  // Barcode / SKU Add Product
+  // Barcode / SKU Add Product with auto-increment and quick-add fallback
   const handleBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcodeSearch.trim()) return;
@@ -276,19 +275,25 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
     if (matched) {
       markDirty();
-      // Check if product already exists in empty row or append
-      const emptyIndex = items.findIndex((i) => !i.productId);
-      if (emptyIndex !== -1) {
-        handleItemChange(emptyIndex, 'productId', matched.id);
+      // Check if product already exists in item list to increment quantity
+      const existingIdx = items.findIndex((i) => i.productId === matched.id);
+      if (existingIdx !== -1) {
+        handleItemChange(existingIdx, 'quantity', items[existingIdx].quantity + 1);
       } else {
-        setItems((prev) => [
-          ...prev,
-          { productId: matched.id, quantity: 1, unitPrice: Number(matched.costPrice) || 0, discount: 0, vatRate: 12 },
-        ]);
+        const emptyIndex = items.findIndex((i) => !i.productId);
+        if (emptyIndex !== -1) {
+          handleItemChange(emptyIndex, 'productId', matched.id);
+        } else {
+          setItems((prev) => [
+            ...prev,
+            { productId: matched.id, quantity: 1, unitPrice: Number(matched.costPrice) || 0, discount: 0, vatRate: 12 },
+          ]);
+        }
       }
       setBarcodeSearch('');
     } else {
-      setError(isRu ? `Товар "${barcodeSearch}" не найден` : `"${barcodeSearch}" mahsuloti topilmadi`);
+      setQuickProductSearch(barcodeSearch.trim());
+      setIsQuickProductOpen(true);
     }
   };
 
@@ -390,8 +395,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         setIsDirty(false);
       }
       return saved;
-    } catch (err: any) {
-      setError(err.message || (isRu ? 'Ошибка сохранения документа' : 'Hujjatni saqlashda xatolik yuz berdi'));
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : undefined;
+      setError(errMsg || (isRu ? 'Ошибка сохранения документа' : 'Hujjatni saqlashda xatolik yuz berdi'));
       return null;
     } finally {
       setLoading(false);
@@ -430,8 +436,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       } else {
         router.push(`/purchases/${saved.id}`);
       }
-    } catch (err: any) {
-      setError(err.message || (isRu ? 'Ошибка проведения документа' : 'Hujjatni tasdiqlashda xatolik yuz berdi'));
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : undefined;
+      setError(errMsg || (isRu ? 'Ошибка проведения документа' : 'Hujjatni tasdiqlashda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -454,11 +461,58 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       setDocStatus('DRAFT');
       if (unposted) setCurrentReceiptData(unposted);
       setIsDirty(false);
-    } catch (err: any) {
-      setError(err.message || (isRu ? 'Ошибка отмены проведения' : 'Tasdiqni bekor qilishda xatolik yuz berdi'));
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : undefined;
+      setError(errMsg || (isRu ? 'Ошибка отмены проведения' : 'Tasdiqni bekor qilishda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
+  };
+
+  // Action Handler: Delete Draft
+  const handleDeleteDraft = async () => {
+    if (!receiptId || !token || !company || mode !== 'edit' || docStatus !== 'DRAFT') return;
+    const confirmed = window.confirm(
+      isRu
+        ? 'Вы уверены, что хотите удалить этот черновик?'
+        : 'Ushbu qoralama hujjatni o‘chirishga ishonchingiz komilmi?'
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await apiFetch(`/purchases/receipts/${receiptId}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+      });
+      setIsDirty(false);
+      router.push('/purchases');
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : undefined;
+      setError(
+        errMsg ||
+          (isRu ? 'Ошибка при удалении черновика' : 'Qoralama hujjatni o‘chirishda xatolik')
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Back navigation guard
+  const handleBackNavigation = () => {
+    if (isDirty) {
+      const confirmed = window.confirm(
+        isRu
+          ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
+          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?'
+      );
+      if (!confirmed) return;
+    }
+    setIsDirty(false);
+    router.push('/purchases');
   };
 
   const supplierOptions: SelectOption[] = counterparties.map((c) => ({
@@ -470,6 +524,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     value: w.id,
     label: getProductName(w.name),
   }));
+
+
 
   const productOptions: SelectOption[] = products.map((p) => ({
     value: p.id,
@@ -521,11 +577,14 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <Link href="/purchases" style={{ textDecoration: 'none' }}>
-            <Button variant="ghost" size="sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ArrowLeft size={18} /> {isRu ? 'К списку закупок' : 'Xaridlar ro‘yxatiga'}
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleBackNavigation}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <ArrowLeft size={18} /> {isRu ? 'К списку закупок' : 'Xaridlar ro‘yxatiga'}
+          </Button>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -569,6 +628,17 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               >
                 <CheckCircle2 size={16} /> {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
               </Button>
+
+              {mode === 'edit' && receiptId && (
+                <Button
+                  variant="danger"
+                  onClick={handleDeleteDraft}
+                  disabled={loading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Trash2 size={16} /> {isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
+                </Button>
+              )}
             </>
           )}
 
@@ -643,9 +713,32 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
           {/* Supplier */}
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Поставщик *' : 'Yetkazib beruvchi *'}
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                {isRu ? 'Поставщик *' : 'Yetkazib beruvchi *'}
+              </label>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => setIsQuickSupplierOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: 'var(--color-primary-600)',
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <UserPlus size={13} />
+                  {isRu ? '+ Новый' : '+ Yangi'}
+                </button>
+              )}
+            </div>
             <Select
               options={supplierOptions}
               value={counterpartyId}
@@ -653,6 +746,26 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               placeholder={isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang'}
               disabled={isReadOnly}
             />
+            {(() => {
+              const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);
+              if (!selectedSupplier) return null;
+              const debt = Number(selectedSupplier.debtBalance || 0);
+              return (
+                <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)' }}>
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>
+                    {isRu ? 'Баланс долга:' : 'Qarz balansi:'}
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: debt > 0 ? '#ef4444' : debt < 0 ? '#10b981' : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    {formatCurrency(debt, locale)}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Warehouse */}
@@ -668,6 +781,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               disabled={isReadOnly}
             />
           </div>
+
+
 
           {/* Document Date */}
           <div>
@@ -825,20 +940,35 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           </h3>
 
           {!isReadOnly && (
-            <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <div style={{ position: 'relative', width: '260px' }}>
-                <Input
-                  value={barcodeSearch}
-                  onChange={(e) => setBarcodeSearch(e.target.value)}
-                  placeholder={isRu ? 'Штрих-код или SKU...' : 'Shtrix-kod yoki SKU...'}
-                  style={{ paddingLeft: '32px' }}
-                />
-                <Barcode size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-              </div>
-              <Button type="submit" variant="secondary" size="sm">
-                <Search size={14} /> {isRu ? 'Найти' : 'Qidirish'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <div style={{ position: 'relative', width: '240px' }}>
+                  <Input
+                    value={barcodeSearch}
+                    onChange={(e) => setBarcodeSearch(e.target.value)}
+                    placeholder={isRu ? 'Штрих-код или SKU...' : 'Shtrix-kod yoki SKU...'}
+                    style={{ paddingLeft: '32px' }}
+                  />
+                  <Barcode size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+                </div>
+                <Button type="submit" variant="secondary" size="sm">
+                  <Search size={14} /> {isRu ? 'Найти' : 'Qidirish'}
+                </Button>
+              </form>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setQuickProductSearch('');
+                  setIsQuickProductOpen(true);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <PackagePlus size={14} /> {isRu ? 'Новый товар' : 'Yangi tovar'}
               </Button>
-            </form>
+            </div>
           )}
         </div>
 
@@ -1068,6 +1198,24 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           onSuccess={() => {
             setIsReturnOpen(false);
           }}
+        />
+      )}
+
+      {/* Quick Add Modals for In-Flight Entity Creation */}
+      {isQuickSupplierOpen && (
+        <QuickAddSupplierModal
+          isOpen={isQuickSupplierOpen}
+          onClose={() => setIsQuickSupplierOpen(false)}
+          onSuccess={handleSupplierAdded}
+        />
+      )}
+
+      {isQuickProductOpen && (
+        <QuickAddProductModal
+          isOpen={isQuickProductOpen}
+          onClose={() => setIsQuickProductOpen(false)}
+          initialSkuOrBarcode={quickProductSearch}
+          onSuccess={handleProductAdded}
         />
       )}
     </div>
