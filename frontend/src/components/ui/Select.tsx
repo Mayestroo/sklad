@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
-import { ChevronDown, Check, Search, X } from 'lucide-react';
+import { ChevronDown, Check, Search, X, Plus } from 'lucide-react';
 
 export interface SelectOption {
   value: string;
@@ -26,6 +26,8 @@ export interface CustomSelectProps {
   size?: 'sm' | 'md' | 'lg';
   style?: React.CSSProperties;
   className?: string;
+  onCreateNew?: (searchQuery?: string) => void;
+  createNewLabel?: string;
 }
 
 export function Select({
@@ -43,6 +45,8 @@ export function Select({
   size = 'md',
   style,
   className,
+  onCreateNew,
+  createNewLabel,
 }: CustomSelectProps) {
   let locale = 'uz';
   try {
@@ -286,6 +290,50 @@ export function Select({
                 </button>
               )}
             </div>
+          )}
+
+          {/* Pinned Create New Action Bar */}
+          {onCreateNew && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsOpen(false);
+                onCreateNew(searchQuery);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '8px 10px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 600,
+                color: 'var(--color-primary-600)',
+                backgroundColor: 'var(--color-primary-50, rgba(99, 102, 241, 0.08))',
+                border: '1px dashed var(--color-primary-300, rgba(99, 102, 241, 0.35))',
+                cursor: 'pointer',
+                marginBottom: '4px',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-primary-100, rgba(99, 102, 241, 0.16))';
+                e.currentTarget.style.borderColor = 'var(--color-primary-600)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-primary-50, rgba(99, 102, 241, 0.08))';
+                e.currentTarget.style.borderColor = 'var(--color-primary-300, rgba(99, 102, 241, 0.35))';
+              }}
+            >
+              <Plus size={14} style={{ flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {createNewLabel || (isRu ? '+ Создать новую запись' : '+ Yangi qo‘shish')}
+                {searchQuery ? ` «${searchQuery}»` : ''}
+              </span>
+            </button>
           )}
 
           {/* Options List */}

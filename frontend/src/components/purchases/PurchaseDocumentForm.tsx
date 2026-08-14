@@ -36,6 +36,7 @@ import { AllocateExpenseModal } from './AllocateExpenseModal';
 import { CreateReturnModal } from './CreateReturnModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
+import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 
 interface CounterpartyOption {
   id: string;
@@ -137,10 +138,12 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [currentReceiptData, setCurrentReceiptData] = useState<PurchaseReceipt | null>(initialData || null);
 
-  // Quick Add Modals (for DRAFT creation)
+  // Quick Add Drawers (for DRAFT creation)
   const [isQuickSupplierOpen, setIsQuickSupplierOpen] = useState(false);
+  const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false);
   const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
   const [quickProductSearch, setQuickProductSearch] = useState('');
+  const [activeRowIndexForNewProduct, setActiveRowIndexForNewProduct] = useState<number | null>(null);
 
   const isReadOnly = docStatus === 'POSTED' || docStatus === 'CANCELLED';
 
@@ -151,8 +154,14 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
   const handleSupplierAdded = (newSupplier: { id: string; name: string; type: string; debtBalance?: number }) => {
     markDirty();
-    setCounterparties((prev) => [...prev, newSupplier]);
+    setCounterparties((prev) => [newSupplier, ...prev]);
     setCounterpartyId(newSupplier.id);
+  };
+
+  const handleWarehouseAdded = (newWarehouse: { id: string; name: string | Record<string, string> }) => {
+    markDirty();
+    setWarehouses((prev) => [newWarehouse, ...prev]);
+    setWarehouseId(newWarehouse.id);
   };
 
   const handleProductAdded = (newProduct: {
@@ -165,22 +174,36 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     unitOfMeasure?: string;
   }) => {
     markDirty();
-    setProducts((prev) => [...prev, newProduct]);
-    const emptyIndex = items.findIndex((i) => !i.productId);
-    if (emptyIndex !== -1) {
-      handleItemChange(emptyIndex, 'productId', newProduct.id);
+    setProducts((prev) => [newProduct, ...prev]);
+
+    if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
+      const targetIdx = activeRowIndexForNewProduct;
+      handleItemChange(targetIdx, 'productId', newProduct.id);
+      if (newProduct.costPrice) {
+        handleItemChange(targetIdx, 'unitPrice', Number(newProduct.costPrice));
+      }
+      setActiveRowIndexForNewProduct(null);
     } else {
-      setItems((prev) => [
-        ...prev,
-        {
-          productId: newProduct.id,
-          quantity: 1,
-          unitPrice: Number(newProduct.costPrice) || 0,
-          discount: 0,
-          vatRate: 12,
-        },
-      ]);
+      const emptyIndex = items.findIndex((i) => !i.productId);
+      if (emptyIndex !== -1) {
+        handleItemChange(emptyIndex, 'productId', newProduct.id);
+        if (newProduct.costPrice) {
+          handleItemChange(emptyIndex, 'unitPrice', Number(newProduct.costPrice));
+        }
+      } else {
+        setItems((prev) => [
+          ...prev,
+          {
+            productId: newProduct.id,
+            quantity: 1,
+            unitPrice: Number(newProduct.costPrice) || 0,
+            discount: 0,
+            vatRate: 12,
+          },
+        ]);
+      }
     }
+    setQuickProductSearch('');
   };
 
   // Fetch reference lists (Suppliers, Warehouses, Products)
@@ -745,6 +768,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               onChange={(val) => { markDirty(); setCounterpartyId(val); }}
               placeholder={isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang'}
               disabled={isReadOnly}
+              onCreateNew={!isReadOnly ? () => setIsQuickSupplierOpen(true) : undefined}
+              createNewLabel={isRu ? '+ Создать поставщика' : '+ Yangi yetkazib beruvchi'}
             />
             {(() => {
               const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);
@@ -779,6 +804,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               onChange={(val) => { markDirty(); setWarehouseId(val); }}
               placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
               disabled={isReadOnly}
+              onCreateNew={!isReadOnly ? () => setIsQuickWarehouseOpen(true) : undefined}
+              createNewLabel={isRu ? '+ Создать новый склад' : '+ Yangi ombor qo‘shish'}
             />
           </div>
 
@@ -1026,6 +1053,16 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         onChange={(val) => handleItemChange(idx, 'productId', val)}
                         placeholder={isRu ? 'Выберите товар...' : 'Tovarni tanlang...'}
                         disabled={isReadOnly}
+                        onCreateNew={
+                          !isReadOnly
+                            ? (searchQuery) => {
+                                setActiveRowIndexForNewProduct(idx);
+                                setQuickProductSearch(searchQuery || '');
+                                setIsQuickProductOpen(true);
+                              }
+                            : undefined
+                        }
+                        createNewLabel={isRu ? '+ Создать новый товар' : '+ Yangi tovar qo‘shish'}
                       />
                     </td>
 
@@ -1208,6 +1245,14 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           onClose={() => setIsQuickSupplierOpen(false)}
           defaultType="SUPPLIER"
           onSuccess={handleSupplierAdded}
+        />
+      )}
+
+      {isQuickWarehouseOpen && (
+        <CreateWarehouseDrawer
+          isOpen={isQuickWarehouseOpen}
+          onClose={() => setIsQuickWarehouseOpen(false)}
+          onSuccess={handleWarehouseAdded}
         />
       )}
 
