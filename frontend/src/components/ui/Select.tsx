@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocale } from 'next-intl';
 import { ChevronDown, Check, Search, X, Plus } from 'lucide-react';
 
@@ -62,26 +63,65 @@ export function Select({
   const effectiveNoOptionsText = noOptionsText ?? (isRu ? 'Результаты не найдены' : 'Natija topilmadi');
 
   const [isOpen, setIsOpen] = useState(false);
-  const [openUpward, setOpenUpward] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [coords, setCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+    openUpward: boolean;
+  }>({ left: 0, width: 0, openUpward: false });
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const selectedOption = options.find((opt) => opt.value === value);
 
   // Enable search if searchable is true OR option count > 6
   const showSearch = searchable ?? options.length > 6;
 
-  useEffect(() => {
-    if (isOpen && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      if (spaceBelow < 250 && rect.top > 250) {
-        setOpenUpward(true);
-      } else {
-        setOpenUpward(false);
-      }
+  const updatePosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldOpenUpward = spaceBelow < 260 && spaceAbove > 260;
+
+    setCoords({
+      left: rect.left,
+      width: Math.max(rect.width, 220),
+      top: shouldOpenUpward ? undefined : rect.bottom + 4,
+      bottom: shouldOpenUpward ? window.innerHeight - rect.top + 4 : undefined,
+      openUpward: shouldOpenUpward,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
   }, [isOpen]);
 
   const filteredOptions = useMemo(() => {
@@ -96,7 +136,13 @@ export function Select({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -137,7 +183,6 @@ export function Select({
         flexDirection: 'column',
         gap: 'var(--space-1)',
         position: 'relative',
-        zIndex: isOpen ? 50 : 'auto',
         ...style,
       }}
     >
@@ -159,7 +204,12 @@ export function Select({
         id={id}
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!disabled) {
+            if (!isOpen) updatePosition();
+            setIsOpen(!isOpen);
+          }
+        }}
         style={{
           width: '100%',
           display: 'flex',
@@ -213,16 +263,17 @@ export function Select({
         />
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
+      {/* Portal Dropdown Menu */}
+      {isOpen && mounted && typeof document !== 'undefined' && createPortal(
         <div
+          ref={menuRef}
           style={{
-            position: 'absolute',
-            top: openUpward ? 'auto' : 'calc(100% + 4px)',
-            bottom: openUpward ? 'calc(100% + 4px)' : 'auto',
-            left: 0,
-            minWidth: '100%',
-            zIndex: 999,
+            position: 'fixed',
+            top: coords.top !== undefined ? `${coords.top}px` : 'auto',
+            bottom: coords.bottom !== undefined ? `${coords.bottom}px` : 'auto',
+            left: `${coords.left}px`,
+            width: `${coords.width}px`,
+            zIndex: 99999,
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-border)',
             backgroundColor: 'var(--color-bg-secondary)',
@@ -231,7 +282,8 @@ export function Select({
             display: 'flex',
             flexDirection: 'column',
             gap: '4px',
-            animation: 'fadeIn 150ms ease',
+            boxSizing: 'border-box',
+            animation: 'fadeIn 120ms ease',
           }}
         >
           {/* Search Box */}
@@ -421,7 +473,8 @@ export function Select({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {error && (
