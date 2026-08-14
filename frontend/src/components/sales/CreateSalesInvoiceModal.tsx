@@ -276,9 +276,9 @@ export function CreateSalesInvoiceModal({
             value={currency}
             onChange={(val) => setCurrency(val)}
             options={[
-              { value: 'UZS', label: 'UZS (So\'m)' },
-              { value: 'USD', label: 'USD (Dollar)' },
-              { value: 'EUR', label: 'EUR (Evro)' },
+              { value: 'UZS', label: 'UZS' },
+              { value: 'USD', label: 'USD' },
+              { value: 'EUR', label: 'EUR' },
             ]}
           />
           <Input

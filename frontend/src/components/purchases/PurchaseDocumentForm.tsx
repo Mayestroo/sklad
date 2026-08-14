@@ -843,10 +843,10 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               </label>
               <Select
                 options={[
-                  { value: 'UZS', label: 'UZS (So‘m)' },
-                  { value: 'USD', label: 'USD ($)' },
-                  { value: 'EUR', label: 'EUR (€)' },
-                  { value: 'RUB', label: 'RUB (₽)' },
+                  { value: 'UZS', label: 'UZS' },
+                  { value: 'USD', label: 'USD' },
+                  { value: 'EUR', label: 'EUR' },
+                  { value: 'RUB', label: 'RUB' },
                 ]}
                 value={currency}
                 onChange={(val) => { markDirty(); setCurrency(val); }}

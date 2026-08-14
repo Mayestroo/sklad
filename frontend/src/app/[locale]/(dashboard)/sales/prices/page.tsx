@@ -321,9 +321,9 @@ export default function PricesPage() {
               value={newPLCurrency}
               onChange={(val) => setNewPLCurrency(val)}
               options={[
-                { value: 'UZS', label: "UZS (So'm)" },
-                { value: 'USD', label: 'USD (Dollar)' },
-                { value: 'EUR', label: 'EUR (Evro)' },
+                { value: 'UZS', label: 'UZS' },
+                { value: 'USD', label: 'USD' },
+                { value: 'EUR', label: 'EUR' },
               ]}
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>

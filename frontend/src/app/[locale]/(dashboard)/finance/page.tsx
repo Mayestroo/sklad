@@ -494,8 +494,8 @@ function AddTransactionModal({ mode, accounts, txTypes, locale, token, tenantId,
               <Select
                 label="Valyuta"
                 options={[
-                  { value: 'UZS', label: "UZS (So'm)" },
-                  { value: 'USD', label: 'USD (Dollar)' },
+                  { value: 'UZS', label: 'UZS' },
+                  { value: 'USD', label: 'USD' },
                 ]}
                 value={currency}
                 onChange={(val) => setCurrency(val)}
