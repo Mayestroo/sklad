@@ -26,12 +26,13 @@ const DAYS: Record<string, string[]> = {
   ru: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
 };
 
-function formatDisplayDate(dateStr: string, locale: string): string {
+function formatDisplayDate(dateStr: string): string {
   if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-').map(Number);
   if (!y || !m || !d) return dateStr;
-  const monthName = MONTHS[locale]?.[m - 1] ?? MONTHS.uz[m - 1];
-  return `${d} ${monthName.slice(0, 3)} ${y}`;
+  const dd = String(d).padStart(2, '0');
+  const mm = String(m).padStart(2, '0');
+  return `${dd}/${mm}/${y}`;
 }
 
 export function DatePicker({
@@ -267,7 +268,7 @@ export function DatePicker({
               textOverflow: 'ellipsis',
             }}
           >
-            {value ? formatDisplayDate(value, locale) : effectivePlaceholder}
+            {value ? formatDisplayDate(value) : effectivePlaceholder}
           </span>
         </div>
 

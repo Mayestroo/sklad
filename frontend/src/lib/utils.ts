@@ -16,17 +16,16 @@ export function formatCurrency(amount: number, locale: string = 'uz', currency: 
 const UZ_MONTHS_SHORT = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
 const RU_MONTHS_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
-export function formatDate(date: string | Date | null | undefined, locale: string = 'uz'): string {
+export function formatDate(date: string | Date | null | undefined, _locale?: string): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
 
-  const day = d.getDate();
-  const monthIdx = d.getMonth();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
 
-  const month = locale === 'ru' ? RU_MONTHS_SHORT[monthIdx] : UZ_MONTHS_SHORT[monthIdx];
-  return `${day} ${month} ${year}`;
+  return `${day}/${month}/${year}`;
 }
 
 export function formatDateNumeric(date: string | Date | null | undefined): string {
@@ -38,20 +37,19 @@ export function formatDateNumeric(date: string | Date | null | undefined): strin
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
 
-  return `${day}.${month}.${year}`;
+  return `${day}/${month}/${year}`;
 }
 
-export function formatDateTime(date: string | Date | null | undefined, locale: string = 'uz'): string {
+export function formatDateTime(date: string | Date | null | undefined, _locale?: string): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
 
-  const day = d.getDate();
-  const monthIdx = d.getMonth();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
 
-  const month = locale === 'ru' ? RU_MONTHS_SHORT[monthIdx] : UZ_MONTHS_SHORT[monthIdx];
-  return `${day} ${month} ${year}, ${hours}:${minutes}`;
+  return `${day}/${month}/${year}, ${hours}:${minutes}`;
 }
