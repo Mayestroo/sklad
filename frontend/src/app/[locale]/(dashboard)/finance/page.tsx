@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -29,6 +30,7 @@ import {
   ChevronRight,
   Calendar,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
@@ -320,8 +322,41 @@ function AddTransactionModal({ mode, accounts, txTypes, locale, token, tenantId,
   };
 
   return (
-    <Modal isOpen={true} title={titleMap[mode]} onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+    <Drawer
+      isOpen={true}
+      title={titleMap[mode]}
+      description={
+        isRu
+          ? 'Оформление кассовой операции, перемещения средств или конвертации'
+          : 'Kassa amaliyoti, pul o‘tkazmasi yoki konvertatsiyani rasmiylashtirish'
+      }
+      icon={<Wallet size={20} />}
+      size="md"
+      onClose={onClose}
+      onSubmitShortcut={handleSubmit}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{
+              backgroundColor: colorMap[mode],
+              borderColor: colorMap[mode],
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <CheckCircle2 size={16} />
+            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : `${titleMap[mode]} (Ctrl+Enter)`}
+          </Button>
+        </>
+      }
+    >
         {error && (
           <div
             style={{
@@ -493,20 +528,7 @@ function AddTransactionModal({ mode, accounts, txTypes, locale, token, tenantId,
           <label style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', display: 'block', marginBottom: '6px' }}>Izoh (ixtiyoriy)</label>
           <Input placeholder="Izoh..." value={comment} onChange={(e) => setComment(e.target.value)} />
         </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-          <Button variant="outline" onClick={onClose} disabled={loading}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            disabled={loading}
-            style={{ backgroundColor: colorMap[mode], borderColor: colorMap[mode] }}
-          >
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : titleMap[mode]}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+    </Drawer>
   );
 }
 

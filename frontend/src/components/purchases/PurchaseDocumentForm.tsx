@@ -34,8 +34,8 @@ import { PurchaseReceipt } from '@shared/types';
 import { PayPurchaseModal } from './PayPurchaseModal';
 import { AllocateExpenseModal } from './AllocateExpenseModal';
 import { CreateReturnModal } from './CreateReturnModal';
-import { QuickAddSupplierModal } from './QuickAddSupplierModal';
-import { QuickAddProductModal } from './QuickAddProductModal';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 
 interface CounterpartyOption {
   id: string;
@@ -1201,17 +1201,18 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         />
       )}
 
-      {/* Quick Add Modals for In-Flight Entity Creation */}
+      {/* In-Flight Quick Add Drawers */}
       {isQuickSupplierOpen && (
-        <QuickAddSupplierModal
+        <CreateCounterpartyDrawer
           isOpen={isQuickSupplierOpen}
           onClose={() => setIsQuickSupplierOpen(false)}
+          defaultType="SUPPLIER"
           onSuccess={handleSupplierAdded}
         />
       )}
 
       {isQuickProductOpen && (
-        <QuickAddProductModal
+        <CreateProductDrawer
           isOpen={isQuickProductOpen}
           onClose={() => setIsQuickProductOpen(false)}
           initialSkuOrBarcode={quickProductSearch}

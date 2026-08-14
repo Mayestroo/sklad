@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import {
   Users,
   Plus,
@@ -699,69 +700,18 @@ export default function CounterpartiesPage() {
         </div>
       </div>
 
-      {/* Create Counterparty Modal */}
+      {/* Create Counterparty Slide-Over Drawer */}
       {isCreateOpen && (
-        <Modal isOpen={true} onClose={() => setIsCreateOpen(false)} title={isRu ? 'Создание контрагента' : 'Yangi Kontragent Yaratish'} size="lg">
-          <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {formError && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: 'var(--text-sm)' }}>
-                {formError}
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
-              <Select
-                label={isRu ? 'Тип контрагента *' : 'Kontragent Turi *'}
-                value={formType}
-                onChange={(val) => setFormType(val as any)}
-                options={[
-                  { value: 'CUSTOMER', label: isRu ? 'Клиент (Покупатель)' : 'Mijoz (Xaridor)' },
-                  { value: 'SUPPLIER', label: isRu ? 'Поставщик' : 'Yetkazib beruvchi' },
-                  { value: 'BOTH', label: isRu ? 'Клиент и Поставщик' : 'Mijoz & Yetkazib beruvchi' },
-                ]}
-              />
-
-              <div>
-                <Input label={isRu ? 'Наименование *' : 'Kontragent Nomi *'} value={formName} onChange={(e) => setFormName(e.target.value)} placeholder={isRu ? "ООО 'Mega Textile'" : "'Mega Textile' MCHJ"} required />
-              </div>
-
-              <Select
-                label={isRu ? 'Папка' : 'Papka'}
-                value={formFolderId}
-                onChange={(val) => setFormFolderId(val)}
-                options={[
-                  { value: '', label: isRu ? '— Без папки —' : '— Papkasiz —' },
-                  ...folders.map((f) => ({ value: f.id, label: f.name })),
-                ]}
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-              <Input label={isRu ? 'ИНН' : 'STIR / INN'} value={formInn} onChange={(e) => setFormInn(e.target.value)} placeholder={isRu ? '9-значный код ИНН' : '9 xonali STIR kodi'} />
-              <Input label={isRu ? 'Телефон' : 'Telefon'} value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="+998 90 123 45 67" />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-              <Input label="Email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="info@company.uz" />
-              <Input label={isRu ? 'Юридический адрес' : 'Yuridik Manzil'} value={formAddress} onChange={(e) => setFormAddress(e.target.value)} placeholder={isRu ? 'г. Ташкент, Чиланзарский р-н' : 'Toshkent sh., Chilonzor t.'} />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)' }}>
-              <Input label={isRu ? 'Наименование банка' : 'Bank Nomi'} value={formBankName} onChange={(e) => setFormBankName(e.target.value)} placeholder={isRu ? 'АКБ Капиталбанк' : 'Kapitalbank ATB'} />
-              <Input label={isRu ? 'Расчётный счёт' : 'Hisob Raqam (IBAN)'} value={formBankAccount} onChange={(e) => setFormBankAccount(e.target.value)} placeholder="20208000..." />
-              <Input label="MFO" value={formMfo} onChange={(e) => setFormMfo(e.target.value)} placeholder="00980" />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
-              <Button type="button" variant="secondary" onClick={() => setIsCreateOpen(false)} disabled={submitting}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+        <CreateCounterpartyDrawer
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          defaultFolderId={formFolderId}
+          folders={folders}
+          onSuccess={() => {
+            fetchFolders();
+            fetchCounterparties();
+          }}
+        />
       )}
 
       {/* Create / Edit Folder Modal */}

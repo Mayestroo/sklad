@@ -9,8 +9,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Building2, Eye } from 'lucide-react';
+import { Building2, Eye, Plus } from 'lucide-react';
 import { SupplierProfileDrawer } from '@/components/purchases/SupplierProfileDrawer';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 
 interface Counterparty {
   id: string;
@@ -31,7 +32,7 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 
   const fetchSuppliers = () => {
@@ -66,7 +67,7 @@ export default function SuppliersPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
             {isRu ? 'Каталог Поставщиков и Договоры' : 'Yetkazib Beruvchilar Katalogi va Shartnomalar'}
@@ -75,6 +76,12 @@ export default function SuppliersPage() {
             {isRu ? 'Список поставщиков, реквизиты, договоры, история закупок и баланс задолженности' : 'Barcha yetkazib beruvchilar ro\'yxati, rekvizitlari, shartnomalari, xaridlar va o\'zaro qarzdorlik balansi'}
           </p>
         </div>
+        <Button
+          onClick={() => setIsCreateOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}
+        >
+          <Plus size={18} /> {isRu ? 'Новый поставщик' : 'Yangi Yetkazib Beruvchi'}
+        </Button>
       </div>
 
       {/* KPI & Search Bar */}
@@ -183,6 +190,16 @@ export default function SuppliersPage() {
           isOpen={!!selectedSupplierId}
           onClose={() => setSelectedSupplierId(null)}
           supplierId={selectedSupplierId}
+        />
+      )}
+
+      {/* Create Supplier Slide-Over Drawer */}
+      {isCreateOpen && (
+        <CreateCounterpartyDrawer
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          defaultType="SUPPLIER"
+          onSuccess={() => fetchSuppliers()}
         />
       )}
     </div>

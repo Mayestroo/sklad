@@ -1,21 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { PurchaseReceipt } from '@shared/types';
+import { Truck, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface CounterpartyOption {
   id: string;
   name: string;
 }
 
-interface AllocateExpenseModalProps {
+export interface AllocateExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
   receipt: PurchaseReceipt | null;
@@ -115,28 +116,63 @@ export function AllocateExpenseModal({
   ];
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      title={`${isRu ? 'Ввод доп. расхода: Документ №' : 'Qo\'shimcha Xarajat Kiritish: Hujjat №'} ${receipt.docNumber}`}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '550px', width: '100%' }}>
-        {error && (
-          <div
-            style={{
-              padding: 'var(--space-3)',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--color-danger-50)',
-              color: 'var(--color-danger-700)',
-              fontSize: 'var(--text-sm)',
-            }}
+      title={`${isRu ? 'Расход: Документ №' : 'Xarajat: Hujjat №'} ${receipt.docNumber}`}
+      description={
+        isRu
+          ? 'Распределение прямых расходов на себестоимость товаров (Landed Cost)'
+          : 'To‘g‘ridan-to‘g‘ri xarajatlarni tovarlar tannarxiga taqsimlash'
+      }
+      icon={<Truck size={20} />}
+      size="md"
+      onSubmitShortcut={handleSubmit}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            {error}
-          </div>
-        )}
+            {loading ? (
+              isRu ? 'Распределение...' : 'Taqsimlanmoqda...'
+            ) : (
+              <>
+                <CheckCircle2 size={16} />
+                {isRu ? 'Рассчитать и распределить (Ctrl+Enter)' : 'Hisoblab taqsimlash (Ctrl+Enter)'}
+              </>
+            )}
+          </Button>
+        </>
+      }
+    >
+      {error && (
+        <div
+          style={{
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid #ef4444',
+            color: '#ef4444',
+            borderRadius: 'var(--radius-md)',
+            fontSize: 'var(--text-xs)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <AlertCircle size={16} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
+        </div>
+      )}
 
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <div>
-          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
             {isRu ? 'Вид расхода *' : 'Xarajat Turi *'}
           </label>
           <Select
@@ -147,8 +183,8 @@ export function AllocateExpenseModal({
         </div>
 
         <div>
-          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
-            {isRu ? 'Поставщик услуг (Транспортная компания)' : 'Xizmat ko\'rsatuvchi Yetkazib beruvchi (Transport kompaniyasi)'}
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
+            {isRu ? 'Поставщик услуг (Транспортная компания)' : 'Xizmat ko\'rsatuvchi Yetkazib beruvchi'}
           </label>
           <Select
             options={supplierOptions}
@@ -159,7 +195,7 @@ export function AllocateExpenseModal({
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-3)' }}>
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
               {isRu ? 'Сумма расхода *' : 'Xarajat Summasi *'}
             </label>
             <Input
@@ -167,11 +203,12 @@ export function AllocateExpenseModal({
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder={isRu ? 'Например: 800' : 'Masalan: 800'}
+              placeholder="500 000"
+              autoFocus
             />
           </div>
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
               {isRu ? 'Валюта' : 'Valyuta'}
             </label>
             <Select
@@ -183,7 +220,7 @@ export function AllocateExpenseModal({
         </div>
 
         <div>
-          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
             {isRu ? 'Критерий распределения (Landed Cost Allocation) *' : 'Taqsimlash Mezoni (Landed Cost Allocation) *'}
           </label>
           <Select
@@ -197,21 +234,16 @@ export function AllocateExpenseModal({
         </div>
 
         <div>
-          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
             {isRu ? 'Комментарий / Описание' : 'Izoh / Tavsif'}
           </label>
-          <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder={isRu ? 'Например: Транспорт фуры Ташкент-Самарканд' : 'Masalan: Toshkent-Samarqand fura transporti'} />
+          <Input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={isRu ? 'Например: Транспорт фуры Ташкент-Самарканд' : 'Masalan: Toshkent-Samarqand fura transporti'}
+          />
         </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? (isRu ? 'Распределение...' : 'Taqsimlanmoqda...') : (isRu ? 'Рассчитать и распределить расход' : 'Xarajatni Hisoblab Taqsimlash')}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      </form>
+    </Drawer>
   );
 }

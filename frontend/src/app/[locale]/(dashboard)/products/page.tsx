@@ -23,6 +23,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 
 export default function ProductsPage() {
   const t = useTranslations('inventory');
@@ -34,6 +35,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -149,12 +151,10 @@ export default function ProductsPage() {
             <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : undefined }} />
             {isRu ? 'Обновить' : 'Yangilash'}
           </Button>
-          <Link href="/products/new">
-            <Button variant="primary">
-              <Plus size={18} />
-              {isRu ? 'Добавить товар' : 'Yangi tovar qo‘shish'}
-            </Button>
-          </Link>
+          <Button variant="primary" onClick={() => setIsCreateOpen(true)}>
+            <Plus size={18} />
+            {isRu ? 'Добавить товар' : 'Yangi tovar qo‘shish'}
+          </Button>
         </div>
       </div>
 
@@ -471,6 +471,17 @@ export default function ProductsPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Create Product Slide-Over Drawer */}
+      {isCreateOpen && (
+        <CreateProductDrawer
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          onSuccess={() => {
+            fetchCatalogData();
+          }}
+        />
       )}
     </div>
   );
