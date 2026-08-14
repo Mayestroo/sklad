@@ -330,7 +330,7 @@ export function Select({
             >
               <Plus size={14} style={{ flexShrink: 0 }} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {createNewLabel || (isRu ? '+ Создать новую запись' : '+ Yangi qo‘shish')}
+                {createNewLabel || (isRu ? 'Создать новую запись' : 'Yangi qo‘shish')}
                 {searchQuery ? ` «${searchQuery}»` : ''}
               </span>
             </button>

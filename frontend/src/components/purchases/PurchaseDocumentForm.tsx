@@ -736,32 +736,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
           {/* Supplier */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                {isRu ? 'Поставщик *' : 'Yetkazib beruvchi *'}
-              </label>
-              {!isReadOnly && (
-                <button
-                  type="button"
-                  onClick={() => setIsQuickSupplierOpen(true)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                    color: 'var(--color-primary-600)',
-                    fontSize: 'var(--text-xs)',
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <UserPlus size={13} />
-                  {isRu ? '+ Новый' : '+ Yangi'}
-                </button>
-              )}
-            </div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Поставщик *' : 'Yetkazib beruvchi *'}
+            </label>
             <Select
               options={supplierOptions}
               value={counterpartyId}
@@ -769,7 +746,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               placeholder={isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang'}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickSupplierOpen(true) : undefined}
-              createNewLabel={isRu ? '+ Создать поставщика' : '+ Yangi yetkazib beruvchi'}
+              createNewLabel={isRu ? 'Создать поставщика' : 'Yangi yetkazib beruvchi'}
             />
             {(() => {
               const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);
@@ -805,7 +782,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickWarehouseOpen(true) : undefined}
-              createNewLabel={isRu ? '+ Создать новый склад' : '+ Yangi ombor qo‘shish'}
+              createNewLabel={isRu ? 'Создать новый склад' : 'Yangi ombor qo‘shish'}
             />
           </div>
 
@@ -1062,7 +1039,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                               }
                             : undefined
                         }
-                        createNewLabel={isRu ? '+ Создать новый товар' : '+ Yangi tovar qo‘shish'}
+                        createNewLabel={isRu ? 'Создать новый товар' : 'Yangi tovar qo‘shish'}
                       />
                     </td>
 
