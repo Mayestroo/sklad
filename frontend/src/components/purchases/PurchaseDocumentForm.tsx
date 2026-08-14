@@ -164,39 +164,47 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     setWarehouseId(newWarehouse.id);
   };
 
-  const handleProductAdded = (newProduct: {
-    id: string;
-    name: Record<string, string> | string;
-    sku: string;
-    barcode?: string;
-    costPrice: number;
-    salePrice?: number;
-    unitOfMeasure?: string;
-  }) => {
+  const handleProductAdded = (
+    newProduct: {
+      id: string;
+      name: Record<string, string> | string;
+      sku: string;
+      barcode?: string;
+      costPrice: number;
+      salePrice?: number;
+      unitOfMeasure?: string;
+    },
+    initialQuantity?: number
+  ) => {
     markDirty();
     setProducts((prev) => [newProduct, ...prev]);
+
+    const qty = Number(initialQuantity) || 1;
+    const price = Number(newProduct.costPrice) || 0;
 
     if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
       const targetIdx = activeRowIndexForNewProduct;
       handleItemChange(targetIdx, 'productId', newProduct.id);
-      if (newProduct.costPrice) {
-        handleItemChange(targetIdx, 'unitPrice', Number(newProduct.costPrice));
+      handleItemChange(targetIdx, 'quantity', qty);
+      if (price > 0) {
+        handleItemChange(targetIdx, 'unitPrice', price);
       }
       setActiveRowIndexForNewProduct(null);
     } else {
       const emptyIndex = items.findIndex((i) => !i.productId);
       if (emptyIndex !== -1) {
         handleItemChange(emptyIndex, 'productId', newProduct.id);
-        if (newProduct.costPrice) {
-          handleItemChange(emptyIndex, 'unitPrice', Number(newProduct.costPrice));
+        handleItemChange(emptyIndex, 'quantity', qty);
+        if (price > 0) {
+          handleItemChange(emptyIndex, 'unitPrice', price);
         }
       } else {
         setItems((prev) => [
           ...prev,
           {
             productId: newProduct.id,
-            quantity: 1,
-            unitPrice: Number(newProduct.costPrice) || 0,
+            quantity: qty,
+            unitPrice: price,
             discount: 0,
             vatRate: 12,
           },
