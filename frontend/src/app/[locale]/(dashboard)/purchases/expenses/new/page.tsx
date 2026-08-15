@@ -255,247 +255,94 @@ export default function NewExpensePage() {
   const isStep3Done = Boolean(selectedItemIds.length > 0 && previewResult);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1280px', margin: '0 auto', width: '100%', paddingBottom: 'var(--space-8)' }}>
-      {/* ─── Breadcrumbs & Header ─── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-          <span>{isRu ? 'Закупки' : 'Xaridlar'}</span>
-          <ChevronRight size={12} />
-          <span
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', width: '100%', paddingBottom: 'var(--space-8)' }}>
+      {/* ─── Header ─── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <button
             onClick={() => router.push(`/${locale}/purchases/expenses`)}
-            style={{ cursor: 'pointer', color: 'var(--color-text-secondary)', transition: 'color var(--transition-fast)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-primary-600)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '40px',
+              height: '40px',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--color-bg-secondary)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text-primary)',
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
+              e.currentTarget.style.borderColor = 'var(--color-primary-400)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+              e.currentTarget.style.borderColor = 'var(--color-border)';
+            }}
+            title={isRu ? 'Назад к списку' : 'Ro‘yxatga qaytish'}
           >
-            {isRu ? 'Дополнительные расходы' : 'Qo‘shimcha xarajatlar'}
-          </span>
-          <ChevronRight size={12} />
-          <span style={{ color: 'var(--color-primary-600)', fontWeight: 'var(--font-medium)' }}>
-            {isRu ? 'Новый расход' : 'Yangi xarajat'}
-          </span>
-        </div>
+            <ArrowLeft size={18} />
+          </button>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)', marginTop: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <button
-              onClick={() => router.push(`/${locale}/purchases/expenses`)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '40px',
-                height: '40px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-primary)',
-                cursor: 'pointer',
-                transition: 'all var(--transition-fast)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-                e.currentTarget.style.borderColor = 'var(--color-primary-400)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                e.currentTarget.style.borderColor = 'var(--color-border)';
-              }}
-              title={isRu ? 'Назад к списку' : 'Ro‘yxatga qaytish'}
-            >
-              <ArrowLeft size={18} />
-            </button>
-
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
-                  {isRu ? 'Новый дополнительный расход' : 'Yangi Qo‘shimcha Xarajat Kiritish'}
-                </h1>
-                <span
-                  style={{
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    fontSize: '11px',
-                    fontWeight: 'var(--font-medium)',
-                    backgroundColor: 'var(--color-primary-50)',
-                    color: 'var(--color-primary-600)',
-                    border: '1px solid var(--color-primary-100)',
-                  }}
-                >
-                  {isRu ? 'Черновик' : 'Yangi qoralama'}
-                </span>
-              </div>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-                {isRu
-                  ? 'Распределение прямых транспортных, таможенных и брокерских расходов на себестоимость товаров закупки'
-                  : 'Transport, bojxona va boshqa xarajatlarni tovarlar tannarxiga adolatli taqsimlash'}
-              </p>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+                {isRu ? 'Новый дополнительный расход' : 'Yangi Qo‘shimcha Xarajat Kiritish'}
+              </h1>
+              <span
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-full)',
+                  fontSize: '11px',
+                  fontWeight: 'var(--font-medium)',
+                  backgroundColor: 'var(--color-primary-50)',
+                  color: 'var(--color-primary-600)',
+                  border: '1px solid var(--color-primary-100)',
+                }}
+              >
+                {isRu ? 'Черновик' : 'Yangi qoralama'}
+              </span>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <Button
-              variant="outline"
-              disabled={submitting}
-              onClick={() => handleSubmit(false)}
-              style={{
-                backgroundColor: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-primary)',
-                fontWeight: 'var(--font-semibold)',
-              }}
-            >
-              <Save size={16} style={{ marginRight: '6px' }} />
-              {isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}
-            </Button>
-            <Button
-              disabled={submitting || !isStep1Done || !isStep2Done || !isStep3Done}
-              onClick={() => handleSubmit(true)}
-              style={{
-                boxShadow: isStep3Done ? '0 4px 14px rgba(79, 70, 229, 0.4)' : 'none',
-                fontWeight: 'var(--font-semibold)',
-              }}
-            >
-              {submitting ? (
-                <RefreshCw size={16} className="animate-spin" style={{ marginRight: '6px' }} />
-              ) : (
-                <CheckCircle2 size={16} style={{ marginRight: '6px' }} />
-              )}
-              {isRu ? 'Провести и распределить' : 'Tasdiqlash va Taqsimlash'}
-            </Button>
-          </div>
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <Button
+            variant="outline"
+            disabled={submitting}
+            onClick={() => handleSubmit(false)}
+            style={{
+              backgroundColor: 'var(--color-bg-secondary)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text-primary)',
+              fontWeight: 'var(--font-semibold)',
+            }}
+          >
+            <Save size={16} style={{ marginRight: '6px' }} />
+            {isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}
+          </Button>
+          <Button
+            disabled={submitting || !isStep1Done || !isStep2Done || !isStep3Done}
+            onClick={() => handleSubmit(true)}
+            style={{
+              boxShadow: isStep3Done ? '0 4px 14px rgba(79, 70, 229, 0.4)' : 'none',
+              fontWeight: 'var(--font-semibold)',
+            }}
+          >
+            {submitting ? (
+              <RefreshCw size={16} className="animate-spin" style={{ marginRight: '6px' }} />
+            ) : (
+              <CheckCircle2 size={16} style={{ marginRight: '6px' }} />
+            )}
+            {isRu ? 'Провести и распределить' : 'Tasdiqlash va Taqsimlash'}
+          </Button>
         </div>
       </div>
 
-      {/* ─── Workflow Step Progress Bar ─── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 'var(--space-3)',
-          padding: 'var(--space-3)',
-          backgroundColor: 'var(--color-bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--color-border-light)',
-        }}
-      >
-        {/* Step 1 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: isStep1Done ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)',
-            border: isStep1Done ? '1px solid var(--color-success-100)' : '1px solid transparent',
-            transition: 'all var(--transition-base)',
-          }}
-        >
-          <div
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: isStep1Done ? 'var(--color-success-500)' : 'var(--color-primary-600)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              fontWeight: 'var(--font-bold)',
-            }}
-          >
-            {isStep1Done ? <Check size={14} /> : '1'}
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-              {isRu ? 'Параметры расхода' : 'Xarajat parametrlari'}
-            </div>
-            <div style={{ fontSize: '11px', color: isStep1Done ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
-              {isStep1Done ? (isRu ? 'Заполнено' : 'Kiritildi') : (isRu ? 'Сумма и поставщик' : 'Summa va kontragent')}
-            </div>
-          </div>
-        </div>
-
-        {/* Step 2 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: isStep2Done ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)',
-            border: isStep2Done ? '1px solid var(--color-success-100)' : '1px solid transparent',
-            transition: 'all var(--transition-base)',
-          }}
-        >
-          <div
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: isStep2Done ? 'var(--color-success-500)' : 'var(--color-warning-500)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              fontWeight: 'var(--font-bold)',
-            }}
-          >
-            {isStep2Done ? <Check size={14} /> : '2'}
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-              {isRu ? 'Партия и метод' : 'Xarid va taqsimot'}
-            </div>
-            <div style={{ fontSize: '11px', color: isStep2Done ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
-              {isStep2Done ? (isRu ? 'Закупка выбрана' : 'Xarid tanlandi') : (isRu ? 'Выбор накладной' : 'Hujjat va formula')}
-            </div>
-          </div>
-        </div>
-
-        {/* Step 3 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: isStep3Done ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)',
-            border: isStep3Done ? '1px solid var(--color-success-100)' : '1px solid transparent',
-            transition: 'all var(--transition-base)',
-          }}
-        >
-          <div
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: isStep3Done ? 'var(--color-success-500)' : 'var(--color-text-tertiary)',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              fontWeight: 'var(--font-bold)',
-            }}
-          >
-            {isStep3Done ? <Check size={14} /> : '3'}
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-              {isRu ? 'Расчет себестоимости' : 'Tannarx hisob-kitobi'}
-            </div>
-            <div style={{ fontSize: '11px', color: isStep3Done ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
-              {isStep3Done ? (isRu ? 'Готово к проведению' : 'Hisoblandi') : (isRu ? 'Предпросмотр цен' : 'Avtomatik taqsimot')}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {errorMsg && (
         <div
@@ -579,11 +426,11 @@ export default function NewExpensePage() {
                 value={expenseType}
                 onChange={(val) => setExpenseType(val as ExpenseType)}
                 options={[
-                  { value: 'TRANSPORT', label: isRu ? '🚚 Транспорт / Доставка' : '🚚 Transport / Yetkazish' },
-                  { value: 'CUSTOMS', label: isRu ? '🛃 Таможня / Пошлина' : '🛃 Bojxona / Boj' },
-                  { value: 'BROKER', label: isRu ? '🏢 Брокерские услуги' : '🏢 Brokerlik xizmati' },
-                  { value: 'INSURANCE', label: isRu ? '🛡️ Страхование груза' : '🛡️ Yuk sug‘urtasi' },
-                  { value: 'OTHER', label: isRu ? '📦 Прочие расходы' : '📦 Boshqa xarajatlar' },
+                  { value: 'TRANSPORT', label: isRu ? 'Транспорт / Доставка' : 'Transport / Yetkazish' },
+                  { value: 'CUSTOMS', label: isRu ? 'Таможня / Пошлина' : 'Bojxona / Boj' },
+                  { value: 'BROKER', label: isRu ? 'Брокерские услуги' : 'Brokerlik xizmati' },
+                  { value: 'INSURANCE', label: isRu ? 'Страхование груза' : 'Yuk sug‘urtasi' },
+                  { value: 'OTHER', label: isRu ? 'Прочие расходы' : 'Boshqa xarajatlar' },
                 ]}
               />
             </div>
@@ -642,45 +489,25 @@ export default function NewExpensePage() {
             </div>
           </div>
 
-          {/* Payment Mode (Interactive Card Toggle) */}
-          <div
-            style={{
-              padding: 'var(--space-3)',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: isPaid ? 'var(--color-primary-50)' : 'var(--color-bg-tertiary)',
-              border: isPaid ? '1px solid var(--color-primary-200)' : '1px solid var(--color-border-light)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-3)',
-              transition: 'all var(--transition-fast)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Wallet size={18} color={isPaid ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)'} />
-                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                  {isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={isPaid}
-                onChange={(e) => setIsPaid(e.target.checked)}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-              />
-            </div>
+          {/* Payment Mode */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-subtle)' }}>
+            <Checkbox
+              checked={isPaid}
+              onChange={(e) => setIsPaid(e.target.checked)}
+              label={isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}
+            />
 
             {isPaid && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px', borderTop: '1px dashed var(--color-primary-200)' }}>
-                <label style={{ fontSize: '11px', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Касса / Счет для списания *' : 'Chiqim qilinadigan kassa hisobi *'}
+              <div style={{ marginTop: '4px' }}>
+                <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  {isRu ? 'Касса для списания средств *' : 'Chiqim qilinadigan kassa hisobi *'}
                 </label>
                 <Select
                   value={cashAccountId}
                   onChange={(val) => setCashAccountId(val)}
                   options={cashAccounts.map((a) => ({
                     value: a.id,
-                    label: `${(a.name as any)?.uz || a.name} [Balans: ${formatCurrency(a.balance, locale, a.currency)}]`,
+                    label: `${(a.name as any)?.uz || a.name} (${formatCurrency(a.balance, locale, a.currency)})`,
                   }))}
                 />
               </div>
