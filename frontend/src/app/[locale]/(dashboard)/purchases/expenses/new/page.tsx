@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Radio } from '@/components/ui/Radio';
 import { Badge } from '@/components/ui/Badge';
 import {
   ArrowLeft,
@@ -25,6 +24,19 @@ import {
   AlertCircle,
   Building2,
   Wallet,
+  Coins,
+  Scale,
+  Boxes,
+  Percent,
+  Check,
+  TrendingUp,
+  Sparkles,
+  RefreshCw,
+  HelpCircle,
+  FileSpreadsheet,
+  ChevronRight,
+  ShieldCheck,
+  Info,
 } from 'lucide-react';
 import {
   PurchaseReceipt,
@@ -237,52 +249,317 @@ export default function NewExpensePage() {
     }
   };
 
+  // Step Completion Checks
+  const isStep1Done = Boolean(docDate && expenseType && counterpartyId && amount && Number(amount) > 0);
+  const isStep2Done = Boolean(receiptId && allocationMethod);
+  const isStep3Done = Boolean(selectedItemIds.length > 0 && previewResult);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-      {/* Top Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/purchases/expenses`)}>
-            <ArrowLeft size={16} />
-          </Button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1280px', margin: '0 auto', width: '100%', paddingBottom: 'var(--space-8)' }}>
+      {/* ─── Breadcrumbs & Header ─── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+          <span>{isRu ? 'Закупки' : 'Xaridlar'}</span>
+          <ChevronRight size={12} />
+          <span
+            onClick={() => router.push(`/${locale}/purchases/expenses`)}
+            style={{ cursor: 'pointer', color: 'var(--color-text-secondary)', transition: 'color var(--transition-fast)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-primary-600)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+          >
+            {isRu ? 'Дополнительные расходы' : 'Qo‘shimcha xarajatlar'}
+          </span>
+          <ChevronRight size={12} />
+          <span style={{ color: 'var(--color-primary-600)', fontWeight: 'var(--font-medium)' }}>
+            {isRu ? 'Новый расход' : 'Yangi xarajat'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)', marginTop: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <button
+              onClick={() => router.push(`/${locale}/purchases/expenses`)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '40px',
+                height: '40px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-bg-secondary)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
+                e.currentTarget.style.borderColor = 'var(--color-primary-400)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+              title={isRu ? 'Назад к списку' : 'Ro‘yxatga qaytish'}
+            >
+              <ArrowLeft size={18} />
+            </button>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+                  {isRu ? 'Новый дополнительный расход' : 'Yangi Qo‘shimcha Xarajat Kiritish'}
+                </h1>
+                <span
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '11px',
+                    fontWeight: 'var(--font-medium)',
+                    backgroundColor: 'var(--color-primary-50)',
+                    color: 'var(--color-primary-600)',
+                    border: '1px solid var(--color-primary-100)',
+                  }}
+                >
+                  {isRu ? 'Черновик' : 'Yangi qoralama'}
+                </span>
+              </div>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+                {isRu
+                  ? 'Распределение прямых транспортных, таможенных и брокерских расходов на себестоимость товаров закупки'
+                  : 'Transport, bojxona va boshqa xarajatlarni tovarlar tannarxiga adolatli taqsimlash'}
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <Button
+              variant="outline"
+              disabled={submitting}
+              onClick={() => handleSubmit(false)}
+              style={{
+                backgroundColor: 'var(--color-bg-secondary)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)',
+                fontWeight: 'var(--font-semibold)',
+              }}
+            >
+              <Save size={16} style={{ marginRight: '6px' }} />
+              {isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}
+            </Button>
+            <Button
+              disabled={submitting || !isStep1Done || !isStep2Done || !isStep3Done}
+              onClick={() => handleSubmit(true)}
+              style={{
+                boxShadow: isStep3Done ? '0 4px 14px rgba(79, 70, 229, 0.4)' : 'none',
+                fontWeight: 'var(--font-semibold)',
+              }}
+            >
+              {submitting ? (
+                <RefreshCw size={16} className="animate-spin" style={{ marginRight: '6px' }} />
+              ) : (
+                <CheckCircle2 size={16} style={{ marginRight: '6px' }} />
+              )}
+              {isRu ? 'Провести и распределить' : 'Tasdiqlash va Taqsimlash'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Workflow Step Progress Bar ─── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 'var(--space-3)',
+          padding: 'var(--space-3)',
+          backgroundColor: 'var(--color-bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--color-border-light)',
+        }}
+      >
+        {/* Step 1 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: isStep1Done ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)',
+            border: isStep1Done ? '1px solid var(--color-success-100)' : '1px solid transparent',
+            transition: 'all var(--transition-base)',
+          }}
+        >
+          <div
+            style={{
+              width: '26px',
+              height: '26px',
+              borderRadius: 'var(--radius-full)',
+              backgroundColor: isStep1Done ? 'var(--color-success-500)' : 'var(--color-primary-600)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              fontWeight: 'var(--font-bold)',
+            }}
+          >
+            {isStep1Done ? <Check size={14} /> : '1'}
+          </div>
           <div>
-            <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {isRu ? 'Новый дополнительный расход' : 'Yangi Qo‘shimcha Xarajat Kiritish'}
-            </h1>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-              {isRu ? 'Распределение прямых расходов на себестоимость товаров закупки' : 'Transport, bojxona va boshqa xarajatlarni tovarlar tannarxiga taqsimlash'}
-            </p>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+              {isRu ? 'Параметры расхода' : 'Xarajat parametrlari'}
+            </div>
+            <div style={{ fontSize: '11px', color: isStep1Done ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
+              {isStep1Done ? (isRu ? 'Заполнено' : 'Kiritildi') : (isRu ? 'Сумма и поставщик' : 'Summa va kontragent')}
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <Button variant="outline" disabled={submitting} onClick={() => handleSubmit(false)}>
-            <Save size={16} style={{ marginRight: '6px' }} />
-            {isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}
-          </Button>
-          <Button disabled={submitting} onClick={() => handleSubmit(true)}>
-            <CheckCircle2 size={16} style={{ marginRight: '6px' }} />
-            {isRu ? 'Провести и распределить' : 'Tasdiqlash va Taqsimlash'}
-          </Button>
+        {/* Step 2 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: isStep2Done ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)',
+            border: isStep2Done ? '1px solid var(--color-success-100)' : '1px solid transparent',
+            transition: 'all var(--transition-base)',
+          }}
+        >
+          <div
+            style={{
+              width: '26px',
+              height: '26px',
+              borderRadius: 'var(--radius-full)',
+              backgroundColor: isStep2Done ? 'var(--color-success-500)' : 'var(--color-warning-500)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              fontWeight: 'var(--font-bold)',
+            }}
+          >
+            {isStep2Done ? <Check size={14} /> : '2'}
+          </div>
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+              {isRu ? 'Партия и метод' : 'Xarid va taqsimot'}
+            </div>
+            <div style={{ fontSize: '11px', color: isStep2Done ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
+              {isStep2Done ? (isRu ? 'Закупка выбрана' : 'Xarid tanlandi') : (isRu ? 'Выбор накладной' : 'Hujjat va formula')}
+            </div>
+          </div>
+        </div>
+
+        {/* Step 3 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: isStep3Done ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)',
+            border: isStep3Done ? '1px solid var(--color-success-100)' : '1px solid transparent',
+            transition: 'all var(--transition-base)',
+          }}
+        >
+          <div
+            style={{
+              width: '26px',
+              height: '26px',
+              borderRadius: 'var(--radius-full)',
+              backgroundColor: isStep3Done ? 'var(--color-success-500)' : 'var(--color-text-tertiary)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              fontWeight: 'var(--font-bold)',
+            }}
+          >
+            {isStep3Done ? <Check size={14} /> : '3'}
+          </div>
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+              {isRu ? 'Расчет себестоимости' : 'Tannarx hisob-kitobi'}
+            </div>
+            <div style={{ fontSize: '11px', color: isStep3Done ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
+              {isStep3Done ? (isRu ? 'Готово к проведению' : 'Hisoblandi') : (isRu ? 'Предпросмотр цен' : 'Avtomatik taqsimot')}
+            </div>
+          </div>
         </div>
       </div>
 
       {errorMsg && (
-        <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-danger-50)', color: 'var(--color-danger-700)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--text-sm)' }}>
-          <AlertCircle size={18} />
-          <span>{errorMsg}</span>
+        <div
+          style={{
+            padding: 'var(--space-3) var(--space-4)',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-50)',
+            border: '1px solid var(--color-danger-100)',
+            color: 'var(--color-danger-600)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: 'var(--text-sm)',
+            boxShadow: 'var(--shadow-xs)',
+          }}
+        >
+          <AlertCircle size={20} />
+          <span style={{ fontWeight: 'var(--font-medium)' }}>{errorMsg}</span>
         </div>
       )}
 
-      {/* Grid: Parameters & Selection */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-5)' }}>
+      {/* ─── Grid: Parameters & Selection ─── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 'var(--space-5)' }}>
         {/* Card 1: Expense Details */}
-        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--color-border-subtle)', paddingBottom: 'var(--space-3)' }}>
-            <Receipt size={20} color="var(--color-primary-600)" />
-            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-              {isRu ? '1. Параметры расхода' : '1. Xarajat parametrlari'}
-            </h2>
+        <Card
+          style={{
+            padding: 'var(--space-5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-4)',
+            backgroundColor: 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          {/* Card Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--color-primary-50)',
+                  border: '1px solid var(--color-primary-100)',
+                  color: 'var(--color-primary-600)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Receipt size={18} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                  {isRu ? '1. Параметры расхода' : '1. Xarajat parametrlari'}
+                </h2>
+                <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Дата, тип, сумма и поставщик услуги' : 'Sana, xarajat turi, summa va kontragent'}
+                </p>
+              </div>
+            </div>
+            {isStep1Done && <Badge variant="success">{isRu ? 'Готово' : 'Tayyor'}</Badge>}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
@@ -295,85 +572,115 @@ export default function NewExpensePage() {
             </div>
 
             <div>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
                 {isRu ? 'Тип расхода' : 'Xarajat turi'}
               </label>
               <Select
                 value={expenseType}
                 onChange={(val) => setExpenseType(val as ExpenseType)}
                 options={[
-                  { value: 'TRANSPORT', label: isRu ? 'Транспорт' : 'Transport' },
-                  { value: 'CUSTOMS', label: isRu ? 'Таможня / Пошлина' : 'Bojxona / Boj' },
-                  { value: 'BROKER', label: isRu ? 'Брокер' : 'Broker' },
-                  { value: 'INSURANCE', label: isRu ? 'Страхование' : 'Sug‘urta' },
-                  { value: 'OTHER', label: isRu ? 'Прочее' : 'Boshqa' },
+                  { value: 'TRANSPORT', label: isRu ? '🚚 Транспорт / Доставка' : '🚚 Transport / Yetkazish' },
+                  { value: 'CUSTOMS', label: isRu ? '🛃 Таможня / Пошлина' : '🛃 Bojxona / Boj' },
+                  { value: 'BROKER', label: isRu ? '🏢 Брокерские услуги' : '🏢 Brokerlik xizmati' },
+                  { value: 'INSURANCE', label: isRu ? '🛡️ Страхование груза' : '🛡️ Yuk sug‘urtasi' },
+                  { value: 'OTHER', label: isRu ? '📦 Прочие расходы' : '📦 Boshqa xarajatlar' },
                 ]}
               />
             </div>
           </div>
 
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
               {isRu ? 'Поставщик услуг / Перевозчик *' : 'Xizmat ko‘rsatuvchi kontragent *'}
             </label>
             <Select
+              searchable
               value={counterpartyId}
               onChange={(val) => setCounterpartyId(val)}
-              placeholder={isRu ? 'Выберите поставщика...' : 'Kontragentni tanlang...'}
+              placeholder={isRu ? 'Выберите или найдите поставщика...' : 'Kontragentni qidiring yoki tanlang...'}
               options={counterparties.map((c) => ({
                 value: c.id,
-                label: `${c.name} ${c.phone ? `(${c.phone})` : ''}`,
+                label: `${c.name}${c.phone ? ` (${c.phone})` : ''}`,
               }))}
             />
           </div>
 
+          {/* Amount & Currency */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-3)' }}>
             <div>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
                 {isRu ? 'Сумма расхода *' : 'Xarajat summasi *'}
               </label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-              />
+              <div style={{ position: 'relative' }}>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  style={{
+                    fontSize: 'var(--text-base)',
+                    fontWeight: 'var(--font-bold)',
+                    color: 'var(--color-text-primary)',
+                    letterSpacing: '0.02em',
+                  }}
+                />
+              </div>
             </div>
 
             <div>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
                 {isRu ? 'Валюта' : 'Valyuta'}
               </label>
               <Select
                 value={currency}
                 onChange={(val) => setCurrency(val)}
                 options={[
-                  { value: 'UZS', label: 'UZS' },
-                  { value: 'USD', label: 'USD' },
+                  { value: 'UZS', label: 'UZS (So‘m)' },
+                  { value: 'USD', label: 'USD ($)' },
                 ]}
               />
             </div>
           </div>
 
-          {/* Payment Mode */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-subtle)' }}>
-            <Checkbox
-              checked={isPaid}
-              onChange={(e) => setIsPaid(e.target.checked)}
-              label={isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}
-            />
+          {/* Payment Mode (Interactive Card Toggle) */}
+          <div
+            style={{
+              padding: 'var(--space-3)',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: isPaid ? 'var(--color-primary-50)' : 'var(--color-bg-tertiary)',
+              border: isPaid ? '1px solid var(--color-primary-200)' : '1px solid var(--color-border-light)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-3)',
+              transition: 'all var(--transition-fast)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Wallet size={18} color={isPaid ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)'} />
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+                  {isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={isPaid}
+                onChange={(e) => setIsPaid(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+            </div>
 
             {isPaid && (
-              <div style={{ marginTop: '4px' }}>
-                <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                  {isRu ? 'Касса для списания средств *' : 'Chiqim qilinadigan kassa hisobi *'}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px', borderTop: '1px dashed var(--color-primary-200)' }}>
+                <label style={{ fontSize: '11px', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Касса / Счет для списания *' : 'Chiqim qilinadigan kassa hisobi *'}
                 </label>
                 <Select
                   value={cashAccountId}
                   onChange={(val) => setCashAccountId(val)}
                   options={cashAccounts.map((a) => ({
                     value: a.id,
-                    label: `${(a.name as any)?.uz || a.name} (${formatCurrency(a.balance, locale, a.currency)})`,
+                    label: `${(a.name as any)?.uz || a.name} [Balans: ${formatCurrency(a.balance, locale, a.currency)}]`,
                   }))}
                 />
               </div>
@@ -381,135 +688,466 @@ export default function NewExpensePage() {
           </div>
 
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-              {isRu ? 'Комментарий' : 'Izoh'}
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+              {isRu ? 'Комментарий / Номер накладной' : 'Izoh / Yuk xati raqami'}
             </label>
-            <Input placeholder={isRu ? 'Номер накладной, пояснение...' : 'Yuk xati raqami, izoh...'} value={comment} onChange={(e) => setComment(e.target.value)} />
+            <Input
+              placeholder={isRu ? 'Например: ТТН №48291, рейс Ташкент-Самарканд...' : 'Masalan: TTN №48291, Toshkent-Samarqand reysi...'}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
           </div>
         </Card>
 
         {/* Card 2: Target Receipt & Method */}
-        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--color-border-subtle)', paddingBottom: 'var(--space-3)' }}>
-            <Truck size={20} color="var(--color-warning-600)" />
-            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-              {isRu ? '2. Выбор закупки и метода' : '2. Xarid va taqsimot usulini tanlash'}
-            </h2>
+        <Card
+          style={{
+            padding: 'var(--space-5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-4)',
+            backgroundColor: 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          {/* Card Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--color-warning-50)',
+                  border: '1px solid var(--color-warning-100)',
+                  color: 'var(--color-warning-600)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Truck size={18} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                  {isRu ? '2. Выбор закупки и метода' : '2. Xarid va taqsimot usulini tanlash'}
+                </h2>
+                <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Целевая партия и формула распределения' : 'Qaysi xaridga va qanday formula bilan taqsimlash'}
+                </p>
+              </div>
+            </div>
+            {isStep2Done && <Badge variant="success">{isRu ? 'Tanlandi' : 'Tanlandi'}</Badge>}
           </div>
 
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
               {isRu ? 'Партия закупки (Xarid hujjati) *' : 'Tegishli xarid hujjati *'}
             </label>
             <Select
+              searchable
               value={receiptId}
               onChange={(val) => setReceiptId(val)}
-              placeholder={isRu ? 'Выберите закупку...' : 'Xaridni tanlang...'}
+              placeholder={isRu ? 'Выберите или найдите партию закупки...' : 'Xarid hujjatini qidiring yoki tanlang...'}
               options={receipts.map((r) => ({
                 value: r.id,
-                label: `${r.docNumber} — ${r.counterparty?.name || 'Поставщик'} (${formatDate(r.docDate, locale)}) [${formatCurrency(r.totalAmount, locale, r.currency)}]`,
+                label: `${r.docNumber} — ${r.counterparty?.name || 'Yetkazib beruvchi'} (${formatDate(r.docDate, locale)}) [${formatCurrency(r.totalAmount, locale, r.currency)}]`,
               }))}
             />
           </div>
 
-          {selectedReceipt && (
-            <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-hover)', fontSize: 'var(--text-xs)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div><strong>{isRu ? 'Поставщик:' : 'Yetkazib beruvchi:'}</strong> {selectedReceipt.counterparty?.name}</div>
-              <div><strong>{isRu ? 'Склад:' : 'Ombor:'}</strong> {(selectedReceipt.warehouse?.name as any)?.uz || selectedReceipt.warehouse?.name}</div>
-              <div><strong>{isRu ? 'Сумма закупки:' : 'Xarid jami summasi:'}</strong> {formatCurrency(selectedReceipt.totalAmount, locale, selectedReceipt.currency)}</div>
-              <div><strong>{isRu ? 'Позиций товаров:' : 'Tovarlar soni:'}</strong> {selectedReceipt.items?.length || 0} ta</div>
+          {/* Selected Receipt Info Widget */}
+          {selectedReceipt ? (
+            <div
+              style={{
+                padding: 'var(--space-3) var(--space-4)',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                border: '1px solid var(--color-border)',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px',
+                fontSize: 'var(--text-xs)',
+              }}
+            >
+              <div>
+                <span style={{ color: 'var(--color-text-tertiary)', display: 'block', fontSize: '10px' }}>
+                  {isRu ? 'Поставщик' : 'Yetkazib beruvchi'}
+                </span>
+                <strong style={{ color: 'var(--color-text-primary)' }}>{selectedReceipt.counterparty?.name || '—'}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-tertiary)', display: 'block', fontSize: '10px' }}>
+                  {isRu ? 'Склад назначения' : 'Ombor'}
+                </span>
+                <strong style={{ color: 'var(--color-text-primary)' }}>
+                  {(selectedReceipt.warehouse?.name as any)?.uz || selectedReceipt.warehouse?.name || 'Asosiy ombor'}
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-tertiary)', display: 'block', fontSize: '10px' }}>
+                  {isRu ? 'Сумма закупки' : 'Xarid summasi'}
+                </span>
+                <strong style={{ color: 'var(--color-primary-600)' }}>
+                  {formatCurrency(selectedReceipt.totalAmount, locale, selectedReceipt.currency)}
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-tertiary)', display: 'block', fontSize: '10px' }}>
+                  {isRu ? 'Товаров в партии' : 'Tovarlar soni'}
+                </span>
+                <strong style={{ color: 'var(--color-text-primary)' }}>{selectedReceipt.items?.length || 0} xil tovar</strong>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: 'var(--space-3)',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                border: '1px dashed var(--color-border)',
+                color: 'var(--color-text-tertiary)',
+                fontSize: '11px',
+                textAlign: 'center',
+              }}
+            >
+              <Info size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+              {isRu ? 'Выберите закупку для просмотра товаров' : 'Tovarlarni ko‘rish uchun yuqoridan xarid hujjatini tanlang'}
             </div>
           )}
 
+          {/* Segmented Interactive Allocation Method Selection */}
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>
-              {isRu ? 'Метод распределения расхода' : 'Xarajatni taqsimlash usuli'}
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>
+              {isRu ? 'Метод распределения расхода' : 'Xarajatni taqsimlash usuli (Formula)'}
             </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <Radio
-                name="allocMethod"
-                value="BY_AMOUNT"
-                checked={allocationMethod === 'BY_AMOUNT'}
-                onChange={() => setAllocationMethod('BY_AMOUNT')}
-                label={isRu ? 'По стоимости' : 'Xarid qiymatiga mutanosib'}
-                description={isRu ? 'дорогие товары получают большую долю' : 'qimmatroq tovarlarga ko‘proq ulush'}
-                size="sm"
-              />
 
-              <Radio
-                name="allocMethod"
-                value="BY_QUANTITY"
-                checked={allocationMethod === 'BY_QUANTITY'}
-                onChange={() => setAllocationMethod('BY_QUANTITY')}
-                label={isRu ? 'По количеству' : 'Miqdoriga mutanosib'}
-                description={isRu ? 'равная доля на каждую штуку' : 'har bir donaga teng taqsimlash'}
-                size="sm"
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Option 1: BY_AMOUNT */}
+              <div
+                onClick={() => setAllocationMethod('BY_AMOUNT')}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  border: allocationMethod === 'BY_AMOUNT' ? '2px solid var(--color-primary-600)' : '1px solid var(--color-border)',
+                  backgroundColor: allocationMethod === 'BY_AMOUNT' ? 'var(--color-primary-50)' : 'var(--color-bg-tertiary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: allocationMethod === 'BY_AMOUNT' ? 'var(--color-primary-600)' : 'var(--color-bg-hover)',
+                      color: allocationMethod === 'BY_AMOUNT' ? '#ffffff' : 'var(--color-text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Coins size={16} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                        {isRu ? 'По стоимости (Xarid qiymatiga mutanosib)' : 'Xarid qiymatiga mutanosib'}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          padding: '1px 6px',
+                          borderRadius: 'var(--radius-full)',
+                          backgroundColor: 'var(--color-success-50)',
+                          color: 'var(--color-success-600)',
+                          fontWeight: 'var(--font-bold)',
+                        }}
+                      >
+                        {isRu ? 'Рекомендуется' : 'Tavsiya'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>
+                      {isRu ? 'Дорогие товары получают большую долю расхода' : 'Qimmatroq tovarlarga qiymatiga qarab ko‘proq ulush'}
+                    </p>
+                  </div>
+                </div>
+                {allocationMethod === 'BY_AMOUNT' && (
+                  <div style={{ width: '18px', height: '18px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-primary-600)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Check size={12} />
+                  </div>
+                )}
+              </div>
 
-              <Radio
-                name="allocMethod"
-                value="BY_WEIGHT"
-                checked={allocationMethod === 'BY_WEIGHT'}
-                onChange={() => setAllocationMethod('BY_WEIGHT')}
-                label={isRu ? 'По весу (кг)' : 'Vazniga mutanosib'}
-                description={isRu ? 'тяжелые товары получают большую долю' : 'og‘irroq tovarlarga ko‘proq ulush'}
-                size="sm"
-              />
+              {/* Option 2: BY_QUANTITY */}
+              <div
+                onClick={() => setAllocationMethod('BY_QUANTITY')}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  border: allocationMethod === 'BY_QUANTITY' ? '2px solid var(--color-primary-600)' : '1px solid var(--color-border)',
+                  backgroundColor: allocationMethod === 'BY_QUANTITY' ? 'var(--color-primary-50)' : 'var(--color-bg-tertiary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: allocationMethod === 'BY_QUANTITY' ? 'var(--color-primary-600)' : 'var(--color-bg-hover)',
+                      color: allocationMethod === 'BY_QUANTITY' ? '#ffffff' : 'var(--color-text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Boxes size={16} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                      {isRu ? 'По количеству (Miqdoriga mutanosib)' : 'Miqdoriga mutanosib'}
+                    </span>
+                    <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>
+                      {isRu ? 'Равная доля расхода на каждую единицу/штуку' : 'Har bir donaga / dona hajmiga teng taqsimlash'}
+                    </p>
+                  </div>
+                </div>
+                {allocationMethod === 'BY_QUANTITY' && (
+                  <div style={{ width: '18px', height: '18px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-primary-600)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Check size={12} />
+                  </div>
+                )}
+              </div>
+
+              {/* Option 3: BY_WEIGHT */}
+              <div
+                onClick={() => setAllocationMethod('BY_WEIGHT')}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  border: allocationMethod === 'BY_WEIGHT' ? '2px solid var(--color-primary-600)' : '1px solid var(--color-border)',
+                  backgroundColor: allocationMethod === 'BY_WEIGHT' ? 'var(--color-primary-50)' : 'var(--color-bg-tertiary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: allocationMethod === 'BY_WEIGHT' ? 'var(--color-primary-600)' : 'var(--color-bg-hover)',
+                      color: allocationMethod === 'BY_WEIGHT' ? '#ffffff' : 'var(--color-text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Scale size={16} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                      {isRu ? 'По весу (Vazniga mutanosib, кг)' : 'Vazniga mutanosib (kg)'}
+                    </span>
+                    <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>
+                      {isRu ? 'Тяжелые товары получают большую долю' : 'Og‘irroq tovarlarga ko‘proq ulush'}
+                    </p>
+                  </div>
+                </div>
+                {allocationMethod === 'BY_WEIGHT' && (
+                  <div style={{ width: '18px', height: '18px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-primary-600)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Check size={12} />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Card 3: Interactive Items Table & Preview */}
-      <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Calculator size={20} color="var(--color-primary-600)" />
-            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-              {isRu ? '3. Выбор товаров и предварительный расчет себестоимости' : '3. Tovarlarni tanlash va yangi tannarx hisob-kitobi'}
-            </h2>
+      {/* ─── Card 3: Interactive Items Table & Preview ─── */}
+      <Card
+        style={{
+          padding: 'var(--space-5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-4)',
+          backgroundColor: 'var(--color-bg-secondary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-primary-50)',
+                border: '1px solid var(--color-primary-100)',
+                color: 'var(--color-primary-600)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Calculator size={18} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                {isRu ? '3. Выбор товаров и расчет себестоимости' : '3. Tovarlarni tanlash va yangi tannarx hisob-kitobi'}
+              </h2>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                {isRu
+                  ? 'Выберите позиции, на которые будет распределен расход'
+                  : 'Xarajat qaysi tovarlarga taqsimlanishini belgilang va yangi tannarxni ko‘ring'}
+              </p>
+            </div>
           </div>
 
-          {selectedReceipt?.items && selectedReceipt.items.length > 0 && (
-            <Checkbox
-              checked={selectedItemIds.length === selectedReceipt.items.length}
-              onChange={(e) => handleSelectAll(e.target.checked)}
-              label={isRu ? 'Выбрать все позиции' : 'Barcha tovarlarni belgilash'}
-              size="sm"
-            />
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            {isCalculating && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '3px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  backgroundColor: 'var(--color-warning-50)',
+                  color: 'var(--color-warning-600)',
+                  fontSize: '11px',
+                  fontWeight: 'var(--font-medium)',
+                }}
+              >
+                <RefreshCw size={12} className="animate-spin" />
+                {isRu ? 'Пересчет...' : 'Hisoblanmoqda...'}
+              </span>
+            )}
+
+            {selectedReceipt?.items && selectedReceipt.items.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '4px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <Checkbox
+                  checked={selectedItemIds.length === selectedReceipt.items.length}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  label={isRu ? 'Все позиции' : 'Barcha tovarlar'}
+                  size="sm"
+                />
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 'var(--font-bold)',
+                    color: selectedItemIds.length > 0 ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)',
+                  }}
+                >
+                  ({selectedItemIds.length} / {selectedReceipt.items.length})
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* Empty State vs Loaded Table */}
         {!selectedReceipt ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-            {isRu ? 'Сначала выберите партию закупки выше' : 'Avval yuqoridan tegishli xarid hujjatini tanlang'}
+          <div
+            style={{
+              padding: 'var(--space-12) var(--space-6)',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'var(--space-3)',
+              backgroundColor: 'var(--color-bg-tertiary)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px dashed var(--color-border)',
+            }}
+          >
+            <div
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--color-primary-50)',
+                color: 'var(--color-primary-600)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '4px',
+              }}
+            >
+              <FileSpreadsheet size={28} />
+            </div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+              {isRu ? 'Сначала выберите партию закупки выше' : 'Avval yuqoridan tegishli xarid hujjatini tanlang'}
+            </div>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', maxWidth: '480px', lineHeight: 1.5 }}>
+              {isRu
+                ? 'После выбора закупки здесь появится подробная таблица товаров с автоматическим расчетом прироста себестоимости.'
+                : 'Xarid hujjati tanlangach, uning tovarlari va har birining yangi tannarxi ushbu jadvalda real-vaqtda hisoblab ko‘rsatiladi.'}
+            </p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
+          <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)', textAlign: 'left' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'left', color: 'var(--color-text-secondary)' }}>
-                  <th style={{ padding: '8px 12px', width: '40px' }}></th>
-                  <th style={{ padding: '8px 12px', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Товар' : 'Tovar nomi'}</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Кол-во' : 'Miqdor'}</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Цена закупки' : 'Xarid narxi'}</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Сумма' : 'Jami xarid'}</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Тек. себестоимость' : 'Amaldagi tannarx'}</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }}>
-                    {isRu ? 'Расход на поз.' : 'Taqsimlangan xarajat'}
+                <tr
+                  style={{
+                    backgroundColor: 'var(--color-bg-tertiary)',
+                    borderBottom: '1px solid var(--color-border)',
+                    color: 'var(--color-text-secondary)',
+                    fontWeight: 'var(--font-semibold)',
+                  }}
+                >
+                  <th style={{ padding: '10px 12px', width: '40px', textAlign: 'center' }}>#</th>
+                  <th style={{ padding: '10px 12px' }}>{isRu ? 'Товар / Номенклатура' : 'Tovar nomi'}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>{isRu ? 'Кол-во' : 'Miqdor'}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>{isRu ? 'Цена закупки' : 'Xarid narxi'}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>{isRu ? 'Сумма' : 'Jami xarid'}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>{isRu ? 'Тек. себестоимость' : 'Amaldagi tannarx'}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)' }}>
+                    {isRu ? '+Расход на поз.' : '+Taqsimlangan xarajat'}
                   </th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }}>
-                    {isRu ? 'Расход / ед.' : 'Xarajat / dona'}
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)' }}>
+                    {isRu ? '+Расход / ед.' : '+Xarajat / dona'}
                   </th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-primary-600)', fontWeight: 'var(--font-bold)' }}>
                     {isRu ? 'Новая себестоимость' : 'Yangi tannarx'}
                   </th>
-                  <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Прирост %' : 'O‘sish %'}</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Склад / Продано' : 'Ombor / Sotilgan'}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>{isRu ? 'Прирост %' : 'O‘sish %'}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center' }}>{isRu ? 'Остаток / Продано' : 'Ombor / Sotilgan'}</th>
                 </tr>
               </thead>
               <tbody>
-                {selectedReceipt.items?.map((item) => {
+                {selectedReceipt.items?.map((item, idx) => {
                   const isSelected = selectedItemIds.includes(item.id);
                   const preview = previewResult?.items.find((p) => p.receiptItemId === item.id);
 
@@ -517,55 +1155,102 @@ export default function NewExpensePage() {
                     <tr
                       key={item.id}
                       style={{
-                        borderBottom: '1px solid var(--color-border-subtle)',
-                        backgroundColor: isSelected ? 'transparent' : 'var(--color-surface-hover)',
-                        opacity: isSelected ? 1 : 0.6,
+                        borderBottom: '1px solid var(--color-border-light)',
+                        backgroundColor: isSelected ? 'transparent' : 'var(--color-bg-tertiary)',
+                        opacity: isSelected ? 1 : 0.45,
+                        transition: 'all var(--transition-fast)',
                       }}
                     >
-                      <td style={{ padding: '8px 12px' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                         <Checkbox
                           checked={isSelected}
                           onChange={() => handleToggleItem(item.id)}
                           size="sm"
                         />
                       </td>
-                      <td style={{ padding: '8px 12px', fontWeight: 'var(--font-medium)' }}>
-                        {(item.product?.name as any)?.uz || item.product?.name}
-                        <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+                          {(item.product?.name as any)?.uz || item.product?.name}
+                        </div>
+                        {item.product?.sku && (
+                          <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>
+                            SKU: {item.product?.sku}
+                          </div>
+                        )}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
-                        {Number(item.quantity)} {item.product?.unitOfMeasure}
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
+                        {Number(item.quantity)} {item.product?.unitOfMeasure || 'dona'}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
                         {formatCurrency(item.unitPrice, locale)}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
                         {formatCurrency(item.totalPrice, locale)}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
                         {formatCurrency(item.landedCost || item.unitPrice, locale)}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
                         {preview ? formatCurrency(preview.allocatedAmount, locale) : '—'}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--color-warning-700)' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
                         {preview ? `+${formatCurrency(preview.allocatedPerUnit, locale)}` : '—'}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', fontSize: 'var(--text-sm)' }} className="tabular-nums">
                         {preview ? formatCurrency(preview.newLandedCost, locale) : formatCurrency(item.landedCost || item.unitPrice, locale)}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
-                        {preview && preview.costIncreasePercent > 0 ? `+${preview.costIncreasePercent.toFixed(1)}%` : '0%'}
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }} className="tabular-nums">
+                        {preview && preview.costIncreasePercent > 0 ? (
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: 'var(--radius-full)',
+                              fontSize: '11px',
+                              fontWeight: 'var(--font-bold)',
+                              backgroundColor: 'var(--color-warning-50)',
+                              color: 'var(--color-warning-600)',
+                              border: '1px solid var(--color-warning-100)',
+                            }}
+                          >
+                            +{preview.costIncreasePercent.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--color-text-tertiary)', fontSize: '11px' }}>0%</span>
+                        )}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                         {preview ? (
-                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                            <span style={{ color: 'var(--color-success-600)', fontWeight: 'var(--font-medium)' }}>{preview.remainingQuantity} omborda</span>
+                          <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <span
+                              style={{
+                                padding: '1px 6px',
+                                borderRadius: 'var(--radius-sm)',
+                                fontSize: '10px',
+                                fontWeight: 'var(--font-medium)',
+                                backgroundColor: 'var(--color-success-50)',
+                                color: 'var(--color-success-600)',
+                              }}
+                            >
+                              {preview.remainingQuantity} omborda
+                            </span>
                             {preview.soldQuantity > 0 && (
-                              <span style={{ color: 'var(--color-warning-600)' }}>/ {preview.soldQuantity} sotilgan</span>
+                              <span
+                                style={{
+                                  padding: '1px 6px',
+                                  borderRadius: 'var(--radius-sm)',
+                                  fontSize: '10px',
+                                  fontWeight: 'var(--font-medium)',
+                                  backgroundColor: 'var(--color-warning-50)',
+                                  color: 'var(--color-warning-600)',
+                                }}
+                              >
+                                {preview.soldQuantity} sotilgan
+                              </span>
                             )}
                           </div>
-                        ) : '—'}
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     </tr>
                   );
@@ -575,14 +1260,65 @@ export default function NewExpensePage() {
           </div>
         )}
 
-        {/* Footer Summary */}
+        {/* ─── Footer Calculation Summary ─── */}
         {previewResult && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', backgroundColor: 'var(--color-primary-50)', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary-900)' }}>
-              <strong>{isRu ? 'Контроль распределения:' : 'Taqsimot nazorati:'}</strong> {isRu ? 'Сумма строго сходится' : 'Taqsimlangan jami summa xarajat summasiga 100% teng'}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 'var(--space-4)',
+              padding: 'var(--space-4) var(--space-5)',
+              backgroundColor: 'var(--color-primary-50)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-primary-200)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: 'var(--radius-full)',
+                  backgroundColor: 'var(--color-primary-600)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <ShieldCheck size={16} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-900)' }}>
+                  {isRu ? 'Контроль точности распределения (100%)' : 'Taqsimot aniqligi 100% nazorat ostida'}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--color-primary-700)' }}>
+                  {isRu
+                    ? 'Сумма расхода копейка в копейку распределена на выбранные позиции'
+                    : 'Kiritilgan xarajat tovarlarga to‘liq va mutanosib taqsimlandi'}
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-900)' }} className="tabular-nums">
-              {isRu ? 'Итого распределено:' : 'Jami taqsimlandi:'} {formatCurrency(previewResult.allocatedTotal, locale)} {currency}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--color-primary-700)', display: 'block' }}>
+                  {isRu ? 'Позиций выбрано' : 'Tanlangan tovarlar'}
+                </span>
+                <strong style={{ fontSize: 'var(--text-sm)', color: 'var(--color-primary-900)' }}>
+                  {selectedItemIds.length} ta
+                </strong>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '11px', color: 'var(--color-primary-700)', display: 'block' }}>
+                  {isRu ? 'Итого распределено' : 'Jami taqsimlandi'}
+                </span>
+                <strong style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-900)' }} className="tabular-nums">
+                  {formatCurrency(previewResult.allocatedTotal, locale)} {currency}
+                </strong>
+              </div>
             </div>
           </div>
         )}
