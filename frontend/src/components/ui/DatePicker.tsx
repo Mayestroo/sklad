@@ -216,9 +216,9 @@ export function DatePicker({
           htmlFor={id}
           style={{
             fontSize: 'var(--text-xs)',
-            fontWeight: 'var(--font-medium)',
+            fontWeight: 500,
             color: 'var(--color-text-secondary)',
-            marginBottom: '4px',
+            marginBottom: '2px',
           }}
         >
           {label}
@@ -245,18 +245,17 @@ export function DatePicker({
           fontFamily: 'inherit',
           borderRadius: 'var(--radius-md)',
           border: error
-            ? '1px solid var(--color-error-600)'
+            ? '1px solid var(--color-error-500)'
             : isOpen
             ? '1px solid var(--color-primary-600)'
             : '1px solid var(--color-border)',
-          backgroundColor: disabled ? 'var(--color-bg-tertiary)' : 'var(--color-bg-input)',
+          backgroundColor: disabled ? 'var(--color-bg-tertiary)' : 'var(--color-bg-secondary)',
           color: value ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
           cursor: disabled ? 'not-allowed' : 'pointer',
           outline: 'none',
-          boxShadow: isOpen ? '0 0 0 3px rgba(79, 70, 229, 0.15)' : 'none',
+          boxShadow: isOpen ? '0 0 0 3px rgba(79, 70, 229, 0.15)' : 'var(--shadow-xs)',
           transition: 'all var(--transition-fast)',
           userSelect: 'none',
-          width: '100%',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', minWidth: 0 }}>
