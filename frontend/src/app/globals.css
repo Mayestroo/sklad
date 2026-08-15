@@ -209,6 +209,27 @@ input::placeholder {
   color: var(--color-text-tertiary);
 }
 
+/* ─── Global Native Checkbox & Radio Modern Styling ─── */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-primary-600);
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+input[type='radio'] {
+  border-radius: var(--radius-full);
+}
+
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
+
 select {
   appearance: none;
   -webkit-appearance: none;

@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Plus, Tag, Edit3, Check } from 'lucide-react';
 
@@ -326,10 +327,12 @@ export default function PricesPage() {
                 { value: 'EUR', label: 'EUR' },
               ]}
             />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <input id="pl-is-default" type="checkbox" checked={newPLDefault} onChange={(e) => setNewPLDefault(e.target.checked)} style={{ width: 16, height: 16 }} />
-              <span style={{ fontSize: 'var(--text-sm)' }}>{isRu ? 'Установить как основной прайс-лист' : 'Asosiy narx jadvali sifatida belgilash'}</span>
-            </label>
+            <Checkbox
+              id="pl-is-default"
+              checked={newPLDefault}
+              onChange={(e) => setNewPLDefault(e.target.checked)}
+              label={isRu ? 'Установить как основной прайс-лист' : 'Asosiy narx jadvali sifatida belgilash'}
+            />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)' }}>
               <Button id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
               <Button id="submit-pl-btn" onClick={handleCreatePL} disabled={createLoading || !newPLNameUz}>

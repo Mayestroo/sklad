@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
@@ -601,15 +602,12 @@ export default function CounterpartiesPage() {
                 ]}
               />
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
-                <input
-                  type="checkbox"
-                  checked={hasDebtOnly}
-                  onChange={(e) => setHasDebtOnly(e.target.checked)}
-                  style={{ accentColor: 'var(--color-primary-600)' }}
-                />
-                {isRu ? 'Только с долгом' : 'Faqat qarzi borlar'}
-              </label>
+              <Checkbox
+                checked={hasDebtOnly}
+                onChange={(e) => setHasDebtOnly(e.target.checked)}
+                label={isRu ? 'Только с долгом' : 'Faqat qarzi borlar'}
+                size="sm"
+              />
             </div>
           </Card>
 

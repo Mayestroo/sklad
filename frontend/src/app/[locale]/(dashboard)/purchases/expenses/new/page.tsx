@@ -10,6 +10,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Radio } from '@/components/ui/Radio';
 import { Badge } from '@/components/ui/Badge';
 import {
   ArrowLeft,
@@ -284,10 +287,11 @@ export default function NewExpensePage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                {isRu ? 'Дата расхода' : 'Xarajat sanasi'}
-              </label>
-              <Input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />
+              <DatePicker
+                label={isRu ? 'Дата расхода' : 'Xarajat sanasi'}
+                value={docDate}
+                onChange={(val) => setDocDate(val)}
+              />
             </div>
 
             <div>
@@ -353,10 +357,11 @@ export default function NewExpensePage() {
 
           {/* Payment Mode */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-subtle)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
-              <input type="checkbox" checked={isPaid} onChange={(e) => setIsPaid(e.target.checked)} style={{ width: '16px', height: '16px' }} />
-              <span>{isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}</span>
-            </label>
+            <Checkbox
+              checked={isPaid}
+              onChange={(e) => setIsPaid(e.target.checked)}
+              label={isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}
+            />
 
             {isPaid && (
               <div style={{ marginTop: '4px' }}>
@@ -368,7 +373,7 @@ export default function NewExpensePage() {
                   onChange={(val) => setCashAccountId(val)}
                   options={cashAccounts.map((a) => ({
                     value: a.id,
-                    label: `${(a.name as any)?.uz || a.name} (${formatCurrency(a.balance, locale)} ${a.currency})`,
+                    label: `${(a.name as any)?.uz || a.name} (${formatCurrency(a.balance, locale, a.currency)})`,
                   }))}
                 />
               </div>
@@ -402,7 +407,7 @@ export default function NewExpensePage() {
               placeholder={isRu ? 'Выберите закупку...' : 'Xaridni tanlang...'}
               options={receipts.map((r) => ({
                 value: r.id,
-                label: `${r.docNumber} — ${r.counterparty?.name || 'Поставщик'} (${formatDate(r.docDate, locale)}) [${formatCurrency(r.totalAmount, locale)} ${r.currency}]`,
+                label: `${r.docNumber} — ${r.counterparty?.name || 'Поставщик'} (${formatDate(r.docDate, locale)}) [${formatCurrency(r.totalAmount, locale, r.currency)}]`,
               }))}
             />
           </div>
@@ -411,48 +416,45 @@ export default function NewExpensePage() {
             <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-surface-hover)', fontSize: 'var(--text-xs)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <div><strong>{isRu ? 'Поставщик:' : 'Yetkazib beruvchi:'}</strong> {selectedReceipt.counterparty?.name}</div>
               <div><strong>{isRu ? 'Склад:' : 'Ombor:'}</strong> {(selectedReceipt.warehouse?.name as any)?.uz || selectedReceipt.warehouse?.name}</div>
-              <div><strong>{isRu ? 'Сумма закупки:' : 'Xarid jami summasi:'}</strong> {formatCurrency(selectedReceipt.totalAmount, locale)} {selectedReceipt.currency}</div>
+              <div><strong>{isRu ? 'Сумма закупки:' : 'Xarid jami summasi:'}</strong> {formatCurrency(selectedReceipt.totalAmount, locale, selectedReceipt.currency)}</div>
               <div><strong>{isRu ? 'Позиций товаров:' : 'Tovarlar soni:'}</strong> {selectedReceipt.items?.length || 0} ta</div>
             </div>
           )}
 
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }}>
               {isRu ? 'Метод распределения расхода' : 'Xarajatni taqsimlash usuli'}
             </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: 'var(--text-xs)' }}>
-                <input
-                  type="radio"
-                  name="allocMethod"
-                  value="BY_AMOUNT"
-                  checked={allocationMethod === 'BY_AMOUNT'}
-                  onChange={() => setAllocationMethod('BY_AMOUNT')}
-                />
-                <span><strong>{isRu ? 'По стоимости' : 'Xarid qiymatiga mutanosib'}:</strong> {isRu ? 'дорогие товары получают большую долю' : 'qimmatroq tovarlarga ko‘proq ulush'}</span>
-              </label>
+              <Radio
+                name="allocMethod"
+                value="BY_AMOUNT"
+                checked={allocationMethod === 'BY_AMOUNT'}
+                onChange={() => setAllocationMethod('BY_AMOUNT')}
+                label={isRu ? 'По стоимости' : 'Xarid qiymatiga mutanosib'}
+                description={isRu ? 'дорогие товары получают большую долю' : 'qimmatroq tovarlarga ko‘proq ulush'}
+                size="sm"
+              />
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: 'var(--text-xs)' }}>
-                <input
-                  type="radio"
-                  name="allocMethod"
-                  value="BY_QUANTITY"
-                  checked={allocationMethod === 'BY_QUANTITY'}
-                  onChange={() => setAllocationMethod('BY_QUANTITY')}
-                />
-                <span><strong>{isRu ? 'По количеству' : 'Miqdoriga mutanosib'}:</strong> {isRu ? 'равная доля на каждую штуку' : 'har bir donaga teng taqsimlash'}</span>
-              </label>
+              <Radio
+                name="allocMethod"
+                value="BY_QUANTITY"
+                checked={allocationMethod === 'BY_QUANTITY'}
+                onChange={() => setAllocationMethod('BY_QUANTITY')}
+                label={isRu ? 'По количеству' : 'Miqdoriga mutanosib'}
+                description={isRu ? 'равная доля на каждую штуку' : 'har bir donaga teng taqsimlash'}
+                size="sm"
+              />
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: 'var(--text-xs)' }}>
-                <input
-                  type="radio"
-                  name="allocMethod"
-                  value="BY_WEIGHT"
-                  checked={allocationMethod === 'BY_WEIGHT'}
-                  onChange={() => setAllocationMethod('BY_WEIGHT')}
-                />
-                <span><strong>{isRu ? 'По весу (кг)' : 'Vazniga mutanosib'}:</strong> {isRu ? 'тяжелые товары получают большую долю' : 'og‘irroq tovarlarga ko‘proq ulush'}</span>
-              </label>
+              <Radio
+                name="allocMethod"
+                value="BY_WEIGHT"
+                checked={allocationMethod === 'BY_WEIGHT'}
+                onChange={() => setAllocationMethod('BY_WEIGHT')}
+                label={isRu ? 'По весу (кг)' : 'Vazniga mutanosib'}
+                description={isRu ? 'тяжелые товары получают большую долю' : 'og‘irroq tovarlarga ko‘proq ulush'}
+                size="sm"
+              />
             </div>
           </div>
         </Card>
@@ -469,14 +471,12 @@ export default function NewExpensePage() {
           </div>
 
           {selectedReceipt?.items && selectedReceipt.items.length > 0 && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={selectedItemIds.length === selectedReceipt.items.length}
-                onChange={(e) => handleSelectAll(e.target.checked)}
-              />
-              <span>{isRu ? 'Выбрать все позиции' : 'Barcha tovarlarni belgilash'}</span>
-            </label>
+            <Checkbox
+              checked={selectedItemIds.length === selectedReceipt.items.length}
+              onChange={(e) => handleSelectAll(e.target.checked)}
+              label={isRu ? 'Выбрать все позиции' : 'Barcha tovarlarni belgilash'}
+              size="sm"
+            />
           )}
         </div>
 
@@ -523,11 +523,10 @@ export default function NewExpensePage() {
                       }}
                     >
                       <td style={{ padding: '8px 12px' }}>
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={isSelected}
                           onChange={() => handleToggleItem(item.id)}
-                          style={{ width: '16px', height: '16px' }}
+                          size="sm"
                         />
                       </td>
                       <td style={{ padding: '8px 12px', fontWeight: 'var(--font-medium)' }}>

@@ -242,7 +242,7 @@ export default function ExpenseDetailPage() {
             <div>
               <strong>{isRu ? 'Сумма расхода:' : 'Xarajat summasi:'}</strong>{' '}
               <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
-                {formatCurrency(expense.amount, locale)} {expense.currency}
+                {formatCurrency(expense.amount, locale, expense.currency)}
               </span>
             </div>
             <div style={{ marginTop: '4px' }}>
@@ -370,7 +370,7 @@ export default function ExpenseDetailPage() {
                     </td>
                     <td style={{ padding: '6px 10px' }}>{impact.customerName || '—'}</td>
                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-700)' }} className="tabular-nums">
-                      +{formatCurrency(impact.totalDeltaCogs, locale)} {expense.currency}
+                      +{formatCurrency(impact.totalDeltaCogs, locale, expense.currency)}
                     </td>
                   </tr>
                 ))}

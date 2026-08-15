@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Plus, Trash2, AlertTriangle } from 'lucide-react';
 
 interface CounterpartyOption {
@@ -439,23 +440,13 @@ export function CreateSalesInvoiceModal({
         </div>
 
         {/* Post immediately toggle */}
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
-        >
-          <input
-            id="post-immediately-checkbox"
-            type="checkbox"
-            checked={postImmediately}
-            onChange={(e) => setPostImmediately(e.target.checked)}
-            style={{ width: 16, height: 16, accentColor: 'var(--color-primary-600)' }}
-          />
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{isRu ? 'Провести сразу' : 'Darhol tasdiqlash'}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-              {isRu ? 'При сохранении сразу списать со склада и рассчитать COGS' : 'Saqlash bilan birga ombor qoldig\'ini ayirib, COGS hisoblanadi'}
-            </div>
-          </div>
-        </label>
+        <Checkbox
+          id="post-immediately-checkbox"
+          checked={postImmediately}
+          onChange={(e) => setPostImmediately(e.target.checked)}
+          label={isRu ? 'Провести сразу' : 'Darhol tasdiqlash'}
+          description={isRu ? 'При сохранении сразу списать со склада и рассчитать COGS' : 'Saqlash bilan birga ombor qoldig\'ini ayirib, COGS hisoblanadi'}
+        />
 
         {/* Error */}
         {error && (

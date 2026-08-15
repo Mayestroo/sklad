@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { GitBranch, Warehouse, Plus, Building2, MapPin, Phone } from 'lucide-react';
@@ -208,10 +209,12 @@ export default function BranchesPage() {
           <Input label={isRu ? 'Название филиала (Узбекский)' : "Filial Nomi (O'zbekcha)"} value={branchNameUz} onChange={(e) => setBranchNameUz(e.target.value)} required />
           <Input label={isRu ? 'Название филиала (Русский)' : 'Название Филиала (Русский)'} value={branchNameRu} onChange={(e) => setBranchNameRu(e.target.value)} />
           <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--text-xs)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={branchIsMain} onChange={(e) => setBranchIsMain(e.target.checked)} />
-            <span>{isRu ? 'Отметить как главный филиал' : 'Bosh filial deb belgilash (Main Branch)'}</span>
-          </label>
+          <Checkbox
+            checked={branchIsMain}
+            onChange={(e) => setBranchIsMain(e.target.checked)}
+            label={isRu ? 'Отметить как главный филиал' : 'Bosh filial deb belgilash (Main Branch)'}
+            size="sm"
+          />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             <Button type="button" variant="outline" onClick={() => setBranchModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
             <Button type="submit" variant="primary">{isRu ? 'Сохранить' : 'Saqlash'}</Button>
