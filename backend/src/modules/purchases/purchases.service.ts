@@ -1328,7 +1328,7 @@ export class PurchasesService {
           userId,
           entityType: 'PurchaseReturn',
           entityId: returnId,
-          action: 'CANCEL',
+          action: 'UPDATE',
           newValue: { status: ReturnDocStatus.CANCELLED },
         },
       });
