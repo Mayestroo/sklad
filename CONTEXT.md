@@ -10,9 +10,17 @@ Sklad is an inventory, warehouse management, and trade ERP platform tailored for
 A document recording goods acquired from a supplier and received into a single designated warehouse, establishing accounts payable and generating inventory batches.
 _Avoid_: Purchase order, inbound invoice, admission sheet
 
-**Purchase Expense**:
-A direct ancillary cost (such as freight, customs duties, brokerage, or cargo handling) incurred to acquire goods and allocated to item landed costs.
+**Purchase Expense / Additional Expense**:
+A direct ancillary cost (such as freight, customs duties, brokerage, or cargo handling) incurred to acquire goods and allocated to item landed costs. Can be recorded either within a draft purchase receipt or as a standalone Additional Expense document linked to a posted receipt.
 _Avoid_: Overhead, indirect cost, operational expense
+
+**Additional Expense Document**:
+A standalone operational document recording ancillary acquisition expenses with its own document lifecycle, counterparty, currency, and line allocations, capable of updating landed cost for both draft and posted purchase receipts.
+_Avoid_: Expense voucher, cost adjustment slip, freight bill
+
+**Retroactive COGS Revaluation**:
+The automatic recalibration of historical cost of goods sold (`unitCogs`, `lineCogs`, `grossProfit`) and linked general ledger entries on sales invoices that consumed batches whose landed cost increased after the sale occurred.
+_Avoid_: Historical overwrite, manual cogs fix, profit override
 
 **Expense Allocation Method**:
 The mathematical rule (`BY_AMOUNT`, `BY_QUANTITY`, `BY_WEIGHT`) used to distribute a purchase expense across items in a purchase receipt.
@@ -25,6 +33,14 @@ _Avoid_: Prime cost, net price, base purchase cost
 **Product Batch**:
 A specific tracking record created upon posting a purchase receipt, maintaining the remaining quantity, original purchase price, and landed cost for FIFO/weighted valuation.
 _Avoid_: Lot, serial group, shipment pack
+
+**Batch Consumption**:
+An audit and ledger record tracking the exact quantity and unit cost consumed from a specific product batch by an outbound sales invoice line, enabling exact historical tracing and retroactive COGS recalibration.
+_Avoid_: Batch reduction, stock eating, FIFO deduction record
+
+**Allocation Remainder Rule**:
+The deterministic rounding convention assigning fractional penny or tiyin remainders from expense division to the highest-value line item so the sum of allocated expenses exactly equals the total expense document amount.
+_Avoid_: Penny adjustment, rounding drift, fractional balance drop
 
 **Purchase Return**:
 A document recording the return of previously received goods back to the supplier, deducting inventory quantity from the warehouse and reducing supplier debt or generating supplier credit.

@@ -286,6 +286,16 @@ export class SalesInvoicesService {
             where: { id: batch.id },
             data: { remainingQty: { decrement: consumed } },
           });
+
+          await tx.batchConsumption.create({
+            data: {
+              tenantId,
+              salesInvoiceItemId: item.id,
+              batchId: batch.id,
+              quantity: consumed,
+              unitCost: batchCostPerUnit,
+            },
+          });
         }
 
         // If no batches found (no purchase history), fallback to product costPrice

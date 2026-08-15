@@ -1,0 +1,3 @@
+# 8. Post-Inbound Landed Cost and Retroactive COGS Revaluation
+
+Direct ancillary purchase expenses (transport, customs, brokerage, cargo handling) can be registered as standalone Additional Expense documents after purchase receipts have been posted. When an additional expense is posted against a purchase whose inventory batches have already been partially or fully sold, the expense is proportionally divided: the portion attributable to remaining warehouse stock updates the batch landed cost, while the portion attributable to dispatched quantities retroactively recalibrates downstream `SalesInvoice` COGS, gross profit margins, and associated BHMS accounting journal lines.

@@ -147,3 +147,114 @@ export interface PurchaseSummaryStats {
   monthlyReturnsCount: number;
   activeSuppliersCount: number;
 }
+
+export interface AdditionalExpenseItem {
+  id: string;
+  expenseId: string;
+  receiptItemId: string;
+  productId: string;
+  initialLandedCost: number;
+  allocatedAmount: number;
+  newLandedCost: number;
+  soldQuantity: number;
+  remainingQuantity: number;
+  cogsAdjustment: number;
+  product?: {
+    id: string;
+    name: any;
+    sku: string;
+    unitOfMeasure: string;
+    weight?: number;
+  };
+  receiptItem?: PurchaseReceiptItem;
+}
+
+export interface AdditionalExpense {
+  id: string;
+  tenantId: string;
+  docNumber: string;
+  docDate: string;
+  status: PurchaseDocStatus;
+  expenseType: ExpenseType;
+  counterpartyId: string;
+  receiptId: string;
+  amount: number;
+  currency: string;
+  exchangeRate: number;
+  vatRate: number;
+  vatAmount: number;
+  allocationMethod: ExpenseAllocationMethod;
+  isPaid: boolean;
+  cashAccountId?: string;
+  comment?: string;
+  createdById?: string;
+  postedById?: string;
+  postedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  counterparty?: {
+    id: string;
+    name: string;
+    phone?: string;
+    inn?: string;
+  };
+  receipt?: PurchaseReceipt;
+  cashAccount?: {
+    id: string;
+    name: any;
+    currency: string;
+  };
+  createdBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+  postedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+  items?: AdditionalExpenseItem[];
+}
+
+export interface BatchConsumption {
+  id: string;
+  tenantId: string;
+  salesInvoiceItemId: string;
+  batchId: string;
+  quantity: number;
+  unitCost: number;
+  createdAt: string;
+  salesInvoiceItem?: any;
+  batch?: any;
+}
+
+export interface AllocationPreviewItem {
+  receiptItemId: string;
+  productId: string;
+  productName: any;
+  sku: string;
+  unitOfMeasure: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  weight: number;
+  initialLandedCost: number;
+  allocatedAmount: number;
+  allocatedPerUnit: number;
+  newLandedCost: number;
+  costIncreasePercent: number;
+  soldQuantity: number;
+  remainingQuantity: number;
+  cogsAdjustment: number;
+  stockAdjustment: number;
+}
+
+export interface AllocationPreviewResult {
+  expenseAmount: number;
+  allocationMethod: ExpenseAllocationMethod;
+  allocatedTotal: number;
+  remainder: number;
+  items: AllocationPreviewItem[];
+}
+
