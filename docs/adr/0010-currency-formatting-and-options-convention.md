@@ -1,0 +1,3 @@
+# 10. Currency Formatting and Options Convention
+
+`formatCurrency(amount, locale, currency)` in `src/lib/utils.ts` always appends the ISO currency code to its output (e.g. `"1 500 000 UZS"`). Callers must never append `{currency}` a second time — the function signature was chosen this way so every display site is a single expression with no extra moving parts. Currency select options across all pages must be imported from the shared `CURRENCY_OPTIONS` constant in `src/lib/utils.ts` rather than redefined inline, so label text (bare ISO codes, no parenthetical glosses) is controlled from one place. Violating either rule produces visible duplication bugs (`"UZS UZS"`, `"(So'm)"`) that recur each time a new page is scaffolded by copying an older file.

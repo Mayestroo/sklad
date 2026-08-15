@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { CURRENCY_OPTIONS } from '@/lib/utils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -103,11 +104,7 @@ export function AllocateExpenseModal({
     ...counterparties.map((c) => ({ value: c.id, label: c.name })),
   ];
 
-  const currencyOptions: SelectOption[] = [
-    { value: 'UZS', label: 'UZS' },
-    { value: 'USD', label: 'USD' },
-    { value: 'EUR', label: 'EUR' },
-  ];
+  const currencyOptions = CURRENCY_OPTIONS;
 
   const allocationOptions: SelectOption[] = [
     { value: 'BY_AMOUNT', label: isRu ? 'По сумме (пропорционально стоимости покупки)' : 'Summa bo\'yicha (Xarid qiymatiga mutanosib)' },

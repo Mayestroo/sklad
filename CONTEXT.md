@@ -81,3 +81,25 @@ _Avoid_: Currency slippage, revaluation loss, FX fee
 **Automatic Journal Posting**:
 The automated creation of National Accounting Standards (BHMS/NAS) double-entry records (e.g. Debit 2910, Debit 4410, Credit 6010) triggered by operational document status changes without manual user accounting intervention.
 _Avoid_: Manual debit-credit, voucher posting, provodka input
+
+## Frontend Conventions
+
+### Currency Display
+
+**`formatCurrency(amount, locale, currency)`** always returns the formatted number with the currency code already appended (e.g. `"1 500 000 UZS"`). Never add a separate `{currency}` expression after calling it — doing so produces `"1 500 000 UZS UZS"`.
+
+```tsx
+// ✅ Correct
+{formatCurrency(amount, locale, currency)}
+
+// ❌ Wrong — renders "1 500 000 UZS UZS"
+{formatCurrency(amount, locale, currency)} {currency}
+```
+
+**`CURRENCY_OPTIONS`** is the single source of truth for currency select options across the entire frontend. Import it from `@/lib/utils`; never define an inline array. Currency labels must be bare ISO codes (`UZS`, `USD`) — no parenthetical additions like `(So'm)` or `($)`.
+
+```tsx
+import { CURRENCY_OPTIONS } from '@/lib/utils';
+// ...
+<Select options={CURRENCY_OPTIONS} />
+```

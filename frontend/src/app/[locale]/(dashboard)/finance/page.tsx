@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -493,10 +493,7 @@ function AddTransactionModal({ mode, accounts, txTypes, locale, token, tenantId,
             {!isTransferOrExchange ? (
               <Select
                 label="Valyuta"
-                options={[
-                  { value: 'UZS', label: 'UZS' },
-                  { value: 'USD', label: 'USD' },
-                ]}
+                options={CURRENCY_OPTIONS}
                 value={currency}
                 onChange={(val) => setCurrency(val)}
               />
@@ -800,8 +797,7 @@ export default function FinancePage() {
           <Select
             options={[
               { value: '', label: isRu ? 'Все валюты' : 'Barcha valyutalar' },
-              { value: 'UZS', label: 'UZS' },
-              { value: 'USD', label: 'USD' },
+              ...CURRENCY_OPTIONS,
             ]}
             value={currencyFilter}
             onChange={(val) => { setCurrencyFilter(val); setPage(1); }}

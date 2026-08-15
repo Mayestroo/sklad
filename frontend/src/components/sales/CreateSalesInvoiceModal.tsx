@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';

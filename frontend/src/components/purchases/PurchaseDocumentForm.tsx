@@ -11,7 +11,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
 import {
   ArrowLeft,
   Plus,

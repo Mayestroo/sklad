@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -456,10 +456,7 @@ export default function NewExpensePage() {
               <Select
                 value={currency}
                 onChange={(val) => setCurrency(val)}
-                options={[
-                  { value: 'UZS', label: 'UZS (So‘m)' },
-                  { value: 'USD', label: 'USD ($)' },
-                ]}
+                options={CURRENCY_OPTIONS}
               />
             </div>
           </div>
@@ -1118,7 +1115,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Итого распределено' : 'Jami taqsimlandi'}
                 </span>
                 <strong style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-900)' }} className="tabular-nums">
-                  {formatCurrency(previewResult.allocatedTotal, locale)} {currency}
+                  {formatCurrency(previewResult.allocatedTotal, locale, currency)}
                 </strong>
               </div>
             </div>

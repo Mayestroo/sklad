@@ -3,6 +3,19 @@
  * Supporting Uzbek (uz-UZ) and Russian (ru-RU) locales
  */
 
+/**
+ * Summani valyuta kodi bilan birga formatlaydi.
+ *
+ * ⚠️ MUHIM: Bu funksiya natijasiga ALOHIDA `{currency}` QO'SHMANG!
+ * Valyuta kodi (masalan "UZS") ichida ALLAQACHON bor.
+ *
+ * @example
+ * // ✅ To'g'ri — "1 500 000 UZS"
+ * {formatCurrency(amount, locale, currency)}
+ *
+ * // ❌ XATO — "1 500 000 UZS UZS" (ikki marta!)
+ * {formatCurrency(amount, locale, currency)} {currency}
+ */
 export function formatCurrency(amount: number, locale: string = 'uz', currency: string = 'UZS'): string {
   const formatted = new Intl.NumberFormat(locale === 'uz' ? 'uz-UZ' : 'ru-RU', {
     minimumFractionDigits: 0,
@@ -12,6 +25,21 @@ export function formatCurrency(amount: number, locale: string = 'uz', currency: 
   const cur = (currency || 'UZS').toUpperCase();
   return `${formatted} ${cur}`;
 }
+
+/**
+ * Valyuta select opsiyalari — butun loyihada SHU konstantani ishlating.
+ *
+ * ⚠️ Yangi sahifada o'z options yozмang — har doim import qiling:
+ *   import { CURRENCY_OPTIONS } from '@/lib/utils';
+ *
+ * Qoidalar:
+ * - Faqat ISO kodlari: "UZS", "USD" — qavs yoki qo'shimcha matn YO'Q
+ * - "(So'm)", "($)", "UZS (So'm)" — TAQIQLANGAN
+ */
+export const CURRENCY_OPTIONS = [
+  { value: 'UZS', label: 'UZS' },
+  { value: 'USD', label: 'USD' },
+];
 
 const UZ_MONTHS_SHORT = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
 const RU_MONTHS_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
