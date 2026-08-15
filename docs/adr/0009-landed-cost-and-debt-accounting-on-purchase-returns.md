@@ -1,0 +1,3 @@
+# 9. Landed Cost and Supplier Payable Accounting on Purchase Returns
+
+When a purchase return document is posted for inventory that previously received allocated purchase expenses (such as freight or customs duties), the unit valuation used for inventory asset reduction (Debit 2910 credit) is the item's actual landed cost (`landedCost`), whereas the reduction in supplier debt (Credit 6010 debit) is strictly calculated using the supplier's original base purchase price (`unitPrice`). Any non-refundable difference resulting from allocated third-party expenses is automatically written off as a Landed Cost Return Expense Loss, preserving double-entry accounting integrity without improperly reducing counterparty payable balances.

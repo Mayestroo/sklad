@@ -204,6 +204,7 @@ enum SalesReturnDocStatus {
 
 enum ReturnDocStatus {
   DRAFT
+  UNDER_REVIEW
   POSTED
   CANCELLED
 }
@@ -1229,6 +1230,7 @@ model PurchaseReceiptItem {
   receiptId         String          @map("receipt_id")
   productId         String          @map("product_id")
   quantity          Decimal         @db.Decimal(15, 3)
+  returnedQuantity  Decimal         @default(0) @db.Decimal(15, 3) @map("returned_quantity")
   weight            Decimal         @default(0) @db.Decimal(15, 3)
   unitPrice         Decimal         @db.Decimal(15, 2) @map("unit_price")
   discount          Decimal         @default(0) @db.Decimal(15, 2)

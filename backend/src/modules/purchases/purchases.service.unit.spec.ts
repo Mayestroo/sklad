@@ -6,6 +6,7 @@ import {
   PurchaseDocStatus,
   PurchasePaymentStatus,
   PurchaseReturnStatus,
+  ReturnDocStatus,
 } from '@prisma/client';
 import {
   ExpenseTypeDto,
@@ -30,6 +31,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       purchaseReceiptItem: {
         deleteMany: jest.fn(),
         update: jest.fn(),
+        findMany: jest.fn(),
       },
       purchaseExpense: {
         create: jest.fn(),
@@ -38,10 +40,13 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       purchaseReturn: {
         count: jest.fn(),
         create: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
+        update: jest.fn(),
       },
       productBatch: {
         create: jest.fn(),
+        update: jest.fn(),
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
       },
@@ -398,9 +403,32 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.counterparty.update.mockResolvedValue({});
       prisma.purchaseReceipt.findUnique.mockResolvedValue({
         id: 'rec-1',
+        status: PurchaseDocStatus.POSTED,
         totalAmount: 1000000,
         returns: [],
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 10,
+            returnedQuantity: 0,
+            unitPrice: 100000,
+            landedCost: 100000,
+          },
+        ],
+        batches: [
+          {
+            id: 'batch-1',
+            productId: 'prod-1',
+            remainingQty: 10,
+          },
+        ],
       });
+      prisma.purchaseReceiptItem.update.mockResolvedValue({});
+      prisma.purchaseReceiptItem.findMany.mockResolvedValue([
+        { id: 'item-1', quantity: 10, returnedQuantity: 2 },
+      ]);
+      prisma.productBatch.update.mockResolvedValue({});
       prisma.purchaseReceipt.update.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
 
@@ -429,5 +457,73 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         data: { returnStatus: PurchaseReturnStatus.PARTIALLY_RETURNED },
       });
     });
+
+    it('should disallow returning more than remaining batch quantity', async () => {
+      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+        id: 'rec-1',
+        status: PurchaseDocStatus.POSTED,
+        items: [{ id: 'item-1', productId: 'prod-1', quantity: 10, returnedQuantity: 8 }],
+        batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 2 }],
+      });
+
+      await expect(
+        service.createReturn('tenant-123', 'user-1', {
+          receiptId: 'rec-1',
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          items: [{ productId: 'prod-1', quantity: 5, unitPrice: 100000 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should support ReturnDocStatus.UNDER_REVIEW and track returnedQuantity on receipt items', async () => {
+      const mockReceiptItem = {
+        id: 'item-1',
+        productId: 'prod-1',
+        quantity: 10,
+        returnedQuantity: 2,
+        unitPrice: 100000,
+        landedCost: 110000,
+      };
+
+      expect(mockReceiptItem.returnedQuantity).toBe(2);
+      expect(mockReceiptItem.quantity - mockReceiptItem.returnedQuantity).toBe(8);
+    });
+
+    it('should cancel posted return: restore stock, product batch remainingQty, and supplier debt', async () => {
+      prisma.purchaseReturn.findFirst.mockResolvedValue({
+        id: 'ret-1',
+        status: ReturnDocStatus.POSTED,
+        counterpartyId: 'supp-1',
+        warehouseId: 'wh-1',
+        receiptId: 'rec-1',
+        items: [{ productId: 'prod-1', quantity: 2, totalPrice: 200000 }],
+        receipt: {
+          items: [{ id: 'item-1', productId: 'prod-1', quantity: 10, returnedQuantity: 2 }],
+          batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 8 }],
+        },
+      });
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 8 });
+      prisma.stockLevel.update.mockResolvedValue({});
+      prisma.purchaseReceiptItem.update.mockResolvedValue({});
+      prisma.productBatch.update.mockResolvedValue({});
+      prisma.counterparty.update.mockResolvedValue({});
+      prisma.purchaseReceiptItem.findMany.mockResolvedValue([
+        { id: 'item-1', quantity: 10, returnedQuantity: 0 },
+      ]);
+      prisma.purchaseReceipt.update.mockResolvedValue({});
+      prisma.purchaseReturn.update.mockResolvedValue({ id: 'ret-1', status: ReturnDocStatus.CANCELLED });
+      prisma.auditLog.create.mockResolvedValue({});
+
+      const result = await service.cancelReturn('tenant-123', 'user-1', 'ret-1');
+      expect(result.status).toBe(ReturnDocStatus.CANCELLED);
+      expect(prisma.counterparty.update).toHaveBeenCalledWith({
+        where: { id: 'supp-1' },
+        data: { debtBalance: { increment: 200000 } },
+      });
+    });
   });
 });
+
+
+

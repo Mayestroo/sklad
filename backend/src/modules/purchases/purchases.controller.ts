@@ -160,6 +160,16 @@ export class PurchasesController {
     return this.purchasesService.findAllReturns(tenantId);
   }
 
+  @Post('returns/:id/cancel')
+  @RequirePermissions('inventory:delete')
+  async cancelReturn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+  ) {
+    return this.purchasesService.cancelReturn(tenantId, user?.id, id);
+  }
+
   // ─── SUPPLIER PROFILE & HISTORY ───────────────────────────────
 
   @Get('suppliers/:id')

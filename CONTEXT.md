@@ -46,6 +46,14 @@ _Avoid_: Penny adjustment, rounding drift, fractional balance drop
 A document recording the return of previously received goods back to the supplier, deducting inventory quantity from the warehouse and reducing supplier debt or generating supplier credit.
 _Avoid_: Debit memo, outbound return, vendor refund slip
 
+**Landed Cost Return Variance**:
+The non-refundable expense difference recognized when returning inventory whose unit landed cost exceeded the supplier base purchase price (due to allocated freight, customs, or brokerage), credited from inventory asset (2910) and expensed without altering the supplier's payable balance.
+_Avoid_: Inventory write-off, return loss penalty, supplier over-charge
+
+**Return Quantity Invariant**:
+The safety validation ensuring that item returned quantity cannot exceed the minimum of unreturned receipt quantity, remaining batch quantity, and active warehouse stock.
+_Avoid_: Over-return, negative batch balance, sold-item return
+
 **Rollback Invariant**:
 The safety rule disallowing the unposting or cancellation of a posted purchase receipt if linked payments exist or if warehouse stock has dropped below received quantities due to sales.
 _Avoid_: Document unlock, forced unpost, stock override

@@ -30,7 +30,7 @@ export function CreateReturnModal({
 
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
   const [reason, setReason] = useState('');
-  const [returnItems, setReturnItems] = useState<{ productId: string; name: string; maxQty: number; returnQty: number; unitPrice: number }[]>([]);
+  const [returnItems, setReturnItems] = useState<{ productId: string; name: string; maxQty: number; returnQty: number; unitPrice: number; landedCost: number }[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,16 +41,25 @@ export function CreateReturnModal({
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
   };
 
+  const REASON_PRESETS = isRu
+    ? ['Брак / дефект товара', 'Отправлен не тот товар', 'Излишек товара', 'Поврежденный товар', 'Не соответствует заказу', 'Ошибка в документах', 'Другое']
+    : ['Brak / nuqsonli tovar', 'Noto\'g\'ri tovar yuborilgan', 'Ortiqcha tovar', 'Shikastlangan tovar', 'Buyurtmaga mos emas', 'Hujjatdagi xato', 'Boshqa'];
+
   useEffect(() => {
     if (receipt && receipt.items) {
       setReturnItems(
-        receipt.items.map((i) => ({
-          productId: i.productId,
-          name: getProductName(i.product?.name),
-          maxQty: Number(i.quantity),
-          returnQty: 0,
-          unitPrice: Number(i.unitPrice),
-        }))
+        receipt.items.map((i: any) => {
+          const unreturned = Math.max(0, Number(i.quantity) - Number(i.returnedQuantity || 0));
+          const landedUnit = Number(i.quantity) > 0 && Number(i.landedCost) > 0 ? Number(i.landedCost) / Number(i.quantity) : Number(i.unitPrice);
+          return {
+            productId: i.productId,
+            name: getProductName(i.product?.name),
+            maxQty: unreturned,
+            returnQty: 0,
+            unitPrice: Number(i.unitPrice),
+            landedCost: landedUnit,
+          };
+        })
       );
     }
   }, [receipt, locale]);
@@ -70,7 +79,7 @@ export function CreateReturnModal({
     return returnItems.reduce((sum, item) => sum + item.returnQty * item.unitPrice, 0);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (targetStatus: 'POSTED' | 'UNDER_REVIEW') => {
     setError('');
 
     const itemsToReturn = returnItems
@@ -101,6 +110,7 @@ export function CreateReturnModal({
           returnDate: returnDate || undefined,
           currency: receipt.currency,
           reason: reason || undefined,
+          status: targetStatus,
           items: itemsToReturn,
         }),
       });
@@ -122,7 +132,7 @@ export function CreateReturnModal({
       onClose={onClose}
       title={`${isRu ? 'Возврат товара поставщику: Документ №' : 'Yetkazib Beruvchiga Tovarni Qaytarish:'} ${receipt.docNumber}`}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '650px', width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '700px', width: '100%' }}>
         {error && (
           <div
             style={{
@@ -152,7 +162,25 @@ export function CreateReturnModal({
             <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
               {isRu ? 'Причина возврата' : 'Qaytarish Sababi'}
             </label>
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isRu ? 'Например: Брак, дефект или нарушение договора' : 'Masalan: Brak, Yaroqsiz tovar yoki shartnoma buzilishi'} />
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-bg-surface)',
+                fontSize: 'var(--text-sm)',
+              }}
+            >
+              <option value="">{isRu ? '-- Выберите причину --' : '-- Sababni tanlang --'}</option>
+              {REASON_PRESETS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -165,7 +193,7 @@ export function CreateReturnModal({
               <thead>
                 <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
                   <th style={{ padding: '8px', textAlign: 'left' }}>{isRu ? 'ТОВАР' : 'TOVAR'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>{isRu ? 'ПРИНЯТО' : 'QABUL MIQDORI'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>{isRu ? 'ДОСТУПНО' : 'QAYTARILISHI MUMKIN'}</th>
                   <th style={{ padding: '8px', textAlign: 'right', width: '110px' }}>{isRu ? 'ВОЗВРАТ' : 'QAYTARISH MIQDORI'}</th>
                   <th style={{ padding: '8px', textAlign: 'right', width: '120px' }}>{isRu ? 'ЦЕНА ЗАКУПКИ' : 'XARID NARXI'}</th>
                   <th style={{ padding: '8px', textAlign: 'right', width: '130px' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
@@ -174,8 +202,15 @@ export function CreateReturnModal({
               <tbody>
                 {returnItems.map((item, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '8px', fontWeight: 'var(--font-medium)' }}>{item.name}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>{item.maxQty}</td>
+                    <td style={{ padding: '8px', fontWeight: 'var(--font-medium)' }}>
+                      <div>{item.name}</div>
+                      {item.landedCost > item.unitPrice && (
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                          {isRu ? `Себестоимость: ${formatCurrency(item.landedCost, locale, receipt.currency)}` : `Tannarxi: ${formatCurrency(item.landedCost, locale, receipt.currency)}`}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)' }}>{item.maxQty}</td>
                     <td style={{ padding: '6px' }}>
                       <Input
                         type="number"
@@ -209,8 +244,11 @@ export function CreateReturnModal({
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
-          <Button variant="danger" onClick={handleSubmit} disabled={loading || returnTotal <= 0}>
-            {loading ? (isRu ? 'Оформление...' : 'Rasmiylashtirilmoqda...') : (isRu ? 'Подтвердить возврат' : 'Qaytarishni Tasdiqlash')}
+          <Button variant="secondary" onClick={() => handleSubmit('UNDER_REVIEW')} disabled={loading || returnTotal <= 0}>
+            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Отправить на проверку' : 'Tekshiruvga Yuborish')}
+          </Button>
+          <Button variant="danger" onClick={() => handleSubmit('POSTED')} disabled={loading || returnTotal <= 0}>
+            {loading ? (isRu ? 'Оформление...' : 'Rasmiylashtirilmoqda...') : (isRu ? 'Подтвердить и списать' : 'Tasdiqlash va Balansni Kamaytirish')}
           </Button>
         </div>
       </div>
