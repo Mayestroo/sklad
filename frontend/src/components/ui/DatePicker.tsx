@@ -207,7 +207,6 @@ export function DatePicker({
         gap: 'var(--space-1)',
         position: 'relative',
         fontFamily: 'var(--font-sans)',
-        maxWidth: '180px',
         width: '100%',
         ...style,
       }}
