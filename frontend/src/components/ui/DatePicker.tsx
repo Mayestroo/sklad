@@ -61,7 +61,7 @@ export function DatePicker({
     // fallback
   }
   const isRu = locale === 'ru';
-  const effectivePlaceholder = placeholder ?? (isRu ? 'Выберите дату...' : 'Sana tanlang...');
+  const effectivePlaceholder = placeholder ?? (isRu ? 'Дата...' : 'Sana...');
 
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
