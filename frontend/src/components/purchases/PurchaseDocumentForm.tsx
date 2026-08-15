@@ -742,13 +742,11 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           {isRu ? 'Основная информация' : 'Asosiy Hujjat Ma’lumotlari'}
         </h3>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
           {/* Supplier / Counterparty */}
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Контрагент *' : 'Kontragent *'}
-            </label>
+          <div style={{ minWidth: '200px', flex: '2 1 220px' }}>
             <Select
+              label={isRu ? 'Контрагент *' : 'Kontragent *'}
               options={supplierOptions}
               value={counterpartyId}
               onChange={(val) => { markDirty(); setCounterpartyId(val); }}
@@ -762,7 +760,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               if (!selectedSupplier) return null;
               const debt = Number(selectedSupplier.debtBalance || 0);
               return (
-                <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)' }}>
+                <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)' }}>
                   <span style={{ color: 'var(--color-text-tertiary)' }}>
                     {isRu ? 'Баланс долга:' : 'Qarz balansi:'}
                   </span>
@@ -780,11 +778,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           </div>
 
           {/* Warehouse */}
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Склад *' : 'Ombor *'}
-            </label>
+          <div style={{ minWidth: '150px', flex: '1.5 1 170px' }}>
             <Select
+              label={isRu ? 'Склад *' : 'Ombor *'}
               options={warehouseOptions}
               value={warehouseId}
               onChange={(val) => { markDirty(); setWarehouseId(val); }}
@@ -795,10 +791,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             />
           </div>
 
-
-
           {/* Document Date */}
-          <div>
+          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
             <DatePicker
               label={isRu ? 'Дата документа *' : 'Hujjat Sanasi *'}
               value={docDate}
@@ -807,58 +801,52 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             />
           </div>
 
-          {/* Contract Number & Date */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                {isRu ? '№ Договора' : 'Shartnoma №'}
-              </label>
-              <Input
-                value={contractNumber}
-                onChange={(e) => { markDirty(); setContractNumber(e.target.value); }}
-                placeholder="№ 12-A"
-                disabled={isReadOnly}
-              />
-            </div>
-            <div>
-              <DatePicker
-                label={isRu ? 'Дата договора' : 'Shartnoma sanasi'}
-                value={contractDate}
-                onChange={(val) => { markDirty(); setContractDate(val); }}
-                disabled={isReadOnly}
-              />
-            </div>
+          {/* Contract Number */}
+          <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
+            <Input
+              label={isRu ? '№ Договора' : 'Shartnoma №'}
+              value={contractNumber}
+              onChange={(e) => { markDirty(); setContractNumber(e.target.value); }}
+              placeholder="№ 12-A"
+              disabled={isReadOnly}
+            />
           </div>
 
-          {/* Currency & Exchange Rate */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                {isRu ? 'Валюта' : 'Valyuta'}
-              </label>
-              <Select
-                options={[
-                  { value: 'UZS', label: 'UZS' },
-                  { value: 'USD', label: 'USD' },
-                  { value: 'EUR', label: 'EUR' },
-                  { value: 'RUB', label: 'RUB' },
-                ]}
-                value={currency}
-                onChange={(val) => { markDirty(); setCurrency(val); }}
-                disabled={isReadOnly}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                {isRu ? 'Курс валюты' : 'Valyuta kursi'}
-              </label>
-              <Input
-                type="number"
-                value={exchangeRate}
-                onChange={(e) => { markDirty(); setExchangeRate(Number(e.target.value)); }}
-                disabled={isReadOnly}
-              />
-            </div>
+          {/* Contract Date */}
+          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
+            <DatePicker
+              label={isRu ? 'Дата договора' : 'Shartnoma sanasi'}
+              value={contractDate}
+              onChange={(val) => { markDirty(); setContractDate(val); }}
+              disabled={isReadOnly}
+            />
+          </div>
+
+          {/* Currency */}
+          <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
+            <Select
+              label={isRu ? 'Валюта' : 'Valyuta'}
+              options={[
+                { value: 'UZS', label: 'UZS' },
+                { value: 'USD', label: 'USD' },
+                { value: 'EUR', label: 'EUR' },
+                { value: 'RUB', label: 'RUB' },
+              ]}
+              value={currency}
+              onChange={(val) => { markDirty(); setCurrency(val); }}
+              disabled={isReadOnly}
+            />
+          </div>
+
+          {/* Exchange Rate */}
+          <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
+            <Input
+              label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
+              type="number"
+              value={exchangeRate}
+              onChange={(e) => { markDirty(); setExchangeRate(Number(e.target.value)); }}
+              disabled={isReadOnly}
+            />
           </div>
 
           {/* Comment */}
