@@ -256,87 +256,62 @@ export default function NewExpensePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', width: '100%', paddingBottom: 'var(--space-8)' }}>
-      {/* ─── Header ─── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <button
+      {/* ─── Header & Toolbar ─── */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 'var(--space-4)',
+          paddingBottom: 'var(--space-2)',
+          borderBottom: '1px solid var(--color-border-light)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => router.push(`/${locale}/purchases/expenses`)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '40px',
-              height: '40px',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-primary)',
-              cursor: 'pointer',
-              transition: 'all var(--transition-fast)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-              e.currentTarget.style.borderColor = 'var(--color-primary-400)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-              e.currentTarget.style.borderColor = 'var(--color-border)';
-            }}
-            title={isRu ? 'Назад к списку' : 'Ro‘yxatga qaytish'}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <ArrowLeft size={18} />
-          </button>
+            <ArrowLeft size={18} /> {isRu ? 'К списку расходов' : 'Xarajatlar ro‘yxatiga'}
+          </Button>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Новый дополнительный расход' : 'Yangi Qo‘shimcha Xarajat Kiritish'}
               </h1>
-              <span
-                style={{
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: '11px',
-                  fontWeight: 'var(--font-medium)',
-                  backgroundColor: 'var(--color-primary-50)',
-                  color: 'var(--color-primary-600)',
-                  border: '1px solid var(--color-primary-100)',
-                }}
-              >
-                {isRu ? 'Черновик' : 'Yangi qoralama'}
-              </span>
+              <Badge variant="warning">{isRu ? 'Черновик' : 'Qoralama'}</Badge>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+        {/* Action Toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <Button
-            variant="outline"
+            variant="secondary"
             disabled={submitting}
             onClick={() => handleSubmit(false)}
-            style={{
-              backgroundColor: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-primary)',
-              fontWeight: 'var(--font-semibold)',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Save size={16} style={{ marginRight: '6px' }} />
-            {isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}
+            <Save size={16} /> {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
           </Button>
           <Button
-            disabled={submitting || !isStep1Done || !isStep2Done || !isStep3Done}
+            disabled={submitting || !counterpartyId || !receiptId || !amount || Number(amount) <= 0 || selectedItemIds.length === 0}
             onClick={() => handleSubmit(true)}
             style={{
-              boxShadow: isStep3Done ? '0 4px 14px rgba(79, 70, 229, 0.4)' : 'none',
-              fontWeight: 'var(--font-semibold)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: 'var(--color-success-600)',
             }}
           >
             {submitting ? (
-              <RefreshCw size={16} className="animate-spin" style={{ marginRight: '6px' }} />
+              <RefreshCw size={16} className="animate-spin" />
             ) : (
-              <CheckCircle2 size={16} style={{ marginRight: '6px' }} />
+              <CheckCircle2 size={16} />
             )}
             {isRu ? 'Провести и распределить' : 'Tasdiqlash va Taqsimlash'}
           </Button>
