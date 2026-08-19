@@ -276,11 +276,7 @@ export function CreateSalesInvoiceModal({
             label={isRu ? 'Валюта' : 'Valyuta'}
             value={currency}
             onChange={(val) => setCurrency(val)}
-            options={[
-              { value: 'UZS', label: 'UZS' },
-              { value: 'USD', label: 'USD' },
-              { value: 'EUR', label: 'EUR' },
-            ]}
+            options={CURRENCY_OPTIONS}
           />
           <Input
             id="modal-contract-number"
@@ -383,7 +379,7 @@ export function CreateSalesInvoiceModal({
                           />
                           {item._costPrice > 0 && (
                             <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginTop: 2 }}>
-                              {isRu ? 'Себест.:' : 'Tan.:'} {formatCurrency(item._costPrice, locale)}
+                              {isRu ? 'Себест.:' : 'Tan.:'} {formatCurrency(item._costPrice, locale, currency)}
                             </div>
                           )}
                         </td>
@@ -409,7 +405,7 @@ export function CreateSalesInvoiceModal({
                           />
                         </td>
                         <td style={{ padding: '6px 10px', width: 120, fontWeight: 600, fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>
-                          {formatCurrency(lineTotal, locale)}
+                          {formatCurrency(lineTotal, locale, currency)}
                         </td>
                         <td style={{ padding: '6px 8px', width: 40 }}>
                           <button
@@ -430,7 +426,7 @@ export function CreateSalesInvoiceModal({
                       {isRu ? 'Итоговая сумма:' : 'Jami summa:'}
                     </td>
                     <td colSpan={2} style={{ padding: '10px', fontWeight: 700, fontSize: 'var(--text-base)' }}>
-                      {formatCurrency(totalAmount, locale)}
+                      {formatCurrency(totalAmount, locale, currency)}
                     </td>
                   </tr>
                 </tfoot>

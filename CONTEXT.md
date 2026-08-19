@@ -62,6 +62,28 @@ _Avoid_: Document unlock, forced unpost, stock override
 An inline creation dialog enabling operators to create new products, categories, or counterparties directly within the purchase receipt creation workflow without leaving the page.
 _Avoid_: Context switch, background registration, external entity setup
 
+### Sales & Outbound
+
+**Sales Invoice**:
+A document recording the sale of goods to a customer from a single designated warehouse, establishing customer accounts receivable, consuming inventory batches via FIFO, and calculating real-time COGS and gross profit.
+_Avoid_: Sales order, bill of sale, outbound invoice
+
+**Gross Profit**:
+The operational trade margin calculated as Net Sales Revenue (excluding output VAT) minus the actual Cost of Goods Sold (`totalCogs`) consumed from inventory batches.
+_Avoid_: Mark-up profit, raw turnover, sales spread
+
+**Below-Cost Guardrail**:
+The real-time safety alert and role-permission gate preventing the sale of products below their unit landed cost without explicit managerial authorization.
+_Avoid_: Margin alert, discount stop, price restriction
+
+**Sales Return**:
+A document recording the return of previously sold goods from a customer back into the warehouse, restoring active stock at the original consumption landed cost, reducing customer debt or generating customer advance, and adjusting accounting revenue and COGS.
+_Avoid_: Customer refund slip, inbound return, reverse invoice
+
+**Sales Rollback Invariant**:
+The safety rule disallowing the unposting or cancellation of a posted sales invoice if linked finance payments exist or if sales returns have been registered against it.
+_Avoid_: Force cancel, cash bypass, invoice unlock
+
 ### Counterparties & Balances
 
 **Supplier Debt**:
@@ -72,14 +94,26 @@ _Avoid_: Vendor credit, accounts payable liability, unpaid bill balance
 A credit balance or overpayment held with a supplier resulting from advance payments or returns of already-settled purchases, applicable to future receipts.
 _Avoid_: Prepayment liability, negative debt, deposit fund
 
+**Customer Debt**:
+The accounts receivable obligation owed by a customer in the sales currency, created upon posting a sales invoice and diminished by finance payments or sales returns.
+_Avoid_: Buyer liability, customer balance, unpaid bill balance
+
+**Customer Advance**:
+An unallocated credit balance held on behalf of a customer resulting from advance payments or returns exceeding open debt, applicable toward future sales.
+_Avoid_: Customer credit deposit, buyer prepay, negative receivable
+
+**Payment Allocation**:
+The direct or FIFO-based distribution of customer finance income transactions to settle outstanding sales invoices and diminish customer debt.
+_Avoid_: Debt erase, money clearing, manual match
+
 **Exchange Difference**:
-The financial variance recognized between the purchase invoice exchange rate and the settlement payment exchange rate for multi-currency transactions.
+The financial variance recognized between the operational document exchange rate and the settlement payment exchange rate for multi-currency transactions.
 _Avoid_: Currency slippage, revaluation loss, FX fee
 
 ### Accounting & General Ledger
 
 **Automatic Journal Posting**:
-The automated creation of National Accounting Standards (BHMS/NAS) double-entry records (e.g. Debit 2910, Debit 4410, Credit 6010) triggered by operational document status changes without manual user accounting intervention.
+The automated creation of National Accounting Standards (BHMS/NAS) double-entry records (e.g. Debit 2910, Debit 4410, Credit 6010 for purchases; Debit 4010, Credit 9010, Debit 9110, Credit 2910 for sales) triggered by operational document status changes without manual user accounting intervention.
 _Avoid_: Manual debit-credit, voucher posting, provodka input
 
 ## Frontend Conventions

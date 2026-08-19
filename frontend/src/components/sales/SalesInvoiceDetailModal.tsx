@@ -163,27 +163,27 @@ export function SalesInvoiceDetailModal({
         }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Общая сумма' : 'Jami summa'}</div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4 }}>{formatCurrency(totalAmount, locale)}</div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4 }}>{formatCurrency(totalAmount, locale, invoice.currency)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Оплачено' : 'To\'langan'}</div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#10b981' }}>{formatCurrency(paidAmount, locale)}</div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#10b981' }}>{formatCurrency(paidAmount, locale, invoice.currency)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Остаток долга' : 'Qoldiq qarz'}</div>
-            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#f59e0b' }}>{formatCurrency(totalAmount - paidAmount, locale)}</div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: '#f59e0b' }}>{formatCurrency(totalAmount - paidAmount, locale, invoice.currency)}</div>
           </div>
           {invoice.status === 'POSTED' && (
             <>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'COGS (себестоимость)' : 'COGS (tannarx)'}</div>
-                <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: 'var(--color-text-secondary)' }}>{formatCurrency(totalCogs, locale)}</div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: 'var(--color-text-secondary)' }}>{formatCurrency(totalCogs, locale, invoice.currency)}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Валовая прибыль' : 'Yalpi foyda'}</div>
                 <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: grossProfit >= 0 ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   {grossProfit >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                  {formatCurrency(grossProfit, locale)}
+                  {formatCurrency(grossProfit, locale, invoice.currency)}
                 </div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{isRu ? 'Маржа:' : 'Marja:'} {margin}%</div>
               </div>
@@ -228,16 +228,16 @@ export function SalesInvoiceDetailModal({
                           )}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{Number(item.quantity)}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{formatCurrency(Number(item.unitPrice), locale)}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{formatCurrency(Number(item.unitPrice), locale, invoice.currency)}</td>
                         <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)' }}>{Number(item.vatRate)}%</td>
-                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(item.totalPrice), locale)}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(item.totalPrice), locale, invoice.currency)}</td>
                         {invoice.status === 'POSTED' && (
                           <>
                             <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                              {formatCurrency(Number(item.lineCogs || 0), locale)}
+                              {formatCurrency(Number(item.lineCogs || 0), locale, invoice.currency)}
                             </td>
                             <td style={{ padding: '10px 12px', fontSize: 'var(--text-sm)', fontWeight: 600, color: lineGrossProfit >= 0 ? '#10b981' : '#ef4444' }}>
-                              {formatCurrency(lineGrossProfit, locale)}
+                              {formatCurrency(lineGrossProfit, locale, invoice.currency)}
                             </td>
                             <td style={{ padding: '10px 12px', fontSize: 11, color: 'var(--color-text-secondary)' }}>
                               {totalAmount > 0 ? `${((Number(item.totalPrice) / totalAmount) * 100).toFixed(1)}%` : ''}

@@ -5,7 +5,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
-import { TransactionDirection } from '@prisma/client';
+import {
+  TransactionDirection,
+  SalesDocStatus,
+  SalesPaymentStatus,
+} from '@prisma/client';
 import { CreateIncomeDto } from './dto/create-income.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
@@ -222,6 +226,60 @@ export class FinanceService {
           where: { id: dto.counterpartyId },
           data: { debtBalance: { decrement: dto.amount } },
         });
+
+        // 1. Direct Invoice Settlement
+        if (dto.sourceDocType === 'SalesInvoice' && dto.sourceDocId) {
+          const invoice = await tx.salesInvoice.findFirst({
+            where: { id: dto.sourceDocId, tenantId },
+          });
+          if (invoice) {
+            const newPaid = Number(invoice.paidAmount) + Number(dto.amount);
+            const total = Number(invoice.totalAmount);
+            const paymentStatus =
+              newPaid >= total
+                ? SalesPaymentStatus.PAID
+                : newPaid > 0
+                ? SalesPaymentStatus.PARTIALLY_PAID
+                : SalesPaymentStatus.UNPAID;
+
+            await tx.salesInvoice.update({
+              where: { id: invoice.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
+        } else if (!dto.sourceDocId) {
+          // 2. FIFO Auto-Allocation across open unpaid/partially-paid sales invoices
+          const openInvoices = await tx.salesInvoice.findMany({
+            where: {
+              tenantId,
+              counterpartyId: dto.counterpartyId,
+              status: SalesDocStatus.POSTED,
+              paymentStatus: {
+                in: [SalesPaymentStatus.UNPAID, SalesPaymentStatus.PARTIALLY_PAID],
+              },
+            },
+            orderBy: { invoiceDate: 'asc' },
+          });
+
+          let remainingPayment = Number(dto.amount);
+          for (const invoice of openInvoices) {
+            if (remainingPayment <= 0) break;
+            const remainingDebt =
+              Number(invoice.totalAmount) - Number(invoice.paidAmount);
+            const allocate = Math.min(remainingDebt, remainingPayment);
+            const newPaid = Number(invoice.paidAmount) + allocate;
+            const paymentStatus =
+              newPaid >= Number(invoice.totalAmount)
+                ? SalesPaymentStatus.PAID
+                : SalesPaymentStatus.PARTIALLY_PAID;
+
+            await tx.salesInvoice.update({
+              where: { id: invoice.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+            remainingPayment -= allocate;
+          }
+        }
       }
 
       return transaction;
@@ -429,6 +487,28 @@ export class FinanceService {
               where: { id: existing.counterpartyId },
               data: { debtBalance: { increment: Number(existing.amount) } },
             });
+          }
+          if (existing.sourceDocType === 'SalesInvoice' && existing.sourceDocId) {
+            const invoice = await tx.salesInvoice.findFirst({
+              where: { id: existing.sourceDocId, tenantId },
+            });
+            if (invoice) {
+              const newPaid = Math.max(
+                0,
+                Number(invoice.paidAmount) - Number(existing.amount),
+              );
+              const total = Number(invoice.totalAmount);
+              const paymentStatus =
+                newPaid <= 0
+                  ? SalesPaymentStatus.UNPAID
+                  : newPaid >= total
+                  ? SalesPaymentStatus.PAID
+                  : SalesPaymentStatus.PARTIALLY_PAID;
+              await tx.salesInvoice.update({
+                where: { id: invoice.id },
+                data: { paidAmount: newPaid, paymentStatus },
+              });
+            }
           }
         } else if (existing.direction === TransactionDirection.EXPENSE) {
           await tx.cashAccount.update({

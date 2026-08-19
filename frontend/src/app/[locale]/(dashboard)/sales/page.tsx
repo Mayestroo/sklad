@@ -490,16 +490,16 @@ export default function SalesPage() {
                         })()}
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                        {formatCurrency(Number(inv.totalAmount), locale)}
+                        {formatCurrency(Number(inv.totalAmount), locale, inv.currency)}
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                        {inv.status === 'POSTED' ? formatCurrency(Number(inv.totalCogs || 0), locale) : '—'}
+                        {inv.status === 'POSTED' ? formatCurrency(Number(inv.totalCogs || 0), locale, inv.currency) : '—'}
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600, color: inv.status === 'POSTED' ? profitColor : 'var(--color-text-secondary)' }}>
                         {inv.status === 'POSTED' ? (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             {grossProfit >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                            {formatCurrency(grossProfit, locale)}
+                            {formatCurrency(grossProfit, locale, inv.currency)}
                           </span>
                         ) : '—'}
                       </td>

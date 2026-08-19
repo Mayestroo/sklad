@@ -310,7 +310,9 @@ export class SalesInvoicesService {
         const unitCogs = qty > 0 ? totalItemCogs / qty : 0;
         const lineCogs = totalItemCogs;
         const lineTotal = Number(item.totalPrice);
-        const lineGrossProfit = lineTotal - lineCogs;
+        const lineVat = Number(item.vatAmount || 0);
+        const lineNetRevenue = lineTotal - lineVat;
+        const lineGrossProfit = lineNetRevenue - lineCogs;
         const isBelowCost = Number(item.unitPrice) < unitCogs;
 
         totalCogs += lineCogs;
@@ -349,7 +351,8 @@ export class SalesInvoicesService {
         });
       }
 
-      const grossProfit = Number(invoice.totalAmount) - totalCogs;
+      const netRevenue = Number(invoice.totalAmount) - Number(invoice.vatAmount);
+      const grossProfit = netRevenue - totalCogs;
 
       // 3. Increase customer (debitor) debt
       await tx.counterparty.update({
@@ -505,6 +508,26 @@ export class SalesInvoicesService {
         }
       }
 
+      // Restore product batches from batch consumptions
+      const consumptions = await tx.batchConsumption.findMany({
+        where: {
+          salesInvoiceItem: { invoiceId: id },
+        },
+      });
+
+      for (const c of consumptions) {
+        await tx.productBatch.update({
+          where: { id: c.batchId },
+          data: { remainingQty: { increment: c.quantity } },
+        });
+      }
+
+      await tx.batchConsumption.deleteMany({
+        where: {
+          salesInvoiceItem: { invoiceId: id },
+        },
+      });
+
       // Reduce customer debt
       await tx.counterparty.update({
         where: { id: invoice.counterpartyId },
@@ -587,20 +610,51 @@ export class SalesInvoicesService {
 
     const returnNumber = await this.generateReturnNumber(tenantId);
     let totalAmount = 0;
-    const totalCogs = 0;
+    let totalCogs = 0;
 
-    const preparedItems = dto.items.map((i) => {
+    let originalInvoiceItems: any[] = [];
+    if (dto.invoiceId) {
+      const orig = await this.prisma.salesInvoice.findUnique({
+        where: { id: dto.invoiceId },
+        include: { items: true },
+      });
+      if (orig) originalInvoiceItems = orig.items;
+    }
+
+    const preparedItems: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      unitCogs: number;
+      lineCogs: number;
+    }> = [];
+    for (const i of dto.items) {
       const lineTotal = i.quantity * i.unitPrice;
       totalAmount += lineTotal;
-      return {
+
+      const origItem = originalInvoiceItems.find(
+        (oi) => oi.productId === i.productId,
+      );
+      let unitCogs = origItem ? Number(origItem.unitCogs || 0) : 0;
+      if (unitCogs <= 0) {
+        const prod = await this.prisma.product.findUnique({
+          where: { id: i.productId },
+        });
+        unitCogs = Number(prod?.costPrice || 0);
+      }
+      const lineCogs = i.quantity * unitCogs;
+      totalCogs += lineCogs;
+
+      preparedItems.push({
         productId: i.productId,
         quantity: i.quantity,
         unitPrice: i.unitPrice,
         totalPrice: lineTotal,
-        unitCogs: 0,
-        lineCogs: 0,
-      };
-    });
+        unitCogs,
+        lineCogs,
+      });
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const salesReturn = await tx.salesReturn.create({
@@ -627,8 +681,8 @@ export class SalesInvoicesService {
         },
       });
 
-      // Return goods to warehouse
-      for (const item of dto.items) {
+      // Return goods to warehouse and create returned product batches
+      for (const item of preparedItems) {
         const stockLevel = await tx.stockLevel.findUnique({
           where: {
             tenantId_warehouseId_productId: {
@@ -655,6 +709,20 @@ export class SalesInvoicesService {
             },
           });
         }
+
+        // Create product batch for returned stock with historical landed cost
+        await tx.productBatch.create({
+          data: {
+            tenantId,
+            productId: item.productId,
+            warehouseId: dto.warehouseId,
+            batchNumber: `RET-${returnNumber}-${item.productId.slice(0, 4)}`,
+            initialQty: item.quantity,
+            remainingQty: item.quantity,
+            purchasePrice: item.unitCogs,
+            landedCost: item.unitCogs,
+          },
+        });
       }
 
       // Reduce customer debt
@@ -684,6 +752,54 @@ export class SalesInvoicesService {
         }
       }
 
+      // Double-entry accounting reversal for Sales Return (BHMS)
+      const revenueAcc = await tx.account.findFirst({
+        where: { tenantId, code: '9010' },
+      });
+      const receivableAcc = await tx.account.findFirst({
+        where: { tenantId, code: '4010' },
+      });
+      const cogsAcc = await tx.account.findFirst({
+        where: { tenantId, code: '9110' },
+      });
+      const inventoryAcc = await tx.account.findFirst({
+        where: { tenantId, code: '2910' },
+      });
+
+      const journalLines: any[] = [];
+      if (revenueAcc && receivableAcc && totalAmount > 0) {
+        journalLines.push({
+          debitAccountId: revenueAcc.id,
+          creditAccountId: receivableAcc.id,
+          amount: totalAmount,
+          description: `Sotuv qaytarilishi № ${returnNumber}`,
+        });
+      }
+      if (cogsAcc && inventoryAcc && totalCogs > 0) {
+        journalLines.push({
+          debitAccountId: inventoryAcc.id,
+          creditAccountId: cogsAcc.id,
+          amount: totalCogs,
+          description: `Sotuv qaytarilishi tannarxi № ${returnNumber}`,
+        });
+      }
+
+      if (journalLines.length > 0) {
+        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
+        const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
+        await tx.journalEntry.create({
+          data: {
+            tenantId,
+            entryNumber,
+            entryDate: salesReturn.returnDate,
+            description: `Sotuv qaytarilishi № ${returnNumber}`,
+            sourceDocType: 'SalesReturn',
+            sourceDocId: salesReturn.id,
+            lines: { create: journalLines },
+          },
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           tenantId,
@@ -691,7 +807,7 @@ export class SalesInvoicesService {
           entityType: 'SalesReturn',
           entityId: salesReturn.id,
           action: 'CREATE',
-          newValue: { returnNumber, totalAmount },
+          newValue: { returnNumber, totalAmount, totalCogs },
         },
       });
 

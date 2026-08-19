@@ -1,0 +1,3 @@
+# 12. Sales Returns Costing and Discount Mechanics
+
+When items from a posted sales invoice are returned via a Sales Return document, active warehouse stock is restored at the exact historical unit landed cost (`unitCogs`) recognized during the original batch consumption, rather than current catalog prices. Double-entry accounting reverses revenue and COGS (Debit 2910, Credit 9110; Debit 9010, Credit 4010) while diminishing customer accounts receivable or establishing customer advance. Item line discounts support both percentage and fixed currency amounts, preserving net revenue accuracy during COGS and gross profit calculations.
