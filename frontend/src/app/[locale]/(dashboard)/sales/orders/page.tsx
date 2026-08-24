@@ -1,49 +1,40 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Badge } from '@/components/ui/Badge';
 import {
   ClipboardList,
   Plus,
   Eye,
+  CreditCard,
   RotateCcw,
   Filter,
   Search,
+  RefreshCw,
   Factory,
   Truck,
-  CreditCard,
   CheckCircle,
-  AlertCircle,
-  Package,
+  Clock,
   Layers,
+  ShoppingBag,
 } from 'lucide-react';
-import { CreateSalesOrderModal } from '@/components/sales/CreateSalesOrderModal';
-import {
-  SalesOrderDetailModal,
-  ORDER_STATUS_LABELS,
-} from '@/components/sales/SalesOrderDetailModal';
+import { ORDER_STATUS_LABELS } from '@/components/sales/SalesOrderForm';
+import { PaySalesOrderModal } from '@/components/sales/PaySalesOrderModal';
 
 interface CounterpartyItem {
   id: string;
   name: string;
 }
-interface WarehouseItem {
-  id: string;
-  name: any;
-}
-interface ProductItem {
-  id: string;
-  name: any;
-  sku: string;
-}
+
 interface SellerItem {
   id: string;
   firstName: string;
@@ -55,79 +46,36 @@ export default function SalesOrdersPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  // Data states
   const [orders, setOrders] = useState<any[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
   const [stats, setStats] = useState<any>(null);
-  const [counterparties, setCounterparties] = useState<CounterpartyItem[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
-  const [products, setProducts] = useState<ProductItem[]>([]);
-  const [sellers, setSellers] = useState<SellerItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counterparties, setCounterparties] = useState<CounterpartyItem[]>([]);
+  const [sellers, setSellers] = useState<SellerItem[]>([]);
 
-  // Filters (All 8 spec criteria)
+  // Filters
   const [search, setSearch] = useState('');
   const [counterpartyId, setCounterpartyId] = useState('');
   const [status, setStatus] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
-  const [productId, setProductId] = useState('');
   const [assignedSellerId, setAssignedSellerId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [deliveryDateFrom, setDeliveryDateFrom] = useState('');
-  const [deliveryDateTo, setDeliveryDateTo] = useState('');
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Modals
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [payOrder, setPayOrder] = useState<any | null>(null);
 
-  // Fetch initial dropdown references
-  useEffect(() => {
+  const fetchStats = () => {
     if (!token || !company) return;
-
-    apiFetch<{ data: CounterpartyItem[] }>('/counterparties', {
+    apiFetch<any>('/sales/orders/stats', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
-      .then((res) => setCounterparties(res?.data || (res as any) || []))
-      .catch(console.error);
+      .then(setStats)
+      .catch((err) => console.error(err));
+  };
 
-    apiFetch<WarehouseItem[]>('/inventory/warehouses', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setWarehouses(res || []))
-      .catch(console.error);
-
-    apiFetch<ProductItem[]>('/inventory/products', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setProducts(res || []))
-      .catch(console.error);
-
-    apiFetch<{ data: any[] }>('/users', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => {
-        const uList = (res?.data || res || []).map((u: any) => ({
-          id: u.id,
-          firstName: u.firstName,
-          lastName: u.lastName,
-        }));
-        setSellers(uList);
-      })
-      .catch(console.error);
-  }, [token, company, locale]);
-
-  // Fetch orders and dashboard stats
-  const fetchOrders = useCallback(() => {
+  const fetchOrders = () => {
     if (!token || !company) return;
     setLoading(true);
 
@@ -136,91 +84,75 @@ export default function SalesOrdersPage() {
     if (counterpartyId) query.append('counterpartyId', counterpartyId);
     if (status) query.append('status', status);
     if (paymentStatus) query.append('paymentStatus', paymentStatus);
-    if (productId) query.append('productId', productId);
     if (assignedSellerId) query.append('assignedSellerId', assignedSellerId);
     if (dateFrom) query.append('dateFrom', dateFrom);
     if (dateTo) query.append('dateTo', dateTo);
-    if (deliveryDateFrom) query.append('deliveryDateFrom', deliveryDateFrom);
-    if (deliveryDateTo) query.append('deliveryDateTo', deliveryDateTo);
 
-    Promise.all([
-      apiFetch<{ data: any[]; total: number }>(`/api/sales/orders?${query.toString()}`, {
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      }),
-      apiFetch<any>('/api/sales/orders/stats', {
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      }),
-    ])
-      .then(([ordersRes, statsRes]) => {
-        setOrders(ordersRes?.data || []);
-        setTotalCount(ordersRes?.total || 0);
-        setStats(statsRes);
+    apiFetch<any>(`/sales/orders?${query.toString()}`, {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => {
+        const list = res?.data || (Array.isArray(res) ? res : []);
+        setOrders(list);
       })
-      .catch(console.error)
+      .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [
-    token,
-    company,
-    locale,
-    search,
-    counterpartyId,
-    status,
-    paymentStatus,
-    productId,
-    assignedSellerId,
-    dateFrom,
-    dateTo,
-    deliveryDateFrom,
-    deliveryDateTo,
-  ]);
+  };
 
   useEffect(() => {
+    fetchStats();
     fetchOrders();
-  }, [fetchOrders]);
+  }, [token, company, locale]);
 
-  const resetFilters = () => {
+  useEffect(() => {
+    if (!token || !company) return;
+
+    apiFetch<any>('/counterparties', {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => setCounterparties(res?.data || res || []))
+      .catch(console.error);
+
+    apiFetch<any>('/users', {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => {
+        const userList = (res?.data || res || []).map((u: any) => ({
+          id: u.id,
+          firstName: u.firstName,
+          lastName: u.lastName,
+        }));
+        setSellers(userList);
+      })
+      .catch(console.error);
+  }, [token, company, locale]);
+
+  const handleApplyFilter = () => {
+    fetchOrders();
+  };
+
+  const handleResetFilters = () => {
     setSearch('');
     setCounterpartyId('');
     setStatus('');
     setPaymentStatus('');
-    setProductId('');
     setAssignedSellerId('');
     setDateFrom('');
     setDateTo('');
-    setDeliveryDateFrom('');
-    setDeliveryDateTo('');
+    setTimeout(() => {
+      fetchOrders();
+    }, 0);
   };
 
-  const statusOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все статусы' : 'Barcha statuslar' },
-    ...Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => ({
-      value: k,
-      label: isRu ? v.ru : v.uz,
-    })),
-  ];
-
-  const paymentStatusOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Любая оплата' : 'Barcha to‘lovlar' },
-    { value: 'PAID', label: isRu ? 'Полностью оплачен' : 'To‘liq to‘langan' },
-    { value: 'PARTIALLY_PAID', label: isRu ? 'Частично оплачен' : 'Qisman to‘langan' },
-    { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To‘lanmagan' },
-  ];
-
-  const counterpartyOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все контрагенты' : 'Barcha mijozlar' },
+  const customerOptions: SelectOption[] = [
+    { value: '', label: isRu ? 'Все клиенты' : 'Barcha mijozlar' },
     ...counterparties.map((c) => ({ value: c.id, label: c.name })),
-  ];
-
-  const productOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все товары' : 'Barcha mahsulotlar' },
-    ...products.map((p) => {
-      const name = typeof p.name === 'object' ? (p.name[locale] || p.name.uz || '') : p.name;
-      return { value: p.id, label: `${name} (${p.sku})` };
-    }),
   ];
 
   const sellerOptions: SelectOption[] = [
@@ -228,309 +160,332 @@ export default function SalesOrdersPage() {
     ...sellers.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
   ];
 
-  const pipeline = stats?.pipeline || {};
-  const inProductionCount =
-    (pipeline.SENT_TO_PRODUCTION || 0) +
-    (pipeline.IN_PRODUCTION || 0) +
-    (pipeline.PARTIALLY_READY || 0);
-  const readyToShipCount = pipeline.READY_TO_SHIP || 0;
-  const awaitingPaymentCount = pipeline.AWAITING_PAYMENT || 0;
+  const statusOptions: SelectOption[] = [
+    { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
+    ...Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => ({
+      value: k,
+      label: isRu ? v.ru : v.uz,
+    })),
+  ];
+
+  const hasActiveFilters = Boolean(search || counterpartyId || status || paymentStatus || assignedSellerId || dateFrom || dateTo);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ClipboardList size={28} color="var(--color-primary)" />
-            {isRu ? 'Заказы клиентов (Заявки)' : 'Zakazlar (Mijoz buyurtmalari)'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+            {isRu ? 'Заказы покупателей (Zakazlar)' : 'Mijoz Buyurtmalari (Zakazlar)'}
           </h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            {isRu
-              ? 'Полный цикл: от приёма заявки и производства до оплаты и отгрузки со склада'
-              : 'Qabul qilish, ishlab chiqarish, to‘lov nazorati va ombordan chiqim qilish jarayoni'}
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+            {isRu ? '13-этапный пайплайн, предварительные обязательства, производство и контроль отгрузки' : '13 bosqichli jarayon, majburiyatlar, ishlab chiqarish va jo‘natish nazorati'}
           </p>
         </div>
-
-        <Button variant="primary" onClick={() => setIsCreateOpen(true)}>
-          <Plus size={16} style={{ marginRight: '6px' }} />
-          {isRu ? 'Новый заказ' : 'Yangi zakaz'}
-        </Button>
+        <Link href="/sales/orders/new">
+          <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
+            <Plus size={18} /> {isRu ? 'Новый заказ' : 'Yangi Buyurtma'}
+          </Button>
+        </Link>
       </div>
 
-      {/* KPI Cards */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 'var(--spacing-md)',
-        }}
-      >
-        <Card style={{ padding: 'var(--spacing-md)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-              {isRu ? 'ВСЕГО ЗАКАЗОВ' : 'JAMI ZAKAZLAR'}
-            </span>
-            <Layers size={18} color="var(--color-primary)" />
+      {/* Summary KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ClipboardList size={22} />
           </div>
-          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: '8px' }}>
-            {totalCount}
-          </div>
-        </Card>
-
-        <Card style={{ padding: 'var(--spacing-md)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-              {isRu ? 'В ПРОИЗВОДСТВЕ' : 'ISHLAB CHIQARISHDA'}
-            </span>
-            <Factory size={18} color="var(--color-warning)" />
-          </div>
-          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: '8px', color: 'var(--color-warning)' }}>
-            {inProductionCount}
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Новые / Согласование' : 'Yangi / Tasdiqlashda'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '2px' }} className="tabular-nums">
+              {(stats?.new || 0) + (stats?.pendingApproval || 0)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {isRu ? 'Требуют внимания' : 'E’tibor talab qiladi'}
+            </div>
           </div>
         </Card>
 
-        <Card style={{ padding: 'var(--spacing-md)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-              {isRu ? 'ОЖИДАЮТ ОПЛАТЫ' : 'TO‘LOV KUTILMOQDA'}
-            </span>
-            <CreditCard size={18} color="var(--color-error)" />
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Factory size={22} />
           </div>
-          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: '8px', color: 'var(--color-error)' }}>
-            {awaitingPaymentCount}
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'В производстве' : 'Ishlab chiqarilmoqda'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#f59e0b', marginTop: '2px' }} className="tabular-nums">
+              {(stats?.inProduction || 0) + (stats?.sentToProduction || 0)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {isRu ? 'Изготовление' : 'Tayyorlanmoqda'}
+            </div>
           </div>
         </Card>
 
-        <Card style={{ padding: 'var(--spacing-md)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-              {isRu ? 'ГОТОВЫ К ОТГРУЗКЕ' : 'JO‘NATISHGA TAYYOR'}
-            </span>
-            <Truck size={18} color="var(--color-success)" />
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Truck size={22} />
           </div>
-          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: '8px', color: 'var(--color-success)' }}>
-            {readyToShipCount}
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Готовы к отгрузке' : 'Jo‘natishga tayyor'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#10b981', marginTop: '2px' }} className="tabular-nums">
+              {stats?.readyToShip || 0}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {isRu ? 'Оплата подтверждена' : 'To‘lov tasdiqlangan'}
+            </div>
+          </div>
+        </Card>
+
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CheckCircle size={22} />
+          </div>
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Завершено' : 'Bajarilgan'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#3b82f6', marginTop: '2px' }} className="tabular-nums">
+              {stats?.completed || 0}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {isRu ? 'Закрытые сделки' : 'Yopilgan shartnomalar'}
+            </div>
           </div>
         </Card>
       </div>
 
-      {/* Filter Bar (8 criteria) */}
-      <Card style={{ padding: 'var(--spacing-md)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: 'var(--spacing-sm)',
-              alignItems: 'center',
-            }}
-          >
-            <div>
-              <Input
-                placeholder={isRu ? 'Номер заказа (напр. Z-2026-0001)...' : 'Zakaz raqami (Z-2026-0001)...'}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+      {/* Filter Toolbar */}
+      <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {/* Search */}
+        <div>
+          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+            {isRu ? 'Поиск (№ Заказа, Клиент, Комментарий...)' : 'Qidiruv (Zakaz №, Mijoz, Izoh...)'}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+            <input
+              placeholder={isRu ? 'Введите № заказа или имя клиента...' : 'Qidirish uchun zakaz raqami yoki mijoz ismini kiriting...'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 14px 10px 42px',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--color-bg-input)',
+                color: 'var(--color-text-primary)',
+                fontSize: 'var(--text-sm)',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Filter grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap: 'var(--space-3)',
+            alignItems: 'end',
+            paddingTop: 'var(--space-2)',
+            borderTop: '1px solid var(--color-border-light)',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Клиент' : 'Mijoz'}
             </div>
-            <div>
-              <Select options={counterpartyOptions} value={counterpartyId} onChange={(val) => setCounterpartyId(val)} />
-            </div>
-            <div>
-              <Select options={statusOptions} value={status} onChange={(val) => setStatus(val)} />
-            </div>
-            <div>
-              <Select options={paymentStatusOptions} value={paymentStatus} onChange={(val) => setPaymentStatus(val)} />
-            </div>
+            <Select
+              options={customerOptions}
+              value={counterpartyId}
+              onChange={setCounterpartyId}
+            />
           </div>
 
-          {/* Advanced toggle & secondary row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            >
-              <Filter size={14} style={{ marginRight: '6px' }} />
-              {showAdvancedFilters
-                ? isRu ? 'Скрыть доп. фильтры' : 'Qo‘shimcha filtrlarni yashirish'
-                : isRu ? 'Дополнительные фильтры (Товар, Продавец, Даты)' : 'Qo‘shimcha filtrlar (Mahsulot, Sotuvchi, Sanalar)'}
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Статус заказа' : 'Buyurtma holati'}
+            </div>
+            <Select
+              options={statusOptions}
+              value={status}
+              onChange={setStatus}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Ответственный продавец' : 'Mas’ul sotuvchi'}
+            </div>
+            <Select
+              options={sellerOptions}
+              value={assignedSellerId}
+              onChange={setAssignedSellerId}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'С даты' : 'Sanadan'}
+            </div>
+            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder={isRu ? 'С даты...' : 'Sanadan...'} />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'По дату' : 'Sanagacha'}
+            </div>
+            <DatePicker value={dateTo} onChange={setDateTo} placeholder={isRu ? 'По дату...' : 'Sanagacha...'} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Button variant="secondary" onClick={handleApplyFilter} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '38px' }}>
+              <Filter size={15} /> {isRu ? 'Фильтр' : 'Filtr'}
             </Button>
-
-            {(search || counterpartyId || status || paymentStatus || productId || assignedSellerId || dateFrom || dateTo || deliveryDateFrom || deliveryDateTo) && (
-              <Button variant="ghost" size="sm" onClick={resetFilters}>
-                <RotateCcw size={14} style={{ marginRight: '6px' }} />
-                {isRu ? 'Сбросить фильтры' : 'Filtrlarni tozalash'}
+            {hasActiveFilters && (
+              <Button variant="secondary" onClick={handleResetFilters} title={isRu ? 'Сбросить' : 'Tozalash'} style={{ padding: '0 12px', height: '38px', color: 'var(--color-text-secondary)' }}>
+                <RefreshCw size={14} />
               </Button>
             )}
           </div>
-
-          {showAdvancedFilters && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: 'var(--spacing-sm)',
-                paddingTop: 'var(--spacing-sm)',
-                borderTop: '1px dashed var(--color-border-light)',
-              }}
-            >
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: '2px' }}>
-                  {isRu ? 'Товар в заказе' : 'Zakazdagi mahsulot'}
-                </label>
-                <Select options={productOptions} value={productId} onChange={(val) => setProductId(val)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: '2px' }}>
-                  {isRu ? 'Ответственный продавец' : 'Mas‘ul sotuvchi'}
-                </label>
-                <Select options={sellerOptions} value={assignedSellerId} onChange={(val) => setAssignedSellerId(val)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: '2px' }}>
-                  {isRu ? 'Дата заказа (с / по)' : 'Buyurtma sanasi (dan / gacha)'}
-                </label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: '2px' }}>
-                  {isRu ? 'Срок доставки (с / по)' : 'Yetkazish sanasi (dan / gacha)'}
-                </label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <Input type="date" value={deliveryDateFrom} onChange={(e) => setDeliveryDateFrom(e.target.value)} />
-                  <Input type="date" value={deliveryDateTo} onChange={(e) => setDeliveryDateTo(e.target.value)} />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </Card>
 
       {/* Orders Table */}
-      <Card style={{ padding: '0', overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: 'var(--color-bg-secondary)',
-                  borderBottom: '1px solid var(--color-border-light)',
-                  color: 'var(--color-text-secondary)',
-                  textAlign: 'left',
-                }}
-              >
-                <th style={{ padding: '12px 16px' }}>{isRu ? '№ Заказа' : 'Zakaz №'}</th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата' : 'Sana'}</th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Клиент' : 'Mijoz'}</th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Сумма' : 'Jami summa'}</th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Оплата' : 'To‘lov holati'}</th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Условие' : 'To‘lov sharti'}</th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holat'}</th>
-                <th style={{ padding: '12px 16px', textAlign: 'center' }}>{isRu ? 'Действия' : 'Amallar'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Загрузка заказов...' : 'Zakazlar yuklanmoqda...'}
-                  </td>
+      <Card style={{ overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
+            <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
+          </div>
+        ) : orders.length === 0 ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <ClipboardList size={48} style={{ margin: '0 auto var(--space-3)', opacity: 0.3 }} />
+            <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? 'Заказы не найдены' : 'Buyurtmalar topilmadi'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
+              {isRu ? 'Нажмите кнопку выше, чтобы создать новый заказ' : 'Yangi buyurtma yaratish uchun yuqoridagi tugmani bosing'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? '№ ЗАКАЗА / ДАТА' : 'ZAKAZ № / SANA'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? 'КЛИЕНТ' : 'MIJOZ'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                    {isRu ? 'СТАТУС' : 'HOLAT'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? 'УСЛОВИЕ ОПЛАТЫ' : 'TO‘LOV SHARTI'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'СУММА ЗАКАЗА' : 'JAMI SUMMA'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}
+                  </th>
                 </tr>
-              ) : orders.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Заказы не найдены' : 'Zakazlar topilmadi'}
-                  </td>
-                </tr>
-              ) : (
-                orders.map((o) => {
-                  const statusObj = ORDER_STATUS_LABELS[o.status] || {
-                    uz: o.status,
-                    ru: o.status,
-                    variant: 'neutral' as const,
-                  };
-
-                  const payPercent = o.paymentPercent || 0;
-                  const payBadgeVariant = payPercent >= 100 ? 'success' : payPercent > 0 ? 'warning' : 'error';
-
+              </thead>
+              <tbody>
+                {orders.map((ord) => {
+                  const meta = ORDER_STATUS_LABELS[ord.status] || { uz: ord.status, ru: ord.status, variant: 'neutral' };
                   return (
                     <tr
-                      key={o.id}
+                      key={ord.id}
                       style={{
                         borderBottom: '1px solid var(--color-border-light)',
-                        transition: 'background-color var(--transition-fast)',
+                        transition: 'background-color 0.15s ease',
                       }}
                     >
-                      <td style={{ padding: '12px 16px', fontWeight: 600 }}>
-                        {o.orderNumber}
-                      </td>
-                      <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
-                        {formatDate(o.orderDate || o.createdAt)}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontWeight: 500 }}>
-                        {o.counterparty?.name || '—'}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontWeight: 600 }}>
-                        {formatCurrency(Number(o.totalAmount), o.currency)}
-                      </td>
                       <td style={{ padding: '12px 16px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <Badge variant={payBadgeVariant}>
-                            {formatCurrency(Number(o.paidAmount), o.currency)} ({payPercent}%)
-                          </Badge>
+                        <Link href={`/sales/orders/${ord.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
+                          {ord.orderNumber}
+                        </Link>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
+                          {formatDate(ord.createdAt)}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                        {o.paymentCondition === 'PREPAID_100'
-                          ? '100% oldindan'
-                          : o.paymentCondition === 'PARTIAL'
-                          ? `${o.requiredPaymentPercent || 50}% oldindan`
-                          : 'Nasiya / Qarzga'}
-                      </td>
+
                       <td style={{ padding: '12px 16px' }}>
-                        <Badge variant={statusObj.variant}>
-                          {isRu ? statusObj.ru : statusObj.uz}
+                        <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                          {ord.counterparty?.name || '—'}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                        <Badge variant={meta.variant as any}>
+                          {isRu ? meta.ru : meta.uz}
                         </Badge>
                       </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setSelectedOrderId(o.id)}
-                        >
-                          <Eye size={14} style={{ marginRight: '4px' }} />
-                          {isRu ? 'Просмотр' : 'Ko‘rish'}
-                        </Button>
+
+                      <td style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                        {ord.paymentCondition === 'PREPAID_100' ? (isRu ? '100% Предоплата' : '100% Oldindan') : ord.paymentCondition === 'PARTIAL' ? `${ord.requiredPaymentPercent}% ${isRu ? 'Предоплата' : 'Avans'}` : (isRu ? 'Кредит' : 'Kredit')}
+                      </td>
+
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
+                        {formatCurrency(Number(ord.totalAmount || 0), locale, ord.currency)}
+                      </td>
+
+                      <td style={{ padding: '12px 16px', textAlign: 'right', color: '#10b981', fontWeight: 500 }} className="tabular-nums">
+                        {formatCurrency(Number(ord.paidAmount || 0), locale, ord.currency)}
+                      </td>
+
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          <Link href={`/sales/orders/${ord.id}`}>
+                            <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр / Управление' : 'Ko‘rish / Boshqarish'}>
+                              <Eye size={14} />
+                            </Button>
+                          </Link>
+
+                          {ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED' && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => setPayOrder(ord)}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#10b981' }}
+                              title={isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
+                            >
+                              <CreditCard size={14} />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
-      {/* Create Order Modal */}
-      {isCreateOpen && (
-        <CreateSalesOrderModal
-          onClose={() => setIsCreateOpen(false)}
-          onCreated={fetchOrders}
-          counterparties={counterparties}
-        />
-      )}
-
-      {/* Detail & Action Modal */}
-      {selectedOrderId && (
-        <SalesOrderDetailModal
-          orderId={selectedOrderId}
-          onClose={() => setSelectedOrderId(null)}
-          onUpdated={fetchOrders}
-          warehouses={warehouses}
+      {/* Action Modal */}
+      {payOrder && (
+        <PaySalesOrderModal
+          isOpen={Boolean(payOrder)}
+          onClose={() => setPayOrder(null)}
+          order={payOrder}
+          onSuccess={() => {
+            fetchStats();
+            fetchOrders();
+          }}
         />
       )}
     </div>

@@ -3,11 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Badge } from '@/components/ui/Badge';
@@ -15,60 +15,34 @@ import {
   ShoppingCart,
   Plus,
   Eye,
-  CheckCircle,
-  XCircle,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Users,
+  CreditCard,
   RotateCcw,
   Filter,
   Search,
-  BarChart2,
-  AlertTriangle,
-  Percent,
+  RefreshCw,
+  TrendingUp,
+  Users,
+  Building2,
+  DollarSign,
 } from 'lucide-react';
 import { SalesInvoice, SalesSummaryStats } from '@shared/types';
-import { CreateSalesInvoiceModal } from '@/components/sales/CreateSalesInvoiceModal';
-import { SalesInvoiceDetailModal } from '@/components/sales/SalesInvoiceDetailModal';
+import { PaySalesInvoiceModal } from '@/components/sales/PaySalesInvoiceModal';
+import { CreateSalesReturnModal } from '@/components/sales/CreateSalesReturnModal';
 
 interface CounterpartyItem {
   id: string;
   name: string;
 }
+
 interface WarehouseItem {
   id: string;
   name: any;
 }
 
-const statusBadgeVariant: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
-  DRAFT: 'warning',
-  POSTED: 'success',
-  CANCELLED: 'error',
-};
-
-const paymentBadgeVariant: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
-  UNPAID: 'error',
-  PARTIALLY_PAID: 'warning',
-  PAID: 'success',
-};
-
 export default function SalesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-
-  const statusLabel: Record<string, string> = {
-    DRAFT: isRu ? 'Черновик' : 'Qoralama',
-    POSTED: isRu ? 'Проведён' : 'Tasdiqlangan',
-    CANCELLED: isRu ? 'Отменён' : 'Bekor qilingan',
-  };
-
-  const paymentLabel: Record<string, string> = {
-    UNPAID: isRu ? 'Не оплачен' : 'To‘lanmagan',
-    PARTIALLY_PAID: isRu ? 'Частично' : 'Qisman to‘langan',
-    PAID: isRu ? 'Оплачен' : 'To‘langan',
-  };
 
   const [stats, setStats] = useState<SalesSummaryStats | null>(null);
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
@@ -84,14 +58,16 @@ export default function SalesPage() {
   const [paymentStatus, setPaymentStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
 
   // Modals
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [detailInvoice, setDetailInvoice] = useState<SalesInvoice | null>(null);
+  const [payInvoice, setPayInvoice] = useState<SalesInvoice | null>(null);
+  const [returnInvoice, setReturnInvoice] = useState<SalesInvoice | null>(null);
 
-  // ─── POST / UNPOST ────────────────────────────────────────────
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const getLocalizedName = (name: any) => {
+    if (!name) return '—';
+    if (typeof name === 'string') return name;
+    return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
+  };
 
   const fetchStats = () => {
     if (!token || !company) return;
@@ -101,7 +77,7 @@ export default function SalesPage() {
       locale,
     })
       .then(setStats)
-      .catch(console.error);
+      .catch((err) => console.error(err));
   };
 
   const fetchInvoices = () => {
@@ -123,7 +99,7 @@ export default function SalesPage() {
       locale,
     })
       .then((res) => setInvoices(res || []))
-      .catch(console.error)
+      .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   };
 
@@ -134,211 +110,199 @@ export default function SalesPage() {
 
   useEffect(() => {
     if (!token || !company) return;
-    Promise.all([
-      apiFetch<CounterpartyItem[]>('/sales/counterparties?type=CUSTOMER', {
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      }).catch(() => [] as CounterpartyItem[]),
-      apiFetch<WarehouseItem[]>('/tenants/warehouses', {
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      }).catch(() => [] as WarehouseItem[]),
-    ]).then(([cp, wh]) => {
-      setCounterparties(cp);
-      setWarehouses(wh);
-    });
+
+    apiFetch<any>('/counterparties', {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => setCounterparties(res?.data || res || []))
+      .catch((err) => console.error(err));
+
+    apiFetch<any>('/inventory/warehouses', {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => setWarehouses(res?.data || res || []))
+      .catch((err) => console.error(err));
   }, [token, company, locale]);
 
-  // Re-fetch when filters change (debounced for search)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchInvoices();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search, counterpartyId, warehouseId, status, paymentStatus, dateFrom, dateTo]);
-
-  const handlePost = async (id: string) => {
-    if (!token || !company) return;
-    setActionLoading(id);
-    try {
-      await apiFetch(`/sales/invoices/${id}/post`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      });
-      fetchInvoices();
-      fetchStats();
-    } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xato'));
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleUnpost = async (id: string) => {
-    if (!token || !company) return;
-    if (!confirm(isRu ? 'Отменить проведение документа? Остатки товаров вернутся на склад.' : 'Hujjatni bekor qilmoqchimisiz? Ombor qoldig\'i tiklanadi.')) return;
-    setActionLoading(id);
-    try {
-      await apiFetch(`/sales/invoices/${id}/unpost`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      });
-      fetchInvoices();
-      fetchStats();
-    } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка отмены' : 'Bekor qilishda xato'));
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!token || !company) return;
-    if (!confirm(isRu ? 'Удалить этот черновик?' : 'Ushbu qoralamani o\'chirmoqchimisiz?')) return;
-    setActionLoading(id);
-    try {
-      await apiFetch(`/sales/invoices/${id}`, {
-        method: 'DELETE',
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      });
-      fetchInvoices();
-      fetchStats();
-    } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка удаления' : 'O\'chirishda xato'));
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const onCreated = () => {
-    setIsCreateOpen(false);
+  const handleApplyFilter = () => {
     fetchInvoices();
-    fetchStats();
   };
 
-  const counterpartyOptions: SelectOption[] = [
+  const handleResetFilters = () => {
+    setSearch('');
+    setCounterpartyId('');
+    setWarehouseId('');
+    setStatus('');
+    setPaymentStatus('');
+    setDateFrom('');
+    setDateTo('');
+    setTimeout(() => {
+      fetchInvoices();
+    }, 0);
+  };
+
+  const getDocStatusBadge = (st: string) => {
+    switch (st) {
+      case 'DRAFT':
+        return <Badge variant="warning">{isRu ? 'Черновик' : 'Qoralama'}</Badge>;
+      case 'POSTED':
+        return <Badge variant="success">{isRu ? 'Проведён' : 'Tasdiqlangan'}</Badge>;
+      case 'CANCELLED':
+        return <Badge variant="error">{isRu ? 'Отменён' : 'Bekor qilingan'}</Badge>;
+      default:
+        return <Badge variant="neutral">{st}</Badge>;
+    }
+  };
+
+  const getPaymentBadge = (pst: string) => {
+    switch (pst) {
+      case 'UNPAID':
+        return <Badge variant="error">{isRu ? 'Не оплачен' : 'To‘lanmagan'}</Badge>;
+      case 'PARTIALLY_PAID':
+        return <Badge variant="warning">{isRu ? 'Частично' : 'Qisman to‘langan'}</Badge>;
+      case 'PAID':
+        return <Badge variant="success">{isRu ? 'Оплачен' : 'To‘langan'}</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const customerOptions: SelectOption[] = [
     { value: '', label: isRu ? 'Все клиенты' : 'Barcha mijozlar' },
     ...counterparties.map((c) => ({ value: c.id, label: c.name })),
   ];
 
   const warehouseOptions: SelectOption[] = [
     { value: '', label: isRu ? 'Все склады' : 'Barcha omborlar' },
-    ...warehouses.map((w) => ({
-      value: w.id,
-      label: typeof w.name === 'object' ? (w.name[locale] || w.name.uz || '') : w.name,
-    })),
+    ...warehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) })),
   ];
 
-  const margin =
-    stats && stats.monthlySalesTotal > 0
-      ? ((stats.monthlyGrossProfit / stats.monthlySalesTotal) * 100).toFixed(1)
-      : '0.0';
+  const statusOptions: SelectOption[] = [
+    { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
+    { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+    { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
+    { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
+  ];
+
+  const paymentStatusOptions: SelectOption[] = [
+    { value: '', label: isRu ? 'Любой статус оплаты' : 'Barcha to‘lov holatlari' },
+    { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To‘lanmagan' },
+    { value: 'PARTIALLY_PAID', label: isRu ? 'Частично оплачен' : 'Qisman to‘langan' },
+    { value: 'PAID', label: isRu ? 'Оплачен' : 'To‘liq to‘langan' },
+  ];
+
+  const hasActiveFilters = Boolean(search || counterpartyId || warehouseId || status || paymentStatus || dateFrom || dateTo);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* ── HEADER ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+      {/* Page Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Продажи и Реализация' : 'Sotuvlar va Tovar Sotish'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+            {isRu ? 'Продажи и Реализация' : 'Sotuvlar va Mahsulot Chiqimi'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {isRu ? 'Продажа товаров, проведение документов и контроль прибыли' : 'Tovarlar sotuvi, hujjatlarni tasdiqlash va foyda nazorati'}
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+            {isRu ? 'Накладные продажи, списание остатков со склада по FIFO, взаиморасчеты и валовая прибыль' : 'Sotuv fakturalari, ombordan FIFO bo‘yicha hisobdan chiqarish, mijoz qarzdorligi va yalpi foyda hisobi'}
           </p>
         </div>
-        <Button
-          id="create-sales-invoice-btn"
-          onClick={() => setIsCreateOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-        >
-          <Plus size={16} />
-          {isRu ? 'Новая продажа' : 'Yangi sotuv'}
-        </Button>
+        <Link href="/sales/new">
+          <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
+            <Plus size={18} /> {isRu ? 'Новая накладная продажи' : 'Yangi Sotuv Hujjati'}
+          </Button>
+        </Link>
       </div>
 
-      {/* ── STATS CARDS ── */}
-      {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-4)' }}>
-          <Card style={{ padding: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShoppingCart size={18} color="var(--color-primary-600)" />
-              </div>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Продажи за месяц' : 'Oylik sotuv'}</span>
+      {/* Summary KPI Cards (Purchases style) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShoppingCart size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Продажи за месяц' : 'Shu Oydagi Sotuvlar'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{formatCurrency(stats.monthlySalesTotal, locale)}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{stats.monthlySalesCount} {isRu ? 'документов' : 'ta hujjat'}</div>
-          </Card>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '2px' }} className="tabular-nums">
+              {formatCurrency(stats?.monthlySalesTotal || 0, locale)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {stats?.monthlySalesCount || 0} {isRu ? 'накладных' : 'ta faktura'}
+            </div>
+          </div>
+        </Card>
 
-          <Card style={{ padding: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <TrendingUp size={18} color="#10b981" />
-              </div>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Валовая прибыль' : 'Yalpi foyda'}</span>
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Building2 size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Дебиторская задолженность' : 'Mijozlarning Qarzdorligi'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: stats.monthlyGrossProfit >= 0 ? '#10b981' : '#ef4444' }}>
-              {formatCurrency(stats.monthlyGrossProfit, locale)}
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#ef4444', marginTop: '2px' }} className="tabular-nums">
+              {formatCurrency(stats?.totalCustomerDebt || 0, locale)}
             </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{isRu ? 'Маржа' : 'Marja'}: {margin}%</div>
-          </Card>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {stats?.customersWithDebtCount || 0} {isRu ? 'клиентов' : 'ta mijoz qarzdor'}
+            </div>
+          </div>
+        </Card>
 
-          <Card style={{ padding: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <DollarSign size={18} color="#f59e0b" />
-              </div>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Долг клиентов' : 'Mijozlar qarzi'}</span>
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <RotateCcw size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Возвраты (За месяц)' : 'Qaytarishlar (Shu oy)'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(stats.totalCustomerDebt, locale)}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{stats.customersWithDebtCount} {isRu ? 'клиентов' : 'ta mijoz'}</div>
-          </Card>
-
-          <Card style={{ padding: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <RotateCcw size={18} color="#ef4444" />
-              </div>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Возвраты' : 'Qaytarishlar'}</span>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#f59e0b', marginTop: '2px' }} className="tabular-nums">
+              {formatCurrency(stats?.monthlyReturnsTotal || 0, locale)}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#ef4444' }}>{formatCurrency(stats.monthlyReturnsTotal, locale)}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{isRu ? 'Текущий месяц' : 'Joriy oy'}</div>
-          </Card>
-
-          <Card style={{ padding: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Percent size={18} color="var(--color-primary-600)" />
-              </div>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Рентабельность' : 'Foyda marjasi'}</span>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {isRu ? 'Сумма возвратов' : 'Qaytarilgan tovarlar'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{margin}%</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{isRu ? 'Прибыль / Продажи' : 'Yalpi foyda / sotuv'}</div>
-          </Card>
-        </div>
-      )}
+          </div>
+        </Card>
 
-      {/* ── FILTERS ── */}
-      <Card style={{ padding: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ flex: '1 1 220px', position: 'relative' }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Валовая прибыль' : 'Yalpi Foyda (Marja)'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#10b981', marginTop: '2px' }} className="tabular-nums">
+              {formatCurrency(stats?.monthlyGrossProfit || 0, locale)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              {isRu ? 'Маржинальность:' : 'Marja:'} {Number(stats?.monthlyGrossProfitMargin || 0).toFixed(1)}%
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Filter & Search Toolbar (Purchases Style) */}
+      <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {/* Row 1: Search Input */}
+        <div>
+          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+            {isRu ? 'Поиск (№ Накладной, Договор, Клиент, Комментарий...)' : 'Qidiruv (Hujjat №, Shartnoma, Mijoz, Izoh...)'}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
             <input
-              id="sales-search-input"
-              placeholder={isRu ? '№ Документа или клиент...' : 'Hujjat raqami yoki mijoz...'}
+              placeholder={isRu ? 'Введите № накладной, договор или комментарий...' : 'Qidirish uchun faktura raqami yoki izohni kiriting...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
                 width: '100%',
-                padding: '8px 12px 8px 34px',
+                padding: '10px 14px 10px 42px',
                 border: '1px solid var(--color-border)',
                 borderRadius: 'var(--radius-md)',
                 background: 'var(--color-bg-input)',
@@ -348,242 +312,241 @@ export default function SalesPage() {
               }}
             />
           </div>
-          <Button
-            variant="secondary"
-            id="toggle-sales-filters-btn"
-            onClick={() => setShowFilters((v) => !v)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <Filter size={15} />
-            {isRu ? 'Фильтры' : 'Filtrlar'}
-          </Button>
         </div>
 
-        {showFilters && (
-          <div style={{ marginTop: 'var(--space-3)', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
+        {/* Row 2: Filters Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap: 'var(--space-3)',
+            alignItems: 'end',
+            paddingTop: 'var(--space-2)',
+            borderTop: '1px solid var(--color-border-light)',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Клиент' : 'Mijoz'}
+            </div>
             <Select
-              id="sales-counterparty-filter"
-              label={isRu ? 'Клиент' : 'Mijoz'}
+              options={customerOptions}
               value={counterpartyId}
-              onChange={(value) => setCounterpartyId(value)}
-              options={counterpartyOptions}
+              onChange={setCounterpartyId}
             />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Склад' : 'Ombor'}
+            </div>
             <Select
-              id="sales-warehouse-filter"
-              label={isRu ? 'Склад' : 'Ombor'}
-              value={warehouseId}
-              onChange={(value) => setWarehouseId(value)}
               options={warehouseOptions}
+              value={warehouseId}
+              onChange={setWarehouseId}
             />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Статус документа' : 'Hujjat holati'}
+            </div>
             <Select
-              id="sales-status-filter"
-              label={isRu ? 'Статус документа' : 'Hujjat holati'}
+              options={statusOptions}
               value={status}
-              onChange={(value) => setStatus(value)}
-              options={[
-                { value: '', label: isRu ? 'Все' : 'Barchasi' },
-                { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
-                { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
-                { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
-              ]}
+              onChange={setStatus}
             />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Статус оплаты' : 'To‘lov holati'}
+            </div>
             <Select
-              id="sales-payment-status-filter"
-              label={isRu ? 'Статус оплаты' : 'To\'lov holati'}
+              options={paymentStatusOptions}
               value={paymentStatus}
-              onChange={(value) => setPaymentStatus(value)}
-              options={[
-                { value: '', label: isRu ? 'Все' : 'Barchasi' },
-                { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To\'lanmagan' },
-                { value: 'PARTIALLY_PAID', label: isRu ? 'Частично' : 'Qisman to\'langan' },
-                { value: 'PAID', label: isRu ? 'Оплачен' : 'To\'langan' },
-              ]}
+              onChange={setPaymentStatus}
             />
-            <DatePicker
-              label={isRu ? 'С даты' : 'Sanadan'}
-              value={dateFrom}
-              onChange={(val) => setDateFrom(val)}
-              placeholder={isRu ? 'С даты...' : 'Sanadan...'}
-            />
-            <DatePicker
-              label={isRu ? 'По дату' : 'Sanagacha'}
-              value={dateTo}
-              onChange={(val) => setDateTo(val)}
-              placeholder={isRu ? 'По дату...' : 'Sanagacha...'}
-            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'С даты' : 'Sanadan'}
+            </div>
+            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder={isRu ? 'С даты...' : 'Sanadan...'} />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'По дату' : 'Sanagacha'}
+            </div>
+            <DatePicker value={dateTo} onChange={setDateTo} placeholder={isRu ? 'По дату...' : 'Sanagacha...'} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Button variant="secondary" onClick={handleApplyFilter} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '38px' }}>
+              <Filter size={15} /> {isRu ? 'Фильтр' : 'Filtr'}
+            </Button>
+            {hasActiveFilters && (
+              <Button variant="secondary" onClick={handleResetFilters} title={isRu ? 'Сбросить' : 'Tozalash'} style={{ padding: '0 12px', height: '38px', color: 'var(--color-text-secondary)' }}>
+                <RefreshCw size={14} />
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Invoices Table */}
+      <Card style={{ overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
+            <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
+          </div>
+        ) : invoices.length === 0 ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <ShoppingCart size={48} style={{ margin: '0 auto var(--space-3)', opacity: 0.3 }} />
+            <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? 'Накладные продаж не найдены' : 'Sotuv fakturalari topilmadi'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
+              {isRu ? 'Нажмите кнопку выше, чтобы создать новую накладную продажи' : 'Yangi sotuv hujjatini yaratish uchun yuqoridagi tugmani bosing'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? '№ НАКЛАДНОЙ / ДАТА' : 'FAKTURA № / SANA'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? 'КЛИЕНТ' : 'MIJOZ'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isRu ? 'СКЛАД' : 'OMBOR'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ОБЩАЯ СУММА' : 'JAMI SUMMA'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                    {isRu ? 'СТАТУС' : 'HOLATI'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                    {isRu ? 'ОПЛАТА' : 'TO‘LOV'}
+                  </th>
+                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
+                    {isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => (
+                  <tr
+                    key={inv.id}
+                    style={{
+                      borderBottom: '1px solid var(--color-border-light)',
+                      transition: 'background-color 0.15s ease',
+                    }}
+                  >
+                    <td style={{ padding: '12px 16px' }}>
+                      <Link href={`/sales/${inv.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
+                        {inv.invoiceNumber || (inv as any).docNumber}
+                      </Link>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
+                        {formatDate(inv.invoiceDate || inv.createdAt)}
+                      </div>
+                    </td>
+
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                        {inv.counterparty?.name || '—'}
+                      </div>
+                    </td>
+
+                    <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
+                      {getLocalizedName(inv.warehouse?.name)}
+                    </td>
+
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
+                      {formatCurrency(Number(inv.totalAmount || 0), locale, inv.currency)}
+                    </td>
+
+                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#10b981', fontWeight: 500 }} className="tabular-nums">
+                      {formatCurrency(Number(inv.paidAmount || 0), locale, inv.currency)}
+                    </td>
+
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      {getDocStatusBadge(inv.status)}
+                    </td>
+
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      {getPaymentBadge(inv.paymentStatus || 'UNPAID')}
+                    </td>
+
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                        <Link href={`/sales/${inv.id}`}>
+                          <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр / Редактирование' : 'Ko‘rish / Tahrirlash'}>
+                            <Eye size={14} />
+                          </Button>
+                        </Link>
+
+                        {inv.status === 'POSTED' && (
+                          <>
+                            <Button
+                              variant="secondary"
+                              onClick={() => setPayInvoice(inv)}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#10b981' }}
+                              title={isRu ? 'Принять оплату' : 'To‘lov olish'}
+                            >
+                              <CreditCard size={14} />
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              onClick={() => setReturnInvoice(inv)}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#f59e0b' }}
+                              title={isRu ? 'Оформить возврат' : 'Qaytaruv'}
+                            >
+                              <RotateCcw size={14} />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
 
-      {/* ── TABLE ── */}
-      <Card>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                {(isRu
-                  ? ['№ ДОКУМЕНТА', 'ДАТА', 'КЛИЕНТ', 'СКЛАД', 'СУММА', 'COGS', 'ВАЛОВАЯ ПРИБЫЛЬ', 'СТАТУС', 'ОПЛАТА', 'ДЕЙСТВИЯ']
-                  : ['HUJJAT №', 'SANA', 'MIJOZ', 'OMBOR', 'SUMMA', 'COGS', 'YALPI FOYDA', 'HOLAT', 'TO\'LOV', 'AMALLAR']
-                ).map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '10px 14px',
-                      textAlign: 'left',
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: 600,
-                      color: 'var(--color-text-secondary)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
-                  </td>
-                </tr>
-              ) : invoices.length === 0 ? (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-secondary)' }}>
-                    <ShoppingCart size={40} style={{ margin: '0 auto 12px', opacity: 0.3, display: 'block' }} />
-                    {isRu ? 'Продажи не найдены' : 'Sotuvlar topilmadi'}
-                  </td>
-                </tr>
-              ) : (
-                invoices.map((inv) => {
-                  const grossProfit = Number(inv.grossProfit || 0);
-                  const profitColor = grossProfit >= 0 ? '#10b981' : '#ef4444';
-                  const isLoading = actionLoading === inv.id;
-
-                  return (
-                    <tr
-                      key={inv.id}
-                      style={{
-                        borderBottom: '1px solid var(--color-border-light)',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = '')}
-                    >
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                        {inv.invoiceNumber}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                        {formatDate(inv.invoiceDate, locale)}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)' }}>
-                        {(inv as any).counterparty?.name || '—'}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                        {(() => {
-                          const wh = (inv as any).warehouse;
-                          if (!wh) return '—';
-                          return typeof wh.name === 'object' ? (wh.name[locale] || wh.name.uz || '—') : wh.name;
-                        })()}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                        {formatCurrency(Number(inv.totalAmount), locale, inv.currency)}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                        {inv.status === 'POSTED' ? formatCurrency(Number(inv.totalCogs || 0), locale, inv.currency) : '—'}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600, color: inv.status === 'POSTED' ? profitColor : 'var(--color-text-secondary)' }}>
-                        {inv.status === 'POSTED' ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            {grossProfit >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                            {formatCurrency(grossProfit, locale, inv.currency)}
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <Badge variant={statusBadgeVariant[inv.status] || 'default'}>
-                          {statusLabel[inv.status] || inv.status}
-                        </Badge>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <Badge variant={paymentBadgeVariant[inv.paymentStatus] || 'default'}>
-                          {paymentLabel[inv.paymentStatus] || inv.paymentStatus}
-                        </Badge>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            id={`view-invoice-${inv.id}`}
-                            onClick={() => setDetailInvoice(inv)}
-                            title={isRu ? 'Просмотр' : 'Ko\'rish'}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary-600)', padding: 4 }}
-                          >
-                            <Eye size={15} />
-                          </button>
-                          {inv.status === 'DRAFT' && (
-                            <button
-                              id={`post-invoice-${inv.id}`}
-                              onClick={() => handlePost(inv.id)}
-                              disabled={isLoading}
-                              title={isRu ? 'Провести' : 'Tasdiqlash'}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', padding: 4 }}
-                            >
-                              <CheckCircle size={15} />
-                            </button>
-                          )}
-                          {inv.status === 'POSTED' && (
-                            <button
-                              id={`unpost-invoice-${inv.id}`}
-                              onClick={() => handleUnpost(inv.id)}
-                              disabled={isLoading || inv.paymentStatus !== 'UNPAID'}
-                              title={inv.paymentStatus !== 'UNPAID' ? (isRu ? 'Есть оплата — отмена невозможна' : 'To\'lov mavjud — bekor qilib bo\'lmaydi') : (isRu ? 'Отменить проведение' : 'Tasdiqlashni bekor qilish')}
-                              style={{ background: 'none', border: 'none', cursor: inv.paymentStatus !== 'UNPAID' ? 'not-allowed' : 'pointer', color: inv.paymentStatus !== 'UNPAID' ? '#9ca3af' : '#f59e0b', padding: 4 }}
-                            >
-                              <XCircle size={15} />
-                            </button>
-                          )}
-                          {inv.status === 'DRAFT' && (
-                            <button
-                              id={`delete-invoice-${inv.id}`}
-                              onClick={() => handleDelete(inv.id)}
-                              disabled={isLoading}
-                              title={isRu ? 'Удалить' : 'O\'chirish'}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 4 }}
-                            >
-                              <XCircle size={15} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* ── MODALS ── */}
-      {isCreateOpen && (
-        <CreateSalesInvoiceModal
-          onClose={() => setIsCreateOpen(false)}
-          onCreated={onCreated}
-          counterparties={counterparties}
-          warehouses={warehouses}
+      {/* Action Modals */}
+      {payInvoice && (
+        <PaySalesInvoiceModal
+          isOpen={Boolean(payInvoice)}
+          onClose={() => setPayInvoice(null)}
+          invoice={payInvoice}
+          onSuccess={() => {
+            fetchStats();
+            fetchInvoices();
+          }}
         />
       )}
-      {detailInvoice && (
-        <SalesInvoiceDetailModal
-          invoice={detailInvoice}
-          onClose={() => setDetailInvoice(null)}
-          onAction={() => {
-            setDetailInvoice(null);
-            fetchInvoices();
+
+      {returnInvoice && (
+        <CreateSalesReturnModal
+          isOpen={Boolean(returnInvoice)}
+          onClose={() => setReturnInvoice(null)}
+          invoice={returnInvoice}
+          onSuccess={() => {
             fetchStats();
+            fetchInvoices();
           }}
         />
       )}
