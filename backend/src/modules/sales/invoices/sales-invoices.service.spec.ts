@@ -97,7 +97,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
   describe('1. Draft Creation & Discount Calculation', () => {
     it('should create a draft invoice with accurate subtotal, discount, vat, and total amounts', async () => {
       prisma.salesInvoice.count.mockResolvedValue(0);
-      prisma.salesInvoice.create.mockImplementation(({ data }) => ({
+      prisma.salesInvoice.create.mockImplementation(({ data }: any) => ({
         id: 'inv-1',
         ...data,
       }));
@@ -227,7 +227,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       }));
       prisma.journalEntry.count.mockResolvedValue(0);
 
-      prisma.salesInvoice.update.mockImplementation(({ data }) => ({
+      prisma.salesInvoice.update.mockImplementation(({ data }: any) => ({
         ...mockInvoice,
         ...data,
       }));
@@ -340,7 +340,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         { batchId: 'batch-2', quantity: 4 },
       ]);
 
-      prisma.salesInvoice.update.mockImplementation(({ data }) => ({
+      prisma.salesInvoice.update.mockImplementation(({ data }: any) => ({
         id: 'inv-1',
         ...data,
       }));
@@ -402,7 +402,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         quantity: 5,
       });
 
-      prisma.salesReturn.create.mockImplementation(({ data }) => ({
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
         id: 'sret-1',
         ...data,
       }));

@@ -127,6 +127,24 @@ export default function CounterpartiesPage() {
 
   // Detail Modal state
   const [detailItem, setDetailItem] = useState<Counterparty | null>(null);
+  const [customerOrdersData, setCustomerOrdersData] = useState<any>(null);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  useEffect(() => {
+    if (!detailItem || !token || !company) {
+      setCustomerOrdersData(null);
+      return;
+    }
+    setOrdersLoading(true);
+    apiFetch<any>(`/api/sales/orders/by-counterparty/${detailItem.id}`, {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => setCustomerOrdersData(res))
+      .catch(console.error)
+      .finally(() => setOrdersLoading(false));
+  }, [detailItem, token, company, locale]);
 
   const fetchFolders = () => {
     if (!token || !company) return;
@@ -870,6 +888,57 @@ export default function CounterpartiesPage() {
                 </div>
               </div>
             )}
+
+            {/* Customer Orders History Section */}
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h4 style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+                  {isRu ? 'История заказов клиента' : 'Mijozning zakazlar tarixi'}
+                </h4>
+                {customerOrdersData?.summary && (
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                    {isRu ? 'Всего заказов:' : 'Jami zakazlar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale)} UZS</strong>
+                  </span>
+                )}
+              </div>
+
+              {ordersLoading ? (
+                <div style={{ padding: '16px', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Загрузка заказов...' : 'Zakazlar yuklanmoqda...'}
+                </div>
+              ) : !customerOrdersData?.orders || customerOrdersData.orders.length === 0 ? (
+                <div style={{ padding: '16px', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+                  {isRu ? 'У данного клиента нет заказов' : 'Ushbu mijozda hali zakazlar mavjud emas'}
+                </div>
+              ) : (
+                <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border-light)', textAlign: 'left' }}>
+                        <th style={{ padding: '6px 8px' }}>№</th>
+                        <th style={{ padding: '6px 8px' }}>{isRu ? 'Сумма' : 'Summa'}</th>
+                        <th style={{ padding: '6px 8px' }}>{isRu ? 'Оплачено' : 'To‘langan'}</th>
+                        <th style={{ padding: '6px 8px' }}>{isRu ? 'Статус' : 'Holat'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customerOrdersData.orders.map((ord: any) => (
+                        <tr key={ord.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                          <td style={{ padding: '6px 8px', fontWeight: 600 }}>{ord.orderNumber}</td>
+                          <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.totalAmount), ord.currency)}</td>
+                          <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.paidAmount), ord.currency)} ({ord.paymentPercent}%)</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <Badge variant={ord.status === 'COMPLETED' ? 'success' : ord.status === 'CANCELLED' ? 'error' : 'warning'}>
+                              {ord.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </Modal>
       )}

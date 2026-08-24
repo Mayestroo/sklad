@@ -27,6 +27,9 @@ import {
   TrendingDown,
   Wallet,
   ShoppingCart,
+  ClipboardList,
+  Factory,
+  Truck,
   BarChart3,
   Users,
   Building2,
@@ -332,6 +335,7 @@ export default function DashboardPage() {
 
   const [period, setPeriod] = useState<DashboardPeriod>('this_month');
   const [data, setData] = useState<FullDashboard | null>(null);
+  const [orderStats, setOrderStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [cashFlowGranularity, setCashFlowGranularity] = useState<'day' | 'week' | 'month'>('day');
 
@@ -342,8 +346,12 @@ export default function DashboardPage() {
     const params = new URLSearchParams({ date_from, date_to, granularity: cashFlowGranularity });
 
     try {
-      const result = await apiFetch<FullDashboard>(`/dashboard?${params}`, { token, tenantId: company.id, locale });
+      const [result, orders] = await Promise.all([
+        apiFetch<FullDashboard>(`/dashboard?${params}`, { token, tenantId: company.id, locale }),
+        apiFetch<any>('/api/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
+      ]);
       setData(result);
+      setOrderStats(orders);
     } catch (e) {
       console.error(e);
     } finally {
@@ -486,6 +494,74 @@ export default function DashboardPage() {
           iconBg="var(--color-warning-50)"
         />
       </div>
+
+      {/* Orders Pipeline (Zakazlar voronkasi) */}
+      {orderStats && (
+        <Card
+          title={isRu ? 'Воронка заказов и производство' : 'Zakazlar voronkasi va ishlab chiqarish'}
+          action={
+            <Link href="/sales/orders" style={{ textDecoration: 'none' }}>
+              <Button variant="ghost" size="sm">
+                {isRu ? 'Все заказы' : 'Barcha zakazlar'} <ArrowRight size={14} />
+              </Button>
+            </Link>
+          }
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+              gap: 'var(--space-3)',
+              marginTop: 'var(--space-2)',
+            }}
+          >
+            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-primary-500)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                {isRu ? 'НОВЫЕ / СОГЛАСОВАНИЕ' : 'YANGI / TASDIQLASHDA'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px' }}>
+                {(orderStats.pipeline?.NEW || 0) + (orderStats.pipeline?.PENDING_APPROVAL || 0)}
+              </div>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-warning-500)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                {isRu ? 'В ПРОИЗВОДСТВЕ' : 'ISHLAB CHIQARISHDA'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-warning-600)' }}>
+                {(orderStats.pipeline?.SENT_TO_PRODUCTION || 0) + (orderStats.pipeline?.IN_PRODUCTION || 0) + (orderStats.pipeline?.PARTIALLY_READY || 0)}
+              </div>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-error-500)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                {isRu ? 'ОЖИДАЮТ ОПЛАТЫ' : 'TO‘LOV KUTILMOQDA'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-error-600)' }}>
+                {orderStats.pipeline?.AWAITING_PAYMENT || 0}
+              </div>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-success-500)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                {isRu ? 'ГОТОВЫ К ОТГРУЗКЕ' : 'JO‘NATISHGA TAYYOR'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-success-600)' }}>
+                {orderStats.pipeline?.READY_TO_SHIP || 0}
+              </div>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-info-500)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                {isRu ? 'ОТГРУЖЕНЫ' : 'JO‘NATILGAN'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-info-600)' }}>
+                {orderStats.pipeline?.SHIPPED || 0}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Receivables & Payables */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>

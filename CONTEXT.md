@@ -62,6 +62,32 @@ _Avoid_: Document unlock, forced unpost, stock override
 An inline creation dialog enabling operators to create new products, categories, or counterparties directly within the purchase receipt creation workflow without leaving the page.
 _Avoid_: Context switch, background registration, external entity setup
 
+### Orders & Fulfillment
+
+**Sales Order (Zakaz)**:
+A confirmed customer commitment to purchase goods, with its own 13-state lifecycle. A Sales Order is not a sale — it does not move inventory or create accounts receivable. It coordinates production, payment collection, and warehouse dispatch. A Sales Order converts to a Sales Invoice automatically when the warehouse posts an outbound dispatch.
+_Avoid_: Pre-invoice, draft sale, pro-forma
+
+**Sales Order Status**:
+One of 13 states a Sales Order passes through: `NEW` → `PENDING_APPROVAL` → `APPROVED` → `SENT_TO_PRODUCTION` → `IN_PRODUCTION` → `PARTIALLY_READY` → `READY` → `AWAITING_PAYMENT` → `PAYMENT_CONFIRMED` → `READY_TO_SHIP` → `SHIPPED` → `COMPLETED` | `CANCELLED`. Transitions are either manual (role-gated) or automatic (triggered by production, finance, or warehouse events).
+_Avoid_: Order phase, order stage, pipeline step
+
+**Payment Condition**:
+The rule governing when the warehouse dispatch gate is unlocked for a Sales Order. One of three values: `PREPAID_100` (dispatch blocked until 100% of `totalAmount` is paid), `PARTIAL` (dispatch unlocked once `paidAmount ≥ totalAmount × requiredPaymentPercent`), or `CREDIT` (dispatch gate bypassed entirely; goods ship regardless of payment status).
+_Avoid_: Payment terms, credit terms, billing mode
+
+**Dispatch Gate**:
+The system-enforced block preventing warehouse staff from posting an OUTBOUND inventory document against a Sales Order until its Payment Condition is satisfied. For `PREPAID_100` and `PARTIAL` orders, the gate checks `paidAmount` at the moment of dispatch. For `CREDIT` orders, no check is performed.
+_Avoid_: Release lock, payment block, shipment hold
+
+**Production Order (stub)**:
+A lightweight task record automatically created when a Sales Order is sent to production. Tracks `requiredQty`, `readyQty`, and `status` (`PENDING` / `IN_PROGRESS` / `DONE` / `CANCELLED`) for a single product line within an order. The full production workflow (steps, materials, BOM) is a separate future module; this stub is the minimum interface between the Orders and Production contexts.
+_Avoid_: Manufacturing order, work order, production task
+
+**Order Payment**:
+A `Payment` record linked to a `SalesOrder` via `orderId` (rather than `invoiceId`). Represents money received from a customer before the order has been dispatched and converted to a Sales Invoice. Order Payments accumulate in `paidAmount` on the Sales Order and determine whether the Dispatch Gate is satisfied. After dispatch, they are not re-linked to the resulting Sales Invoice; the invoice's `paidAmount` is computed by summing all payments referencing the originating order.
+_Avoid_: Advance payment, deposit, pre-payment allocation
+
 ### Sales & Outbound
 
 **Sales Invoice**:

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ShoppingBag,
   ShoppingCart,
+  ClipboardList,
   PackageCheck,
   Package,
   UserCheck,
@@ -54,6 +55,7 @@ export function Sidebar() {
   ];
 
   const salesSubItems = [
+    { href: '/sales/orders', label: t('salesOrders'), icon: ClipboardList },
     { href: '/sales', label: t('salesOverview'), icon: ShoppingCart },
     { href: '/sales/returns', label: t('salesReturns'), icon: RotateCcw },
     { href: '/sales/customers', label: t('customers'), icon: UserCheck },

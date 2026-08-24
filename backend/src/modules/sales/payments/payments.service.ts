@@ -3,6 +3,7 @@ import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreatePaymentDto } from '../dto';
+import { SalesOrdersService } from '../orders/sales-orders.service';
 
 @Injectable()
 export class PaymentsService {
@@ -10,6 +11,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly journalService: JournalService,
+    private readonly salesOrdersService: SalesOrdersService,
   ) {}
 
   async registerPayment(
@@ -34,6 +36,7 @@ export class PaymentsService {
           tenantId,
           counterpartyId: dto.counterpartyId,
           invoiceId: dto.invoiceId || null,
+          orderId: dto.orderId || null,
           paymentNumber,
           method: dto.method,
           amount: dto.amount,
@@ -42,6 +45,7 @@ export class PaymentsService {
         include: {
           counterparty: true,
           invoice: true,
+          salesOrder: true,
         },
       });
 
@@ -80,7 +84,16 @@ export class PaymentsService {
       return payment;
     });
 
-    // 4. Module 4 Integration: Auto-post Payment NAS double-entry journal (Dt 5110/5010 / Kt 4010)
+    // 4. If linked to a Sales Order, trigger dispatch gate evaluation
+    if (dto.orderId) {
+      try {
+        await this.salesOrdersService.onPaymentRegistered(tenantId, userId, dto.orderId);
+      } catch (err) {
+        console.error('Failed to evaluate order payment gate:', err);
+      }
+    }
+
+    // 5. Module 4 Integration: Auto-post Payment NAS double-entry journal (Dt 5110/5010 / Kt 4010)
     try {
       await this.journalService.autoPostPayment(tenantId, result);
     } catch (err) {
@@ -94,7 +107,7 @@ export class PaymentsService {
       entityType: 'Payment',
       entityId: result.id,
       action: 'CREATE',
-      newValue: { paymentNumber, amount: dto.amount, method: dto.method },
+      newValue: { paymentNumber, amount: dto.amount, method: dto.method, orderId: dto.orderId },
     });
 
     return result;
@@ -106,6 +119,7 @@ export class PaymentsService {
       include: {
         counterparty: true,
         invoice: true,
+        salesOrder: true,
       },
       orderBy: { createdAt: 'desc' },
     });

@@ -108,6 +108,35 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum SalesOrderStatus {
+  NEW
+  PENDING_APPROVAL
+  APPROVED
+  SENT_TO_PRODUCTION
+  IN_PRODUCTION
+  PARTIALLY_READY
+  READY
+  AWAITING_PAYMENT
+  PAYMENT_CONFIRMED
+  READY_TO_SHIP
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentCondition {
+  PREPAID_100
+  PARTIAL
+  CREDIT
+}
+
+enum ProductionOrderStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
 enum PaymentMethod {
   CASH
   BANK_TRANSFER
@@ -259,6 +288,7 @@ model Company {
   priceLists           PriceList[]
   additionalExpenses   AdditionalExpense[]
   batchConsumptions    BatchConsumption[]
+  productionOrders     ProductionOrder[]
 
   @@map("companies")
 }
@@ -386,6 +416,9 @@ model User {
   createdSalesReturns  SalesReturn[]  @relation("CreatedSalesReturns")
   createdAdditionalExpenses AdditionalExpense[] @relation("CreatedAdditionalExpenses")
   postedAdditionalExpenses  AdditionalExpense[] @relation("PostedAdditionalExpenses")
+  assignedSalesOrders       SalesOrder[]        @relation("AssignedSalesOrders")
+  createdSalesOrders        SalesOrder[]        @relation("CreatedSalesOrders")
+  assignedProductionOrders  ProductionOrder[]   @relation("AssignedProductionOrders")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -491,6 +524,7 @@ model Warehouse {
   purchaseReturns  PurchaseReturn[]
   salesReturns     SalesReturn[]
   productBatches   ProductBatch[]
+  salesOrders      SalesOrder[]
 
   @@index([tenantId])
   @@map("warehouses")
@@ -606,6 +640,7 @@ model Product {
   salesReturnItems     SalesReturnItem[]
   productPrices        ProductPrice[]
   additionalExpenseItems AdditionalExpenseItem[]
+  productionOrders       ProductionOrder[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
@@ -790,20 +825,43 @@ model CounterpartyFolder {
 }
 
 model SalesOrder {
-  id             String         @id @default(uuid())
-  tenantId       String         @map("tenant_id")
-  counterpartyId String         @map("counterparty_id")
-  orderNumber    String         @map("order_number")
-  status         InvoiceStatus  @default(DRAFT)
-  orderDate      DateTime       @default(now()) @map("order_date")
-  totalAmount    Decimal        @default(0) @db.Decimal(15, 2) @map("total_amount")
+  id                      String             @id @default(uuid())
+  tenantId                String             @map("tenant_id")
+  counterpartyId          String             @map("counterparty_id")
+  orderNumber             String             @map("order_number")
+  status                  SalesOrderStatus   @default(NEW)
+  paymentCondition        PaymentCondition   @default(PREPAID_100) @map("payment_condition")
+  requiredPaymentPercent  Decimal?           @db.Decimal(5, 2) @map("required_payment_percent")
+  orderDate               DateTime           @default(now()) @map("order_date")
+  deliveryDate            DateTime?          @map("delivery_date")
+  deliveryAddress         String?            @map("delivery_address")
+  currency                String             @default("UZS")
+  exchangeRate            Decimal            @default(1) @db.Decimal(15, 4) @map("exchange_rate")
+  subtotalAmount          Decimal            @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
+  discountAmount          Decimal            @default(0) @db.Decimal(15, 2) @map("discount_amount")
+  totalAmount             Decimal            @default(0) @db.Decimal(15, 2) @map("total_amount")
+  paidAmount              Decimal            @default(0) @db.Decimal(15, 2) @map("paid_amount")
+  comment                 String?
+  warehouseId             String?            @map("warehouse_id")
+  assignedSellerId        String?            @map("assigned_seller_id")
+  createdById             String?            @map("created_by_id")
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
 
-  company      Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  counterparty Counterparty     @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
-  items        SalesOrderItem[]
+  company        Company           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty   Counterparty      @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  warehouse      Warehouse?        @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  assignedSeller User?             @relation("AssignedSalesOrders", fields: [assignedSellerId], references: [id], onDelete: SetNull)
+  createdBy      User?             @relation("CreatedSalesOrders", fields: [createdById], references: [id], onDelete: SetNull)
+  items          SalesOrderItem[]
+  productionOrders ProductionOrder[]
+  payments       Payment[]
+  salesInvoices  SalesInvoice[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, counterpartyId])
   @@map("sales_orders")
 }
 
@@ -813,12 +871,40 @@ model SalesOrderItem {
   productId  String     @map("product_id")
   quantity   Decimal    @db.Decimal(15, 3)
   unitPrice  Decimal    @db.Decimal(15, 2) @map("unit_price")
+  discount   Decimal    @default(0) @db.Decimal(15, 2)
   totalPrice Decimal    @db.Decimal(15, 2) @map("total_price")
+  readyQty   Decimal    @default(0) @db.Decimal(15, 3) @map("ready_qty")
 
-  order   SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order            SalesOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product          Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productionOrders ProductionOrder[]
 
   @@map("sales_order_items")
+}
+
+model ProductionOrder {
+  id             String                @id @default(uuid())
+  tenantId       String                @map("tenant_id")
+  salesOrderId   String                @map("sales_order_id")
+  salesOrderItemId String?             @map("sales_order_item_id")
+  productId      String                @map("product_id")
+  requiredQty    Decimal               @db.Decimal(15, 3) @map("required_qty")
+  readyQty       Decimal               @default(0) @db.Decimal(15, 3) @map("ready_qty")
+  status         ProductionOrderStatus @default(PENDING)
+  dueDate        DateTime?             @map("due_date")
+  assignedToId   String?               @map("assigned_to_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  company        Company      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrder     SalesOrder   @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  salesOrderItem SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: SetNull)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  assignedTo     User?        @relation("AssignedProductionOrders", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, salesOrderId])
+  @@map("production_orders")
 }
 
 model SalesInvoice {
@@ -826,6 +912,7 @@ model SalesInvoice {
   tenantId       String             @map("tenant_id")
   warehouseId    String             @map("warehouse_id")
   counterpartyId String             @map("counterparty_id")
+  salesOrderId   String?            @map("sales_order_id")
   invoiceNumber  String             @map("invoice_number")
   status         SalesDocStatus     @default(DRAFT)
   paymentStatus  SalesPaymentStatus @default(UNPAID) @map("payment_status")
@@ -853,6 +940,7 @@ model SalesInvoice {
   company      Company            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   warehouse    Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   counterparty Counterparty       @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  salesOrder   SalesOrder?        @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
   createdBy    User?              @relation("CreatedSalesInvoices", fields: [createdById], references: [id], onDelete: SetNull)
   postedBy     User?              @relation("PostedSalesInvoices", fields: [postedById], references: [id], onDelete: SetNull)
   items        SalesInvoiceItem[]
@@ -1022,6 +1110,7 @@ model Payment {
   tenantId       String        @map("tenant_id")
   counterpartyId String        @map("counterparty_id")
   invoiceId      String?       @map("invoice_id")
+  orderId        String?       @map("order_id")
   paymentNumber  String        @map("payment_number")
   method         PaymentMethod @default(BANK_TRANSFER)
   amount         Decimal       @db.Decimal(15, 2)
@@ -1032,6 +1121,7 @@ model Payment {
   company      Company       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   counterparty Counterparty  @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
   invoice      SalesInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  salesOrder   SalesOrder?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId])

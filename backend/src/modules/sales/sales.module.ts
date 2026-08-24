@@ -10,6 +10,8 @@ import { PaymentsService } from './payments/payments.service';
 import { PurchasesController } from './purchases/purchases.controller';
 import { PurchasesService } from './purchases/purchases.service';
 import { AccountingModule } from '../accounting/accounting.module';
+import { SalesOrdersController } from './orders/sales-orders.controller';
+import { SalesOrdersService } from './orders/sales-orders.service';
 
 @Module({
   imports: [AccountingModule],
@@ -19,6 +21,7 @@ import { AccountingModule } from '../accounting/accounting.module';
     CrmController,
     PaymentsController,
     PurchasesController,
+    SalesOrdersController,
   ],
   providers: [
     CounterpartiesService,
@@ -26,6 +29,7 @@ import { AccountingModule } from '../accounting/accounting.module';
     CrmService,
     PaymentsService,
     PurchasesService,
+    SalesOrdersService,
   ],
   exports: [
     CounterpartiesService,
@@ -33,6 +37,7 @@ import { AccountingModule } from '../accounting/accounting.module';
     CrmService,
     PaymentsService,
     PurchasesService,
+    SalesOrdersService,
   ],
 })
 export class SalesModule {}

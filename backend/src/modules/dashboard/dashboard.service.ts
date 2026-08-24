@@ -290,4 +290,64 @@ export class DashboardService {
 
     return transactions;
   }
+
+  // ─── /api/dashboard/sales-orders ─────────────────────────────────
+
+  async getSalesOrderStats(tenantId: string) {
+    const [statusCounts, deadlineOrders, inflightAgg] = await Promise.all([
+      this.prisma.salesOrder.groupBy({
+        by: ['status'],
+        where: { tenantId },
+        _count: { _all: true },
+      }),
+      this.prisma.salesOrder.findMany({
+        where: {
+          tenantId,
+          deliveryDate: {
+            gte: new Date(),
+            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+          status: {
+            notIn: ['SHIPPED', 'COMPLETED', 'CANCELLED'] as any[],
+          },
+        },
+        include: { counterparty: { select: { id: true, name: true } } },
+        orderBy: { deliveryDate: 'asc' },
+        take: 20,
+      }),
+      this.prisma.salesOrder.aggregate({
+        where: {
+          tenantId,
+          status: { notIn: ['CANCELLED', 'COMPLETED'] as any[] },
+        },
+        _sum: { totalAmount: true },
+      }),
+    ]);
+
+    const counts: Record<string, number> = {};
+    for (const sc of statusCounts) {
+      counts[sc.status] = sc._count._all;
+    }
+
+    return {
+      pipeline: {
+        NEW: counts['NEW'] || 0,
+        PENDING_APPROVAL: counts['PENDING_APPROVAL'] || 0,
+        APPROVED: counts['APPROVED'] || 0,
+        SENT_TO_PRODUCTION: counts['SENT_TO_PRODUCTION'] || 0,
+        IN_PRODUCTION: counts['IN_PRODUCTION'] || 0,
+        PARTIALLY_READY: counts['PARTIALLY_READY'] || 0,
+        READY: counts['READY'] || 0,
+        AWAITING_PAYMENT: counts['AWAITING_PAYMENT'] || 0,
+        PAYMENT_CONFIRMED: counts['PAYMENT_CONFIRMED'] || 0,
+        READY_TO_SHIP: counts['READY_TO_SHIP'] || 0,
+        SHIPPED: counts['SHIPPED'] || 0,
+        COMPLETED: counts['COMPLETED'] || 0,
+        CANCELLED: counts['CANCELLED'] || 0,
+      },
+      upcomingDeadlines: deadlineOrders,
+      totalInflightAmount: Number(inflightAgg._sum.totalAmount || 0),
+    };
+  }
 }
+

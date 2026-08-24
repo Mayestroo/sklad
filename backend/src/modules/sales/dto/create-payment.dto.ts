@@ -16,6 +16,10 @@ export class CreatePaymentDto {
   @IsOptional()
   invoiceId?: string;
 
+  @IsString()
+  @IsOptional()
+  orderId?: string;
+
   @IsEnum(['CASH', 'BANK_TRANSFER', 'CARD', 'CLICK', 'PAYME'])
   method: 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME';
 
@@ -27,3 +31,4 @@ export class CreatePaymentDto {
   @IsOptional()
   comment?: string;
 }
+

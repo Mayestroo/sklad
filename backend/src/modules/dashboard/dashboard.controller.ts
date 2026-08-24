@@ -92,4 +92,11 @@ export class DashboardController {
       limit ? Number(limit) : 10,
     );
   }
+
+  @Get('sales-orders')
+  @RequirePermissions('analytics:view')
+  getSalesOrderStats(@CurrentTenant() tenantId: string) {
+    return this.dashboardService.getSalesOrderStats(tenantId);
+  }
 }
+
