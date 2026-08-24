@@ -27,20 +27,17 @@ import {
   Search,
   AlertCircle,
   AlertTriangle,
-  UserPlus,
   PackagePlus,
-  Building2,
   Factory,
   PackageCheck,
   CheckCheck,
   XCircle,
   Percent,
-  Clock,
 } from 'lucide-react';
 import { PaySalesOrderModal } from './PaySalesOrderModal';
-import { QuickAddCustomerModal } from './QuickAddCustomerModal';
-import { QuickAddProductModal } from '@/components/purchases/QuickAddProductModal';
-import { CustomerProfileDrawer } from './CustomerProfileDrawer';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
+import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 
 export const ORDER_STATUS_LABELS: Record<string, { uz: string; ru: string; variant: 'neutral' | 'info' | 'warning' | 'success' | 'error' }> = {
   NEW: { uz: 'Yangi', ru: 'Новый', variant: 'neutral' },
@@ -63,12 +60,14 @@ interface CounterpartyOption {
   name: string;
   phone?: string;
   debtBalance?: number;
+  type?: string;
 }
 
 interface ProductOption {
   id: string;
   name: string | Record<string, string>;
   sku: string;
+  barcode?: string;
   salePrice: number;
   costPrice: number;
   unitOfMeasure?: string;
@@ -148,14 +147,23 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const [currentOrderData, setCurrentOrderData] = useState<any | null>(initialData || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Quick Add Drawers
+  const [isQuickCustomerOpen, setIsQuickCustomerOpen] = useState(false);
+  const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false);
+  const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
+  const [quickProductSearch, setQuickProductSearch] = useState('');
+  const [activeRowIndexForNewProduct, setActiveRowIndexForNewProduct] = useState<number | null>(null);
 
   // Modals
   const [isPayOpen, setIsPayOpen] = useState(false);
-  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
 
   const isLocked = orderStatus !== 'NEW' && orderStatus !== 'PENDING_APPROVAL';
+
+  const markDirty = () => {
+    if (!isDirty) setIsDirty(true);
+  };
 
   const getLocalizedName = (name: any) => {
     if (!name) return '—';
@@ -169,10 +177,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
     try {
       const [cpRes, prdRes, usrRes, whRes] = await Promise.all([
-        apiFetch<any>('/counterparties', { token, tenantId: company.id, locale }),
-        apiFetch<any>('/inventory/products', { token, tenantId: company.id, locale }),
-        apiFetch<any>('/users', { token, tenantId: company.id, locale }),
-        apiFetch<any>('/inventory/warehouses', { token, tenantId: company.id, locale }),
+        apiFetch<any>('/counterparties', { token: token || undefined, tenantId: company.id, locale }),
+        apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }),
+        apiFetch<any>('/users', { token: token || undefined, tenantId: company.id, locale }),
+        apiFetch<any>('/inventory/warehouses', { token: token || undefined, tenantId: company.id, locale }),
       ]);
 
       const cpList = cpRes?.data || cpRes || [];
@@ -185,6 +193,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         id: p.id,
         name: p.name,
         sku: p.sku,
+        barcode: p.barcode,
         salePrice: Number(p.salePrice) || 0,
         costPrice: Number(p.costPrice) || 0,
         unitOfMeasure: p.unitOfMeasure || 'dona',
@@ -211,6 +220,74 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   useEffect(() => {
     fetchDropdowns();
   }, [token, company, locale]);
+
+  // Drawer handlers
+  const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; debtBalance?: number }) => {
+    markDirty();
+    setCounterparties((prev) => [newCustomer, ...prev]);
+    setCounterpartyId(newCustomer.id);
+  };
+
+  const handleWarehouseAdded = (newWarehouse: { id: string; name: string | Record<string, string> }) => {
+    markDirty();
+    setWarehouses((prev) => [newWarehouse, ...prev]);
+    setDispatchWarehouseId(newWarehouse.id);
+  };
+
+  const handleProductAdded = (
+    newProduct: {
+      id: string;
+      name: Record<string, string> | string;
+      sku: string;
+      barcode?: string;
+      costPrice: number;
+      salePrice?: number;
+      unitOfMeasure?: string;
+    },
+    initialQuantity?: number
+  ) => {
+    markDirty();
+    const formatted = {
+      id: newProduct.id,
+      name: newProduct.name,
+      sku: newProduct.sku,
+      barcode: newProduct.barcode,
+      salePrice: Number(newProduct.salePrice) || 0,
+      costPrice: Number(newProduct.costPrice) || 0,
+      unitOfMeasure: newProduct.unitOfMeasure || 'dona',
+    };
+    setProducts((prev) => [formatted, ...prev]);
+
+    const qty = Number(initialQuantity) || 1;
+    const price = Number(newProduct.salePrice) || 0;
+
+    if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
+      const targetIdx = activeRowIndexForNewProduct;
+      handleItemChange(targetIdx, 'productId', newProduct.id);
+      handleItemChange(targetIdx, 'quantity', qty);
+      if (price > 0) handleItemChange(targetIdx, 'unitPrice', price);
+      setActiveRowIndexForNewProduct(null);
+    } else {
+      const emptyIdx = items.findIndex((i) => !i.productId);
+      if (emptyIdx !== -1) {
+        handleItemChange(emptyIdx, 'productId', newProduct.id);
+        handleItemChange(emptyIdx, 'quantity', qty);
+        if (price > 0) handleItemChange(emptyIdx, 'unitPrice', price);
+      } else {
+        setItems((prev) => [
+          ...prev,
+          {
+            productId: newProduct.id,
+            quantity: qty,
+            unitPrice: price,
+            discount: 0,
+            readyQty: 0,
+          },
+        ]);
+      }
+    }
+    setQuickProductSearch('');
+  };
 
   // Calculations
   const calculations = useMemo(() => {
@@ -249,6 +326,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   }, [items, currentOrderData, paymentCondition, requiredPaymentPercent]);
 
   const handleItemChange = (index: number, field: keyof OrderItemRow, val: any) => {
+    markDirty();
     setItems((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: val };
@@ -261,6 +339,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   };
 
   const addItemRow = (productId = '') => {
+    markDirty();
     const prd = products.find((p) => p.id === productId);
     setItems((prev) => [
       ...prev,
@@ -275,6 +354,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   };
 
   const removeItemRow = (index: number) => {
+    markDirty();
     if (items.length <= 1) {
       setItems([{ productId: '', quantity: 1, unitPrice: 0, discount: 0, readyQty: 0 }]);
       return;
@@ -327,6 +407,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         });
 
         if (res && res.id) {
+          setIsDirty(false);
           router.push(`/sales/orders/${res.id}`);
         }
       } else {
@@ -339,6 +420,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         });
         if (res) {
           setCurrentOrderData(res);
+          setIsDirty(false);
         }
       }
     } catch (err: any) {
@@ -376,7 +458,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     }
   };
 
-  // Dispatch Action (Converts to Invoice)
+  // Dispatch Action
   const handleDispatch = async () => {
     if (!orderId || !dispatchWarehouseId) {
       setError(isRu ? 'Выберите склад для списания' : 'Chiqim omborini tanlang');
@@ -433,60 +515,101 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     }
   };
 
+  const handleBackNavigation = () => {
+    if (isDirty) {
+      const confirmed = window.confirm(
+        isRu
+          ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
+          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?'
+      );
+      if (!confirmed) return;
+    }
+    setIsDirty(false);
+    router.push('/sales/orders');
+  };
+
   const statusMeta = ORDER_STATUS_LABELS[orderStatus] || { uz: orderStatus, ru: orderStatus, variant: 'neutral' };
 
+  const customerOptions: SelectOption[] = counterparties.map((c) => ({
+    value: c.id,
+    label: c.name,
+  }));
+
+  const productOptions: SelectOption[] = products.map((p) => ({
+    value: p.id,
+    label: `${getLocalizedName(p.name)} ${p.sku ? `(${p.sku})` : ''}`,
+  }));
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', paddingBottom: 'var(--space-10)' }}>
-      {/* Header & Actions */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'var(--space-12)' }}>
+      {/* Sticky Top Header & Toolbar */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 'var(--header-height)',
+          zIndex: 15,
+          backgroundColor: 'var(--color-bg-primary)',
+          padding: 'var(--space-4) 0',
+          borderBottom: '1px solid var(--color-border-light)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 'var(--space-4)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
           <Button
-            variant="secondary"
-            onClick={() => router.push('/sales/orders')}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px', padding: '0 12px' }}
+            variant="ghost"
+            size="sm"
+            onClick={handleBackNavigation}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <ArrowLeft size={16} />
-            {isRu ? 'К заказам' : 'Buyurtmalarga'}
+            <ArrowLeft size={18} /> {isRu ? 'К списку заказов' : 'Buyurtmalar ro‘yxatiga'}
           </Button>
+
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                {mode === 'create'
-                  ? (isRu ? 'Новый заказ покупателя' : 'Yangi Xaridor Buyurtmasi')
-                  : `${isRu ? 'Заказ' : 'Buyurtma'} № ${orderNumber}`}
+                {mode === 'create' && !orderNumber
+                  ? isRu
+                    ? 'Новый заказ покупателя'
+                    : 'Yangi Xaridor Buyurtmasi'
+                  : `${isRu ? 'Заказ покупателя' : 'Xaridor buyurtmasi'} ${orderNumber}`}
               </h1>
               <Badge variant={statusMeta.variant as any}>
                 {isRu ? statusMeta.ru : statusMeta.uz}
               </Badge>
             </div>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? '13-этапный жизненный цикл, координация производства, оплат и отгрузки' : '13 bosqichli sikl, ishlab chiqarish, to‘lovlar va jo‘natish koordinatsiyasi'}
-            </p>
           </div>
         </div>
 
-        {/* Action Buttons based on orderStatus */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           {orderStatus !== 'CANCELLED' && orderStatus !== 'COMPLETED' && (
             <Button
               variant="secondary"
               onClick={() => setIsPayOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px', borderColor: '#10b981', color: '#10b981' }}
+              style={{
+                backgroundColor: 'var(--color-success-50)',
+                color: 'var(--color-success-600)',
+                border: '1px solid var(--color-success-200)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
             >
-              <CreditCard size={16} />
-              {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
+              <CreditCard size={16} /> {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
             </Button>
           )}
 
-          {/* Lifecycle actions */}
           {orderStatus === 'NEW' && (
             <Button
               onClick={() => handleTransition('SUBMIT')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Send size={16} />
-              {isRu ? 'Отправить на согласование' : 'Tasdiqlashga yuborish'}
+              <Send size={16} /> {isRu ? 'Отправить на согласование' : 'Tasdiqlashga yuborish'}
             </Button>
           )}
 
@@ -495,19 +618,17 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               <Button
                 onClick={() => handleTransition('APPROVE')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
               >
-                <CheckCircle2 size={16} />
-                {isRu ? 'Согласовать заказ' : 'Tasdiqlash'}
+                <CheckCircle2 size={16} /> {isRu ? 'Согласовать' : 'Tasdiqlash'}
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => handleTransition('REJECT')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px', color: '#ef4444' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}
               >
-                <XCircle size={16} />
-                {isRu ? 'Отклонить' : 'Rad etish'}
+                <XCircle size={16} /> {isRu ? 'Отклонить' : 'Rad etish'}
               </Button>
             </>
           )}
@@ -516,10 +637,9 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleTransition('SEND_TO_PRODUCTION')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Factory size={16} />
-              {isRu ? 'Передать в производство' : 'Ishlab chiqarishga yuborish'}
+              <Factory size={16} /> {isRu ? 'В производство' : 'Ishlab chiqarishga'}
             </Button>
           )}
 
@@ -529,15 +649,16 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                 options={warehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) }))}
                 value={dispatchWarehouseId}
                 onChange={setDispatchWarehouseId}
+                onCreateNew={() => setIsQuickWarehouseOpen(true)}
+                createNewLabel={isRu ? 'Создать склад' : 'Yangi ombor'}
                 style={{ width: '160px' }}
               />
               <Button
                 onClick={handleDispatch}
                 disabled={loading || !dispatchWarehouseId}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
               >
-                <Truck size={16} />
-                {isRu ? 'Отгрузить (Создать фактуру)' : 'Jo‘natish (Faktura ochish)'}
+                <Truck size={16} /> {isRu ? 'Отгрузить' : 'Jo‘natish'}
               </Button>
             </div>
           )}
@@ -546,23 +667,20 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={handleComplete}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
             >
-              <CheckCheck size={16} />
-              {isRu ? 'Подтвердить получение' : 'Yakunlash (Topshirildi)'}
+              <CheckCheck size={16} /> {isRu ? 'Завершить' : 'Yakunlash'}
             </Button>
           )}
 
-          {/* Cancellation */}
           {orderStatus !== 'COMPLETED' && orderStatus !== 'CANCELLED' && orderStatus !== 'SHIPPED' && (
             <Button
               variant="secondary"
               onClick={() => handleTransition('CANCEL')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px', color: '#ef4444' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}
             >
-              <XCircle size={16} />
-              {isRu ? 'Отменить заказ' : 'Bekor qilish'}
+              <XCircle size={16} /> {isRu ? 'Отменить' : 'Bekor qilish'}
             </Button>
           )}
 
@@ -571,441 +689,389 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={handleSave}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Save size={16} />
-              {isRu ? 'Сохранить' : 'Saqlash'}
+              <Save size={16} /> {isRu ? 'Сохранить' : 'Saqlash'}
+            </Button>
+          )}
+
+          <Button
+            variant="ghost"
+            onClick={() => window.print()}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Printer size={16} /> {isRu ? 'Печать' : 'Chop etish'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Error Banner */}
+      {error && (
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <AlertCircle size={20} />
+          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
+        </Card>
+      )}
+
+      {/* Document Primary Metadata Form Card */}
+      <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+          {isRu ? 'Основная информация' : 'Asosiy Hujjat Ma’lumotlari'}
+        </h3>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+          {/* Customer */}
+          <div style={{ minWidth: '200px', flex: '2 1 220px' }}>
+            <Select
+              label={isRu ? 'Клиент (Покупатель) *' : 'Mijoz (Xaridor) *'}
+              options={customerOptions}
+              value={counterpartyId}
+              onChange={(val) => { markDirty(); setCounterpartyId(val); }}
+              placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
+              disabled={isLocked}
+              onCreateNew={!isLocked ? () => setIsQuickCustomerOpen(true) : undefined}
+              createNewLabel={isRu ? 'Добавить клиента' : 'Yangi mijoz qo‘shish'}
+            />
+          </div>
+
+          {/* Payment Condition */}
+          <div style={{ minWidth: '160px', flex: '1.5 1 180px' }}>
+            <Select
+              label={isRu ? 'Условие отгрузки / оплаты' : 'To‘lov / Jo‘natish sharti'}
+              options={[
+                { value: 'PREPAID_100', label: isRu ? '100% Предоплата' : '100% Oldindan to‘lov' },
+                { value: 'PARTIAL', label: isRu ? 'Частичная предоплата (%)' : 'Qisman oldindan to‘lov (%)' },
+                { value: 'CREDIT', label: isRu ? 'В кредит (Без предоплаты)' : 'Nasiya / Kreditga' },
+              ]}
+              value={paymentCondition}
+              onChange={(val) => { markDirty(); setPaymentCondition(val as any); }}
+              disabled={isLocked}
+            />
+          </div>
+
+          {/* Required % when partial */}
+          {paymentCondition === 'PARTIAL' && (
+            <div style={{ minWidth: '120px', flex: '1 1 130px' }}>
+              <Input
+                label={isRu ? 'Мин. % оплаты' : 'Min. to‘lov %'}
+                type="number"
+                min={1}
+                max={100}
+                value={requiredPaymentPercent}
+                onChange={(e) => { markDirty(); setRequiredPaymentPercent(parseFloat(e.target.value) || 50); }}
+                disabled={isLocked}
+              />
+            </div>
+          )}
+
+          {/* Responsible Seller */}
+          <div style={{ minWidth: '160px', flex: '1.5 1 180px' }}>
+            <Select
+              label={isRu ? 'Ответственный продавец' : 'Mas’ul sotuvchi'}
+              options={[
+                { value: '', label: isRu ? '— Не назначен —' : '— Biriktirilmagan —' },
+                ...sellers.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
+              ]}
+              value={assignedSellerId}
+              onChange={(val) => { markDirty(); setAssignedSellerId(val); }}
+              disabled={isLocked}
+            />
+          </div>
+
+          {/* Delivery Date */}
+          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
+            <DatePicker
+              label={isRu ? 'Требуемая дата доставки' : 'Yetkazish talab sanasi'}
+              value={deliveryDate}
+              onChange={(val) => { markDirty(); setDeliveryDate(val); }}
+              disabled={isLocked}
+            />
+          </div>
+
+          {/* Currency */}
+          <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
+            <Select
+              label={isRu ? 'Валюта' : 'Valyuta'}
+              options={CURRENCY_OPTIONS}
+              value={currency}
+              onChange={(val) => {
+                markDirty();
+                setCurrency(val);
+                if (val === 'UZS') setExchangeRate(1);
+              }}
+              disabled={isLocked}
+            />
+          </div>
+
+          {/* Delivery Address */}
+          <div style={{ minWidth: '220px', flex: '2 1 250px' }}>
+            <Input
+              label={isRu ? 'Адрес доставки' : 'Yetkazish manzili'}
+              value={deliveryAddress}
+              onChange={(e) => { markDirty(); setDeliveryAddress(e.target.value); }}
+              placeholder={isRu ? 'Город, район, улица...' : 'Shahar, tuman, ko‘cha...'}
+              disabled={isLocked}
+            />
+          </div>
+
+          {/* Comment */}
+          <div style={{ minWidth: '220px', flex: '2 1 250px' }}>
+            <Input
+              label={isRu ? 'Примечание / Комментарий' : 'Izoh / Qayd'}
+              value={comment}
+              onChange={(e) => { markDirty(); setComment(e.target.value); }}
+              placeholder={isRu ? 'Дополнительные сведения...' : 'Qo‘shimcha ma’lumotlar...'}
+              disabled={isLocked}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Items Table Card */}
+      <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+            {isRu ? 'Товары в заказе' : 'Buyurtmadagi Tovarlar'} ({items.length})
+          </h3>
+
+          {!isLocked && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setQuickProductSearch('');
+                setIsQuickProductOpen(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <PackagePlus size={14} /> {isRu ? 'Новый товар' : 'Yangi tovar'}
             </Button>
           )}
         </div>
-      </div>
 
-      {/* Error alert */}
-      {error && (
-        <div
-          style={{
-            padding: '12px 16px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: 'var(--radius-md)',
-            color: '#ef4444',
-            fontSize: 'var(--text-sm)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
-      )}
+        {/* Table container */}
+        <div style={{ overflowX: 'auto', minHeight: '280px', paddingBottom: '40px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
+                  {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
+                </th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
+                  {isRu ? 'Заказано' : 'Buyurtma miqdori'}
+                </th>
+                {orderStatus !== 'NEW' && (
+                  <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
+                    {isRu ? 'Готово (Пр-во)' : 'Tayyorlandi'}
+                  </th>
+                )}
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
+                  {isRu ? 'Цена за ед.' : 'Birlik narxi'}
+                </th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                  {isRu ? 'Скидка %' : 'Skidka %'}
+                </th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
+                  {isRu ? 'Итого' : 'Jami Summa'}
+                </th>
+                {!isLocked && <th style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => {
+                const prd = products.find((p) => p.id === item.productId);
+                const lineRaw = item.quantity * item.unitPrice;
+                const discountVal = (lineRaw * item.discount) / 100;
+                const lineTotal = lineRaw - discountVal;
 
-      {/* Main Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: 'var(--space-6)', alignItems: 'start' }}>
-        {/* Left Column: Details & Items */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {/* Requisites Card */}
-          <Card style={{ padding: 'var(--space-5)' }}>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 'var(--space-4)' }}>
-              {isRu ? 'Параметры заказа' : 'Buyurtma parametrlari'}
-            </div>
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                    <td style={{ padding: '10px 12px', color: 'var(--color-text-tertiary)' }}>{idx + 1}</td>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-              {/* Customer */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Клиент (Покупатель) *' : 'Mijoz (Xaridor) *'}
-                  </label>
-                  {!isLocked && (
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomerModalOpen(true)}
-                      style={{
-                        fontSize: '11px',
-                        color: 'var(--color-primary-600)',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      <UserPlus size={12} /> {isRu ? '+ Клиент' : '+ Mijoz'}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <div style={{ flex: 1 }}>
-                    <Select
-                      options={counterparties.map((c) => ({ value: c.id, label: c.name }))}
-                      value={counterpartyId}
-                      onChange={setCounterpartyId}
-                      disabled={isLocked}
-                    />
-                  </div>
-                  {counterpartyId && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setIsCustomerDrawerOpen(true)}
-                      title={isRu ? 'Профиль клиента' : 'Mijoz profili'}
-                      style={{ padding: '0 10px', height: '38px' }}
-                    >
-                      <Building2 size={16} />
-                    </Button>
-                  )}
-                </div>
-              </div>
+                    {/* Product select */}
+                    <td style={{ padding: '10px 12px' }}>
+                      <Select
+                        options={productOptions}
+                        value={item.productId}
+                        onChange={(val) => handleItemChange(idx, 'productId', val)}
+                        placeholder={isRu ? 'Выберите товар...' : 'Tovarni tanlang...'}
+                        disabled={isLocked}
+                        onCreateNew={
+                          !isLocked
+                            ? (searchQuery) => {
+                                setActiveRowIndexForNewProduct(idx);
+                                setQuickProductSearch(searchQuery || '');
+                                setIsQuickProductOpen(true);
+                              }
+                            : undefined
+                        }
+                        createNewLabel={isRu ? 'Создать новый товар' : 'Yangi tovar qo‘shish'}
+                      />
+                    </td>
 
-              {/* Payment Condition */}
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                  {isRu ? 'Условие отгрузки / оплаты' : 'To‘lov / Jo‘natish sharti'}
-                </label>
-                <Select
-                  options={[
-                    { value: 'PREPAID_100', label: isRu ? '100% Предоплата' : '100% Oldindan to‘lov' },
-                    { value: 'PARTIAL', label: isRu ? 'Частичная предоплата (%)' : 'Qisman oldindan to‘lov (%)' },
-                    { value: 'CREDIT', label: isRu ? 'В кредит (Без предоплаты)' : 'Nasiya / Kreditga (Avanssiz)' },
-                  ]}
-                  value={paymentCondition}
-                  onChange={(val) => setPaymentCondition(val as any)}
-                  disabled={isLocked}
-                />
-              </div>
+                    {/* Quantity */}
+                    <td style={{ padding: '10px 12px' }}>
+                      <Input
+                        type="number"
+                        min="0.001"
+                        step="any"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                        disabled={isLocked}
+                        style={{ textAlign: 'right' }}
+                      />
+                    </td>
 
-              {/* Required % when partial */}
-              {paymentCondition === 'PARTIAL' && (
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                    {isRu ? 'Мин. % оплаты для отгрузки' : 'Jo‘natish uchun min. to‘lov %'}
-                  </label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={requiredPaymentPercent}
-                    onChange={(e) => setRequiredPaymentPercent(parseFloat(e.target.value) || 50)}
-                    disabled={isLocked}
-                  />
-                </div>
-              )}
-
-              {/* Responsible Seller */}
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                  {isRu ? 'Ответственный продавец' : 'Mas’ul sotuvchi'}
-                </label>
-                <Select
-                  options={[
-                    { value: '', label: isRu ? '— Не назначен —' : '— Biriktirilmagan —' },
-                    ...sellers.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
-                  ]}
-                  value={assignedSellerId}
-                  onChange={setAssignedSellerId}
-                  disabled={isLocked}
-                />
-              </div>
-
-              {/* Delivery Date */}
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                  {isRu ? 'Требуемая дата доставки' : 'Yetkazish talab sanasi'}
-                </label>
-                <DatePicker
-                  value={deliveryDate}
-                  onChange={setDeliveryDate}
-                  disabled={isLocked}
-                />
-              </div>
-
-              {/* Currency */}
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                  {isRu ? 'Валюта' : 'Valyuta'}
-                </label>
-                <Select
-                  options={CURRENCY_OPTIONS}
-                  value={currency}
-                  onChange={(val) => {
-                    setCurrency(val);
-                    if (val === 'UZS') setExchangeRate(1);
-                  }}
-                  disabled={isLocked}
-                />
-              </div>
-            </div>
-
-            {/* Delivery address & note */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-border-light)' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                  {isRu ? 'Адрес доставки' : 'Yetkazish manzili'}
-                </label>
-                <Input
-                  placeholder={isRu ? 'Город, район, улица, ориентир...' : 'Shahar, tuman, ko‘cha, mo‘ljal...'}
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  disabled={isLocked}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                  {isRu ? 'Комментарий / Инструкции' : 'Izoh / Ko‘rsatmalar'}
-                </label>
-                <Input
-                  placeholder={isRu ? 'Дополнительные сведения...' : 'Qo‘shimcha ma’lumotlar...'}
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  disabled={isLocked}
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* Order Items Table */}
-          <Card style={{ padding: 'var(--space-5)', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                {isRu ? 'Товары в заказе' : 'Buyurtmadagi tovarlar'}
-              </div>
-
-              {!isLocked && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setIsProductModalOpen(true)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '32px', padding: '0 10px', fontSize: 'var(--text-xs)' }}
-                >
-                  <PackagePlus size={14} />
-                  {isRu ? '+ Новый товар' : '+ Yangi tovar'}
-                </Button>
-              )}
-            </div>
-
-            <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', width: '38%' }}>
-                      {isRu ? 'ТОВАР' : 'TOVAR'}
-                    </th>
-                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', width: '14%' }}>
-                      {isRu ? 'ЗАКАЗАНО' : 'BUYURTMA'}
-                    </th>
+                    {/* Ready Qty */}
                     {orderStatus !== 'NEW' && (
-                      <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', width: '14%' }}>
-                        {isRu ? 'ГОТОВО' : 'TAYYOR'}
-                      </th>
+                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                        <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? '#10b981' : '#f59e0b' }}>
+                          {item.readyQty || 0} / {item.quantity}
+                        </span>
+                      </td>
                     )}
-                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', width: '16%' }}>
-                      {isRu ? 'ЦЕНА' : 'NARX'}
-                    </th>
-                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', width: '14%' }}>
-                      {isRu ? 'СУММА' : 'SUMMA'}
-                    </th>
+
+                    {/* Unit Price */}
+                    <td style={{ padding: '10px 12px' }}>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={item.unitPrice}
+                        onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        disabled={isLocked}
+                        style={{ textAlign: 'right' }}
+                      />
+                    </td>
+
+                    {/* Discount */}
+                    <td style={{ padding: '10px 12px' }}>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="any"
+                        value={item.discount}
+                        onChange={(e) => handleItemChange(idx, 'discount', parseFloat(e.target.value) || 0)}
+                        disabled={isLocked}
+                        style={{ textAlign: 'right' }}
+                      />
+                    </td>
+
+                    {/* Line Total */}
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
+                      {formatCurrency(lineTotal, locale, currency)}
+                    </td>
+
+                    {/* Actions */}
                     {!isLocked && (
-                      <th style={{ padding: '8px 12px', textAlign: 'center', width: '4%' }}></th>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeItemRow(idx)}
+                          style={{ color: 'var(--color-text-tertiary)', padding: '4px' }}
+                          title={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </td>
                     )}
                   </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => {
-                    const prd = products.find((p) => p.id === item.productId);
-                    const lineTotal = item.quantity * item.unitPrice * (1 - item.discount / 100);
-
-                    return (
-                      <tr key={index} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                        {/* Product */}
-                        <td style={{ padding: '6px 8px' }}>
-                          <Select
-                            options={[
-                              { value: '', label: isRu ? '— Выберите товар —' : '— Tovarni tanlang —' },
-                              ...products.map((p) => ({
-                                value: p.id,
-                                label: `${getLocalizedName(p.name)} (${p.sku})`,
-                              })),
-                            ]}
-                            value={item.productId}
-                            onChange={(val) => handleItemChange(index, 'productId', val)}
-                            disabled={isLocked}
-                          />
-                        </td>
-
-                        {/* Quantity */}
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                          <Input
-                            type="number"
-                            min={0.001}
-                            step="any"
-                            value={item.quantity || ''}
-                            onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-                            disabled={isLocked}
-                            style={{ textAlign: 'right', height: '36px' }}
-                          />
-                        </td>
-
-                        {/* Ready Qty */}
-                        {orderStatus !== 'NEW' && (
-                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                            <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? '#10b981' : '#f59e0b' }}>
-                              {item.readyQty || 0} / {item.quantity}
-                            </span>
-                          </td>
-                        )}
-
-                        {/* Unit Price */}
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={item.unitPrice || ''}
-                            onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                            disabled={isLocked}
-                            style={{ textAlign: 'right', height: '36px' }}
-                          />
-                        </td>
-
-                        {/* Line Total */}
-                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
-                          {formatCurrency(lineTotal, locale, currency)}
-                        </td>
-
-                        {/* Delete Row */}
-                        {!isLocked && (
-                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              onClick={() => removeItemRow(index)}
-                              style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: 4 }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {!isLocked && (
-              <div style={{ marginTop: 'var(--space-3)' }}>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => addItemRow()}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '36px', fontSize: 'var(--text-xs)' }}
-                >
-                  <Plus size={14} />
-                  {isRu ? 'Добавить строку' : 'Qator qo‘shish'}
-                </Button>
-              </div>
-            )}
-          </Card>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        {/* Right Column: Summary & Payment Card */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', position: 'sticky', top: 'var(--space-6)' }}>
-          <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-3)' }}>
-              {isRu ? 'Финансовый итог' : 'Buyurtma hisobi'}
+        {!isLocked && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => addItemRow()}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Plus size={16} /> {isRu ? 'Добавить позицию' : 'Qator qo‘shish'}
+            </Button>
+          </div>
+        )}
+      </Card>
+
+      {/* Summary Footer Panel */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
+            {isRu ? 'Финансовый итог' : 'Buyurtma Hisobi'}
+          </h3>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            <span>{isRu ? 'Сумма заказа:' : 'Buyurtma summasi:'}</span>
+            <span className="tabular-nums font-medium">{formatCurrency(calculations.grandTotal, locale, currency)}</span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#10b981' }}>
+            <span>{isRu ? 'Оплачено (Аванс):' : 'To‘langan (Avans):'}</span>
+            <span className="tabular-nums font-medium">{formatCurrency(calculations.paid, locale, currency)}</span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
+            <span>{isRu ? 'ОСТАТОК К ОПЛАТЕ:' : 'QOLDIQ TO‘LOV:'}</span>
+            <span className="tabular-nums" style={{ color: calculations.remaining > 0 ? '#ef4444' : '#10b981' }}>
+              {formatCurrency(calculations.remaining, locale, currency)}
+            </span>
+          </div>
+
+          {/* Dispatch Gate Widget */}
+          <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginTop: 'var(--space-2)' }}>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              {isRu ? 'Условие отгрузки (Dispatch Gate)' : 'Jo‘natish talabi (Dispatch Gate)'}
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-primary)' }}>
+              {paymentCondition === 'PREPAID_100' && (isRu ? 'Требуется 100% оплата' : '100% to‘lov talab qilinadi')}
+              {paymentCondition === 'PARTIAL' && (isRu ? `Требуется минимум ${requiredPaymentPercent}% (${formatCurrency(calculations.minRequired, locale, currency)})` : `Min. ${requiredPaymentPercent}% to‘lov talab qilinadi (${formatCurrency(calculations.minRequired, locale, currency)})`)}
+              {paymentCondition === 'CREDIT' && (isRu ? 'Кредит / Nasiya (Отгрузка без предоплаты)' : 'Nasiya / Kredit (Avanssiz jo‘natish ruxsat etilgan)')}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-secondary)' }}>
-                <span>{isRu ? 'Сумма заказа:' : 'Buyurtma qiymati:'}</span>
-                <span className="tabular-nums font-semibold">{formatCurrency(calculations.grandTotal, locale, currency)}</span>
+            {calculations.minNeededForDispatch > 0 && paymentCondition !== 'CREDIT' ? (
+              <div style={{ fontSize: '11px', color: '#ef4444', marginTop: 4, fontWeight: 600 }}>
+                {isRu ? `Необходимо оплатить еще: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}` : `Jo‘natish uchun yana to‘lanishi kerak: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}`}
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#10b981' }}>
-                <span>{isRu ? 'Оплачено (Аванс):' : 'To‘langan (Avans):'}</span>
-                <span className="tabular-nums font-semibold">{formatCurrency(calculations.paid, locale, currency)}</span>
+            ) : (
+              <div style={{ fontSize: '11px', color: '#10b981', marginTop: 4, fontWeight: 600 }}>
+                {isRu ? 'Условие для отгрузки выполнено' : 'Jo‘natish sharti bajarilgan'}
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: calculations.remaining > 0 ? '#ef4444' : '#10b981', fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-2)' }}>
-                <span>{isRu ? 'Остаток к оплате:' : 'Qoldiq to‘lov:'}</span>
-                <span className="tabular-nums">{formatCurrency(calculations.remaining, locale, currency)}</span>
-              </div>
-            </div>
-
-            {/* Dispatch Gate Requirement Widget */}
-            <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                {isRu ? 'Условие отгрузки (Dispatch Gate)' : 'Jo‘natish talabi (Dispatch Gate)'}
-              </div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-primary)' }}>
-                {paymentCondition === 'PREPAID_100' && (isRu ? 'Требуется 100% оплата' : '100% to‘lov talab qilinadi')}
-                {paymentCondition === 'PARTIAL' && (isRu ? `Требуется минимум ${requiredPaymentPercent}% (${formatCurrency(calculations.minRequired, locale, currency)})` : `Min. ${requiredPaymentPercent}% to‘lov talab qilinadi (${formatCurrency(calculations.minRequired, locale, currency)})`)}
-                {paymentCondition === 'CREDIT' && (isRu ? 'Кредит / Nasiya (Отгрузка без предоплаты)' : 'Nasiya / Kredit (Avanssiz jo‘natish ruxsat etilgan)')}
-              </div>
-
-              {calculations.minNeededForDispatch > 0 && paymentCondition !== 'CREDIT' ? (
-                <div style={{ fontSize: '11px', color: '#ef4444', marginTop: 4, fontWeight: 600 }}>
-                  {isRu ? `Необходимо оплатить еще: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}` : `Jo‘natish uchun yana to‘lanishi kerak: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}`}
-                </div>
-              ) : (
-                <div style={{ fontSize: '11px', color: '#10b981', marginTop: 4, fontWeight: 600 }}>
-                  {isRu ? 'Условие для отгрузки выполнено' : 'Jo‘natish sharti bajarilgan'}
-                </div>
-              )}
-            </div>
-
-            {/* Linked Invoice if Shipped/Completed */}
-            {currentOrderData?.invoiceId && (
-              <Button
-                variant="secondary"
-                onClick={() => router.push(`/sales/${currentOrderData.invoiceId}`)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                <Truck size={16} />
-                {isRu ? 'Открыть накладную отгрузки' : 'Chiqim fakturasini ochish'}
-              </Button>
             )}
-          </Card>
-        </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Auxiliary Modals */}
-      <QuickAddCustomerModal
-        isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        onSuccess={(newCp) => {
-          setCounterparties((prev) => [newCp, ...prev]);
-          setCounterpartyId(newCp.id);
-        }}
+      {/* Drawers */}
+      <CreateCounterpartyDrawer
+        isOpen={isQuickCustomerOpen}
+        onClose={() => setIsQuickCustomerOpen(false)}
+        onSuccess={handleCustomerAdded}
+        defaultType="CUSTOMER"
       />
 
-      <QuickAddProductModal
-        isOpen={isProductModalOpen}
-        onClose={() => setIsProductModalOpen(false)}
-        onSuccess={(newPrd) => {
-          const formatted = {
-            id: newPrd.id,
-            name: newPrd.name,
-            sku: newPrd.sku,
-            salePrice: Number(newPrd.salePrice) || 0,
-            costPrice: Number(newPrd.costPrice) || 0,
-            unitOfMeasure: newPrd.unitOfMeasure || 'dona',
-          };
-          setProducts((prev) => [formatted, ...prev]);
-          addItemRow(newPrd.id);
-        }}
+      <CreateWarehouseDrawer
+        isOpen={isQuickWarehouseOpen}
+        onClose={() => setIsQuickWarehouseOpen(false)}
+        onSuccess={handleWarehouseAdded}
       />
 
-      {counterpartyId && (
-        <CustomerProfileDrawer
-          isOpen={isCustomerDrawerOpen}
-          onClose={() => setIsCustomerDrawerOpen(false)}
-          customerId={counterpartyId}
-        />
-      )}
+      <CreateProductDrawer
+        isOpen={isQuickProductOpen}
+        onClose={() => {
+          setIsQuickProductOpen(false);
+          setActiveRowIndexForNewProduct(null);
+        }}
+        onSuccess={handleProductAdded}
+        initialSkuOrBarcode={quickProductSearch}
+      />
 
       {currentOrderData && (
         <PaySalesOrderModal
