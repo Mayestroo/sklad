@@ -102,7 +102,7 @@ describe('CounterpartiesService', () => {
       }) as Record<string, unknown>;
       expect(mockPrisma.counterparty.create).toHaveBeenCalledWith({
         data: expectedData,
-        include: { folder: true },
+        include: { folder: true, priceList: true },
       });
     });
   });

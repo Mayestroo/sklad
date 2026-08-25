@@ -76,6 +76,7 @@ export class SalesOrdersService {
   private buildOrderInclude() {
     return {
       counterparty: true,
+      priceList: true,
       warehouse: true,
       assignedSeller: { select: { id: true, firstName: true, lastName: true } },
       createdBy: { select: { id: true, firstName: true, lastName: true } },
@@ -383,6 +384,7 @@ export class SalesOrdersService {
         deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : null,
         deliveryAddress: dto.deliveryAddress || null,
         comment: dto.comment || null,
+        priceListId: dto.priceListId || null,
         warehouseId: dto.warehouseId || null,
         assignedSellerId: dto.assignedSellerId || null,
         createdById: userId,
@@ -439,6 +441,7 @@ export class SalesOrdersService {
       deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
       deliveryAddress: dto.deliveryAddress,
       comment: dto.comment,
+      priceListId: dto.priceListId !== undefined ? dto.priceListId : undefined,
       warehouseId: dto.warehouseId,
       assignedSellerId: dto.assignedSellerId,
     };

@@ -39,6 +39,8 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const [name, setName] = useState('');
   const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER' | 'BOTH'>(defaultType);
   const [folderId, setFolderId] = useState<string>(defaultFolderId);
+  const [priceListId, setPriceListId] = useState<string>('');
+  const [discountPercent, setDiscountPercent] = useState<string>('0');
   const [inn, setInn] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -47,8 +49,16 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const [bankAccount, setBankAccount] = useState('');
   const [mfo, setMfo] = useState('');
 
+  const [priceLists, setPriceLists] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!token || !company?.id || !isOpen) return;
+    apiFetch<any[]>('/sales/price-lists', { token, tenantId: company.id, locale })
+      .then((res) => setPriceLists(res || []))
+      .catch(console.error);
+  }, [token, company, locale, isOpen]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -71,6 +81,8 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
           name: name.trim(),
           type,
           folderId: folderId || undefined,
+          priceListId: priceListId || undefined,
+          discountPercent: Number(discountPercent) || 0,
           inn: inn.trim() || undefined,
           phone: phone.trim() || undefined,
           email: email.trim() || undefined,
@@ -95,6 +107,8 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
     setName('');
     setType(defaultType);
     setFolderId(defaultFolderId);
+    setPriceListId('');
+    setDiscountPercent('0');
     setInn('');
     setPhone('');
     setEmail('');
@@ -114,6 +128,14 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const folderOptions = [
     { value: '', label: isRu ? 'Без папки (Общие)' : 'Papkasiz (Umumiy)' },
     ...folders.map((f) => ({ value: f.id, label: f.name })),
+  ];
+
+  const priceListOptions = [
+    { value: '', label: isRu ? '— Основной (По умолчанию) —' : '— Asosiy (Standart narx) —' },
+    ...priceLists.map((pl) => {
+      const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
+      return { value: pl.id, label: `${plName} (${pl.currency})` };
+    }),
   ];
 
   return (
@@ -281,6 +303,40 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
               onChange={(e) => setAddress(e.target.value)}
               placeholder={isRu ? 'г. Ташкент, ул. Навои, 10' : 'Toshkent sh., Navoiy ko‘chasi, 10'}
             />
+          </div>
+        </div>
+
+        {/* Pricing & Loyalty Discounts */}
+        <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
+          <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>
+            {isRu ? 'Цены и скидки' : 'Narxlar va chegirmalar'}
+          </h4>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Индивидуальный прайс-лист' : 'Biriktirilgan narx jadvali'}
+              </label>
+              <Select
+                options={priceListOptions}
+                value={priceListId}
+                onChange={(val) => setPriceListId(val)}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Постоянная скидка (%)' : 'Doimiy chegirma (%)'}
+              </label>
+              <Input
+                type="number"
+                value={discountPercent}
+                onChange={(e) => setDiscountPercent(e.target.value)}
+                placeholder="0"
+                min="0"
+                max="100"
+              />
+            </div>
           </div>
         </div>
 

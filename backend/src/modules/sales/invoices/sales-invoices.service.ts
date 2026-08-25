@@ -87,6 +87,7 @@ export class SalesInvoicesService {
       where,
       include: {
         counterparty: true,
+        priceList: true,
         warehouse: true,
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         postedBy: { select: { id: true, firstName: true, lastName: true } },
@@ -102,6 +103,7 @@ export class SalesInvoicesService {
       where: { id, tenantId },
       include: {
         counterparty: true,
+        priceList: true,
         warehouse: true,
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         postedBy: { select: { id: true, firstName: true, lastName: true } },
@@ -179,6 +181,7 @@ export class SalesInvoicesService {
         contractDate: dto.contractDate ? new Date(dto.contractDate) : null,
         paymentTerms: dto.paymentTerms || null,
         comment: dto.comment || null,
+        priceListId: dto.priceListId || null,
         status: SalesDocStatus.DRAFT,
         paymentStatus: SalesPaymentStatus.UNPAID,
         returnStatus: SalesReturnStatus.NONE,
@@ -194,6 +197,7 @@ export class SalesInvoicesService {
       },
       include: {
         counterparty: true,
+        priceList: true,
         warehouse: true,
         items: { include: { product: true } },
       },

@@ -787,14 +787,17 @@ model Counterparty {
   bankName    String?          @map("bank_name")
   phone       String?
   email       String?
-  address     String?
-  folderId    String?          @map("folder_id")
-  debtBalance Decimal          @default(0) @db.Decimal(15, 2) @map("debt_balance")
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+  address         String?
+  folderId        String?          @map("folder_id")
+  priceListId     String?          @map("price_list_id")
+  discountPercent Decimal          @default(0) @db.Decimal(5, 2) @map("discount_percent")
+  debtBalance     Decimal          @default(0) @db.Decimal(15, 2) @map("debt_balance")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
   company             Company              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   folder              CounterpartyFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  priceList           PriceList?           @relation(fields: [priceListId], references: [id], onDelete: SetNull)
   salesOrders         SalesOrder[]
   salesInvoices       SalesInvoice[]
   purchaseOrders      PurchaseOrder[]
@@ -846,6 +849,7 @@ model SalesOrder {
   totalAmount             Decimal            @default(0) @db.Decimal(15, 2) @map("total_amount")
   paidAmount              Decimal            @default(0) @db.Decimal(15, 2) @map("paid_amount")
   comment                 String?
+  priceListId             String?            @map("price_list_id")
   warehouseId             String?            @map("warehouse_id")
   assignedSellerId        String?            @map("assigned_seller_id")
   createdById             String?            @map("created_by_id")
@@ -854,6 +858,7 @@ model SalesOrder {
 
   company        Company           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   counterparty   Counterparty      @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  priceList      PriceList?        @relation(fields: [priceListId], references: [id], onDelete: SetNull)
   warehouse      Warehouse?        @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
   assignedSeller User?             @relation("AssignedSalesOrders", fields: [assignedSellerId], references: [id], onDelete: SetNull)
   createdBy      User?             @relation("CreatedSalesOrders", fields: [createdById], references: [id], onDelete: SetNull)
@@ -951,6 +956,7 @@ model SalesInvoice {
   contractDate   DateTime?          @map("contract_date")
   paymentTerms   String?            @map("payment_terms")
   comment        String?
+  priceListId    String?            @map("price_list_id")
   subtotalAmount Decimal            @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
   discountAmount Decimal            @default(0) @db.Decimal(15, 2) @map("discount_amount")
   vatAmount      Decimal            @default(0) @db.Decimal(15, 2) @map("vat_amount")
@@ -967,6 +973,7 @@ model SalesInvoice {
   company      Company            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   warehouse    Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   counterparty Counterparty       @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  priceList    PriceList?         @relation(fields: [priceListId], references: [id], onDelete: SetNull)
   salesOrder   SalesOrder?        @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
   createdBy    User?              @relation("CreatedSalesInvoices", fields: [createdById], references: [id], onDelete: SetNull)
   postedBy     User?              @relation("PostedSalesInvoices", fields: [postedById], references: [id], onDelete: SetNull)
@@ -1049,17 +1056,20 @@ model SalesReturnItem {
 }
 
 model PriceList {
-  id        String         @id @default(uuid())
-  tenantId  String         @map("tenant_id")
-  name      Json
-  currency  String         @default("UZS")
-  isDefault Boolean        @default(false) @map("is_default")
-  isActive  Boolean        @default(true) @map("is_active")
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
+  id             String         @id @default(uuid())
+  tenantId       String         @map("tenant_id")
+  name           Json
+  currency       String         @default("UZS")
+  isDefault      Boolean        @default(false) @map("is_default")
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  company Company        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  prices  ProductPrice[]
+  company        Company        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prices         ProductPrice[]
+  counterparties Counterparty[]
+  salesOrders    SalesOrder[]
+  salesInvoices  SalesInvoice[]
 
   @@index([tenantId])
   @@map("price_lists")

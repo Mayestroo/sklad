@@ -40,4 +40,11 @@ export class UpdateCounterpartyDto {
   @IsString()
   @IsOptional()
   folderId?: string | null;
+
+  @IsString()
+  @IsOptional()
+  priceListId?: string | null;
+
+  @IsOptional()
+  discountPercent?: number;
 }

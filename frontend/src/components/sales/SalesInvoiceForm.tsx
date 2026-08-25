@@ -41,6 +41,8 @@ interface CounterpartyOption {
   debtBalance?: number;
   phone?: string;
   inn?: string;
+  priceListId?: string | null;
+  discountPercent?: number;
 }
 
 interface WarehouseOption {
@@ -82,6 +84,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [counterparties, setCounterparties] = useState<CounterpartyOption[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
+  const [priceLists, setPriceLists] = useState<any[]>([]);
 
   // Document Form State
   const [invoiceId, setInvoiceId] = useState<string | null>(initialData?.id || null);
@@ -90,6 +93,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [paymentStatus, setPaymentStatus] = useState<string>(initialData?.paymentStatus || 'UNPAID');
 
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
+  const [priceListId, setPriceListId] = useState<string>((initialData as any)?.priceListId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [docDate, setDocDate] = useState(
     initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))
@@ -152,7 +156,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     if (!token || !company) return;
 
     try {
-      const [cpRes, whRes, prdRes] = await Promise.all([
+      const [cpRes, whRes, prdRes, plRes] = await Promise.all([
         apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
           console.error('Failed to load counterparties:', err);
           return null;
@@ -165,12 +169,18 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           console.error('Failed to load products:', err);
           return null;
         }),
+        apiFetch<any>('/sales/price-lists', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+          console.error('Failed to load price lists:', err);
+          return null;
+        }),
       ]);
 
       const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
       setCounterparties(cpList);
       if (!counterpartyId && cpList.length > 0 && mode === 'create') {
-        setCounterpartyId(cpList[0].id);
+        const defaultCp = cpList[0];
+        setCounterpartyId(defaultCp.id);
+        if (defaultCp.priceListId) setPriceListId(defaultCp.priceListId);
       }
 
       const whList = whRes?.data || (Array.isArray(whRes) ? whRes : []);
@@ -191,6 +201,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         stockQty: Number(p.totalStock ?? p.stockQuantity ?? p.quantity ?? 0),
       }));
       setProducts(prdList);
+
+      const pls = plRes?.data || (Array.isArray(plRes) ? plRes : []);
+      setPriceLists(pls);
 
       // Pre-populate stock map if stockLevels exist on product objects
       const initialStockMap: Record<string, { physical: number; reserved: number; free: number }> = {};
@@ -310,15 +323,69 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     };
   }, [items, products, currentInvoiceData, warehouseStockMap, isReadOnly]);
 
+  const getProductPriceForList = (pId: string, pListId?: string) => {
+    const prd = products.find((p) => p.id === pId);
+    if (!prd) return 0;
+    const activeListId = pListId !== undefined ? pListId : priceListId;
+    if (activeListId) {
+      const pl = priceLists.find((l) => l.id === activeListId);
+      const custom = pl?.prices?.find((item: any) => item.productId === pId);
+      if (custom && Number(custom.price) > 0) {
+        return Number(custom.price);
+      }
+    }
+    return Number(prd.salePrice) || 0;
+  };
+
+  const handleCounterpartySelect = (cpId: string) => {
+    markDirty();
+    setCounterpartyId(cpId);
+    const cp: any = counterparties.find((c: any) => c.id === cpId);
+    if (cp) {
+      const targetPriceListId = cp.priceListId || '';
+      setPriceListId(targetPriceListId);
+      const custDiscount = Number(cp.discountPercent || 0);
+
+      // Recalculate existing rows
+      setItems((prev) =>
+        prev.map((row) => {
+          if (!row.productId) return row;
+          const unitPrice = getProductPriceForList(row.productId, targetPriceListId);
+          return {
+            ...row,
+            unitPrice,
+            discount: custDiscount > 0 ? custDiscount : row.discount,
+          };
+        })
+      );
+    }
+  };
+
+  const handlePriceListChange = (newListId: string) => {
+    markDirty();
+    setPriceListId(newListId);
+    // Recalculate existing rows with new price list
+    setItems((prev) =>
+      prev.map((row) => {
+        if (!row.productId) return row;
+        const unitPrice = getProductPriceForList(row.productId, newListId);
+        return { ...row, unitPrice };
+      })
+    );
+  };
+
   const handleItemChange = (index: number, field: keyof ItemRow, val: any) => {
     markDirty();
     setItems((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: val };
       if (field === 'productId') {
-        const prd = products.find((p) => p.id === val);
-        if (prd) {
-          updated[index].unitPrice = prd.salePrice || 0;
+        const unitPrice = getProductPriceForList(val);
+        const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+        const custDiscount = Number(cp?.discountPercent || 0);
+        updated[index].unitPrice = unitPrice;
+        if (custDiscount > 0 && (!updated[index].discount || updated[index].discount === 0)) {
+          updated[index].discount = custDiscount;
         }
       }
       return updated;
@@ -327,14 +394,16 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
   const addItemRow = (productId = '') => {
     markDirty();
-    const prd = products.find((p) => p.id === productId);
+    const unitPrice = productId ? getProductPriceForList(productId) : 0;
+    const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+    const custDiscount = Number(cp?.discountPercent || 0);
     setItems((prev) => [
       ...prev,
       {
         productId,
         quantity: 1,
-        unitPrice: prd ? prd.salePrice || 0 : 0,
-        discount: 0,
+        unitPrice,
+        discount: custDiscount > 0 ? custDiscount : 0,
         vatRate: 0,
       },
     ]);
@@ -404,6 +473,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         invoiceDate: docDate,
         currency,
         exchangeRate: Number(exchangeRate) || 1,
+        priceListId: priceListId || undefined,
         contractNumber: contractNumber.trim() || undefined,
         contractDate: contractDate || undefined,
         paymentTerms: paymentTerms.trim() || undefined,
@@ -773,7 +843,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               label={isRu ? 'Клиент (Покупатель) *' : 'Mijoz (Xaridor) *'}
               options={customerOptions}
               value={counterpartyId}
-              onChange={(val) => { markDirty(); setCounterpartyId(val); }}
+              onChange={handleCounterpartySelect}
               placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickCustomerOpen(true) : undefined}
@@ -799,6 +869,23 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 </div>
               );
             })()}
+          </div>
+
+          {/* Price List */}
+          <div style={{ minWidth: '180px', flex: '1.5 1 200px' }}>
+            <Select
+              label={isRu ? 'Прайс-лист цен' : 'Narx jadvali'}
+              options={[
+                { value: '', label: isRu ? '— Базовый (Основной) —' : '— Asosiy (Bazaviy) —' },
+                ...priceLists.map((pl) => {
+                  const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
+                  return { value: pl.id, label: `${plName} (${pl.currency})` };
+                }),
+              ]}
+              value={priceListId}
+              onChange={handlePriceListChange}
+              disabled={isReadOnly}
+            />
           </div>
 
           {/* Warehouse */}

@@ -102,10 +102,13 @@ export class CounterpartiesService {
         email: dto.email || null,
         address: dto.address || null,
         folderId: dto.folderId || null,
+        priceListId: dto.priceListId || null,
+        discountPercent: dto.discountPercent ? Number(dto.discountPercent) : 0,
         debtBalance: 0,
       },
       include: {
         folder: true,
+        priceList: true,
       },
     });
   }
@@ -146,6 +149,7 @@ export class CounterpartiesService {
       where,
       include: {
         folder: true,
+        priceList: true,
         _count: {
           select: { salesInvoices: true, deals: true, payments: true },
         },
@@ -159,6 +163,7 @@ export class CounterpartiesService {
       where: { id, tenantId },
       include: {
         folder: true,
+        priceList: true,
         salesInvoices: { orderBy: { createdAt: 'desc' }, take: 10 },
         payments: { orderBy: { createdAt: 'desc' }, take: 10 },
         deals: { orderBy: { createdAt: 'desc' }, take: 10 },
@@ -198,9 +203,16 @@ export class CounterpartiesService {
         address: dto.address !== undefined ? dto.address : counterparty.address,
         folderId:
           dto.folderId !== undefined ? dto.folderId : counterparty.folderId,
+        priceListId:
+          dto.priceListId !== undefined ? dto.priceListId : counterparty.priceListId,
+        discountPercent:
+          dto.discountPercent !== undefined
+            ? Number(dto.discountPercent)
+            : counterparty.discountPercent,
       },
       include: {
         folder: true,
+        priceList: true,
       },
     });
   }

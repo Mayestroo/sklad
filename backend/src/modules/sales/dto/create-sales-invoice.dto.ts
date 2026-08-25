@@ -73,6 +73,10 @@ export class CreateSalesInvoiceDto {
   comment?: string;
 
   @IsOptional()
+  @IsString()
+  priceListId?: string;
+
+  @IsOptional()
   @IsBoolean()
   postImmediately?: boolean;
 

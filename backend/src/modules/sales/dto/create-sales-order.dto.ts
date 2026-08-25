@@ -73,6 +73,10 @@ export class CreateSalesOrderDto {
 
   @IsOptional()
   @IsString()
+  priceListId?: string;
+
+  @IsOptional()
+  @IsString()
   assignedSellerId?: string;
 
   @IsArray()

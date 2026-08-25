@@ -52,6 +52,9 @@ interface Counterparty {
   address?: string;
   folderId?: string | null;
   folder?: CounterpartyFolder | null;
+  priceListId?: string | null;
+  priceList?: any | null;
+  discountPercent?: number;
   debtBalance: number;
   createdAt: string;
 }
@@ -866,6 +869,18 @@ export default function CounterpartiesPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>Email</div>
                 <div style={{ fontSize: 'var(--text-sm)', marginTop: 4 }}>{detailItem.email || '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Прайс-лист' : 'Narx jadvali'}</div>
+                <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginTop: 4, color: 'var(--color-primary-600)' }}>
+                  {detailItem.priceList ? (typeof detailItem.priceList.name === 'object' ? (detailItem.priceList.name[locale] || detailItem.priceList.name.ru || detailItem.priceList.name.uz) : detailItem.priceList.name) : (isRu ? 'Основной' : 'Standart')}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Постоянная скидка' : 'Doimiy chegirma'}</div>
+                <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginTop: 4, color: Number(detailItem.discountPercent || 0) > 0 ? '#10b981' : 'inherit' }}>
+                  {Number(detailItem.discountPercent || 0)}%
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Баланс долга' : 'Qarz Balansi'}</div>

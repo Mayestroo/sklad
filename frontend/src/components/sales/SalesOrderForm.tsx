@@ -63,6 +63,8 @@ interface CounterpartyOption {
   phone?: string;
   debtBalance?: number;
   type?: string;
+  priceListId?: string | null;
+  discountPercent?: number;
 }
 
 interface ProductOption {
@@ -110,12 +112,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [sellers, setSellers] = useState<SellerOption[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [priceLists, setPriceLists] = useState<any[]>([]);
 
   // Order state
   const [orderId, setOrderId] = useState<string | null>(initialData?.id || null);
   const [orderNumber, setOrderNumber] = useState<string>(initialData?.orderNumber || '');
   const [orderStatus, setOrderStatus] = useState<string>(initialData?.status || 'NEW');
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
+  const [priceListId, setPriceListId] = useState(initialData?.priceListId || '');
   const [currency, setCurrency] = useState(initialData?.currency || 'UZS');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
   const [paymentCondition, setPaymentCondition] = useState<'PREPAID_100' | 'PARTIAL' | 'CREDIT'>(
@@ -176,7 +180,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     if (!token || !company) return;
 
     try {
-      const [cpRes, prdRes, usrRes, whRes] = await Promise.all([
+      const [cpRes, prdRes, usrRes, whRes, plRes] = await Promise.all([
         apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
           console.error('Failed to load counterparties:', err);
           return null;
@@ -190,12 +194,18 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           console.error('Failed to load warehouses:', err);
           return null;
         }),
+        apiFetch<any>('/sales/price-lists', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+          console.error('Failed to load price lists:', err);
+          return null;
+        }),
       ]);
 
       const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
       setCounterparties(cpList);
       if (!counterpartyId && cpList.length > 0 && mode === 'create') {
-        setCounterpartyId(cpList[0].id);
+        const defaultCp = cpList[0];
+        setCounterpartyId(defaultCp.id);
+        if (defaultCp.priceListId) setPriceListId(defaultCp.priceListId);
       }
 
       const prdList = (prdRes?.data || prdRes || []).map((p: any) => ({
@@ -221,6 +231,9 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       if (whList.length > 0) {
         setDispatchWarehouseId(whList[0].id);
       }
+
+      const pls = plRes?.data || (Array.isArray(plRes) ? plRes : []);
+      setPriceLists(pls);
     } catch (err) {
       console.error('fetchDropdowns error:', err);
     }
@@ -279,14 +292,70 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     };
   }, [items, currentOrderData, paymentCondition, requiredPaymentPercent]);
 
+  const getProductPriceForList = (pId: string, pListId?: string) => {
+    const prd = products.find((p) => p.id === pId);
+    if (!prd) return 0;
+    const activeListId = pListId !== undefined ? pListId : priceListId;
+    if (activeListId) {
+      const pl = priceLists.find((l) => l.id === activeListId);
+      const custom = pl?.prices?.find((item: any) => item.productId === pId);
+      if (custom && Number(custom.price) > 0) {
+        return Number(custom.price);
+      }
+    }
+    return Number(prd.salePrice) || 0;
+  };
+
+  const handleCounterpartySelect = (cpId: string) => {
+    markDirty();
+    setCounterpartyId(cpId);
+    const cp: any = counterparties.find((c: any) => c.id === cpId);
+    if (cp) {
+      const targetPriceListId = cp.priceListId || '';
+      setPriceListId(targetPriceListId);
+      const custDiscount = Number(cp.discountPercent || 0);
+
+      // Recalculate existing rows
+      setItems((prev) =>
+        prev.map((row) => {
+          if (!row.productId) return row;
+          const unitPrice = getProductPriceForList(row.productId, targetPriceListId);
+          return {
+            ...row,
+            unitPrice,
+            discount: custDiscount > 0 ? custDiscount : row.discount,
+          };
+        })
+      );
+    }
+  };
+
+  const handlePriceListChange = (newListId: string) => {
+    markDirty();
+    setPriceListId(newListId);
+    // Recalculate existing rows with new price list
+    setItems((prev) =>
+      prev.map((row) => {
+        if (!row.productId) return row;
+        const unitPrice = getProductPriceForList(row.productId, newListId);
+        return { ...row, unitPrice };
+      })
+    );
+  };
+
   const handleItemChange = (index: number, field: keyof OrderItemRow, val: any) => {
     markDirty();
     setItems((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: val };
       if (field === 'productId') {
-        const prd = products.find((p) => p.id === val);
-        if (prd) updated[index].unitPrice = prd.salePrice || 0;
+        const unitPrice = getProductPriceForList(val);
+        const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+        const custDiscount = Number(cp?.discountPercent || 0);
+        updated[index].unitPrice = unitPrice;
+        if (custDiscount > 0 && (!updated[index].discount || updated[index].discount === 0)) {
+          updated[index].discount = custDiscount;
+        }
       }
       return updated;
     });
@@ -294,14 +363,16 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
   const addItemRow = (productId = '') => {
     markDirty();
-    const prd = products.find((p) => p.id === productId);
+    const unitPrice = productId ? getProductPriceForList(productId) : 0;
+    const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+    const custDiscount = Number(cp?.discountPercent || 0);
     setItems((prev) => [
       ...prev,
       {
         productId,
         quantity: 1,
-        unitPrice: prd ? prd.salePrice || 0 : 0,
-        discount: 0,
+        unitPrice,
+        discount: custDiscount > 0 ? custDiscount : 0,
         readyQty: 0,
       },
     ]);
@@ -337,6 +408,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         counterpartyId,
         currency,
         exchangeRate: Number(exchangeRate) || 1,
+        priceListId: priceListId || undefined,
         paymentCondition,
         requiredPaymentPercent: paymentCondition === 'PARTIAL' ? Number(requiredPaymentPercent) : undefined,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
@@ -675,11 +747,28 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               label={isRu ? 'Клиент (Покупатель) *' : 'Mijoz (Xaridor) *'}
               options={customerOptions}
               value={counterpartyId}
-              onChange={(val) => { markDirty(); setCounterpartyId(val); }}
+              onChange={handleCounterpartySelect}
               placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
               disabled={isLocked}
               onCreateNew={!isLocked ? () => setIsQuickCustomerOpen(true) : undefined}
               createNewLabel={isRu ? 'Добавить клиента' : 'Yangi mijoz qo‘shish'}
+            />
+          </div>
+
+          {/* Price List */}
+          <div style={{ minWidth: '180px', flex: '1.5 1 200px' }}>
+            <Select
+              label={isRu ? 'Прайс-лист цен' : 'Narx jadvali'}
+              options={[
+                { value: '', label: isRu ? '— Базовый (Основной) —' : '— Asosiy (Bazaviy) —' },
+                ...priceLists.map((pl) => {
+                  const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
+                  return { value: pl.id, label: `${plName} (${pl.currency})` };
+                }),
+              ]}
+              value={priceListId}
+              onChange={handlePriceListChange}
+              disabled={isLocked}
             />
           </div>
 

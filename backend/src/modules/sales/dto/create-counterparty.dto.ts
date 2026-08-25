@@ -45,4 +45,11 @@ export class CreateCounterpartyDto {
   @IsString()
   @IsOptional()
   folderId?: string;
+
+  @IsString()
+  @IsOptional()
+  priceListId?: string;
+
+  @IsOptional()
+  discountPercent?: number;
 }
