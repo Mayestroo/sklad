@@ -119,12 +119,12 @@ export default function SalesPage() {
       .then((res) => setCounterparties(res?.data || (Array.isArray(res) ? res : [])))
       .catch((err) => console.error(err));
 
-    apiFetch<any>('/inventory/warehouses', {
+    apiFetch<any>('/tenants/warehouses', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
-      .then((res) => setWarehouses(res?.data || res || []))
+      .then((res) => setWarehouses(res?.data || (Array.isArray(res) ? res : [])))
       .catch((err) => console.error(err));
   }, [token, company, locale]);
 

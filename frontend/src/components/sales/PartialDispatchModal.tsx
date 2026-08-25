@@ -40,7 +40,7 @@ export function PartialDispatchModal({
   useEffect(() => {
     if (!isOpen || !token || !company) return;
 
-    apiFetch<any>('/warehouses', {
+    apiFetch<any>('/tenants/warehouses', {
       token: token || undefined,
       tenantId: company.id,
       locale,

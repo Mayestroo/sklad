@@ -153,9 +153,18 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
     try {
       const [cpRes, whRes, prdRes] = await Promise.all([
-        apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }),
-        apiFetch<any>('/inventory/warehouses', { token: token || undefined, tenantId: company.id, locale }),
-        apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }),
+        apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+          console.error('Failed to load counterparties:', err);
+          return null;
+        }),
+        apiFetch<any>('/tenants/warehouses', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+          console.error('Failed to load warehouses:', err);
+          return null;
+        }),
+        apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+          console.error('Failed to load products:', err);
+          return null;
+        }),
       ]);
 
       const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
@@ -164,7 +173,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setCounterpartyId(cpList[0].id);
       }
 
-      const whList = whRes?.data || whRes || [];
+      const whList = whRes?.data || (Array.isArray(whRes) ? whRes : []);
       setWarehouses(whList);
       if (!warehouseId && whList.length > 0 && mode === 'create') {
         setWarehouseId(whList[0].id);
@@ -182,7 +191,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       }));
       setProducts(prdList);
     } catch (err) {
-      console.error(err);
+      console.error('fetchDropdowns error:', err);
     }
   };
 
