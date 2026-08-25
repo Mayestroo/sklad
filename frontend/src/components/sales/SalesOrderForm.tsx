@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { invalidateApiCache, getApiCache, setApiCache } from '@/lib/cache';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -433,11 +434,12 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         });
 
         if (res && res.id) {
+          invalidateApiCache('/sales/orders*');
           setIsDirty(false);
           router.push(`/sales/orders/${res.id}`);
         }
       } else {
-        const res = await apiFetch<any>(`/sales/orders/${orderId}`, {
+        const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}`, {
           method: 'PATCH',
           token: token || undefined,
           tenantId: company?.id,
@@ -445,13 +447,15 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           body: JSON.stringify(payload),
         });
         if (res) {
+          invalidateApiCache('/sales/orders*');
           setCurrentOrderData(res);
           setIsDirty(false);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка сохранения заказа' : 'Buyurtmani saqlashda xatolik'));
+      const errMsg = err instanceof Error ? err.message : '';
+      setError(errMsg || (isRu ? 'Ошибка сохранения заказа' : 'Buyurtmani saqlashda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -464,7 +468,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     setError(null);
 
     try {
-      const res = await apiFetch<any>(`/sales/orders/${orderId}/transition`, {
+      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/transition`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
@@ -473,12 +477,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       });
 
       if (res) {
+        invalidateApiCache('/sales/orders*');
         setOrderStatus(res.status);
         setCurrentOrderData(res);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка перехода статуса' : 'Holatni o‘zgartirishda xatolik yuz berdi'));
+      const errMsg = err instanceof Error ? err.message : '';
+      setError(errMsg || (isRu ? 'Ошибка перехода статуса' : 'Holatni o‘zgartirishda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -495,7 +501,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     setError(null);
 
     try {
-      const res = await apiFetch<any>(`/sales/orders/${orderId}/dispatch`, {
+      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/dispatch`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
@@ -504,12 +510,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       });
 
       if (res) {
+        invalidateApiCache('/sales/orders*');
         setOrderStatus(res.status);
         setCurrentOrderData(res);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка отгрузки заказа' : 'Buyurtmani jo‘natishda xatolik yuz berdi'));
+      const errMsg = err instanceof Error ? err.message : '';
+      setError(errMsg || (isRu ? 'Ошибка отгрузки заказа' : 'Buyurtmani jo‘natishda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -522,7 +530,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     setError(null);
 
     try {
-      const res = await apiFetch<any>(`/sales/orders/${orderId}/complete`, {
+      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/complete`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
@@ -530,12 +538,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       });
 
       if (res) {
+        invalidateApiCache('/sales/orders*');
         setOrderStatus(res.status);
         setCurrentOrderData(res);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка завершения заказа' : 'Buyurtmani yakunlashda xatolik'));
+      const errMsg = err instanceof Error ? err.message : '';
+      setError(errMsg || (isRu ? 'Ошибка завершения заказа' : 'Buyurtmani yakunlashda xatolik'));
     } finally {
       setLoading(false);
     }

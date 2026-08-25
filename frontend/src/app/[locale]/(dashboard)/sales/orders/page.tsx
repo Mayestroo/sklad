@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { apiFetch } from '@/lib/api';
+import { useApiData } from '@/lib/useApiData';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -41,16 +41,44 @@ interface SellerItem {
   lastName: string;
 }
 
+interface OrderItemSummary {
+  id: string;
+  orderNumber: string;
+  counterpartyId: string;
+  counterparty?: { id: string; name: string; phone?: string } | null;
+  status: string;
+  paymentStatus: string;
+  paymentCondition?: string | null;
+  requiredPaymentPercent?: number | null;
+  currency?: string;
+  totalAmount: number;
+  paidAmount: number;
+  debtAmount: number;
+  deliveryDate?: string | null;
+  createdAt: string;
+  assignedSeller?: { id: string; firstName: string; lastName: string } | null;
+  orderItems?: Array<{ id: string; quantity: number; readyQty?: number; isReady?: boolean }>;
+}
+
+interface OrderStatsSummary {
+  total?: number;
+  new?: number;
+  pendingApproval?: number;
+  inProduction?: number;
+  sentToProduction?: number;
+  readyToShip?: number;
+  completed?: number;
+  cancelled?: number;
+  totalOrders?: number;
+  totalAmount?: number;
+  totalPaid?: number;
+  totalDebt?: number;
+}
+
 export default function SalesOrdersPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-
-  const [orders, setOrders] = useState<any[]>([]);
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [counterparties, setCounterparties] = useState<CounterpartyItem[]>([]);
-  const [sellers, setSellers] = useState<SellerItem[]>([]);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -62,23 +90,42 @@ export default function SalesOrdersPage() {
   const [dateTo, setDateTo] = useState('');
 
   // Modals
-  const [payOrder, setPayOrder] = useState<any | null>(null);
+  const [payOrder, setPayOrder] = useState<OrderItemSummary | null>(null);
 
-  const fetchStats = () => {
-    if (!token || !company) return;
-    apiFetch<any>('/sales/orders/stats', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then(setStats)
-      .catch((err) => console.error(err));
-  };
+  // SWR Cached Reference Data (5 min fresh time)
+  const { data: rawCp } = useApiData<CounterpartyItem[] | { data: CounterpartyItem[] }>(
+    token && company ? '/sales/counterparties' : null,
+    { staleTime: 5 * 60 * 1000, token: token || undefined, tenantId: company?.id, locale }
+  );
+  const counterparties: CounterpartyItem[] = useMemo(() => {
+    if (!rawCp) return [];
+    if (Array.isArray(rawCp)) return rawCp;
+    return (rawCp as { data: CounterpartyItem[] }).data || [];
+  }, [rawCp]);
 
-  const fetchOrders = () => {
-    if (!token || !company) return;
-    setLoading(true);
+  const { data: rawUsers } = useApiData<SellerItem[] | { data: SellerItem[] }>(
+    token && company ? '/users' : null,
+    { staleTime: 5 * 60 * 1000, token: token || undefined, tenantId: company?.id, locale }
+  );
+  const sellers: SellerItem[] = useMemo(() => {
+    if (!rawUsers) return [];
+    const list = Array.isArray(rawUsers) ? rawUsers : (rawUsers as { data: SellerItem[] }).data || [];
+    return list.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+    }));
+  }, [rawUsers]);
 
+  // SWR Cached Stats
+  const { data: stats, refetch: fetchStats } = useApiData<OrderStatsSummary>(
+    token && company ? '/sales/orders/stats' : null,
+    { staleTime: 15000, token: token || undefined, tenantId: company?.id, locale }
+  );
+
+  // SWR Cached Orders with Active Filters
+  const ordersEndpoint = useMemo(() => {
+    if (!token || !company) return null;
     const query = new URLSearchParams();
     if (search) query.append('search', search);
     if (counterpartyId) query.append('counterpartyId', counterpartyId);
@@ -87,51 +134,25 @@ export default function SalesOrdersPage() {
     if (assignedSellerId) query.append('assignedSellerId', assignedSellerId);
     if (dateFrom) query.append('dateFrom', dateFrom);
     if (dateTo) query.append('dateTo', dateTo);
+    return `/sales/orders?${query.toString()}`;
+  }, [token, company, search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo]);
 
-    apiFetch<any>(`/sales/orders?${query.toString()}`, {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => {
-        const list = res?.data || (Array.isArray(res) ? res : []);
-        setOrders(list);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
+  const {
+    data: rawOrders,
+    loading,
+    refetch: fetchOrders,
+  } = useApiData<OrderItemSummary[] | { data: OrderItemSummary[] }>(ordersEndpoint, {
+    staleTime: 10000,
+    token: token || undefined,
+    tenantId: company?.id,
+    locale,
+  });
 
-  useEffect(() => {
-    fetchStats();
-    fetchOrders();
-  }, [token, company, locale]);
-
-  useEffect(() => {
-    if (!token || !company) return;
-
-    apiFetch<any>('/sales/counterparties', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setCounterparties(res?.data || (Array.isArray(res) ? res : [])))
-      .catch(console.error);
-
-    apiFetch<any>('/users', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => {
-        const userList = (res?.data || res || []).map((u: any) => ({
-          id: u.id,
-          firstName: u.firstName,
-          lastName: u.lastName,
-        }));
-        setSellers(userList);
-      })
-      .catch(console.error);
-  }, [token, company, locale]);
+  const orders: OrderItemSummary[] = useMemo(() => {
+    if (!rawOrders) return [];
+    if (Array.isArray(rawOrders)) return rawOrders;
+    return (rawOrders as { data: OrderItemSummary[] }).data || [];
+  }, [rawOrders]);
 
   const handleApplyFilter = () => {
     fetchOrders();
@@ -430,7 +451,7 @@ export default function SalesOrdersPage() {
                       </td>
 
                       <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <Badge variant={meta.variant as any}>
+                        <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
                           {isRu ? meta.ru : meta.uz}
                         </Badge>
                       </td>
