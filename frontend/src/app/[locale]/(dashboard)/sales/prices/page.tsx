@@ -38,7 +38,7 @@ export default function PricesPage() {
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPL, setSelectedPL] = useState<PriceList | null>(null);
+  const [selectedPLId, setSelectedPLId] = useState<string | null>(null);
 
   const [showCreatePL, setShowCreatePL] = useState(false);
   const [newPLNameUz, setNewPLNameUz] = useState('');
@@ -51,6 +51,26 @@ export default function PricesPage() {
   const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
   const [savingPrice, setSavingPrice] = useState<string | null>(null);
 
+  // Restore saved active price list on initial mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('sklad_selected_price_list_id');
+      if (saved) setSelectedPLId(saved);
+    }
+  }, []);
+
+  const selectPriceList = (id: string) => {
+    setSelectedPLId(id);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('sklad_selected_price_list_id', id);
+    }
+  };
+
+  const selectedPL =
+    priceLists.find((pl) => pl.id === selectedPLId) ||
+    priceLists[0] ||
+    null;
+
   const getProductName = (p: Product) =>
     typeof p.name === 'object' ? (p.name[locale] || p.name.ru || p.name.uz || '') : (p.name || '');
 
@@ -62,10 +82,15 @@ export default function PricesPage() {
       apiFetch<Product[]>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }),
     ])
       .then(([pls, prods]) => {
-        setPriceLists(pls || []);
+        const list = pls || [];
+        setPriceLists(list);
         setProducts(prods || []);
-        if (pls && pls.length > 0 && !selectedPL) {
-          setSelectedPL(pls[0]);
+        if (list.length > 0) {
+          setSelectedPLId((prev) => {
+            if (prev && list.some((p) => p.id === prev)) return prev;
+            const def = list.find((p) => p.isDefault) || list[0];
+            return def.id;
+          });
         }
       })
       .catch(console.error)
@@ -94,7 +119,7 @@ export default function PricesPage() {
       setNewPLNameRu('');
       setNewPLDefault(false);
       fetchData();
-      if (created) setSelectedPL(created);
+      if (created) selectPriceList(created.id);
     } catch (err: any) {
       alert(err?.message || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
     } finally {
@@ -121,10 +146,11 @@ export default function PricesPage() {
     if (!selectedPL || !token || !company) return;
     const priceVal = editingPrices[productId];
     if (priceVal === undefined) return;
+    const targetPLId = selectedPL.id;
     setSavingPrice(productId);
 
     try {
-      await apiFetch(`/sales/price-lists/${selectedPL.id}/items`, {
+      await apiFetch(`/sales/price-lists/${targetPLId}/items`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company.id,
@@ -134,11 +160,30 @@ export default function PricesPage() {
           price: Number(priceVal),
         }),
       });
+
+      // Optimistically update local priceLists state so the table immediately shows new price
+      setPriceLists((prev) =>
+        prev.map((pl) => {
+          if (pl.id !== targetPLId) return pl;
+          const oldPrices = pl.prices || [];
+          const existingIdx = oldPrices.findIndex((p) => p.productId === productId);
+          let newPrices: any[];
+          if (existingIdx >= 0) {
+            newPrices = [...oldPrices];
+            newPrices[existingIdx] = { ...newPrices[existingIdx], price: Number(priceVal) };
+          } else {
+            newPrices = [...oldPrices, { id: 'temp-' + Date.now(), productId, price: Number(priceVal) }];
+          }
+          return { ...pl, prices: newPrices };
+        }),
+      );
+
       setEditingPrices((prev) => {
         const next = { ...prev };
         delete next[productId];
         return next;
       });
+
       fetchData();
     } catch (err: any) {
       alert(err?.message || (isRu ? 'Ошибка сохранения цены' : 'Narxni saqlashda xatolik'));
@@ -182,7 +227,7 @@ export default function PricesPage() {
                 <button
                   key={pl.id}
                   id={`pl-tab-${pl.id}`}
-                  onClick={() => setSelectedPL(pl)}
+                  onClick={() => selectPriceList(pl.id)}
                   style={{
                     width: '100%',
                     textAlign: 'left',
