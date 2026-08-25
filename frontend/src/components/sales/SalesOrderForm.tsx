@@ -878,28 +878,28 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                   {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
                   {isRu ? 'Заказано' : 'Buyurtma miqdori'}
                 </th>
                 {orderStatus !== 'NEW' && (
-                  <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
+                  <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
                     {isRu ? 'Готово (Пр-во)' : 'Tayyorlandi'}
                   </th>
                 )}
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
                   {isRu ? 'Цена за ед.' : 'Birlik narxi'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
                   {isRu ? 'Скидка %' : 'Skidka %'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
                   {isRu ? 'Итого' : 'Jami Summa'}
                 </th>
-                {!isLocked && <th style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}></th>}
+                {!isLocked && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -934,6 +934,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                         onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
                         disabled={isLocked}
                         style={{ textAlign: 'right' }}
+                        aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
                       />
                     </td>
 
@@ -956,6 +957,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                         onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
                         disabled={isLocked}
                         style={{ textAlign: 'right' }}
+                        aria-label={`${isRu ? 'Цена за единицу для строки' : 'Birlik narxi'} ${idx + 1}`}
                       />
                     </td>
 
@@ -970,6 +972,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                         onChange={(e) => handleItemChange(idx, 'discount', parseFloat(e.target.value) || 0)}
                         disabled={isLocked}
                         style={{ textAlign: 'right' }}
+                        aria-label={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
                       />
                     </td>
 
@@ -987,6 +990,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                           onClick={() => removeItemRow(idx)}
                           style={{ color: 'var(--color-text-tertiary)', padding: '4px' }}
                           title={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
+                          aria-label={`${isRu ? 'Удалить строку' : 'Qatorni o‘chirish'} ${idx + 1}`}
                         >
                           <Trash2 size={16} />
                         </Button>
@@ -1007,6 +1011,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               size="sm"
               onClick={() => addItemRow()}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              aria-label={isRu ? 'Добавить новую позицию' : 'Yangi qator qo‘shish'}
             >
               <Plus size={16} /> {isRu ? 'Добавить позицию' : 'Qator qo‘shish'}
             </Button>
@@ -1020,7 +1025,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
 
-        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
             {isRu ? 'Финансовый итог' : 'Buyurtma Hisobi'}
           </h3>

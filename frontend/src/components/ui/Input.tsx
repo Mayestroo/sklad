@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label?: string;
@@ -7,7 +7,11 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, size = 'md', style, className, ...props }, ref) => {
+  ({ label, error, size = 'md', style, className, id, ...props }, ref) => {
+    const generatedId = useId();
+    const inputId = id || generatedId;
+    const errorId = `${inputId}-error`;
+
     const sizeStyles = {
       sm: { height: '32px', padding: '4px 10px', fontSize: 'var(--text-xs)' },
       md: { height: '38px', padding: '8px 12px', fontSize: 'var(--text-sm)' },
@@ -17,12 +21,16 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: style?.width || '100%' }}>
         {label && (
-          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+          <label htmlFor={inputId} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
             {label}
           </label>
         )}
         <input
           ref={ref}
+          id={inputId}
+          aria-invalid={!!error}
+          aria-describedby={error ? errorId : undefined}
+          aria-required={props.required}
           style={{
             boxSizing: 'border-box',
             borderRadius: 'var(--radius-md)',
@@ -37,7 +45,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           }}
           {...props}
         />
-        {error && <span style={{ fontSize: '11px', color: 'var(--color-error-600)' }}>{error}</span>}
+        {error && (
+          <span id={errorId} role="alert" style={{ fontSize: '11px', color: 'var(--color-error-600)' }}>
+            {error}
+          </span>
+        )}
       </div>
     );
   }

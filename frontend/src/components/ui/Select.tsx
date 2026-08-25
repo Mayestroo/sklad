@@ -203,11 +203,22 @@ export function Select({
       <button
         id={id}
         type="button"
+        role="combobox"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={label || placeholder || effectivePlaceholder}
         disabled={disabled}
         onClick={() => {
           if (!disabled) {
             if (!isOpen) updatePosition();
             setIsOpen(!isOpen);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (!disabled && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            if (!isOpen) updatePosition();
+            setIsOpen(true);
           }
         }}
         style={{
@@ -390,6 +401,8 @@ export function Select({
 
           {/* Options List */}
           <div
+            role="listbox"
+            tabIndex={-1}
             style={{
               maxHeight: '220px',
               overflowY: 'auto',
@@ -416,6 +429,8 @@ export function Select({
                   <button
                     key={option.value}
                     type="button"
+                    role="option"
+                    aria-selected={isSelected}
                     onClick={() => {
                       onChange(option.value);
                       setIsOpen(false);

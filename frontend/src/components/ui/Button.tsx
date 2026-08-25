@@ -64,7 +64,9 @@ export function Button({
 
   return (
     <button
+      type={props.type || 'button'}
       disabled={disabled}
+      aria-disabled={disabled}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

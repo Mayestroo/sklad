@@ -1018,26 +1018,26 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                   {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
                   {isRu ? 'Цена продажи' : 'Sotish narxi'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
                   {isRu ? 'Скидка %' : 'Skidka %'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '90px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '90px' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
                   {isRu ? 'Итого' : 'Jami Summa'}
                 </th>
-                {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}></th>}
+                {!isReadOnly && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -1098,6 +1098,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         value={item.quantity}
                         onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
                         disabled={isReadOnly}
+                        aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
                         style={{
                           textAlign: 'right',
                           borderColor:
@@ -1126,6 +1127,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         value={item.unitPrice}
                         onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
                         disabled={isReadOnly}
+                        aria-label={`${isRu ? 'Цена продажи для строки' : 'Sotish narxi'} ${idx + 1}`}
                         style={{
                           textAlign: 'right',
                           borderColor: isBelowCost ? '#ef4444' : undefined,
@@ -1144,6 +1146,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         value={item.discount}
                         onChange={(e) => handleItemChange(idx, 'discount', parseFloat(e.target.value) || 0)}
                         disabled={isReadOnly}
+                        aria-label={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
                         style={{ textAlign: 'right' }}
                       />
                     </td>
@@ -1158,6 +1161,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         value={item.vatRate}
                         onChange={(e) => handleItemChange(idx, 'vatRate', parseFloat(e.target.value) || 0)}
                         disabled={isReadOnly}
+                        aria-label={`${isRu ? 'НДС для строки' : 'QQS %'} ${idx + 1}`}
                         style={{ textAlign: 'right' }}
                       />
                     </td>
@@ -1176,6 +1180,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                           onClick={() => removeItemRow(idx)}
                           style={{ color: 'var(--color-text-tertiary)', padding: '4px' }}
                           title={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
+                          aria-label={`${isRu ? 'Удалить строку' : 'Qatorni o‘chirish'} ${idx + 1}`}
                         >
                           <Trash2 size={16} />
                         </Button>
@@ -1197,6 +1202,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               size="sm"
               onClick={() => addItemRow()}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              aria-label={isRu ? 'Добавить новую позицию' : 'Yangi qator qo‘shish'}
             >
               <Plus size={16} /> {isRu ? 'Добавить позицию' : 'Qator qo‘shish'}
             </Button>
@@ -1210,7 +1216,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
 
-        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
             {isRu ? 'Финансовый итог' : 'Hisob-kitob Xulosasi'}
           </h3>
