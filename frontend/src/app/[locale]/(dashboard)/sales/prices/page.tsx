@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Plus, Tag, Edit3, Check } from 'lucide-react';
 
 interface PriceList {
@@ -310,38 +310,60 @@ export default function PricesPage() {
         </Card>
       </div>
 
-      {/* Create Price List Modal */}
-      {showCreatePL && (
-        <Modal isOpen={true} onClose={() => setShowCreatePL(false)} title={isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'} size="md">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <Input id="pl-name-uz" label={isRu ? 'Название (Узбекский) *' : 'Nomi (O\'zbekcha) *'} value={newPLNameUz} onChange={(e) => setNewPLNameUz(e.target.value)} placeholder={isRu ? 'Напр. Розница' : 'Mas. Chakana narxlar'} />
-            <Input id="pl-name-ru" label={isRu ? 'Название (Русский)' : 'Nomi (Ruscha)'} value={newPLNameRu} onChange={(e) => setNewPLNameRu(e.target.value)} placeholder={isRu ? 'Напр. Розничные цены' : 'Mas. Розничные цены'} />
-            <Select
-              id="pl-currency"
-              label={isRu ? 'Валюта' : 'Valyuta'}
-              value={newPLCurrency}
-              onChange={(val) => setNewPLCurrency(val)}
-              options={[
-                { value: 'UZS', label: 'UZS' },
-                { value: 'USD', label: 'USD' },
-                { value: 'EUR', label: 'EUR' },
-              ]}
-            />
-            <Checkbox
-              id="pl-is-default"
-              checked={newPLDefault}
-              onChange={(e) => setNewPLDefault(e.target.checked)}
-              label={isRu ? 'Установить как основной прайс-лист' : 'Asosiy narx jadvali sifatida belgilash'}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)' }}>
-              <Button id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button id="submit-pl-btn" onClick={handleCreatePL} disabled={createLoading || !newPLNameUz}>
-                {createLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
+      {/* Create Price List Side Drawer Panel */}
+      <Drawer
+        isOpen={showCreatePL}
+        onClose={() => setShowCreatePL(false)}
+        title={isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'}
+        description={isRu ? 'Создание новой категории цен (розница, опт, дилерские)' : 'Yangi narx toifasini yaratish (chakana, ulgurji, dilerlik)'}
+        icon={<Tag size={20} />}
+        size="md"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
+            <Button id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button id="submit-pl-btn" onClick={handleCreatePL} disabled={createLoading || !newPLNameUz} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Plus size={16} />
+              {createLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+            </Button>
           </div>
-        </Modal>
-      )}
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <Input
+            id="pl-name-uz"
+            label={isRu ? 'Название (Узбекский) *' : 'Nomi (O\'zbekcha) *'}
+            value={newPLNameUz}
+            onChange={(e) => setNewPLNameUz(e.target.value)}
+            placeholder={isRu ? 'Напр. Розница / Оптовая' : 'Mas. Chakana / Ulgurji narxlar'}
+          />
+          <Input
+            id="pl-name-ru"
+            label={isRu ? 'Название (Русский)' : 'Nomi (Ruscha)'}
+            value={newPLNameRu}
+            onChange={(e) => setNewPLNameRu(e.target.value)}
+            placeholder={isRu ? 'Напр. Розничные цены' : 'Mas. Розничные цены'}
+          />
+          <Select
+            id="pl-currency"
+            label={isRu ? 'Валюта' : 'Valyuta'}
+            value={newPLCurrency}
+            onChange={(val) => setNewPLCurrency(val)}
+            options={[
+              { value: 'UZS', label: 'UZS (So\'m)' },
+              { value: 'USD', label: 'USD (Dollar)' },
+              { value: 'EUR', label: 'EUR (Evro)' },
+            ]}
+          />
+          <Checkbox
+            id="pl-is-default"
+            checked={newPLDefault}
+            onChange={(e) => setNewPLDefault(e.target.checked)}
+            label={isRu ? 'Установить как основной прайс-лист' : 'Asosiy narx jadvali sifatida belgilash'}
+          />
+        </div>
+      </Drawer>
     </div>
   );
 }

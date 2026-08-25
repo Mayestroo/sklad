@@ -7,7 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -254,89 +254,98 @@ export default function SalesReturnsPage() {
         </div>
       </Card>
 
-      {/* Create Modal */}
-      {showModal && (
-        <Modal isOpen={true} onClose={() => setShowModal(false)} title={isRu ? 'Новый документ возврата' : 'Yangi qaytarish hujjati'} size="xl">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
-              <Select id="ret-counterparty" label={isRu ? 'Клиент *' : 'Mijoz *'} value={counterpartyId} onChange={(val) => setCounterpartyId(val)} options={cpOptions} />
-              <Select id="ret-warehouse" label={isRu ? 'Склад *' : 'Ombor *'} value={warehouseId} onChange={(val) => setWarehouseId(val)} options={whOptions} />
-              <Select id="ret-invoice" label={isRu ? 'Документ продажи' : 'Asl sotuv hujjati'} value={invoiceId} onChange={(val) => setInvoiceId(val)} options={invoiceOptions} />
-              <DatePicker label={isRu ? 'Дата *' : 'Sana *'} value={returnDate} onChange={(val) => setReturnDate(val)} />
-              <Input id="ret-reason" label={isRu ? 'Причина возврата' : 'Qaytarish sababi'} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isRu ? 'Напр. Бракованный товар' : 'Mas. Sifatsiz tovar'} />
-            </div>
+      {/* Create Return Side Drawer Panel */}
+      <Drawer
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={isRu ? 'Новый документ возврата' : 'Yangi qaytarish hujjati'}
+        description={isRu ? 'Оформление возврата товаров на склад от покупателя' : 'Mijozdan tovarlarni omborga qaytarishni rasmiylashtirish'}
+        icon={<RotateCcw size={20} />}
+        size="lg"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
+            <Button id="ret-cancel-btn" variant="secondary" onClick={() => setShowModal(false)} disabled={formLoading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button id="ret-submit-btn" onClick={handleSubmit} disabled={formLoading || items.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <RotateCcw size={16} />
+              {formLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Оформить возврат' : 'Qaytarishni rasmiylashtirish')}
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
+            <Select id="ret-counterparty" label={isRu ? 'Клиент *' : 'Mijoz *'} value={counterpartyId} onChange={(val) => setCounterpartyId(val)} options={cpOptions} />
+            <Select id="ret-warehouse" label={isRu ? 'Склад *' : 'Ombor *'} value={warehouseId} onChange={(val) => setWarehouseId(val)} options={whOptions} />
+            <Select id="ret-invoice" label={isRu ? 'Документ продажи' : 'Asl sotuv hujjati'} value={invoiceId} onChange={(val) => setInvoiceId(val)} options={invoiceOptions} />
+            <DatePicker label={isRu ? 'Дата *' : 'Sana *'} value={returnDate} onChange={(val) => setReturnDate(val)} />
+          </div>
+          <Input id="ret-reason" label={isRu ? 'Причина возврата' : 'Qaytarish sababi'} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isRu ? 'Напр. Бракованный товар' : 'Mas. Sifatsiz tovar'} />
 
-            {/* Items */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <strong>{isRu ? 'Возвращаемые товары' : 'Qaytariladigan tovarlar'}</strong>
-                <Button id="ret-add-item-btn" size="sm" variant="secondary" onClick={addItem}><Plus size={13} /> {isRu ? 'Добавить' : 'Qo\'shish'}</Button>
+          {/* Items */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong style={{ fontSize: 'var(--text-sm)' }}>{isRu ? 'Возвращаемые товары' : 'Qaytariladigan tovarlar'}</strong>
+              <Button id="ret-add-item-btn" size="sm" variant="secondary" onClick={addItem}><Plus size={13} /> {isRu ? 'Добавить' : 'Qo\'shish'}</Button>
+            </div>
+            {items.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', background: 'var(--color-bg-subtle)' }}>
+                {isRu ? 'Добавьте возвращаемые товары' : 'Qaytariladigan tovarlarni qo\'shing'}
               </div>
-              {items.length === 0 ? (
-                <div style={{ padding: 20, textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-                  {isRu ? 'Добавьте возвращаемые товары' : 'Qaytariladigan tovarlarni qo\'shing'}
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--color-bg-subtle)' }}>
-                        {[isRu ? 'Товар' : 'Tovar', isRu ? 'Количество' : 'Miqdor', isRu ? 'Цена' : 'Narx', isRu ? 'Итого' : 'Jami', ''].map((h) => (
-                          <th key={h} style={{ padding: '7px 10px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                          <td style={{ padding: '6px 10px' }}>
-                            <Select
-                              id={`ret-product-${idx}`}
-                              value={item.productId}
-                              onChange={(val) => updateItem(idx, 'productId', val)}
-                              options={productOptions}
-                              size="sm"
-                            />
-                          </td>
-                          <td style={{ padding: '6px 8px', width: 80 }}>
-                            <input id={`ret-qty-${idx}`} type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} style={{ width: '100%', padding: '5px 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }} />
-                          </td>
-                          <td style={{ padding: '6px 8px', width: 110 }}>
-                            <input id={`ret-price-${idx}`} type="number" min={0} value={item.unitPrice} onChange={(e) => updateItem(idx, 'unitPrice', Number(e.target.value))} style={{ width: '100%', padding: '5px 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }} />
-                          </td>
-                          <td style={{ padding: '6px 10px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(item.quantity * item.unitPrice, locale)}</td>
-                          <td style={{ padding: '6px 8px' }}>
-                            <button id={`ret-remove-${idx}`} onClick={() => removeItem(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
-                          </td>
-                        </tr>
+            ) : (
+              <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--color-bg-subtle)' }}>
+                      {[isRu ? 'Товар' : 'Tovar', isRu ? 'Количество' : 'Miqdor', isRu ? 'Цена' : 'Narx', isRu ? 'Итого' : 'Jami', ''].map((h) => (
+                        <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{h}</th>
                       ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ background: 'var(--color-bg-subtle)', borderTop: '2px solid var(--color-border)' }}>
-                        <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{isRu ? 'Итого возврат:' : 'Jami qaytarish:'}</td>
-                        <td colSpan={2} style={{ padding: '8px 10px', fontWeight: 700 }}>{formatCurrency(totalAmount, locale)}</td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                        <td style={{ padding: '6px 10px' }}>
+                          <Select
+                            id={`ret-product-${idx}`}
+                            value={item.productId}
+                            onChange={(val) => updateItem(idx, 'productId', val)}
+                            options={productOptions}
+                            size="sm"
+                          />
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 80 }}>
+                          <input id={`ret-qty-${idx}`} type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))} style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }} />
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 110 }}>
+                          <input id={`ret-price-${idx}`} type="number" min={0} value={item.unitPrice} onChange={(e) => updateItem(idx, 'unitPrice', Number(e.target.value))} style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }} />
+                        </td>
+                        <td style={{ padding: '6px 10px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(item.quantity * item.unitPrice, locale)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center', width: 40 }}>
+                          <button id={`ret-remove-${idx}`} onClick={() => removeItem(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={15} /></button>
+                        </td>
                       </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {formError && (
-              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: '#ef4444', fontSize: 'var(--text-sm)', display: 'flex', gap: 8 }}>
-                <AlertTriangle size={16} /> {formError}
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: 'var(--color-bg-subtle)', borderTop: '2px solid var(--color-border)' }}>
+                      <td colSpan={3} style={{ padding: '10px', textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{isRu ? 'Итого возврат:' : 'Jami qaytarish:'}</td>
+                      <td colSpan={2} style={{ padding: '10px', fontWeight: 700, fontSize: 'var(--text-base)', color: '#f59e0b' }}>{formatCurrency(totalAmount, locale)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)' }}>
-              <Button id="ret-cancel-btn" variant="secondary" onClick={() => setShowModal(false)} disabled={formLoading}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button id="ret-submit-btn" onClick={handleSubmit} disabled={formLoading || items.length === 0}>
-                {formLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Оформить возврат' : 'Qaytarishni rasmiylashtirish')}
-              </Button>
-            </div>
           </div>
-        </Modal>
-      )}
+
+          {formError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: '#ef4444', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={16} /> {formError}
+            </div>
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 }

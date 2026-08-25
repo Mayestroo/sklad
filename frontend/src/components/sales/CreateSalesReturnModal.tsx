@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -133,10 +133,12 @@ export function CreateSalesReturnModal({
   const returnTotal = calculateReturnTotal();
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
       title={isRu ? `Возврат товара от покупателя — ${invoice.invoiceNumber || (invoice as any).docNumber || ''}` : `Mijozdan tovar qaytarish — ${invoice.invoiceNumber || (invoice as any).docNumber || ''}`}
+      description={isRu ? 'Оформление возврата по счет-фактуре' : 'Sotuv hujjati bo\'yicha tovar qaytarish'}
+      icon={<RotateCcw size={20} />}
       size="lg"
     >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -286,6 +288,6 @@ export function CreateSalesReturnModal({
           </Button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 }
