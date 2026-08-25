@@ -77,7 +77,7 @@ export class SalesOrdersController {
     const orderList = result.data || [];
     const totalOrders = result.total ?? orderList.length;
     const totalAmount = orderList.reduce(
-      (sum: number, o: any) => sum + Number(o.totalAmount || 0),
+      (sum: number, o: { totalAmount?: unknown }) => sum + Number(o.totalAmount || 0),
       0,
     );
     return {

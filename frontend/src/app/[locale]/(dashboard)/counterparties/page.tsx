@@ -53,7 +53,7 @@ interface Counterparty {
   folderId?: string | null;
   folder?: CounterpartyFolder | null;
   priceListId?: string | null;
-  priceList?: any | null;
+  priceList?: { id: string; name: string | Record<string, string>; currency?: string } | null;
   discountPercent?: number;
   debtBalance: number;
   createdAt: string;

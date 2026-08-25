@@ -400,7 +400,12 @@ export class SalesInvoicesService {
         const netRevenue =
           Number(invoice.totalAmount) - Number(invoice.vatAmount);
         const vatSum = Number(invoice.vatAmount);
-        const journalLines: any[] = [];
+        const journalLines: Array<{
+          debitAccountId: string;
+          creditAccountId: string;
+          amount: number;
+          description: string;
+        }> = [];
 
         // Debit 4010 (Mijozlar qarzi) / Credit 9010 (Sotuv tushumi)
         journalLines.push({
@@ -628,7 +633,7 @@ export class SalesInvoicesService {
     let totalAmount = 0;
     let totalCogs = 0;
 
-    let originalInvoiceItems: any[] = [];
+    let originalInvoiceItems: Prisma.SalesInvoiceItemGetPayload<Record<string, never>>[] = [];
     if (dto.invoiceId) {
       const orig = await this.prisma.salesInvoice.findUnique({
         where: { id: dto.invoiceId },
@@ -782,7 +787,12 @@ export class SalesInvoicesService {
         where: { tenantId, code: '2910' },
       });
 
-      const journalLines: any[] = [];
+      const journalLines: Array<{
+        debitAccountId: string;
+        creditAccountId: string;
+        amount: number;
+        description: string;
+      }> = [];
       if (revenueAcc && receivableAcc && totalAmount > 0) {
         journalLines.push({
           debitAccountId: revenueAcc.id,

@@ -26,6 +26,46 @@ function isManagerOrAbove(roles: string[]) {
   return roles.some((r) => ['ADMIN', 'SUPER_ADMIN', 'MANAGER'].includes(r));
 }
 
+type FullSalesOrder = Prisma.SalesOrderGetPayload<{
+  include: {
+    counterparty: true;
+    priceList: true;
+    warehouse: true;
+    assignedSeller: { select: { id: true; firstName: true; lastName: true } };
+    createdBy: { select: { id: true; firstName: true; lastName: true } };
+    items: {
+      include: {
+        product: true;
+        productionOrders: true;
+      };
+    };
+    productionOrders: {
+      include: {
+        product: true;
+        assignedTo: { select: { id: true; firstName: true; lastName: true } };
+      };
+    };
+    payments: true;
+    salesInvoices: {
+      select: {
+        id: true;
+        invoiceNumber: true;
+        status: true;
+        totalAmount: true;
+        totalCogs: true;
+        grossProfit: true;
+        createdAt: true;
+      };
+    };
+    reservations: {
+      include: {
+        warehouse: true;
+        product: true;
+      };
+    };
+  };
+}>;
+
 @Injectable()
 export class SalesOrdersService {
   constructor(
@@ -48,9 +88,9 @@ export class SalesOrdersService {
 
   private computeGateStatus(order: {
     paymentCondition: PaymentCondition;
-    paidAmount: any;
-    totalAmount: any;
-    requiredPaymentPercent: any;
+    paidAmount: number | Prisma.Decimal | string;
+    totalAmount: number | Prisma.Decimal | string;
+    requiredPaymentPercent?: number | Prisma.Decimal | string | null;
   }): 'OPEN' | 'SATISFIED' | 'BYPASSED' {
     if (order.paymentCondition === PaymentCondition.CREDIT) return 'BYPASSED';
     const paid = Number(order.paidAmount);
@@ -66,9 +106,9 @@ export class SalesOrdersService {
 
   private isGateSatisfied(order: {
     paymentCondition: PaymentCondition;
-    paidAmount: any;
-    totalAmount: any;
-    requiredPaymentPercent: any;
+    paidAmount: number | Prisma.Decimal | string;
+    totalAmount: number | Prisma.Decimal | string;
+    requiredPaymentPercent?: number | Prisma.Decimal | string | null;
   }): boolean {
     return this.computeGateStatus(order) !== 'OPEN';
   }
@@ -115,9 +155,9 @@ export class SalesOrdersService {
     };
   }
 
-  private enrichOrder(order: any) {
+  private enrichOrder(order: FullSalesOrder) {
     let hasBelowCost = false;
-    const itemsWithComputed = (order.items || []).map((item: any) => {
+    const itemsWithComputed = (order.items || []).map((item) => {
       const qty = Number(item.quantity);
       const ready = Number(item.readyQty || 0);
       const shipped = Number(item.shippedQty || 0);
@@ -432,10 +472,10 @@ export class SalesOrdersService {
       );
     }
 
-    const updateData: any = {
+    const updateData: Prisma.SalesOrderUncheckedUpdateInput = {
       currency: dto.currency,
       exchangeRate: dto.exchangeRate,
-      paymentCondition: dto.paymentCondition,
+      paymentCondition: dto.paymentCondition as PaymentCondition,
       requiredPaymentPercent:
         dto.paymentCondition === 'PARTIAL' ? dto.requiredPaymentPercent : null,
       deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
@@ -634,21 +674,25 @@ export class SalesOrdersService {
   }
 
   private async _handleCancel(
-    order: any,
+    order: {
+      id: string;
+      status: SalesOrderStatus;
+      items?: Array<{ id: string }>;
+    },
     userId: string,
     tenantId: string,
     userRoles: string[],
   ) {
-    const cancelableBySellerStatuses = [
+    const cancelableBySellerStatuses: SalesOrderStatus[] = [
       SalesOrderStatus.NEW,
       SalesOrderStatus.PENDING_APPROVAL,
     ];
-    const cancelableByManagerStatuses = [
+    const cancelableByManagerStatuses: SalesOrderStatus[] = [
       ...cancelableBySellerStatuses,
       SalesOrderStatus.APPROVED,
       SalesOrderStatus.SENT_TO_PRODUCTION,
     ];
-    const inProductionStatuses = [
+    const inProductionStatuses: SalesOrderStatus[] = [
       SalesOrderStatus.IN_PRODUCTION,
       SalesOrderStatus.PARTIALLY_READY,
       SalesOrderStatus.READY,
@@ -834,7 +878,7 @@ export class SalesOrdersService {
 
       if (prodOrder.salesOrderItemId) {
         // Line total ready = reserved from stock + manufactured ready
-        const matchingItem = (order?.items || []).find((i: any) => i.id === prodOrder.salesOrderItemId);
+        const matchingItem = (order?.items || []).find((i) => i.id === prodOrder.salesOrderItemId);
         const reserved = Number(matchingItem?.reservedQty || 0);
         await tx.salesOrderItem.update({
           where: { id: prodOrder.salesOrderItemId },
@@ -931,9 +975,9 @@ export class SalesOrdersService {
   // ─── LIST PRODUCTION ORDERS ───────────────────────────────────
 
   async findProductionOrders(tenantId: string, filters: { salesOrderId?: string; status?: string }) {
-    const where: any = { tenantId };
+    const where: Prisma.ProductionOrderWhereInput = { tenantId };
     if (filters.salesOrderId) where.salesOrderId = filters.salesOrderId;
-    if (filters.status) where.status = filters.status;
+    if (filters.status) where.status = filters.status as ProductionOrderStatus;
 
     return this.prisma.productionOrder.findMany({
       where,
@@ -971,7 +1015,7 @@ export class SalesOrdersService {
       );
     }
 
-    if (!this.isGateSatisfied(order as any)) {
+    if (!this.isGateSatisfied(order)) {
       throw new BadRequestException("To'lov sharti bajarilmagan. Jo'natishga ruxsat yo'q");
     }
 
@@ -980,7 +1024,7 @@ export class SalesOrdersService {
     return this.prisma.$transaction(async (tx) => {
       // 1. Determine dispatch quantities per line
       const dispatchPlan: {
-        orderItem: any;
+        orderItem: (typeof order.items)[number];
         dispatchQty: number;
         unitPrice: number;
         discount: number;
