@@ -176,7 +176,7 @@ export default function SalesOrdersPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Заказы покупателей (Zakazlar)' : 'Mijoz Buyurtmalari (Zakazlar)'}
+            {isRu ? 'Заказы покупателей' : 'Mijoz Buyurtmalari'}
           </h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
             {isRu ? '13-этапный пайплайн, предварительные обязательства, производство и контроль отгрузки' : '13 bosqichli jarayon, majburiyatlar, ishlab chiqarish va jo‘natish nazorati'}
@@ -265,12 +265,12 @@ export default function SalesOrdersPage() {
         {/* Search */}
         <div>
           <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-            {isRu ? 'Поиск (№ Заказа, Клиент, Комментарий...)' : 'Qidiruv (Zakaz №, Mijoz, Izoh...)'}
+            {isRu ? 'Поиск (№ Заказа, Клиент, Комментарий...)' : 'Qidiruv (Buyurtma №, Mijoz, Izoh...)'}
           </div>
           <div style={{ position: 'relative' }}>
             <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
             <input
-              placeholder={isRu ? 'Введите № заказа или имя клиента...' : 'Qidirish uchun zakaz raqami yoki mijoz ismini kiriting...'}
+              placeholder={isRu ? 'Введите № заказа или имя клиента...' : 'Qidirish uchun buyurtma raqami yoki mijoz ismini kiriting...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -381,7 +381,7 @@ export default function SalesOrdersPage() {
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {isRu ? '№ ЗАКАЗА / ДАТА' : 'ZAKAZ № / SANA'}
+                    {isRu ? '№ ЗАКАЗА / ДАТА' : 'BUYURTMA № / SANA'}
                   </th>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {isRu ? 'КЛИЕНТ' : 'MIJOZ'}

@@ -299,7 +299,7 @@ export class SalesOrdersService {
       where: { id, tenantId },
       include: this.buildOrderInclude(),
     });
-    if (!order) throw new NotFoundException('Zakaz topilmadi');
+    if (!order) throw new NotFoundException('Buyurtma topilmadi');
 
     const auditLogs = await this.prisma.auditLog.findMany({
       where: {
@@ -423,10 +423,10 @@ export class SalesOrdersService {
     dto: Partial<CreateSalesOrderDto>,
   ) {
     const order = await this.prisma.salesOrder.findFirst({ where: { id, tenantId } });
-    if (!order) throw new NotFoundException('Zakaz topilmadi');
+    if (!order) throw new NotFoundException('Buyurtma topilmadi');
     if (order.status !== SalesOrderStatus.NEW && order.status !== SalesOrderStatus.PENDING_APPROVAL) {
       throw new BadRequestException(
-        "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi zakazni tahrirlash mumkin",
+        "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tahrirlash mumkin",
       );
     }
 
@@ -493,7 +493,7 @@ export class SalesOrdersService {
       where: { id, tenantId },
       include: { items: true },
     });
-    if (!order) throw new NotFoundException('Zakaz topilmadi');
+    if (!order) throw new NotFoundException('Buyurtma topilmadi');
 
     const oldStatus = order.status;
     let newStatus: SalesOrderStatus;
@@ -501,7 +501,7 @@ export class SalesOrdersService {
     switch (action) {
       case 'SUBMIT': {
         if (order.status !== SalesOrderStatus.NEW) {
-          throw new BadRequestException("Faqat 'Yangi zakaz' statusidagi zakazni topshirish mumkin");
+          throw new BadRequestException("Faqat 'Yangi buyurtma' statusidagi buyurtmani topshirish mumkin");
         }
         newStatus = SalesOrderStatus.PENDING_APPROVAL;
         break;
@@ -511,7 +511,7 @@ export class SalesOrdersService {
           throw new ForbiddenException('Tasdiqlash uchun menejer yoki admin roli talab qilinadi');
         }
         if (order.status !== SalesOrderStatus.PENDING_APPROVAL && order.status !== SalesOrderStatus.NEW) {
-          throw new BadRequestException("Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi zakazni tasdiqlash mumkin");
+          throw new BadRequestException("Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tasdiqlash mumkin");
         }
         newStatus = SalesOrderStatus.APPROVED;
         break;
@@ -521,7 +521,7 @@ export class SalesOrdersService {
           throw new ForbiddenException('Rad etish uchun menejer yoki admin roli talab qilinadi');
         }
         if (order.status !== SalesOrderStatus.PENDING_APPROVAL) {
-          throw new BadRequestException("Faqat 'Tasdiqlashda' statusidagi zakazni rad etish mumkin");
+          throw new BadRequestException("Faqat 'Tasdiqlashda' statusidagi buyurtmani rad etish mumkin");
         }
         newStatus = SalesOrderStatus.NEW;
         break;
@@ -670,10 +670,10 @@ export class SalesOrdersService {
     if (!canCancel) {
       if (inProductionStatuses.includes(order.status)) {
         throw new ForbiddenException(
-          'Jarayondagi zakazni faqat tizim administratori bekor qilishi mumkin',
+          'Jarayondagi buyurtmani faqat tizim administratori bekor qilishi mumkin',
         );
       }
-      throw new BadRequestException('Bu holatdagi zakazni bekor qilish mumkin emas');
+      throw new BadRequestException('Bu holatdagi buyurtmani bekor qilish mumkin emas');
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -717,9 +717,9 @@ export class SalesOrdersService {
       throw new ForbiddenException('Yakunlash uchun menejer yoki admin roli talab qilinadi');
     }
     const order = await this.prisma.salesOrder.findFirst({ where: { id, tenantId } });
-    if (!order) throw new NotFoundException('Zakaz topilmadi');
+    if (!order) throw new NotFoundException('Buyurtma topilmadi');
     if (order.status !== SalesOrderStatus.SHIPPED) {
-      throw new BadRequestException("Faqat 'Jo'natildi' statusidagi zakazni yakunlash mumkin");
+      throw new BadRequestException("Faqat 'Jo'natildi' statusidagi buyurtmani yakunlash mumkin");
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -956,7 +956,7 @@ export class SalesOrdersService {
         counterparty: true,
       },
     });
-    if (!order) throw new NotFoundException('Zakaz topilmadi');
+    if (!order) throw new NotFoundException('Buyurtma topilmadi');
 
     const allowedStatuses: SalesOrderStatus[] = [
       SalesOrderStatus.READY_TO_SHIP,
@@ -964,7 +964,7 @@ export class SalesOrdersService {
     ];
     if (!allowedStatuses.includes(order.status)) {
       throw new BadRequestException(
-        "Faqat 'Jo'natishga tayyor' yoki 'Qisman jo'natilgan' statusidagi zakazni jo'natish mumkin",
+        "Faqat 'Jo'natishga tayyor' yoki 'Qisman jo'natilgan' statusidagi buyurtmani jo'natish mumkin",
       );
     }
 
@@ -1072,7 +1072,7 @@ export class SalesOrdersService {
           invoiceNumber,
           currency: order.currency,
           exchangeRate: order.exchangeRate,
-          comment: `Zakaz ${order.orderNumber} bo'yicha chiqim`,
+          comment: `Buyurtma ${order.orderNumber} bo'yicha chiqim`,
           status: SalesDocStatus.DRAFT,
           paymentStatus: SalesPaymentStatus.UNPAID,
           returnStatus: SalesReturnStatus.NONE,

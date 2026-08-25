@@ -893,22 +893,22 @@ export default function CounterpartiesPage() {
             <div style={{ marginTop: 'var(--space-2)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h4 style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                  {isRu ? 'История заказов клиента' : 'Mijozning zakazlar tarixi'}
+                  {isRu ? 'История заказов клиента' : 'Mijozning buyurtmalar tarixi'}
                 </h4>
                 {customerOrdersData?.summary && (
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Всего заказов:' : 'Jami zakazlar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale)} UZS</strong>
+                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale)} UZS</strong>
                   </span>
                 )}
               </div>
 
               {ordersLoading ? (
                 <div style={{ padding: '16px', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Загрузка заказов...' : 'Zakazlar yuklanmoqda...'}
+                  {isRu ? 'Загрузка заказов...' : 'Buyurtmalar yuklanmoqda...'}
                 </div>
               ) : !customerOrdersData?.orders || customerOrdersData.orders.length === 0 ? (
                 <div style={{ padding: '16px', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)' }}>
-                  {isRu ? 'У данного клиента нет заказов' : 'Ushbu mijozda hali zakazlar mavjud emas'}
+                  {isRu ? 'У данного клиента нет заказов' : 'Ushbu mijozda hali buyurtmalar mavjud emas'}
                 </div>
               ) : (
                 <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>

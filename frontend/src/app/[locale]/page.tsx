@@ -495,14 +495,14 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Orders Pipeline (Zakazlar voronkasi) */}
+      {/* Orders Pipeline (Buyurtmalar voronkasi) */}
       {orderStats && (
         <Card
-          title={isRu ? 'Воронка заказов и производство' : 'Zakazlar voronkasi va ishlab chiqarish'}
+          title={isRu ? 'Воронка заказов и производство' : 'Buyurtmalar voronkasi va ishlab chiqarish'}
           action={
             <Link href="/sales/orders" style={{ textDecoration: 'none' }}>
               <Button variant="ghost" size="sm">
-                {isRu ? 'Все заказы' : 'Barcha zakazlar'} <ArrowRight size={14} />
+                {isRu ? 'Все заказы' : 'Barcha buyurtmalar'} <ArrowRight size={14} />
               </Button>
             </Link>
           }

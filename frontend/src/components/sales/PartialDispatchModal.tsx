@@ -197,7 +197,7 @@ export function PartialDispatchModal({
       title={
         isRu
           ? `Отгрузка со склада — Заказ ${order.orderNumber}`
-          : `Ombordan chiqim qilish — Zakaz ${order.orderNumber}`
+          : `Ombordan chiqim qilish — Buyurtma ${order.orderNumber}`
       }
     >
       <form
@@ -258,7 +258,7 @@ export function PartialDispatchModal({
                   {isRu ? 'Товар' : 'Tovar'}
                 </th>
                 <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border)', textAlign: 'center' }}>
-                  {isRu ? 'Заказ' : 'Zakaz'}
+                  {isRu ? 'Заказ' : 'Buyurtma'}
                 </th>
                 <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border)', textAlign: 'center' }}>
                   {isRu ? 'Отгружено' : "Jo'natildi"}
