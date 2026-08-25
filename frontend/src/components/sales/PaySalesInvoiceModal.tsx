@@ -259,6 +259,12 @@ export function PaySalesInvoiceModal({
           />
         </div>
 
+        {/* Required fields indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, paddingTop: '4px' }}>
+          <span>*</span>
+          <span>{isRu ? '* Поля, отмеченные (*), обязательны для заполнения' : '* bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
           <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}

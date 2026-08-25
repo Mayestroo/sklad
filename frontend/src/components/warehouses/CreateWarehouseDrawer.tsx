@@ -238,6 +238,12 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
             />
           </div>
         </div>
+
+        {/* Required fields indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, paddingTop: '8px', borderTop: '1px solid var(--color-border-light)' }}>
+          <span>*</span>
+          <span>{isRu ? '* Поля, отмеченные (*), обязательны для заполнения' : '* bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
+        </div>
       </form>
     </Drawer>
   );
