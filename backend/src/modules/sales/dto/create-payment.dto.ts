@@ -29,6 +29,10 @@ export class CreatePaymentDto {
 
   @IsString()
   @IsOptional()
+  cashAccountId?: string;
+
+  @IsString()
+  @IsOptional()
   comment?: string;
 }
 

@@ -33,8 +33,10 @@ import {
   CheckCheck,
   XCircle,
   Percent,
+  FileText,
 } from 'lucide-react';
 import { PaySalesOrderModal } from './PaySalesOrderModal';
+import { PartialDispatchModal } from './PartialDispatchModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 
@@ -49,6 +51,7 @@ export const ORDER_STATUS_LABELS: Record<string, { uz: string; ru: string; varia
   AWAITING_PAYMENT: { uz: 'To‘lov kutilmoqda', ru: 'Ожидает оплаты', variant: 'warning' },
   PAYMENT_CONFIRMED: { uz: 'To‘lov tasdiqlandi', ru: 'Оплата подтверждена', variant: 'success' },
   READY_TO_SHIP: { uz: 'Jo‘natishga tayyor', ru: 'Готов к отгрузке', variant: 'success' },
+  PARTIALLY_SHIPPED: { uz: 'Qisman jo‘natilgan', ru: 'Частично отгружен', variant: 'warning' },
   SHIPPED: { uz: 'Jo‘natilgan', ru: 'Отгружен', variant: 'success' },
   COMPLETED: { uz: 'Bajarildi', ru: 'Завершён', variant: 'success' },
   CANCELLED: { uz: 'Bekor qilingan', ru: 'Отменён', variant: 'error' },
@@ -154,6 +157,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
   // Modals
   const [isPayOpen, setIsPayOpen] = useState(false);
+  const [isDispatchOpen, setIsDispatchOpen] = useState(false);
 
   const isLocked = orderStatus !== 'NEW' && orderStatus !== 'PENDING_APPROVAL';
 
@@ -589,24 +593,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             </Button>
           )}
 
-          {orderStatus === 'READY_TO_SHIP' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Select
-                options={warehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) }))}
-                value={dispatchWarehouseId}
-                onChange={setDispatchWarehouseId}
-                onCreateNew={() => setIsQuickWarehouseOpen(true)}
-                createNewLabel={isRu ? 'Создать склад' : 'Yangi ombor'}
-                style={{ width: '160px' }}
-              />
-              <Button
-                onClick={handleDispatch}
-                disabled={loading || !dispatchWarehouseId}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
-              >
-                <Truck size={16} /> {isRu ? 'Отгрузить' : 'Jo‘natish'}
-              </Button>
-            </div>
+          {(orderStatus === 'READY_TO_SHIP' || orderStatus === 'PARTIALLY_SHIPPED') && (
+            <Button
+              onClick={() => setIsDispatchOpen(true)}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+            >
+              <Truck size={16} /> {isRu ? (orderStatus === 'PARTIALLY_SHIPPED' ? 'Отгрузить еще' : 'Отгрузить') : (orderStatus === 'PARTIALLY_SHIPPED' ? 'Keyingi chiqim (jo‘natish)' : 'Ombordan chiqim (jo‘natish)')}
+            </Button>
           )}
 
           {orderStatus === 'SHIPPED' && (
@@ -967,6 +961,47 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               </div>
             )}
           </div>
+          {/* Linked Dispatches / Sales Invoices */}
+          {currentOrderData?.salesInvoices && currentOrderData.salesInvoices.length > 0 && (
+            <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginTop: 'var(--space-3)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileText size={14} color="var(--color-primary)" />
+                {isRu ? 'Накладные отгрузки' : 'Chiqim fakturalari'} ({currentOrderData.salesInvoices.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {currentOrderData.salesInvoices.map((inv: any) => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      padding: '8px 10px',
+                      backgroundColor: 'var(--color-bg-primary)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--color-border-light)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: 'var(--text-xs)',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{inv.invoiceNumber}</span>
+                      <div style={{ color: 'var(--color-text-secondary)', fontSize: '11px' }}>
+                        {formatDate(inv.createdAt, locale)}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 600 }} className="tabular-nums">
+                        {formatCurrency(Number(inv.totalAmount), locale, currency)}
+                      </div>
+                      <Badge variant="success">
+                        {inv.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 
@@ -985,18 +1020,36 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       />
 
       {currentOrderData && (
-        <PaySalesOrderModal
-          isOpen={isPayOpen}
-          onClose={() => setIsPayOpen(false)}
-          order={currentOrderData}
-          onSuccess={() => {
-            if (orderId) {
-              apiFetch<any>(`/sales/orders/${orderId}`, { token: token || undefined, tenantId: company?.id, locale }).then((res) => {
-                if (res) setCurrentOrderData(res);
-              });
-            }
-          }}
-        />
+        <>
+          <PaySalesOrderModal
+            isOpen={isPayOpen}
+            onClose={() => setIsPayOpen(false)}
+            order={currentOrderData}
+            onSuccess={() => {
+              if (orderId) {
+                apiFetch<any>(`/sales/orders/${orderId}`, { token: token || undefined, tenantId: company?.id, locale }).then((res) => {
+                  if (res) setCurrentOrderData(res);
+                });
+              }
+            }}
+          />
+
+          <PartialDispatchModal
+            isOpen={isDispatchOpen}
+            onClose={() => setIsDispatchOpen(false)}
+            order={currentOrderData}
+            onSuccess={() => {
+              if (orderId) {
+                apiFetch<any>(`/sales/orders/${orderId}`, { token: token || undefined, tenantId: company?.id, locale }).then((res) => {
+                  if (res) {
+                    setCurrentOrderData(res);
+                    setOrderStatus(res.status);
+                  }
+                });
+              }
+            }}
+          />
+        </>
       )}
     </div>
   );

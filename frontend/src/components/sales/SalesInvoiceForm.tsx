@@ -132,6 +132,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [isPayOpen, setIsPayOpen] = useState(false);
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [currentInvoiceData, setCurrentInvoiceData] = useState<SalesInvoice | null>(initialData || null);
+  const [warehouseStockMap, setWarehouseStockMap] = useState<Record<string, { physical: number; reserved: number; free: number }>>({});
 
   const isReadOnly = docStatus === 'POSTED' || docStatus === 'CANCELLED';
 
@@ -189,6 +190,32 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     fetchDropdowns();
   }, [token, company, locale]);
 
+  // Fetch live free stock when warehouseId changes
+  useEffect(() => {
+    if (!token || !company || !warehouseId) return;
+
+    apiFetch<any>(`/inventory/stock-levels?warehouseId=${warehouseId}`, {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.data || [];
+        const map: Record<string, { physical: number; reserved: number; free: number }> = {};
+        list.forEach((sl: any) => {
+          const physical = Number(sl.quantity || 0);
+          const reserved = Number(sl.reservedQuantity || 0);
+          map[sl.productId] = {
+            physical,
+            reserved,
+            free: Math.max(0, physical - reserved),
+          };
+        });
+        setWarehouseStockMap(map);
+      })
+      .catch((err) => console.error('Failed to load warehouse stock levels:', err));
+  }, [token, company, warehouseId, locale]);
+
   // Quick addition handlers
   const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; debtBalance?: number }) => {
     markDirty();
@@ -209,6 +236,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     let totalVat = 0;
     let totalCost = 0;
     let belowCostCount = 0;
+    let insufficientStockCount = 0;
 
     items.forEach((item) => {
       if (!item.productId) return;
@@ -226,6 +254,12 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       if (prd && item.unitPrice > 0 && item.unitPrice < cost) {
         belowCostCount++;
+      }
+
+      const stockInfo = warehouseStockMap[item.productId];
+      const available = Number(stockInfo !== undefined ? stockInfo.free : (prd ? prd.stockQty : 0)) || 0;
+      if (!isReadOnly && item.quantity > available) {
+        insufficientStockCount++;
       }
     });
 
@@ -245,8 +279,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       estimatedProfit,
       marginPercent,
       belowCostCount,
+      insufficientStockCount,
     };
-  }, [items, products, currentInvoiceData]);
+  }, [items, products, currentInvoiceData, warehouseStockMap, isReadOnly]);
 
   const handleItemChange = (index: number, field: keyof ItemRow, val: any) => {
     markDirty();
@@ -501,10 +536,14 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     label: getLocalizedName(w.name),
   }));
 
-  const productOptions: SelectOption[] = products.map((p) => ({
-    value: p.id,
-    label: `${getLocalizedName(p.name)} ${p.sku ? `(${p.sku})` : ''}`,
-  }));
+  const productOptions: SelectOption[] = products.map((p) => {
+    const stockInfo = warehouseStockMap[p.id];
+    const freeStock = stockInfo !== undefined ? stockInfo.free : p.stockQty;
+    return {
+      value: p.id,
+      label: `${getLocalizedName(p.name)} ${p.sku ? `(${p.sku})` : ''} · ${isRu ? 'Остаток' : 'Qoldiq'}: ${freeStock}`,
+    };
+  });
 
   const getDocStatusBadge = (st: string) => {
     switch (st) {
@@ -667,6 +706,18 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertCircle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
+        </Card>
+      )}
+
+      {/* Insufficient free stock alert */}
+      {!isReadOnly && calculations.insufficientStockCount > 0 && (
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <AlertCircle size={20} />
+          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
+            {isRu
+              ? `Внимание! В ${calculations.insufficientStockCount} поз. указанное количество превышает свободный остаток на складе.`
+              : `Diqqat! ${calculations.insufficientStockCount} ta tovar bo'yicha kiritilgan miqdor ombordagi erkin qoldiqdan ko'p.`}
+          </span>
         </Card>
       )}
 
@@ -903,10 +954,23 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         disabled={isReadOnly}
                       />
                       {prd && (
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', gap: '8px' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           <span>Tannarx: {formatCurrency(prd.costPrice, locale, currency)}</span>
                           <span>•</span>
                           <span>Birlik: {prd.unitOfMeasure || 'dona'}</span>
+                          {warehouseStockMap[item.productId] !== undefined && (
+                            <>
+                              <span>•</span>
+                              <span
+                                style={{
+                                  fontWeight: 600,
+                                  color: warehouseStockMap[item.productId].free >= qty ? '#10b981' : '#ef4444',
+                                }}
+                              >
+                                {isRu ? 'Свободный остаток' : 'Erkin qoldiq'}: {warehouseStockMap[item.productId].free}
+                              </span>
+                            </>
+                          )}
                         </div>
                       )}
                     </td>
@@ -920,8 +984,23 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         value={item.quantity}
                         onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
                         disabled={isReadOnly}
-                        style={{ textAlign: 'right' }}
+                        style={{
+                          textAlign: 'right',
+                          borderColor:
+                            !isReadOnly &&
+                            warehouseStockMap[item.productId] !== undefined &&
+                            qty > warehouseStockMap[item.productId].free
+                              ? '#ef4444'
+                              : undefined,
+                        }}
                       />
+                      {!isReadOnly &&
+                        warehouseStockMap[item.productId] !== undefined &&
+                        qty > warehouseStockMap[item.productId].free && (
+                          <div style={{ fontSize: '10px', color: '#ef4444', marginTop: 2, textAlign: 'right', fontWeight: 600 }}>
+                            {isRu ? 'Недостаточно!' : 'Yetarli emas!'}
+                          </div>
+                        )}
                     </td>
 
                     {/* Unit Price */}

@@ -28,6 +28,8 @@ export function PaySalesOrderModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
+  const [cashAccountId, setCashAccountId] = useState<string>('');
+  const [cashAccounts, setCashAccounts] = useState<any[]>([]);
   const [method, setMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME'>('CASH');
   const [amount, setAmount] = useState<number>(0);
   const [note, setNote] = useState('');
@@ -48,6 +50,24 @@ export function PaySalesOrderModal({
   const minNeededForDispatch = Math.max(0, minRequired - paid);
 
   useEffect(() => {
+    if (!isOpen || !token || !company) return;
+
+    apiFetch<any>('/finance/accounts', {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.data || [];
+        setCashAccounts(list);
+        if (list.length > 0) {
+          setCashAccountId(list[0].id);
+        }
+      })
+      .catch((err) => console.error('Failed to load cash accounts:', err));
+  }, [isOpen, token, company, locale]);
+
+  useEffect(() => {
     if (!isOpen || !token || !company || !order) return;
 
     // Default to minNeededForDispatch or remaining
@@ -57,6 +77,22 @@ export function PaySalesOrderModal({
   }, [isOpen, order, token, company, minNeededForDispatch, remaining]);
 
   if (!order) return null;
+
+  const cashAccountOptions: SelectOption[] = cashAccounts.length > 0
+    ? cashAccounts.map((ca) => {
+        const name = typeof ca.name === 'object' ? ca.name[locale] || ca.name.uz || ca.name.ru : ca.name;
+        const cur = ca.currency || 'UZS';
+        const bal = formatCurrency(Number(ca.balance || 0), locale, cur);
+        return {
+          value: ca.id,
+          label: `${name} (${bal})`,
+        };
+      })
+    : [
+        { value: 'CASH_UZS', label: isRu ? 'Наличная касса (UZS)' : 'Naqd kassa (UZS)' },
+        { value: 'CASH_USD', label: isRu ? 'Долларовая касса (USD)' : 'Dollar kassa (USD)' },
+        { value: 'BANK_ACCOUNT', label: isRu ? 'Расчетный счет (Банк)' : 'Hisobraqam (Bank)' },
+      ];
 
   const methodOptions: SelectOption[] = [
     { value: 'CASH', label: isRu ? 'Наличные (Касса)' : 'Naqd pul (Kassa)' },
@@ -85,6 +121,7 @@ export function PaySalesOrderModal({
         body: JSON.stringify({
           counterpartyId: order.counterpartyId,
           orderId: order.id,
+          cashAccountId: cashAccountId || undefined,
           method,
           amount: Number(amount),
           comment: note.trim() || undefined,
@@ -171,6 +208,19 @@ export function PaySalesOrderModal({
             </span>
           </div>
         )}
+
+        {/* Cash Desk Selector (1C Kassa) */}
+        <div>
+          <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+            {isRu ? 'Касса / Счет зачисления' : 'Kassa / Hisob (Kirim joyi)'}
+          </label>
+          <Select
+            options={cashAccountOptions}
+            value={cashAccountId}
+            onChange={(val) => setCashAccountId(val)}
+            placeholder={isRu ? 'Выберите кассу' : 'Kassani tanlang'}
+          />
+        </div>
 
         {/* Payment Method */}
         <div>

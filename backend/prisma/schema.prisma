@@ -119,6 +119,7 @@ enum SalesOrderStatus {
   AWAITING_PAYMENT
   PAYMENT_CONFIRMED
   READY_TO_SHIP
+  PARTIALLY_SHIPPED
   SHIPPED
   COMPLETED
   CANCELLED
@@ -289,6 +290,7 @@ model Company {
   additionalExpenses   AdditionalExpense[]
   batchConsumptions    BatchConsumption[]
   productionOrders     ProductionOrder[]
+  stockReservations    StockReservation[]
 
   @@map("companies")
 }
@@ -525,6 +527,7 @@ model Warehouse {
   salesReturns     SalesReturn[]
   productBatches   ProductBatch[]
   salesOrders      SalesOrder[]
+  stockReservations StockReservation[]
 
   @@index([tenantId])
   @@map("warehouses")
@@ -641,6 +644,7 @@ model Product {
   productPrices        ProductPrice[]
   additionalExpenseItems AdditionalExpenseItem[]
   productionOrders       ProductionOrder[]
+  stockReservations      StockReservation[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
@@ -857,6 +861,7 @@ model SalesOrder {
   productionOrders ProductionOrder[]
   payments       Payment[]
   salesInvoices  SalesInvoice[]
+  reservations   StockReservation[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -866,20 +871,42 @@ model SalesOrder {
 }
 
 model SalesOrderItem {
-  id         String     @id @default(uuid())
-  orderId    String     @map("order_id")
-  productId  String     @map("product_id")
-  quantity   Decimal    @db.Decimal(15, 3)
-  unitPrice  Decimal    @db.Decimal(15, 2) @map("unit_price")
-  discount   Decimal    @default(0) @db.Decimal(15, 2)
-  totalPrice Decimal    @db.Decimal(15, 2) @map("total_price")
-  readyQty   Decimal    @default(0) @db.Decimal(15, 3) @map("ready_qty")
+  id          String     @id @default(uuid())
+  orderId     String     @map("order_id")
+  productId   String     @map("product_id")
+  quantity    Decimal    @db.Decimal(15, 3)
+  unitPrice   Decimal    @db.Decimal(15, 2) @map("unit_price")
+  discount    Decimal    @default(0) @db.Decimal(15, 2)
+  totalPrice  Decimal    @db.Decimal(15, 2) @map("total_price")
+  reservedQty Decimal    @default(0) @db.Decimal(15, 3) @map("reserved_qty")
+  readyQty    Decimal    @default(0) @db.Decimal(15, 3) @map("ready_qty")
+  shippedQty  Decimal    @default(0) @db.Decimal(15, 3) @map("shipped_qty")
 
   order            SalesOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product          Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   productionOrders ProductionOrder[]
 
   @@map("sales_order_items")
+}
+
+model StockReservation {
+  id          String      @id @default(uuid())
+  tenantId    String      @map("tenant_id")
+  orderId     String      @map("order_id")
+  productId   String      @map("product_id")
+  warehouseId String      @map("warehouse_id")
+  quantity    Decimal     @db.Decimal(15, 3)
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  company     Company     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order       SalesOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, productId, warehouseId])
+  @@index([orderId])
+  @@map("stock_reservations")
 }
 
 model ProductionOrder {
@@ -1111,6 +1138,7 @@ model Payment {
   counterpartyId String        @map("counterparty_id")
   invoiceId      String?       @map("invoice_id")
   orderId        String?       @map("order_id")
+  cashAccountId  String?       @map("cash_account_id")
   paymentNumber  String        @map("payment_number")
   method         PaymentMethod @default(BANK_TRANSFER)
   amount         Decimal       @db.Decimal(15, 2)
@@ -1122,6 +1150,7 @@ model Payment {
   counterparty Counterparty  @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
   invoice      SalesInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   salesOrder   SalesOrder?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  cashAccount  CashAccount?  @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId])
@@ -1204,6 +1233,7 @@ model CashAccount {
   transactions       FinanceTransaction[] @relation("TxAccount")
   transfersTo        FinanceTransaction[] @relation("TxTransferTo")
   additionalExpenses AdditionalExpense[]
+  payments           Payment[]
 
   @@unique([tenantId, accountType])
   @@index([tenantId])

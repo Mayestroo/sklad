@@ -7,6 +7,7 @@ import { InventoryDocumentsController } from './documents/inventory-documents.co
 import { InventoryDocumentsService } from './documents/inventory-documents.service';
 import { StockTransfersController } from './transfers/stock-transfers.controller';
 import { StockTransfersService } from './transfers/stock-transfers.service';
+import { StockReservationService } from './stock-reservation/stock-reservation.service';
 import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
@@ -22,12 +23,14 @@ import { AccountingModule } from '../accounting/accounting.module';
     ProductsService,
     InventoryDocumentsService,
     StockTransfersService,
+    StockReservationService,
   ],
   exports: [
     CategoriesService,
     ProductsService,
     InventoryDocumentsService,
     StockTransfersService,
+    StockReservationService,
   ],
 })
 export class InventoryModule {}

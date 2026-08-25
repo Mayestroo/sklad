@@ -4,6 +4,7 @@ import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreatePaymentDto } from '../dto';
 import { SalesOrdersService } from '../orders/sales-orders.service';
+import { CashAccountType } from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
@@ -24,10 +25,25 @@ export class PaymentsService {
     });
 
     if (!counterparty) {
-      throw new NotFoundException('Counterparty not found');
+      throw new NotFoundException('Mijoz topilmadi');
     }
 
     const paymentNumber = await this.generatePaymentNumber(tenantId);
+
+    // Resolve target CashAccount (Dollar kassa, Naqd kassa, Hisobraqam)
+    let cashAccountId = dto.cashAccountId;
+    if (!cashAccountId) {
+      let targetType: CashAccountType = CashAccountType.BANK_ACCOUNT;
+      if (dto.method === 'CASH') {
+        targetType = CashAccountType.CASH_UZS;
+      }
+      const defaultAccount = await this.prisma.cashAccount.findFirst({
+        where: { tenantId, accountType: targetType },
+      });
+      if (defaultAccount) {
+        cashAccountId = defaultAccount.id;
+      }
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       // 1. Create Payment record
@@ -37,6 +53,7 @@ export class PaymentsService {
           counterpartyId: dto.counterpartyId,
           invoiceId: dto.invoiceId || null,
           orderId: dto.orderId || null,
+          cashAccountId: cashAccountId || null,
           paymentNumber,
           method: dto.method,
           amount: dto.amount,
@@ -46,6 +63,7 @@ export class PaymentsService {
           counterparty: true,
           invoice: true,
           salesOrder: true,
+          cashAccount: true,
         },
       });
 
@@ -59,7 +77,35 @@ export class PaymentsService {
         },
       });
 
-      // 3. If linked to an invoice, update invoice paid amount and status
+      // 3. Update CashAccount balance & create FinanceTransaction
+      if (cashAccountId) {
+        await tx.cashAccount.update({
+          where: { id: cashAccountId },
+          data: {
+            balance: {
+              increment: dto.amount,
+            },
+          },
+        });
+
+        await tx.financeTransaction.create({
+          data: {
+            tenantId,
+            direction: 'INCOME',
+            accountId: cashAccountId,
+            counterpartyId: dto.counterpartyId,
+            amount: dto.amount,
+            currency: 'UZS',
+            comment: dto.comment || `To'lov ${paymentNumber} qabul qilindi`,
+            docNumber: paymentNumber,
+            sourceDocType: 'PAYMENT',
+            sourceDocId: payment.id,
+            createdById: userId,
+          },
+        });
+      }
+
+      // 4. If linked to an invoice, update invoice paid amount and status
       if (dto.invoiceId) {
         const invoice = await tx.salesInvoice.findUnique({
           where: { id: dto.invoiceId },
@@ -84,7 +130,7 @@ export class PaymentsService {
       return payment;
     });
 
-    // 4. If linked to a Sales Order, trigger dispatch gate evaluation
+    // 5. If linked to a Sales Order, trigger dispatch gate evaluation
     if (dto.orderId) {
       try {
         await this.salesOrdersService.onPaymentRegistered(tenantId, userId, dto.orderId);
@@ -93,7 +139,7 @@ export class PaymentsService {
       }
     }
 
-    // 5. Module 4 Integration: Auto-post Payment NAS double-entry journal (Dt 5110/5010 / Kt 4010)
+    // 6. Module 4 Integration: Auto-post Payment NAS double-entry journal (Dt 5110/5010 / Kt 4010)
     try {
       await this.journalService.autoPostPayment(tenantId, result);
     } catch (err) {
@@ -107,7 +153,13 @@ export class PaymentsService {
       entityType: 'Payment',
       entityId: result.id,
       action: 'CREATE',
-      newValue: { paymentNumber, amount: dto.amount, method: dto.method, orderId: dto.orderId },
+      newValue: {
+        paymentNumber,
+        amount: dto.amount,
+        method: dto.method,
+        orderId: dto.orderId,
+        cashAccountId,
+      },
     });
 
     return result;
@@ -120,6 +172,7 @@ export class PaymentsService {
         counterparty: true,
         invoice: true,
         salesOrder: true,
+        cashAccount: true,
       },
       orderBy: { createdAt: 'desc' },
     });

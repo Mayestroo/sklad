@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesOrdersService } from './sales-orders.service';
 import { PrismaService } from '../../../common/prisma';
+import { StockReservationService } from '../../inventory/stock-reservation/stock-reservation.service';
 import {
   SalesOrderStatus,
   PaymentCondition,
@@ -12,8 +13,24 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 describe('SalesOrdersService', () => {
   let service: SalesOrdersService;
   let prisma: any;
+  let stockReservationService: any;
 
   beforeEach(async () => {
+    stockReservationService = {
+      reserveStockForOrder: jest.fn().mockResolvedValue([
+        { orderItemId: 'item-1', productId: 'prod-1', requestedQty: 5, reservedQty: 0, remainingGap: 5 },
+      ]),
+      releaseOrderReservations: jest.fn().mockResolvedValue(undefined),
+      consumeReservation: jest.fn().mockResolvedValue(undefined),
+      getFreeStock: jest.fn().mockResolvedValue({
+        productId: 'prod-1',
+        warehouseId: 'wh-1',
+        physicalStock: 10,
+        reservedStock: 0,
+        freeStock: 10,
+      }),
+    };
+
     prisma = {
       salesOrder: {
         count: jest.fn(),
@@ -27,6 +44,7 @@ describe('SalesOrdersService', () => {
       salesOrderItem: {
         deleteMany: jest.fn(),
         update: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       productionOrder: {
         create: jest.fn(),
@@ -66,6 +84,10 @@ describe('SalesOrdersService', () => {
       },
       product: {
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      warehouse: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }),
       },
       $transaction: jest.fn(async (callback) => callback(prisma)),
     };
@@ -74,6 +96,7 @@ describe('SalesOrdersService', () => {
       providers: [
         SalesOrdersService,
         { provide: PrismaService, useValue: prisma },
+        { provide: StockReservationService, useValue: stockReservationService },
       ],
     }).compile();
 
@@ -100,7 +123,7 @@ describe('SalesOrdersService', () => {
         ],
       };
 
-      const result = await service.create('tenant-1', 'user-1', dto);
+      const result = await service.create('tenant-1', 'user-1', ['SELLER'], dto);
 
       expect(prisma.salesOrder.create).toHaveBeenCalled();
       expect(result.subtotalAmount).toBe(900000); // (5*100000) + (2*200000) = 500000 + 400000
@@ -110,9 +133,9 @@ describe('SalesOrdersService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException if items list is empty', async () => {
+    it('should throw Error if items list is empty or invalid', async () => {
       await expect(
-        service.create('tenant-1', 'user-1', {
+        service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
           paymentCondition: 'CREDIT',
           items: [],
@@ -225,6 +248,7 @@ describe('SalesOrdersService', () => {
           paymentCondition: PaymentCondition.PREPAID_100,
           paidAmount: 0,
           totalAmount: 1000000,
+          items: [{ id: 'item-1', reservedQty: 0 }],
         },
       });
 
@@ -261,6 +285,7 @@ describe('SalesOrdersService', () => {
           paidAmount: 0,
           totalAmount: 1000000,
           requiredPaymentPercent: null,
+          items: [{ id: 'item-1', reservedQty: 0 }],
         },
       });
 
@@ -288,6 +313,7 @@ describe('SalesOrdersService', () => {
           paymentCondition: PaymentCondition.CREDIT,
           paidAmount: 0,
           totalAmount: 1000000,
+          items: [{ id: 'item-1', reservedQty: 0 }],
         },
       });
 
@@ -338,7 +364,7 @@ describe('SalesOrdersService', () => {
       });
 
       await expect(
-        service.dispatch('tenant-1', 'user-1', 'order-1', 'wh-1'),
+        service.dispatch('tenant-1', 'user-1', 'order-1', { warehouseId: 'wh-1' }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -361,10 +387,15 @@ describe('SalesOrdersService', () => {
             quantity: 5,
             unitPrice: 200000,
             discount: 0,
+            shippedQty: 0,
             product: { name: { uz: 'Mahsulot 1' }, costPrice: 120000 },
           },
         ],
       });
+
+      prisma.salesOrderItem.findMany.mockResolvedValue([
+        { id: 'item-1', quantity: 5, shippedQty: 5 },
+      ]);
 
       prisma.salesInvoice.count.mockResolvedValue(0);
       prisma.salesInvoice.create.mockResolvedValue({
@@ -401,7 +432,7 @@ describe('SalesOrdersService', () => {
         'tenant-1',
         'user-1',
         'order-1',
-        'wh-1',
+        { warehouseId: 'wh-1' },
       );
 
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({

@@ -11,6 +11,7 @@ import {
 import { SalesOrdersService } from './sales-orders.service';
 import { CreateSalesOrderDto } from '../dto/create-sales-order.dto';
 import { FilterSalesOrdersDto } from '../dto/filter-sales-orders.dto';
+import { DispatchSalesOrderDto } from '../dto/dispatch-sales-order.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
@@ -80,9 +81,10 @@ export class SalesOrdersController {
   create(
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
+    @CurrentUser('roles') roles: string[],
     @Body() dto: CreateSalesOrderDto,
   ) {
-    return this.service.create(tenantId, userId, dto);
+    return this.service.create(tenantId, userId, roles || [], dto);
   }
 
   // ─── SINGLE ORDER ─────────────────────────────────────────────
@@ -137,9 +139,9 @@ export class SalesOrdersController {
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
     @Param('id') id: string,
-    @Body() dto: DispatchDto,
+    @Body() dto: DispatchSalesOrderDto,
   ) {
-    return this.service.dispatch(tenantId, userId, id, dto.warehouseId);
+    return this.service.dispatch(tenantId, userId, id, dto);
   }
 
   // ─── COUNTERPARTY PROFILE ──────────────────────────────────────

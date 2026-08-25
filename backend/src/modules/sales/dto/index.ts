@@ -8,3 +8,4 @@ export * from './create-deal.dto';
 export * from './create-payment.dto';
 export * from './create-sales-order.dto';
 export * from './filter-sales-orders.dto';
+export * from './dispatch-sales-order.dto';

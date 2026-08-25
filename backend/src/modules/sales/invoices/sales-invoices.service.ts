@@ -237,7 +237,7 @@ export class SalesInvoicesService {
       for (const item of invoice.items) {
         const qty = Number(item.quantity);
 
-        // Check stock level
+        // Check stock level and free stock (physical minus reserved)
         const stockLevel = await tx.stockLevel.findUnique({
           where: {
             tenantId_warehouseId_productId: {
@@ -248,10 +248,22 @@ export class SalesInvoicesService {
           },
         });
 
-        const availableQty = stockLevel ? Number(stockLevel.quantity) : 0;
+        const physicalQty = stockLevel ? Number(stockLevel.quantity) : 0;
+        const reservedQty = stockLevel ? Number(stockLevel.reservedQuantity || 0) : 0;
+        const freeQty = Math.max(0, physicalQty - reservedQty);
+
+        // If not from a sales order (direct sale), must not eat into reserved stock
+        const availableQty = invoice.salesOrderId ? physicalQty : freeQty;
+
         if (availableQty < qty) {
+          const prodName = (item.product.name as any)?.uz || item.product.name;
+          if (!invoice.salesOrderId && reservedQty > 0) {
+            throw new BadRequestException(
+              `"${prodName}" uchun erkin qoldiq yetarli emas. Jami: ${physicalQty}, Band qilingan (rezerv): ${reservedQty}, Erkin: ${freeQty}, Talab qilingan: ${qty}`,
+            );
+          }
           throw new BadRequestException(
-            `"${(item.product.name as any)?.uz || item.product.name}" uchun omborda yetarli miqdor yo'q. Mavjud: ${availableQty}, kerakli: ${qty}`,
+            `"${prodName}" uchun omborda yetarli miqdor yo'q. Mavjud: ${availableQty}, kerakli: ${qty}`,
           );
         }
 
