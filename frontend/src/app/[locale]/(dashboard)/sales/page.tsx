@@ -111,12 +111,12 @@ export default function SalesPage() {
   useEffect(() => {
     if (!token || !company) return;
 
-    apiFetch<any>('/counterparties', {
+    apiFetch<any>('/sales/counterparties', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
-      .then((res) => setCounterparties(res?.data || res || []))
+      .then((res) => setCounterparties(res?.data || (Array.isArray(res) ? res : [])))
       .catch((err) => console.error(err));
 
     apiFetch<any>('/inventory/warehouses', {

@@ -28,7 +28,17 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
+  // Normalize endpoint: remove leading /api/ if present to prevent double /api/api
+  let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (cleanEndpoint.startsWith('/api/')) {
+    cleanEndpoint = cleanEndpoint.substring(4);
+  }
+  // Alias /counterparties to /sales/counterparties
+  if (cleanEndpoint === '/counterparties' || cleanEndpoint.startsWith('/counterparties?')) {
+    cleanEndpoint = cleanEndpoint.replace('/counterparties', '/sales/counterparties');
+  }
+
+  const response = await fetch(`${API_BASE_URL}${cleanEndpoint.startsWith('/') ? cleanEndpoint : `/${cleanEndpoint}`}`, {
     headers,
     ...restOptions,
   });

@@ -36,7 +36,6 @@ import {
 } from 'lucide-react';
 import { PaySalesOrderModal } from './PaySalesOrderModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
-import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 
 export const ORDER_STATUS_LABELS: Record<string, { uz: string; ru: string; variant: 'neutral' | 'info' | 'warning' | 'success' | 'error' }> = {
@@ -152,9 +151,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   // Quick Add Drawers
   const [isQuickCustomerOpen, setIsQuickCustomerOpen] = useState(false);
   const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false);
-  const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
-  const [quickProductSearch, setQuickProductSearch] = useState('');
-  const [activeRowIndexForNewProduct, setActiveRowIndexForNewProduct] = useState<number | null>(null);
 
   // Modals
   const [isPayOpen, setIsPayOpen] = useState(false);
@@ -177,13 +173,13 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
     try {
       const [cpRes, prdRes, usrRes, whRes] = await Promise.all([
-        apiFetch<any>('/counterparties', { token: token || undefined, tenantId: company.id, locale }),
+        apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }),
         apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }),
         apiFetch<any>('/users', { token: token || undefined, tenantId: company.id, locale }),
         apiFetch<any>('/inventory/warehouses', { token: token || undefined, tenantId: company.id, locale }),
       ]);
 
-      const cpList = cpRes?.data || cpRes || [];
+      const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
       setCounterparties(cpList);
       if (!counterpartyId && cpList.length > 0 && mode === 'create') {
         setCounterpartyId(cpList[0].id);
@@ -232,61 +228,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     markDirty();
     setWarehouses((prev) => [newWarehouse, ...prev]);
     setDispatchWarehouseId(newWarehouse.id);
-  };
-
-  const handleProductAdded = (
-    newProduct: {
-      id: string;
-      name: Record<string, string> | string;
-      sku: string;
-      barcode?: string;
-      costPrice: number;
-      salePrice?: number;
-      unitOfMeasure?: string;
-    },
-    initialQuantity?: number
-  ) => {
-    markDirty();
-    const formatted = {
-      id: newProduct.id,
-      name: newProduct.name,
-      sku: newProduct.sku,
-      barcode: newProduct.barcode,
-      salePrice: Number(newProduct.salePrice) || 0,
-      costPrice: Number(newProduct.costPrice) || 0,
-      unitOfMeasure: newProduct.unitOfMeasure || 'dona',
-    };
-    setProducts((prev) => [formatted, ...prev]);
-
-    const qty = Number(initialQuantity) || 1;
-    const price = Number(newProduct.salePrice) || 0;
-
-    if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
-      const targetIdx = activeRowIndexForNewProduct;
-      handleItemChange(targetIdx, 'productId', newProduct.id);
-      handleItemChange(targetIdx, 'quantity', qty);
-      if (price > 0) handleItemChange(targetIdx, 'unitPrice', price);
-      setActiveRowIndexForNewProduct(null);
-    } else {
-      const emptyIdx = items.findIndex((i) => !i.productId);
-      if (emptyIdx !== -1) {
-        handleItemChange(emptyIdx, 'productId', newProduct.id);
-        handleItemChange(emptyIdx, 'quantity', qty);
-        if (price > 0) handleItemChange(emptyIdx, 'unitPrice', price);
-      } else {
-        setItems((prev) => [
-          ...prev,
-          {
-            productId: newProduct.id,
-            quantity: qty,
-            unitPrice: price,
-            discount: 0,
-            readyQty: 0,
-          },
-        ]);
-      }
-    }
-    setQuickProductSearch('');
   };
 
   // Calculations
@@ -533,6 +474,11 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const customerOptions: SelectOption[] = counterparties.map((c) => ({
     value: c.id,
     label: c.name,
+    description: c.phone
+      ? `${c.phone}${Number(c.debtBalance) > 0 ? ` · ${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), 'UZS')}` : ''}`
+      : Number(c.debtBalance) > 0
+      ? `${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), 'UZS')}`
+      : undefined,
   }));
 
   const productOptions: SelectOption[] = products.map((p) => ({
@@ -833,21 +779,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
             {isRu ? 'Товары в заказе' : 'Buyurtmadagi Tovarlar'} ({items.length})
           </h3>
-
-          {!isLocked && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setQuickProductSearch('');
-                setIsQuickProductOpen(true);
-              }}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <PackagePlus size={14} /> {isRu ? 'Новый товар' : 'Yangi tovar'}
-            </Button>
-          )}
         </div>
 
         {/* Table container */}
@@ -898,16 +829,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                         onChange={(val) => handleItemChange(idx, 'productId', val)}
                         placeholder={isRu ? 'Выберите товар...' : 'Tovarni tanlang...'}
                         disabled={isLocked}
-                        onCreateNew={
-                          !isLocked
-                            ? (searchQuery) => {
-                                setActiveRowIndexForNewProduct(idx);
-                                setQuickProductSearch(searchQuery || '');
-                                setIsQuickProductOpen(true);
-                              }
-                            : undefined
-                        }
-                        createNewLabel={isRu ? 'Создать новый товар' : 'Yangi tovar qo‘shish'}
                       />
                     </td>
 
@@ -1061,16 +982,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         isOpen={isQuickWarehouseOpen}
         onClose={() => setIsQuickWarehouseOpen(false)}
         onSuccess={handleWarehouseAdded}
-      />
-
-      <CreateProductDrawer
-        isOpen={isQuickProductOpen}
-        onClose={() => {
-          setIsQuickProductOpen(false);
-          setActiveRowIndexForNewProduct(null);
-        }}
-        onSuccess={handleProductAdded}
-        initialSkuOrBarcode={quickProductSearch}
       />
 
       {currentOrderData && (

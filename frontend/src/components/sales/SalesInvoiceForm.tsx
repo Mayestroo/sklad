@@ -32,7 +32,6 @@ import { SalesInvoice } from '@shared/types';
 import { PaySalesInvoiceModal } from './PaySalesInvoiceModal';
 import { CreateSalesReturnModal } from './CreateSalesReturnModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
-import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 
 interface CounterpartyOption {
@@ -128,9 +127,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   // Quick Add Drawers
   const [isQuickCustomerOpen, setIsQuickCustomerOpen] = useState(false);
   const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false);
-  const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
-  const [quickProductSearch, setQuickProductSearch] = useState('');
-  const [activeRowIndexForNewProduct, setActiveRowIndexForNewProduct] = useState<number | null>(null);
 
   // Modals state
   const [isPayOpen, setIsPayOpen] = useState(false);
@@ -156,12 +152,12 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
     try {
       const [cpRes, whRes, prdRes] = await Promise.all([
-        apiFetch<any>('/counterparties', { token: token || undefined, tenantId: company.id, locale }),
+        apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }),
         apiFetch<any>('/inventory/warehouses', { token: token || undefined, tenantId: company.id, locale }),
         apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }),
       ]);
 
-      const cpList = cpRes?.data || cpRes || [];
+      const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
       setCounterparties(cpList);
       if (!counterpartyId && cpList.length > 0 && mode === 'create') {
         setCounterpartyId(cpList[0].id);
@@ -204,66 +200,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     markDirty();
     setWarehouses((prev) => [newWarehouse, ...prev]);
     setWarehouseId(newWarehouse.id);
-  };
-
-  const handleProductAdded = (
-    newProduct: {
-      id: string;
-      name: Record<string, string> | string;
-      sku: string;
-      barcode?: string;
-      costPrice: number;
-      salePrice?: number;
-      unitOfMeasure?: string;
-    },
-    initialQuantity?: number
-  ) => {
-    markDirty();
-    const formatted = {
-      id: newProduct.id,
-      name: newProduct.name,
-      sku: newProduct.sku,
-      barcode: newProduct.barcode,
-      salePrice: Number(newProduct.salePrice) || 0,
-      costPrice: Number(newProduct.costPrice) || 0,
-      unitOfMeasure: newProduct.unitOfMeasure || 'dona',
-      stockQty: 0,
-    };
-    setProducts((prev) => [formatted, ...prev]);
-
-    const qty = Number(initialQuantity) || 1;
-    const price = Number(newProduct.salePrice) || Number(newProduct.costPrice) || 0;
-
-    if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
-      const targetIdx = activeRowIndexForNewProduct;
-      handleItemChange(targetIdx, 'productId', newProduct.id);
-      handleItemChange(targetIdx, 'quantity', qty);
-      if (price > 0) {
-        handleItemChange(targetIdx, 'unitPrice', price);
-      }
-      setActiveRowIndexForNewProduct(null);
-    } else {
-      const emptyIndex = items.findIndex((i) => !i.productId);
-      if (emptyIndex !== -1) {
-        handleItemChange(emptyIndex, 'productId', newProduct.id);
-        handleItemChange(emptyIndex, 'quantity', qty);
-        if (price > 0) {
-          handleItemChange(emptyIndex, 'unitPrice', price);
-        }
-      } else {
-        setItems((prev) => [
-          ...prev,
-          {
-            productId: newProduct.id,
-            quantity: qty,
-            unitPrice: price,
-            discount: 0,
-            vatRate: 0,
-          },
-        ]);
-      }
-    }
-    setQuickProductSearch('');
   };
 
   // Calculations
@@ -375,8 +311,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       }
       setBarcodeSearch('');
     } else {
-      setQuickProductSearch(barcodeSearch.trim());
-      setIsQuickProductOpen(true);
+      setError(isRu ? `Товар со штрих-кодом/SKU "${barcodeSearch.trim()}" не найден в каталоге` : `"${barcodeSearch.trim()}" shtrix-kod/SKU ga ega tovar katalogda topilmadi`);
     }
   };
 
@@ -909,19 +844,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                   <Search size={14} /> {isRu ? 'Найти' : 'Qidirish'}
                 </Button>
               </form>
-
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setQuickProductSearch('');
-                  setIsQuickProductOpen(true);
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <PackagePlus size={14} /> {isRu ? 'Новый товар' : 'Yangi tovar'}
-              </Button>
             </div>
           )}
         </div>
@@ -979,16 +901,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         onChange={(val) => handleItemChange(idx, 'productId', val)}
                         placeholder={isRu ? 'Выберите товар...' : 'Tovarni tanlang...'}
                         disabled={isReadOnly}
-                        onCreateNew={
-                          !isReadOnly
-                            ? (searchQuery) => {
-                                setActiveRowIndexForNewProduct(idx);
-                                setQuickProductSearch(searchQuery || '');
-                                setIsQuickProductOpen(true);
-                              }
-                            : undefined
-                        }
-                        createNewLabel={isRu ? 'Создать новый товар' : 'Yangi tovar qo‘shish'}
                       />
                       {prd && (
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', gap: '8px' }}>
@@ -1166,16 +1078,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         isOpen={isQuickWarehouseOpen}
         onClose={() => setIsQuickWarehouseOpen(false)}
         onSuccess={handleWarehouseAdded}
-      />
-
-      <CreateProductDrawer
-        isOpen={isQuickProductOpen}
-        onClose={() => {
-          setIsQuickProductOpen(false);
-          setActiveRowIndexForNewProduct(null);
-        }}
-        onSuccess={handleProductAdded}
-        initialSkuOrBarcode={quickProductSearch}
       />
 
       {currentInvoiceData && (
