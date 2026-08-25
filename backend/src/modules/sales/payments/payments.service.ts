@@ -33,9 +33,9 @@ export class PaymentsService {
     // Resolve target CashAccount (Dollar kassa, Naqd kassa, Hisobraqam)
     let cashAccountId = dto.cashAccountId;
     if (!cashAccountId) {
-      let targetType: CashAccountType = CashAccountType.BANK_ACCOUNT;
+      let targetType: CashAccountType = CashAccountType.BANK;
       if (dto.method === 'CASH') {
-        targetType = CashAccountType.CASH_UZS;
+        targetType = CashAccountType.UZS_CASH;
       }
       const defaultAccount = await this.prisma.cashAccount.findFirst({
         where: { tenantId, accountType: targetType },

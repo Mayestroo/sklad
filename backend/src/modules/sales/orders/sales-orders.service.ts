@@ -288,6 +288,10 @@ export class SalesOrdersService {
     };
   }
 
+  async getDashboardStats(tenantId: string) {
+    return this.getStats(tenantId);
+  }
+
   // ─── FIND ONE ──────────────────────────────────────────────────
 
   async findOne(tenantId: string, id: string) {
@@ -541,7 +545,7 @@ export class SalesOrdersService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      let finalStatus = newStatus;
+      let finalStatus: SalesOrderStatus = newStatus;
 
       // When APPROVED, auto-reserve available warehouse inventory
       if (newStatus === SalesOrderStatus.APPROVED) {

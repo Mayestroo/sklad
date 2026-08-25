@@ -39,6 +39,10 @@ export class CreateSalesOrderDto {
 
   @IsOptional()
   @IsString()
+  warehouseId?: string;
+
+  @IsOptional()
+  @IsString()
   currency?: string;
 
   @IsOptional()

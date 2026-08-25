@@ -38,6 +38,7 @@ export class FilterSalesOrdersDto {
     'AWAITING_PAYMENT',
     'PAYMENT_CONFIRMED',
     'READY_TO_SHIP',
+    'PARTIALLY_SHIPPED',
     'SHIPPED',
     'COMPLETED',
     'CANCELLED',
@@ -76,4 +77,14 @@ export class FilterSalesOrdersDto {
   @Max(200)
   @Type(() => Number)
   limit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  skip?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  take?: number;
 }
