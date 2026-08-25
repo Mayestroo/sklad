@@ -136,7 +136,7 @@ export default function CounterpartiesPage() {
       return;
     }
     setOrdersLoading(true);
-    apiFetch<any>(`/api/sales/orders/by-counterparty/${detailItem.id}`, {
+    apiFetch<any>(`/sales/orders/by-counterparty/${detailItem.id}`, {
       token: token || undefined,
       tenantId: company.id,
       locale,

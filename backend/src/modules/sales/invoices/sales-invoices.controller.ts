@@ -128,6 +128,21 @@ export class SalesInvoicesController {
     return this.service.createPriceList(tenantId, body);
   }
 
+  @Post('price-lists/:priceListId/items')
+  @RequirePermissions('sales:create')
+  upsertProductPriceItem(
+    @CurrentTenant() tenantId: string,
+    @Param('priceListId') priceListId: string,
+    @Body() body: { productId: string; price: number },
+  ) {
+    return this.service.upsertProductPrice(
+      tenantId,
+      priceListId,
+      body.productId,
+      Number(body.price),
+    );
+  }
+
   @Post('price-lists/:priceListId/prices/:productId')
   @RequirePermissions('sales:create')
   upsertProductPrice(
@@ -140,7 +155,7 @@ export class SalesInvoicesController {
       tenantId,
       priceListId,
       productId,
-      price,
+      Number(price),
     );
   }
 

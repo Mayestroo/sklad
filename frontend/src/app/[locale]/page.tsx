@@ -348,7 +348,7 @@ export default function DashboardPage() {
     try {
       const [result, orders] = await Promise.all([
         apiFetch<FullDashboard>(`/dashboard?${params}`, { token, tenantId: company.id, locale }),
-        apiFetch<any>('/api/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
+        apiFetch<any>('/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
       ]);
       setData(result);
       setOrderStats(orders);

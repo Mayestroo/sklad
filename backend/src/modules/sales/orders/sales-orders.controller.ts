@@ -67,6 +67,28 @@ export class SalesOrdersController {
 
   // ─── LIST & CREATE ─────────────────────────────────────────────
 
+  @Get('by-counterparty/:counterpartyId')
+  @RequirePermissions('sales:view')
+  async findByCounterparty(
+    @CurrentTenant() tenantId: string,
+    @Param('counterpartyId') counterpartyId: string,
+  ) {
+    const result = await this.service.findAll(tenantId, { counterpartyId });
+    const orderList = result.data || [];
+    const totalOrders = result.total ?? orderList.length;
+    const totalAmount = orderList.reduce(
+      (sum: number, o: any) => sum + Number(o.totalAmount || 0),
+      0,
+    );
+    return {
+      orders: orderList,
+      summary: {
+        totalOrders,
+        totalAmount,
+      },
+    };
+  }
+
   @Get()
   @RequirePermissions('sales:view')
   findAll(

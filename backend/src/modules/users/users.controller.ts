@@ -21,6 +21,16 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Post('invite')
+  @RequirePermissions('users:create')
+  inviteUser(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') actorUserId: string,
+    @Body() dto: CreateUserDto,
+  ) {
+    return this.usersService.createUser(tenantId, dto, actorUserId);
+  }
+
   @Post()
   @RequirePermissions('users:create')
   createUser(
@@ -29,6 +39,12 @@ export class UsersController {
     @Body() dto: CreateUserDto,
   ) {
     return this.usersService.createUser(tenantId, dto, actorUserId);
+  }
+
+  @Get('staff')
+  @RequirePermissions('users:view')
+  findStaff(@CurrentTenant() tenantId: string) {
+    return this.usersService.findAllByTenant(tenantId);
   }
 
   @Get()
@@ -47,6 +63,17 @@ export class UsersController {
   @RequirePermissions('users:view')
   findById(@CurrentTenant() tenantId: string, @Param('id') userId: string) {
     return this.usersService.findById(tenantId, userId);
+  }
+
+  @Patch(':id/status')
+  @RequirePermissions('users:edit')
+  updateUserStatus(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') actorUserId: string,
+    @Param('id') userId: string,
+    @Body() dto: UpdateUserDto,
+  ) {
+    return this.usersService.updateUser(tenantId, userId, dto, actorUserId);
   }
 
   @Patch(':id')

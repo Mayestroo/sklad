@@ -11,6 +11,12 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
+  @Get('kpi-summary')
+  @RequirePermissions('analytics:view')
+  getKpiSummaryAlias(@CurrentTenant() tenantId: string) {
+    return this.analyticsService.getKpiSummary(tenantId);
+  }
+
   @Get('kpi')
   @RequirePermissions('analytics:view')
   getKpiSummary(@CurrentTenant() tenantId: string) {
@@ -21,6 +27,12 @@ export class AnalyticsController {
   @RequirePermissions('analytics:view')
   getSalesTrend(@CurrentTenant() tenantId: string) {
     return this.analyticsService.getSalesTrend(tenantId);
+  }
+
+  @Get('category-breakdown')
+  @RequirePermissions('analytics:view')
+  getCategoryBreakdownAlias(@CurrentTenant() tenantId: string) {
+    return this.analyticsService.getCategoryBreakdown(tenantId);
   }
 
   @Get('categories')
@@ -51,6 +63,12 @@ export class AnalyticsController {
       tenantId,
       limit ? Number(limit) : 5,
     );
+  }
+
+  @Get('financial-ratios')
+  @RequirePermissions('analytics:view')
+  getFinancialRatiosAlias(@CurrentTenant() tenantId: string) {
+    return this.analyticsService.getFinancialRatios(tenantId);
   }
 
   @Get('ratios')
