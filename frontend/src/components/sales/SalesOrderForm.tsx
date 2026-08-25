@@ -1016,9 +1016,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
       {/* Summary Footer Panel with Required notice */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, padding: 'var(--space-2) 0' }}>
-          <span>*</span>
-          <span>{isRu ? '* Поля, отмеченные (*), обязательны для заполнения' : '* bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, padding: 'var(--space-2) 0' }}>
+          <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
 
         <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
