@@ -78,7 +78,7 @@ export function PartialDispatchModal({
     if (!isOpen || !token || !company || !selectedWarehouseId) return;
 
     setLoadingStock(true);
-    apiFetch<any>(`/inventory/stock-levels?warehouseId=${selectedWarehouseId}`, {
+    apiFetch<any>(`/inventory/products/stock-levels?warehouseId=${selectedWarehouseId}`, {
       token: token || undefined,
       tenantId: company.id,
       locale,

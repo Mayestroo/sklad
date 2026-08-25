@@ -179,7 +179,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setWarehouseId(whList[0].id);
       }
 
-      const prdList = (prdRes?.data || prdRes || []).map((p: any) => ({
+      const rawProducts = prdRes?.data || (Array.isArray(prdRes) ? prdRes : []);
+      const prdList = rawProducts.map((p: any) => ({
         id: p.id,
         name: p.name,
         sku: p.sku,
@@ -187,9 +188,26 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         salePrice: Number(p.salePrice) || 0,
         costPrice: Number(p.costPrice) || 0,
         unitOfMeasure: p.unitOfMeasure || 'dona',
-        stockQty: Number(p.stockQuantity || p.quantity || 0),
+        stockQty: Number(p.totalStock ?? p.stockQuantity ?? p.quantity ?? 0),
       }));
       setProducts(prdList);
+
+      // Pre-populate stock map if stockLevels exist on product objects
+      const initialStockMap: Record<string, { physical: number; reserved: number; free: number }> = {};
+      rawProducts.forEach((p: any) => {
+        if (p.stockLevels && Array.isArray(p.stockLevels)) {
+          const physical = p.stockLevels.reduce((acc: number, sl: any) => acc + Number(sl.quantity || 0), 0);
+          const reserved = p.stockLevels.reduce((acc: number, sl: any) => acc + Number(sl.reservedQuantity || 0), 0);
+          initialStockMap[p.id] = {
+            physical,
+            reserved,
+            free: Math.max(0, physical - reserved),
+          };
+        }
+      });
+      if (Object.keys(initialStockMap).length > 0) {
+        setWarehouseStockMap(initialStockMap);
+      }
     } catch (err) {
       console.error('fetchDropdowns error:', err);
     }
@@ -203,7 +221,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   useEffect(() => {
     if (!token || !company || !warehouseId) return;
 
-    apiFetch<any>(`/inventory/stock-levels?warehouseId=${warehouseId}`, {
+    apiFetch<any>(`/inventory/products/stock-levels?warehouseId=${warehouseId}`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
