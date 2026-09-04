@@ -1066,8 +1066,39 @@ export class PurchasesService {
     }
 
     const returnNumber = await this.generateReturnNumber(tenantId);
-    let totalAmount = 0;
-    const targetStatus = dto.status || ReturnDocStatus.POSTED;
+    const targetStatus = (dto.status as ReturnDocStatus) || ReturnDocStatus.POSTED;
+
+    // Validate products and check that SERVICE and BUNDLE are rejected
+    for (const item of dto.items) {
+      const product = await this.prisma.product.findFirst({
+        where: { id: item.productId, tenantId },
+      });
+      if (!product) {
+        throw new NotFoundException(`Mahsulot #${item.productId} topilmadi`);
+      }
+      if (product.type === 'SERVICE' || product.type === 'BUNDLE') {
+        throw new BadRequestException(
+          `Xizmat (SERVICE) yoki to'plam (BUNDLE) turidagi mahsulotlarni ombordan qaytarish taqiqlanadi. Faqat Tovar (PRODUCT) va Xomashyo (RAW_MATERIAL) qaytarilishi mumkin.`,
+        );
+      }
+
+      // Check on-hand warehouse stock
+      const stockLevel = await this.prisma.stockLevel.findUnique({
+        where: {
+          tenantId_warehouseId_productId: {
+            tenantId,
+            warehouseId: dto.warehouseId,
+            productId: item.productId,
+          },
+        },
+      });
+      const availableStock = stockLevel ? Number(stockLevel.quantity) : 0;
+      if (item.quantity > availableStock) {
+        throw new BadRequestException(
+          `Qaytariladigan miqdor (${item.quantity}) omborda mavjud qoldiqdan (${availableStock}) oshishi mumkin emas`,
+        );
+      }
+    }
 
     // Validate receipt & items if receiptId is linked
     let receipt: any = null;
@@ -1090,75 +1121,59 @@ export class PurchasesService {
           "Faqat tasdiqlangan (POSTED) xaridlar bo'yicha qaytarish yaratish mumkin",
         );
       }
+
+      for (const item of dto.items) {
+        const receiptItem = receipt.items.find(
+          (ri: any) => ri.productId === item.productId,
+        );
+        if (!receiptItem) {
+          throw new BadRequestException(
+            `Tovar #${item.productId} ushbu xarid tarkibida mavjud emas`,
+          );
+        }
+
+        const unreturnedQty =
+          Number(receiptItem.quantity) - Number(receiptItem.returnedQuantity || 0);
+        if (item.quantity > unreturnedQty) {
+          throw new BadRequestException(
+            `Qaytariladigan miqdor (${item.quantity}) ushbu xariddan qolgan qaytarilmagan miqdordan (${unreturnedQty}) oshishi mumkin emas`,
+          );
+        }
+
+        const batch = receipt.batches.find(
+          (b: any) => b.productId === item.productId,
+        );
+        if (batch && item.quantity > Number(batch.remainingQty)) {
+          throw new BadRequestException(
+            `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
+          );
+        }
+      }
     }
 
+    let totalAmount = 0;
     const preparedItems = dto.items.map((i) => {
-      const lineTotal = i.quantity * i.unitPrice;
+      const vatRate = i.vatRate || 0;
+      const calculatedVat =
+        i.vatAmount !== undefined
+          ? Number(i.vatAmount)
+          : Number(((i.quantity * i.unitPrice * vatRate) / 100).toFixed(2));
+      const lineTotal = Number(
+        (i.quantity * i.unitPrice + calculatedVat).toFixed(2),
+      );
       totalAmount += lineTotal;
+
       return {
         productId: i.productId,
         quantity: i.quantity,
         unitPrice: i.unitPrice,
+        vatRate,
+        vatAmount: calculatedVat,
         totalPrice: lineTotal,
       };
     });
 
     return this.prisma.$transaction(async (tx) => {
-      // Validate inventory & batch constraints if posting immediately
-      if (targetStatus === ReturnDocStatus.POSTED && receipt) {
-        for (const item of dto.items) {
-          const receiptItem = receipt.items.find(
-            (ri: any) => ri.productId === item.productId,
-          );
-          if (!receiptItem) {
-            throw new BadRequestException(
-              `Tovar #${item.productId} ushbu xarid tarkibida mavjud emas`,
-            );
-          }
-
-          if (receiptItem.product?.type === 'SERVICE') {
-            throw new BadRequestException(
-              `Xizmat (SERVICE) turidagi pozitsiyalarni ombordan qaytarish taqiqlanadi`,
-            );
-          }
-
-          const unreturnedQty =
-            Number(receiptItem.quantity) - Number(receiptItem.returnedQuantity || 0);
-          if (item.quantity > unreturnedQty) {
-            throw new BadRequestException(
-              `Qaytariladigan miqdor (${item.quantity}) ushbu xariddan qolgan qaytarilmagan miqdordan (${unreturnedQty}) oshishi mumkin emas`,
-            );
-          }
-
-          // Check product batch
-          const batch = receipt.batches.find(
-            (b: any) => b.productId === item.productId,
-          );
-          if (batch && item.quantity > Number(batch.remainingQty)) {
-            throw new BadRequestException(
-              `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
-            );
-          }
-
-          // Check warehouse stock
-          const stockLevel = await tx.stockLevel.findUnique({
-            where: {
-              tenantId_warehouseId_productId: {
-                tenantId,
-                warehouseId: dto.warehouseId,
-                productId: item.productId,
-              },
-            },
-          });
-          const availableStock = stockLevel ? Number(stockLevel.quantity) : 0;
-          if (item.quantity > availableStock) {
-            throw new BadRequestException(
-              `Qaytariladigan miqdor (${item.quantity}) omborda mavjud qoldiqdan (${availableStock}) oshishi mumkin emas`,
-            );
-          }
-        }
-      }
-
       const pReturn = await tx.purchaseReturn.create({
         data: {
           tenantId,
@@ -1168,7 +1183,9 @@ export class PurchasesService {
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
           currency: dto.currency || 'UZS',
+          actNumber: dto.actNumber || null,
           reason: dto.reason || null,
+          comment: dto.comment || null,
           status: targetStatus,
           totalAmount,
           createdById: userId,
@@ -1179,110 +1196,30 @@ export class PurchasesService {
         include: {
           counterparty: true,
           warehouse: true,
-          receipt: true,
+          receipt: { include: { items: { include: { product: true } }, batches: true } },
           items: { include: { product: true } },
         },
       });
 
       // If created directly in POSTED status, execute posting inventory & financial movements
       if (targetStatus === ReturnDocStatus.POSTED) {
-        let totalLandedCostReduction = 0;
-        let basePurchaseTotalReduction = 0;
-
-        for (const item of dto.items) {
-          // 1. Decrement warehouse stock
-          const stockLevel = await tx.stockLevel.findUnique({
-            where: {
-              tenantId_warehouseId_productId: {
-                tenantId,
-                warehouseId: dto.warehouseId,
-                productId: item.productId,
-              },
-            },
-          });
-
-          if (stockLevel) {
-            const newQty = Math.max(
-              0,
-              Number(stockLevel.quantity) - item.quantity,
-            );
-            await tx.stockLevel.update({
-              where: { id: stockLevel.id },
-              data: { quantity: newQty },
-            });
-          }
-
-          // 2. Decrement ProductBatch remainingQty and calculate Landed Cost Variance (ADR 0009)
-          if (receipt) {
-            const receiptItem = receipt.items.find(
-              (ri: any) => ri.productId === item.productId,
-            );
-            const unitLandedCost =
-              receiptItem && Number(receiptItem.quantity) > 0 && Number(receiptItem.landedCost) > 0
-                ? Number(receiptItem.landedCost) / Number(receiptItem.quantity)
-                : item.unitPrice;
-
-            totalLandedCostReduction += item.quantity * unitLandedCost;
-            basePurchaseTotalReduction += item.quantity * item.unitPrice;
-
-            // Update receipt item returnedQuantity
-            if (receiptItem) {
-              await tx.purchaseReceiptItem.update({
-                where: { id: receiptItem.id },
-                data: {
-                  returnedQuantity: { increment: item.quantity },
-                },
-              });
-            }
-
-            // Update ProductBatch remainingQty
-            const batch = receipt.batches.find(
-              (b: any) => b.productId === item.productId,
-            );
-            if (batch) {
-              const newBatchQty = Math.max(
-                0,
-                Number(batch.remainingQty) - item.quantity,
-              );
-              await tx.productBatch.update({
-                where: { id: batch.id },
-                data: { remainingQty: newBatchQty },
-              });
-            }
-          } else {
-            basePurchaseTotalReduction += item.quantity * item.unitPrice;
-          }
-        }
-
-        // 3. Reduce supplier debt (Credit 6010 debit) by base purchase total
-        await tx.counterparty.update({
-          where: { id: dto.counterpartyId },
-          data: {
-            debtBalance: { decrement: basePurchaseTotalReduction },
+        await this.executeReturnPostingInternal(
+          tx,
+          tenantId,
+          userId,
+          pReturn,
+          {
+            items: preparedItems,
+            warehouseId: dto.warehouseId,
+            counterpartyId: dto.counterpartyId,
+            receiptId: dto.receiptId,
+            receipt,
+            returnNumber,
           },
-        });
-
-        // 4. Update main receipt returnStatus if linked
-        if (dto.receiptId && receipt) {
-          const updatedItems = await tx.purchaseReceiptItem.findMany({
-            where: { receiptId: dto.receiptId },
-          });
-
-          const allFullyReturned = updatedItems.every(
-            (ri) => Number(ri.returnedQuantity) >= Number(ri.quantity),
-          );
-          const returnStatus = allFullyReturned
-            ? PurchaseReturnStatus.FULLY_RETURNED
-            : PurchaseReturnStatus.PARTIALLY_RETURNED;
-
-          await tx.purchaseReceipt.update({
-            where: { id: dto.receiptId },
-            data: { returnStatus },
-          });
-        }
+        );
       }
 
-      // 5. Audit Log
+      // Audit Log
       await tx.auditLog.create({
         data: {
           tenantId,
@@ -1298,10 +1235,354 @@ export class PurchasesService {
     });
   }
 
+  /**
+   * Internal reusable posting engine for Purchase Returns (ADR 0009 & ADR 0017)
+   */
+  private async executeReturnPostingInternal(
+    tx: any,
+    tenantId: string,
+    userId: string,
+    pReturn: any,
+    fallbackData?: {
+      items?: any[];
+      warehouseId?: string;
+      counterpartyId?: string;
+      receiptId?: string | null;
+      receipt?: any;
+      returnNumber?: string;
+    },
+  ) {
+    let productLandedCostTotal = 0;
+    let rawMaterialLandedCostTotal = 0;
+    let basePurchaseTotalReduction = 0;
+    let totalVatAmount = 0;
+
+    const items =
+      Array.isArray(pReturn?.items) && pReturn.items.length > 0
+        ? pReturn.items
+        : Array.isArray(fallbackData?.items)
+        ? fallbackData.items
+        : [];
+    const warehouseId = pReturn?.warehouseId || fallbackData?.warehouseId;
+    const counterpartyId = pReturn?.counterpartyId || fallbackData?.counterpartyId;
+    const receiptId = pReturn?.receiptId !== undefined ? pReturn.receiptId : fallbackData?.receiptId;
+    const receipt = pReturn?.receipt || fallbackData?.receipt;
+    const returnNumber = pReturn?.returnNumber || fallbackData?.returnNumber || 'RET';
+
+    for (const item of items) {
+      const qty = Number(item.quantity);
+      const unitPrice = Number(item.unitPrice);
+      const vatAmount = Number(item.vatAmount || 0);
+      const itemType = item.product?.type || 'PRODUCT';
+
+      totalVatAmount += vatAmount;
+      basePurchaseTotalReduction += qty * unitPrice + vatAmount;
+
+      // 1. Decrement warehouse stock
+      const stockLevel = await tx.stockLevel.findUnique({
+        where: {
+          tenantId_warehouseId_productId: {
+            tenantId,
+            warehouseId,
+            productId: item.productId,
+          },
+        },
+      });
+
+      if (!stockLevel || Number(stockLevel.quantity) < qty) {
+        const avail = stockLevel ? Number(stockLevel.quantity) : 0;
+        throw new BadRequestException(
+          `Omborda qaytarish uchun yetarli qoldiq mavjud emas (Mavjud: ${avail}, Qaytarilayotgan: ${qty})`,
+        );
+      }
+
+      await tx.stockLevel.update({
+        where: { id: stockLevel.id },
+        data: { quantity: { decrement: qty } },
+      });
+
+      // 2. Batch deduction & Landed cost calculation
+      let unitLandedCost = unitPrice;
+
+      if (receiptId && receipt) {
+        const receiptItem = receipt.items?.find(
+          (ri: any) => ri.productId === item.productId,
+        );
+
+        if (
+          receiptItem &&
+          Number(receiptItem.quantity) > 0 &&
+          Number(receiptItem.landedCost) > 0
+        ) {
+          unitLandedCost =
+            Number(receiptItem.landedCost) / Number(receiptItem.quantity);
+        }
+
+        if (receiptItem) {
+          await tx.purchaseReceiptItem.update({
+            where: { id: receiptItem.id },
+            data: {
+              returnedQuantity: { increment: qty },
+            },
+          });
+        }
+
+        const batch = receipt.batches?.find(
+          (b: any) => b.productId === item.productId,
+        );
+        if (batch) {
+          const newBatchQty = Math.max(0, Number(batch.remainingQty) - qty);
+          await tx.productBatch.update({
+            where: { id: batch.id },
+            data: { remainingQty: newBatchQty },
+          });
+        }
+      } else {
+        // Standalone return: FIFO batch consumption from warehouse
+        const batches = await tx.productBatch.findMany({
+          where: {
+            tenantId,
+            warehouseId,
+            productId: item.productId,
+            remainingQty: { gt: 0 },
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        let needed = qty;
+        let accumulatedLandedCost = 0;
+        for (const b of batches) {
+          if (needed <= 0) break;
+          const bRemaining = Number(b.remainingQty);
+          const consume = Math.min(needed, bRemaining);
+          const bLandedUnit =
+            Number(b.initialQty) > 0
+              ? Number(b.landedCost) / Number(b.initialQty)
+              : Number(b.purchasePrice);
+          accumulatedLandedCost += consume * bLandedUnit;
+
+          await tx.productBatch.update({
+            where: { id: b.id },
+            data: { remainingQty: { decrement: consume } },
+          });
+          needed -= consume;
+        }
+
+        if (qty - needed > 0) {
+          unitLandedCost = accumulatedLandedCost / (qty - needed);
+        }
+      }
+
+      const lineLandedCost = qty * unitLandedCost;
+      if (itemType === 'RAW_MATERIAL') {
+        rawMaterialLandedCostTotal += lineLandedCost;
+      } else {
+        productLandedCostTotal += lineLandedCost;
+      }
+    }
+
+    // 3. Reduce supplier debt by base purchase total + VAT
+    await tx.counterparty.update({
+      where: { id: counterpartyId },
+      data: {
+        debtBalance: { decrement: basePurchaseTotalReduction },
+      },
+    });
+
+    // 4. Update main receipt returnStatus if linked
+    if (receiptId) {
+      const updatedItems = await tx.purchaseReceiptItem.findMany({
+        where: { receiptId },
+      });
+
+      const allFullyReturned = updatedItems.every(
+        (ri: any) => Number(ri.returnedQuantity) >= Number(ri.quantity),
+      );
+      const anyReturned = updatedItems.some(
+        (ri: any) => Number(ri.returnedQuantity) > 0,
+      );
+      const returnStatus = allFullyReturned
+        ? PurchaseReturnStatus.FULLY_RETURNED
+        : anyReturned
+        ? PurchaseReturnStatus.PARTIALLY_RETURNED
+        : PurchaseReturnStatus.NONE;
+
+      await tx.purchaseReceipt.update({
+        where: { id: receiptId },
+        data: { returnStatus },
+      });
+    }
+
+    // 5. Automated BHMS/NAS Double-Entry Journal Entries (ADR 0009)
+    const supplierAcc = await tx.account.findFirst({
+      where: { tenantId, code: '6010' },
+    });
+    const inventoryAcc = await tx.account.findFirst({
+      where: { tenantId, code: '2910' },
+    });
+    const rawMaterialAcc =
+      (await tx.account.findFirst({
+        where: { tenantId, code: '1010' },
+      })) || inventoryAcc;
+    const vatAcc = await tx.account.findFirst({
+      where: { tenantId, code: '4410' },
+    });
+    const lossAcc =
+      (await tx.account.findFirst({
+        where: { tenantId, code: '9430' },
+      })) ||
+      (await tx.account.findFirst({
+        where: { tenantId, code: '9420' },
+      }));
+
+    if (supplierAcc) {
+      const journalLines: any[] = [];
+      const totalLandedCost =
+        productLandedCostTotal + rawMaterialLandedCostTotal;
+      const baseWithoutVat = basePurchaseTotalReduction - totalVatAmount;
+      const varianceLoss = Math.max(0, totalLandedCost - baseWithoutVat);
+
+      if (productLandedCostTotal > 0 && inventoryAcc) {
+        journalLines.push({
+          debitAccountId: supplierAcc.id,
+          creditAccountId: inventoryAcc.id,
+          amount: productLandedCostTotal,
+          description: `Qaytarilgan tovarlar hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
+        });
+      }
+
+      if (rawMaterialLandedCostTotal > 0 && rawMaterialAcc) {
+        journalLines.push({
+          debitAccountId: supplierAcc.id,
+          creditAccountId: rawMaterialAcc.id,
+          amount: rawMaterialLandedCostTotal,
+          description: `Qaytarilgan xomashyolar hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
+        });
+      }
+
+      if (totalVatAmount > 0 && vatAcc) {
+        journalLines.push({
+          debitAccountId: supplierAcc.id,
+          creditAccountId: vatAcc.id,
+          amount: totalVatAmount,
+          description: `Qaytarilgan tovarlar bo‘yicha QQS kamayishi (№ ${pReturn.returnNumber})`,
+        });
+      }
+
+      if (varianceLoss > 0 && lossAcc && inventoryAcc) {
+        journalLines.push({
+          debitAccountId: lossAcc.id,
+          creditAccountId: inventoryAcc.id,
+          amount: varianceLoss,
+          description: `Qaytarish bo‘yicha taqsimlangan xarajatlar zarari (Landed Cost Return Variance, № ${pReturn.returnNumber})`,
+        });
+      }
+
+      if (journalLines.length > 0) {
+        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
+        const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
+
+        await tx.journalEntry.create({
+          data: {
+            tenantId,
+            entryNumber,
+            entryDate: pReturn.returnDate,
+            description: `Yetkazib beruvchiga qaytarish № ${pReturn.returnNumber} (${pReturn.counterparty?.name || ''})`,
+            sourceDocType: 'PurchaseReturn',
+            sourceDocId: pReturn.id,
+            lines: { create: journalLines },
+          },
+        });
+      }
+    }
+  }
+
+  async approveReturn(tenantId: string, userId: string, returnId: string) {
+    const pReturn = await this.prisma.purchaseReturn.findFirst({
+      where: { id: returnId, tenantId },
+      include: {
+        counterparty: true,
+        warehouse: true,
+        receipt: {
+          include: {
+            items: { include: { product: true } },
+            batches: true,
+          },
+        },
+        items: { include: { product: true } },
+      },
+    });
+
+    if (!pReturn) {
+      throw new NotFoundException('Qaytarish hujjati topilmadi');
+    }
+
+    if (pReturn.status === ReturnDocStatus.POSTED) {
+      throw new BadRequestException('Ushbu hujjat allaqachon tasdiqlangan');
+    }
+
+    if (pReturn.status === ReturnDocStatus.CANCELLED) {
+      throw new BadRequestException('Bekor qilingan hujjatni tasdiqlab bo\'lmaydi');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.executeReturnPostingInternal(tx, tenantId, userId, pReturn);
+
+      const updated = await tx.purchaseReturn.update({
+        where: { id: returnId },
+        data: { status: ReturnDocStatus.POSTED },
+        include: {
+          counterparty: true,
+          warehouse: true,
+          receipt: true,
+          items: { include: { product: true } },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'PurchaseReturn',
+          entityId: returnId,
+          action: 'UPDATE',
+          oldValue: { status: pReturn.status },
+          newValue: { status: ReturnDocStatus.POSTED },
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  async getReturnById(tenantId: string, returnId: string) {
+    const pReturn = await this.prisma.purchaseReturn.findFirst({
+      where: { id: returnId, tenantId },
+      include: {
+        counterparty: true,
+        warehouse: true,
+        receipt: true,
+        createdBy: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+        items: { include: { product: true } },
+      },
+    });
+
+    if (!pReturn) {
+      throw new NotFoundException('Qaytarish hujjati topilmadi');
+    }
+
+    return pReturn;
+  }
+
   async cancelReturn(tenantId: string, userId: string, returnId: string) {
     const pReturn = await this.prisma.purchaseReturn.findFirst({
       where: { id: returnId, tenantId },
-      include: { items: true, receipt: { include: { items: true, batches: true } } },
+      include: {
+        items: { include: { product: true } },
+        receipt: { include: { items: true, batches: true } },
+      },
     });
 
     if (!pReturn) {
@@ -1312,8 +1593,23 @@ export class PurchasesService {
       throw new BadRequestException('Ushbu hujjat allaqachon bekor qilingan');
     }
 
+    // Safety guardrail: check for linked cash refund transactions in Finance
+    const linkedPayment = await this.prisma.financeTransaction.findFirst({
+      where: {
+        tenantId,
+        counterpartyId: pReturn.counterpartyId,
+        direction: 'INCOME',
+        comment: { contains: pReturn.returnNumber },
+      },
+    });
+    if (linkedPayment) {
+      throw new BadRequestException(
+        `Ushbu qaytarish hujjati bo'yicha pul qaytishi (moliya kirimi) mavjud. Avval ushbu to'lovni o'chiring.`,
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
-      // If the document was POSTED, reverse stock, batch, debt, and receipt items
+      // If the document was POSTED, reverse stock, batch, debt, journal entries and receipt items
       if (pReturn.status === ReturnDocStatus.POSTED) {
         let basePurchaseTotal = 0;
 
@@ -1342,21 +1638,24 @@ export class PurchasesService {
           // 2. Re-increment ProductBatch remainingQty and decrement PurchaseReceiptItem returnedQuantity
           if (pReturn.receipt) {
             const receiptItem = pReturn.receipt.items.find(
-              (ri) => ri.productId === item.productId,
+              (ri: any) => ri.productId === item.productId,
             );
             if (receiptItem) {
               await tx.purchaseReceiptItem.update({
                 where: { id: receiptItem.id },
                 data: {
                   returnedQuantity: {
-                    decrement: Math.min(qty, Number(receiptItem.returnedQuantity)),
+                    decrement: Math.min(
+                      qty,
+                      Number(receiptItem.returnedQuantity),
+                    ),
                   },
                 },
               });
             }
 
             const batch = pReturn.receipt.batches.find(
-              (b) => b.productId === item.productId,
+              (b: any) => b.productId === item.productId,
             );
             if (batch) {
               await tx.productBatch.update({
@@ -1395,6 +1694,15 @@ export class PurchasesService {
             data: { returnStatus },
           });
         }
+
+        // 5. Delete journal entries created for this return
+        await tx.journalEntry.deleteMany({
+          where: {
+            tenantId,
+            sourceDocType: 'PurchaseReturn',
+            sourceDocId: returnId,
+          },
+        });
       }
 
       // Update status to CANCELLED
@@ -1420,9 +1728,55 @@ export class PurchasesService {
     });
   }
 
-  async findAllReturns(tenantId: string) {
+  async findAllReturns(
+    tenantId: string,
+    filters?: {
+      search?: string;
+      supplierId?: string;
+      warehouseId?: string;
+      status?: ReturnDocStatus;
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
+    const where: any = { tenantId };
+
+    if (filters?.supplierId) {
+      where.counterpartyId = filters.supplierId;
+    }
+
+    if (filters?.warehouseId) {
+      where.warehouseId = filters.warehouseId;
+    }
+
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+
+    if (filters?.startDate || filters?.endDate) {
+      where.returnDate = {};
+      if (filters.startDate) {
+        where.returnDate.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        const end = new Date(filters.endDate);
+        end.setHours(23, 59, 59, 999);
+        where.returnDate.lte = end;
+      }
+    }
+
+    if (filters?.search) {
+      const search = filters.search.trim();
+      where.OR = [
+        { returnNumber: { contains: search, mode: 'insensitive' } },
+        { actNumber: { contains: search, mode: 'insensitive' } },
+        { comment: { contains: search, mode: 'insensitive' } },
+        { counterparty: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
     return this.prisma.purchaseReturn.findMany({
-      where: { tenantId },
+      where,
       include: {
         counterparty: true,
         warehouse: true,
@@ -1432,7 +1786,7 @@ export class PurchasesService {
         },
         items: { include: { product: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { returnDate: 'desc' },
     });
   }
 

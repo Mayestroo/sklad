@@ -49,6 +49,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       stockLevel: {
         findUnique: jest.fn(),
@@ -66,6 +67,13 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         count: jest.fn(),
         create: jest.fn(),
         deleteMany: jest.fn(),
+      },
+      product: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      financeTransaction: {
+        findFirst: jest.fn(),
       },
       auditLog: {
         create: jest.fn(),
@@ -502,6 +510,11 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
           },
         ],
       });
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'prod-1',
+        type: 'PRODUCT',
+        name: 'Test Product',
+      });
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.findMany.mockResolvedValue([
         { id: 'item-1', quantity: 10, returnedQuantity: 2 },
@@ -520,7 +533,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       // Decremented stock by 2 (10 -> 8)
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
         where: { id: 'stock-1' },
-        data: { quantity: 8 },
+        data: { quantity: { decrement: 2 } },
       });
 
       // Reduced supplier debt by 200,000
@@ -537,6 +550,11 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
     });
 
     it('should disallow returning more than remaining batch quantity', async () => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'prod-1',
+        type: 'PRODUCT',
+        name: 'Test Product',
+      });
       prisma.purchaseReceipt.findUnique.mockResolvedValue({
         id: 'rec-1',
         status: PurchaseDocStatus.POSTED,
@@ -556,6 +574,11 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
     it('should disallow returning SERVICE items in purchase return', async () => {
       prisma.purchaseReturn.count.mockResolvedValue(0);
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'srv-1',
+        type: 'SERVICE',
+        name: 'Test Service',
+      });
       prisma.purchaseReceipt.findUnique.mockResolvedValue({
         id: 'rec-srv',
         status: PurchaseDocStatus.POSTED,
@@ -599,12 +622,14 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
     });
 
     it('should cancel posted return: restore stock, product batch remainingQty, and supplier debt', async () => {
+      prisma.financeTransaction.findFirst.mockResolvedValue(null);
       prisma.purchaseReturn.findFirst.mockResolvedValue({
         id: 'ret-1',
         status: ReturnDocStatus.POSTED,
         counterpartyId: 'supp-1',
         warehouseId: 'wh-1',
         receiptId: 'rec-1',
+        totalAmount: 200000,
         items: [{ productId: 'prod-1', quantity: 2, totalPrice: 200000 }],
         receipt: {
           items: [{ id: 'item-1', productId: 'prod-1', quantity: 10, returnedQuantity: 2 }],
@@ -628,6 +653,94 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: 'supp-1' },
         data: { debtBalance: { increment: 200000 } },
+      });
+    });
+
+    it('should create standalone return and consume FIFO batches', async () => {
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 15 });
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'prod-raw',
+        type: 'RAW_MATERIAL',
+        name: 'Iron Sheet',
+      });
+      prisma.productBatch.findMany.mockResolvedValue([
+        { id: 'batch-1', initialQty: 10, remainingQty: 5, purchasePrice: 50000, landedCost: 55000 },
+      ]);
+      prisma.purchaseReturn.create.mockResolvedValue({
+        id: 'ret-standalone',
+        returnNumber: 'RET-2026-0002',
+        status: ReturnDocStatus.POSTED,
+        totalAmount: 150000,
+        items: [{ productId: 'prod-raw', quantity: 3, unitPrice: 50000, totalPrice: 150000 }],
+      });
+      prisma.account.findFirst.mockResolvedValue({ id: 'acc-1' });
+      prisma.journalEntry.count.mockResolvedValue(0);
+      prisma.journalEntry.create.mockResolvedValue({});
+
+      const res = await service.createReturn('tenant-123', 'user-1', {
+        counterpartyId: 'supp-1',
+        warehouseId: 'wh-1',
+        status: ReturnDocStatus.POSTED,
+        items: [{ productId: 'prod-raw', quantity: 3, unitPrice: 50000 }],
+      });
+
+      expect(res.status).toBe(ReturnDocStatus.POSTED);
+      expect(prisma.stockLevel.update).toHaveBeenCalledWith({
+        where: { id: 'stock-1' },
+        data: { quantity: { decrement: 3 } },
+      });
+      expect(prisma.productBatch.update).toHaveBeenCalledWith({
+        where: { id: 'batch-1' },
+        data: { remainingQty: { decrement: 3 } },
+      });
+      expect(prisma.journalEntry.create).toHaveBeenCalled();
+    });
+
+    it('should create a DRAFT return and approve it later', async () => {
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 10 });
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'prod-1',
+        type: 'PRODUCT',
+        name: 'Item 1',
+      });
+      prisma.purchaseReturn.create.mockResolvedValue({
+        id: 'ret-draft',
+        status: ReturnDocStatus.DRAFT,
+        totalAmount: 100000,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100000 }],
+      });
+
+      // 1. Create Draft
+      const draft = await service.createReturn('tenant-123', 'user-1', {
+        counterpartyId: 'supp-1',
+        warehouseId: 'wh-1',
+        status: ReturnDocStatus.DRAFT,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100000 }],
+      });
+      expect(draft.status).toBe(ReturnDocStatus.DRAFT);
+
+      // Stock should NOT be decremented yet during draft creation
+      expect(prisma.stockLevel.update).not.toHaveBeenCalled();
+
+      // 2. Approve Draft
+      prisma.purchaseReturn.findFirst.mockResolvedValue({
+        id: 'ret-draft',
+        status: ReturnDocStatus.DRAFT,
+        warehouseId: 'wh-1',
+        counterpartyId: 'supp-1',
+        totalAmount: 100000,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100000, totalPrice: 100000 }],
+      });
+      prisma.purchaseReturn.update.mockResolvedValue({
+        id: 'ret-draft',
+        status: ReturnDocStatus.POSTED,
+      });
+
+      const approved = await service.approveReturn('tenant-123', 'user-1', 'ret-draft');
+      expect(approved.status).toBe(ReturnDocStatus.POSTED);
+      expect(prisma.stockLevel.update).toHaveBeenCalledWith({
+        where: { id: 'stock-1' },
+        data: { quantity: { decrement: 1 } },
       });
     });
   });

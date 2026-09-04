@@ -1407,7 +1407,9 @@ model PurchaseReturn {
   counterpartyId String          @map("counterparty_id")
   warehouseId    String          @map("warehouse_id")
   currency       String          @default("UZS")
+  actNumber      String?         @map("act_number")
   reason         String?
+  comment        String?
   status         ReturnDocStatus @default(DRAFT)
   totalAmount    Decimal         @default(0) @db.Decimal(15, 2) @map("total_amount")
   createdById    String?         @map("created_by_id")
@@ -1432,6 +1434,8 @@ model PurchaseReturnItem {
   productId  String         @map("product_id")
   quantity   Decimal        @db.Decimal(15, 3)
   unitPrice  Decimal        @db.Decimal(15, 2) @map("unit_price")
+  vatRate    Decimal        @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount  Decimal        @default(0) @db.Decimal(15, 2) @map("vat_amount")
   totalPrice Decimal        @db.Decimal(15, 2) @map("total_price")
 
   return     PurchaseReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)

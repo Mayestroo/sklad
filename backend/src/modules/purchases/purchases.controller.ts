@@ -156,8 +156,40 @@ export class PurchasesController {
 
   @Get('returns')
   @RequirePermissions('inventory:view')
-  async findAllReturns(@CurrentTenant() tenantId: string) {
-    return this.purchasesService.findAllReturns(tenantId);
+  async findAllReturns(
+    @CurrentTenant() tenantId: string,
+    @Query() query: any,
+  ) {
+    return this.purchasesService.findAllReturns(tenantId, query);
+  }
+
+  @Get('returns/:id')
+  @RequirePermissions('inventory:view')
+  async findOneReturn(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.purchasesService.getReturnById(tenantId, id);
+  }
+
+  @Post('returns/:id/approve')
+  @RequirePermissions('inventory:create')
+  async approveReturn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+  ) {
+    return this.purchasesService.approveReturn(tenantId, user?.id, id);
+  }
+
+  @Post('returns/:id/post')
+  @RequirePermissions('inventory:create')
+  async postReturn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+  ) {
+    return this.purchasesService.approveReturn(tenantId, user?.id, id);
   }
 
   @Post('returns/:id/cancel')

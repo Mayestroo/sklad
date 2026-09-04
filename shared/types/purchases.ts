@@ -105,11 +105,14 @@ export interface PurchaseReturnItem {
   productId: string;
   quantity: number;
   unitPrice: number;
+  vatRate?: number;
+  vatAmount?: number;
   totalPrice: number;
   product?: {
     id: string;
     name: any;
     sku: string;
+    type?: string;
   };
 }
 
@@ -122,7 +125,9 @@ export interface PurchaseReturn {
   counterpartyId: string;
   warehouseId: string;
   currency: string;
+  actNumber?: string;
   reason?: string;
+  comment?: string;
   status: ReturnDocStatus;
   totalAmount: number;
   createdAt: string;

@@ -29,8 +29,10 @@ export function CreateReturnModal({
   const isRu = locale === 'ru';
 
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
+  const [actNumber, setActNumber] = useState('');
   const [reason, setReason] = useState('');
-  const [returnItems, setReturnItems] = useState<{ productId: string; name: string; maxQty: number; returnQty: number; unitPrice: number; landedCost: number }[]>([]);
+  const [comment, setComment] = useState('');
+  const [returnItems, setReturnItems] = useState<{ productId: string; name: string; maxQty: number; returnQty: number; unitPrice: number; landedCost: number; vatRate: number }[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -58,6 +60,7 @@ export function CreateReturnModal({
             returnQty: 0,
             unitPrice: Number(i.unitPrice),
             landedCost: landedUnit,
+            vatRate: Number(i.vatRate || 0),
           };
         })
       );
@@ -76,19 +79,29 @@ export function CreateReturnModal({
   };
 
   const calculateReturnTotal = () => {
-    return returnItems.reduce((sum, item) => sum + item.returnQty * item.unitPrice, 0);
+    return returnItems.reduce((sum, item) => {
+      const lineTotal = item.returnQty * item.unitPrice;
+      const vat = lineTotal * ((item.vatRate || 0) / 100);
+      return sum + lineTotal + vat;
+    }, 0);
   };
 
-  const handleSubmit = async (targetStatus: 'POSTED' | 'UNDER_REVIEW') => {
+  const handleSubmit = async (targetStatus: 'DRAFT' | 'POSTED' | 'UNDER_REVIEW') => {
     setError('');
 
     const itemsToReturn = returnItems
       .filter((i) => i.returnQty > 0)
-      .map((i) => ({
-        productId: i.productId,
-        quantity: i.returnQty,
-        unitPrice: i.unitPrice,
-      }));
+      .map((i) => {
+        const lineTotal = i.returnQty * i.unitPrice;
+        const vat = lineTotal * ((i.vatRate || 0) / 100);
+        return {
+          productId: i.productId,
+          quantity: i.returnQty,
+          unitPrice: i.unitPrice,
+          vatRate: i.vatRate || 0,
+          vatAmount: vat,
+        };
+      });
 
     if (itemsToReturn.length === 0) {
       setError(isRu ? 'Укажите количество для возврата хотя бы для одного товара' : 'Kamida bitta tovar qaytarish miqdorini kiriting');
@@ -105,11 +118,13 @@ export function CreateReturnModal({
         method: 'POST',
         body: JSON.stringify({
           receiptId: receipt.id,
+          actNumber: actNumber || undefined,
           counterpartyId: receipt.counterpartyId,
           warehouseId: receipt.warehouseId,
           returnDate: returnDate || undefined,
           currency: receipt.currency,
           reason: reason || undefined,
+          comment: comment || undefined,
           status: targetStatus,
           items: itemsToReturn,
         }),
@@ -152,12 +167,22 @@ export function CreateReturnModal({
           <div><strong>{isRu ? 'Склад:' : 'Ombor:'}</strong> {getProductName(receipt.warehouse?.name)}</div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
           <DatePicker
             label={isRu ? 'Дата возврата *' : 'Qaytarish Sanasi *'}
             value={returnDate}
             onChange={(val) => setReturnDate(val)}
           />
+          <div>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
+              {isRu ? 'Номер акта возврата' : 'Qaytarish dalolatnoma №'}
+            </label>
+            <Input
+              value={actNumber}
+              onChange={(e) => setActNumber(e.target.value)}
+              placeholder={isRu ? 'Напр: АКТ-001' : 'Masalan: AKT-001'}
+            />
+          </div>
           <div>
             <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
               {isRu ? 'Причина возврата' : 'Qaytarish Sababi'}
@@ -185,6 +210,17 @@ export function CreateReturnModal({
         </div>
 
         <div>
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
+            {isRu ? 'Примечание / Комментарий' : 'Izoh / Tavsif'}
+          </label>
+          <Input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={isRu ? 'Дополнительные пояснения к возврату...' : 'Qaytarish bo\'yicha qo\'shimcha izoh...'}
+          />
+        </div>
+
+        <div>
           <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: 'var(--space-2)', display: 'block' }}>
             {isRu ? 'Возвращаемое количество' : 'Qaytariladigan Miqdorlar'}
           </label>
@@ -193,48 +229,71 @@ export function CreateReturnModal({
               <thead>
                 <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
                   <th style={{ padding: '8px', textAlign: 'left' }}>{isRu ? 'ТОВАР' : 'TOVAR'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>{isRu ? 'ДОСТУПНО' : 'QAYTARILISHI MUMKIN'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '110px' }}>{isRu ? 'ВОЗВРАТ' : 'QAYTARISH MIQDORI'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '120px' }}>{isRu ? 'ЦЕНА ЗАКУПКИ' : 'XARID NARXI'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '130px' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '90px' }}>{isRu ? 'ДОСТУПНО' : 'MUMKIN'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>{isRu ? 'ВОЗВРАТ' : 'MIQDOR'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '110px' }}>{isRu ? 'ЦЕНА' : 'NARX'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '75px' }}>{isRu ? 'НДС %' : 'QQS %'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right', width: '120px' }}>{isRu ? 'ИТОГО' : 'JAMI'}</th>
                 </tr>
               </thead>
               <tbody>
-                {returnItems.map((item, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '8px', fontWeight: 'var(--font-medium)' }}>
-                      <div>{item.name}</div>
-                      {item.landedCost > item.unitPrice && (
-                        <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                          {isRu ? `Себестоимость: ${formatCurrency(item.landedCost, locale, receipt.currency)}` : `Tannarxi: ${formatCurrency(item.landedCost, locale, receipt.currency)}`}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)' }}>{item.maxQty}</td>
-                    <td style={{ padding: '6px' }}>
-                      <Input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        max={item.maxQty}
-                        value={item.returnQty}
-                        onChange={(e) => handleQtyChange(idx, parseFloat(e.target.value) || 0)}
-                        style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)' }}
-                      />
-                    </td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, receipt.currency)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
-                      {formatCurrency(item.returnQty * item.unitPrice, locale, receipt.currency)}
-                    </td>
-                  </tr>
-                ))}
+                {returnItems.map((item, idx) => {
+                  const lineTotal = item.returnQty * item.unitPrice;
+                  const vat = lineTotal * ((item.vatRate || 0) / 100);
+                  const totalWithVat = lineTotal + vat;
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                      <td style={{ padding: '8px', fontWeight: 'var(--font-medium)' }}>
+                        <div>{item.name}</div>
+                        {item.landedCost > item.unitPrice && (
+                          <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                            {isRu ? `Себестоимость: ${formatCurrency(item.landedCost, locale, receipt.currency)}` : `Tannarxi: ${formatCurrency(item.landedCost, locale, receipt.currency)}`}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)' }}>{item.maxQty}</td>
+                      <td style={{ padding: '6px' }}>
+                        <Input
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          max={item.maxQty}
+                          value={item.returnQty}
+                          onChange={(e) => handleQtyChange(idx, parseFloat(e.target.value) || 0)}
+                          style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)' }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, receipt.currency)}</td>
+                      <td style={{ padding: '6px', width: '75px' }}>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={item.vatRate}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+                            setReturnItems((prev) => {
+                              const updated = [...prev];
+                              updated[idx].vatRate = val;
+                              return updated;
+                            });
+                          }}
+                          style={{ textAlign: 'right' }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
+                        {formatCurrency(totalWithVat, locale, receipt.currency)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', backgroundColor: 'var(--color-warning-50)', borderRadius: 'var(--radius-md)' }}>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning-900)' }}>{isRu ? 'Общая сумма возврата (уменьшит долг):' : 'Qaytariladigan Jami Summa (Qarzimiz kamayadi):'}</span>
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning-900)' }}>{isRu ? 'Общая сумма возврата (с НДС):' : 'Qaytariladigan Jami Summa (QQS bilan):'}</span>
           <strong style={{ fontSize: 'var(--text-lg)', color: 'var(--color-warning-900)' }}>
             {formatCurrency(returnTotal, locale, receipt.currency)}
           </strong>
@@ -244,11 +303,14 @@ export function CreateReturnModal({
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
+          <Button variant="secondary" onClick={() => handleSubmit('DRAFT')} disabled={loading || returnTotal <= 0}>
+            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Черновик' : 'Qoralama')}
+          </Button>
           <Button variant="secondary" onClick={() => handleSubmit('UNDER_REVIEW')} disabled={loading || returnTotal <= 0}>
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Отправить на проверку' : 'Tekshiruvga Yuborish')}
+            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'На проверку' : 'Tekshiruvga')}
           </Button>
           <Button variant="danger" onClick={() => handleSubmit('POSTED')} disabled={loading || returnTotal <= 0}>
-            {loading ? (isRu ? 'Оформление...' : 'Rasmiylashtirilmoqda...') : (isRu ? 'Подтвердить и списать' : 'Tasdiqlash va Balansni Kamaytirish')}
+            {loading ? (isRu ? 'Оформление...' : 'Rasmiylashtirilmoqda...') : (isRu ? 'Провести возврат' : 'Tasdiqlash va O\'tkazish')}
           </Button>
         </div>
       </div>
