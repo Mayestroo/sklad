@@ -1,11 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
-import { Input } from '@/components/ui/Input';
-import { formatCurrency } from '@/lib/utils';
 import { Plus, Trash2 } from 'lucide-react';
 import { ProductDropdownItem } from '@/hooks/useDocumentDropdowns';
 
@@ -29,6 +27,101 @@ export interface OrderItemsTableProps {
   onItemChange: (index: number, field: keyof OrderItemRow, value: any) => void;
   onAddItem: () => void;
   onRemoveItem: (index: number) => void;
+}
+
+/** Format a number as 1,234,567.000 */
+function formatNum(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  }).format(value || 0);
+}
+
+const numInputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '6px 10px',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-md)',
+  background: 'var(--color-bg-input)',
+  color: 'var(--color-text-primary)',
+  fontSize: 'var(--text-sm)',
+  textAlign: 'right',
+  fontVariantNumeric: 'tabular-nums',
+  boxSizing: 'border-box' as const,
+  outline: 'none',
+};
+
+interface FormattedNumInputProps {
+  value: number;
+  onChange: (val: number) => void;
+  disabled?: boolean;
+  min?: number;
+  max?: number;
+  extraStyle?: React.CSSProperties;
+  ariaLabel?: string;
+  title?: string;
+}
+
+/**
+ * Shows formatted number (e.g. 12,000.000) when blurred.
+ * Shows raw editable value when focused.
+ */
+function FormattedNumInput({
+  value,
+  onChange,
+  disabled,
+  min,
+  max,
+  extraStyle,
+  ariaLabel,
+  title,
+}: FormattedNumInputProps) {
+  const [focused, setFocused] = useState(false);
+  const [rawStr, setRawStr] = useState('');
+
+  const handleFocus = useCallback(() => {
+    setFocused(true);
+    setRawStr(value === 0 ? '' : String(value));
+  }, [value]);
+
+  const handleBlur = useCallback(() => {
+    setFocused(false);
+    const parsed = parseFloat(rawStr.replace(/,/g, ''));
+    const next = isNaN(parsed) ? 0 : parsed;
+    if (max !== undefined && next > max) {
+      onChange(max);
+    } else if (min !== undefined && next < min) {
+      onChange(min);
+    } else {
+      onChange(next);
+    }
+  }, [rawStr, onChange, min, max]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setRawStr(e.target.value);
+  }, []);
+
+  const computedStyle: React.CSSProperties = {
+    ...numInputStyle,
+    ...(disabled ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed', opacity: 0.7 } : {}),
+    ...extraStyle,
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={focused ? rawStr : formatNum(value)}
+      onFocus={disabled ? undefined : handleFocus}
+      onBlur={disabled ? undefined : handleBlur}
+      onChange={focused && !disabled ? handleChange : undefined}
+      readOnly={!focused || disabled}
+      disabled={disabled}
+      style={computedStyle}
+      aria-label={ariaLabel}
+      title={title}
+    />
+  );
 }
 
 export function OrderItemsTable({
@@ -70,13 +163,13 @@ export function OrderItemsTable({
                   {isRu ? 'Готово (Пр-во)' : 'Tayyorlandi'}
                 </th>
               )}
-              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
+              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
                 {isRu ? 'Цена за ед.' : 'Birlik narxi'}
               </th>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
                 {isRu ? 'Скидка %' : 'Skidka %'}
               </th>
-              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
+              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
                 {isRu ? 'Итого' : 'Jami Summa'}
               </th>
               {!isLocked && (
@@ -96,7 +189,7 @@ export function OrderItemsTable({
                 <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                   <td style={{ padding: '10px 12px', color: 'var(--color-text-tertiary)' }}>{idx + 1}</td>
 
-                  {/* Product select */}
+                  {/* Product */}
                   <td style={{ padding: '10px 12px' }}>
                     <Select
                       options={productOptions}
@@ -109,19 +202,16 @@ export function OrderItemsTable({
 
                   {/* Quantity */}
                   <td style={{ padding: '10px 12px' }}>
-                    <Input
-                      type="number"
-                      min="0.001"
-                      step="any"
+                    <FormattedNumInput
                       value={item.quantity}
-                      onChange={(e) => onItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                      onChange={(val) => onItemChange(idx, 'quantity', val)}
                       disabled={isLocked}
-                      style={{ textAlign: 'right' }}
-                      aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
+                      min={0}
+                      ariaLabel={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
                     />
                   </td>
 
-                  {/* Ready Qty */}
+                  {/* Ready Qty (read-only display) */}
                   {orderStatus !== 'NEW' && (
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? '#10b981' : '#f59e0b' }}>
@@ -132,40 +222,39 @@ export function OrderItemsTable({
 
                   {/* Unit Price */}
                   <td style={{ padding: '10px 12px' }}>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="any"
+                    <FormattedNumInput
                       value={item.unitPrice}
-                      onChange={(e) => onItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                      onChange={(val) => onItemChange(idx, 'unitPrice', val)}
                       disabled={isLocked || !isPriceOverrideAllowed}
-                      title={!isPriceOverrideAllowed ? (isRu ? 'Ручное изменение цены запрещено настройками' : 'Narxni qo‘lda o‘zgartirish taqiqlangan') : undefined}
-                      style={{ textAlign: 'right', ...(!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : {}) }}
-                      aria-label={`${isRu ? 'Цена за единицу для строки' : 'Birlik narxi'} ${idx + 1}`}
+                      min={0}
+                      extraStyle={!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : undefined}
+                      ariaLabel={`${isRu ? 'Цена за единицу для строки' : 'Birlik narxi'} ${idx + 1}`}
+                      title={
+                        !isPriceOverrideAllowed
+                          ? (isRu ? 'Ручное изменение цены запрещено настройками' : "Narxni qo'lda o'zgartirish taqiqlangan")
+                          : undefined
+                      }
                     />
                   </td>
 
-                  {/* Discount */}
+                  {/* Discount % */}
                   <td style={{ padding: '10px 12px' }}>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="any"
+                    <FormattedNumInput
                       value={item.discount}
-                      onChange={(e) => onItemChange(idx, 'discount', parseFloat(e.target.value) || 0)}
+                      onChange={(val) => onItemChange(idx, 'discount', val)}
                       disabled={isLocked}
-                      style={{ textAlign: 'right' }}
-                      aria-label={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
+                      min={0}
+                      max={100}
+                      ariaLabel={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
                     />
                   </td>
 
                   {/* Line Total */}
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
-                    {formatCurrency(lineTotal, locale, currency)}
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatNum(lineTotal)} {(currency || 'UZS').toUpperCase()}
                   </td>
 
-                  {/* Actions */}
+                  {/* Delete */}
                   {!isLocked && (
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <Button
@@ -173,8 +262,8 @@ export function OrderItemsTable({
                         size="sm"
                         onClick={() => onRemoveItem(idx)}
                         style={{ color: 'var(--color-text-tertiary)', padding: '4px' }}
-                        title={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
-                        aria-label={`${isRu ? 'Удалить строку' : 'Qatorni o‘chirish'} ${idx + 1}`}
+                        title={isRu ? 'Удалить строку' : "Qatorni o'chirish"}
+                        aria-label={`${isRu ? 'Удалить строку' : "Qatorni o'chirish"} ${idx + 1}`}
                       >
                         <Trash2 size={16} />
                       </Button>
@@ -195,9 +284,9 @@ export function OrderItemsTable({
             size="sm"
             onClick={onAddItem}
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            aria-label={isRu ? 'Добавить новую позицию' : 'Yangi qator qo‘shish'}
+            aria-label={isRu ? 'Добавить новую позицию' : "Yangi qator qo'shish"}
           >
-            <Plus size={16} /> {isRu ? 'Добавить позицию' : 'Qator qo‘shish'}
+            <Plus size={16} /> {isRu ? 'Добавить позицию' : "Qator qo'shish"}
           </Button>
         </div>
       )}
