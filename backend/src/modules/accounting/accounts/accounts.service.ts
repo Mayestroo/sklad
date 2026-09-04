@@ -96,6 +96,24 @@ export const DEFAULT_NAS_ACCOUNTS = [
     type: 'EXPENSE' as const,
     isSystem: true,
   },
+  {
+    code: '9030',
+    name: {
+      uz: "Xizmatlar ko'rsatishdan daromadlar",
+      ru: 'Доходы от оказания услуг',
+    },
+    type: 'REVENUE' as const,
+    isSystem: true,
+  },
+  {
+    code: '9420',
+    name: {
+      uz: "Ma'muriy xarajatlar",
+      ru: 'Административные расходы',
+    },
+    type: 'EXPENSE' as const,
+    isSystem: true,
+  },
 ];
 
 @Injectable()

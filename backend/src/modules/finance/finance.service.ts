@@ -9,6 +9,7 @@ import {
   TransactionDirection,
   SalesDocStatus,
   SalesPaymentStatus,
+  ServicePaymentStatus,
 } from '@prisma/client';
 import { CreateIncomeDto } from './dto/create-income.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -247,6 +248,25 @@ export class FinanceService {
               data: { paidAmount: newPaid, paymentStatus },
             });
           }
+        } else if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
+          const act = await tx.serviceAct.findFirst({
+            where: { id: dto.sourceDocId, tenantId },
+          });
+          if (act) {
+            const newPaid = Number(act.paidAmount) + Number(dto.amount);
+            const total = Number(act.totalAmount);
+            const paymentStatus =
+              newPaid >= total
+                ? ServicePaymentStatus.PAID
+                : newPaid > 0
+                ? ServicePaymentStatus.PARTIALLY_PAID
+                : ServicePaymentStatus.UNPAID;
+
+            await tx.serviceAct.update({
+              where: { id: act.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
         } else if (!dto.sourceDocId) {
           // 2. FIFO Auto-Allocation across open unpaid/partially-paid sales invoices
           const openInvoices = await tx.salesInvoice.findMany({
@@ -331,8 +351,30 @@ export class FinanceService {
       if (dto.counterpartyId) {
         await tx.counterparty.update({
           where: { id: dto.counterpartyId },
-          data: { debtBalance: { increment: dto.amount } },
+          data: { debtBalance: { decrement: dto.amount } },
         });
+
+        // Direct ServiceAct Settlement (for RECEIVED services)
+        if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
+          const act = await tx.serviceAct.findFirst({
+            where: { id: dto.sourceDocId, tenantId },
+          });
+          if (act) {
+            const newPaid = Number(act.paidAmount) + Number(dto.amount);
+            const total = Number(act.totalAmount);
+            const paymentStatus =
+              newPaid >= total
+                ? ServicePaymentStatus.PAID
+                : newPaid > 0
+                ? ServicePaymentStatus.PARTIALLY_PAID
+                : ServicePaymentStatus.UNPAID;
+
+            await tx.serviceAct.update({
+              where: { id: act.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
+        }
       }
 
       return transaction;
@@ -509,6 +551,27 @@ export class FinanceService {
                 data: { paidAmount: newPaid, paymentStatus },
               });
             }
+          } else if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
+            const act = await tx.serviceAct.findFirst({
+              where: { id: existing.sourceDocId, tenantId },
+            });
+            if (act) {
+              const newPaid = Math.max(
+                0,
+                Number(act.paidAmount) - Number(existing.amount),
+              );
+              const total = Number(act.totalAmount);
+              const paymentStatus =
+                newPaid <= 0
+                  ? ServicePaymentStatus.UNPAID
+                  : newPaid >= total
+                  ? ServicePaymentStatus.PAID
+                  : ServicePaymentStatus.PARTIALLY_PAID;
+              await tx.serviceAct.update({
+                where: { id: act.id },
+                data: { paidAmount: newPaid, paymentStatus },
+              });
+            }
           }
         } else if (existing.direction === TransactionDirection.EXPENSE) {
           await tx.cashAccount.update({
@@ -518,8 +581,30 @@ export class FinanceService {
           if (existing.counterpartyId) {
             await tx.counterparty.update({
               where: { id: existing.counterpartyId },
-              data: { debtBalance: { decrement: Number(existing.amount) } },
+              data: { debtBalance: { increment: Number(existing.amount) } },
             });
+          }
+          if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
+            const act = await tx.serviceAct.findFirst({
+              where: { id: existing.sourceDocId, tenantId },
+            });
+            if (act) {
+              const newPaid = Math.max(
+                0,
+                Number(act.paidAmount) - Number(existing.amount),
+              );
+              const total = Number(act.totalAmount);
+              const paymentStatus =
+                newPaid <= 0
+                  ? ServicePaymentStatus.UNPAID
+                  : newPaid >= total
+                  ? ServicePaymentStatus.PAID
+                  : ServicePaymentStatus.PARTIALLY_PAID;
+              await tx.serviceAct.update({
+                where: { id: act.id },
+                data: { paidAmount: newPaid, paymentStatus },
+              });
+            }
           }
         } else if (existing.direction === TransactionDirection.TRANSFER) {
           await tx.cashAccount.update({

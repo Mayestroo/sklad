@@ -296,6 +296,7 @@ model Company {
   batchConsumptions    BatchConsumption[]
   productionOrders     ProductionOrder[]
   stockReservations    StockReservation[]
+  serviceActs          ServiceAct[]
 
   @@map("companies")
 }
@@ -652,6 +653,7 @@ model Product {
   additionalExpenseItems AdditionalExpenseItem[]
   productionOrders       ProductionOrder[]
   stockReservations      StockReservation[]
+  serviceActItems        ServiceActItem[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
@@ -816,6 +818,7 @@ model Counterparty {
   purchaseExpenses    PurchaseExpense[]
   salesReturns        SalesReturn[]
   additionalExpenses  AdditionalExpense[]
+  serviceActs         ServiceAct[]
 
   @@index([tenantId])
   @@index([tenantId, folderId])
@@ -1557,3 +1560,80 @@ model BatchConsumption {
   @@index([salesInvoiceItemId])
   @@map("batch_consumptions")
 }
+
+// ============================================
+// MODULE 14: SERVICES & ACCRUALS MANAGEMENT
+// ============================================
+
+enum ServiceActType {
+  PROVIDED // Ko'rsatilgan xizmat (biz ko'rsatdik)
+  RECEIVED // Olingan xizmat (tashqaridan oldik)
+}
+
+enum ServiceActStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum ServicePaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+model ServiceAct {
+  id              String               @id @default(uuid())
+  tenantId        String               @map("tenant_id")
+  actNumber       String               @map("act_number")
+  type            ServiceActType
+  counterpartyId  String               @map("counterparty_id")
+  status          ServiceActStatus     @default(DRAFT)
+  paymentStatus   ServicePaymentStatus @default(UNPAID) @map("payment_status")
+  actDate         DateTime             @default(now()) @map("act_date")
+  currency        String               @default("UZS")
+  exchangeRate    Decimal              @default(1.0) @db.Decimal(12, 4) @map("exchange_rate")
+  externalNumber  String?              @map("external_number")
+  externalDate    DateTime?            @map("external_date")
+  subtotal        Decimal              @default(0) @db.Decimal(15, 2)
+  vatAmount       Decimal              @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  totalAmount     Decimal              @default(0) @db.Decimal(15, 2) @map("total_amount")
+  paidAmount      Decimal              @default(0) @db.Decimal(15, 2) @map("paid_amount")
+  notes           String?
+  createdById     String?              @map("created_by_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  company         Company              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty    Counterparty         @relation(fields: [counterpartyId], references: [id], onDelete: Restrict)
+  items           ServiceActItem[]
+
+  @@unique([tenantId, actNumber])
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@index([tenantId, counterpartyId])
+  @@index([tenantId, actDate])
+  @@map("service_acts")
+}
+
+model ServiceActItem {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  actId       String   @map("act_id")
+  productId   String?  @map("product_id")
+  serviceName String   @map("service_name")
+  description String?
+  unit        String   @default("piece")
+  quantity    Decimal  @default(1.0) @db.Decimal(12, 3)
+  unitPrice   Decimal  @db.Decimal(15, 2) @map("unit_price")
+  vatRate     Decimal  @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount   Decimal  @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  lineTotal   Decimal  @db.Decimal(15, 2) @map("line_total")
+
+  act         ServiceAct @relation(fields: [actId], references: [id], onDelete: Cascade)
+  product     Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, actId])
+  @@map("service_act_items")
+}
+

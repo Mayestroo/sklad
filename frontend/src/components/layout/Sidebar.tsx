@@ -27,6 +27,7 @@ import {
   GitBranch,
   ShieldCheck,
   CreditCard,
+  Briefcase,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -96,6 +97,7 @@ export function Sidebar() {
     { href: '/products', label: t('products'), icon: PackageCheck },
     { href: '/inventory', label: t('inventory'), icon: Package },
     { href: '/finance', label: t('finance'), icon: Wallet },
+    { href: '/services', label: t('services'), icon: Briefcase },
     { href: '/production', label: t('production'), icon: Factory },
     { href: '/analytics', label: t('analytics'), icon: BarChart3 },
     { href: '/accounting', label: t('accounting'), icon: BookOpen },

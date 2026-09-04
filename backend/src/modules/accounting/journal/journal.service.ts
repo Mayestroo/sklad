@@ -258,6 +258,83 @@ export class JournalService {
     });
   }
 
+  /**
+   * Auto-post Journal Entries when a Service Act is posted
+   * PROVIDED:
+   * 1. Dt 4010 (Customer Receivables) / Kt 9030 (Service Revenue) — Subtotal
+   * 2. Dt 4010 (Customer Receivables) / Kt 6410 (VAT Payable) — VAT Amount (if > 0)
+   * RECEIVED:
+   * 1. Dt 9420 (Admin Expenses) / Kt 6010 (Supplier Payables) — Subtotal
+   * 2. Dt 4410 (Input VAT) / Kt 6010 (Supplier Payables) — VAT Amount (if > 0)
+   */
+  async autoPostServiceAct(tenantId: string, act: any) {
+    await this.accountsService.ensureDefaultAccounts(tenantId);
+
+    const lines: any[] = [];
+    const subtotal = Number(act.subtotal) || 0;
+    const vat = Number(act.vatAmount) || 0;
+
+    if (act.type === 'PROVIDED') {
+      const acc4010 = await this.accountsService.findByCode(tenantId, '4010');
+      let acc9030 = await this.accountsService.findByCode(tenantId, '9030');
+      if (!acc9030) acc9030 = await this.accountsService.findByCode(tenantId, '9010');
+      const acc6410 = await this.accountsService.findByCode(tenantId, '6410');
+
+      if (!acc4010 || !acc9030) return;
+
+      if (subtotal > 0) {
+        lines.push({
+          debitAccountId: acc4010.id,
+          creditAccountId: acc9030.id,
+          amount: subtotal,
+          description: `Ko'rsatilgan xizmatdan daromad (Akt № ${act.actNumber})`,
+        });
+      }
+
+      if (vat > 0 && acc6410) {
+        lines.push({
+          debitAccountId: acc4010.id,
+          creditAccountId: acc6410.id,
+          amount: vat,
+          description: `Ko'rsatilgan xizmat bo'yicha QQS (Akt № ${act.actNumber})`,
+        });
+      }
+    } else if (act.type === 'RECEIVED') {
+      const acc6010 = await this.accountsService.findByCode(tenantId, '6010');
+      const acc9420 = await this.accountsService.findByCode(tenantId, '9420');
+      const acc4410 = await this.accountsService.findByCode(tenantId, '4410');
+
+      if (!acc6010 || !acc9420) return;
+
+      if (subtotal > 0) {
+        lines.push({
+          debitAccountId: acc9420.id,
+          creditAccountId: acc6010.id,
+          amount: subtotal,
+          description: `Olingan xizmat xarajati (Akt № ${act.actNumber})`,
+        });
+      }
+
+      if (vat > 0 && acc4410) {
+        lines.push({
+          debitAccountId: acc4410.id,
+          creditAccountId: acc6010.id,
+          amount: vat,
+          description: `Olingan xizmat bo'yicha kiruvchi QQS (Akt № ${act.actNumber})`,
+        });
+      }
+    }
+
+    if (lines.length > 0) {
+      await this.createJournalEntry(tenantId, {
+        description: `Avtomatik provodka: Xizmatlar dalolatnomasi № ${act.actNumber}`,
+        sourceDocType: 'ServiceAct',
+        sourceDocId: act.id,
+        lines,
+      });
+    }
+  }
+
   private async generateEntryNumber(tenantId: string): Promise<string> {
     const count = await this.prisma.journalEntry.count({ where: { tenantId } });
     const nextSeq = (count + 1).toString().padStart(6, '0');

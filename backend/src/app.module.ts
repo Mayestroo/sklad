@@ -22,6 +22,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PurchasesModule } from './modules/purchases/purchases.module';
+import { ServicesModule } from './modules/services/services.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { PurchasesModule } from './modules/purchases/purchases.module';
     SuperAdminModule,
     FinanceModule,
     DashboardModule,
+    ServicesModule,
   ],
 })
 export class AppModule implements NestModule {

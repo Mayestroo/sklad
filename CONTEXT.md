@@ -176,7 +176,23 @@ _Avoid_: Raw debt balance, unsigned debt, mixed ledger total
 **Receivables & Payables Summary**:
 The real-time tenant-level financial aggregation of counterparty settlement states, reporting total customer and supplier counts alongside segregated aggregate figures for receivables (`debtBalance > 0`) and payables (`debtBalance < 0`).
 _Avoid_: Debt pile, lumped liability, generic debtor sum
+### Services & Accruals
 
+**Service Act (Xizmatlar dalolatnomasi / akti)**:
+An operational document recording intangible services either rendered to a customer (`PROVIDED`) or received from a vendor (`RECEIVED`), establishing accounts receivable or payable (accrual) and national accounting journal entries without initiating cash or bank transactions.
+_Avoid_: Service invoice, labor slip, cash service bill, work completion note
+
+**Service Accrual (Xizmat hisob-kitobi)**:
+The formal recognition of revenue/expense and counterparty debt obligation at the moment a Service Act is posted, completely decoupled from the timing of physical cash settlement.
+_Avoid_: Cash-basis fee, payment record, advance deduction
+
+**Separation of Concerns (Services vs. Finance)**:
+The core architectural boundary establishing that the Services module solely records performance acts, quantities, units, and debt accruals, while all physical money inflows, outflows, and reconciliation are strictly managed by the Finance module.
+_Avoid_: In-module checkout, direct cash act, service cashbox
+
+**Service Rollback Invariant**:
+The safety rule disallowing the cancellation or deletion of a posted Service Act if linked financial transactions (`FinanceTransaction`) or partial payments exist.
+_Avoid_: Orphan payment unlink, forced service delete, silent de-reconciliation
 
 ### Accounting & General Ledger
 

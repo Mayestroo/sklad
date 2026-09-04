@@ -5,6 +5,7 @@ import {
   TransactionDirection,
   SalesDocStatus,
   SalesPaymentStatus,
+  ServicePaymentStatus,
 } from '@prisma/client';
 
 describe('FinanceService Settlement Unit Test Suite', () => {
@@ -31,6 +32,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       salesInvoice: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
+        update: jest.fn(),
+      },
+      serviceAct: {
+        findFirst: jest.fn(),
         update: jest.fn(),
       },
       $transaction: jest.fn(async (cb) => cb(prisma)),
@@ -137,6 +142,62 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         data: {
           paidAmount: 2000000,
           paymentStatus: SalesPaymentStatus.PARTIALLY_PAID,
+        },
+      });
+    });
+  });
+
+  describe('ServiceAct Settlement in Finance', () => {
+    it('should reconcile income payment to ServiceAct, updating paidAmount and paymentStatus to PAID', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({ id: 'acc-1', balance: 500000 });
+      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-srv-1', amount: 1200000 });
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-1',
+        totalAmount: 1200000,
+        paidAmount: 0,
+      });
+
+      await service.createIncome('tenant-1', {
+        accountId: 'acc-1',
+        amount: 1200000,
+        currency: 'UZS',
+        counterpartyId: 'cust-1',
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-1',
+      });
+
+      expect(prisma.serviceAct.update).toHaveBeenCalledWith({
+        where: { id: 'act-1' },
+        data: {
+          paidAmount: 1200000,
+          paymentStatus: ServicePaymentStatus.PAID,
+        },
+      });
+    });
+
+    it('should reconcile expense payment to RECEIVED ServiceAct, updating paidAmount to PARTIALLY_PAID', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({ id: 'acc-1', balance: 5000000 });
+      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-srv-2', amount: 400000 });
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-vendor-1',
+        totalAmount: 1000000,
+        paidAmount: 0,
+      });
+
+      await service.createExpense('tenant-1', {
+        accountId: 'acc-1',
+        amount: 400000,
+        currency: 'UZS',
+        counterpartyId: 'vendor-1',
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-vendor-1',
+      });
+
+      expect(prisma.serviceAct.update).toHaveBeenCalledWith({
+        where: { id: 'act-vendor-1' },
+        data: {
+          paidAmount: 400000,
+          paymentStatus: ServicePaymentStatus.PARTIALLY_PAID,
         },
       });
     });
