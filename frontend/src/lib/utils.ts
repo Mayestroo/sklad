@@ -81,3 +81,12 @@ export function formatDateTime(date: string | Date | null | undefined, _locale?:
 
   return `${day}/${month}/${year}, ${hours}:${minutes}`;
 }
+
+/**
+ * Extracts the localized string from a name that might be an object { uz: string, ru: string } or a plain string.
+ */
+export function getLocalizedName(name: any, locale: string = 'uz'): string {
+  if (!name) return '—';
+  if (typeof name === 'string') return name;
+  return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
+}

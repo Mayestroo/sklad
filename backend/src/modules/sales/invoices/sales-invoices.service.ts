@@ -14,6 +14,7 @@ import {
   SalesReturnStatus,
   SalesReturnDocStatus,
 } from '@prisma/client';
+import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
 
 @Injectable()
 export class SalesInvoicesService {
@@ -22,21 +23,19 @@ export class SalesInvoicesService {
   // ─── NUMBER GENERATORS ─────────────────────────────────────────
 
   private async generateInvoiceNumber(tenantId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `INV-${year}-`;
-    const count = await this.prisma.salesInvoice.count({
-      where: { tenantId, invoiceNumber: { startsWith: prefix } },
-    });
-    return `${prefix}${(count + 1).toString().padStart(4, '0')}`;
+    return generateDocumentSequence('INV', (prefix) =>
+      this.prisma.salesInvoice.count({
+        where: { tenantId, invoiceNumber: { startsWith: prefix } },
+      }),
+    );
   }
 
   private async generateReturnNumber(tenantId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `SRET-${year}-`;
-    const count = await this.prisma.salesReturn.count({
-      where: { tenantId, returnNumber: { startsWith: prefix } },
-    });
-    return `${prefix}${(count + 1).toString().padStart(4, '0')}`;
+    return generateDocumentSequence('SRET', (prefix) =>
+      this.prisma.salesReturn.count({
+        where: { tenantId, returnNumber: { startsWith: prefix } },
+      }),
+    );
   }
 
   // ─── INVOICES LIST & DETAIL ────────────────────────────────────

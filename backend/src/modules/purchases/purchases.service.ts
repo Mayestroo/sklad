@@ -22,6 +22,8 @@ import {
   TransactionDirection,
 } from '@prisma/client';
 
+import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
+
 @Injectable()
 export class PurchasesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -29,29 +31,19 @@ export class PurchasesService {
   // ─── RECEIPT NUMBER GENERATOR ─────────────────────────────────
 
   private async generateDocNumber(tenantId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `PUR-${year}-`;
-    const count = await this.prisma.purchaseReceipt.count({
-      where: {
-        tenantId,
-        docNumber: { startsWith: prefix },
-      },
-    });
-    const nextNum = (count + 1).toString().padStart(4, '0');
-    return `${prefix}${nextNum}`;
+    return generateDocumentSequence('PUR', (prefix) =>
+      this.prisma.purchaseReceipt.count({
+        where: { tenantId, docNumber: { startsWith: prefix } },
+      }),
+    );
   }
 
   private async generateReturnNumber(tenantId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `PRET-${year}-`;
-    const count = await this.prisma.purchaseReturn.count({
-      where: {
-        tenantId,
-        returnNumber: { startsWith: prefix },
-      },
-    });
-    const nextNum = (count + 1).toString().padStart(4, '0');
-    return `${prefix}${nextNum}`;
+    return generateDocumentSequence('PRET', (prefix) =>
+      this.prisma.purchaseReturn.count({
+        where: { tenantId, returnNumber: { startsWith: prefix } },
+      }),
+    );
   }
 
   // ─── RECEIPTS ─────────────────────────────────────────────────

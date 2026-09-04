@@ -4,37 +4,29 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { invalidateApiCache, getApiCache, setApiCache } from '@/lib/cache';
+import { invalidateApiCache } from '@/lib/cache';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { DatePicker } from '@/components/ui/DatePicker';
-import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
+import { SelectOption } from '@/components/ui/Select';
+import { formatCurrency, getLocalizedName } from '@/lib/utils';
+import {
+  ORDER_STATUS_LABELS,
+} from '@/lib/constants/statuses';
 import {
   ArrowLeft,
-  Plus,
-  Trash2,
   Save,
   CheckCircle2,
   Send,
   Truck,
-  RotateCcw,
   Printer,
   CreditCard,
-  Barcode,
-  Search,
   AlertCircle,
-  AlertTriangle,
-  PackagePlus,
   Factory,
   PackageCheck,
   CheckCheck,
   XCircle,
-  Percent,
-  FileText,
 } from 'lucide-react';
 import { PaySalesOrderModal } from './PaySalesOrderModal';
 import { PartialDispatchModal } from './PartialDispatchModal';
@@ -42,68 +34,15 @@ import { OrderPickListModal } from './OrderPickListModal';
 import { OrderDeliveryNoteModal } from './OrderDeliveryNoteModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
+import { useDocumentDropdowns, CounterpartyDropdownItem, WarehouseDropdownItem } from '@/hooks/useDocumentDropdowns';
+import { OrderGeneralInfo } from './order-form/OrderGeneralInfo';
+import { OrderItemsTable, OrderItemRow } from './order-form/OrderItemsTable';
+import { OrderTotalsSummary } from './order-form/OrderTotalsSummary';
 
-export const ORDER_STATUS_LABELS: Record<string, { uz: string; ru: string; variant: 'neutral' | 'info' | 'warning' | 'success' | 'error' }> = {
-  NEW: { uz: 'Yangi', ru: 'Новый', variant: 'neutral' },
-  PENDING_APPROVAL: { uz: 'Tasdiqlashda', ru: 'На согласовании', variant: 'warning' },
-  APPROVED: { uz: 'Tasdiqlangan', ru: 'Согласован', variant: 'info' },
-  ACCEPTED: { uz: 'Qabul qilindi', ru: 'Принят', variant: 'info' },
-  PROCESSING: { uz: 'Yig‘ilmoqda', ru: 'В сборке', variant: 'warning' },
-  SENT_TO_PRODUCTION: { uz: 'Ishlab chiqarishga yuborilgan', ru: 'Передан в пр-во', variant: 'info' },
-  IN_PRODUCTION: { uz: 'Ishlab chiqarilmoqda', ru: 'В производстве', variant: 'warning' },
-  PARTIALLY_READY: { uz: 'Qisman tayyor', ru: 'Частично готов', variant: 'warning' },
-  READY: { uz: 'Tayyor', ru: 'Готов', variant: 'success' },
-  AWAITING_PAYMENT: { uz: 'To‘lov kutilmoqda', ru: 'Ожидает оплаты', variant: 'warning' },
-  PAYMENT_CONFIRMED: { uz: 'To‘lov tasdiqlandi', ru: 'Оплата подтверждена', variant: 'success' },
-  READY_TO_SHIP: { uz: 'Jo‘natishga tayyor', ru: 'Готов к отгрузке', variant: 'success' },
-  READY_FOR_SHIPMENT: { uz: 'Jo‘natishga tayyor', ru: 'Готов к отгрузке', variant: 'success' },
-  PARTIALLY_SHIPPED: { uz: 'Qisman jo‘natilgan', ru: 'Частично отгружен', variant: 'warning' },
-  SHIPPED: { uz: 'Jo‘natilgan', ru: 'Отгружен', variant: 'success' },
-  COMPLETED: { uz: 'Bajarildi', ru: 'Завершён', variant: 'success' },
-  CANCELLED: { uz: 'Bekor qilingan', ru: 'Отменён', variant: 'error' },
-};
+// Re-export ORDER_STATUS_LABELS for backward compatibility
+export { ORDER_STATUS_LABELS };
 
-interface CounterpartyOption {
-  id: string;
-  name: string;
-  phone?: string;
-  debtBalance?: number;
-  type?: string;
-  priceListId?: string | null;
-  discountPercent?: number;
-}
-
-interface ProductOption {
-  id: string;
-  name: string | Record<string, string>;
-  sku: string;
-  barcode?: string;
-  salePrice: number;
-  costPrice: number;
-  unitOfMeasure?: string;
-  currency?: string;
-}
-
-interface SellerOption {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
-
-interface WarehouseOption {
-  id: string;
-  name: string | Record<string, string>;
-}
-
-interface OrderItemRow {
-  productId: string;
-  quantity: number;
-  unitPrice: number;
-  discount: number;
-  readyQty?: number;
-}
-
-interface SalesOrderFormProps {
+export interface SalesOrderFormProps {
   initialData?: any | null;
   mode: 'create' | 'edit';
 }
@@ -118,16 +57,38 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     hasPermission('sales:override_price') ||
     company?.settings?.sales?.allowSellerPriceOverride !== false;
 
-  // Dropdown lists
-  const [counterparties, setCounterparties] = useState<CounterpartyOption[]>([]);
-  const [products, setProducts] = useState<ProductOption[]>([]);
-  const [sellers, setSellers] = useState<SellerOption[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
-  const [priceLists, setPriceLists] = useState<any[]>([]);
+  // Cached Dropdown Hook
+  const {
+    counterparties: initialCounterparties,
+    products,
+    sellers,
+    warehouses: initialWarehouses,
+    priceLists,
+  } = useDocumentDropdowns({
+    token: token || undefined,
+    tenantId: company?.id,
+    locale,
+  });
+
+  // Local state for dynamically added counterparties/warehouses from drawers
+  const [counterparties, setCounterparties] = useState<CounterpartyDropdownItem[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseDropdownItem[]>([]);
+
+  useEffect(() => {
+    if (initialCounterparties.length > 0 && counterparties.length === 0) {
+      setCounterparties(initialCounterparties);
+    }
+  }, [initialCounterparties, counterparties.length]);
+
+  useEffect(() => {
+    if (initialWarehouses.length > 0 && warehouses.length === 0) {
+      setWarehouses(initialWarehouses);
+    }
+  }, [initialWarehouses, warehouses.length]);
 
   // Order state
-  const [orderId, setOrderId] = useState<string | null>(initialData?.id || null);
-  const [orderNumber, setOrderNumber] = useState<string>(initialData?.orderNumber || '');
+  const [orderId] = useState<string | null>(initialData?.id || null);
+  const [orderNumber] = useState<string>(initialData?.orderNumber || '');
   const [orderStatus, setOrderStatus] = useState<string>(initialData?.status || 'NEW');
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [priceListId, setPriceListId] = useState(initialData?.priceListId || '');
@@ -145,7 +106,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   );
   const [deliveryAddress, setDeliveryAddress] = useState(initialData?.deliveryAddress || '');
   const [comment, setComment] = useState(initialData?.comment || '');
-  const [dispatchWarehouseId, setDispatchWarehouseId] = useState('');
 
   // Line items
   const [items, setItems] = useState<OrderItemRow[]>(
@@ -182,79 +142,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     if (!isDirty) setIsDirty(true);
   };
 
-  const getLocalizedName = (name: any) => {
-    if (!name) return '—';
-    if (typeof name === 'string') return name;
-    return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
-  };
-
-  // Fetch dropdown data
-  const fetchDropdowns = async () => {
-    if (!token || !company) return;
-
-    try {
-      const [cpRes, prdRes, usrRes, whRes, plRes] = await Promise.all([
-        apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
-          console.error('Failed to load counterparties:', err);
-          return null;
-        }),
-        apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
-          console.error('Failed to load products:', err);
-          return null;
-        }),
-        apiFetch<any>('/users', { token: token || undefined, tenantId: company.id, locale }).catch(() => null),
-        apiFetch<any>('/tenants/warehouses', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
-          console.error('Failed to load warehouses:', err);
-          return null;
-        }),
-        apiFetch<any>('/sales/price-lists', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
-          console.error('Failed to load price lists:', err);
-          return null;
-        }),
-      ]);
-
-      const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
-      setCounterparties(cpList);
-      if (!counterpartyId && cpList.length > 0 && mode === 'create') {
-        const defaultCp = cpList[0];
-        setCounterpartyId(defaultCp.id);
-        if (defaultCp.priceListId) setPriceListId(defaultCp.priceListId);
-      }
-
-      const prdList = (prdRes?.data || prdRes || []).map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        sku: p.sku,
-        barcode: p.barcode,
-        salePrice: Number(p.salePrice) || 0,
-        costPrice: Number(p.costPrice) || 0,
-        unitOfMeasure: p.unitOfMeasure || 'dona',
-      }));
-      setProducts(prdList);
-
-      const userList = (usrRes?.data || usrRes || []).map((u: any) => ({
-        id: u.id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-      }));
-      setSellers(userList);
-
-      const whList = whRes?.data || (Array.isArray(whRes) ? whRes : []);
-      setWarehouses(whList);
-      if (whList.length > 0) {
-        setDispatchWarehouseId(whList[0].id);
-      }
-
-      const pls = plRes?.data || (Array.isArray(plRes) ? plRes : []);
-      setPriceLists(pls);
-    } catch (err) {
-      console.error('fetchDropdowns error:', err);
-    }
-  };
-
+  // Set default counterparty if empty in create mode
   useEffect(() => {
-    fetchDropdowns();
-  }, [token, company, locale]);
+    if (!counterpartyId && counterparties.length > 0 && mode === 'create') {
+      const defaultCp = counterparties[0];
+      setCounterpartyId(defaultCp.id);
+      if (defaultCp.priceListId) setPriceListId(defaultCp.priceListId);
+    }
+  }, [counterpartyId, counterparties, mode]);
 
   // Drawer handlers
   const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; debtBalance?: number }) => {
@@ -266,7 +161,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const handleWarehouseAdded = (newWarehouse: { id: string; name: string | Record<string, string> }) => {
     markDirty();
     setWarehouses((prev) => [newWarehouse, ...prev]);
-    setDispatchWarehouseId(newWarehouse.id);
   };
 
   // Calculations
@@ -313,11 +207,11 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     let itemCurrency = (prd as any).currency || 'UZS';
 
     if (activeListId) {
-      const pl = priceLists.find((l) => l.id === activeListId);
-      const custom = pl?.prices?.find((item: any) => item.productId === pId);
+      const pl = priceLists.find((l: any) => l.id === activeListId);
+      const custom = (pl as any)?.prices?.find((item: any) => item.productId === pId);
       if (custom && Number(custom.price) > 0) {
         price = Number(custom.price);
-        itemCurrency = pl.currency || 'UZS';
+        itemCurrency = pl?.currency || 'UZS';
       }
     }
 
@@ -360,7 +254,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const handlePriceListChange = (newListId: string) => {
     markDirty();
     setPriceListId(newListId);
-    // Recalculate existing rows with new price list
     setItems((prev) =>
       prev.map((row) => {
         if (!row.productId) return row;
@@ -516,39 +409,6 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     }
   };
 
-  // Dispatch Action
-  const handleDispatch = async () => {
-    if (!orderId || !dispatchWarehouseId) {
-      setError(isRu ? 'Выберите склад для списания' : 'Chiqim omborini tanlang');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/dispatch`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: company?.id,
-        locale,
-        body: JSON.stringify({ warehouseId: dispatchWarehouseId }),
-      });
-
-      if (res) {
-        invalidateApiCache('/sales/orders*');
-        setOrderStatus(res.status);
-        setCurrentOrderData(res);
-      }
-    } catch (err: unknown) {
-      console.error(err);
-      const errMsg = err instanceof Error ? err.message : '';
-      setError(errMsg || (isRu ? 'Ошибка отгрузки заказа' : 'Buyurtmani jo‘natishda xatolik yuz berdi'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Complete Order
   const handleComplete = async () => {
     if (!orderId) return;
@@ -624,15 +484,15 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     value: c.id,
     label: c.name,
     description: c.phone
-      ? `${c.phone}${Number(c.debtBalance) > 0 ? ` · ${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), 'UZS')}` : ''}`
+      ? `${c.phone}${Number(c.debtBalance) > 0 ? ` · ${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, 'UZS')}` : ''}`
       : Number(c.debtBalance) > 0
-      ? `${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), 'UZS')}`
+      ? `${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, 'UZS')}`
       : undefined,
   }));
 
   const productOptions: SelectOption[] = products.map((p) => ({
     value: p.id,
-    label: `${getLocalizedName(p.name)} ${p.sku ? `(${p.sku})` : ''}`,
+    label: `${getLocalizedName(p.name, locale)} ${p.sku ? `(${p.sku})` : ''}`,
   }));
 
   return (
@@ -853,384 +713,62 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         </Card>
       )}
 
-      {/* Document Primary Metadata Form Card */}
-      <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-          {isRu ? 'Основная информация' : 'Asosiy Hujjat Ma’lumotlari'}
-        </h3>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-          {/* Customer */}
-          <div style={{ minWidth: '200px', flex: '2 1 220px' }}>
-            <Select
-              label={isRu ? 'Клиент (Покупатель) *' : 'Mijoz (Xaridor) *'}
-              options={customerOptions}
-              value={counterpartyId}
-              onChange={handleCounterpartySelect}
-              placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
-              disabled={isLocked}
-              onCreateNew={!isLocked ? () => setIsQuickCustomerOpen(true) : undefined}
-              createNewLabel={isRu ? 'Добавить клиента' : 'Yangi mijoz qo‘shish'}
-            />
-          </div>
-
-          {/* Price List */}
-          <div style={{ minWidth: '180px', flex: '1.5 1 200px' }}>
-            <Select
-              label={isRu ? 'Прайс-лист цен' : 'Narx jadvali'}
-              options={[
-                { value: '', label: isRu ? '— Базовый (Основной) —' : '— Asosiy (Bazaviy) —' },
-                ...priceLists.map((pl) => {
-                  const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
-                  return { value: pl.id, label: `${plName} (${pl.currency})` };
-                }),
-              ]}
-              value={priceListId}
-              onChange={handlePriceListChange}
-              disabled={isLocked}
-            />
-          </div>
-
-          {/* Payment Condition */}
-          <div style={{ minWidth: '160px', flex: '1.5 1 180px' }}>
-            <Select
-              label={isRu ? 'Условие отгрузки / оплаты' : 'To‘lov / Jo‘natish sharti'}
-              options={[
-                { value: 'PREPAID_100', label: isRu ? '100% Предоплата' : '100% Oldindan to‘lov' },
-                { value: 'PARTIAL', label: isRu ? 'Частичная предоплата (%)' : 'Qisman oldindan to‘lov (%)' },
-                { value: 'CREDIT', label: isRu ? 'В кредит (Без предоплаты)' : 'Nasiya / Kreditga' },
-              ]}
-              value={paymentCondition}
-              onChange={(val) => { markDirty(); setPaymentCondition(val as any); }}
-              disabled={isLocked}
-            />
-          </div>
-
-          {/* Required % when partial */}
-          {paymentCondition === 'PARTIAL' && (
-            <div style={{ minWidth: '120px', flex: '1 1 130px' }}>
-              <Input
-                label={isRu ? 'Мин. % оплаты' : 'Min. to‘lov %'}
-                type="number"
-                min={1}
-                max={100}
-                value={requiredPaymentPercent}
-                onChange={(e) => { markDirty(); setRequiredPaymentPercent(parseFloat(e.target.value) || 50); }}
-                disabled={isLocked}
-              />
-            </div>
-          )}
-
-          {/* Responsible Seller */}
-          <div style={{ minWidth: '160px', flex: '1.5 1 180px' }}>
-            <Select
-              label={isRu ? 'Ответственный продавец' : 'Mas’ul sotuvchi'}
-              options={[
-                { value: '', label: isRu ? '— Не назначен —' : '— Biriktirilmagan —' },
-                ...sellers.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
-              ]}
-              value={assignedSellerId}
-              onChange={(val) => { markDirty(); setAssignedSellerId(val); }}
-              disabled={isLocked}
-            />
-          </div>
-
-          {/* Delivery Date */}
-          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
-            <DatePicker
-              label={isRu ? 'Требуемая дата доставки' : 'Yetkazish talab sanasi'}
-              value={deliveryDate}
-              onChange={(val) => { markDirty(); setDeliveryDate(val); }}
-              disabled={isLocked}
-            />
-          </div>
-
-          {/* Currency */}
-          <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
-            <Select
-              label={isRu ? 'Валюта' : 'Valyuta'}
-              options={CURRENCY_OPTIONS}
-              value={currency}
-              onChange={(val) => {
-                markDirty();
-                setCurrency(val);
-                if (val === 'UZS') setExchangeRate(1);
-              }}
-              disabled={isLocked}
-            />
-          </div>
-
-          {/* Delivery Address */}
-          <div style={{ minWidth: '220px', flex: '2 1 250px' }}>
-            <Input
-              label={isRu ? 'Адрес доставки' : 'Yetkazish manzili'}
-              value={deliveryAddress}
-              onChange={(e) => { markDirty(); setDeliveryAddress(e.target.value); }}
-              placeholder={isRu ? 'Город, район, улица...' : 'Shahar, tuman, ko‘cha...'}
-              disabled={isLocked}
-            />
-          </div>
-
-          {/* Comment */}
-          <div style={{ minWidth: '220px', flex: '2 1 250px' }}>
-            <Input
-              label={isRu ? 'Примечание / Комментарий' : 'Izoh / Qayd'}
-              value={comment}
-              onChange={(e) => { markDirty(); setComment(e.target.value); }}
-              placeholder={isRu ? 'Дополнительные сведения...' : 'Qo‘shimcha ma’lumotlar...'}
-              disabled={isLocked}
-            />
-          </div>
-        </div>
-      </Card>
+      {/* Primary General Info */}
+      <OrderGeneralInfo
+        locale={locale}
+        isLocked={isLocked}
+        counterpartyId={counterpartyId}
+        onCounterpartyChange={handleCounterpartySelect}
+        customerOptions={customerOptions}
+        onQuickCustomerOpen={() => setIsQuickCustomerOpen(true)}
+        priceListId={priceListId}
+        onPriceListChange={handlePriceListChange}
+        priceLists={priceLists}
+        paymentCondition={paymentCondition}
+        onPaymentConditionChange={(val) => { markDirty(); setPaymentCondition(val); }}
+        requiredPaymentPercent={requiredPaymentPercent}
+        onRequiredPaymentPercentChange={(val) => { markDirty(); setRequiredPaymentPercent(val); }}
+        assignedSellerId={assignedSellerId}
+        onAssignedSellerChange={(val) => { markDirty(); setAssignedSellerId(val); }}
+        sellers={sellers}
+        deliveryDate={deliveryDate}
+        onDeliveryDateChange={(val) => { markDirty(); setDeliveryDate(val); }}
+        currency={currency}
+        onCurrencyChange={(val) => {
+          markDirty();
+          setCurrency(val);
+          if (val === 'UZS') setExchangeRate(1);
+        }}
+        deliveryAddress={deliveryAddress}
+        onDeliveryAddressChange={(val) => { markDirty(); setDeliveryAddress(val); }}
+        comment={comment}
+        onCommentChange={(val) => { markDirty(); setComment(val); }}
+      />
 
       {/* Items Table Card */}
-      <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-          <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Товары в заказе' : 'Buyurtmadagi Tovarlar'} ({items.length})
-          </h3>
-        </div>
+      <OrderItemsTable
+        locale={locale}
+        currency={currency}
+        isLocked={isLocked}
+        orderStatus={orderStatus}
+        isPriceOverrideAllowed={isPriceOverrideAllowed}
+        items={items}
+        products={products}
+        productOptions={productOptions}
+        onItemChange={handleItemChange}
+        onAddItem={addItemRow}
+        onRemoveItem={removeItemRow}
+      />
 
-        {/* Table container */}
-        <div style={{ overflowX: 'auto', minHeight: '280px', paddingBottom: '40px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
-                  {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
-                </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
-                  {isRu ? 'Заказано' : 'Buyurtma miqdori'}
-                </th>
-                {orderStatus !== 'NEW' && (
-                  <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
-                    {isRu ? 'Готово (Пр-во)' : 'Tayyorlandi'}
-                  </th>
-                )}
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
-                  {isRu ? 'Цена за ед.' : 'Birlik narxi'}
-                </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
-                  {isRu ? 'Скидка %' : 'Skidka %'}
-                </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
-                  {isRu ? 'Итого' : 'Jami Summa'}
-                </th>
-                {!isLocked && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, idx) => {
-                const prd = products.find((p) => p.id === item.productId);
-                const lineRaw = item.quantity * item.unitPrice;
-                const discountVal = (lineRaw * item.discount) / 100;
-                const lineTotal = lineRaw - discountVal;
-
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '10px 12px', color: 'var(--color-text-tertiary)' }}>{idx + 1}</td>
-
-                    {/* Product select */}
-                    <td style={{ padding: '10px 12px' }}>
-                      <Select
-                        options={productOptions}
-                        value={item.productId}
-                        onChange={(val) => handleItemChange(idx, 'productId', val)}
-                        placeholder={isRu ? 'Выберите товар...' : 'Tovarni tanlang...'}
-                        disabled={isLocked}
-                      />
-                    </td>
-
-                    {/* Quantity */}
-                    <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="any"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                        disabled={isLocked}
-                        style={{ textAlign: 'right' }}
-                        aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
-                      />
-                    </td>
-
-                    {/* Ready Qty */}
-                    {orderStatus !== 'NEW' && (
-                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? '#10b981' : '#f59e0b' }}>
-                          {item.readyQty || 0} / {item.quantity}
-                        </span>
-                      </td>
-                    )}
-
-                    {/* Unit Price */}
-                    <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={item.unitPrice}
-                        onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        disabled={isLocked || !isPriceOverrideAllowed}
-                        title={!isPriceOverrideAllowed ? (isRu ? 'Ручное изменение цены запрещено настройками' : 'Narxni qo‘lda o‘zgartirish taqiqlangan') : undefined}
-                        style={{ textAlign: 'right', ...(!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : {}) }}
-                        aria-label={`${isRu ? 'Цена за единицу для строки' : 'Birlik narxi'} ${idx + 1}`}
-                      />
-                    </td>
-
-                    {/* Discount */}
-                    <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="any"
-                        value={item.discount}
-                        onChange={(e) => handleItemChange(idx, 'discount', parseFloat(e.target.value) || 0)}
-                        disabled={isLocked}
-                        style={{ textAlign: 'right' }}
-                        aria-label={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
-                      />
-                    </td>
-
-                    {/* Line Total */}
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
-                      {formatCurrency(lineTotal, locale, currency)}
-                    </td>
-
-                    {/* Actions */}
-                    {!isLocked && (
-                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeItemRow(idx)}
-                          style={{ color: 'var(--color-text-tertiary)', padding: '4px' }}
-                          title={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
-                          aria-label={`${isRu ? 'Удалить строку' : 'Qatorni o‘chirish'} ${idx + 1}`}
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {!isLocked && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => addItemRow()}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              aria-label={isRu ? 'Добавить новую позицию' : 'Yangi qator qo‘shish'}
-            >
-              <Plus size={16} /> {isRu ? 'Добавить позицию' : 'Qator qo‘shish'}
-            </Button>
-          </div>
-        )}
-      </Card>
-
-      {/* Summary Footer Panel with Required notice */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, padding: 'var(--space-2) 0' }}>
-          <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
-        </div>
-
-        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
-          <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
-            {isRu ? 'Финансовый итог' : 'Buyurtma Hisobi'}
-          </h3>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            <span>{isRu ? 'Сумма заказа:' : 'Buyurtma summasi:'}</span>
-            <span className="tabular-nums font-medium">{formatCurrency(calculations.grandTotal, locale, currency)}</span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#10b981' }}>
-            <span>{isRu ? 'Оплачено (Аванс):' : 'To‘langan (Avans):'}</span>
-            <span className="tabular-nums font-medium">{formatCurrency(calculations.paid, locale, currency)}</span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
-            <span>{isRu ? 'ОСТАТОК К ОПЛАТЕ:' : 'QOLDIQ TO‘LOV:'}</span>
-            <span className="tabular-nums" style={{ color: calculations.remaining > 0 ? '#ef4444' : '#10b981' }}>
-              {formatCurrency(calculations.remaining, locale, currency)}
-            </span>
-          </div>
-
-          {/* Dispatch Gate Widget */}
-          <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginTop: 'var(--space-2)' }}>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-              {isRu ? 'Условие отгрузки (Dispatch Gate)' : 'Jo‘natish talabi (Dispatch Gate)'}
-            </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-primary)' }}>
-              {paymentCondition === 'PREPAID_100' && (isRu ? 'Требуется 100% оплата' : '100% to‘lov talab qilinadi')}
-              {paymentCondition === 'PARTIAL' && (isRu ? `Требуется минимум ${requiredPaymentPercent}% (${formatCurrency(calculations.minRequired, locale, currency)})` : `Min. ${requiredPaymentPercent}% to‘lov talab qilinadi (${formatCurrency(calculations.minRequired, locale, currency)})`)}
-              {paymentCondition === 'CREDIT' && (isRu ? 'Кредит / Nasiya (Отгрузка без предоплаты)' : 'Nasiya / Kredit (Avanssiz jo‘natish ruxsat etilgan)')}
-            </div>
-
-            {calculations.minNeededForDispatch > 0 && paymentCondition !== 'CREDIT' ? (
-              <div style={{ fontSize: '11px', color: '#ef4444', marginTop: 4, fontWeight: 600 }}>
-                {isRu ? `Необходимо оплатить еще: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}` : `Jo‘natish uchun yana to‘lanishi kerak: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}`}
-              </div>
-            ) : (
-              <div style={{ fontSize: '11px', color: '#10b981', marginTop: 4, fontWeight: 600 }}>
-                {isRu ? 'Условие для отгрузки выполнено' : 'Jo‘natish sharti bajarilgan'}
-              </div>
-            )}
-          </div>
-          {/* Linked Dispatches / Sales Invoices */}
-          {currentOrderData?.salesInvoices && currentOrderData.salesInvoices.length > 0 && (
-            <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginTop: 'var(--space-3)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FileText size={14} color="var(--color-primary)" />
-                {isRu ? 'Накладные отгрузки' : 'Chiqim fakturalari'} ({currentOrderData.salesInvoices.length})
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {currentOrderData.salesInvoices.map((inv: any) => (
-                  <div
-                    key={inv.id}
-                    style={{
-                      padding: '8px 10px',
-                      backgroundColor: 'var(--color-bg-primary)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--color-border-light)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      fontSize: 'var(--text-xs)',
-                    }}
-                  >
-                    <div>
-                      <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{inv.invoiceNumber}</span>
-                      <div style={{ color: 'var(--color-text-secondary)', fontSize: '11px' }}>
-                        {formatDate(inv.createdAt, locale)}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 600 }} className="tabular-nums">
-                        {formatCurrency(Number(inv.totalAmount), locale, currency)}
-                      </div>
-                      <Badge variant="success">
-                        {inv.status}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
+      {/* Totals Summary and Linked Invoices */}
+      <OrderTotalsSummary
+        locale={locale}
+        currency={currency}
+        calculations={calculations}
+        paymentCondition={paymentCondition}
+        requiredPaymentPercent={requiredPaymentPercent}
+        salesInvoices={currentOrderData?.salesInvoices}
+      />
 
       {/* Drawers */}
       <CreateCounterpartyDrawer

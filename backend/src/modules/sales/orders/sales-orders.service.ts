@@ -18,20 +18,12 @@ import {
   SalesPaymentStatus,
   SalesReturnStatus,
 } from '@prisma/client';
-
-function isAdmin(roles: string[]) {
-  return roles.some((r) => ['ADMIN', 'SUPER_ADMIN'].includes(r));
-}
-function isManagerOrAbove(roles: string[]) {
-  return roles.some((r) => ['ADMIN', 'SUPER_ADMIN', 'MANAGER'].includes(r));
-}
-function isWarehouseOrAbove(roles: string[]) {
-  return roles.some((r) =>
-    ['ADMIN', 'SUPER_ADMIN', 'MANAGER', 'WAREHOUSE', 'WAREHOUSE_MANAGER', 'STOREKEEPER', 'OMBORCHI'].includes(
-      r.toUpperCase(),
-    ),
-  );
-}
+import {
+  isAdmin,
+  isManagerOrAbove,
+  isWarehouseOrAbove,
+} from '../../../common/utils/roles.util';
+import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -83,12 +75,11 @@ export class SalesOrdersService {
   // ─── NUMBER GENERATOR ──────────────────────────────────────────
 
   private async generateOrderNumber(tenantId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `Z-${year}-`;
-    const count = await this.prisma.salesOrder.count({
-      where: { tenantId, orderNumber: { startsWith: prefix } },
-    });
-    return `${prefix}${(count + 1).toString().padStart(4, '0')}`;
+    return generateDocumentSequence('Z', (prefix) =>
+      this.prisma.salesOrder.count({
+        where: { tenantId, orderNumber: { startsWith: prefix } },
+      }),
+    );
   }
 
   // ─── DISPATCH GATE HELPER ──────────────────────────────────────
