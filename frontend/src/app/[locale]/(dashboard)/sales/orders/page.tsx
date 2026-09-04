@@ -524,57 +524,50 @@ export default function SalesOrdersPage() {
                       </td>
 
                       <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        {isWarehouseOperator && getNextStatuses(ord.status).length > 0 ? (
-                          <select
-                            value=""
-                            disabled={updatingOrderId === ord.id}
-                            onChange={(e) => {
-                              const nextVal = e.target.value;
-                              if (!nextVal) return;
-                              if (nextVal === 'CANCELLED') {
-                                if (confirm(isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?')) {
-                                  handleQuickStatusChange(ord.id, nextVal);
-                                }
-                              } else if (nextVal === 'SHIPPED') {
-                                if (confirm(isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?')) {
-                                  handleQuickStatusChange(ord.id, nextVal);
-                                }
-                              } else {
-                                handleQuickStatusChange(ord.id, nextVal);
-                              }
-                            }}
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              padding: '3px 20px 3px 8px',
-                              borderRadius: '9999px',
-                              border: 'none',
-                              cursor: updatingOrderId === ord.id ? 'not-allowed' : 'pointer',
-                              opacity: updatingOrderId === ord.id ? 0.6 : 1,
-                              appearance: 'none' as const,
-                              WebkitAppearance: 'none' as const,
-                              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='currentColor' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-                              backgroundRepeat: 'no-repeat',
-                              backgroundPosition: 'right 6px center',
-                              ...(meta.variant === 'success' ? { backgroundColor: 'rgba(16,185,129,0.12)', color: '#065f46' } :
-                                  meta.variant === 'warning' ? { backgroundColor: 'rgba(245,158,11,0.12)', color: '#92400e' } :
-                                  meta.variant === 'error'   ? { backgroundColor: 'rgba(239,68,68,0.12)',  color: '#991b1b' } :
-                                  meta.variant === 'info'    ? { backgroundColor: 'rgba(59,130,246,0.12)', color: '#1e40af' } :
-                                                               { backgroundColor: 'rgba(107,114,128,0.12)', color: '#374151' }),
-                            }}
-                          >
-                            <option value="">{isRu ? meta.ru : meta.uz}</option>
-                            {getNextStatuses(ord.status).map((s) => (
-                              <option key={s.status} value={s.status}>
-                                {isRu ? s.labelRu : s.labelUz}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
                           <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
                             {isRu ? meta.ru : meta.uz}
                           </Badge>
-                        )}
+                          {isWarehouseOperator && getNextStatuses(ord.status).length > 0 && (
+                            <select
+                              value=""
+                              disabled={updatingOrderId === ord.id}
+                              onChange={(e) => {
+                                const nextVal = e.target.value;
+                                if (!nextVal) return;
+                                if (nextVal === 'CANCELLED') {
+                                  if (confirm(isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?')) {
+                                    handleQuickStatusChange(ord.id, nextVal);
+                                  }
+                                } else if (nextVal === 'SHIPPED') {
+                                  if (confirm(isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?')) {
+                                    handleQuickStatusChange(ord.id, nextVal);
+                                  }
+                                } else {
+                                  handleQuickStatusChange(ord.id, nextVal);
+                                }
+                              }}
+                              style={{
+                                fontSize: '11px',
+                                padding: '2px 6px',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--color-border)',
+                                backgroundColor: 'var(--color-bg-subtle)',
+                                color: 'var(--color-text-secondary)',
+                                cursor: updatingOrderId === ord.id ? 'not-allowed' : 'pointer',
+                                opacity: updatingOrderId === ord.id ? 0.5 : 1,
+                                width: '100%',
+                              }}
+                            >
+                              <option value="">{isRu ? 'O\'zgartirish...' : 'O\'zgartirish...'}</option>
+                              {getNextStatuses(ord.status).map((s) => (
+                                <option key={s.status} value={s.status}>
+                                  {isRu ? s.labelRu : s.labelUz}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                       </td>
 
 
