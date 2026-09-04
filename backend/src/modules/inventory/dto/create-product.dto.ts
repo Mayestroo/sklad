@@ -36,9 +36,9 @@ export class CreateProductDto {
   @IsOptional()
   categoryId?: string;
 
-  @IsEnum(['PRODUCT', 'SERVICE', 'BUNDLE'])
+  @IsEnum(['PRODUCT', 'RAW_MATERIAL', 'SERVICE', 'BUNDLE'])
   @IsOptional()
-  type?: 'PRODUCT' | 'SERVICE' | 'BUNDLE';
+  type?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE' | 'BUNDLE';
 
   @IsString()
   @IsNotEmpty()

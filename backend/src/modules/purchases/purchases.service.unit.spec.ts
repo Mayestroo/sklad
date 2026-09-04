@@ -373,6 +373,84 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       expect(jeCall.data.lines.create).toHaveLength(2); // Inventory net + VAT line
     });
 
+    it('should correctly handle mixed PRODUCT, RAW_MATERIAL, and SERVICE in postReceipt', async () => {
+      const receipt = {
+        id: 'rec-mixed',
+        tenantId: 'tenant-123',
+        docNumber: 'PUR-2026-0008',
+        docDate: new Date(),
+        warehouseId: 'wh-1',
+        counterpartyId: 'supp-1',
+        status: PurchaseDocStatus.DRAFT,
+        subtotalAmount: 350000,
+        discountAmount: 0,
+        vatAmount: 42000,
+        additionalExpensesTotal: 0,
+        totalAmount: 392000,
+        counterparty: { id: 'supp-1', name: 'Mixed Supplier' },
+        items: [
+          {
+            id: 'item-prod',
+            productId: 'prod-1',
+            quantity: 2,
+            unitPrice: 100000,
+            totalPrice: 200000,
+            allocatedExpenses: 0,
+            product: { id: 'prod-1', type: 'PRODUCT' },
+          },
+          {
+            id: 'item-raw',
+            productId: 'raw-1',
+            quantity: 5,
+            unitPrice: 20000,
+            totalPrice: 100000,
+            allocatedExpenses: 0,
+            product: { id: 'raw-1', type: 'RAW_MATERIAL' },
+          },
+          {
+            id: 'item-srv',
+            productId: 'srv-1',
+            quantity: 1,
+            unitPrice: 50000,
+            totalPrice: 50000,
+            allocatedExpenses: 0,
+            product: { id: 'srv-1', type: 'SERVICE' },
+          },
+        ],
+        expenses: [],
+      };
+
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 10 });
+      prisma.stockLevel.update.mockResolvedValue({});
+      prisma.productBatch.create.mockResolvedValue({});
+      prisma.counterparty.update.mockResolvedValue({});
+      prisma.journalEntry.count.mockResolvedValue(1);
+      prisma.account.findFirst.mockImplementation(({ where }: { where: any }) => ({
+        id: `acc-${where.code}`,
+        code: where.code,
+      }));
+      prisma.journalEntry.create.mockResolvedValue({});
+      prisma.auditLog.create.mockResolvedValue({});
+      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({ ...receipt, ...data }));
+
+      await service.postReceipt('tenant-123', 'user-1', 'rec-mixed');
+
+      // Stock updated for prod-1 and raw-1, NOT for srv-1
+      expect(prisma.stockLevel.update).toHaveBeenCalledTimes(2);
+      expect(prisma.productBatch.create).toHaveBeenCalledTimes(2);
+
+      // Journal entry lines: PRODUCT (2910), RAW_MATERIAL (1010), SERVICE (9420), VAT (4410)
+      const jeCalls = prisma.journalEntry.create.mock.calls;
+      const lastJeCall = jeCalls[jeCalls.length - 1][0];
+      const lines = lastJeCall.data.lines.create;
+      expect(lines).toHaveLength(4);
+      expect(lines.find((l: any) => l.debitAccountId === 'acc-2910')?.amount).toBe(200000);
+      expect(lines.find((l: any) => l.debitAccountId === 'acc-1010')?.amount).toBe(100000);
+      expect(lines.find((l: any) => l.debitAccountId === 'acc-9420')?.amount).toBe(50000);
+      expect(lines.find((l: any) => l.debitAccountId === 'acc-4410')?.amount).toBe(42000);
+    });
+
     it('should block unposting if payments are already linked to the receipt', async () => {
       prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-paid',
@@ -472,6 +550,36 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
           counterpartyId: 'supp-1',
           warehouseId: 'wh-1',
           items: [{ productId: 'prod-1', quantity: 5, unitPrice: 100000 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should disallow returning SERVICE items in purchase return', async () => {
+      prisma.purchaseReturn.count.mockResolvedValue(0);
+      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+        id: 'rec-srv',
+        status: PurchaseDocStatus.POSTED,
+        totalAmount: 50000,
+        returns: [],
+        items: [
+          {
+            id: 'item-srv',
+            productId: 'srv-1',
+            quantity: 1,
+            returnedQuantity: 0,
+            unitPrice: 50000,
+            product: { id: 'srv-1', type: 'SERVICE' },
+          },
+        ],
+        batches: [],
+      });
+
+      await expect(
+        service.createReturn('tenant-123', 'user-1', {
+          receiptId: 'rec-srv',
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          items: [{ productId: 'srv-1', quantity: 1, unitPrice: 50000 }],
         }),
       ).rejects.toThrow(BadRequestException);
     });

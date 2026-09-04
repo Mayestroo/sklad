@@ -14,6 +14,7 @@ export interface CreateProductDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   initialSkuOrBarcode?: string;
+  initialType?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE';
   onSuccess?: (createdProduct: any, initialQuantity?: number) => void;
 }
 
@@ -21,12 +22,14 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   isOpen,
   onClose,
   initialSkuOrBarcode = '',
+  initialType = 'PRODUCT',
   onSuccess,
 }) => {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
+  const [itemType, setItemType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>(initialType);
   const [name, setName] = useState('');
   const [unitOfMeasure, setUnitOfMeasure] = useState('piece');
   const [quantity, setQuantity] = useState<number | string>(1);
@@ -35,6 +38,12 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setItemType(initialType || 'PRODUCT');
+    }
+  }, [isOpen, initialType]);
 
   useEffect(() => {
     if (isOpen && initialSkuOrBarcode) {
@@ -64,13 +73,14 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
     try {
       const randomCode = Math.floor(100000 + Math.random() * 900000);
+      const prefix = itemType === 'RAW_MATERIAL' ? 'RAW' : itemType === 'SERVICE' ? 'SRV' : 'PRD';
       const payload = {
         name: {
           uz: finalName,
           ru: finalName,
         },
-        sku: `PRD-${randomCode}`,
-        type: 'PRODUCT',
+        sku: `${prefix}-${randomCode}`,
+        type: itemType,
         unitOfMeasure: unitOfMeasure || 'piece',
         costPrice: Number(costPrice) || 0,
         salePrice: Number(sellingPrice) || 0,
@@ -90,7 +100,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       if (onSuccess) onSuccess(res, savedQuantity);
       onClose();
     } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка сохранения товара' : 'Tovarni saqlashda xatolik'));
+      setError(err?.message || (isRu ? 'Ошибка сохранения позиции' : 'Pozitsiyani saqlashda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -134,6 +144,34 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     }
   };
 
+  const getDrawerTitle = () => {
+    if (itemType === 'RAW_MATERIAL') return isRu ? 'Новое сырьё / материал' : 'Yangi Xomashyo Qo‘shish';
+    if (itemType === 'SERVICE') return isRu ? 'Новая услуга' : 'Yangi Xizmat Qo‘shish';
+    return isRu ? 'Новый товар' : 'Yangi Tovar Qo‘shish';
+  };
+
+  const getDrawerDescription = () => {
+    if (itemType === 'RAW_MATERIAL') {
+      return isRu
+        ? 'Быстрое добавление сырья и производственных материалов в документ'
+        : 'Ishlab chiqarish xomashyosi va materiallarini tezkor kiritish';
+    }
+    if (itemType === 'SERVICE') {
+      return isRu
+        ? 'Быстрое добавление транспортных или иных услуг в документ'
+        : 'Yetkazib berish yoki boshqa xizmatlarni tezkor kiritish';
+    }
+    return isRu
+      ? 'Быстрое добавление нового товара в каталог и документ'
+      : 'Yangi tovar, miqdori va narxlarini tezkor kiritish';
+  };
+
+  const getSubmitLabel = () => {
+    if (itemType === 'RAW_MATERIAL') return isRu ? 'Сохранить сырьё (Ctrl+Enter)' : 'Xomashyoni saqlash (Ctrl+Enter)';
+    if (itemType === 'SERVICE') return isRu ? 'Сохранить услугу (Ctrl+Enter)' : 'Xizmatni saqlash (Ctrl+Enter)';
+    return isRu ? 'Сохранить товар (Ctrl+Enter)' : 'Tovarni saqlash (Ctrl+Enter)';
+  };
+
   return (
     <Drawer
       isOpen={isOpen}
@@ -141,12 +179,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         resetForm();
         onClose();
       }}
-      title={isRu ? 'Новый товар' : 'Yangi Tovar Qo‘shish'}
-      description={
-        isRu
-          ? 'Быстрое добавление нового товара в каталог и документ'
-          : 'Yangi tovar, miqdori va narxlarini tezkor kiritish'
-      }
+      title={getDrawerTitle()}
+      description={getDrawerDescription()}
       icon={<PackagePlus size={20} />}
       size="md"
       onSubmitShortcut={handleSubmit}
@@ -175,7 +209,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             ) : (
               <>
                 <CheckCircle2 size={16} />
-                {isRu ? 'Сохранить товар (Ctrl+Enter)' : 'Tovarni saqlash (Ctrl+Enter)'}
+                {getSubmitLabel()}
               </>
             )}
           </Button>
@@ -202,15 +236,81 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {/* Type Segmented Switch */}
+        <div>
+          <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+            {isRu ? 'Тип номенклатуры' : 'Nomenklatura turi'}
+          </label>
+          <div style={{ display: 'flex', borderRadius: 'var(--radius-md)', padding: '3px', backgroundColor: 'var(--color-bg-subtle)', border: '1px solid var(--color-border-light)' }}>
+            <button
+              type="button"
+              onClick={() => setItemType('PRODUCT')}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 600,
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: itemType === 'PRODUCT' ? 'var(--color-surface)' : 'transparent',
+                color: itemType === 'PRODUCT' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                boxShadow: itemType === 'PRODUCT' ? 'var(--shadow-sm)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isRu ? 'Товар' : 'Tovar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setItemType('RAW_MATERIAL')}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 600,
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: itemType === 'RAW_MATERIAL' ? 'var(--color-surface)' : 'transparent',
+                color: itemType === 'RAW_MATERIAL' ? '#059669' : 'var(--color-text-secondary)',
+                boxShadow: itemType === 'RAW_MATERIAL' ? 'var(--shadow-sm)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isRu ? 'Сырьё / Материал' : 'Xomashyo'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setItemType('SERVICE')}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 600,
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: itemType === 'SERVICE' ? 'var(--color-surface)' : 'transparent',
+                color: itemType === 'SERVICE' ? '#d97706' : 'var(--color-text-secondary)',
+                boxShadow: itemType === 'SERVICE' ? 'var(--shadow-sm)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isRu ? 'Услуга' : 'Xizmat'}
+            </button>
+          </div>
+        </div>
+
         {/* Product Name (Single Unified Field) */}
         <div>
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-            {isRu ? 'Наименование товара *' : 'Tovar nomi *'}
+            {isRu ? (itemType === 'SERVICE' ? 'Наименование услуги *' : itemType === 'RAW_MATERIAL' ? 'Наименование сырья *' : 'Наименование товара *') : (itemType === 'SERVICE' ? 'Xizmat nomi *' : itemType === 'RAW_MATERIAL' ? 'Xomashyo nomi *' : 'Tovar nomi *')}
           </label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={isRu ? 'Например: Футболка Zara M' : 'Masalan: Erkaklar futbolkasi Zara M'}
+            placeholder={isRu ? (itemType === 'SERVICE' ? 'Например: Доставка и логистика' : itemType === 'RAW_MATERIAL' ? 'Например: Алюминиевый профиль 60x40' : 'Например: Футболка Zara M') : (itemType === 'SERVICE' ? 'Masalan: Transport xizmati' : itemType === 'RAW_MATERIAL' ? 'Masalan: Alyumin profil 60x40' : 'Masalan: Futbolka Zara M')}
             autoFocus
           />
         </div>

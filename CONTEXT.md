@@ -62,6 +62,19 @@ _Avoid_: Document unlock, forced unpost, stock override
 An inline creation dialog enabling operators to create new products, categories, or counterparties directly within the purchase receipt creation workflow without leaving the page.
 _Avoid_: Context switch, background registration, external entity setup
 
+**Nomenclature Item Type**:
+The classification of an item in the unified catalog as either a finished good (`PRODUCT`), raw material or industrial input (`RAW_MATERIAL`), or service (`SERVICE`).
+_Avoid_: Stock category, item status, billing tag
+
+**Raw Material Inbound**:
+Inbound processing of raw materials (`RAW_MATERIAL`) within a purchase receipt, increasing warehouse stock and establishing FIFO batches under National Accounting Standards Account 1010 (Materials & Supplies) rather than merchandise Account 2910.
+_Avoid_: Production intake, factory receipt, direct charging
+
+**Service Purchase Inbound**:
+The recording of services (`SERVICE`) directly on a purchase receipt, debiting operational expense accounts (such as 9420/9430) and crediting supplier payable (6010) without incrementing warehouse stock levels or creating inventory batches.
+_Avoid_: Non-stock receipt, virtual inbound, intangible intake
+
+
 ### Orders & Fulfillment
 
 **Sales Order (Zakaz)**:

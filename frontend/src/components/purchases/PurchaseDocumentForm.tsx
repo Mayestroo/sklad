@@ -59,6 +59,7 @@ interface ProductOption {
   barcode?: string;
   costPrice: number;
   unitOfMeasure?: string;
+  type?: string;
 }
 
 interface ItemRow {
@@ -143,6 +144,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [isQuickSupplierOpen, setIsQuickSupplierOpen] = useState(false);
   const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false);
   const [isQuickProductOpen, setIsQuickProductOpen] = useState(false);
+  const [quickProductType, setQuickProductType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>('PRODUCT');
+  const [isCreateDropdownOpen, setIsCreateDropdownOpen] = useState(false);
   const [quickProductSearch, setQuickProductSearch] = useState('');
   const [activeRowIndexForNewProduct, setActiveRowIndexForNewProduct] = useState<number | null>(null);
 
@@ -368,8 +371,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     if (items.some((i) => !i.productId || i.quantity <= 0)) {
       setError(
         isRu
-          ? 'Выберите товар и укажите правильное количество во всех строках'
-          : 'Barcha qatorlarda tovar tanlanishi va miqdor kiritilishi shart'
+          ? 'Выберите номенклатуру и укажите правильное количество во всех строках'
+          : 'Barcha qatorlarda nomenklatura tanlanishi va miqdor kiritilishi shart'
       );
       return null;
     }
@@ -559,9 +562,77 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
 
 
+  const getNomenclatureBadge = (type?: string) => {
+    if (type === 'RAW_MATERIAL') {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontSize: '10px',
+            fontWeight: 600,
+            padding: '1px 6px',
+            borderRadius: '4px',
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+            color: '#059669',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            lineHeight: '14px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {isRu ? 'Сырьё' : 'Xomashyo'}
+        </span>
+      );
+    }
+    if (type === 'SERVICE') {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontSize: '10px',
+            fontWeight: 600,
+            padding: '1px 6px',
+            borderRadius: '4px',
+            backgroundColor: 'rgba(245, 158, 11, 0.12)',
+            color: '#d97706',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            lineHeight: '14px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {isRu ? 'Услуга' : 'Xizmat'}
+        </span>
+      );
+    }
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          fontSize: '10px',
+          fontWeight: 600,
+          padding: '1px 6px',
+          borderRadius: '4px',
+          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+          color: '#2563eb',
+          border: '1px solid rgba(59, 130, 246, 0.3)',
+          lineHeight: '14px',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+      >
+        {isRu ? 'Товар' : 'Tovar'}
+      </span>
+    );
+  };
+
   const productOptions: SelectOption[] = products.map((p) => ({
     value: p.id,
     label: `${getProductName(p.name)} ${p.sku ? `(${p.sku})` : ''}`,
+    icon: getNomenclatureBadge(p.type),
   }));
 
   const getDocStatusBadge = (st: string) => {
@@ -928,7 +999,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Товары в документе' : 'Hujjatdagi Tovarlar'} ({items.length})
+            {isRu ? 'Состав документа' : 'Hujjat tarkibi'} ({items.length})
           </h3>
 
           {!isReadOnly && (
@@ -948,18 +1019,159 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 </Button>
               </form>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setQuickProductSearch('');
-                  setIsQuickProductOpen(true);
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <PackagePlus size={14} /> {isRu ? 'Новый товар' : 'Yangi tovar'}
-              </Button>
+              {/* Split-button for creating new nomenclature items */}
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setQuickProductSearch('');
+                      setQuickProductType('PRODUCT');
+                      setIsQuickProductOpen(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      borderTopRightRadius: 0,
+                      borderBottomRightRadius: 0,
+                      borderRight: '1px solid var(--color-border-light)',
+                    }}
+                  >
+                    <PackagePlus size={14} /> {isRu ? 'Новая позиция' : '+ Yangi tovar'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsCreateDropdownOpen((prev) => !prev)}
+                    style={{
+                      padding: '0 8px',
+                      borderTopLeftRadius: 0,
+                      borderBottomLeftRadius: 0,
+                    }}
+                    aria-label={isRu ? 'Выбрать тип' : 'Turini tanlash'}
+                  >
+                    <ChevronDown size={14} />
+                  </Button>
+                </div>
+
+                {isCreateDropdownOpen && (
+                  <>
+                    <div
+                      style={{ position: 'fixed', inset: 0, zIndex: 25 }}
+                      onClick={() => setIsCreateDropdownOpen(false)}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 'calc(100% + 4px)',
+                        zIndex: 30,
+                        backgroundColor: 'var(--color-surface, #ffffff)',
+                        border: '1px solid var(--color-border-light, #e2e8f0)',
+                        borderRadius: 'var(--radius-md, 8px)',
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                        minWidth: '180px',
+                        padding: '4px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreateDropdownOpen(false);
+                          setQuickProductSearch('');
+                          setQuickProductType('PRODUCT');
+                          setIsQuickProductOpen(true);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '8px 10px',
+                          fontSize: 'var(--text-xs)',
+                          fontWeight: 500,
+                          color: 'var(--color-text-primary)',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          borderRadius: 'var(--radius-sm, 6px)',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563eb' }} />
+                        {isRu ? '+ Новый товар' : '+ Yangi Tovar'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreateDropdownOpen(false);
+                          setQuickProductSearch('');
+                          setQuickProductType('RAW_MATERIAL');
+                          setIsQuickProductOpen(true);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '8px 10px',
+                          fontSize: 'var(--text-xs)',
+                          fontWeight: 500,
+                          color: 'var(--color-text-primary)',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          borderRadius: 'var(--radius-sm, 6px)',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669' }} />
+                        {isRu ? '+ Новое сырьё' : '+ Yangi Xomashyo'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreateDropdownOpen(false);
+                          setQuickProductSearch('');
+                          setQuickProductType('SERVICE');
+                          setIsQuickProductOpen(true);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '8px 10px',
+                          fontSize: 'var(--text-xs)',
+                          fontWeight: 500,
+                          color: 'var(--color-text-primary)',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          borderRadius: 'var(--radius-sm, 6px)',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#d97706' }} />
+                        {isRu ? '+ Новая услуга' : '+ Yangi Xizmat'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -971,7 +1183,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
-                  {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
+                  {isRu ? 'Номенклатура / Позиция' : 'Nomenklatura / Mahsulot'}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
@@ -1016,18 +1228,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         options={productOptions}
                         value={item.productId}
                         onChange={(val) => handleItemChange(idx, 'productId', val)}
-                        placeholder={isRu ? 'Выберите товар...' : 'Tovarni tanlang...'}
+                        placeholder={isRu ? 'Выберите номенклатуру...' : 'Nomenklaturani tanlang...'}
                         disabled={isReadOnly}
                         onCreateNew={
                           !isReadOnly
                             ? (searchQuery) => {
                                 setActiveRowIndexForNewProduct(idx);
                                 setQuickProductSearch(searchQuery || '');
+                                setQuickProductType('PRODUCT');
                                 setIsQuickProductOpen(true);
                               }
                             : undefined
                         }
-                        createNewLabel={isRu ? 'Создать новый товар' : 'Yangi tovar qo‘shish'}
+                        createNewLabel={isRu ? 'Создать новую номенклатуру' : 'Yangi nomenklatura qo‘shish'}
                       />
                     </td>
 
@@ -1134,7 +1347,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            <span>{isRu ? 'Сумма товаров:' : 'Tovarlar summasi:'}</span>
+            <span>{isRu ? 'Сумма позиций:' : 'Pozitsiyalar summasi:'}</span>
             <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.subtotal, locale)}</span>
           </div>
 
@@ -1226,6 +1439,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           isOpen={isQuickProductOpen}
           onClose={() => setIsQuickProductOpen(false)}
           initialSkuOrBarcode={quickProductSearch}
+          initialType={quickProductType}
           onSuccess={handleProductAdded}
         />
       )}

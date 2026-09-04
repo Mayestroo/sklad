@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
-import { X, Package, Sparkles } from 'lucide-react';
+import { X, Package, Sparkles, Layers, Wrench } from 'lucide-react';
 
 interface QuickAddProductModalProps {
   isOpen: boolean;
@@ -20,8 +20,10 @@ interface QuickAddProductModalProps {
     costPrice: number;
     salePrice?: number;
     unitOfMeasure?: string;
+    type?: string;
   }) => void;
   initialSkuOrBarcode?: string;
+  initialType?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE';
 }
 
 export function QuickAddProductModal({
@@ -29,11 +31,13 @@ export function QuickAddProductModal({
   onClose,
   onSuccess,
   initialSkuOrBarcode = '',
+  initialType = 'PRODUCT',
 }: QuickAddProductModalProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
+  const [itemType, setItemType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>(initialType);
   const [nameUz, setNameUz] = useState('');
   const [nameRu, setNameRu] = useState('');
   const [sku, setSku] = useState(initialSkuOrBarcode || '');
@@ -43,6 +47,15 @@ export function QuickAddProductModal({
   const [salePrice, setSalePrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setItemType(initialType || 'PRODUCT');
+      if (initialType === 'SERVICE') {
+        setUnitOfMeasure('piece');
+      }
+    }
+  }, [isOpen, initialType]);
 
   if (!isOpen) return null;
 
@@ -57,7 +70,8 @@ export function QuickAddProductModal({
 
   const generateSku = () => {
     const random = Math.floor(1000 + Math.random() * 9000);
-    setSku(`PRD-${Date.now().toString().slice(-4)}-${random}`);
+    const prefix = itemType === 'RAW_MATERIAL' ? 'RAW' : itemType === 'SERVICE' ? 'SRV' : 'PRD';
+    setSku(`${prefix}-${Date.now().toString().slice(-4)}-${random}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,7 +80,7 @@ export function QuickAddProductModal({
     const resolvedNameRu = nameRu.trim() || nameUz.trim();
 
     if (!resolvedNameUz) {
-      setError(isRu ? 'Введите наименование товара' : 'Tovar nomini kiriting');
+      setError(isRu ? 'Введите наименование' : 'Nomini kiriting');
       return;
     }
     if (!sku.trim()) {
@@ -88,9 +102,9 @@ export function QuickAddProductModal({
             uz: resolvedNameUz,
             ru: resolvedNameRu,
           },
-          type: 'PRODUCT',
+          type: itemType,
           sku: sku.trim(),
-          barcode: barcode.trim() || undefined,
+          barcode: itemType !== 'SERVICE' && barcode.trim() ? barcode.trim() : undefined,
           unitOfMeasure,
           costPrice: Number(costPrice) || 0,
           salePrice: Number(salePrice) || 0,
@@ -109,10 +123,22 @@ export function QuickAddProductModal({
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : undefined;
-      setError(msg || (isRu ? 'Ошибка при создании товара' : 'Tovarni saqlashda xatolik yuz berdi'));
+      setError(msg || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
+  };
+
+  const getHeaderIcon = () => {
+    if (itemType === 'RAW_MATERIAL') return <Layers className="w-5 h-5 text-emerald-600" />;
+    if (itemType === 'SERVICE') return <Wrench className="w-5 h-5 text-amber-600" />;
+    return <Package className="w-5 h-5 text-primary" />;
+  };
+
+  const getHeaderTitle = () => {
+    if (itemType === 'RAW_MATERIAL') return isRu ? 'Быстрое создание сырья / материала' : 'Yangi xomashyo yaratish';
+    if (itemType === 'SERVICE') return isRu ? 'Быстрое создание услуги' : 'Yangi xizmat yaratish';
+    return isRu ? 'Быстрое создание товара' : 'Yangi tovar yaratish';
   };
 
   return (
@@ -120,15 +146,15 @@ export function QuickAddProductModal({
       <div className="bg-surface dark:bg-zinc-900 rounded-2xl shadow-2xl border border-border w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-surface-hover/30">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-primary/10 text-primary">
-              <Package className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-primary/10">
+              {getHeaderIcon()}
             </div>
             <div>
               <h3 className="font-semibold text-text-primary text-base">
-                {isRu ? 'Быстрое создание товара' : 'Yangi tovar yaratish'}
+                {getHeaderTitle()}
               </h3>
               <p className="text-xs text-text-muted">
-                {isRu ? 'Добавьте товар в номенклатуру без выхода из формы' : 'Xarid oynasidan chiqmasdan yangi tovar ochish'}
+                {isRu ? 'Добавьте позицию в номенклатуру без выхода из формы' : 'Xarid oynasidan chiqmasdan yangi pozitsiya ochish'}
               </p>
             </div>
           </div>
@@ -139,6 +165,60 @@ export function QuickAddProductModal({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Type Segmented Switch */}
+        <div className="px-6 pt-4">
+          <div className="flex rounded-xl bg-surface-hover/60 p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => {
+                setItemType('PRODUCT');
+                if (sku.startsWith('RAW-') || sku.startsWith('SRV-')) {
+                  setSku(`PRD-${sku.slice(4)}`);
+                }
+              }}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                itemType === 'PRODUCT'
+                  ? 'bg-white dark:bg-zinc-800 text-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {isRu ? 'Товар' : 'Tovar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setItemType('RAW_MATERIAL');
+                if (sku.startsWith('PRD-') || sku.startsWith('SRV-')) {
+                  setSku(`RAW-${sku.slice(4)}`);
+                }
+              }}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                itemType === 'RAW_MATERIAL'
+                  ? 'bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {isRu ? 'Сырьё / Материал' : 'Xomashyo'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setItemType('SERVICE');
+                if (sku.startsWith('PRD-') || sku.startsWith('RAW-')) {
+                  setSku(`SRV-${sku.slice(4)}`);
+                }
+              }}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                itemType === 'SERVICE'
+                  ? 'bg-white dark:bg-zinc-800 text-amber-600 shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              {isRu ? 'Услуга' : 'Xizmat'}
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -173,7 +253,7 @@ export function QuickAddProductModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid ${itemType === 'SERVICE' ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -191,20 +271,22 @@ export function QuickAddProductModal({
               <Input
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
-                placeholder="IP15-BLK-128"
+                placeholder={itemType === 'RAW_MATERIAL' ? 'RAW-1010-01' : itemType === 'SERVICE' ? 'SRV-TRAN-01' : 'PRD-001'}
                 required
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                {isRu ? 'Штрихкод' : 'Shtrixkod'}
-              </label>
-              <Input
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                placeholder="4780001234567"
-              />
-            </div>
+            {itemType !== 'SERVICE' && (
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                  {isRu ? 'Штрихкод' : 'Shtrixkod'}
+                </label>
+                <Input
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  placeholder="4780001234567"
+                />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -220,7 +302,7 @@ export function QuickAddProductModal({
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                {isRu ? 'Цена закупки' : 'Xarid narxi'}
+                {isRu ? (itemType === 'SERVICE' ? 'Стоимость (за ед.)' : 'Цена закупки') : (itemType === 'SERVICE' ? 'Xizmat narxi' : 'Xarid narxi')}
               </label>
               <Input
                 type="number"
@@ -232,7 +314,7 @@ export function QuickAddProductModal({
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                {isRu ? 'Цена продажи' : 'Sotuv narxi'}
+                {isRu ? (itemType === 'SERVICE' ? 'Тариф продажи' : 'Цена продажи') : (itemType === 'SERVICE' ? 'Sotuv tarifi' : 'Sotuv narxi')}
               </label>
               <Input
                 type="number"
@@ -249,7 +331,11 @@ export function QuickAddProductModal({
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button type="submit" variant="primary" disabled={loading}>
-              {loading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать товар' : 'Tovarni yaratish'}
+              {loading
+                ? (isRu ? 'Создание...' : 'Yaratilmoqda...')
+                : isRu
+                ? (itemType === 'SERVICE' ? 'Создать услугу' : itemType === 'RAW_MATERIAL' ? 'Создать сырьё' : 'Создать товар')
+                : (itemType === 'SERVICE' ? 'Xizmatni yaratish' : itemType === 'RAW_MATERIAL' ? 'Xomashyoni yaratish' : 'Tovarni yaratish')}
             </Button>
           </div>
         </form>

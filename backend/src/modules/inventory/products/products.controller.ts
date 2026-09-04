@@ -32,8 +32,9 @@ export class ProductsController {
     @CurrentTenant() tenantId: string,
     @Query('category') categoryId?: string,
     @Query('search') search?: string,
+    @Query('type') type?: string,
   ) {
-    return this.productsService.findAll(tenantId, categoryId, search);
+    return this.productsService.findAll(tenantId, categoryId, search, type);
   }
 
   @Get('low-stock')

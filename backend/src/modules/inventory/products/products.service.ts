@@ -43,21 +43,23 @@ export class ProductsService {
     });
   }
 
-  async findAll(tenantId: string, categoryId?: string, search?: string) {
+  async findAll(
+    tenantId: string,
+    categoryId?: string,
+    search?: string,
+    type?: string,
+  ) {
     const where: any = { tenantId, isActive: true };
 
     if (categoryId) {
       where.categoryId = categoryId;
     }
 
-    if (search) {
-      where.OR = [
-        { sku: { contains: search, mode: 'insensitive' } },
-        { barcode: { contains: search, mode: 'insensitive' } },
-      ];
+    if (type && type !== 'ALL') {
+      where.type = type as any;
     }
 
-    const products = await this.prisma.product.findMany({
+    let products = await this.prisma.product.findMany({
       where,
       include: {
         category: true,
@@ -67,6 +69,21 @@ export class ProductsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      products = products.filter((p) => {
+        const skuMatch = p.sku?.toLowerCase().includes(q);
+        const barcodeMatch = p.barcode?.toLowerCase().includes(q);
+        const nameObj =
+          typeof p.name === 'object' && p.name !== null
+            ? (p.name as Record<string, string>)
+            : {};
+        const uzMatch = nameObj.uz?.toLowerCase().includes(q);
+        const ruMatch = nameObj.ru?.toLowerCase().includes(q);
+        return skuMatch || barcodeMatch || uzMatch || ruMatch;
+      });
+    }
 
     // Compute total stock per product across warehouses
     return products.map((p) => {

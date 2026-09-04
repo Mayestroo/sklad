@@ -382,8 +382,14 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Update stock levels & create batches
+      // 1. Update stock levels & create batches (physical items only)
       for (const item of receipt.items) {
+        const itemType = item.product?.type || 'PRODUCT';
+        if (itemType === 'SERVICE') {
+          // Services do not increment physical stock or create product batches
+          continue;
+        }
+
         const stockLevel = await tx.stockLevel.findUnique({
           where: {
             tenantId_warehouseId_productId: {
@@ -438,7 +444,9 @@ export class PurchasesService {
       });
 
       // 3. Accounting journal entries according to BHMS / NAS Standard
-      // Debit 2910 (Inventory / Goods): Net goods cost + allocated expenses
+      // Debit 2910 (Finished Goods / Tovarlar): Net product cost + allocated expenses
+      // Debit 1010 (Raw Materials & Supplies / Xomashyo): Net raw material cost + allocated expenses
+      // Debit 9420/9430 (Operating Expense / Xizmat xarajatlari): Service costs
       // Debit 4410 (Input VAT / Kiruvchi QQS): VAT amount
       // Credit 6010 (Accounts Payable / Yetkazib beruvchiga qarz): Total Amount
       const entryCount = await tx.journalEntry.count({ where: { tenantId } });
@@ -447,6 +455,18 @@ export class PurchasesService {
       const inventoryAcc = await tx.account.findFirst({
         where: { tenantId, code: '2910' },
       });
+      const rawMaterialAcc =
+        (await tx.account.findFirst({
+          where: { tenantId, code: '1010' },
+        })) || inventoryAcc;
+      const serviceExpenseAcc =
+        (await tx.account.findFirst({
+          where: { tenantId, code: '9420' },
+        })) ||
+        (await tx.account.findFirst({
+          where: { tenantId, code: '9430' },
+        })) ||
+        inventoryAcc;
       const vatAcc = await tx.account.findFirst({
         where: { tenantId, code: '4410' },
       });
@@ -454,21 +474,72 @@ export class PurchasesService {
         where: { tenantId, code: '6010' },
       });
 
-      if (inventoryAcc && supplierAcc) {
-        const netGoodsCost =
-          Number(receipt.subtotalAmount) -
-          Number(receipt.discountAmount) +
-          Number(receipt.additionalExpensesTotal);
-        const vatSum = Number(receipt.vatAmount);
+      if (supplierAcc) {
+        let productSum = 0;
+        let rawMaterialSum = 0;
+        let serviceSum = 0;
 
-        const journalLines: any[] = [
-          {
+        const totalNet =
+          Number(receipt.subtotalAmount || 0) -
+          Number(receipt.discountAmount || 0) +
+          Number(receipt.additionalExpensesTotal || 0);
+
+        const hasSpecialTypes = receipt.items.some(
+          (i: any) =>
+            i.product?.type === 'RAW_MATERIAL' || i.product?.type === 'SERVICE',
+        );
+
+        if (!hasSpecialTypes) {
+          productSum = totalNet;
+        } else {
+          for (const item of receipt.items) {
+            const lineTotal =
+              item.totalPrice !== undefined
+                ? Number(item.totalPrice)
+                : Number(item.quantity || 0) * Number(item.unitPrice || 0);
+            const allocated = Number(item.allocatedExpenses || 0);
+            const itemNet = lineTotal + allocated;
+            const itemType = item.product?.type || 'PRODUCT';
+
+            if (itemType === 'RAW_MATERIAL') {
+              rawMaterialSum += itemNet;
+            } else if (itemType === 'SERVICE') {
+              serviceSum += lineTotal;
+            } else {
+              productSum += itemNet;
+            }
+          }
+        }
+
+        const vatSum = Number(receipt.vatAmount);
+        const journalLines: any[] = [];
+
+        if (productSum > 0 && inventoryAcc) {
+          journalLines.push({
             debitAccountId: inventoryAcc.id,
             creditAccountId: supplierAcc.id,
-            amount: netGoodsCost,
+            amount: productSum,
             description: `Kiruvchi tovarlar va taqsimlangan xarajatlar qiymati (№ ${receipt.docNumber})`,
-          },
-        ];
+          });
+        }
+
+        if (rawMaterialSum > 0 && rawMaterialAcc) {
+          journalLines.push({
+            debitAccountId: rawMaterialAcc.id,
+            creditAccountId: supplierAcc.id,
+            amount: rawMaterialSum,
+            description: `Kiruvchi xomashyo va materiallar qiymati (№ ${receipt.docNumber})`,
+          });
+        }
+
+        if (serviceSum > 0 && serviceExpenseAcc) {
+          journalLines.push({
+            debitAccountId: serviceExpenseAcc.id,
+            creditAccountId: supplierAcc.id,
+            amount: serviceSum,
+            description: `Xarid bo‘yicha ko‘rsatilgan xizmatlar xarajati (№ ${receipt.docNumber})`,
+          });
+        }
 
         if (vatSum > 0 && vatAcc) {
           journalLines.push({
@@ -479,19 +550,21 @@ export class PurchasesService {
           });
         }
 
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber,
-            entryDate: receipt.docDate,
-            description: `Tovar qabul qilish № ${receipt.docNumber} (${receipt.counterparty.name})`,
-            sourceDocType: 'PurchaseReceipt',
-            sourceDocId: receipt.id,
-            lines: {
-              create: journalLines,
+        if (journalLines.length > 0) {
+          await tx.journalEntry.create({
+            data: {
+              tenantId,
+              entryNumber,
+              entryDate: receipt.docDate,
+              description: `Nomenklatura qabul qilish № ${receipt.docNumber} (${receipt.counterparty.name})`,
+              sourceDocType: 'PurchaseReceipt',
+              sourceDocId: receipt.id,
+              lines: {
+                create: journalLines,
+              },
             },
-          },
-        });
+          });
+        }
       }
 
       // 4. Record Audit Log
@@ -1001,7 +1074,11 @@ export class PurchasesService {
     if (dto.receiptId) {
       receipt = await this.prisma.purchaseReceipt.findUnique({
         where: { id: dto.receiptId },
-        include: { items: true, batches: true, returns: true },
+        include: {
+          items: { include: { product: true } },
+          batches: true,
+          returns: true,
+        },
       });
 
       if (!receipt) {
@@ -1036,6 +1113,12 @@ export class PurchasesService {
           if (!receiptItem) {
             throw new BadRequestException(
               `Tovar #${item.productId} ushbu xarid tarkibida mavjud emas`,
+            );
+          }
+
+          if (receiptItem.product?.type === 'SERVICE') {
+            throw new BadRequestException(
+              `Xizmat (SERVICE) turidagi pozitsiyalarni ombordan qaytarish taqiqlanadi`,
             );
           }
 
