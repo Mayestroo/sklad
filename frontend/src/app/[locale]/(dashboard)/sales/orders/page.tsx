@@ -26,9 +26,15 @@ import {
   Clock,
   Layers,
   ShoppingBag,
+  PackageCheck,
+  Printer,
 } from 'lucide-react';
 import { ORDER_STATUS_LABELS } from '@/components/sales/SalesOrderForm';
 import { PaySalesOrderModal } from '@/components/sales/PaySalesOrderModal';
+import { OrderPickListModal } from '@/components/sales/OrderPickListModal';
+import { OrderDeliveryNoteModal } from '@/components/sales/OrderDeliveryNoteModal';
+import { invalidateApiCache } from '@/lib/cache';
+import { apiFetch } from '@/lib/api';
 
 interface CounterpartyItem {
   id: string;
@@ -76,7 +82,7 @@ interface OrderStatsSummary {
 }
 
 export default function SalesOrdersPage() {
-  const { token, company } = useAuth();
+  const { token, company, hasRole, hasPermission } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
@@ -91,6 +97,73 @@ export default function SalesOrdersPage() {
 
   // Modals
   const [payOrder, setPayOrder] = useState<OrderItemSummary | null>(null);
+  const [pickListOrder, setPickListOrder] = useState<any | null>(null);
+  const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<any | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+
+  const isWarehouseOperator = Boolean(
+    hasRole('ADMIN') ||
+    hasRole('SUPER_ADMIN') ||
+    hasRole('MANAGER') ||
+    hasRole('WAREHOUSE') ||
+    hasRole('WAREHOUSE_MANAGER') ||
+    hasRole('STOREKEEPER') ||
+    hasRole('OMBORCHI') ||
+    hasPermission('inventory:create') ||
+    hasPermission('sales:post')
+  );
+
+  const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
+    if (!token) return;
+    setUpdatingOrderId(orderId);
+    try {
+      await apiFetch(`/sales/orders/${orderId}/status`, {
+        method: 'PATCH',
+        token,
+        tenantId: company?.id,
+        body: JSON.stringify({ status: newStatus }),
+      });
+      invalidateApiCache('/sales/orders*');
+      fetchOrders();
+      fetchStats();
+    } catch (err: any) {
+      alert(err.message || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const getNextStatuses = (currentStatus: string): Array<{ status: string; labelUz: string; labelRu: string }> => {
+    switch (currentStatus) {
+      case 'NEW':
+        return [
+          { status: 'ACCEPTED', labelUz: 'Qabul qilish', labelRu: 'Принять' },
+          { status: 'PROCESSING', labelUz: 'Yig‘ishga olish', labelRu: 'В сборку' },
+          { status: 'CANCELLED', labelUz: 'Bekor qilish', labelRu: 'Отменить' },
+        ];
+      case 'ACCEPTED':
+        return [
+          { status: 'PROCESSING', labelUz: 'Yig‘ishga olish', labelRu: 'В сборку' },
+          { status: 'READY_FOR_SHIPMENT', labelUz: 'Jo‘natishga tayyorlash', labelRu: 'Готов к отгрузке' },
+          { status: 'SHIPPED', labelUz: 'Otgruzka qilish (Sotish)', labelRu: 'Отгрузить заказ' },
+          { status: 'CANCELLED', labelUz: 'Bekor qilish', labelRu: 'Отменить' },
+        ];
+      case 'PROCESSING':
+        return [
+          { status: 'READY_FOR_SHIPMENT', labelUz: 'Jo‘natishga tayyorlash', labelRu: 'Готов к отгрузке' },
+          { status: 'SHIPPED', labelUz: 'Otgruzka qilish (Sotish)', labelRu: 'Отгрузить заказ' },
+          { status: 'CANCELLED', labelUz: 'Bekor qilish', labelRu: 'Отменить' },
+        ];
+      case 'READY_FOR_SHIPMENT':
+      case 'READY_TO_SHIP':
+        return [
+          { status: 'SHIPPED', labelUz: 'Otgruzka qilish (Sotish)', labelRu: 'Отгрузить заказ' },
+          { status: 'CANCELLED', labelUz: 'Bekor qilish', labelRu: 'Отменить' },
+        ];
+      default:
+        return [];
+    }
+  };
 
   // SWR Cached Reference Data (5 min fresh time)
   const { data: rawCp } = useApiData<CounterpartyItem[] | { data: CounterpartyItem[] }>(
@@ -451,9 +524,48 @@ export default function SalesOrdersPage() {
                       </td>
 
                       <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
-                          {isRu ? meta.ru : meta.uz}
-                        </Badge>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                          <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
+                            {isRu ? meta.ru : meta.uz}
+                          </Badge>
+                          {isWarehouseOperator && getNextStatuses(ord.status).length > 0 && (
+                            <select
+                              value=""
+                              disabled={updatingOrderId === ord.id}
+                              onChange={(e) => {
+                                const nextVal = e.target.value;
+                                if (!nextVal) return;
+                                if (nextVal === 'CANCELLED') {
+                                  if (confirm(isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?')) {
+                                    handleQuickStatusChange(ord.id, nextVal);
+                                  }
+                                } else if (nextVal === 'SHIPPED') {
+                                  if (confirm(isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?')) {
+                                    handleQuickStatusChange(ord.id, nextVal);
+                                  }
+                                } else {
+                                  handleQuickStatusChange(ord.id, nextVal);
+                                }
+                              }}
+                              style={{
+                                fontSize: '11px',
+                                padding: '2px 4px',
+                                borderRadius: '4px',
+                                border: '1px solid var(--color-border-light)',
+                                backgroundColor: 'var(--color-bg-primary)',
+                                color: 'var(--color-text-secondary)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <option value="">{isRu ? 'Сменить статус...' : 'Status...'}</option>
+                              {getNextStatuses(ord.status).map((s) => (
+                                <option key={s.status} value={s.status}>
+                                  {isRu ? s.labelRu : s.labelUz}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                       </td>
 
                       <td style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
@@ -476,6 +588,28 @@ export default function SalesOrdersPage() {
                             </Button>
                           </Link>
 
+                          {/* Pick list print button */}
+                          <Button
+                            variant="secondary"
+                            onClick={() => setPickListOrder(ord)}
+                            style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-primary-600)' }}
+                            title={isRu ? 'Лист сборки (Pick List)' : 'Yig‘uv varaqasi'}
+                          >
+                            <PackageCheck size={14} />
+                          </Button>
+
+                          {/* Delivery note print button (if shipped) */}
+                          {ord.status === 'SHIPPED' && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => setDeliveryNoteOrder(ord)}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#059669' }}
+                              title={isRu ? 'Накладная (Yuk xati)' : 'Yuk xati (Nakladnaya)'}
+                            >
+                              <Printer size={14} />
+                            </Button>
+                          )}
+
                           {ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED' && (
                             <Button
                               variant="secondary"
@@ -497,7 +631,7 @@ export default function SalesOrdersPage() {
         )}
       </Card>
 
-      {/* Action Modal */}
+      {/* Action Modals */}
       {payOrder && (
         <PaySalesOrderModal
           isOpen={Boolean(payOrder)}
@@ -507,6 +641,23 @@ export default function SalesOrdersPage() {
             fetchStats();
             fetchOrders();
           }}
+        />
+      )}
+
+      {pickListOrder && (
+        <OrderPickListModal
+          isOpen={Boolean(pickListOrder)}
+          onClose={() => setPickListOrder(null)}
+          order={pickListOrder}
+        />
+      )}
+
+      {deliveryNoteOrder && (
+        <OrderDeliveryNoteModal
+          isOpen={Boolean(deliveryNoteOrder)}
+          onClose={() => setDeliveryNoteOrder(null)}
+          companyName={company?.name}
+          order={deliveryNoteOrder}
         />
       )}
     </div>

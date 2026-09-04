@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import { PaySalesOrderModal } from './PaySalesOrderModal';
 import { PartialDispatchModal } from './PartialDispatchModal';
+import { OrderPickListModal } from './OrderPickListModal';
+import { OrderDeliveryNoteModal } from './OrderDeliveryNoteModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 
@@ -45,6 +47,8 @@ export const ORDER_STATUS_LABELS: Record<string, { uz: string; ru: string; varia
   NEW: { uz: 'Yangi', ru: 'Новый', variant: 'neutral' },
   PENDING_APPROVAL: { uz: 'Tasdiqlashda', ru: 'На согласовании', variant: 'warning' },
   APPROVED: { uz: 'Tasdiqlangan', ru: 'Согласован', variant: 'info' },
+  ACCEPTED: { uz: 'Qabul qilindi', ru: 'Принят', variant: 'info' },
+  PROCESSING: { uz: 'Yig‘ilmoqda', ru: 'В сборке', variant: 'warning' },
   SENT_TO_PRODUCTION: { uz: 'Ishlab chiqarishga yuborilgan', ru: 'Передан в пр-во', variant: 'info' },
   IN_PRODUCTION: { uz: 'Ishlab chiqarilmoqda', ru: 'В производстве', variant: 'warning' },
   PARTIALLY_READY: { uz: 'Qisman tayyor', ru: 'Частично готов', variant: 'warning' },
@@ -52,6 +56,7 @@ export const ORDER_STATUS_LABELS: Record<string, { uz: string; ru: string; varia
   AWAITING_PAYMENT: { uz: 'To‘lov kutilmoqda', ru: 'Ожидает оплаты', variant: 'warning' },
   PAYMENT_CONFIRMED: { uz: 'To‘lov tasdiqlandi', ru: 'Оплата подтверждена', variant: 'success' },
   READY_TO_SHIP: { uz: 'Jo‘natishga tayyor', ru: 'Готов к отгрузке', variant: 'success' },
+  READY_FOR_SHIPMENT: { uz: 'Jo‘natishga tayyor', ru: 'Готов к отгрузке', variant: 'success' },
   PARTIALLY_SHIPPED: { uz: 'Qisman jo‘natilgan', ru: 'Частично отгружен', variant: 'warning' },
   SHIPPED: { uz: 'Jo‘natilgan', ru: 'Отгружен', variant: 'success' },
   COMPLETED: { uz: 'Bajarildi', ru: 'Завершён', variant: 'success' },
@@ -163,6 +168,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   // Modals
   const [isPayOpen, setIsPayOpen] = useState(false);
   const [isDispatchOpen, setIsDispatchOpen] = useState(false);
+  const [isPickListOpen, setIsPickListOpen] = useState(false);
+  const [isDeliveryNoteOpen, setIsDeliveryNoteOpen] = useState(false);
 
   const isLocked = orderStatus !== 'NEW' && orderStatus !== 'PENDING_APPROVAL';
 
@@ -551,6 +558,34 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     }
   };
 
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!orderId) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/status`, {
+        method: 'PATCH',
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (res) {
+        invalidateApiCache('/sales/orders*');
+        setOrderStatus(res.status);
+        setCurrentOrderData(res);
+      }
+    } catch (err: unknown) {
+      console.error(err);
+      const errMsg = err instanceof Error ? err.message : '';
+      setError(errMsg || (isRu ? 'Ошибка обновления статуса' : 'Statusni yangilashda xatolik yuz berdi'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleBackNavigation = () => {
     if (isDirty) {
       const confirmed = window.confirm(
@@ -684,13 +719,68 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             </Button>
           )}
 
-          {(orderStatus === 'READY_TO_SHIP' || orderStatus === 'PARTIALLY_SHIPPED') && (
+          {/* Warehouse workflow buttons */}
+          {orderStatus === 'NEW' && mode === 'edit' && (
+            <Button
+              onClick={() => handleStatusUpdate('ACCEPTED')}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-primary-600)' }}
+            >
+              <CheckCircle2 size={16} /> {isRu ? 'Принять на складе' : 'Omborga qabul qilish'}
+            </Button>
+          )}
+
+          {orderStatus === 'ACCEPTED' && (
+            <Button
+              onClick={() => handleStatusUpdate('PROCESSING')}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f59e0b', color: '#fff' }}
+            >
+              <PackageCheck size={16} /> {isRu ? 'В сборку' : 'Yig‘uvga olish'}
+            </Button>
+          )}
+
+          {orderStatus === 'PROCESSING' && (
+            <Button
+              onClick={() => handleStatusUpdate('READY_FOR_SHIPMENT')}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+            >
+              <CheckCircle2 size={16} /> {isRu ? 'Готов к отгрузке' : 'Jo‘natishga tayyor'}
+            </Button>
+          )}
+
+          {(orderStatus === 'READY_TO_SHIP' || orderStatus === 'READY_FOR_SHIPMENT' || orderStatus === 'PARTIALLY_SHIPPED' || orderStatus === 'PROCESSING') && (
             <Button
               onClick={() => setIsDispatchOpen(true)}
               disabled={loading}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
             >
               <Truck size={16} /> {isRu ? (orderStatus === 'PARTIALLY_SHIPPED' ? 'Отгрузить еще' : 'Отгрузить') : (orderStatus === 'PARTIALLY_SHIPPED' ? 'Keyingi chiqim (jo‘natish)' : 'Ombordan chiqim (jo‘natish)')}
+            </Button>
+          )}
+
+          {/* Pick list print button */}
+          {mode === 'edit' && (
+            <Button
+              variant="secondary"
+              onClick={() => setIsPickListOpen(true)}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <PackageCheck size={16} /> {isRu ? 'Лист сборки' : 'Yig‘uv varaqasi'}
+            </Button>
+          )}
+
+          {/* Delivery Note print button */}
+          {(orderStatus === 'SHIPPED' || orderStatus === 'COMPLETED') && (
+            <Button
+              variant="secondary"
+              onClick={() => setIsDeliveryNoteOpen(true)}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#059669' }}
+            >
+              <Printer size={16} /> {isRu ? 'Накладная' : 'Yuk xati'}
             </Button>
           )}
 
@@ -1165,6 +1255,19 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                 });
               }
             }}
+          />
+
+          <OrderPickListModal
+            isOpen={isPickListOpen}
+            onClose={() => setIsPickListOpen(false)}
+            order={currentOrderData}
+          />
+
+          <OrderDeliveryNoteModal
+            isOpen={isDeliveryNoteOpen}
+            onClose={() => setIsDeliveryNoteOpen(false)}
+            companyName={company?.name}
+            order={currentOrderData}
           />
         </>
       )}

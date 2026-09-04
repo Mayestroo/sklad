@@ -101,6 +101,18 @@ _Avoid_: Manufacturing order, work order, production task
 A `Payment` record linked to a `SalesOrder` via `orderId` (rather than `invoiceId`). Represents money received from a customer before the order has been dispatched and converted to a Sales Invoice. Order Payments accumulate in `paidAmount` on the Sales Order and determine whether the Dispatch Gate is satisfied. After dispatch, they are not re-linked to the resulting Sales Invoice; the invoice's `paidAmount` is computed by summing all payments referencing the originating order.
 _Avoid_: Advance payment, deposit, pre-payment allocation
 
+**Pick List (Yig'uv varaqasi)**:
+An internal operational document printed for warehouse staff during order preparation (`PROCESSING`), itemizing products, SKU, barcodes, units of measure, and quantities to pick while omitting commercial selling prices and discounts.
+_Avoid_: Picking slip, sborshik list, draft delivery note
+
+**Delivery Note (Yuk xati / Nakladnaya)**:
+The formal commercial shipping document printed upon outbound dispatch (`SHIPPED`), itemizing fulfilled products, agreed unit prices, discounts, total sums, VAT, and official signature blocks for warehouse dispatchers and transport couriers.
+_Avoid_: Waybill, shipment bill, bill of lading
+
+**Automatic Stock Reservation**:
+The instantaneous locking of available warehouse inventory upon creating a `SalesOrder` (`NEW`), preventing double-selling while keeping physical stock balances and accounting ledgers intact until explicit dispatch.
+_Avoid_: Inventory freeze, manual hold, virtual deduction
+
 ### Sales & Outbound
 
 **Sales Invoice**:

@@ -13,9 +13,9 @@ export class DispatchOrderItemDto {
 }
 
 export class DispatchSalesOrderDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  warehouseId: string;
+  warehouseId?: string;
 
   @IsOptional()
   @IsArray()

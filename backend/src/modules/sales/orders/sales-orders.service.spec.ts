@@ -457,4 +457,170 @@ describe('SalesOrdersService', () => {
       });
     });
   });
+
+  describe('6. Warehouse Operational State Machine & 1-Click Otgruzka', () => {
+    it('should transition NEW -> ACCEPTED when role is WAREHOUSE', async () => {
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.NEW,
+        warehouseId: 'wh-1',
+        items: [],
+      });
+
+      await service.updateStatus(
+        'tenant-1',
+        'user-1',
+        'order-1',
+        SalesOrderStatus.ACCEPTED,
+        ['WAREHOUSE'],
+      );
+
+      expect(prisma.salesOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: SalesOrderStatus.ACCEPTED },
+      });
+    });
+
+    it('should reject warehouse transition if role is only SELLER', async () => {
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.NEW,
+        items: [],
+      });
+
+      await expect(
+        service.updateStatus(
+          'tenant-1',
+          'user-1',
+          'order-1',
+          SalesOrderStatus.ACCEPTED,
+          ['SELLER'],
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should transition ACCEPTED -> PROCESSING -> READY_FOR_SHIPMENT for warehouse manager', async () => {
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.ACCEPTED,
+        items: [],
+      });
+
+      await service.updateStatus(
+        'tenant-1',
+        'user-1',
+        'order-1',
+        SalesOrderStatus.PROCESSING,
+        ['WAREHOUSE_MANAGER'],
+      );
+
+      expect(prisma.salesOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: SalesOrderStatus.PROCESSING },
+      });
+    });
+
+    it('should release all stock reservations when order is cancelled from warehouse status', async () => {
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.PROCESSING,
+        items: [{ id: 'item-1' }],
+      });
+
+      await service.updateStatus(
+        'tenant-1',
+        'user-1',
+        'order-1',
+        SalesOrderStatus.CANCELLED,
+        ['WAREHOUSE_MANAGER'],
+      );
+
+      expect(stockReservationService.releaseOrderReservations).toHaveBeenCalledWith(
+        'tenant-1',
+        'order-1',
+        expect.anything(),
+      );
+      expect(prisma.salesOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: SalesOrderStatus.CANCELLED },
+      });
+    });
+
+    it('should trigger 1-click dispatch when updateStatus is called with SHIPPED', async () => {
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.READY_FOR_SHIPMENT,
+        warehouseId: 'wh-1',
+        paymentCondition: PaymentCondition.CREDIT,
+        counterpartyId: 'cust-1',
+        currency: 'UZS',
+        exchangeRate: 1,
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 2,
+            unitPrice: 150000,
+            discount: 0,
+            shippedQty: 0,
+            product: { name: { uz: 'Mahsulot' } },
+          },
+        ],
+      });
+
+      prisma.salesInvoice.count.mockResolvedValue(1);
+      prisma.salesInvoice.create.mockResolvedValue({
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        totalAmount: 300000,
+        items: [
+          {
+            id: 'inv-item-1',
+            productId: 'prod-1',
+            quantity: 2,
+            unitPrice: 150000,
+            totalPrice: 300000,
+            product: { name: { uz: 'Mahsulot' } },
+          },
+        ],
+      });
+
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 10,
+      });
+
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-1',
+          remainingQty: 5,
+          landedCost: 100000,
+          purchasePrice: 100000,
+        },
+      ]);
+
+      await service.updateStatus(
+        'tenant-1',
+        'user-1',
+        'order-1',
+        SalesOrderStatus.SHIPPED,
+        ['WAREHOUSE_MANAGER'],
+      );
+
+      expect(prisma.salesInvoice.create).toHaveBeenCalled();
+      expect(prisma.counterparty.update).toHaveBeenCalledWith({
+        where: { id: 'cust-1' },
+        data: { debtBalance: { increment: 300000 } },
+      });
+      expect(prisma.salesOrder.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: SalesOrderStatus.SHIPPED, warehouseId: 'wh-1' },
+      });
+    });
+  });
 });

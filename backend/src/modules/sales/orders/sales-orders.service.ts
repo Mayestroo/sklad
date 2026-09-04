@@ -25,6 +25,13 @@ function isAdmin(roles: string[]) {
 function isManagerOrAbove(roles: string[]) {
   return roles.some((r) => ['ADMIN', 'SUPER_ADMIN', 'MANAGER'].includes(r));
 }
+function isWarehouseOrAbove(roles: string[]) {
+  return roles.some((r) =>
+    ['ADMIN', 'SUPER_ADMIN', 'MANAGER', 'WAREHOUSE', 'WAREHOUSE_MANAGER', 'STOREKEEPER', 'OMBORCHI'].includes(
+      r.toUpperCase(),
+    ),
+  );
+}
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -453,7 +460,32 @@ export class SalesOrdersService {
       },
     });
 
-    return this.enrichOrder(order);
+    // Auto-reserve warehouse stock for items upon order creation
+    let reservationWarehouseId = order.warehouseId;
+    if (!reservationWarehouseId) {
+      const firstWh = await this.prisma.warehouse.findFirst({ where: { tenantId } });
+      if (firstWh) reservationWarehouseId = firstWh.id;
+    }
+
+    if (reservationWarehouseId && order.items && order.items.length > 0) {
+      await this.stockReservationService.reserveStockForOrder(
+        tenantId,
+        order.id,
+        reservationWarehouseId,
+        order.items.map((i) => ({
+          orderItemId: i.id,
+          productId: i.productId,
+          quantity: Number(i.quantity),
+        })),
+      );
+    }
+
+    const refreshedOrder = await this.prisma.salesOrder.findFirst({
+      where: { id: order.id },
+      include: this.buildOrderInclude(),
+    });
+
+    return this.enrichOrder(refreshedOrder || order);
   }
 
   // ─── UPDATE (only in NEW or PENDING_APPROVAL) ──────────────────
@@ -673,6 +705,102 @@ export class SalesOrdersService {
     return this.findOne(tenantId, id);
   }
 
+  async updateStatus(
+    tenantId: string,
+    userId: string,
+    id: string,
+    newStatus: SalesOrderStatus | string,
+    userRoles: string[],
+    warehouseId?: string,
+    comment?: string,
+  ) {
+    const order = await this.prisma.salesOrder.findFirst({
+      where: { id, tenantId },
+      include: { items: true },
+    });
+    if (!order) throw new NotFoundException('Buyurtma topilmadi');
+
+    // 1. If target status is SHIPPED -> execute 1-click dispatch
+    if (newStatus === SalesOrderStatus.SHIPPED) {
+      if (!isWarehouseOrAbove(userRoles)) {
+        throw new ForbiddenException('Jo‘natish uchun omborchi yoki admin roli talab qilinadi');
+      }
+      return this.dispatch(tenantId, userId, id, {
+        warehouseId: warehouseId || order.warehouseId || undefined,
+      });
+    }
+
+    // 2. If target status is CANCELLED -> execute cancel flow
+    if (newStatus === SalesOrderStatus.CANCELLED) {
+      await this._handleCancel(order, userId, tenantId, userRoles);
+      return this.findOne(tenantId, id);
+    }
+
+    // 3. Role check for warehouse transitions
+    const warehouseTransitions = [
+      SalesOrderStatus.ACCEPTED,
+      SalesOrderStatus.PROCESSING,
+      SalesOrderStatus.READY_FOR_SHIPMENT,
+      SalesOrderStatus.READY_TO_SHIP,
+    ];
+    if ((warehouseTransitions as (SalesOrderStatus | string)[]).includes(newStatus)) {
+      if (!isWarehouseOrAbove(userRoles)) {
+        throw new ForbiddenException(
+          'Ombor statuslarini o‘zgartirish uchun omborchi yoki admin roli talab qilinadi',
+        );
+      }
+    }
+
+    // 4. Ensure valid state progression
+    const validTransitions: Record<string, string[]> = {
+      NEW: ['ACCEPTED', 'PROCESSING', 'PENDING_APPROVAL', 'CANCELLED'],
+      PENDING_APPROVAL: ['APPROVED', 'ACCEPTED', 'NEW', 'CANCELLED'],
+      APPROVED: [
+        'ACCEPTED',
+        'PROCESSING',
+        'READY_FOR_SHIPMENT',
+        'READY_TO_SHIP',
+        'SENT_TO_PRODUCTION',
+        'CANCELLED',
+      ],
+      ACCEPTED: ['PROCESSING', 'READY_FOR_SHIPMENT', 'READY_TO_SHIP', 'CANCELLED'],
+      PROCESSING: ['READY_FOR_SHIPMENT', 'READY_TO_SHIP', 'CANCELLED'],
+      READY_FOR_SHIPMENT: ['SHIPPED', 'CANCELLED'],
+      READY_TO_SHIP: ['SHIPPED', 'CANCELLED'],
+    };
+
+    const allowed = validTransitions[order.status] || [];
+    if (!isAdmin(userRoles) && !allowed.includes(newStatus as string)) {
+      throw new BadRequestException(
+        `"${order.status}" holatidan "${newStatus}" holatiga o‘tkazish mumkin emas`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.salesOrder.update({
+        where: { id },
+        data: {
+          status: newStatus as SalesOrderStatus,
+          ...(warehouseId ? { warehouseId } : {}),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'SalesOrder',
+          entityId: id,
+          action: 'UPDATE',
+          oldValue: { status: order.status },
+          newValue: { status: newStatus, comment },
+        },
+      });
+    });
+
+    return this.findOne(tenantId, id);
+  }
+
   private async _handleCancel(
     order: {
       id: string;
@@ -690,6 +818,9 @@ export class SalesOrdersService {
     const cancelableByManagerStatuses: SalesOrderStatus[] = [
       ...cancelableBySellerStatuses,
       SalesOrderStatus.APPROVED,
+      SalesOrderStatus.ACCEPTED,
+      SalesOrderStatus.PROCESSING,
+      SalesOrderStatus.READY_FOR_SHIPMENT,
       SalesOrderStatus.SENT_TO_PRODUCTION,
     ];
     const inProductionStatuses: SalesOrderStatus[] = [
@@ -708,7 +839,7 @@ export class SalesOrdersService {
     if (isAdmin(userRoles)) {
       canCancel = true;
       isInProduction = inProductionStatuses.includes(order.status);
-    } else if (isManagerOrAbove(userRoles)) {
+    } else if (isManagerOrAbove(userRoles) || isWarehouseOrAbove(userRoles)) {
       canCancel = cancelableByManagerStatuses.includes(order.status);
     } else {
       canCancel = cancelableBySellerStatuses.includes(order.status);
@@ -1007,11 +1138,15 @@ export class SalesOrdersService {
 
     const allowedStatuses: SalesOrderStatus[] = [
       SalesOrderStatus.READY_TO_SHIP,
+      SalesOrderStatus.READY_FOR_SHIPMENT,
+      SalesOrderStatus.PROCESSING,
+      SalesOrderStatus.ACCEPTED,
+      SalesOrderStatus.APPROVED,
       SalesOrderStatus.PARTIALLY_SHIPPED,
     ];
     if (!allowedStatuses.includes(order.status)) {
       throw new BadRequestException(
-        "Faqat 'Jo'natishga tayyor' yoki 'Qisman jo'natilgan' statusidagi buyurtmani jo'natish mumkin",
+        "Faqat 'Jo‘natishga tayyor', 'Yig‘ilmoqda', 'Qabul qilingan' yoki 'Qisman jo‘natilgan' statusidagi buyurtmani jo‘natish mumkin",
       );
     }
 
@@ -1019,7 +1154,14 @@ export class SalesOrdersService {
       throw new BadRequestException("To'lov sharti bajarilmagan. Jo'natishga ruxsat yo'q");
     }
 
-    const warehouseId = dto.warehouseId;
+    let warehouseId = dto.warehouseId || order.warehouseId;
+    if (!warehouseId) {
+      const firstWh = await this.prisma.warehouse.findFirst({ where: { tenantId } });
+      if (firstWh) warehouseId = firstWh.id;
+    }
+    if (!warehouseId) {
+      throw new BadRequestException('Chiqarish uchun ombor tanlanmagan');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Determine dispatch quantities per line

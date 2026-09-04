@@ -30,6 +30,19 @@ class TransitionDto {
   comment?: string;
 }
 
+class UpdateStatusDto {
+  @IsString()
+  status: string;
+
+  @IsOptional()
+  @IsString()
+  comment?: string;
+
+  @IsOptional()
+  @IsString()
+  warehouseId?: string;
+}
+
 class UpdateReadyQtyDto {
   readyQty: number;
 }
@@ -41,7 +54,7 @@ class DispatchDto {
 @ApiTags('Sales Orders')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
-@Controller('api/sales/orders')
+@Controller(['api/sales/orders', 'api/v1/sales-orders'])
 export class SalesOrdersController {
   constructor(private readonly service: SalesOrdersService) {}
 
@@ -140,6 +153,26 @@ export class SalesOrdersController {
     @Body() dto: TransitionDto,
   ) {
     return this.service.transition(tenantId, userId, id, dto.action, roles || [], dto.comment);
+  }
+
+  @Patch(':id/status')
+  @RequirePermissions('sales:view')
+  updateStatus(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('roles') roles: string[],
+    @Param('id') id: string,
+    @Body() dto: UpdateStatusDto,
+  ) {
+    return this.service.updateStatus(
+      tenantId,
+      userId,
+      id,
+      dto.status,
+      roles || [],
+      dto.warehouseId,
+      dto.comment,
+    );
   }
 
   @Post(':id/complete')
