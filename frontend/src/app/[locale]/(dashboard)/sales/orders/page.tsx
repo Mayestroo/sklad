@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
@@ -101,13 +101,6 @@ export default function SalesOrdersPage() {
   const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<any | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = () => setOpenDropdownId(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
 
   const isWarehouseOperator = Boolean(
     hasRole('ADMIN') ||
@@ -532,10 +525,7 @@ export default function SalesOrdersPage() {
                       </td>
 
                       <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div
-                          style={{ display: 'inline-block', position: 'relative' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div style={{ display: 'inline-block', position: 'relative' }}>
                           {/* Clickable badge — opens dropdown if operator and has next statuses */}
                           <button
                             type="button"
@@ -679,6 +669,14 @@ export default function SalesOrdersPage() {
           </div>
         )}
       </Card>
+
+      {/* Backdrop: closes dropdown when clicking outside */}
+      {openDropdownId && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+          onClick={() => setOpenDropdownId(null)}
+        />
+      )}
 
       {/* Action Modals */}
       {payOrder && (
