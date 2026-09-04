@@ -36,8 +36,19 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const [costPrice, setCostPrice] = useState<number | string>('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
 
+  const isMultiTier = Boolean(company?.settings?.sales?.enableMultiTierPriceLists);
+  const [priceLists, setPriceLists] = useState<any[]>([]);
+  const [tierPrices, setTierPrices] = useState<Record<string, number | string>>({});
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token || !company?.id || !isOpen || !isMultiTier) return;
+    apiFetch<any[]>('/sales/price-lists', { token, tenantId: company.id, locale })
+      .then((pls) => setPriceLists(pls || []))
+      .catch(console.error);
+  }, [token, company, locale, isOpen, isMultiTier]);
 
   useEffect(() => {
     if (isOpen) {
@@ -87,13 +98,29 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         minStockAlert: 0,
       };
 
-      const res = await apiFetch('/inventory/products', {
+      const res: any = await apiFetch('/inventory/products', {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
         locale,
         body: JSON.stringify(payload),
       });
+
+      if (isMultiTier && res?.id) {
+        const priceEntries = Object.entries(tierPrices).filter(([_, val]) => Number(val) > 0);
+        for (const [plId, val] of priceEntries) {
+          await apiFetch(`/sales/price-lists/${plId}/items`, {
+            method: 'POST',
+            token: token || undefined,
+            tenantId: company?.id,
+            locale,
+            body: JSON.stringify({
+              productId: res.id,
+              price: Number(val),
+            }),
+          }).catch(console.error);
+        }
+      }
 
       const savedQuantity = numQty;
       resetForm();
@@ -112,6 +139,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setQuantity(1);
     setCostPrice('');
     setSellingPrice('');
+    setTierPrices({});
     setError(null);
   };
 
@@ -374,6 +402,57 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             />
           </div>
         </div>
+
+        {/* Multi-tier Price Lists Section */}
+        {isMultiTier && priceLists.length > 0 && itemType === 'PRODUCT' && (
+          <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '8px' }}>
+              {isRu ? 'Цены по категориям (Прайс-листы)' : 'Narx toifalari bo‘yicha narxlar (Pricelists)'}
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              {priceLists.map((pl) => {
+                const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
+                return (
+                  <div
+                    key={pl.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 140px',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      padding: '6px 10px',
+                      backgroundColor: 'var(--color-bg-secondary)',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                        {plName}
+                      </span>
+                      <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: 'var(--radius-xs)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-700)', fontWeight: 600 }}>
+                        {pl.currency}
+                      </span>
+                      {pl.isDefault && (
+                        <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                          ({isRu ? 'Осн.' : 'Asosiy'})
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={tierPrices[pl.id] || ''}
+                      onChange={(e) => setTierPrices((prev) => ({ ...prev, [pl.id]: e.target.value }))}
+                      placeholder={isRu ? 'Цена' : 'Narx'}
+                      style={{ fontSize: 'var(--text-xs)', padding: '4px 8px' }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </form>
     </Drawer>
   );

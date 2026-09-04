@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -166,13 +167,44 @@ export class SalesInvoicesController {
     return this.service.createPriceList(tenantId, body);
   }
 
+  @Patch('price-lists/:id')
+  @RequirePermissions('sales:create')
+  updatePriceList(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: { uz: string; ru: string };
+      currency?: string;
+      isDefault?: boolean;
+      isActive?: boolean;
+    },
+  ) {
+    return this.service.updatePriceList(tenantId, id, body);
+  }
+
+  @Delete('price-lists/:id')
+  @RequirePermissions('sales:delete')
+  deletePriceList(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.deletePriceList(tenantId, id);
+  }
+
   @Post('price-lists/:priceListId/items')
   @RequirePermissions('sales:create')
   upsertProductPriceItem(
     @CurrentTenant() tenantId: string,
     @Param('priceListId') priceListId: string,
-    @Body() body: { productId: string; price: number },
+    @Body() body: any,
   ) {
+    if (Array.isArray(body)) {
+      return this.service.bulkSetPrices(tenantId, priceListId, body);
+    }
+    if (body?.items && Array.isArray(body.items)) {
+      return this.service.bulkSetPrices(tenantId, priceListId, body.items);
+    }
     return this.service.upsertProductPrice(
       tenantId,
       priceListId,
@@ -195,6 +227,24 @@ export class SalesInvoicesController {
       productId,
       Number(price),
     );
+  }
+
+  @Get('products/:productId/price')
+  @RequirePermissions('sales:view')
+  resolveProductPrice(
+    @CurrentTenant() tenantId: string,
+    @Param('productId') productId: string,
+    @Query('counterpartyId') counterpartyId?: string,
+    @Query('priceListId') priceListId?: string,
+    @Query('currency') currency?: string,
+    @Query('exchangeRate') exchangeRate?: string,
+  ) {
+    return this.service.resolveProductPrice(tenantId, productId, {
+      counterpartyId,
+      priceListId,
+      currency,
+      exchangeRate: exchangeRate ? Number(exchangeRate) : undefined,
+    });
   }
 
   // ─── CUSTOMER PROFILE ─────────────────────────────────────────

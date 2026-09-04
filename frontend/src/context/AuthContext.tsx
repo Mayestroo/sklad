@@ -21,6 +21,14 @@ interface AuthCompany {
   slug: string;
   status: string;
   defaultLanguage: string;
+  settings?: {
+    sales?: {
+      enableMultiTierPriceLists?: boolean;
+      allowSellerPriceOverride?: boolean;
+      defaultCurrency?: string;
+    };
+    [key: string]: any;
+  };
 }
 
 interface AuthContextType {
@@ -33,6 +41,7 @@ interface AuthContextType {
   logout: () => void;
   hasPermission: (permissionSlug: string) => boolean;
   hasRole: (roleSlug: string) => boolean;
+  updateCompanySettings: (settings: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,6 +122,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user.roles.includes(roleSlug);
   };
 
+  const updateCompanySettings = (newSettings: any) => {
+    setCompany((prev) => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        settings: {
+          ...(prev.settings || {}),
+          ...newSettings,
+        },
+      };
+      localStorage.setItem('crm_company', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    if (!token || !company?.id) return;
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    fetch(`${API_BASE_URL}/tenants/settings`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-Id': company.id,
+      },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((settings) => {
+        if (settings) {
+          updateCompanySettings(settings);
+        }
+      })
+      .catch(() => {});
+  }, [token, company?.id]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -125,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         hasPermission,
         hasRole,
+        updateCompanySettings,
       }}
     >
       {children}

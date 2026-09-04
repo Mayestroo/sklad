@@ -53,18 +53,36 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isMultiTier = Boolean(company?.settings?.sales?.enableMultiTierPriceLists);
+
   React.useEffect(() => {
     if (!token || !company?.id || !isOpen) return;
     apiFetch<any[]>('/sales/price-lists', { token, tenantId: company.id, locale })
-      .then((res) => setPriceLists(res || []))
+      .then((res) => {
+        const list = res || [];
+        setPriceLists(list);
+        if (isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') && !priceListId) {
+          const def = list.find((p) => p.isDefault) || list[0];
+          if (def) setPriceListId(def.id);
+        }
+      })
       .catch(console.error);
-  }, [token, company, locale, isOpen]);
+  }, [token, company, locale, isOpen, isMultiTier, type]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!name.trim()) {
       setError(isRu ? 'Введите наименование контрагента' : 'Kontragent nomini kiriting');
+      return;
+    }
+
+    if (isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') && !priceListId) {
+      setError(
+        isRu
+          ? 'Для клиентов выбор прайс-листа обязателен'
+          : 'Mijozlar uchun narx jadvalini tanlash majburiy',
+      );
       return;
     }
 
@@ -315,7 +333,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                {isRu ? 'Индивидуальный прайс-лист' : 'Biriktirilgan narx jadvali'}
+                {isRu ? 'Индивидуальный прайс-лист' : 'Biriktirilgan narx jadvali'} {isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') ? '*' : ''}
               </label>
               <Select
                 options={priceListOptions}

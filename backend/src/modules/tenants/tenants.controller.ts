@@ -1,11 +1,12 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
-import { CreateTenantDto } from './dto';
+import { CreateTenantDto, UpdateCompanySettingsDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('api/tenants')
 export class TenantsController {
@@ -75,6 +76,24 @@ export class TenantsController {
       body.address,
       body.phone,
     );
+  }
+
+  // Settings Endpoints
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get('settings')
+  getSettings(@CurrentTenant() tenantId: string) {
+    return this.tenantsService.getSettings(tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Patch('settings')
+  @RequirePermissions('settings:edit')
+  updateSettings(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: UpdateCompanySettingsDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.tenantsService.updateSettings(tenantId, dto, userId);
   }
 
   @UseGuards(JwtAuthGuard)

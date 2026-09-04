@@ -1,6 +1,6 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
-import { CreateTenantDto } from './dto';
+import { CreateTenantDto, UpdateCompanySettingsDto } from './dto';
 
 @Injectable()
 export class TenantsService {
@@ -107,5 +107,72 @@ export class TenantsService {
       include: { branch: true },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  // ============================================
+  // SETTINGS MANAGEMENT
+  // ============================================
+
+  async getSettings(tenantId: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const settings = (company?.settings as any) || {};
+    return {
+      sales: {
+        enableMultiTierPriceLists: false,
+        allowSellerPriceOverride: false,
+        defaultCurrency: 'UZS',
+        ...(settings.sales || {}),
+      },
+      inventory: settings.inventory || {},
+      accounting: settings.accounting || {},
+    };
+  }
+
+  async updateSettings(
+    tenantId: string,
+    dto: UpdateCompanySettingsDto,
+    userId?: string,
+  ) {
+    const current = await this.getSettings(tenantId);
+    const mergedSettings = {
+      ...current,
+      ...dto,
+      sales: {
+        ...current.sales,
+        ...(dto.sales || {}),
+      },
+      inventory: {
+        ...current.inventory,
+        ...(dto.inventory || {}),
+      },
+      accounting: {
+        ...current.accounting,
+        ...(dto.accounting || {}),
+      },
+    };
+
+    const updated = await this.prisma.company.update({
+      where: { id: tenantId },
+      data: { settings: mergedSettings },
+      select: { id: true, settings: true },
+    });
+
+    if (userId) {
+      await this.prisma.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'CompanySettings',
+          entityId: tenantId,
+          action: 'UPDATE',
+          newValue: mergedSettings,
+        },
+      });
+    }
+
+    return updated.settings;
   }
 }

@@ -1409,6 +1409,246 @@ export class SalesInvoicesService {
     return pp;
   }
 
+  async updatePriceList(
+    tenantId: string,
+    id: string,
+    data: {
+      name?: { uz: string; ru: string };
+      currency?: string;
+      isDefault?: boolean;
+      isActive?: boolean;
+    },
+  ) {
+    const pl = await this.prisma.priceList.findFirst({
+      where: { id, tenantId },
+    });
+    if (!pl) throw new NotFoundException('Narx jadvali topilmadi');
+
+    if (data.isDefault) {
+      await this.prisma.priceList.updateMany({
+        where: { tenantId, isDefault: true, id: { not: id } },
+        data: { isDefault: false },
+      });
+    }
+
+    return this.prisma.priceList.update({
+      where: { id },
+      data: {
+        ...(data.name ? { name: data.name } : {}),
+        ...(data.currency ? { currency: data.currency } : {}),
+        ...(data.isDefault !== undefined ? { isDefault: data.isDefault } : {}),
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      },
+    });
+  }
+
+  async deletePriceList(tenantId: string, id: string) {
+    const pl = await this.prisma.priceList.findFirst({
+      where: { id, tenantId },
+      include: {
+        _count: {
+          select: { salesOrders: true, salesInvoices: true, counterparties: true },
+        },
+      },
+    });
+    if (!pl) throw new NotFoundException('Narx jadvali topilmadi');
+
+    if (
+      pl._count.salesOrders > 0 ||
+      pl._count.salesInvoices > 0 ||
+      pl._count.counterparties > 0
+    ) {
+      return this.prisma.priceList.update({
+        where: { id },
+        data: { isActive: false },
+      });
+    }
+
+    return this.prisma.priceList.delete({
+      where: { id },
+    });
+  }
+
+  async bulkSetPrices(
+    tenantId: string,
+    priceListId: string,
+    items: { productId: string; price: number }[],
+  ) {
+    const pl = await this.prisma.priceList.findFirst({
+      where: { id: priceListId, tenantId },
+    });
+    if (!pl) throw new NotFoundException('Narx jadvali topilmadi');
+
+    const results = [];
+    for (const item of items) {
+      const priceVal = Number(item.price);
+      if (isNaN(priceVal) || priceVal < 0) continue;
+
+      const updated = await this.prisma.productPrice.upsert({
+        where: { priceListId_productId: { priceListId, productId: item.productId } },
+        update: { price: priceVal },
+        create: { priceListId, productId: item.productId, price: priceVal },
+        include: { product: true },
+      });
+      results.push(updated);
+    }
+    return results;
+  }
+
+  async resolveProductPrice(
+    tenantId: string,
+    productId: string,
+    options: {
+      counterpartyId?: string;
+      priceListId?: string;
+      currency?: string;
+      exchangeRate?: number;
+    } = {},
+  ) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const settings = (company?.settings as any) || {};
+    const isMultiTierEnabled = Boolean(
+      settings?.sales?.enableMultiTierPriceLists,
+    );
+
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, tenantId },
+      select: { id: true, salePrice: true, name: true, sku: true },
+    });
+    if (!product) throw new NotFoundException('Tovar topilmadi');
+
+    const basePrice = Number(product.salePrice) || 0;
+
+    if (!isMultiTierEnabled) {
+      return {
+        resolvedPrice: basePrice,
+        basePrice,
+        discountPercent: 0,
+        markupPercent: 0,
+        isTierPrice: false,
+        priceListId: null,
+        priceListName: null,
+        currency: options.currency || 'UZS',
+      };
+    }
+
+    let targetPriceListId = options.priceListId || null;
+
+    if (!targetPriceListId && options.counterpartyId) {
+      const counterparty = await this.prisma.counterparty.findFirst({
+        where: { id: options.counterpartyId, tenantId },
+        select: { priceListId: true },
+      });
+      if (counterparty?.priceListId) {
+        targetPriceListId = counterparty.priceListId;
+      }
+    }
+
+    if (!targetPriceListId) {
+      const defaultPL = await this.prisma.priceList.findFirst({
+        where: { tenantId, isDefault: true, isActive: true },
+        select: { id: true },
+      });
+      if (defaultPL) {
+        targetPriceListId = defaultPL.id;
+      }
+    }
+
+    if (!targetPriceListId) {
+      return {
+        resolvedPrice: basePrice,
+        basePrice,
+        discountPercent: 0,
+        markupPercent: 0,
+        isTierPrice: false,
+        priceListId: null,
+        priceListName: null,
+        currency: options.currency || 'UZS',
+      };
+    }
+
+    const priceList = await this.prisma.priceList.findFirst({
+      where: { id: targetPriceListId, tenantId, isActive: true },
+    });
+
+    if (!priceList) {
+      return {
+        resolvedPrice: basePrice,
+        basePrice,
+        discountPercent: 0,
+        markupPercent: 0,
+        isTierPrice: false,
+        priceListId: null,
+        priceListName: null,
+        currency: options.currency || 'UZS',
+      };
+    }
+
+    const customPrice = await this.prisma.productPrice.findUnique({
+      where: {
+        priceListId_productId: { priceListId: targetPriceListId, productId },
+      },
+    });
+
+    if (!customPrice) {
+      return {
+        resolvedPrice: basePrice,
+        basePrice,
+        discountPercent: 0,
+        markupPercent: 0,
+        isTierPrice: false,
+        priceListId: priceList.id,
+        priceListName: priceList.name,
+        currency: options.currency || priceList.currency,
+      };
+    }
+
+    let tierPrice = Number(customPrice.price);
+
+    const targetCurrency = options.currency || priceList.currency;
+    if (
+      options.currency &&
+      options.currency !== priceList.currency &&
+      options.exchangeRate &&
+      options.exchangeRate > 0
+    ) {
+      if (priceList.currency === 'USD' && targetCurrency === 'UZS') {
+        tierPrice = tierPrice * options.exchangeRate;
+      } else if (priceList.currency === 'UZS' && targetCurrency === 'USD') {
+        tierPrice = tierPrice / options.exchangeRate;
+      }
+    }
+
+    let discountPercent = 0;
+    let markupPercent = 0;
+
+    if (basePrice > 0) {
+      if (tierPrice < basePrice) {
+        discountPercent = Number(
+          (((basePrice - tierPrice) / basePrice) * 100).toFixed(2),
+        );
+      } else if (tierPrice > basePrice) {
+        markupPercent = Number(
+          (((tierPrice - basePrice) / basePrice) * 100).toFixed(2),
+        );
+      }
+    }
+
+    return {
+      resolvedPrice: tierPrice,
+      basePrice,
+      discountPercent,
+      markupPercent,
+      isTierPrice: true,
+      priceListId: priceList.id,
+      priceListName: priceList.name,
+      currency: targetCurrency,
+    };
+  }
+
   // ─── SUMMARY STATS ────────────────────────────────────────────
 
   async getSummaryStats(tenantId: string) {

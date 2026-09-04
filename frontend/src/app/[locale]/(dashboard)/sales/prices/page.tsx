@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Drawer } from '@/components/ui/Drawer';
+import { Badge } from '@/components/ui/Badge';
 import { Plus, Tag, Edit3, Check } from 'lucide-react';
 
 interface PriceList {
@@ -277,7 +278,14 @@ export default function PricesPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    {[isRu ? 'Товар' : 'Tovar', 'SKU', isRu ? 'Базовая цена' : 'Asosiy narx', isRu ? 'Цена в прайсе' : 'Jadval narxi', ''].map((h) => (
+                    {[
+                      isRu ? 'Товар' : 'Tovar',
+                      'SKU',
+                      isRu ? 'Базовая цена' : 'Asosiy narx',
+                      isRu ? 'Цена в прайсе' : 'Jadval narxi',
+                      isRu ? 'Скидка / Наценка' : 'Chegirma / Ustama',
+                      '',
+                    ].map((h) => (
                       <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>
                         {h}
                       </th>
@@ -287,15 +295,29 @@ export default function PricesPage() {
                 <tbody>
                   {products.map((prod) => {
                     const listPrice = getPriceForProduct(prod.id);
+                    const basePrice = Number(prod.salePrice || 0);
                     const isEditing = prod.id in editingPrices;
                     const isSaving = savingPrice === prod.id;
+
+                    let discountBadge = null;
+                    if (listPrice > 0 && basePrice > 0) {
+                      if (listPrice < basePrice) {
+                        const disc = (((basePrice - listPrice) / basePrice) * 100).toFixed(1);
+                        discountBadge = <Badge variant="success">-{disc}% {isRu ? 'скидка' : 'chegirma'}</Badge>;
+                      } else if (listPrice > basePrice) {
+                        const markup = (((listPrice - basePrice) / basePrice) * 100).toFixed(1);
+                        discountBadge = <Badge variant="warning">+{markup}% {isRu ? 'наценка' : 'ustama'}</Badge>;
+                      } else {
+                        discountBadge = <Badge variant="neutral">0%</Badge>;
+                      }
+                    }
 
                     return (
                       <tr key={prod.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', fontWeight: 500 }}>{getProductName(prod)}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{prod.sku || '—'}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)' }}>
-                          {formatCurrency(Number(prod.salePrice || 0), locale)}
+                          {formatCurrency(basePrice, locale)}
                         </td>
                         <td style={{ padding: '10px 14px' }}>
                           {isEditing ? (
@@ -305,6 +327,12 @@ export default function PricesPage() {
                               min={0}
                               value={editingPrices[prod.id]}
                               onChange={(e) => setEditingPrices((prev) => ({ ...prev, [prod.id]: Number(e.target.value) }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleSavePrice(prod.id);
+                                }
+                              }}
                               style={{ width: 120, padding: '5px 8px', border: '1px solid var(--color-primary-400)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
                               autoFocus
                             />
@@ -313,6 +341,9 @@ export default function PricesPage() {
                               {listPrice > 0 ? formatCurrency(listPrice, locale) : '—'}
                             </span>
                           )}
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          {discountBadge || <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>—</span>}
                         </td>
                         <td style={{ padding: '10px 14px' }}>
                           {isEditing ? (
@@ -395,11 +426,7 @@ export default function PricesPage() {
             label={isRu ? 'Валюта' : 'Valyuta'}
             value={newPLCurrency}
             onChange={(val) => setNewPLCurrency(val)}
-            options={[
-              { value: 'UZS', label: 'UZS (So\'m)' },
-              { value: 'USD', label: 'USD (Dollar)' },
-              { value: 'EUR', label: 'EUR (Evro)' },
-            ]}
+            options={CURRENCY_OPTIONS}
           />
           <Checkbox
             id="pl-is-default"

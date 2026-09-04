@@ -255,6 +255,7 @@ model Company {
   defaultLanguage    Language       @default(uz) @map("default_language")
   status             CompanyStatus  @default(TRIAL)
   trialEndsAt        DateTime?      @map("trial_ends_at")
+  settings           Json?          @default("{}")
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
 

@@ -78,9 +78,24 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        delete: jest.fn(),
       },
       productPrice: {
         upsert: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      product: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      counterparty: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      company: {
         findUnique: jest.fn(),
       },
       $transaction: jest.fn(async (cb) => cb(prisma)),
@@ -656,6 +671,192 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       await expect(
         service.cancelReturn('tenant-1', 'user-1', 'sret-posted-1'),
       ).rejects.toThrow('Rollback Guardrail');
+    });
+  });
+
+  describe('Price Lists & Dynamic Pricing Engine', () => {
+    describe('bulkSetPrices', () => {
+      it('should bulk upsert prices for a valid price list', async () => {
+        prisma.priceList.findFirst.mockResolvedValue({ id: 'pl-1', tenantId: 'tenant-1' });
+        prisma.productPrice.upsert.mockResolvedValue({ id: 'pp-1', price: 150000 });
+
+        const res = await service.bulkSetPrices('tenant-1', 'pl-1', [
+          { productId: 'prod-1', price: 150000 },
+          { productId: 'prod-2', price: 250000 },
+        ]);
+
+        expect(prisma.productPrice.upsert).toHaveBeenCalledTimes(2);
+        expect(res.length).toBe(2);
+      });
+    });
+
+    describe('updatePriceList', () => {
+      it('should unset previous default when setting a new default price list', async () => {
+        prisma.priceList.findFirst.mockResolvedValue({ id: 'pl-2', tenantId: 'tenant-1' });
+        prisma.priceList.updateMany.mockResolvedValue({ count: 1 });
+        prisma.priceList.update.mockResolvedValue({ id: 'pl-2', isDefault: true });
+
+        await service.updatePriceList('tenant-1', 'pl-2', { isDefault: true });
+
+        expect(prisma.priceList.updateMany).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', isDefault: true, id: { not: 'pl-2' } },
+          data: { isDefault: false },
+        });
+        expect(prisma.priceList.update).toHaveBeenCalledWith({
+          where: { id: 'pl-2' },
+          data: expect.objectContaining({ isDefault: true }),
+        });
+      });
+    });
+
+    describe('deletePriceList', () => {
+      it('should soft delete by setting isActive=false if referenced in orders/invoices/customers', async () => {
+        prisma.priceList.findFirst.mockResolvedValue({
+          id: 'pl-1',
+          tenantId: 'tenant-1',
+          _count: { salesOrders: 2, salesInvoices: 0, counterparties: 1 },
+        });
+        prisma.priceList.update.mockResolvedValue({ id: 'pl-1', isActive: false });
+
+        await service.deletePriceList('tenant-1', 'pl-1');
+
+        expect(prisma.priceList.update).toHaveBeenCalledWith({
+          where: { id: 'pl-1' },
+          data: { isActive: false },
+        });
+      });
+
+      it('should hard delete if not referenced in any documents', async () => {
+        prisma.priceList.findFirst.mockResolvedValue({
+          id: 'pl-unused',
+          tenantId: 'tenant-1',
+          _count: { salesOrders: 0, salesInvoices: 0, counterparties: 0 },
+        });
+        prisma.priceList.delete.mockResolvedValue({ id: 'pl-unused' });
+
+        await service.deletePriceList('tenant-1', 'pl-unused');
+
+        expect(prisma.priceList.delete).toHaveBeenCalledWith({
+          where: { id: 'pl-unused' },
+        });
+      });
+    });
+
+    describe('resolveProductPrice', () => {
+      it('should return base price with 0% discount when multi-tier pricing is disabled in company settings', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          id: 'tenant-1',
+          settings: { sales: { enableMultiTierPriceLists: false } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-1',
+          salePrice: 200000,
+        });
+
+        const res = await service.resolveProductPrice('tenant-1', 'prod-1', {
+          counterpartyId: 'cp-optom',
+        });
+
+        expect(res.resolvedPrice).toBe(200000);
+        expect(res.discountPercent).toBe(0);
+        expect(res.isTierPrice).toBe(false);
+      });
+
+      it('should resolve customer tier price and compute discount percentage when enabled', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          id: 'tenant-1',
+          settings: { sales: { enableMultiTierPriceLists: true } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-1',
+          salePrice: 200000,
+        });
+        prisma.counterparty.findFirst.mockResolvedValue({
+          id: 'cp-1',
+          priceListId: 'pl-optom',
+        });
+        prisma.priceList.findFirst.mockResolvedValue({
+          id: 'pl-optom',
+          name: { uz: 'Optom' },
+          currency: 'UZS',
+        });
+        prisma.productPrice.findUnique.mockResolvedValue({
+          id: 'pp-1',
+          price: 150000,
+        });
+
+        const res = await service.resolveProductPrice('tenant-1', 'prod-1', {
+          counterpartyId: 'cp-1',
+        });
+
+        expect(res.resolvedPrice).toBe(150000);
+        expect(res.basePrice).toBe(200000);
+        expect(res.discountPercent).toBe(25); // ((200000 - 150000) / 200000) * 100
+        expect(res.markupPercent).toBe(0);
+        expect(res.isTierPrice).toBe(true);
+      });
+
+      it('should compute markup percentage when tier price exceeds base price', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          id: 'tenant-1',
+          settings: { sales: { enableMultiTierPriceLists: true } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-1',
+          salePrice: 200000,
+        });
+        prisma.priceList.findFirst.mockResolvedValue({
+          id: 'pl-nasiya',
+          name: { uz: 'Nasiya' },
+          currency: 'UZS',
+        });
+        prisma.productPrice.findUnique.mockResolvedValue({
+          id: 'pp-2',
+          price: 220000,
+        });
+
+        const res = await service.resolveProductPrice('tenant-1', 'prod-1', {
+          priceListId: 'pl-nasiya',
+        });
+
+        expect(res.resolvedPrice).toBe(220000);
+        expect(res.basePrice).toBe(200000);
+        expect(res.discountPercent).toBe(0);
+        expect(res.markupPercent).toBe(10); // ((220000 - 200000) / 200000) * 100
+        expect(res.isTierPrice).toBe(true);
+      });
+
+      it('should apply multi-currency conversion when priceList currency differs from order currency', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          id: 'tenant-1',
+          settings: { sales: { enableMultiTierPriceLists: true } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-1',
+          salePrice: 130000,
+        });
+        prisma.priceList.findFirst.mockResolvedValue({
+          id: 'pl-usd',
+          currency: 'USD',
+          name: { uz: 'USD Optom' },
+        });
+        // 10 USD tier price
+        prisma.productPrice.findUnique.mockResolvedValue({
+          id: 'pp-usd',
+          price: 10,
+        });
+
+        const res = await service.resolveProductPrice('tenant-1', 'prod-1', {
+          priceListId: 'pl-usd',
+          currency: 'UZS',
+          exchangeRate: 12800,
+        });
+
+        // 10 USD * 12800 = 128,000 UZS
+        expect(res.resolvedPrice).toBe(128000);
+        expect(res.currency).toBe('UZS');
+        expect(res.isTierPrice).toBe(true);
+      });
     });
   });
 });

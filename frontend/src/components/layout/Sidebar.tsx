@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
+import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -23,17 +24,26 @@ import {
   Truck,
   ChevronDown,
   ChevronRight,
+  GitBranch,
+  ShieldCheck,
+  CreditCard,
 } from 'lucide-react';
 
 export function Sidebar() {
   const t = useTranslations('nav');
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const pathname = usePathname();
+  const { company } = useAuth();
 
   const isPurchasesActive = pathname.startsWith('/purchases');
   const [isPurchasesOpen, setIsPurchasesOpen] = useState(isPurchasesActive);
 
   const isSalesActive = pathname.startsWith('/sales');
   const [isSalesOpen, setIsSalesOpen] = useState(isSalesActive);
+
+  const isSettingsActive = pathname.startsWith('/settings');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsActive);
 
   useEffect(() => {
     if (isPurchasesActive) {
@@ -47,6 +57,12 @@ export function Sidebar() {
     }
   }, [isSalesActive]);
 
+  useEffect(() => {
+    if (isSettingsActive) {
+      setIsSettingsOpen(true);
+    }
+  }, [isSettingsActive]);
+
   const purchasesSubItems = [
     { href: '/purchases', label: t('purchases'), icon: ShoppingBag },
     { href: '/purchases/expenses', label: t('purchasesExpenses'), icon: Receipt },
@@ -54,12 +70,25 @@ export function Sidebar() {
     { href: '/purchases/suppliers', label: t('suppliers'), icon: UserCheck },
   ];
 
+  const enableMultiTierPriceLists = Boolean(
+    company?.settings?.sales?.enableMultiTierPriceLists,
+  );
+
   const salesSubItems = [
     { href: '/sales/orders', label: t('salesOrders'), icon: ClipboardList },
     { href: '/sales', label: t('salesOverview'), icon: ShoppingCart },
     { href: '/sales/returns', label: t('salesReturns'), icon: RotateCcw },
     { href: '/sales/customers', label: t('customers'), icon: UserCheck },
-    { href: '/sales/prices', label: t('prices'), icon: Receipt },
+    ...(enableMultiTierPriceLists
+      ? [{ href: '/sales/prices', label: t('prices'), icon: Receipt }]
+      : []),
+  ];
+
+  const settingsSubItems = [
+    { href: '/settings/branches', label: isRu ? 'Филиалы и склады' : 'Filial va omborlar', icon: GitBranch },
+    { href: '/settings/sales', label: isRu ? 'Настройки продаж' : 'Savdo sozlamalari', icon: ShoppingCart },
+    { href: '/settings/security', label: isRu ? 'Безопасность' : 'Xavfsizlik', icon: ShieldCheck },
+    { href: '/settings/billing', label: isRu ? 'Тариф и оплата' : 'Tarif va to\'lov', icon: CreditCard },
   ];
 
   const bottomNavItems = [
@@ -71,7 +100,6 @@ export function Sidebar() {
     { href: '/analytics', label: t('analytics'), icon: BarChart3 },
     { href: '/accounting', label: t('accounting'), icon: BookOpen },
     { href: '/users', label: t('users'), icon: Users },
-    { href: '/settings/branches', label: t('settings'), icon: Settings },
     { href: '/super-admin', label: t('superAdmin'), icon: Crown },
   ];
 
@@ -290,6 +318,81 @@ export function Sidebar() {
                   sub.href === '/sales'
                     ? pathname === '/sales'
                     : pathname === sub.href || pathname.startsWith(`${sub.href}/`);
+
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    style={{
+                      ...itemBaseStyle,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      padding: '8px 12px',
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
+                      color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                      backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <SubIcon size={15} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
+                    <span>{sub.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Settings Dropdown Group */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setIsSettingsOpen((prev) => !prev)}
+            style={{
+              ...itemBaseStyle,
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              fontWeight: isSettingsActive ? 'var(--font-semibold)' : 'var(--font-medium)',
+              color: isSettingsActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+              backgroundColor: isSettingsActive && !isSettingsOpen ? 'var(--color-primary-50)' : 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <Settings size={18} style={{ color: isSettingsActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
+              <span>{t('settings')}</span>
+            </div>
+            {isSettingsOpen ? (
+              <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+            ) : (
+              <ChevronRight size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+            )}
+          </button>
+
+          {/* Settings Sub-items */}
+          {isSettingsOpen && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                marginTop: '2px',
+                marginLeft: '12px',
+                paddingLeft: '12px',
+                borderLeft: '2px solid var(--color-border-light)',
+              }}
+            >
+              {settingsSubItems.map((sub) => {
+                const SubIcon = sub.icon;
+                const isSubActive =
+                  pathname === sub.href || pathname.startsWith(`${sub.href}/`);
 
                 return (
                   <Link

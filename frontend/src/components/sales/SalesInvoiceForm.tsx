@@ -59,6 +59,7 @@ interface ProductOption {
   costPrice: number;
   unitOfMeasure?: string;
   stockQty?: number;
+  currency?: string;
 }
 
 interface ItemRow {
@@ -77,8 +78,12 @@ interface SalesInvoiceFormProps {
 export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
+  const { token, company, hasPermission } = useAuth();
   const router = useRouter();
+
+  const isPriceOverrideAllowed =
+    hasPermission('sales:override_price') ||
+    company?.settings?.sales?.allowSellerPriceOverride !== false;
 
   // Dropdowns state
   const [counterparties, setCounterparties] = useState<CounterpartyOption[]>([]);
@@ -327,14 +332,28 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     const prd = products.find((p) => p.id === pId);
     if (!prd) return 0;
     const activeListId = pListId !== undefined ? pListId : priceListId;
+    let price = Number(prd.salePrice) || 0;
+    let itemCurrency = (prd as any).currency || 'UZS';
+
     if (activeListId) {
       const pl = priceLists.find((l) => l.id === activeListId);
       const custom = pl?.prices?.find((item: any) => item.productId === pId);
       if (custom && Number(custom.price) > 0) {
-        return Number(custom.price);
+        price = Number(custom.price);
+        itemCurrency = pl.currency || 'UZS';
       }
     }
-    return Number(prd.salePrice) || 0;
+
+    if (itemCurrency !== currency) {
+      const rate = Number(exchangeRate) || 1;
+      if (currency === 'UZS' && itemCurrency === 'USD') {
+        price = Math.round(price * rate);
+      } else if (currency === 'USD' && itemCurrency === 'UZS' && rate > 0) {
+        price = Number((price / rate).toFixed(2));
+      }
+    }
+
+    return price;
   };
 
   const handleCounterpartySelect = (cpId: string) => {
@@ -1126,12 +1145,14 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         step="any"
                         value={item.unitPrice}
                         onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        disabled={isReadOnly}
+                        disabled={isReadOnly || !isPriceOverrideAllowed}
+                        title={!isPriceOverrideAllowed ? (isRu ? 'Ручное изменение цены запрещено настройками' : 'Narxni qo‘lda o‘zgartirish taqiqlangan') : undefined}
                         aria-label={`${isRu ? 'Цена продажи для строки' : 'Sotish narxi'} ${idx + 1}`}
                         style={{
                           textAlign: 'right',
                           borderColor: isBelowCost ? '#ef4444' : undefined,
                           color: isBelowCost ? '#ef4444' : undefined,
+                          ...(!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : {}),
                         }}
                       />
                     </td>
