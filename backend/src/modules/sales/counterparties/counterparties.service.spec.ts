@@ -153,4 +153,91 @@ describe('CounterpartiesService', () => {
       });
     });
   });
+
+  describe('getSummary', () => {
+    it('should aggregate customer, supplier, receivables, and payables correctly', async () => {
+      const tenantId = 'tenant-1';
+      mockPrisma.counterparty.count
+        .mockResolvedValueOnce(3) // total_customers
+        .mockResolvedValueOnce(2); // total_suppliers
+
+      mockPrisma.counterparty.findMany.mockResolvedValueOnce([
+        { id: '1', type: 'CUSTOMER', debtBalance: 12500000 },
+        { id: '2', type: 'SUPPLIER', debtBalance: 4779040 },
+        { id: '3', type: 'SUPPLIER', debtBalance: 220960 },
+      ]);
+
+      const result = await service.getSummary(tenantId);
+
+      expect(result).toEqual({
+        total_customers: 3,
+        total_suppliers: 2,
+        receivables: {
+          count: 1,
+          total_amount: 12500000,
+        },
+        payables: {
+          count: 2,
+          total_amount: 5000000,
+        },
+      });
+    });
+  });
+
+  describe('findAll with balanceFilter', () => {
+    it('should filter by balanceFilter = receivables', async () => {
+      const tenantId = 'tenant-1';
+      mockPrisma.counterparty.findMany.mockResolvedValue([]);
+
+      await service.findAll(tenantId, undefined, undefined, undefined, undefined, 'receivables');
+
+      expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId,
+            OR: [
+              { type: { in: ['CUSTOMER', 'BOTH'] }, debtBalance: { gt: 0 } },
+              { type: 'SUPPLIER', debtBalance: { lt: 0 } },
+            ],
+          }),
+        }),
+      );
+    });
+
+    it('should filter by balanceFilter = payables', async () => {
+      const tenantId = 'tenant-1';
+      mockPrisma.counterparty.findMany.mockResolvedValue([]);
+
+      await service.findAll(tenantId, undefined, undefined, undefined, undefined, 'payables');
+
+      expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId,
+            OR: [
+              { type: 'SUPPLIER', debtBalance: { gt: 0 } },
+              { type: { in: ['CUSTOMER', 'BOTH'] }, debtBalance: { lt: 0 } },
+            ],
+          }),
+        }),
+      );
+    });
+
+    it('should filter by balanceFilter = settled', async () => {
+      const tenantId = 'tenant-1';
+      mockPrisma.counterparty.findMany.mockResolvedValue([]);
+
+      await service.findAll(tenantId, undefined, undefined, undefined, undefined, 'settled');
+
+      expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId,
+            debtBalance: 0,
+          }),
+        }),
+      );
+    });
+  });
 });
+

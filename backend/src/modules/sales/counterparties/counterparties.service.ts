@@ -113,12 +113,78 @@ export class CounterpartiesService {
     });
   }
 
+  async getSummary(tenantId: string) {
+    const [customersCount, suppliersCount, counterpartiesWithBalance] =
+      await Promise.all([
+        this.prisma.counterparty.count({
+          where: {
+            tenantId,
+            type: { in: [CounterpartyType.CUSTOMER, CounterpartyType.BOTH] },
+          },
+        }),
+        this.prisma.counterparty.count({
+          where: {
+            tenantId,
+            type: { in: [CounterpartyType.SUPPLIER, CounterpartyType.BOTH] },
+          },
+        }),
+        this.prisma.counterparty.findMany({
+          where: {
+            tenantId,
+            debtBalance: { not: 0 },
+          },
+          select: {
+            id: true,
+            type: true,
+            debtBalance: true,
+          },
+        }),
+      ]);
+
+    let receivablesCount = 0;
+    let receivablesAmount = 0;
+    let payablesCount = 0;
+    let payablesAmount = 0;
+
+    for (const cp of counterpartiesWithBalance) {
+      const rawBalance = Number(cp.debtBalance);
+      let netReceivable = 0;
+      if (cp.type === CounterpartyType.SUPPLIER) {
+        netReceivable = -rawBalance;
+      } else {
+        netReceivable = rawBalance;
+      }
+
+      if (netReceivable > 0) {
+        receivablesCount++;
+        receivablesAmount += netReceivable;
+      } else if (netReceivable < 0) {
+        payablesCount++;
+        payablesAmount += Math.abs(netReceivable);
+      }
+    }
+
+    return {
+      total_customers: customersCount,
+      total_suppliers: suppliersCount,
+      receivables: {
+        count: receivablesCount,
+        total_amount: Math.round(receivablesAmount * 100) / 100,
+      },
+      payables: {
+        count: payablesCount,
+        total_amount: Math.round(payablesAmount * 100) / 100,
+      },
+    };
+  }
+
   async findAll(
     tenantId: string,
     type?: string,
     folderId?: string,
     search?: string,
     hasDebt?: boolean,
+    balanceFilter?: 'all' | 'receivables' | 'payables' | 'settled',
   ) {
     const where: Prisma.CounterpartyWhereInput = { tenantId };
 
@@ -132,20 +198,38 @@ export class CounterpartiesService {
       where.folderId = folderId;
     }
 
-    if (hasDebt) {
+    if (balanceFilter === 'receivables') {
+      where.OR = [
+        { type: { in: [CounterpartyType.CUSTOMER, CounterpartyType.BOTH] }, debtBalance: { gt: 0 } },
+        { type: CounterpartyType.SUPPLIER, debtBalance: { lt: 0 } },
+      ];
+    } else if (balanceFilter === 'payables') {
+      where.OR = [
+        { type: CounterpartyType.SUPPLIER, debtBalance: { gt: 0 } },
+        { type: { in: [CounterpartyType.CUSTOMER, CounterpartyType.BOTH] }, debtBalance: { lt: 0 } },
+      ];
+    } else if (balanceFilter === 'settled') {
+      where.debtBalance = 0;
+    } else if (hasDebt) {
       where.debtBalance = { gt: 0 };
     }
 
     if (search && search.trim()) {
       const q = search.trim();
-      where.OR = [
-        { name: { contains: q, mode: 'insensitive' } },
-        { inn: { contains: q, mode: 'insensitive' } },
-        { phone: { contains: q, mode: 'insensitive' } },
+      const searchOr = [
+        { name: { contains: q, mode: 'insensitive' as const } },
+        { inn: { contains: q, mode: 'insensitive' as const } },
+        { phone: { contains: q, mode: 'insensitive' as const } },
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: searchOr }];
+        delete where.OR;
+      } else {
+        where.OR = searchOr;
+      }
     }
 
-    return this.prisma.counterparty.findMany({
+    const counterparties = await this.prisma.counterparty.findMany({
       where,
       include: {
         folder: true,
@@ -156,7 +240,17 @@ export class CounterpartiesService {
       },
       orderBy: { name: 'asc' },
     });
+
+    return counterparties.map((cp) => {
+      const raw = Number(cp.debtBalance || 0);
+      const net = cp.type === CounterpartyType.SUPPLIER ? -raw : raw;
+      return {
+        ...cp,
+        netBalance: net,
+      };
+    });
   }
+
 
   async findById(tenantId: string, id: string) {
     const counterparty = await this.prisma.counterparty.findFirst({

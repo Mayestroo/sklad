@@ -23,7 +23,7 @@ import { RequirePermissions } from '../../../common/decorators/require-permissio
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
-@Controller('api/sales/counterparties')
+@Controller(['api/sales/counterparties', 'api/v1/contacts'])
 export class CounterpartiesController {
   constructor(private readonly counterpartiesService: CounterpartiesService) {}
 
@@ -66,6 +66,12 @@ export class CounterpartiesController {
   // COUNTERPARTY ENDPOINTS
   // ============================================
 
+  @Get('summary')
+  @RequirePermissions('sales:view')
+  getSummary(@CurrentTenant() tenantId: string) {
+    return this.counterpartiesService.getSummary(tenantId);
+  }
+
   @Post()
   @RequirePermissions('sales:create')
   create(
@@ -83,6 +89,8 @@ export class CounterpartiesController {
     @Query('folderId') folderId?: string,
     @Query('search') search?: string,
     @Query('hasDebt') hasDebt?: string,
+    @Query('balanceFilter')
+    balanceFilter?: 'all' | 'receivables' | 'payables' | 'settled',
   ) {
     const isHasDebt = hasDebt === 'true';
     return this.counterpartiesService.findAll(
@@ -91,6 +99,7 @@ export class CounterpartiesController {
       folderId,
       search,
       isHasDebt,
+      balanceFilter,
     );
   }
 

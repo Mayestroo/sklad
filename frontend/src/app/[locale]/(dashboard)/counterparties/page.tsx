@@ -56,7 +56,21 @@ interface Counterparty {
   priceList?: { id: string; name: string | Record<string, string>; currency?: string } | null;
   discountPercent?: number;
   debtBalance: number;
+  netBalance?: number;
   createdAt: string;
+}
+
+interface CounterpartySummary {
+  total_customers: number;
+  total_suppliers: number;
+  receivables: {
+    count: number;
+    total_amount: number;
+  };
+  payables: {
+    count: number;
+    total_amount: number;
+  };
 }
 
 interface FoldersResponse {
@@ -83,6 +97,7 @@ export default function CounterpartiesPage() {
 
   const [items, setItems] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<CounterpartySummary | null>(null);
 
   // Folder states
   const [folders, setFolders] = useState<CounterpartyFolder[]>([]);
@@ -94,6 +109,7 @@ export default function CounterpartiesPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [hasDebtOnly, setHasDebtOnly] = useState(false);
+  const [balanceFilter, setBalanceFilter] = useState<'all' | 'receivables' | 'payables' | 'settled'>('all');
 
   // Create Counterparty Modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -149,6 +165,19 @@ export default function CounterpartiesPage() {
       .finally(() => setOrdersLoading(false));
   }, [detailItem, token, company, locale]);
 
+  const fetchSummary = () => {
+    if (!token || !company) return;
+    apiFetch<CounterpartySummary>('/sales/counterparties/summary', {
+      token: token || undefined,
+      tenantId: company.id,
+      locale,
+    })
+      .then((res) => {
+        if (res) setSummary(res);
+      })
+      .catch(console.error);
+  };
+
   const fetchFolders = () => {
     if (!token || !company) return;
     apiFetch<FoldersResponse>('/sales/counterparties/folders', {
@@ -174,6 +203,7 @@ export default function CounterpartiesPage() {
     if (search) query.append('search', search);
     if (typeFilter) query.append('type', typeFilter);
     if (hasDebtOnly) query.append('hasDebt', 'true');
+    if (balanceFilter && balanceFilter !== 'all') query.append('balanceFilter', balanceFilter);
     if (activeFolderId) query.append('folderId', activeFolderId);
 
     apiFetch<Counterparty[]>(`/sales/counterparties?${query.toString()}`, {
@@ -188,6 +218,7 @@ export default function CounterpartiesPage() {
 
   useEffect(() => {
     fetchFolders();
+    fetchSummary();
   }, [token, company, locale]);
 
   useEffect(() => {
@@ -199,7 +230,7 @@ export default function CounterpartiesPage() {
       fetchCounterparties();
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, typeFilter, hasDebtOnly]);
+  }, [search, typeFilter, hasDebtOnly, balanceFilter]);
 
   // Open Create Modal & Pre-select Active Folder if a specific folder is selected
   const handleOpenCreateModal = () => {
@@ -245,6 +276,7 @@ export default function CounterpartiesPage() {
       setIsCreateOpen(false);
       resetForm();
       fetchFolders();
+      fetchSummary();
       fetchCounterparties();
     } catch (err: any) {
       setFormError(err?.message || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
@@ -370,6 +402,7 @@ export default function CounterpartiesPage() {
 
       setMoveItem(null);
       fetchFolders();
+      fetchSummary();
       fetchCounterparties();
     } catch (err: any) {
       console.error(err);
@@ -575,19 +608,113 @@ export default function CounterpartiesPage() {
         {/* Right Main Panel: KPIs, Filters, Table */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {/* KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>
-            <Card style={{ padding: 'var(--space-3) var(--space-4)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Клиенты' : 'Mijozlar'}</div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 4, color: 'var(--color-primary-600)' }}>{totalCustomers}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
+            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid var(--color-primary-500, #3b82f6)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                {isRu ? 'Клиенты' : 'Mijozlar'}
+              </div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: 4, color: 'var(--color-primary-600, #2563eb)' }}>
+                {summary?.total_customers ?? totalCustomers}
+              </div>
             </Card>
-            <Card style={{ padding: 'var(--space-3) var(--space-4)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}</div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 4, color: '#f59e0b' }}>{totalSuppliers}</div>
+
+            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid #f59e0b' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                {isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
+              </div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: 4, color: '#d97706' }}>
+                {summary?.total_suppliers ?? totalSuppliers}
+              </div>
             </Card>
-            <Card style={{ padding: 'var(--space-3) var(--space-4)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Должники' : 'Qarzdorlar'}</div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 4, color: '#ef4444' }}>{totalDebtors}</div>
+
+            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid #10b981' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                  {isRu ? 'Нам должны (Дебиторы)' : 'Bizga qarzdorlar (Haqdorlik)'}
+                </div>
+                <span style={{ fontSize: '11px', color: '#059669', background: 'rgba(16, 185, 129, 0.12)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                  {summary?.receivables.count ?? 0} {isRu ? 'контр.' : 'ta'}
+                </span>
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: '#059669' }}>
+                + {formatCurrency(summary?.receivables.total_amount ?? 0, locale)}
+              </div>
             </Card>
+
+            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid #ef4444' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                  {isRu ? 'Наш долг (Кредиторы)' : 'Bizning qarzimiz (Qarzdorlik)'}
+                </div>
+                <span style={{ fontSize: '11px', color: '#dc2626', background: 'rgba(239, 68, 68, 0.12)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                  {summary?.payables.count ?? 0} {isRu ? 'контр.' : 'ta'}
+                </span>
+              </div>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: '#dc2626' }}>
+                - {formatCurrency(summary?.payables.total_amount ?? 0, locale)}
+              </div>
+            </Card>
+          </div>
+
+          {/* Quick Balance Filter Tabs */}
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+            {[
+              { id: 'all', label: isRu ? 'Все контрагенты' : 'Barcha kontragentlar' },
+              {
+                id: 'receivables',
+                label: isRu ? 'Нам должны (Дебиторы)' : 'Bizga qarzdorlar (Haqdorlik)',
+                count: summary?.receivables.count,
+                color: '#10b981',
+              },
+              {
+                id: 'payables',
+                label: isRu ? 'Наш долг (Кредиторы)' : 'Bizning qarzimiz (Kreditorlik)',
+                count: summary?.payables.count,
+                color: '#ef4444',
+              },
+              {
+                id: 'settled',
+                label: isRu ? 'Расчет окончен (Баланс = 0)' : 'Hisob-kitob qilinganlar (Balans = 0)',
+              },
+            ].map((tab) => {
+              const active = balanceFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setBalanceFilter(tab.id as any)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-md, 6px)',
+                    border: active ? '1px solid var(--color-primary-500, #3b82f6)' : '1px solid var(--color-border)',
+                    background: active ? 'var(--color-primary-50, rgba(59, 130, 246, 0.08))' : 'var(--color-bg-surface, #fff)',
+                    color: active ? 'var(--color-primary-700, #1d4ed8)' : 'var(--color-text-secondary)',
+                    fontWeight: active ? 600 : 500,
+                    fontSize: 'var(--text-sm)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        background: active ? tab.color : 'var(--color-bg-subtle)',
+                        color: active ? '#fff' : 'var(--color-text-secondary)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Filter Toolbar */}
@@ -688,8 +815,35 @@ export default function CounterpartiesPage() {
                         </td>
                         <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{item.inn || '—'}</td>
                         <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{item.phone || '—'}</td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: Number(item.debtBalance) > 0 ? '#ef4444' : '#10b981' }}>
-                          {formatCurrency(Number(item.debtBalance || 0), locale)} UZS
+                        <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {(() => {
+                            const net =
+                              item.netBalance !== undefined
+                                ? Number(item.netBalance)
+                                : item.type === 'SUPPLIER'
+                                ? -Number(item.debtBalance || 0)
+                                : Number(item.debtBalance || 0);
+
+                            if (net > 0) {
+                              return (
+                                <span style={{ fontWeight: 600, color: '#10b981' }}>
+                                  + {formatCurrency(net, locale)}
+                                </span>
+                              );
+                            } else if (net < 0) {
+                              return (
+                                <span style={{ fontWeight: 600, color: '#ef4444' }}>
+                                  - {formatCurrency(Math.abs(net), locale)}
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                                  {formatCurrency(0, locale)}
+                                </span>
+                              );
+                            }
+                          })()}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
@@ -884,8 +1038,35 @@ export default function CounterpartiesPage() {
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Баланс долга' : 'Qarz Balansi'}</div>
-                <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', marginTop: 4, color: Number(detailItem.debtBalance) > 0 ? '#ef4444' : '#10b981' }}>
-                  {formatCurrency(Number(detailItem.debtBalance || 0), locale)} UZS
+                <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', marginTop: 4 }}>
+                  {(() => {
+                    const net =
+                      detailItem.netBalance !== undefined
+                        ? Number(detailItem.netBalance)
+                        : detailItem.type === 'SUPPLIER'
+                        ? -Number(detailItem.debtBalance || 0)
+                        : Number(detailItem.debtBalance || 0);
+
+                    if (net > 0) {
+                      return (
+                        <span style={{ color: '#10b981' }}>
+                          + {formatCurrency(net, locale)}
+                        </span>
+                      );
+                    } else if (net < 0) {
+                      return (
+                        <span style={{ color: '#ef4444' }}>
+                          - {formatCurrency(Math.abs(net), locale)}
+                        </span>
+                      );
+                    } else {
+                      return (
+                        <span style={{ color: 'var(--color-text-secondary)' }}>
+                          {formatCurrency(0, locale)}
+                        </span>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
             </div>
@@ -912,7 +1093,7 @@ export default function CounterpartiesPage() {
                 </h4>
                 {customerOrdersData?.summary && (
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale)} UZS</strong>
+                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale)}</strong>
                   </span>
                 )}
               </div>

@@ -169,6 +169,15 @@ _Avoid_: Debt erase, money clearing, manual match
 The financial variance recognized between the operational document exchange rate and the settlement payment exchange rate for multi-currency transactions.
 _Avoid_: Currency slippage, revaluation loss, FX fee
 
+**Counterparty Net Balance**:
+The enterprise's net financial settlement position with a counterparty (`Receivables - Payables`). A positive balance (`+`, green) denotes counterparty indebtedness to the enterprise (Debitor / Haqdorligimiz). A negative balance (`-`, red) denotes the enterprise's indebtedness to the counterparty (Kreditor / Qarzdorligimiz). A zero balance denotes a settled account.
+_Avoid_: Raw debt balance, unsigned debt, mixed ledger total
+
+**Receivables & Payables Summary**:
+The real-time tenant-level financial aggregation of counterparty settlement states, reporting total customer and supplier counts alongside segregated aggregate figures for receivables (`debtBalance > 0`) and payables (`debtBalance < 0`).
+_Avoid_: Debt pile, lumped liability, generic debtor sum
+
+
 ### Accounting & General Ledger
 
 **Automatic Journal Posting**:
