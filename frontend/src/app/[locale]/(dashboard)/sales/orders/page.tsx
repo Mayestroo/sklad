@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
@@ -100,6 +100,14 @@ export default function SalesOrdersPage() {
   const [pickListOrder, setPickListOrder] = useState<any | null>(null);
   const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<any | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = () => setOpenDropdownId(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
 
   const isWarehouseOperator = Boolean(
     hasRole('ADMIN') ||
@@ -524,48 +532,86 @@ export default function SalesOrdersPage() {
                       </td>
 
                       <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
-                          <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
-                            {isRu ? meta.ru : meta.uz}
-                          </Badge>
-                          {isWarehouseOperator && getNextStatuses(ord.status).length > 0 && (
-                            <select
-                              value=""
-                              disabled={updatingOrderId === ord.id}
-                              onChange={(e) => {
-                                const nextVal = e.target.value;
-                                if (!nextVal) return;
-                                if (nextVal === 'CANCELLED') {
-                                  if (confirm(isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?')) {
-                                    handleQuickStatusChange(ord.id, nextVal);
-                                  }
-                                } else if (nextVal === 'SHIPPED') {
-                                  if (confirm(isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?')) {
-                                    handleQuickStatusChange(ord.id, nextVal);
-                                  }
-                                } else {
-                                  handleQuickStatusChange(ord.id, nextVal);
-                                }
-                              }}
+                        <div
+                          style={{ display: 'inline-block', position: 'relative' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Clickable badge — opens dropdown if operator and has next statuses */}
+                          <button
+                            type="button"
+                            disabled={updatingOrderId === ord.id}
+                            onClick={() => {
+                              if (!isWarehouseOperator || getNextStatuses(ord.status).length === 0) return;
+                              setOpenDropdownId(openDropdownId === ord.id ? null : ord.id);
+                            }}
+                            style={{
+                              all: 'unset',
+                              cursor: (isWarehouseOperator && getNextStatuses(ord.status).length > 0 && updatingOrderId !== ord.id) ? 'pointer' : 'default',
+                              opacity: updatingOrderId === ord.id ? 0.5 : 1,
+                            }}
+                          >
+                            <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
+                              {isRu ? meta.ru : meta.uz}
+                              {isWarehouseOperator && getNextStatuses(ord.status).length > 0 && (
+                                <span style={{ marginLeft: '4px', fontSize: '9px', opacity: 0.7 }}>▾</span>
+                              )}
+                            </Badge>
+                          </button>
+
+                          {/* Floating dropdown menu */}
+                          {openDropdownId === ord.id && (
+                            <div
                               style={{
-                                fontSize: '11px',
-                                padding: '2px 6px',
-                                borderRadius: 'var(--radius-md)',
+                                position: 'absolute',
+                                top: 'calc(100% + 4px)',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                zIndex: 50,
+                                minWidth: '160px',
+                                backgroundColor: 'var(--color-bg-primary)',
                                 border: '1px solid var(--color-border)',
-                                backgroundColor: 'var(--color-bg-subtle)',
-                                color: 'var(--color-text-secondary)',
-                                cursor: updatingOrderId === ord.id ? 'not-allowed' : 'pointer',
-                                opacity: updatingOrderId === ord.id ? 0.5 : 1,
-                                width: '100%',
+                                borderRadius: 'var(--radius-md)',
+                                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                                overflow: 'hidden',
                               }}
                             >
-                              <option value="">{isRu ? 'O\'zgartirish...' : 'O\'zgartirish...'}</option>
                               {getNextStatuses(ord.status).map((s) => (
-                                <option key={s.status} value={s.status}>
+                                <button
+                                  key={s.status}
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenDropdownId(null);
+                                    if (s.status === 'CANCELLED') {
+                                      if (confirm(isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?')) {
+                                        handleQuickStatusChange(ord.id, s.status);
+                                      }
+                                    } else if (s.status === 'SHIPPED') {
+                                      if (confirm(isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?')) {
+                                        handleQuickStatusChange(ord.id, s.status);
+                                      }
+                                    } else {
+                                      handleQuickStatusChange(ord.id, s.status);
+                                    }
+                                  }}
+                                  style={{
+                                    display: 'block',
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '8px 14px',
+                                    fontSize: 'var(--text-sm)',
+                                    color: s.status === 'CANCELLED' ? '#dc2626' : 'var(--color-text-primary)',
+                                    background: 'none',
+                                    border: 'none',
+                                    borderBottom: '1px solid var(--color-border-light)',
+                                    cursor: 'pointer',
+                                  }}
+                                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--color-bg-subtle)'; }}
+                                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
+                                >
                                   {isRu ? s.labelRu : s.labelUz}
-                                </option>
+                                </button>
                               ))}
-                            </select>
+                            </div>
                           )}
                         </div>
                       </td>
