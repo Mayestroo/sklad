@@ -480,7 +480,7 @@ export default function SalesOrdersPage() {
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {isRu ? 'КЛИЕНТ' : 'MIJOZ'}
                   </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                  <th style={{ padding: '12px 12px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '140px' }}>
                     {isRu ? 'СТАТУС' : 'HOLAT'}
                   </th>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -523,8 +523,8 @@ export default function SalesOrdersPage() {
                         </div>
                       </td>
 
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
                             {isRu ? meta.ru : meta.uz}
                           </Badge>
@@ -549,15 +549,17 @@ export default function SalesOrdersPage() {
                               }}
                               style={{
                                 fontSize: '11px',
-                                padding: '2px 4px',
+                                padding: '2px 6px',
                                 borderRadius: '4px',
-                                border: '1px solid var(--color-border-light)',
-                                backgroundColor: 'var(--color-bg-primary)',
+                                border: '1px solid var(--color-border)',
+                                backgroundColor: 'var(--color-bg-subtle)',
                                 color: 'var(--color-text-secondary)',
-                                cursor: 'pointer',
+                                cursor: updatingOrderId === ord.id ? 'not-allowed' : 'pointer',
+                                maxWidth: '130px',
+                                opacity: updatingOrderId === ord.id ? 0.5 : 1,
                               }}
                             >
-                              <option value="">{isRu ? 'Сменить статус...' : 'Status...'}</option>
+                              <option value="">{isRu ? 'Smenить ▾' : "O\u2019zgartirish \u25be"}</option>
                               {getNextStatuses(ord.status).map((s) => (
                                 <option key={s.status} value={s.status}>
                                   {isRu ? s.labelRu : s.labelUz}

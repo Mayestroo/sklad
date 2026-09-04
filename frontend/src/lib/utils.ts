@@ -17,9 +17,10 @@
  * {formatCurrency(amount, locale, currency)} {currency}
  */
 export function formatCurrency(amount: number, locale: string = 'uz', currency: string = 'UZS'): string {
-  const formatted = new Intl.NumberFormat(locale === 'uz' ? 'uz-UZ' : 'ru-RU', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+  // Always format as 111,111.000 — comma thousands separator, dot decimal, 3 fixed decimals
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
   }).format(amount || 0);
 
   const cur = (currency || 'UZS').toUpperCase();
