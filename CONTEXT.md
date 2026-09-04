@@ -131,6 +131,14 @@ _Avoid_: Margin alert, discount stop, price restriction
 A document recording the return of previously sold goods from a customer back into the warehouse, restoring active stock at the original consumption landed cost, reducing customer debt or generating customer advance, and adjusting accounting revenue and COGS.
 _Avoid_: Customer refund slip, inbound return, reverse invoice
 
+**Over-Return Invariant**:
+The safety validation ensuring that item returned quantity cannot exceed the unreturned sold quantity of the originating sales invoice.
+_Avoid_: Excess return, unverified quantity return, phantom stock intake
+
+**Defect Warehouse (Brak ombori)**:
+A designated warehouse used to quarantine defective, damaged, or expired returned goods, isolating them from active sellable inventory while maintaining separate accounting valuation.
+_Avoid_: Bad pile, junk bin, broken stock
+
 **Sales Rollback Invariant**:
 The safety rule disallowing the unposting or cancellation of a posted sales invoice if linked finance payments exist or if sales returns have been registered against it.
 _Avoid_: Force cancel, cash bypass, invoice unlock

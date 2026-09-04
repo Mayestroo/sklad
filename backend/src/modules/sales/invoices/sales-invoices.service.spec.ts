@@ -32,7 +32,9 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       salesReturn: {
         count: jest.fn(),
         create: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
+        update: jest.fn(),
         aggregate: jest.fn(),
       },
       productBatch: {
@@ -454,6 +456,206 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         where: { id: 'inv-1' },
         data: { returnStatus: SalesReturnStatus.PARTIALLY_RETURNED },
       });
+    });
+
+    it('should calculate returnable items accurately and respect previous returns', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 10,
+            unitPrice: 50000,
+            unitCogs: 30000,
+            product: { name: { uz: 'Mahsulot 1' }, sku: 'SKU-1', unitOfMeasure: 'piece' },
+          },
+          {
+            productId: 'prod-2',
+            quantity: 5,
+            unitPrice: 80000,
+            unitCogs: 60000,
+            product: { name: { uz: 'Mahsulot 2' }, sku: 'SKU-2', unitOfMeasure: 'piece' },
+          },
+        ],
+        returns: [
+          {
+            status: SalesReturnDocStatus.POSTED,
+            items: [
+              { productId: 'prod-1', quantity: 3 },
+            ],
+          },
+        ],
+      });
+
+      const items = await service.getInvoiceReturnableItems('tenant-1', 'inv-1');
+      expect(items).toHaveLength(2);
+      expect(items[0].soldQuantity).toBe(10);
+      expect(items[0].returnedQuantity).toBe(3);
+      expect(items[0].returnableQuantity).toBe(7);
+
+      expect(items[1].soldQuantity).toBe(5);
+      expect(items[1].returnedQuantity).toBe(0);
+      expect(items[1].returnableQuantity).toBe(5);
+    });
+
+    it('should reject return if item quantity exceeds returnable quantity (Over-Return Invariant)', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        totalAmount: 500000,
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 5,
+            unitPrice: 100000,
+            unitCogs: 70000,
+          },
+        ],
+        returns: [
+          {
+            status: SalesReturnDocStatus.POSTED,
+            items: [{ productId: 'prod-1', quantity: 3 }],
+          },
+        ],
+      });
+
+      // Remaining is 5 - 3 = 2. Trying to return 3 must fail.
+      await expect(
+        service.createReturn('tenant-1', 'user-1', {
+          invoiceId: 'inv-1',
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          items: [
+            {
+              productId: 'prod-1',
+              quantity: 3, // exceeds remaining 2
+              unitPrice: 100000,
+            },
+          ],
+        }),
+      ).rejects.toThrow('Over-return invariant');
+    });
+
+    it('should create return in DRAFT status without altering stock or balances', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        items: [{ productId: 'prod-1', quantity: 10, unitCogs: 50000 }],
+        returns: [],
+      });
+      prisma.salesReturn.count.mockResolvedValue(0);
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-draft',
+        ...data,
+      }));
+
+      const res = await service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        status: SalesReturnDocStatus.DRAFT,
+        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 70000 }],
+      });
+
+      expect(res.status).toBe(SalesReturnDocStatus.DRAFT);
+      expect(prisma.stockLevel.update).not.toHaveBeenCalled();
+      expect(prisma.counterparty.update).not.toHaveBeenCalled();
+      expect(prisma.journalEntry.create).not.toHaveBeenCalled();
+    });
+
+    it('should route defective items to defect warehouse on confirm', async () => {
+      prisma.salesReturn.update.mockImplementation(({ where, data }: any) => ({
+        id: where.id,
+        ...data,
+      }));
+      prisma.salesReturn.findFirst.mockResolvedValue({
+        id: 'sret-draft-1',
+        returnNumber: 'RET-2026-0001',
+        returnDate: new Date(),
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-main',
+        defectWarehouseId: 'wh-defect',
+        currency: 'UZS',
+        reason: 'Defective item',
+        status: SalesReturnDocStatus.DRAFT,
+        totalAmount: 200000,
+        totalCogs: 140000,
+        invoiceId: 'inv-1',
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: 100000,
+            totalPrice: 100000,
+            unitCogs: 70000,
+            lineCogs: 70000,
+            isDefective: false,
+          },
+          {
+            productId: 'prod-2',
+            quantity: 1,
+            unitPrice: 100000,
+            totalPrice: 100000,
+            unitCogs: 70000,
+            lineCogs: 70000,
+            isDefective: true,
+          },
+        ],
+      });
+
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        totalAmount: 500000,
+        items: [
+          { productId: 'prod-1', quantity: 5 },
+          { productId: 'prod-2', quantity: 5 },
+        ],
+        returns: [],
+      });
+
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'st-1',
+        quantity: 10,
+      });
+
+      await service.confirmReturn('tenant-1', 'user-1', 'sret-draft-1');
+
+      // prod-1 (healthy) restocked in wh-main
+      expect(prisma.productBatch.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            productId: 'prod-1',
+            warehouseId: 'wh-main',
+          }),
+        }),
+      );
+
+      // prod-2 (defective) restocked in wh-defect
+      expect(prisma.productBatch.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            productId: 'prod-2',
+            warehouseId: 'wh-defect',
+          }),
+        }),
+      );
+    });
+
+    it('should reject cancellation if restocked goods were already consumed (Rollback Guardrail)', async () => {
+      prisma.salesReturn.findFirst.mockResolvedValue({
+        id: 'sret-posted-1',
+        status: SalesReturnDocStatus.POSTED,
+        warehouseId: 'wh-main',
+        items: [{ productId: 'prod-1', quantity: 5, isDefective: false }],
+      });
+
+      // Warehouse stock only has 2 available (< 5 required to reverse)
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'st-1',
+        quantity: 2,
+      });
+
+      await expect(
+        service.cancelReturn('tenant-1', 'user-1', 'sret-posted-1'),
+      ).rejects.toThrow('Rollback Guardrail');
     });
   });
 });

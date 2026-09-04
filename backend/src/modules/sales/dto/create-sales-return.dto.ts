@@ -1,5 +1,7 @@
 import {
   IsArray,
+  IsBoolean,
+  IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -8,6 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { SalesReturnDocStatus } from '@prisma/client';
 
 export class SalesReturnItemDto {
   @IsString()
@@ -21,6 +24,10 @@ export class SalesReturnItemDto {
   @IsNumber()
   @Min(0)
   unitPrice: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isDefective?: boolean;
 }
 
 export class CreateSalesReturnDto {
@@ -38,6 +45,10 @@ export class CreateSalesReturnDto {
 
   @IsOptional()
   @IsString()
+  defectWarehouseId?: string;
+
+  @IsOptional()
+  @IsString()
   returnDate?: string;
 
   @IsOptional()
@@ -48,8 +59,13 @@ export class CreateSalesReturnDto {
   @IsString()
   reason?: string;
 
+  @IsOptional()
+  @IsEnum(SalesReturnDocStatus)
+  status?: SalesReturnDocStatus;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SalesReturnItemDto)
   items: SalesReturnItemDto[];
 }
+

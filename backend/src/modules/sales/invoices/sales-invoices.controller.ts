@@ -90,10 +90,28 @@ export class SalesInvoicesController {
 
   // ─── RETURNS ──────────────────────────────────────────────────
 
+  @Get('invoices/:id/returnable-items')
+  @RequirePermissions('sales:view')
+  getInvoiceReturnableItems(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.getInvoiceReturnableItems(tenantId, id);
+  }
+
   @Get('returns')
   @RequirePermissions('sales:view')
   findAllReturns(@CurrentTenant() tenantId: string) {
     return this.service.findAllReturns(tenantId);
+  }
+
+  @Get('returns/:id')
+  @RequirePermissions('sales:view')
+  findOneReturn(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.findOneReturn(tenantId, id);
   }
 
   @Post('returns')
@@ -104,6 +122,26 @@ export class SalesInvoicesController {
     @Body() dto: CreateSalesReturnDto,
   ) {
     return this.service.createReturn(tenantId, userId, dto);
+  }
+
+  @Post('returns/:id/confirm')
+  @RequirePermissions('sales:post')
+  confirmReturn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.confirmReturn(tenantId, userId, id);
+  }
+
+  @Post('returns/:id/cancel')
+  @RequirePermissions('sales:post')
+  cancelReturn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.cancelReturn(tenantId, userId, id);
   }
 
   // ─── PRICE LISTS ──────────────────────────────────────────────

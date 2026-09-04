@@ -619,27 +619,98 @@ export class SalesInvoicesService {
 
   // ─── CUSTOMER RETURNS ─────────────────────────────────────────
 
+  async getInvoiceReturnableItems(tenantId: string, invoiceId: string) {
+    const invoice = await this.prisma.salesInvoice.findFirst({
+      where: { id: invoiceId, tenantId },
+      include: {
+        items: { include: { product: true } },
+        returns: {
+          where: { status: SalesReturnDocStatus.POSTED },
+          include: { items: true },
+        },
+      },
+    });
+    if (!invoice) {
+      throw new NotFoundException('Sotuv fakturasi topilmadi');
+    }
+
+    const returnedQtyMap = new Map<string, number>();
+    for (const ret of invoice.returns) {
+      for (const retItem of ret.items) {
+        const current = returnedQtyMap.get(retItem.productId) || 0;
+        returnedQtyMap.set(retItem.productId, current + Number(retItem.quantity));
+      }
+    }
+
+    return invoice.items.map((item) => {
+      const soldQuantity = Number(item.quantity);
+      const returnedQuantity = returnedQtyMap.get(item.productId) || 0;
+      const returnableQuantity = Math.max(0, soldQuantity - returnedQuantity);
+      return {
+        productId: item.productId,
+        productName: item.product?.name,
+        sku: item.product?.sku,
+        barcode: item.product?.barcode,
+        unit: item.product?.unitOfMeasure,
+        soldQuantity,
+        returnedQuantity,
+        returnableQuantity,
+        unitPrice: Number(item.unitPrice),
+        unitCogs: Number(item.unitCogs || 0),
+      };
+    });
+  }
+
   async createReturn(
     tenantId: string,
     userId: string,
     dto: CreateSalesReturnDto,
   ) {
-    if (!dto.items?.length)
+    if (!dto.items?.length) {
       throw new BadRequestException(
         "Qaytarish hujjatida kamida bitta tovar bo'lishi shart",
       );
+    }
 
     const returnNumber = await this.generateReturnNumber(tenantId);
     let totalAmount = 0;
     let totalCogs = 0;
 
-    let originalInvoiceItems: Prisma.SalesInvoiceItemGetPayload<Record<string, never>>[] = [];
+    let originalInvoice: any = null;
+    const returnedQtyMap = new Map<string, number>();
+
     if (dto.invoiceId) {
-      const orig = await this.prisma.salesInvoice.findUnique({
-        where: { id: dto.invoiceId },
-        include: { items: true },
-      });
-      if (orig) originalInvoiceItems = orig.items;
+      originalInvoice =
+        (await this.prisma.salesInvoice.findFirst({
+          where: { id: dto.invoiceId, tenantId },
+          include: {
+            items: true,
+            returns: {
+              where: { status: SalesReturnDocStatus.POSTED },
+              include: { items: true },
+            },
+          },
+        })) ||
+        (await this.prisma.salesInvoice.findUnique({
+          where: { id: dto.invoiceId },
+          include: {
+            items: true,
+            returns: {
+              where: { status: SalesReturnDocStatus.POSTED },
+              include: { items: true },
+            },
+          },
+        }));
+      if (!originalInvoice) {
+        throw new NotFoundException('Tanlangan sotuv fakturasi topilmadi');
+      }
+
+      for (const ret of originalInvoice.returns || []) {
+        for (const retItem of ret.items || []) {
+          const current = returnedQtyMap.get(retItem.productId) || 0;
+          returnedQtyMap.set(retItem.productId, current + Number(retItem.quantity));
+        }
+      }
     }
 
     const preparedItems: Array<{
@@ -649,21 +720,44 @@ export class SalesInvoicesService {
       totalPrice: number;
       unitCogs: number;
       lineCogs: number;
+      isDefective: boolean;
     }> = [];
+
     for (const i of dto.items) {
       const lineTotal = i.quantity * i.unitPrice;
       totalAmount += lineTotal;
 
-      const origItem = originalInvoiceItems.find(
-        (oi) => oi.productId === i.productId,
-      );
-      let unitCogs = origItem ? Number(origItem.unitCogs || 0) : 0;
+      let unitCogs = 0;
+      if (originalInvoice) {
+        const origItem = originalInvoice.items.find(
+          (oi: any) => oi.productId === i.productId,
+        );
+        if (!origItem) {
+          throw new BadRequestException(
+            "Mahsulot tanlangan sotuv fakturasida mavjud emas",
+          );
+        }
+
+        const soldQty = Number(origItem.quantity);
+        const previouslyReturned = returnedQtyMap.get(i.productId) || 0;
+        const remainingReturnable = Math.max(0, soldQty - previouslyReturned);
+
+        if (i.quantity > remainingReturnable + 0.0001) {
+          throw new BadRequestException(
+            `"${origItem.productId}" bo'yicha qaytarish miqdori (${i.quantity}) asl sotuvdagi qoldiqdan (${remainingReturnable}) oshib ketdi (Over-return invariant)`,
+          );
+        }
+
+        unitCogs = Number(origItem.unitCogs || 0);
+      }
+
       if (unitCogs <= 0) {
         const prod = await this.prisma.product.findUnique({
           where: { id: i.productId },
         });
         unitCogs = Number(prod?.costPrice || 0);
       }
+
       const lineCogs = i.quantity * unitCogs;
       totalCogs += lineCogs;
 
@@ -674,11 +768,14 @@ export class SalesInvoicesService {
         totalPrice: lineTotal,
         unitCogs,
         lineCogs,
+        isDefective: Boolean(i.isDefective),
       });
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const salesReturn = await tx.salesReturn.create({
+    const targetStatus = dto.status || SalesReturnDocStatus.POSTED;
+
+    if (targetStatus === SalesReturnDocStatus.DRAFT) {
+      return this.prisma.salesReturn.create({
         data: {
           tenantId,
           returnNumber,
@@ -686,9 +783,10 @@ export class SalesInvoicesService {
           invoiceId: dto.invoiceId || null,
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
+          defectWarehouseId: dto.defectWarehouseId || null,
           currency: dto.currency || 'UZS',
           reason: dto.reason || null,
-          status: SalesReturnDocStatus.POSTED,
+          status: SalesReturnDocStatus.DRAFT,
           totalAmount,
           totalCogs,
           createdById: userId,
@@ -697,18 +795,114 @@ export class SalesInvoicesService {
         include: {
           counterparty: true,
           warehouse: true,
+          defectWarehouse: true,
           invoice: true,
           items: { include: { product: true } },
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
         },
       });
+    }
 
-      // Return goods to warehouse and create returned product batches
-      for (const item of preparedItems) {
+    // Otherwise POSTED (Immediate Confirmation)
+    return this.executePostReturn(tenantId, userId, {
+      returnNumber,
+      returnDate: dto.returnDate ? new Date(dto.returnDate) : new Date(),
+      invoiceId: dto.invoiceId,
+      counterpartyId: dto.counterpartyId,
+      warehouseId: dto.warehouseId,
+      defectWarehouseId: dto.defectWarehouseId,
+      currency: dto.currency || 'UZS',
+      reason: dto.reason,
+      totalAmount,
+      totalCogs,
+      preparedItems,
+    });
+  }
+
+  private async executePostReturn(
+    tenantId: string,
+    userId: string,
+    params: {
+      existingReturnId?: string;
+      returnNumber: string;
+      returnDate: Date;
+      invoiceId?: string | null;
+      counterpartyId: string;
+      warehouseId: string;
+      defectWarehouseId?: string | null;
+      currency: string;
+      reason?: string | null;
+      totalAmount: number;
+      totalCogs: number;
+      preparedItems: Array<{
+        productId: string;
+        quantity: number;
+        unitPrice: number;
+        totalPrice: number;
+        unitCogs: number;
+        lineCogs: number;
+        isDefective: boolean;
+      }>;
+    },
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      let salesReturn;
+      if (params.existingReturnId) {
+        salesReturn = await tx.salesReturn.update({
+          where: { id: params.existingReturnId },
+          data: {
+            status: SalesReturnDocStatus.POSTED,
+          },
+          include: {
+            counterparty: true,
+            warehouse: true,
+            defectWarehouse: true,
+            invoice: true,
+            items: { include: { product: true } },
+            createdBy: { select: { id: true, firstName: true, lastName: true } },
+          },
+        });
+      } else {
+        salesReturn = await tx.salesReturn.create({
+          data: {
+            tenantId,
+            returnNumber: params.returnNumber,
+            returnDate: params.returnDate,
+            invoiceId: params.invoiceId || null,
+            counterpartyId: params.counterpartyId,
+            warehouseId: params.warehouseId,
+            defectWarehouseId: params.defectWarehouseId || null,
+            currency: params.currency,
+            reason: params.reason || null,
+            status: SalesReturnDocStatus.POSTED,
+            totalAmount: params.totalAmount,
+            totalCogs: params.totalCogs,
+            createdById: userId,
+            items: { create: params.preparedItems },
+          },
+          include: {
+            counterparty: true,
+            warehouse: true,
+            defectWarehouse: true,
+            invoice: true,
+            items: { include: { product: true } },
+            createdBy: { select: { id: true, firstName: true, lastName: true } },
+          },
+        });
+      }
+
+      // Restock inventory and create product batches with defect warehouse routing
+      for (const item of params.preparedItems) {
+        const targetWarehouseId =
+          item.isDefective && params.defectWarehouseId
+            ? params.defectWarehouseId
+            : params.warehouseId;
+
         const stockLevel = await tx.stockLevel.findUnique({
           where: {
             tenantId_warehouseId_productId: {
               tenantId,
-              warehouseId: dto.warehouseId,
+              warehouseId: targetWarehouseId,
               productId: item.productId,
             },
           },
@@ -723,7 +917,7 @@ export class SalesInvoicesService {
           await tx.stockLevel.create({
             data: {
               tenantId,
-              warehouseId: dto.warehouseId,
+              warehouseId: targetWarehouseId,
               productId: item.productId,
               quantity: item.quantity,
               reservedQuantity: 0,
@@ -731,13 +925,13 @@ export class SalesInvoicesService {
           });
         }
 
-        // Create product batch for returned stock with historical landed cost
+        // ProductBatch with historical landed cost
         await tx.productBatch.create({
           data: {
             tenantId,
             productId: item.productId,
-            warehouseId: dto.warehouseId,
-            batchNumber: `RET-${returnNumber}-${item.productId.slice(0, 4)}`,
+            warehouseId: targetWarehouseId,
+            batchNumber: `RET-${params.returnNumber}-${item.productId.slice(0, 4)}`,
             initialQty: item.quantity,
             remainingQty: item.quantity,
             purchasePrice: item.unitCogs,
@@ -748,26 +942,30 @@ export class SalesInvoicesService {
 
       // Reduce customer debt
       await tx.counterparty.update({
-        where: { id: dto.counterpartyId },
-        data: { debtBalance: { decrement: totalAmount } },
+        where: { id: params.counterpartyId },
+        data: { debtBalance: { decrement: params.totalAmount } },
       });
 
-      // Update original invoice returnStatus
-      if (dto.invoiceId) {
+      // Update originating invoice returnStatus
+      if (params.invoiceId) {
         const origInvoice = await tx.salesInvoice.findUnique({
-          where: { id: dto.invoiceId },
-          include: { returns: true },
+          where: { id: params.invoiceId },
+          include: {
+            returns: {
+              where: { status: SalesReturnDocStatus.POSTED },
+            },
+          },
         });
         if (origInvoice) {
           const totalReturned =
             origInvoice.returns.reduce((s, r) => s + Number(r.totalAmount), 0) +
-            totalAmount;
+            (params.existingReturnId ? 0 : params.totalAmount);
           const newReturnStatus =
             totalReturned >= Number(origInvoice.totalAmount)
               ? SalesReturnStatus.FULLY_RETURNED
               : SalesReturnStatus.PARTIALLY_RETURNED;
           await tx.salesInvoice.update({
-            where: { id: dto.invoiceId },
+            where: { id: params.invoiceId },
             data: { returnStatus: newReturnStatus },
           });
         }
@@ -793,20 +991,21 @@ export class SalesInvoicesService {
         amount: number;
         description: string;
       }> = [];
-      if (revenueAcc && receivableAcc && totalAmount > 0) {
+
+      if (revenueAcc && receivableAcc && params.totalAmount > 0) {
         journalLines.push({
           debitAccountId: revenueAcc.id,
           creditAccountId: receivableAcc.id,
-          amount: totalAmount,
-          description: `Sotuv qaytarilishi № ${returnNumber}`,
+          amount: params.totalAmount,
+          description: `Sotuv qaytarilishi № ${params.returnNumber}`,
         });
       }
-      if (cogsAcc && inventoryAcc && totalCogs > 0) {
+      if (cogsAcc && inventoryAcc && params.totalCogs > 0) {
         journalLines.push({
           debitAccountId: inventoryAcc.id,
           creditAccountId: cogsAcc.id,
-          amount: totalCogs,
-          description: `Sotuv qaytarilishi tannarxi № ${returnNumber}`,
+          amount: params.totalCogs,
+          description: `Sotuv qaytarilishi tannarxi № ${params.returnNumber}`,
         });
       }
 
@@ -818,7 +1017,7 @@ export class SalesInvoicesService {
             tenantId,
             entryNumber,
             entryDate: salesReturn.returnDate,
-            description: `Sotuv qaytarilishi № ${returnNumber}`,
+            description: `Sotuv qaytarilishi № ${params.returnNumber}`,
             sourceDocType: 'SalesReturn',
             sourceDocId: salesReturn.id,
             lines: { create: journalLines },
@@ -832,12 +1031,285 @@ export class SalesInvoicesService {
           userId,
           entityType: 'SalesReturn',
           entityId: salesReturn.id,
-          action: 'CREATE',
-          newValue: { returnNumber, totalAmount, totalCogs },
+          action: 'UPDATE',
+          newValue: {
+            returnNumber: params.returnNumber,
+            totalAmount: params.totalAmount,
+            totalCogs: params.totalCogs,
+            status: SalesReturnDocStatus.POSTED,
+          },
         },
       });
 
       return salesReturn;
+    });
+  }
+
+  async confirmReturn(tenantId: string, userId: string, returnId: string) {
+    const existing = await this.prisma.salesReturn.findFirst({
+      where: { id: returnId, tenantId },
+      include: {
+        items: true,
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException('Qaytarish hujjati topilmadi');
+    }
+    if (existing.status !== SalesReturnDocStatus.DRAFT) {
+      throw new BadRequestException(
+        'Faqat qoralama (DRAFT) holatidagi qaytarishni tasdiqlash mumkin',
+      );
+    }
+
+    // Check over-return invariant against originating invoice if present
+    if (existing.invoiceId) {
+      const origInvoice = await this.prisma.salesInvoice.findFirst({
+        where: { id: existing.invoiceId, tenantId },
+        include: {
+          items: true,
+          returns: {
+            where: { status: SalesReturnDocStatus.POSTED },
+            include: { items: true },
+          },
+        },
+      });
+
+      if (origInvoice) {
+        const returnedQtyMap = new Map<string, number>();
+        for (const ret of origInvoice.returns) {
+          for (const retItem of ret.items) {
+            const current = returnedQtyMap.get(retItem.productId) || 0;
+            returnedQtyMap.set(retItem.productId, current + Number(retItem.quantity));
+          }
+        }
+
+        for (const item of existing.items) {
+          const origItem = origInvoice.items.find(
+            (oi) => oi.productId === item.productId,
+          );
+          if (origItem) {
+            const soldQty = Number(origItem.quantity);
+            const prevReturned = returnedQtyMap.get(item.productId) || 0;
+            const remaining = Math.max(0, soldQty - prevReturned);
+            if (Number(item.quantity) > remaining + 0.0001) {
+              throw new BadRequestException(
+                `Qaytarish miqdori asl sotuvdagi qoldiqdan oshib ketdi (${remaining})`,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    const preparedItems = existing.items.map((i) => ({
+      productId: i.productId,
+      quantity: Number(i.quantity),
+      unitPrice: Number(i.unitPrice),
+      totalPrice: Number(i.totalPrice),
+      unitCogs: Number(i.unitCogs),
+      lineCogs: Number(i.lineCogs),
+      isDefective: Boolean(i.isDefective),
+    }));
+
+    return this.executePostReturn(tenantId, userId, {
+      existingReturnId: existing.id,
+      returnNumber: existing.returnNumber,
+      returnDate: existing.returnDate,
+      invoiceId: existing.invoiceId,
+      counterpartyId: existing.counterpartyId,
+      warehouseId: existing.warehouseId,
+      defectWarehouseId: existing.defectWarehouseId,
+      currency: existing.currency,
+      reason: existing.reason,
+      totalAmount: Number(existing.totalAmount),
+      totalCogs: Number(existing.totalCogs),
+      preparedItems,
+    });
+  }
+
+  async cancelReturn(tenantId: string, userId: string, returnId: string) {
+    const existing = await this.prisma.salesReturn.findFirst({
+      where: { id: returnId, tenantId },
+      include: {
+        items: true,
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException('Qaytarish hujjati topilmadi');
+    }
+    if (existing.status === SalesReturnDocStatus.CANCELLED) {
+      throw new BadRequestException('Ushbu qaytarish allaqachon bekor qilingan');
+    }
+
+    if (existing.status === SalesReturnDocStatus.DRAFT) {
+      return this.prisma.salesReturn.update({
+        where: { id: returnId },
+        data: { status: SalesReturnDocStatus.CANCELLED },
+      });
+    }
+
+    // If POSTED, execute rollback guardrail and reversals
+    return this.prisma.$transaction(async (tx) => {
+      // Check stock availability in target warehouses
+      for (const item of existing.items) {
+        const targetWarehouseId =
+          item.isDefective && existing.defectWarehouseId
+            ? existing.defectWarehouseId
+            : existing.warehouseId;
+
+        const stockLevel = await tx.stockLevel.findUnique({
+          where: {
+            tenantId_warehouseId_productId: {
+              tenantId,
+              warehouseId: targetWarehouseId,
+              productId: item.productId,
+            },
+          },
+        });
+
+        if (!stockLevel || Number(stockLevel.quantity) < Number(item.quantity)) {
+          throw new BadRequestException(
+            "Qaytarilgan tovarlar keyingi sotuvlarda sarflangan, qaytarishni bekor qilib bo'lmaydi (Rollback Guardrail)",
+          );
+        }
+
+        // Deduct returned stock
+        await tx.stockLevel.update({
+          where: { id: stockLevel.id },
+          data: { quantity: { decrement: Number(item.quantity) } },
+        });
+
+        // Delete/deduct the created return batch
+        const batchNumber = `RET-${existing.returnNumber}-${item.productId.slice(0, 4)}`;
+        const batch = await tx.productBatch.findFirst({
+          where: {
+            tenantId,
+            productId: item.productId,
+            warehouseId: targetWarehouseId,
+            batchNumber,
+          },
+        });
+        if (batch) {
+          if (Number(batch.remainingQty) < Number(item.quantity)) {
+            throw new BadRequestException(
+              "Qaytarilgan partiyadan tovar sarflangan, bekor qilish mumkin emas",
+            );
+          }
+          await tx.productBatch.delete({ where: { id: batch.id } });
+        }
+      }
+
+      // Reverse customer debt
+      await tx.counterparty.update({
+        where: { id: existing.counterpartyId },
+        data: { debtBalance: { increment: Number(existing.totalAmount) } },
+      });
+
+      // Update invoice return status
+      if (existing.invoiceId) {
+        const origInvoice = await tx.salesInvoice.findUnique({
+          where: { id: existing.invoiceId },
+          include: {
+            returns: {
+              where: {
+                status: SalesReturnDocStatus.POSTED,
+                id: { not: existing.id },
+              },
+            },
+          },
+        });
+        if (origInvoice) {
+          const remainingReturned = origInvoice.returns.reduce(
+            (s, r) => s + Number(r.totalAmount),
+            0,
+          );
+          const newStatus =
+            remainingReturned <= 0
+              ? SalesReturnStatus.NONE
+              : remainingReturned >= Number(origInvoice.totalAmount)
+                ? SalesReturnStatus.FULLY_RETURNED
+                : SalesReturnStatus.PARTIALLY_RETURNED;
+          await tx.salesInvoice.update({
+            where: { id: existing.invoiceId },
+            data: { returnStatus: newStatus },
+          });
+        }
+      }
+
+      // Reversal double-entry journal entries
+      const revenueAcc = await tx.account.findFirst({
+        where: { tenantId, code: '9010' },
+      });
+      const receivableAcc = await tx.account.findFirst({
+        where: { tenantId, code: '4010' },
+      });
+      const cogsAcc = await tx.account.findFirst({
+        where: { tenantId, code: '9110' },
+      });
+      const inventoryAcc = await tx.account.findFirst({
+        where: { tenantId, code: '2910' },
+      });
+
+      const journalLines: Array<{
+        debitAccountId: string;
+        creditAccountId: string;
+        amount: number;
+        description: string;
+      }> = [];
+
+      const totalAmount = Number(existing.totalAmount);
+      const totalCogs = Number(existing.totalCogs);
+
+      if (revenueAcc && receivableAcc && totalAmount > 0) {
+        journalLines.push({
+          debitAccountId: receivableAcc.id,
+          creditAccountId: revenueAcc.id,
+          amount: totalAmount,
+          description: `Sotuv qaytarilishini bekor qilish № ${existing.returnNumber}`,
+        });
+      }
+      if (cogsAcc && inventoryAcc && totalCogs > 0) {
+        journalLines.push({
+          debitAccountId: cogsAcc.id,
+          creditAccountId: inventoryAcc.id,
+          amount: totalCogs,
+          description: `Sotuv qaytarilishini bekor qilish tannarxi № ${existing.returnNumber}`,
+        });
+      }
+
+      if (journalLines.length > 0) {
+        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
+        const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
+        await tx.journalEntry.create({
+          data: {
+            tenantId,
+            entryNumber,
+            entryDate: new Date(),
+            description: `Sotuv qaytarilishini bekor qilish № ${existing.returnNumber}`,
+            sourceDocType: 'SalesReturnCancel',
+            sourceDocId: existing.id,
+            lines: { create: journalLines },
+          },
+        });
+      }
+
+      const cancelledReturn = await tx.salesReturn.update({
+        where: { id: returnId },
+        data: { status: SalesReturnDocStatus.CANCELLED },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'SalesReturn',
+          entityId: existing.id,
+          action: 'UPDATE',
+          newValue: { status: SalesReturnDocStatus.CANCELLED },
+        },
+      });
+
+      return cancelledReturn;
     });
   }
 
@@ -847,12 +1319,31 @@ export class SalesInvoicesService {
       include: {
         counterparty: true,
         warehouse: true,
+        defectWarehouse: true,
         invoice: true,
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         items: { include: { product: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async findOneReturn(tenantId: string, id: string) {
+    const ret = await this.prisma.salesReturn.findFirst({
+      where: { id, tenantId },
+      include: {
+        counterparty: true,
+        warehouse: true,
+        defectWarehouse: true,
+        invoice: { include: { items: { include: { product: true } } } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        items: { include: { product: true } },
+      },
+    });
+    if (!ret) {
+      throw new NotFoundException('Qaytarish hujjati topilmadi');
+    }
+    return ret;
   }
 
   // ─── PRICE LISTS ──────────────────────────────────────────────

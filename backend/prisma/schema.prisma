@@ -526,12 +526,14 @@ model Warehouse {
   sourceTransfers StockTransfer[] @relation("SourceWarehouse")
   targetTransfers StockTransfer[] @relation("TargetWarehouse")
   salesInvoices SalesInvoice[]
-  purchaseReceipts PurchaseReceipt[]
-  purchaseReturns  PurchaseReturn[]
-  salesReturns     SalesReturn[]
-  productBatches   ProductBatch[]
-  salesOrders      SalesOrder[]
+  purchaseReceipts  PurchaseReceipt[]
+  purchaseReturns   PurchaseReturn[]
+  salesReturns      SalesReturn[]      @relation("SalesReturnWarehouse")
+  defectSalesReturns SalesReturn[]     @relation("SalesReturnDefectWarehouse")
+  productBatches    ProductBatch[]
+  salesOrders       SalesOrder[]
   stockReservations StockReservation[]
+  isDefect          Boolean            @default(false) @map("is_defect")
 
   @@index([tenantId])
   @@map("warehouses")
@@ -1015,28 +1017,30 @@ model SalesInvoiceItem {
 }
 
 model SalesReturn {
-  id             String               @id @default(uuid())
-  tenantId       String               @map("tenant_id")
-  returnNumber   String               @map("return_number")
-  returnDate     DateTime             @default(now()) @map("return_date")
-  invoiceId      String?              @map("invoice_id")
-  counterpartyId String               @map("counterparty_id")
-  warehouseId    String               @map("warehouse_id")
-  currency       String               @default("UZS")
-  reason         String?
-  status         SalesReturnDocStatus @default(POSTED)
-  totalAmount    Decimal              @default(0) @db.Decimal(15, 2) @map("total_amount")
-  totalCogs      Decimal              @default(0) @db.Decimal(15, 2) @map("total_cogs")
-  createdById    String?              @map("created_by_id")
-  createdAt      DateTime             @default(now()) @map("created_at")
-  updatedAt      DateTime             @updatedAt @map("updated_at")
+  id                String               @id @default(uuid())
+  tenantId          String               @map("tenant_id")
+  returnNumber      String               @map("return_number")
+  returnDate        DateTime             @default(now()) @map("return_date")
+  invoiceId         String?              @map("invoice_id")
+  counterpartyId    String               @map("counterparty_id")
+  warehouseId       String               @map("warehouse_id")
+  defectWarehouseId String?              @map("defect_warehouse_id")
+  currency          String               @default("UZS")
+  reason            String?
+  status            SalesReturnDocStatus @default(DRAFT)
+  totalAmount       Decimal              @default(0) @db.Decimal(15, 2) @map("total_amount")
+  totalCogs         Decimal              @default(0) @db.Decimal(15, 2) @map("total_cogs")
+  createdById       String?              @map("created_by_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
 
-  company      Company           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  counterparty Counterparty      @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
-  warehouse    Warehouse         @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-  invoice      SalesInvoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
-  createdBy    User?             @relation("CreatedSalesReturns", fields: [createdById], references: [id], onDelete: SetNull)
-  items        SalesReturnItem[]
+  company         Company           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty    Counterparty      @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse         @relation("SalesReturnWarehouse", fields: [warehouseId], references: [id], onDelete: Cascade)
+  defectWarehouse Warehouse?        @relation("SalesReturnDefectWarehouse", fields: [defectWarehouseId], references: [id], onDelete: SetNull)
+  invoice         SalesInvoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdBy       User?             @relation("CreatedSalesReturns", fields: [createdById], references: [id], onDelete: SetNull)
+  items           SalesReturnItem[]
 
   @@unique([tenantId, returnNumber])
   @@index([tenantId])
@@ -1044,14 +1048,15 @@ model SalesReturn {
 }
 
 model SalesReturnItem {
-  id         String      @id @default(uuid())
-  returnId   String      @map("return_id")
-  productId  String      @map("product_id")
-  quantity   Decimal     @db.Decimal(15, 3)
-  unitPrice  Decimal     @db.Decimal(15, 2) @map("unit_price")
-  totalPrice Decimal     @db.Decimal(15, 2) @map("total_price")
-  unitCogs   Decimal     @default(0) @db.Decimal(15, 2) @map("unit_cogs")
-  lineCogs   Decimal     @default(0) @db.Decimal(15, 2) @map("line_cogs")
+  id          String      @id @default(uuid())
+  returnId    String      @map("return_id")
+  productId   String      @map("product_id")
+  quantity    Decimal     @db.Decimal(15, 3)
+  unitPrice   Decimal     @db.Decimal(15, 2) @map("unit_price")
+  totalPrice  Decimal     @db.Decimal(15, 2) @map("total_price")
+  unitCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("unit_cogs")
+  lineCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("line_cogs")
+  isDefective Boolean     @default(false) @map("is_defective")
 
   return  SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
   product Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
