@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { toast } from '@/context/ToastContext';
 import {
   ShieldCheck,
   Lock,
@@ -62,10 +63,17 @@ export default function SecurityPage() {
         locale,
         method: 'POST',
       });
-      alert(`PostgreSQL Zaxira Nusxasi Shakllantirildi: ${res.filename}`);
+      toast.success(
+        locale === 'ru'
+          ? `Резервная копия PostgreSQL успешно создана: ${res.filename}`
+          : `PostgreSQL zaxira nusxasi shakllantirildi: ${res.filename}`
+      );
       fetchSecurityData();
     } catch (err: any) {
-      alert(err.message || 'Error creating backup');
+      toast.error(
+        err.message ||
+          (locale === 'ru' ? 'Ошибка при создании резервной копии' : 'Zaxira nusxa yaratishda xatolik')
+      );
     } finally {
       setBackupLoading(false);
     }

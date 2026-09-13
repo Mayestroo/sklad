@@ -28,6 +28,8 @@ import {
   PackageCheck,
   AlertCircle,
 } from 'lucide-react';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 interface SalesReturnRow {
   id: string;
@@ -94,6 +96,7 @@ export default function SalesReturnsPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const confirm = useConfirm();
 
   const [returns, setReturns] = useState<SalesReturnRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -381,9 +384,10 @@ export default function SalesReturnsPage() {
         tenantId: company.id,
         locale,
       });
+      toast.success(isRu ? 'Возврат успешно подтвержден' : 'Qaytarish muvaffaqiyatli tasdiqlandi');
       fetchReturns();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при подтверждении' : 'Tasdiqlashda xatolik yuz berdi'));
+      toast.error(err?.message || (isRu ? 'Ошибка при подтверждении' : 'Tasdiqlashda xatolik yuz berdi'));
     } finally {
       setActionLoadingId(null);
     }
@@ -392,11 +396,17 @@ export default function SalesReturnsPage() {
   // Cancel a return (draft void or posted rollback)
   const handleCancelReturn = async (ret: SalesReturnRow) => {
     if (!token || !company) return;
-    const confirmMsg = ret.status === 'POSTED'
-      ? (isRu ? 'Вы уверены, что хотите отменить проведенный возврат? Остатки на складе и долг клиента будут восстановлены.' : 'Haqiqatan ham tasdiqlangan qaytarishni bekor qilmoqchimisiz? Ombor qoldig\'i va mijoz qarzi qayta tiklanadi.')
-      : (isRu ? 'Вы уверены, что хотите аннулировать этот черновик?' : 'Haqiqatan ham ushbu qoralamani bekor qilmoqchimisiz?');
+    const confirmed = await confirm({
+      title: isRu ? 'Отмена возврата' : 'Qaytarishni bekor qilish',
+      description: ret.status === 'POSTED'
+        ? (isRu ? 'Вы уверены, что хотите отменить проведенный возврат? Остатки на складе и долг клиента будут восстановлены.' : 'Haqiqatan ham tasdiqlangan qaytarishni bekor qilmoqchimisiz? Ombor qoldig\'i va mijoz qarzi qayta tiklanadi.')
+        : (isRu ? 'Вы уверены, что хотите аннулировать этот черновик?' : 'Haqiqatan ham ushbu qoralamani bekor qilmoqchimisiz?'),
+      variant: 'warning',
+      confirmText: isRu ? 'Да, отменить' : 'Ha, bekor qilish',
+      cancelText: isRu ? 'Закрыть' : 'Yopish',
+    });
 
-    if (!confirm(confirmMsg)) return;
+    if (!confirmed) return;
 
     setActionLoadingId(ret.id);
     try {
@@ -406,9 +416,10 @@ export default function SalesReturnsPage() {
         tenantId: company.id,
         locale,
       });
+      toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       fetchReturns();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi'));
+      toast.error(err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi'));
     } finally {
       setActionLoadingId(null);
     }

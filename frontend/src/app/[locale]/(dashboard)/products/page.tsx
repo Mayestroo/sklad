@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
+import { toast } from '@/context/ToastContext';
 
 export default function ProductsPage() {
   const t = useTranslations('inventory');
@@ -94,9 +95,10 @@ export default function ProductsPage() {
         locale,
       });
       setDeletingProduct(null);
+      toast.success(isRu ? 'Товар успешно удален' : 'Tovar muvaffaqiyatli o‘chirildi');
       fetchCatalogData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении товара' : 'Tovarni o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении товара' : 'Tovarni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -118,9 +120,10 @@ export default function ProductsPage() {
       });
       setNewCatNameUz('');
       setNewCatNameRu('');
+      toast.success(isRu ? 'Категория успешно создана' : 'Kategoriya muvaffaqiyatli yaratildi');
       fetchCatalogData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при создании категории' : 'Kategoriya yaratishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при создании категории' : 'Kategoriya yaratishda xatolik'));
     } finally {
       setCreateCatLoading(false);
     }
@@ -149,9 +152,10 @@ export default function ProductsPage() {
         }),
       });
       setEditingCategory(null);
+      toast.success(isRu ? 'Категория успешно обновлена' : 'Kategoriya muvaffaqiyatli yangilandi');
       fetchCatalogData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при обновлении категории' : 'Kategoriyani tahrirlashda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при обновлении категории' : 'Kategoriyani tahrirlashda xatolik'));
     } finally {
       setEditCatLoading(false);
     }
@@ -168,9 +172,10 @@ export default function ProductsPage() {
         locale,
       });
       setDeletingCategory(null);
+      toast.success(isRu ? 'Категория успешно удалена' : 'Kategoriya muvaffaqiyatli o‘chirildi');
       fetchCatalogData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении категории' : 'Kategoriyani o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении категории' : 'Kategoriyani o‘chirishda xatolik'));
     } finally {
       setDeleteCatLoading(false);
     }

@@ -11,6 +11,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { toast } from '@/context/ToastContext';
 import { GitBranch, Warehouse, Plus, Building2, MapPin, Phone, Edit2, Trash2 } from 'lucide-react';
 
 export default function BranchesPage() {
@@ -104,8 +105,9 @@ export default function BranchesPage() {
       setBranchAddress('');
       setBranchIsMain(false);
       fetchBranches();
+      toast.success(isRu ? 'Филиал успешно создан' : 'Filial muvaffaqiyatli yaratildi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik'));
     }
   };
 
@@ -137,8 +139,9 @@ export default function BranchesPage() {
       });
       setEditingBranch(null);
       fetchBranches();
+      toast.success(isRu ? 'Филиал успешно обновлен' : 'Filial muvaffaqiyatli yangilandi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка обновления филиала' : 'Filialni tahrirlashda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка обновления филиала' : 'Filialni tahrirlashda xatolik'));
     } finally {
       setEditBranchLoading(false);
     }
@@ -156,8 +159,9 @@ export default function BranchesPage() {
       });
       setDeletingBranch(null);
       fetchBranches();
+      toast.success(isRu ? 'Филиал успешно удален' : 'Filial muvaffaqiyatli o‘chirildi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении филиала' : 'Filialni o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении филиала' : 'Filialni o‘chirishda xatolik'));
     } finally {
       setDeleteBranchLoading(false);
     }
@@ -185,8 +189,9 @@ export default function BranchesPage() {
       setWarehouseAddress('');
       setWarehousePhone('');
       fetchBranches();
+      toast.success(isRu ? 'Склад успешно создан' : 'Omborxona muvaffaqiyatli yaratildi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik'));
     }
   };
 
@@ -220,8 +225,9 @@ export default function BranchesPage() {
       });
       setEditingWarehouse(null);
       fetchBranches();
+      toast.success(isRu ? 'Склад успешно обновлен' : 'Omborxona muvaffaqiyatli yangilandi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка обновления склада' : 'Omborxonani tahrirlashda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка обновления склада' : 'Omborxonani tahrirlashda xatolik'));
     } finally {
       setEditWarehouseLoading(false);
     }
@@ -239,8 +245,9 @@ export default function BranchesPage() {
       });
       setDeletingWarehouse(null);
       fetchBranches();
+      toast.success(isRu ? 'Склад успешно удален' : 'Omborxona muvaffaqiyatli o‘chirildi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении склада' : 'Omborxonani o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении склада' : 'Omborxonani o‘chirishda xatolik'));
     } finally {
       setDeleteWarehouseLoading(false);
     }

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
+import { toast } from '@/context/ToastContext';
 import {
   Users as UsersIcon,
   UserPlus,
@@ -157,6 +158,7 @@ export default function UsersPage() {
       });
       setEditingUser(null);
       fetchUsers();
+      toast.success(isRu ? 'Пользователь успешно обновлен' : 'Foydalanuvchi muvaffaqiyatli yangilandi');
     } catch (err: any) {
       setEditError(err.message || (isRu ? 'Ошибка обновления' : 'Yangilashda xatolik'));
     } finally {
@@ -177,6 +179,7 @@ export default function UsersPage() {
       });
       setDeletingUser(null);
       fetchUsers();
+      toast.success(isRu ? 'Пользователь успешно удален' : 'Foydalanuvchi muvaffaqiyatli o‘chirildi');
     } catch (err: any) {
       setDeleteError(err.message || (isRu ? 'Ошибка удаления' : "O'chirishda xatolik"));
     } finally {
@@ -197,8 +200,11 @@ export default function UsersPage() {
         }),
       });
       fetchUsers();
+      toast.success(
+        isRu ? 'Статус пользователя успешно изменен' : 'Foydalanuvchi holati muvaffaqiyatli o‘zgartirildi'
+      );
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка обновления статуса' : 'Status update failed'));
+      toast.error(err.message || (isRu ? 'Ошибка обновления статуса' : 'Status update failed'));
     }
   };
 

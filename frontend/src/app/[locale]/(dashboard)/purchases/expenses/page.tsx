@@ -31,6 +31,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 interface ExpensesResponse {
   items: AdditionalExpense[];
@@ -51,6 +53,7 @@ export default function ExpensesPage() {
   const isRu = locale === 'ru';
   const router = useRouter();
   const { token, company } = useAuth();
+  const confirm = useConfirm();
 
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
   const [data, setData] = useState<ExpensesResponse | null>(null);
@@ -90,13 +93,21 @@ export default function ExpensesPage() {
   const handleDeleteDraft = async (item: any, e: React.MouseEvent) => {
     e.stopPropagation();
     const isPosted = item.status === 'POSTED';
-    const confirmMessage = isPosted
-      ? (isRu
+    const confirmed = await confirm({
+      title: isRu ? 'Удаление расхода' : 'Xarajatni o‘chirish',
+      description: isPosted
+        ? isRu
           ? 'Этот расход уже проведен и распределен на себестоимость товаров. При удалении он будет автоматически отменен, распределение себестоимости и долг будут откачены, после чего документ будет удален. Продолжить?'
-          : 'Ushbu xarajat tasdiqlangan va tovarlar tannarxiga taqsimlangan. O‘chirish jarayonida u avtomatik bekor qilinadi, tannarx taqsimoti va qarz orqaga qaytariladi, so‘ngra hujjat butunlay o‘chiriladi. Davom ettirasizmi?')
-      : (isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?');
+          : 'Ushbu xarajat tasdiqlangan va tovarlar tannarxiga taqsimlangan. O‘chirish jarayonida u avtomatik bekor qilinadi, tannarx taqsimoti va qarz orqaga qaytariladi, so‘ngra hujjat butunlay o‘chiriladi. Davom ettirasizmi?'
+        : isRu
+        ? 'Вы уверены, что хотите удалить этот документ расхода?'
+        : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?',
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
 
-    if (!confirm(confirmMessage)) {
+    if (!confirmed) {
       return;
     }
     try {
@@ -114,9 +125,10 @@ export default function ExpensesPage() {
         method: 'DELETE',
         locale,
       });
+      toast.success(isRu ? 'Расход успешно удален' : 'Xarajat muvaffaqiyatli o‘chirildi');
       fetchExpenses();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
+      toast.error(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
     }
   };
 

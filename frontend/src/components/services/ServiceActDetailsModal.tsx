@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 import {
   Printer,
   CheckCircle2,
@@ -41,6 +43,7 @@ export function ServiceActDetailsModal({
 }: ServiceActDetailsModalProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const confirm = useConfirm();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,18 +71,26 @@ export function ServiceActDetailsModal({
 
   // Handle Post
   const handlePost = async () => {
-    if (!window.confirm(isRu ? 'Вы уверены, что хотите провести данный акт?' : 'Ushbu aktni tasdiqlamoqchimisiz? Kontragent balansi va provodkalar shakllanadi.')) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: isRu ? 'Проведение акта' : 'Aktni tasdiqlash',
+      description: isRu ? 'Вы уверены, что хотите провести данный акт?' : 'Ushbu aktni tasdiqlamoqchimisiz? Kontragent balansi va provodkalar shakllanadi.',
+      variant: 'info',
+      confirmText: isRu ? 'Провести' : 'Tasdiqlash',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!confirmed) return;
 
     setLoading(true);
     setError(null);
     try {
       await apiFetch(`/services/${act.id}/post`, { method: 'POST' });
+      toast.success(isRu ? 'Акт успешно проведен' : 'Akt muvaffaqiyatli tasdiqlandi');
       onRefresh();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Tasdiqlashda xatolik yuz berdi');
+      const msg = err.message || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik yuz berdi');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -87,24 +98,28 @@ export function ServiceActDetailsModal({
 
   // Handle Cancel
   const handleCancel = async () => {
-    if (
-      !window.confirm(
-        isRu
-          ? 'Вы уверены, что хотите отменить этот акт? Контрагентский долг и проводки будут отменены.'
-          : 'Ushbu aktni bekor qilmoqchimisiz? Kontragent qarzi va provodkalar bekor qilinadi.'
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: isRu ? 'Отмена акта' : 'Aktni bekor qilish',
+      description: isRu
+        ? 'Вы уверены, что хотите отменить этот акт? Контрагентский долг и проводки будут отменены.'
+        : 'Ushbu aktni bekor qilmoqchimisiz? Kontragent qarzi va provodkalar bekor qilinadi.',
+      variant: 'warning',
+      confirmText: isRu ? 'Отменить акт' : 'Bekor qilish',
+      cancelText: isRu ? 'Закрыть' : 'Yopish',
+    });
+    if (!confirmed) return;
 
     setLoading(true);
     setError(null);
     try {
       await apiFetch(`/services/${act.id}/cancel`, { method: 'POST' });
+      toast.success(isRu ? 'Акт успешно отменен' : 'Akt muvaffaqiyatli bekor qilindi');
       onRefresh();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Bekor qilishda xatolik yuz berdi');
+      const msg = err.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -112,25 +127,29 @@ export function ServiceActDetailsModal({
 
   // Handle Unpost and Edit
   const handleUnpostAndEdit = async () => {
-    if (
-      !window.confirm(
-        isRu
-          ? 'Для редактирования проведение акта будет отменено (с возвратом проводок и задолженности). Продолжить?'
-          : 'Tahrirlash uchun akt o‘tkazmasi bekor qilinadi (qarz va provodkalar orqaga qaytariladi). Davom etasizmi?'
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: isRu ? 'Отмена проведения' : 'O‘tkazmani bekor qilish',
+      description: isRu
+        ? 'Для редактирования проведение акта будет отменено (с возвратом проводок и задолженности). Продолжить?'
+        : 'Tahrirlash uchun akt o‘tkazmasi bekor qilinadi (qarz va provodkalar orqaga qaytariladi). Davom etasizmi?',
+      variant: 'warning',
+      confirmText: isRu ? 'Продолжить' : 'Davom etish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!confirmed) return;
 
     setLoading(true);
     setError(null);
     try {
       const res = await apiFetch<any>(`/services/${act.id}/unpost`, { method: 'POST' });
+      toast.success(isRu ? 'Проведение акта отменено' : 'Akt o‘tkazmasi bekor qilindi');
       onRefresh();
       onClose();
       onEdit(res || { ...act, status: 'DRAFT' });
     } catch (err: any) {
-      setError(err.message || 'O‘tkazmani bekor qilishda xatolik yuz berdi');
+      const msg = err.message || (isRu ? 'Ошибка отмены проведения' : 'O‘tkazmani bekor qilishda xatolik yuz berdi');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -138,13 +157,20 @@ export function ServiceActDetailsModal({
 
   // Handle Delete from Modal
   const handleDeleteFromModal = async () => {
-    const confirmMsg = isPosted
-      ? (isRu
-          ? 'Этот акт проведён. При удалении он будет автоматически отменён (с откатом проводок и задолженности) и удалён из базы. Продолжить?'
-          : 'Ushbu akt tasdiqlangan. O‘chirish jarayonida u avtomatik bekor qilinadi (provodkalar va qarz orqaga qaytariladi) hamda bazadan o‘chiriladi. Davom ettirasizmi?')
-      : (isRu ? 'Удалить этот акт?' : 'Ushbu aktni o‘chirishni xohlaysizmi?');
+    const isPosted = act.status === 'POSTED';
+    const confirmed = await confirm({
+      title: isRu ? 'Удаление акта' : 'Aktni o‘chirish',
+      description: isPosted
+        ? (isRu
+            ? 'Этот акт проведён. При удалении он будет автоматически отменён (с откатом проводок и задолженности) и удалён из базы. Продолжить?'
+            : 'Ushbu akt tasdiqlangan. O‘chirish jarayonida u avtomatik bekor qilinadi (provodkalar va qarz orqaga qaytariladi) hamda bazadan o‘chiriladi. Davom ettirasizmi?')
+        : (isRu ? 'Удалить этот акт?' : 'Ushbu aktni o‘chirishni xohlaysizmi?'),
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
 
-    if (!window.confirm(confirmMsg)) return;
+    if (!confirmed) return;
 
     setLoading(true);
     setError(null);
@@ -153,10 +179,13 @@ export function ServiceActDetailsModal({
         await apiFetch(`/services/${act.id}/cancel`, { method: 'POST' });
       }
       await apiFetch(`/services/${act.id}`, { method: 'DELETE' });
+      toast.success(isRu ? 'Акт успешно удален' : 'Akt muvaffaqiyatli o‘chirildi');
       onRefresh();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'O‘chirishda xatolik yuz berdi');
+      const msg = err.message || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik yuz berdi');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

@@ -14,6 +14,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { toast } from '@/context/ToastContext';
 import type { CashAccount, FinanceTransaction, TransactionJournal, FinanceSummary, TransactionType } from '@shared/types';
 import {
   Plus,
@@ -626,8 +627,9 @@ export default function FinancePage() {
       });
       setEditingTx(null);
       fetchData();
+      toast.success(isRu ? 'Операция успешно сохранена' : 'Operatsiya muvaffaqiyatli saqlandi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
+      toast.error(err?.message || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setSavingTx(false);
     }
@@ -645,8 +647,9 @@ export default function FinancePage() {
       });
       setDeletingTx(null);
       fetchData();
+      toast.success(isRu ? 'Операция успешно удалена' : 'Operatsiya muvaffaqiyatli o‘chirildi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении операции' : 'Operatsiyani o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении операции' : 'Operatsiyani o‘chirishda xatolik'));
     } finally {
       setDeletingTxLoading(false);
     }

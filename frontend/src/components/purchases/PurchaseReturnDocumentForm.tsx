@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { PurchaseReceipt, PurchaseReturn } from '@shared/types';
 import { ReturnActModal } from './ReturnActModal';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 interface CounterpartyOption {
   id: string;
@@ -74,6 +76,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const isRu = locale === 'ru';
   const router = useRouter();
   const { token, company } = useAuth();
+  const confirm = useConfirm();
 
   const isReadOnly = mode === 'view';
 
@@ -437,15 +440,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   // Cancel Return (in view mode)
   const handleCancel = async () => {
     if (!initialData?.id) return;
-    if (
-      !window.confirm(
-        isRu
-          ? 'Вы действительно хотите отменить этот возврат?'
-          : 'Ushbu qaytarish hujjatini bekor qilishni tasdiqlaysizmi?',
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: isRu ? 'Отмена возврата' : 'Qaytarishni bekor qilish',
+      description: isRu
+        ? 'Вы действительно хотите отменить этот возврат?'
+        : 'Ushbu qaytarish hujjatini bekor qilishni tasdiqlaysizmi?',
+      variant: 'warning',
+      confirmText: isRu ? 'Отменить возврат' : 'Bekor qilish',
+      cancelText: isRu ? 'Закрыть' : 'Yopish',
+    });
+    if (!confirmed) return;
 
     setSaving(true);
     setError('');
@@ -457,9 +461,12 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         method: 'POST',
       });
       setStatus('CANCELLED');
+      toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       router.push('/purchases/returns');
     } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik'));
+      const msg = err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }

@@ -35,6 +35,8 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { PurchaseReceipt } from '@shared/types';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 import { PayPurchaseModal } from './PayPurchaseModal';
 import { AllocateExpenseModal } from './AllocateExpenseModal';
 import { CreateReturnModal } from './CreateReturnModal';
@@ -83,6 +85,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
   const searchParams = useSearchParams();
   const isEditRequested = searchParams?.get('edit') === 'true';
 
@@ -512,11 +515,15 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   // Action Handler: Unpost to enable full editing
   const handleUnpostToEdit = async () => {
     if (!receiptId || !token || !company) return;
-    const confirmed = window.confirm(
-      isRu
+    const confirmed = await confirm({
+      title: isRu ? 'Отмена проведения' : 'Tasdiqni bekor qilish',
+      description: isRu
         ? 'Для редактирования проведение документа будет отменено (перевод в черновик). После внесения изменений вы сможете провести его снова. Продолжить?'
-        : 'Hujjatni tahrirlash uchun uning tasdiqlanishi bekor qilinadi (qoralamaga qaytadi). O‘zgartirishlarni kiritgach, qayta tasdiqlashingiz mumkin. Davom etasizmi?'
-    );
+        : 'Hujjatni tahrirlash uchun uning tasdiqlanishi bekor qilinadi (qoralamaga qaytadi). O‘zgartirishlarni kiritgach, qayta tasdiqlashingiz mumkin. Davom etasizmi?',
+      variant: 'warning',
+      confirmText: isRu ? 'Продолжить' : 'Davom etish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
     if (!confirmed) return;
 
     setLoading(true);
@@ -532,9 +539,12 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       setDocStatus('DRAFT');
       if (unposted) setCurrentReceiptData(unposted);
       setIsDirty(true);
+      toast.success(isRu ? 'Документ переведен в черновик' : 'Hujjat qoralamaga qaytarildi');
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : undefined;
-      setError(errMsg || (isRu ? 'Ошибка отмены проведения' : 'Tasdiqni bekor qilishda xatolik yuz berdi'));
+      const finalMsg = errMsg || (isRu ? 'Ошибка отмены проведения' : 'Tasdiqni bekor qilishda xatolik yuz berdi');
+      setError(finalMsg);
+      toast.error(finalMsg);
     } finally {
       setLoading(false);
     }
@@ -543,15 +553,20 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   // Action Handler: Delete Receipt (Draft, Cancelled, or Posted with unpost)
   const handleDeleteReceipt = async () => {
     if (!receiptId || !token || !company || mode !== 'edit') return;
-    const confirmed = window.confirm(
-      docStatus === 'POSTED'
-        ? isRu
-          ? 'Накладная уже проведена. Удаление автоматически отменит проводку, скорректирует складские остатки, партии и задолженность перед поставщиком, после чего удалит документ. Вы уверены?'
-          : 'Hujjat tasdiqlangan (o‘tkazilgan). O‘chirish ombor qoldiqlari, partiyalar va yetkazib beruvchi qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?'
-        : isRu
-        ? 'Вы уверены, что хотите удалить этот документ?'
-        : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?'
-    );
+    const confirmed = await confirm({
+      title: isRu ? 'Удаление документа' : 'Hujjatni o‘chirish',
+      description:
+        docStatus === 'POSTED'
+          ? isRu
+            ? 'Накладная уже проведена. Удаление автоматически отменит проводку, скорректирует складские остатки, партии и задолженность перед поставщиком, после чего удалит документ. Вы уверены?'
+            : 'Hujjat tasdiqlangan (o‘tkazilgan). O‘chirish ombor qoldiqlari, partiyalar va yetkazib beruvchi qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?'
+          : isRu
+          ? 'Вы уверены, что хотите удалить этот документ?'
+          : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?',
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
     if (!confirmed) return;
 
     setLoading(true);
@@ -572,13 +587,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         locale,
       });
       setIsDirty(false);
+      toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
       router.push('/purchases');
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : undefined;
-      setError(
-        errMsg ||
-          (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik')
-      );
+      const finalMsg = errMsg || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik');
+      setError(finalMsg);
+      toast.error(finalMsg);
     } finally {
       setLoading(false);
     }
@@ -592,13 +607,17 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   }, [isEditRequested]);
 
   // Back navigation guard
-  const handleBackNavigation = () => {
+  const handleBackNavigation = async () => {
     if (isDirty) {
-      const confirmed = window.confirm(
-        isRu
+      const confirmed = await confirm({
+        title: isRu ? 'Несохраненные изменения' : 'Saqlanmagan o‘zgarishlar',
+        description: isRu
           ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
-          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?'
-      );
+          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?',
+        variant: 'warning',
+        confirmText: isRu ? 'Выйти' : 'Chiqish',
+        cancelText: isRu ? 'Остаться' : 'Qolish',
+      });
       if (!confirmed) return;
     }
     setIsDirty(false);

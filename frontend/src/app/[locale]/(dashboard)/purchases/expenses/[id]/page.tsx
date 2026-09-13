@@ -28,6 +28,8 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 export default function ExpenseDetailPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -36,6 +38,7 @@ export default function ExpenseDetailPage() {
   const params = useParams();
   const id = params?.id as string;
   const { token, company, user } = useAuth();
+  const confirm = useConfirm();
 
   const [expense, setExpense] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +67,16 @@ export default function ExpenseDetailPage() {
   }, [token, company, id, locale]);
 
   const handlePost = async () => {
-    if (!confirm(isRu ? 'Провести этот расход и обновить себестоимость товаров?' : 'Ushbu xarajatni tasdiqlash va tovarlar tannarxini yangilashni xohlaysizmi?')) {
+    const confirmed = await confirm({
+      title: isRu ? 'Проведение расхода' : 'Xarajatni tasdiqlash',
+      description: isRu
+        ? 'Провести этот расход и обновить себестоимость товаров?'
+        : 'Ushbu xarajatni tasdiqlash va tovarlar tannarxini yangilashni xohlaysizmi?',
+      variant: 'info',
+      confirmText: isRu ? 'Провести' : 'Tasdiqlash',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!confirmed) {
       return;
     }
     setActionLoading(true);
@@ -75,9 +87,10 @@ export default function ExpenseDetailPage() {
         method: 'POST',
         locale,
       });
+      toast.success(isRu ? 'Расход успешно проведен' : 'Xarajat muvaffaqiyatli tasdiqlandi');
       fetchExpense();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik'));
+      toast.error(err.message || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -93,9 +106,10 @@ export default function ExpenseDetailPage() {
         locale,
       });
       setCancelModalOpen(false);
+      toast.success(isRu ? 'Расход успешно отменен' : 'Xarajat muvaffaqiyatli bekor qilindi');
       fetchExpense();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik'));
+      toast.error(err.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -103,13 +117,21 @@ export default function ExpenseDetailPage() {
 
   const handleDeleteExpense = async () => {
     const isPosted = expense?.status === 'POSTED';
-    const confirmMessage = isPosted
-      ? (isRu
+    const confirmed = await confirm({
+      title: isRu ? 'Удаление расхода' : 'Xarajatni o‘chirish',
+      description: isPosted
+        ? isRu
           ? 'Этот расход уже проведен и распределен на себестоимость товаров. При удалении он будет автоматически отменен, распределение себестоимости и долг будут откачены, после чего документ будет удален. Продолжить?'
-          : 'Ushbu xarajat tasdiqlangan va tovarlar tannarxiga taqsimlangan. O‘chirish jarayonida u avtomatik bekor qilinadi, tannarx taqsimoti va qarz orqaga qaytariladi, so‘ngra hujjat butunlay o‘chiriladi. Davom ettirasizmi?')
-      : (isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?');
+          : 'Ushbu xarajat tasdiqlangan va tovarlar tannarxiga taqsimlangan. O‘chirish jarayonida u avtomatik bekor qilinadi, tannarx taqsimoti va qarz orqaga qaytariladi, so‘ngra hujjat butunlay o‘chiriladi. Davom ettirasizmi?'
+        : isRu
+        ? 'Вы уверены, что хотите удалить этот документ расхода?'
+        : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?',
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
 
-    if (!confirm(confirmMessage)) {
+    if (!confirmed) {
       return;
     }
     setActionLoading(true);
@@ -128,9 +150,10 @@ export default function ExpenseDetailPage() {
         method: 'DELETE',
         locale,
       });
+      toast.success(isRu ? 'Расход успешно удален' : 'Xarajat muvaffaqiyatli o‘chirildi');
       router.push(`/${locale}/purchases/expenses`);
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
+      toast.error(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
       setActionLoading(false);
     }
   };

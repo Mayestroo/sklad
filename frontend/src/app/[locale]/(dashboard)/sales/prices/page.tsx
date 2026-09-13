@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 import { Plus, Tag, Edit2, Edit3, Check, Trash2 } from 'lucide-react';
 
 interface PriceList {
@@ -132,10 +133,11 @@ export default function PricesPage() {
       setNewPLNameUz('');
       setNewPLNameRu('');
       setNewPLDefault(false);
+      toast.success(isRu ? 'Прайс-лист успешно создан' : 'Narx jadvali muvaffaqiyatli yaratildi');
       fetchData();
       if (created) selectPriceList(created.id);
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
     } finally {
       setCreateLoading(false);
     }
@@ -165,9 +167,10 @@ export default function PricesPage() {
         }),
       });
       setShowEditPL(false);
+      toast.success(isRu ? 'Прайс-лист успешно обновлен' : 'Narx jadvali muvaffaqiyatli yangilandi');
       fetchData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка обновления прайс-листа' : 'Narx jadvalini tahrirlashda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка обновления прайс-листа' : 'Narx jadvalini tahrirlashda xatolik'));
     } finally {
       setEditLoading(false);
     }
@@ -184,9 +187,10 @@ export default function PricesPage() {
         locale,
       });
       setDeletingPL(null);
+      toast.success(isRu ? 'Прайс-лист успешно удален' : 'Narx jadvali muvaffaqiyatli o‘chirildi');
       fetchData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка удаления прайс-листа' : 'Narx jadvalini o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка удаления прайс-листа' : 'Narx jadvalini o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -250,8 +254,9 @@ export default function PricesPage() {
       });
 
       fetchData();
+      toast.success(isRu ? 'Цена успешно сохранена' : 'Narx muvaffaqiyatli saqlandi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка сохранения цены' : 'Narxni saqlashda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка сохранения цены' : 'Narxni saqlashda xatolik'));
     } finally {
       setSavingPrice(null);
     }

@@ -13,8 +13,8 @@ import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { PurchaseReceipt, PurchaseSummaryStats } from '@shared/types';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 import {
   Building2,
   CreditCard,
@@ -30,6 +30,7 @@ import {
   Truck
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { PurchaseSummaryStats, PurchaseReceipt } from '@shared/types';
 
 interface CounterpartyItem {
   id: string;
@@ -125,10 +126,11 @@ export default function PurchasesPage() {
         locale,
       });
       setDeletingReceipt(null);
+      toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
       fetchStats();
       fetchReceipts();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }

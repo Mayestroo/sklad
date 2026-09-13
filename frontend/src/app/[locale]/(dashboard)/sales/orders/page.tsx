@@ -37,6 +37,8 @@ import { OrderPickListModal } from '@/components/sales/OrderPickListModal';
 import { OrderDeliveryNoteModal } from '@/components/sales/OrderDeliveryNoteModal';
 import { invalidateApiCache } from '@/lib/cache';
 import { apiFetch } from '@/lib/api';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 interface CounterpartyItem {
   id: string;
@@ -87,6 +89,7 @@ export default function SalesOrdersPage() {
   const { token, company, hasRole, hasPermission } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const confirm = useConfirm();
 
   // Filters
   const [search, setSearch] = useState('');
@@ -153,10 +156,11 @@ export default function SalesOrdersPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       invalidateApiCache('/sales/orders*');
+      toast.success(isRu ? 'Статус заказа обновлен' : 'Buyurtma statusi yangilandi');
       fetchOrders();
       fetchStats();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
+      toast.error(err.message || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
     } finally {
       setUpdatingOrderId(null);
     }
@@ -597,14 +601,28 @@ export default function SalesOrdersPage() {
                                 <button
                                   key={s.status}
                                   type="button"
-                                  onClick={() => {
+                                  onClick={async () => {
                                     setOpenDropdownId(null);
                                     if (s.status === 'CANCELLED') {
-                                      if (confirm(isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?')) {
+                                      const ok = await confirm({
+                                        title: isRu ? 'Отмена заказа' : 'Buyurtmani bekor qilish',
+                                        description: isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?',
+                                        variant: 'warning',
+                                        confirmText: isRu ? 'Отменить заказ' : 'Bekor qilish',
+                                        cancelText: isRu ? 'Назад' : 'Orqaga',
+                                      });
+                                      if (ok) {
                                         handleQuickStatusChange(ord.id, s.status);
                                       }
                                     } else if (s.status === 'SHIPPED') {
-                                      if (confirm(isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?')) {
+                                      const ok = await confirm({
+                                        title: isRu ? 'Отгрузка заказа' : 'Buyurtmani otgruzka qilish',
+                                        description: isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?',
+                                        variant: 'info',
+                                        confirmText: isRu ? 'Отгрузить' : 'Otgruzka qilish',
+                                        cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+                                      });
+                                      if (ok) {
                                         handleQuickStatusChange(ord.id, s.status);
                                       }
                                     } else {

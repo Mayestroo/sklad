@@ -35,6 +35,8 @@ import { PaySalesInvoiceModal } from './PaySalesInvoiceModal';
 import { CreateSalesReturnModal } from './CreateSalesReturnModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 interface CounterpartyOption {
   id: string;
@@ -82,6 +84,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
   const searchParams = useSearchParams();
   const isEditRequested = searchParams?.get('edit') === 'true';
 
@@ -614,11 +617,15 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
   const handleUnpostToEdit = async () => {
     if (!invoiceId) return;
-    const confirmed = window.confirm(
-      isRu
+    const confirmed = await confirm({
+      title: isRu ? 'Отмена проведения' : 'Tasdiqni bekor qilish',
+      description: isRu
         ? 'Для редактирования проведение документа будет отменено (перевод в черновик). После внесения изменений вы сможете провести его снова. Продолжить?'
-        : 'Hujjatni tahrirlash uchun uning tasdiqlanishi bekor qilinadi (qoralamaga qaytadi). O‘zgartirishlarni kiritgach, qayta tasdiqlashingiz mumkin. Davom etasizmi?'
-    );
+        : 'Hujjatni tahrirlash uchun uning tasdiqlanishi bekor qilinadi (qoralamaga qaytadi). O‘zgartirishlarni kiritgach, qayta tasdiqlashingiz mumkin. Davom etasizmi?',
+      variant: 'warning',
+      confirmText: isRu ? 'Продолжить' : 'Davom etish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
     if (!confirmed) return;
 
     setLoading(true);
@@ -635,9 +642,12 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setCurrentInvoiceData(res);
         setIsDirty(true);
       }
+      toast.success(isRu ? 'Накладная переведена в черновик' : 'Nukladnoy qoralamaga qaytarildi');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi'));
+      const msg = err.message || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -645,15 +655,20 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
   const handleDeleteInvoice = async () => {
     if (!invoiceId || mode !== 'edit') return;
-    const confirmed = window.confirm(
-      docStatus === 'POSTED'
-        ? isRu
-          ? 'Накладная продажи уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?'
-          : 'Sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?'
-        : isRu
-        ? 'Вы уверены, что хотите удалить этот документ?'
-        : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?'
-    );
+    const confirmed = await confirm({
+      title: isRu ? 'Удаление накладной' : 'Nukladnoyni o‘chirish',
+      description:
+        docStatus === 'POSTED'
+          ? isRu
+            ? 'Накладная продажи уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?'
+            : 'Sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?'
+          : isRu
+          ? 'Вы уверены, что хотите удалить этот документ?'
+          : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?',
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
     if (!confirmed) return;
 
     setLoading(true);
@@ -673,10 +688,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         locale,
       });
       setIsDirty(false);
+      toast.success(isRu ? 'Накладная успешно удалена' : 'Nukladnoy muvaffaqiyatli o‘chirildi');
       router.push('/sales');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || (isRu ? 'Не удалось удалить документ' : 'Hujjatni o‘chirib bo‘lmadi'));
+      const msg = err.message || (isRu ? 'Не удалось удалить документ' : 'Hujjatni o‘chirib bo‘lmadi');
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
     }
   };
@@ -688,13 +706,17 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
   }, [isEditRequested]);
 
-  const handleBackNavigation = () => {
+  const handleBackNavigation = async () => {
     if (isDirty) {
-      const confirmed = window.confirm(
-        isRu
+      const confirmed = await confirm({
+        title: isRu ? 'Несохраненные изменения' : 'Saqlanmagan o‘zgarishlar',
+        description: isRu
           ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
-          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?'
-      );
+          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?',
+        variant: 'warning',
+        confirmText: isRu ? 'Выйти' : 'Chiqish',
+        cancelText: isRu ? 'Остаться' : 'Qolish',
+      });
       if (!confirmed) return;
     }
     setIsDirty(false);

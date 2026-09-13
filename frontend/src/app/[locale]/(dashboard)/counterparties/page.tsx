@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import {
   Users,
@@ -249,8 +250,9 @@ export default function CounterpartiesPage() {
       fetchCounterparties();
       fetchSummary();
       fetchFolders();
+      toast.success(isRu ? 'Контрагент успешно удален' : 'Kontragent muvaffaqiyatli o‘chirildi');
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении контрагента' : 'Kontragentni o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении контрагента' : 'Kontragentni o‘chirishda xatolik'));
     } finally {
       setDeleteCounterpartyLoading(false);
     }

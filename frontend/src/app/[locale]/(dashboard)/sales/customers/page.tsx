@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Users, Search, DollarSign, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
+import { toast } from '@/context/ToastContext';
 
 interface Customer {
   id: string;
@@ -76,9 +77,10 @@ export default function CustomersPage() {
         locale,
       });
       setDeletingCustomer(null);
+      toast.success(isRu ? 'Клиент успешно удален' : 'Mijoz muvaffaqiyatli o‘chirildi');
       fetchCustomers();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
+      toast.error(err.message || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
     } finally {
       setDeleteLoading(false);
     }

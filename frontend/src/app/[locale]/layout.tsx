@@ -5,6 +5,8 @@ import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { AppShell } from '@/components/layout/AppShell';
 import { AuthProvider } from '@/context/AuthContext';
+import { ToastProvider } from '@/context/ToastContext';
+import { ConfirmProvider } from '@/context/ConfirmContext';
 import '../globals.css';
 
 export function generateStaticParams() {
@@ -27,9 +29,13 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      <AuthProvider>
-        <AppShell>{children}</AppShell>
-      </AuthProvider>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
+        </ConfirmProvider>
+      </ToastProvider>
     </NextIntlClientProvider>
   );
 }

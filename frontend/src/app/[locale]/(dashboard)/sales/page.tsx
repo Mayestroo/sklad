@@ -12,6 +12,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 import {
   ShoppingCart,
   Plus,
@@ -129,10 +130,11 @@ export default function SalesPage() {
         locale,
       });
       setDeletingInvoice(null);
+      toast.success(isRu ? 'Накладная успешно удалена' : 'Nukladnoy muvaffaqiyatli o‘chirildi');
       fetchStats();
       fetchInvoices();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении накладной' : 'Nukladnoyni o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении накладной' : 'Nukladnoyni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }

@@ -28,12 +28,15 @@ import {
 import { PurchaseReturn } from '@shared/types';
 import { Link, useRouter } from '@/i18n/navigation';
 import { ReturnActModal } from '@/components/purchases/ReturnActModal';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 export default function ReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const router = useRouter();
   const { token, company } = useAuth();
+  const confirm = useConfirm();
 
   const [returns, setReturns] = useState<PurchaseReturn[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,9 +122,10 @@ export default function ReturnsPage() {
         locale,
         method: 'POST',
       });
+      toast.success(isRu ? 'Возврат успешно утвержден' : 'Qaytarish muvaffaqiyatli tasdiqlandi');
       fetchReturns();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при утверждении возврата' : 'Tasdiqlashda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при утверждении возврата' : 'Tasdiqlashda xatolik'));
     } finally {
       setActionLoadingId(null);
     }
@@ -129,15 +133,16 @@ export default function ReturnsPage() {
 
   // Cancel a return
   const handleCancel = async (id: string) => {
-    if (
-      !window.confirm(
-        isRu
-          ? 'Вы действительно хотите отменить этот возврат?'
-          : 'Ushbu qaytarish hujjatini bekor qilishni tasdiqlaysizmi?',
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: isRu ? 'Отмена возврата' : 'Qaytarishni bekor qilish',
+      description: isRu
+        ? 'Вы действительно хотите отменить этот возврат?'
+        : 'Ushbu qaytarish hujjatini bekor qilishni tasdiqlaysizmi?',
+      variant: 'warning',
+      confirmText: isRu ? 'Отменить возврат' : 'Bekor qilish',
+      cancelText: isRu ? 'Закрыть' : 'Yopish',
+    });
+    if (!confirmed) return;
 
     setActionLoadingId(id);
     try {
@@ -147,9 +152,10 @@ export default function ReturnsPage() {
         locale,
         method: 'POST',
       });
+      toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       fetchReturns();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при отмене возврата' : 'Bekor qilishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при отмене возврата' : 'Bekor qilishda xatolik'));
     } finally {
       setActionLoadingId(null);
     }

@@ -13,6 +13,7 @@ import { Building2, Eye, Pencil, Plus, Trash2 } from 'lucide-react';
 import { SupplierProfileDrawer } from '@/components/purchases/SupplierProfileDrawer';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 
 interface Counterparty {
   id: string;
@@ -65,9 +66,10 @@ export default function SuppliersPage() {
         locale,
       });
       setDeletingSupplier(null);
+      toast.success(isRu ? 'Поставщик успешно удален' : 'Yetkazib beruvchi muvaffaqiyatli o‘chirildi');
       fetchSuppliers();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка при удалении поставщика' : 'Yetkazib beruvchini o‘chirishda xatolik yuz berdi'));
+      toast.error(err.message || (isRu ? 'Ошибка при удалении поставщика' : 'Yetkazib beruvchini o‘chirishda xatolik yuz berdi'));
     } finally {
       setDeleteLoading(false);
     }

@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 import {
   CreditCard,
   CheckCircle,
@@ -84,8 +85,9 @@ export default function BillingSettingsPage() {
       });
 
       setCheckoutResult(res);
+      toast.success(locale === 'ru' ? 'Счет на оплату сформирован' : 'To‘lov hisobi muvaffaqiyatli shakllantirildi');
     } catch (err: any) {
-      alert(err.message || 'Error processing checkout');
+      toast.error(err.message || (locale === 'ru' ? 'Ошибка оформления подписки' : 'Obunani rasmiylashtirishda xatolik'));
     } finally {
       setCheckoutLoading(false);
     }

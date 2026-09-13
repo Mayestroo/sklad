@@ -23,6 +23,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 import { Counterparty } from '@shared/types';
 type Deal = any;
 
@@ -148,9 +149,10 @@ export default function CrmKanbanPage() {
         }),
       });
       setEditingDeal(null);
+      toast.success(isRu ? 'Сделка успешно обновлена' : 'Bitim muvaffaqiyatli yangilandi');
       fetchData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при обновлении сделки' : 'Bitimni yangilashda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при обновлении сделки' : 'Bitimni yangilashda xatolik'));
     } finally {
       setEditLoading(false);
     }
@@ -167,9 +169,10 @@ export default function CrmKanbanPage() {
         locale,
       });
       setDeletingDeal(null);
+      toast.success(isRu ? 'Сделка успешно удалена' : 'Bitim muvaffaqiyatli o‘chirildi');
       fetchData();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении сделки' : 'Bitimni o‘chirishda xatolik'));
+      toast.error(err?.message || (isRu ? 'Ошибка при удалении сделки' : 'Bitimni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { toast } from '@/context/ToastContext';
 import {
   ShieldCheck,
   Building2,
@@ -97,8 +98,9 @@ export default function SuperAdminPage() {
       });
       setEditModalOpen(false);
       fetchSuperAdminData();
+      toast.success(locale === 'ru' ? 'Данные арендатора успешно обновлены' : 'Tenant ma’lumotlari muvaffaqiyatli yangilandi');
     } catch (err: any) {
-      alert(err.message || 'Error updating tenant');
+      toast.error(err.message || (locale === 'ru' ? 'Ошибка при обновлении арендатора' : 'Tenantni yangilashda xatolik'));
     }
   };
 
@@ -121,9 +123,16 @@ export default function SuperAdminPage() {
       setTitleRu('');
       setMsgUz('');
       setMsgRu('');
-      alert('Barcha mijozlarga tizim e\'loni muvaffaqiyatli yuborildi!');
+      toast.success(
+        locale === 'ru'
+          ? 'Системное объявление успешно отправлено всем клиентам!'
+          : 'Barcha mijozlarga tizim e\'loni muvaffaqiyatli yuborildi!'
+      );
     } catch (err: any) {
-      alert(err.message || 'Error sending announcement');
+      toast.error(
+        err.message ||
+          (locale === 'ru' ? 'Ошибка отправки объявления' : 'E\'lon yuborishda xatolik')
+      );
     }
   };
 
@@ -141,8 +150,14 @@ export default function SuperAdminPage() {
       setReplyModalOpen(false);
       setReplyText('');
       fetchSuperAdminData();
+      toast.success(
+        locale === 'ru' ? 'Ответ в тикет успешно отправлен' : 'Chiptaga javob muvaffaqiyatli yuborildi'
+      );
     } catch (err: any) {
-      alert(err.message || 'Error replying to ticket');
+      toast.error(
+        err.message ||
+          (locale === 'ru' ? 'Ошибка ответа на тикет' : 'Chiptaga javob berishda xatolik')
+      );
     }
   };
 

@@ -13,12 +13,15 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { ArrowRightLeft, Send, CheckCircle, Plus, Warehouse, Package, Trash2 } from 'lucide-react';
 import { StockTransfer, Product } from '@shared/types';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 export default function StockTransfersPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const confirm = useConfirm();
 
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -96,15 +99,15 @@ export default function StockTransfersPage() {
     e.preventDefault();
     if (!token || !company) return;
     if (!sourceWarehouseId || !targetWarehouseId) {
-      alert(isRu ? 'Выберите склады' : 'Omborlarni tanlang');
+      toast.warning(isRu ? 'Выберите склады' : 'Omborlarni tanlang');
       return;
     }
     if (sourceWarehouseId === targetWarehouseId) {
-      alert(isRu ? 'Исходный и целевой склады не могут совпадать' : 'Chiquvchi va kiruvchi ombor bir xil bo\'lishi mumkin emas');
+      toast.warning(isRu ? 'Исходный и целевой склады не могут совпадать' : 'Chiquvchi va kiruvchi ombor bir xil bo\'lishi mumkin emas');
       return;
     }
     if (items.length === 0) {
-      alert(isRu ? 'Добавьте хотя бы один товар' : 'Kamida bitta tovar qo\'shing');
+      toast.warning(isRu ? 'Добавьте хотя бы один товар' : 'Kamida bitta tovar qo\'shing');
       return;
     }
 
@@ -124,15 +127,23 @@ export default function StockTransfersPage() {
       setModalOpen(false);
       setItems([]);
       setComment('');
+      toast.success(isRu ? 'Перемещение успешно создано' : 'O‘tkazma muvaffaqiyatli yaratildi');
       fetchTransfers();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка создания перевода' : 'Error creating transfer'));
+      toast.error(err.message || (isRu ? 'Ошибка создания перевода' : 'Error creating transfer'));
     }
   };
 
   const handleShip = async (id: string) => {
     if (!token || !company) return;
-    if (!confirm(isRu ? 'Подтверждаете отправку товаров со склада? Статус изменится на "В пути / IN_TRANSIT".' : 'Tovarlarni chiquvchi ombordan jo\'natishni (Ship) tasdiqlaysizmi? Status "Yo\'lda / IN_TRANSIT" ga o\'tadi.')) return;
+    const ok = await confirm({
+      title: isRu ? 'Отправка перемещения' : 'O‘tkazmani jo‘natish',
+      description: isRu ? 'Подтверждаете отправку товаров со склада? Статус изменится на "В пути / IN_TRANSIT".' : 'Tovarlarni chiquvchi ombordan jo\'natishni (Ship) tasdiqlaysizmi? Status "Yo\'lda / IN_TRANSIT" ga o\'tadi.',
+      variant: 'info',
+      confirmText: isRu ? 'Отправить' : 'Jo‘natish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
 
     try {
       await apiFetch(`/inventory/transfers/${id}/ship`, {
@@ -141,15 +152,23 @@ export default function StockTransfersPage() {
         locale,
         method: 'POST',
       });
+      toast.success(isRu ? 'Товары успешно отправлены' : 'Tovarlar jo‘natildi');
       fetchTransfers();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка отправки' : 'Error shipping transfer'));
+      toast.error(err.message || (isRu ? 'Ошибка отправки' : 'Error shipping transfer'));
     }
   };
 
   const handleReceive = async (id: string) => {
     if (!token || !company) return;
-    if (!confirm(isRu ? 'Подтверждаете приёмку товаров на склад назначения?' : 'Tovarlarni kiruvchi omborga qabul qilishni (Receive) tasdiqlaysizmi? Tovar qoldiqlariga qo\'shiladi.')) return;
+    const ok = await confirm({
+      title: isRu ? 'Приёмка перемещения' : 'O‘tkazmani qabul qilish',
+      description: isRu ? 'Подтверждаете приёмку товаров на склад назначения?' : 'Tovarlarni kiruvchi omborga qabul qilishni (Receive) tasdiqlaysizmi? Tovar qoldiqlariga qo\'shiladi.',
+      variant: 'info',
+      confirmText: isRu ? 'Принять' : 'Qabul qilish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
 
     try {
       await apiFetch(`/inventory/transfers/${id}/receive`, {
@@ -158,9 +177,10 @@ export default function StockTransfersPage() {
         locale,
         method: 'POST',
       });
+      toast.success(isRu ? 'Товары успешно приняты на склад' : 'Tovarlar omborga qabul qilindi');
       fetchTransfers();
     } catch (err: any) {
-      alert(err.message || (isRu ? 'Ошибка приёмки' : 'Error receiving transfer'));
+      toast.error(err.message || (isRu ? 'Ошибка приёмки' : 'Error receiving transfer'));
     }
   };
 

@@ -39,6 +39,8 @@ import { useDocumentDropdowns, CounterpartyDropdownItem, WarehouseDropdownItem }
 import { OrderGeneralInfo } from './order-form/OrderGeneralInfo';
 import { OrderItemsTable, OrderItemRow } from './order-form/OrderItemsTable';
 import { OrderTotalsSummary } from './order-form/OrderTotalsSummary';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 
 // Re-export ORDER_STATUS_LABELS for backward compatibility
 export { ORDER_STATUS_LABELS };
@@ -53,6 +55,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
 
   const isPriceOverrideAllowed =
     hasPermission('sales:override_price') ||
@@ -466,13 +469,17 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     }
   };
 
-  const handleBackNavigation = () => {
+  const handleBackNavigation = async () => {
     if (isDirty) {
-      const confirmed = window.confirm(
-        isRu
+      const confirmed = await confirm({
+        title: isRu ? 'Несохраненные изменения' : 'Saqlanmagan o‘zgarishlar',
+        description: isRu
           ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
-          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?'
-      );
+          : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?',
+        variant: 'warning',
+        confirmText: isRu ? 'Выйти' : 'Chiqish',
+        cancelText: isRu ? 'Остаться' : 'Qolish',
+      });
       if (!confirmed) return;
     }
     setIsDirty(false);
@@ -481,10 +488,16 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
   const handleDeleteOrder = async () => {
     if (!initialData?.id || !token || !company) return;
-    const msg = isRu
-      ? 'Вы уверены, что хотите безвозвратно удалить этот заказ?'
-      : "Haqiqatan ham bu buyurtmani butunlay o'chirib tashlamoqchimisiz?";
-    if (!window.confirm(msg)) return;
+    const confirmed = await confirm({
+      title: isRu ? 'Удаление заказа' : 'Buyurtmani o‘chirish',
+      description: isRu
+        ? 'Вы уверены, что хотите безвозвратно удалить этот заказ?'
+        : "Haqiqatan ham bu buyurtmani butunlay o'chirib tashlamoqchimisiz?",
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!confirmed) return;
 
     setLoading(true);
     setError(null);
@@ -495,9 +508,13 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         tenantId: company.id,
         locale,
       });
+      setIsDirty(false);
+      toast.success(isRu ? 'Заказ успешно удален' : 'Buyurtma muvaffaqiyatli o‘chirildi');
       router.push('/sales/orders');
     } catch (err: any) {
-      setError(err.message || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
+      const msg = err.message || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik");
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
     }
   };
