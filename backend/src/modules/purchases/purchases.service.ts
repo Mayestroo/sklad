@@ -882,9 +882,12 @@ export class PurchasesService {
       throw new NotFoundException('Xarid hujjati topilmadi');
     }
 
-    if (receipt.status !== PurchaseDocStatus.DRAFT) {
+    if (
+      receipt.status !== PurchaseDocStatus.DRAFT &&
+      receipt.status !== PurchaseDocStatus.CANCELLED
+    ) {
       throw new BadRequestException(
-        "Faqat qoralama holatidagi xarid hujjatlarini o'chirish mumkin",
+        "Faqat qoralama yoki bekor qilingan holatidagi xarid hujjatlarini o'chirish mumkin",
       );
     }
 

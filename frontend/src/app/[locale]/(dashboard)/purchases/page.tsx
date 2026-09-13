@@ -20,6 +20,7 @@ import {
   CreditCard,
   Eye,
   Filter,
+  Pencil,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -117,7 +118,7 @@ export default function PurchasesPage() {
       fetchStats();
       fetchReceipts();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении черновика' : 'Qoralamani o‘chirishda xatolik'));
+      alert(err?.message || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -538,27 +539,25 @@ export default function PurchasesPage() {
                           </Button>
                         )}
                         <Link href={`/purchases/${r.id}`}>
-                          <Button size="sm" variant="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Eye size={14} /> {isRu ? 'Просмотр' : 'Ko‘rish'}
+                          <Button size="sm" variant="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
+                            <Eye size={14} />
                           </Button>
                         </Link>
-                        {r.status === 'DRAFT' && (
-                          <>
-                            <Link href={`/purchases/${r.id}`}>
-                              <Button size="sm" variant="secondary">
-                                {isRu ? 'Редактировать' : 'Tahrirlash'}
-                              </Button>
-                            </Link>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              style={{ color: '#ef4444' }}
-                              onClick={() => setDeletingReceipt(r)}
-                              title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </>
+                        <Link href={`/purchases/${r.id}`}>
+                          <Button size="sm" variant="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
+                            <Pencil size={14} />
+                          </Button>
+                        </Link>
+                        {(r.status === 'DRAFT' || r.status === 'CANCELLED') && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            style={{ color: '#ef4444', display: 'flex', alignItems: 'center' }}
+                            onClick={() => setDeletingReceipt(r)}
+                            title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         )}
                       </div>
                     </td>
@@ -608,18 +607,18 @@ export default function PurchasesPage() {
         />
       )}
 
-      {/* Delete Draft Modal */}
+      {/* Delete Receipt Modal */}
       {deletingReceipt && (
         <Modal
           isOpen={true}
           onClose={() => setDeletingReceipt(null)}
-          title={isRu ? 'Удаление черновика' : 'Qoralamani o‘chirish'}
+          title={isRu ? (deletingReceipt.status === 'CANCELLED' ? 'Удаление документа' : 'Удаление черновика') : (deletingReceipt.status === 'CANCELLED' ? 'Hujjatni o‘chirish' : 'Qoralamani o‘chirish')}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {isRu
-                ? `Вы действительно хотите удалить черновик накладной ${deletingReceipt.docNumber}? Это действие необратимо.`
-                : `Haqiqatan ham ${deletingReceipt.docNumber} raqamli qoralamani o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+                ? `Вы действительно хотите удалить накладную ${deletingReceipt.docNumber}? Это действие необратимо.`
+                : `Haqiqatan ham ${deletingReceipt.docNumber} raqamli xarid hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
               <Button

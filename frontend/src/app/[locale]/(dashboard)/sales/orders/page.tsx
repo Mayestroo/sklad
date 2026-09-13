@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Plus,
   Eye,
+  Pencil,
   CreditCard,
   RotateCcw,
   Filter,
@@ -649,8 +650,14 @@ export default function SalesOrdersPage() {
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                           <Link href={`/sales/orders/${ord.id}`}>
-                            <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр / Управление' : 'Ko‘rish / Boshqarish'}>
+                            <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
                               <Eye size={14} />
+                            </Button>
+                          </Link>
+
+                          <Link href={`/sales/orders/${ord.id}`}>
+                            <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
+                              <Pencil size={14} />
                             </Button>
                           </Link>
 
@@ -687,9 +694,9 @@ export default function SalesOrdersPage() {
                             </Button>
                           )}
 
-                          {hasPermission('sales:delete') && (ord.status === 'NEW' || ord.status === 'PENDING_APPROVAL' || ord.status === 'CANCELLED') && (
+                          {(hasPermission('sales:delete') || hasRole('ADMIN') || hasRole('SUPER_ADMIN') || hasRole('company_admin') || hasRole('MANAGER')) && (ord.status === 'NEW' || ord.status === 'PENDING_APPROVAL' || ord.status === 'CANCELLED') && (
                             <Button
-                              variant="ghost"
+                              variant="secondary"
                               onClick={() => {
                                 setDeleteConfirmOrder(ord);
                                 setDeleteError(null);

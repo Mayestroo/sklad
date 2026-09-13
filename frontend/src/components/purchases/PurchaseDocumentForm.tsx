@@ -504,13 +504,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     }
   };
 
-  // Action Handler: Delete Draft
+  // Action Handler: Delete Receipt
   const handleDeleteDraft = async () => {
-    if (!receiptId || !token || !company || mode !== 'edit' || docStatus !== 'DRAFT') return;
+    if (!receiptId || !token || !company || mode !== 'edit' || (docStatus !== 'DRAFT' && docStatus !== 'CANCELLED')) return;
     const confirmed = window.confirm(
       isRu
-        ? 'Вы уверены, что хотите удалить этот черновик?'
-        : 'Ushbu qoralama hujjatni o‘chirishga ishonchingiz komilmi?'
+        ? 'Вы уверены, что хотите удалить этот документ?'
+        : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?'
     );
     if (!confirmed) return;
 
@@ -529,7 +529,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       const errMsg = err instanceof Error ? err.message : undefined;
       setError(
         errMsg ||
-          (isRu ? 'Ошибка при удалении черновика' : 'Qoralama hujjatni o‘chirishda xatolik')
+          (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik')
       );
     } finally {
       setLoading(false);
@@ -743,6 +743,17 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 </Button>
               )}
             </>
+          )}
+
+          {docStatus === 'CANCELLED' && mode === 'edit' && receiptId && (
+            <Button
+              variant="danger"
+              onClick={handleDeleteDraft}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Trash2 size={16} /> {isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
+            </Button>
           )}
 
           {docStatus === 'POSTED' && (

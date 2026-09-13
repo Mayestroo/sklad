@@ -23,6 +23,8 @@ import {
   XCircle,
   Clock,
   ExternalLink,
+  Eye,
+  Pencil,
   Trash2,
   Filter,
   BarChart3,
@@ -87,7 +89,7 @@ export default function ExpensesPage() {
 
   const handleDeleteDraft = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот черновик?' : 'Ushbu qoralama xarajatni o‘chirishni xohlaysizmi?')) {
+    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?')) {
       return;
     }
     try {
@@ -391,17 +393,43 @@ export default function ExpensesPage() {
                         {getStatusBadge(item.status)}
                       </td>
                       <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right' }}>
-                        {item.status === 'DRAFT' && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                           <Button
-                            variant="ghost"
+                            variant="secondary"
                             size="sm"
-                            onClick={(e) => handleDeleteDraft(item.id, e)}
-                            style={{ color: 'var(--color-danger-500)', padding: '6px' }}
-                            title={isRu ? 'Удалить' : 'O‘chirish'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/${locale}/purchases/expenses/${item.id}`);
+                            }}
+                            style={{ padding: '6px' }}
+                            title={isRu ? 'Просмотр' : 'Ko‘rish'}
                           >
-                            <Trash2 size={16} />
+                            <Eye size={14} />
                           </Button>
-                        )}
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/${locale}/purchases/expenses/${item.id}`);
+                            }}
+                            style={{ padding: '6px' }}
+                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                          {(item.status === 'DRAFT' || item.status === 'CANCELLED') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => handleDeleteDraft(item.id, e)}
+                              style={{ color: 'var(--color-danger-500)', padding: '6px' }}
+                              title={isRu ? 'Удалить' : 'O‘chirish'}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

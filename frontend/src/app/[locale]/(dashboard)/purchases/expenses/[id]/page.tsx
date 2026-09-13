@@ -16,6 +16,7 @@ import {
   XCircle,
   Clock,
   Printer,
+  Trash2,
   FileText,
   Truck,
   Building2,
@@ -96,6 +97,25 @@ export default function ExpenseDetailPage() {
     } catch (err: any) {
       alert(err.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik'));
     } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteExpense = async () => {
+    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await apiFetch(`/purchases/additional-expenses/${id}`, {
+        token: token || undefined,
+        tenantId: company?.id || undefined,
+        method: 'DELETE',
+        locale,
+      });
+      router.push(`/${locale}/purchases/expenses`);
+    } catch (err: any) {
+      alert(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
       setActionLoading(false);
     }
   };
@@ -201,6 +221,18 @@ export default function ExpenseDetailPage() {
             <Button variant="outline" disabled={actionLoading} onClick={() => setCancelModalOpen(true)} style={{ color: 'var(--color-danger-600)', borderColor: 'var(--color-danger-200)' }}>
               <XCircle size={16} style={{ marginRight: '6px' }} />
               {isRu ? 'Отменить проведение' : 'Bekor qilish'}
+            </Button>
+          )}
+
+          {(expense.status === 'DRAFT' || expense.status === 'CANCELLED') && (
+            <Button
+              variant="outline"
+              disabled={actionLoading}
+              onClick={handleDeleteExpense}
+              style={{ color: 'var(--color-danger-600)', borderColor: 'var(--color-danger-200)' }}
+            >
+              <Trash2 size={16} style={{ marginRight: '6px' }} />
+              {isRu ? 'Удалить' : 'O‘chirish'}
             </Button>
           )}
         </div>

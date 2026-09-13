@@ -609,8 +609,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   };
 
   const handleDeleteDraft = async () => {
-    if (!invoiceId || mode !== 'edit' || docStatus !== 'DRAFT') return;
-    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот черновик?' : 'Ushbu qoralama hujjatni o‘chirishga ishonchingiz komilmi?')) return;
+    if (!invoiceId || mode !== 'edit' || (docStatus !== 'DRAFT' && docStatus !== 'CANCELLED')) return;
+    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот документ?' : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?')) return;
 
     setLoading(true);
     try {
@@ -624,7 +624,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       router.push('/sales');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || (isRu ? 'Не удалось удалить черновик' : 'Qoralama hujjatni o‘chirib bo‘lmadi'));
+      setError(err.message || (isRu ? 'Не удалось удалить документ' : 'Hujjatni o‘chirib bo‘lmadi'));
       setLoading(false);
     }
   };
@@ -769,6 +769,17 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 </Button>
               )}
             </>
+          )}
+
+          {docStatus === 'CANCELLED' && mode === 'edit' && invoiceId && (
+            <Button
+              variant="danger"
+              onClick={handleDeleteDraft}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Trash2 size={16} /> {isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
+            </Button>
           )}
 
           {docStatus === 'POSTED' && (

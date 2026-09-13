@@ -17,6 +17,7 @@ import {
   Plus,
   Eye,
   CreditCard,
+  Pencil,
   RotateCcw,
   Filter,
   Search,
@@ -121,7 +122,7 @@ export default function SalesPage() {
       fetchStats();
       fetchInvoices();
     } catch (err: any) {
-      alert(err?.message || (isRu ? 'Ошибка при удалении черновика' : 'Qoralamani o‘chirishda xatolik'));
+      alert(err?.message || (isRu ? 'Ошибка при удалении накладной' : 'Nukladnoyni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -515,8 +516,14 @@ export default function SalesPage() {
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                         <Link href={`/sales/${inv.id}`}>
-                          <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр / Редактирование' : 'Ko‘rish / Tahrirlash'}>
+                          <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
                             <Eye size={14} />
+                          </Button>
+                        </Link>
+
+                        <Link href={`/sales/${inv.id}`}>
+                          <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
+                            <Pencil size={14} />
                           </Button>
                         </Link>
 
@@ -541,12 +548,12 @@ export default function SalesPage() {
                           </>
                         )}
 
-                        {inv.status === 'DRAFT' && (
+                        {(inv.status === 'DRAFT' || inv.status === 'CANCELLED') && (
                           <Button
                             variant="secondary"
                             onClick={() => setDeletingInvoice(inv)}
                             style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#ef4444' }}
-                            title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
+                            title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
                           >
                             <Trash2 size={14} />
                           </Button>
@@ -591,13 +598,13 @@ export default function SalesPage() {
         <Modal
           isOpen={true}
           onClose={() => setDeletingInvoice(null)}
-          title={isRu ? 'Удаление черновика' : 'Qoralamani o‘chirish'}
+          title={isRu ? (deletingInvoice.status === 'CANCELLED' ? 'Удаление документа' : 'Удаление черновика') : (deletingInvoice.status === 'CANCELLED' ? 'Hujjatni o‘chirish' : 'Qoralamani o‘chirish')}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {isRu
-                ? `Вы действительно хотите удалить черновик накладной ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber}? Это действие необратимо.`
-                : `Haqiqatan ham ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} raqamli qoralamani o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+                ? `Вы действительно хотите удалить накладную ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber}? Это действие необратимо.`
+                : `Haqiqatan ham ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} raqamli sotuv hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
               <Button

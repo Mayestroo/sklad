@@ -6,9 +6,11 @@ import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Users, Search, DollarSign, Eye } from 'lucide-react';
+import { Users, Search, DollarSign, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 
 interface Customer {
   id: string;
@@ -45,6 +47,10 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchCustomers = () => {
     if (!token || !company) return;
@@ -57,6 +63,25 @@ export default function CustomersPage() {
       .then(setCustomers)
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!deletingCustomer || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/sales/counterparties/${deletingCustomer.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingCustomer(null);
+      fetchCustomers();
+    } catch (err: any) {
+      alert(err.message || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   useEffect(() => { fetchCustomers(); }, [token, company, locale]);
@@ -104,13 +129,21 @@ export default function CustomersPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          {isRu ? 'Клиенты' : 'Mijozlar'}
-        </h1>
-        <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
-          {isRu ? 'Список клиентов, состояние задолженности и история продаж' : 'Mijozlar ro\'yxati, qarz holati va sotuv tarixi'}
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+        <div>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            {isRu ? 'Клиенты' : 'Mijozlar'}
+          </h1>
+          <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
+            {isRu ? 'Список клиентов, состояние задолженности и история продаж' : 'Mijozlar ro\'yxati, qarz holati va sotuv tarixi'}
+          </p>
+        </div>
+        <Button
+          onClick={() => setIsCreateOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}
+        >
+          <Plus size={18} /> {isRu ? 'Новый клиент' : 'Yangi Mijoz'}
+        </Button>
       </div>
 
       {/* Summary */}
@@ -189,14 +222,33 @@ export default function CustomersPage() {
                           {c.type === 'CUSTOMER' ? (isRu ? 'Клиент' : 'Mijoz') : c.type === 'BOTH' ? (isRu ? 'Клиент и Пост.' : 'Mijoz & Yetk.') : c.type}
                         </Badge>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <button
-                          id={`view-customer-${c.id}`}
-                          onClick={() => handleViewProfile(c)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', cursor: 'pointer', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
-                        >
-                          <Eye size={13} /> {isRu ? 'Профиль' : 'Profil'}
-                        </button>
+                      <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          <button
+                            id={`view-customer-${c.id}`}
+                            onClick={() => handleViewProfile(c)}
+                            title={isRu ? 'Профиль' : 'Profil'}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-text-primary)' }}
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            id={`edit-customer-${c.id}`}
+                            onClick={() => setEditingCustomer(c)}
+                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-text-primary)' }}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            id={`delete-customer-${c.id}`}
+                            onClick={() => setDeletingCustomer(c)}
+                            title={isRu ? 'Удалить' : 'O‘chirish'}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: '#ef4444' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -263,6 +315,62 @@ export default function CustomersPage() {
           ) : (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Данные не загружены' : 'Ma\'lumot yuklanmadi'}</div>
           )}
+        </Modal>
+      )}
+      {/* Create Customer Drawer */}
+      {isCreateOpen && (
+        <CreateCounterpartyDrawer
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          defaultType="CUSTOMER"
+          onSuccess={() => fetchCustomers()}
+        />
+      )}
+
+      {/* Edit Customer Drawer */}
+      {editingCustomer && (
+        <CreateCounterpartyDrawer
+          isOpen={!!editingCustomer}
+          onClose={() => setEditingCustomer(null)}
+          counterpartyToEdit={editingCustomer}
+          defaultType="CUSTOMER"
+          onSuccess={() => {
+            setEditingCustomer(null);
+            fetchCustomers();
+          }}
+        />
+      )}
+
+      {/* Delete Customer Confirmation Modal */}
+      {deletingCustomer && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingCustomer(null)}
+          title={isRu ? 'Удаление клиента' : 'Mijozni o‘chirish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить клиента "${deletingCustomer.name}"? Если у клиента есть связанные документы или долг, удаление будет отклонено.`
+                : `Haqiqatan ham "${deletingCustomer.name}" mijozini o‘chirmoqchimisiz? Agar mijozga bog‘langan hujjatlar yoki qarz bo‘lsa, o‘chirish rad etiladi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingCustomer(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteCustomer}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

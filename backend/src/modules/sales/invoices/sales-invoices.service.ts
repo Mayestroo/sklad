@@ -607,9 +607,12 @@ export class SalesInvoicesService {
       where: { id, tenantId },
     });
     if (!invoice) throw new NotFoundException('Sotuv hujjati topilmadi');
-    if (invoice.status !== SalesDocStatus.DRAFT) {
+    if (
+      invoice.status !== SalesDocStatus.DRAFT &&
+      invoice.status !== SalesDocStatus.CANCELLED
+    ) {
       throw new BadRequestException(
-        "Faqat qoralama holatdagi hujjatlarni o'chirish mumkin",
+        "Faqat qoralama yoki bekor qilingan holatdagi hujjatlarni o'chirish mumkin",
       );
     }
     await this.prisma.salesInvoice.delete({ where: { id } });

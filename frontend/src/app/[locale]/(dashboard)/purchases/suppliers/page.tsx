@@ -9,9 +9,10 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Building2, Eye, Plus } from 'lucide-react';
+import { Building2, Eye, Pencil, Plus, Trash2 } from 'lucide-react';
 import { SupplierProfileDrawer } from '@/components/purchases/SupplierProfileDrawer';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
+import { Modal } from '@/components/ui/Modal';
 
 interface Counterparty {
   id: string;
@@ -34,6 +35,9 @@ export default function SuppliersPage() {
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<Counterparty | null>(null);
+  const [deletingSupplier, setDeletingSupplier] = useState<Counterparty | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchSuppliers = () => {
     if (!token || !company) return;
@@ -48,6 +52,25 @@ export default function SuppliersPage() {
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
+  };
+
+  const handleDeleteSupplier = async () => {
+    if (!deletingSupplier || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/sales/counterparties/${deletingSupplier.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingSupplier(null);
+      fetchSuppliers();
+    } catch (err: any) {
+      alert(err.message || (isRu ? 'Ошибка при удалении поставщика' : 'Yetkazib beruvchini o‘chirishda xatolik yuz berdi'));
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -171,9 +194,17 @@ export default function SuppliersPage() {
                         {formatCurrency(debt, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
-                        <Button size="sm" variant="secondary" onClick={() => setSelectedSupplierId(s.id)}>
-                          <Eye size={14} style={{ marginRight: '4px' }} /> {isRu ? 'Профиль и история' : 'Profil va Tarix'}
-                        </Button>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          <Button size="sm" variant="secondary" onClick={() => setSelectedSupplierId(s.id)} title={isRu ? 'Профиль и история' : 'Profil va Tarix'}>
+                            <Eye size={14} />
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => setEditingSupplier(s)} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
+                            <Pencil size={14} />
+                          </Button>
+                          <Button size="sm" variant="secondary" style={{ color: '#ef4444' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -201,6 +232,53 @@ export default function SuppliersPage() {
           defaultType="SUPPLIER"
           onSuccess={() => fetchSuppliers()}
         />
+      )}
+
+      {/* Edit Supplier Slide-Over Drawer */}
+      {editingSupplier && (
+        <CreateCounterpartyDrawer
+          isOpen={!!editingSupplier}
+          onClose={() => setEditingSupplier(null)}
+          counterpartyToEdit={editingSupplier}
+          defaultType="SUPPLIER"
+          onSuccess={() => {
+            setEditingSupplier(null);
+            fetchSuppliers();
+          }}
+        />
+      )}
+
+      {/* Delete Supplier Modal */}
+      {deletingSupplier && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingSupplier(null)}
+          title={isRu ? 'Удаление поставщика' : 'Yetkazib beruvchini o‘chirish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить поставщика "${deletingSupplier.name}"? Если у поставщика есть связанные документы или долг, удаление будет отклонено.`
+                : `Haqiqatan ham "${deletingSupplier.name}" yetkazib beruvchisini o‘chirmoqchimisiz? Agar unga bog‘langan hujjatlar yoki qarz bo‘lsa, o‘chirish rad etiladi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingSupplier(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteSupplier}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
