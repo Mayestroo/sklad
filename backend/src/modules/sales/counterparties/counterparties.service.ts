@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Prisma, CounterpartyType } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 import {
@@ -310,4 +314,49 @@ export class CounterpartiesService {
       },
     });
   }
+
+  async delete(tenantId: string, id: string) {
+    const counterparty = await this.prisma.counterparty.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!counterparty) {
+      throw new NotFoundException('Counterparty not found');
+    }
+
+    if (Math.abs(Number(counterparty.debtBalance || 0)) > 0.001) {
+      throw new BadRequestException(
+        "Qarz balansi mavjud bo'lgan kontragentni o'chirib bo'lmaydi",
+      );
+    }
+
+    const [invoicesCount, receiptsCount, paymentsCount, dealsCount] =
+      await Promise.all([
+        this.prisma.salesInvoice.count({ where: { counterpartyId: id } }),
+        this.prisma.purchaseReceipt.count({ where: { counterpartyId: id } }),
+        this.prisma.payment.count({ where: { counterpartyId: id } }),
+        this.prisma.deal.count({ where: { counterpartyId: id } }),
+      ]);
+
+    if (
+      invoicesCount > 0 ||
+      receiptsCount > 0 ||
+      paymentsCount > 0 ||
+      dealsCount > 0
+    ) {
+      throw new BadRequestException(
+        "Ushbu kontragent bilan bog'liq hujjatlar yoki to'lovlar mavjud bo'lganligi sababli uni o'chirib bo'lmaydi",
+      );
+    }
+
+    await this.prisma.counterparty.delete({
+      where: { id },
+    });
+
+    return {
+      success: true,
+      message: "Kontragent muvaffaqiyatli o'chirildi",
+    };
+  }
 }
+

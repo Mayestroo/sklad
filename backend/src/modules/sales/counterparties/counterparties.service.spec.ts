@@ -18,8 +18,13 @@ describe('CounterpartiesService', () => {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       count: jest.fn(),
     },
+    salesInvoice: { count: jest.fn() },
+    purchaseReceipt: { count: jest.fn() },
+    payment: { count: jest.fn() },
+    deal: { count: jest.fn() },
   };
 
   beforeEach(async () => {
@@ -239,5 +244,40 @@ describe('CounterpartiesService', () => {
       );
     });
   });
+
+  describe('delete', () => {
+    it('should delete counterparty when no relations and debt is zero', async () => {
+      const tenantId = 'tenant-1';
+      const id = 'cp-1';
+      mockPrisma.counterparty.findFirst.mockResolvedValue({ id, tenantId, debtBalance: 0 });
+      mockPrisma.salesInvoice.count.mockResolvedValue(0);
+      mockPrisma.purchaseReceipt.count.mockResolvedValue(0);
+      mockPrisma.payment.count.mockResolvedValue(0);
+      mockPrisma.deal.count.mockResolvedValue(0);
+      mockPrisma.counterparty.delete.mockResolvedValue({ id });
+
+      const result = await service.delete(tenantId, id);
+      expect(result.success).toBe(true);
+      expect(mockPrisma.counterparty.delete).toHaveBeenCalledWith({ where: { id } });
+    });
+
+    it('should throw BadRequestException if counterparty has debt', async () => {
+      const tenantId = 'tenant-1';
+      const id = 'cp-1';
+      mockPrisma.counterparty.findFirst.mockResolvedValue({ id, tenantId, debtBalance: 150000 });
+
+      await expect(service.delete(tenantId, id)).rejects.toThrow();
+    });
+
+    it('should throw BadRequestException if counterparty has linked invoices', async () => {
+      const tenantId = 'tenant-1';
+      const id = 'cp-1';
+      mockPrisma.counterparty.findFirst.mockResolvedValue({ id, tenantId, debtBalance: 0 });
+      mockPrisma.salesInvoice.count.mockResolvedValue(2);
+
+      await expect(service.delete(tenantId, id)).rejects.toThrow();
+    });
+  });
 });
+
 

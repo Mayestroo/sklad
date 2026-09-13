@@ -113,6 +113,9 @@ export default function CounterpartiesPage() {
 
   // Create Counterparty Modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingCounterparty, setEditingCounterparty] = useState<Counterparty | null>(null);
+  const [deletingCounterparty, setDeletingCounterparty] = useState<Counterparty | null>(null);
+  const [deleteCounterpartyLoading, setDeleteCounterpartyLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formName, setFormName] = useState('');
@@ -232,9 +235,31 @@ export default function CounterpartiesPage() {
     return () => clearTimeout(timer);
   }, [search, typeFilter, hasDebtOnly, balanceFilter]);
 
+  const handleDeleteCounterparty = async () => {
+    if (!deletingCounterparty || !token || !company) return;
+    setDeleteCounterpartyLoading(true);
+    try {
+      await apiFetch(`/sales/counterparties/${deletingCounterparty.id}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingCounterparty(null);
+      fetchCounterparties();
+      fetchSummary();
+      fetchFolders();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении контрагента' : 'Kontragentni o‘chirishda xatolik'));
+    } finally {
+      setDeleteCounterpartyLoading(false);
+    }
+  };
+
   // Open Create Modal & Pre-select Active Folder if a specific folder is selected
   const handleOpenCreateModal = () => {
     resetForm();
+    setEditingCounterparty(null);
     if (activeFolderId && activeFolderId !== 'all' && activeFolderId !== 'unassigned') {
       setFormFolderId(activeFolderId);
     } else {
@@ -858,8 +883,33 @@ export default function CounterpartiesPage() {
                             >
                               <MoveRight size={14} />
                             </Button>
-                            <Button size="sm" variant="secondary" onClick={() => setDetailItem(item)}>
-                              <Eye size={14} style={{ marginRight: 4 }} /> {isRu ? 'Просмотр' : 'Ko\'rish'}
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setEditingCounterparty(item);
+                                setIsCreateOpen(true);
+                              }}
+                              title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                            >
+                              <Edit2 size={14} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setDetailItem(item)}
+                              title={isRu ? 'Просмотр' : 'Ko\'rish'}
+                            >
+                              <Eye size={14} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              style={{ color: '#ef4444' }}
+                              onClick={() => setDeletingCounterparty(item)}
+                              title={isRu ? 'Удалить' : 'O\'chirish'}
+                            >
+                              <Trash2 size={14} />
                             </Button>
                           </div>
                         </td>
@@ -873,16 +923,23 @@ export default function CounterpartiesPage() {
         </div>
       </div>
 
-      {/* Create Counterparty Slide-Over Drawer */}
+      {/* Create / Edit Counterparty Slide-Over Drawer */}
       {isCreateOpen && (
         <CreateCounterpartyDrawer
           isOpen={isCreateOpen}
-          onClose={() => setIsCreateOpen(false)}
+          counterpartyToEdit={editingCounterparty}
+          onClose={() => {
+            setIsCreateOpen(false);
+            setEditingCounterparty(null);
+          }}
           defaultFolderId={formFolderId}
           folders={folders}
           onSuccess={() => {
+            setIsCreateOpen(false);
+            setEditingCounterparty(null);
             fetchFolders();
             fetchCounterparties();
+            fetchSummary();
           }}
         />
       )}
@@ -959,6 +1016,41 @@ export default function CounterpartiesPage() {
               </Button>
               <Button variant="danger" onClick={handleDeleteFolder} disabled={deleteSubmitting}>
                 {deleteSubmitting ? (isRu ? 'Удаление...' : 'O\'chirilmoqda...') : (isRu ? 'Удалить папку' : 'Papkani o\'chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Counterparty Modal */}
+      {deletingCounterparty && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingCounterparty(null)}
+          title={isRu ? 'Удаление контрагента' : 'Kontragentni o\'chirish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить контрагента "${deletingCounterparty.name}"? Если с этим контрагентом связаны документы или операции, система отклонит удаление.`
+                : `Haqiqatan ham "${deletingCounterparty.name}" kontragentini o'chirmoqchimisiz? Agar ushbu kontragent bo'yicha operatsiyalar yoki hujjatlar mavjud bo'lsa, tizim o'chirishga ruxsat bermaydi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingCounterparty(null)}
+                disabled={deleteCounterpartyLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteCounterparty}
+                disabled={deleteCounterpartyLoading}
+              >
+                {deleteCounterpartyLoading
+                  ? (isRu ? 'Удаление...' : 'O\'chirilmoqda...')
+                  : (isRu ? 'Удалить' : 'O\'chirish')}
               </Button>
             </div>
           </div>

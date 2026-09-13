@@ -118,4 +118,11 @@ export class CounterpartiesController {
   ) {
     return this.counterpartiesService.update(tenantId, id, dto);
   }
+
+  @Delete(':id')
+  @RequirePermissions('sales:delete')
+  delete(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.counterpartiesService.delete(tenantId, id);
+  }
 }
+

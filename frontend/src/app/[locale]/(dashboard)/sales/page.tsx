@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import {
   ShoppingCart,
   Plus,
@@ -24,6 +25,7 @@ import {
   Users,
   Building2,
   DollarSign,
+  Trash2,
 } from 'lucide-react';
 import { SalesInvoice, SalesSummaryStats } from '@shared/types';
 import { PaySalesInvoiceModal } from '@/components/sales/PaySalesInvoiceModal';
@@ -62,6 +64,8 @@ export default function SalesPage() {
   // Modals
   const [payInvoice, setPayInvoice] = useState<SalesInvoice | null>(null);
   const [returnInvoice, setReturnInvoice] = useState<SalesInvoice | null>(null);
+  const [deletingInvoice, setDeletingInvoice] = useState<SalesInvoice | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const getLocalizedName = (name: any) => {
     if (!name) return '—';
@@ -101,6 +105,26 @@ export default function SalesPage() {
       .then((res) => setInvoices(res || []))
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!deletingInvoice || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/sales/invoices/${deletingInvoice.id}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingInvoice(null);
+      fetchStats();
+      fetchInvoices();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении черновика' : 'Qoralamani o‘chirishda xatolik'));
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -516,6 +540,17 @@ export default function SalesPage() {
                             </Button>
                           </>
                         )}
+
+                        {inv.status === 'DRAFT' && (
+                          <Button
+                            variant="secondary"
+                            onClick={() => setDeletingInvoice(inv)}
+                            style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#ef4444' }}
+                            title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -549,6 +584,41 @@ export default function SalesPage() {
             fetchInvoices();
           }}
         />
+      )}
+
+      {/* Delete Draft Modal */}
+      {deletingInvoice && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingInvoice(null)}
+          title={isRu ? 'Удаление черновика' : 'Qoralamani o‘chirish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить черновик накладной ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber}? Это действие необратимо.`
+                : `Haqiqatan ham ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} raqamli qoralamani o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingInvoice(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteInvoice}
+                disabled={deleteLoading}
+              >
+                {deleteLoading
+                  ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...')
+                  : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

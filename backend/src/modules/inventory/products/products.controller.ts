@@ -2,13 +2,15 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
   Body,
   Param,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
-import { CreateProductDto } from '../dto';
+import { CreateProductDto, UpdateProductDto } from '../dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
@@ -75,4 +77,21 @@ export class ProductsController {
   findById(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.productsService.findById(tenantId, id);
   }
+
+  @Put(':id')
+  @RequirePermissions('inventory:edit')
+  update(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateProductDto,
+  ) {
+    return this.productsService.update(tenantId, id, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('inventory:delete')
+  delete(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.productsService.delete(tenantId, id);
+  }
 }
+

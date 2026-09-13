@@ -18,6 +18,7 @@ interface CounterpartyFolder {
 export interface CreateCounterpartyDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  counterpartyToEdit?: any | null;
   defaultType?: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
   defaultFolderId?: string;
   folders?: CounterpartyFolder[];
@@ -27,6 +28,7 @@ export interface CreateCounterpartyDrawerProps {
 export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> = ({
   isOpen,
   onClose,
+  counterpartyToEdit = null,
   defaultType = 'CUSTOMER',
   defaultFolderId = '',
   folders = [],
@@ -35,6 +37,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const isEdit = Boolean(counterpartyToEdit);
 
   const [name, setName] = useState('');
   const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER' | 'BOTH'>(defaultType);
@@ -61,13 +64,47 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
       .then((res) => {
         const list = res || [];
         setPriceLists(list);
-        if (isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') && !priceListId) {
+        if (isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') && !priceListId && !isEdit) {
           const def = list.find((p) => p.isDefault) || list[0];
           if (def) setPriceListId(def.id);
         }
       })
       .catch(console.error);
-  }, [token, company, locale, isOpen, isMultiTier, type]);
+  }, [token, company, locale, isOpen, isMultiTier, type, isEdit, priceListId]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (counterpartyToEdit) {
+        setName(counterpartyToEdit.name || '');
+        setType(counterpartyToEdit.type || defaultType);
+        setFolderId(counterpartyToEdit.folderId || '');
+        setPriceListId(counterpartyToEdit.priceListId || '');
+        setDiscountPercent(String(counterpartyToEdit.discountPercent ?? 0));
+        setInn(counterpartyToEdit.inn || '');
+        setPhone(counterpartyToEdit.phone || '');
+        setEmail(counterpartyToEdit.email || '');
+        setAddress(counterpartyToEdit.address || '');
+        setBankName(counterpartyToEdit.bankName || '');
+        setBankAccount(counterpartyToEdit.bankAccount || '');
+        setMfo(counterpartyToEdit.mfo || '');
+        setError(null);
+      } else {
+        setName('');
+        setType(defaultType);
+        setFolderId(defaultFolderId);
+        setPriceListId('');
+        setDiscountPercent('0');
+        setInn('');
+        setPhone('');
+        setEmail('');
+        setAddress('');
+        setBankName('');
+        setBankAccount('');
+        setMfo('');
+        setError(null);
+      }
+    }
+  }, [isOpen, counterpartyToEdit, defaultType, defaultFolderId]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -90,26 +127,39 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
     setError(null);
 
     try {
-      const res = await apiFetch('/sales/counterparties', {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: company?.id,
-        locale,
-        body: JSON.stringify({
-          name: name.trim(),
-          type,
-          folderId: folderId || undefined,
-          priceListId: priceListId || undefined,
-          discountPercent: Number(discountPercent) || 0,
-          inn: inn.trim() || undefined,
-          phone: phone.trim() || undefined,
-          email: email.trim() || undefined,
-          address: address.trim() || undefined,
-          bankName: bankName.trim() || undefined,
-          bankAccount: bankAccount.trim() || undefined,
-          mfo: mfo.trim() || undefined,
-        }),
-      });
+      const payload = {
+        name: name.trim(),
+        type,
+        folderId: folderId || null,
+        priceListId: priceListId || null,
+        discountPercent: Number(discountPercent) || 0,
+        inn: inn.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        address: address.trim() || undefined,
+        bankName: bankName.trim() || undefined,
+        bankAccount: bankAccount.trim() || undefined,
+        mfo: mfo.trim() || undefined,
+      };
+
+      let res: any;
+      if (isEdit && counterpartyToEdit?.id) {
+        res = await apiFetch(`/sales/counterparties/${counterpartyToEdit.id}`, {
+          method: 'PATCH',
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await apiFetch('/sales/counterparties', {
+          method: 'POST',
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
+          body: JSON.stringify(payload),
+        });
+      }
 
       resetForm();
       if (onSuccess) onSuccess(res);
@@ -164,7 +214,11 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
         onClose();
       }}
       title={
-        defaultType === 'SUPPLIER'
+        isEdit
+          ? isRu
+            ? 'Редактировать контрагента'
+            : 'Kontragentni tahrirlash'
+          : defaultType === 'SUPPLIER'
           ? isRu
             ? 'Новый поставщик'
             : 'Yangi Yetkazib Beruvchi'
@@ -173,7 +227,11 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
           : 'Yangi Kontragent'
       }
       description={
-        isRu
+        isEdit
+          ? isRu
+            ? 'Изменение реквизитов, контактных данных и настроек'
+            : 'Rekvizitlar, aloqa ma’lumotlari va sozlamalarni tahrirlash'
+          : isRu
           ? 'Заполните реквизиты, контактные данные и банковские счета'
           : 'Rekvizitlar, aloqa ma’lumotlari va bank hisoblarini kiriting'
       }

@@ -1,6 +1,15 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { CategoriesService } from './categories.service';
-import { CreateCategoryDto } from '../dto';
+import { CreateCategoryDto, UpdateCategoryDto } from '../dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
@@ -29,4 +38,21 @@ export class CategoriesController {
   findById(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.categoriesService.findById(tenantId, id);
   }
+
+  @Patch(':id')
+  @RequirePermissions('inventory:edit')
+  update(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateCategoryDto,
+  ) {
+    return this.categoriesService.update(tenantId, id, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('inventory:delete')
+  delete(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.categoriesService.delete(tenantId, id);
+  }
 }
+

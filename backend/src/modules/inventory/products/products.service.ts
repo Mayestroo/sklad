@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
-import { CreateProductDto } from '../dto';
+import { CreateProductDto, UpdateProductDto } from '../dto';
 
 @Injectable()
 export class ProductsService {
@@ -193,4 +193,95 @@ export class ProductsService {
       },
     });
   }
+
+  async update(tenantId: string, id: string, dto: UpdateProductDto) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    if (dto.sku && dto.sku !== product.sku) {
+      const existingSku = await this.prisma.product.findFirst({
+        where: { tenantId, sku: dto.sku, id: { not: id } },
+      });
+      if (existingSku) {
+        throw new ConflictException(
+          `Product with SKU '${dto.sku}' already exists`,
+        );
+      }
+    }
+
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        name: dto.name ? (dto.name as any) : undefined,
+        description:
+          dto.description !== undefined
+            ? (dto.description as any)
+            : undefined,
+        categoryId:
+          dto.categoryId !== undefined ? dto.categoryId : undefined,
+        type: dto.type ?? undefined,
+        sku: dto.sku ?? undefined,
+        barcode: dto.barcode !== undefined ? dto.barcode : undefined,
+        unitOfMeasure: dto.unitOfMeasure ?? undefined,
+        costPrice: dto.costPrice !== undefined ? dto.costPrice : undefined,
+        salePrice: dto.salePrice !== undefined ? dto.salePrice : undefined,
+        vatRate: dto.vatRate !== undefined ? dto.vatRate : undefined,
+        minStockAlert:
+          dto.minStockAlert !== undefined ? dto.minStockAlert : undefined,
+        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+      },
+      include: {
+        category: true,
+      },
+    });
+  }
+
+  async delete(tenantId: string, id: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    // Check if product has transaction references
+    const [receiptItems, invoiceItems, batches] = await Promise.all([
+      this.prisma.purchaseReceiptItem.count({ where: { productId: id } }),
+      this.prisma.salesInvoiceItem.count({ where: { productId: id } }),
+      this.prisma.productBatch.count({ where: { productId: id } }),
+    ]);
+
+    const hasTransactions = receiptItems > 0 || invoiceItems > 0 || batches > 0;
+
+    if (hasTransactions) {
+      // Soft-delete (archive) to preserve accounting and batch invariants
+      await this.prisma.product.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      return {
+        success: true,
+        archived: true,
+        message: 'Tovar muvaffaqiyatli arxivlandi',
+      };
+    }
+
+    // Safe to hard-delete if no transactional history
+    await this.prisma.stockLevel.deleteMany({ where: { productId: id } });
+    await this.prisma.productPrice.deleteMany({ where: { productId: id } });
+    await this.prisma.product.delete({ where: { id } });
+
+    return {
+      success: true,
+      archived: false,
+      message: 'Tovar muvaffaqiyatli o‘chirildi',
+    };
+  }
 }
+

@@ -31,6 +31,8 @@ import {
   Calendar,
   AlertCircle,
   CheckCircle2,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 
 function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
@@ -74,7 +76,17 @@ function formatAmount(amount: number, currency: string): string {
 }
 
 // ─── Transaction Row ────────────────────────────────────────────
-function TransactionRow({ tx, locale }: { tx: FinanceTransaction; locale: string }) {
+function TransactionRow({
+  tx,
+  locale,
+  onEdit,
+  onDelete,
+}: {
+  tx: FinanceTransaction;
+  locale: string;
+  onEdit: (tx: FinanceTransaction) => void;
+  onDelete: (tx: FinanceTransaction) => void;
+}) {
   const isIncome = tx.direction === 'INCOME';
   const isExpense = tx.direction === 'EXPENSE';
   const isTransfer = tx.direction === 'TRANSFER';
@@ -142,6 +154,27 @@ function TransactionRow({ tx, locale }: { tx: FinanceTransaction; locale: string
         >
           {tx.currency}
         </span>
+      </td>
+      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onEdit(tx)}
+            title={locale === 'ru' ? 'Редактировать' : 'Tahrirlash'}
+          >
+            <Edit2 size={13} />
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            style={{ color: '#ef4444' }}
+            onClick={() => onDelete(tx)}
+            title={locale === 'ru' ? 'Удалить' : 'O‘chirish'}
+          >
+            <Trash2 size={13} />
+          </Button>
+        </div>
       </td>
     </tr>
   );
@@ -561,6 +594,64 @@ export default function FinancePage() {
   // Modal state
   const [modal, setModal] = useState<'income' | 'expense' | 'transfer' | 'exchange' | null>(null);
 
+  // Edit / Delete Transaction state
+  const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
+  const [editComment, setEditComment] = useState('');
+  const [editTypeId, setEditTypeId] = useState('');
+  const [savingTx, setSavingTx] = useState(false);
+
+  const [deletingTx, setDeletingTx] = useState<FinanceTransaction | null>(null);
+  const [deletingTxLoading, setDeletingTxLoading] = useState(false);
+
+  const handleOpenEditTx = (tx: FinanceTransaction) => {
+    setEditingTx(tx);
+    setEditComment(tx.comment || '');
+    setEditTypeId(tx.transactionTypeId || '');
+  };
+
+  const handleSaveEditTx = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx || !token || !company) return;
+    setSavingTx(true);
+    try {
+      await apiFetch(`/finance/transactions/${editingTx.id}`, {
+        method: 'PUT',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({
+          comment: editComment.trim() || undefined,
+          transactionTypeId: editTypeId || undefined,
+        }),
+      });
+      setEditingTx(null);
+      fetchData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
+    } finally {
+      setSavingTx(false);
+    }
+  };
+
+  const handleDeleteTx = async () => {
+    if (!deletingTx || !token || !company) return;
+    setDeletingTxLoading(true);
+    try {
+      await apiFetch(`/finance/transactions/${deletingTx.id}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingTx(null);
+      fetchData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении операции' : 'Operatsiyani o‘chirishda xatolik'));
+    } finally {
+      setDeletingTxLoading(false);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     if (!token || !company) return;
     setLoading(true);
@@ -843,11 +934,18 @@ export default function FinancePage() {
                     <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)' }}>{isRu ? 'ПРИХОД' : 'Kirim'}</th>
                     <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)' }}>{isRu ? 'РАСХОД' : 'Chiqim'}</th>
                     <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'ВАЛЮТА' : 'Valyuta'}</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'ДЕЙСТВИЯ' : 'Amallar'}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {journal.data.map((tx) => (
-                    <TransactionRow key={tx.id} tx={tx} locale={locale} />
+                    <TransactionRow
+                      key={tx.id}
+                      tx={tx}
+                      locale={locale}
+                      onEdit={handleOpenEditTx}
+                      onDelete={setDeletingTx}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -883,6 +981,100 @@ export default function FinancePage() {
           onClose={() => setModal(null)}
           onSuccess={fetchData}
         />
+      )}
+
+      {/* Edit Transaction Modal */}
+      {editingTx && (
+        <Modal
+          isOpen={true}
+          onClose={() => setEditingTx(null)}
+          title={isRu ? 'Редактирование операции' : 'Operatsiyani tahrirlash'}
+        >
+          <form onSubmit={handleSaveEditTx} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: 'var(--text-sm)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Сумма:' : 'Summa:'}</span>
+                <span style={{ fontWeight: 600 }}>{formatAmount(Number(editingTx.amount), editingTx.currency)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Счёт:' : 'Hisob:'}</span>
+                <span style={{ fontWeight: 500 }}>{(editingTx.account?.name as any)?.[locale] ?? editingTx.account?.name ?? '—'}</span>
+              </div>
+              {editingTx.counterparty && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Контрагент:' : 'Kontragent:'}</span>
+                  <span style={{ fontWeight: 500 }}>{editingTx.counterparty.name}</span>
+                </div>
+              )}
+            </div>
+
+            {txTypes.length > 0 && (
+              <Select
+                label={isRu ? 'Статья / Категория' : 'Operatsiya moddasi'}
+                options={[
+                  { value: '', label: isRu ? '— Без категории —' : '— Moddasiz —' },
+                  ...txTypes.map((t) => ({
+                    value: t.id,
+                    label: (t.name as any)?.[locale] || (t.name as any)?.ru || (t.name as any)?.uz || t.name,
+                  })),
+                ]}
+                value={editTypeId}
+                onChange={(val) => setEditTypeId(val)}
+              />
+            )}
+
+            <Input
+              label={isRu ? 'Примечание / Комментарий' : 'Izoh / Sharh'}
+              value={editComment}
+              onChange={(e) => setEditComment(e.target.value)}
+              placeholder={isRu ? 'Введите комментарий...' : 'Izoh kiriting...'}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+              <Button type="button" variant="secondary" onClick={() => setEditingTx(null)} disabled={savingTx}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button type="submit" disabled={savingTx}>
+                {savingTx ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Transaction Modal */}
+      {deletingTx && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingTx(null)}
+          title={isRu ? 'Удаление финансовой операции' : 'Moliyaviy operatsiyani o‘chirish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить эту операцию на сумму ${formatAmount(Number(deletingTx.amount), deletingTx.currency)}? Связанные остатки на счетах и баланс контрагента будут автоматически пересчитаны.`
+                : `Haqiqatan ham ${formatAmount(Number(deletingTx.amount), deletingTx.currency)} miqdoridagi operatsiyani o‘chirmoqchimisiz? Hisob qoldiqlari va kontragent balansi avtomatik tarzda qayta tiklanadi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingTx(null)}
+                disabled={deletingTxLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteTx}
+                disabled={deletingTxLoading}
+              >
+                {deletingTxLoading
+                  ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...')
+                  : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

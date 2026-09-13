@@ -13,6 +13,7 @@ import { PackagePlus, AlertCircle, CheckCircle2 } from 'lucide-react';
 export interface CreateProductDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  productToEdit?: any | null;
   initialSkuOrBarcode?: string;
   initialType?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE';
   onSuccess?: (createdProduct: any, initialQuantity?: number) => void;
@@ -21,6 +22,7 @@ export interface CreateProductDrawerProps {
 export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   isOpen,
   onClose,
+  productToEdit = null,
   initialSkuOrBarcode = '',
   initialType = 'PRODUCT',
   onSuccess,
@@ -28,14 +30,20 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const isEdit = Boolean(productToEdit);
 
   const [itemType, setItemType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>(initialType);
   const [name, setName] = useState('');
+  const [sku, setSku] = useState('');
+  const [barcode, setBarcode] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [minStockAlert, setMinStockAlert] = useState<number | string>(0);
   const [unitOfMeasure, setUnitOfMeasure] = useState('piece');
   const [quantity, setQuantity] = useState<number | string>(1);
   const [costPrice, setCostPrice] = useState<number | string>('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
 
+  const [categories, setCategories] = useState<any[]>([]);
   const isMultiTier = Boolean(company?.settings?.sales?.enableMultiTierPriceLists);
   const [priceLists, setPriceLists] = useState<any[]>([]);
   const [tierPrices, setTierPrices] = useState<Record<string, number | string>>({});
@@ -51,60 +59,106 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   }, [token, company, locale, isOpen, isMultiTier]);
 
   useEffect(() => {
-    if (isOpen) {
-      setItemType(initialType || 'PRODUCT');
-    }
-  }, [isOpen, initialType]);
+    if (!token || !company?.id || !isOpen) return;
+    apiFetch<any[]>('/inventory/categories', { token, tenantId: company.id, locale })
+      .then((cats) => setCategories(cats || []))
+      .catch(console.error);
+  }, [token, company, locale, isOpen]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    if (isOpen && initialSkuOrBarcode) {
-      if (!/^\d{8,14}$/.test(initialSkuOrBarcode)) {
-        setName(initialSkuOrBarcode);
+    if (isOpen) {
+      if (productToEdit) {
+        const pName =
+          typeof productToEdit.name === 'object'
+            ? productToEdit.name[locale] || productToEdit.name.ru || productToEdit.name.uz || ''
+            : productToEdit.name || '';
+        setName(pName);
+        setSku(productToEdit.sku || '');
+        setBarcode(productToEdit.barcode || '');
+        setCategoryId(productToEdit.categoryId || '');
+        setItemType(productToEdit.type || 'PRODUCT');
+        setUnitOfMeasure(productToEdit.unitOfMeasure || 'piece');
+        setCostPrice(productToEdit.costPrice !== undefined ? String(productToEdit.costPrice) : '');
+        setSellingPrice(productToEdit.salePrice !== undefined ? String(productToEdit.salePrice) : '');
+        setMinStockAlert(productToEdit.minStockAlert !== undefined ? String(productToEdit.minStockAlert) : '0');
+        setError(null);
+      } else {
+        setItemType(initialType || 'PRODUCT');
+        if (initialSkuOrBarcode) {
+          if (!/^\d{8,14}$/.test(initialSkuOrBarcode)) {
+            setName(initialSkuOrBarcode);
+          } else {
+            setBarcode(initialSkuOrBarcode);
+          }
+        }
       }
     }
-  }, [isOpen, initialSkuOrBarcode]);
+  }, [isOpen, productToEdit, initialType, initialSkuOrBarcode, locale]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     const finalName = name.trim();
     if (!finalName) {
-      setError(isRu ? 'Введите наименование товара' : 'Tovar nomini kiriting');
+      setError(isRu ? 'Наименование обязательно' : 'Nom kiritilishi shart');
       return;
     }
 
     const numQty = parseFloat(String(quantity)) || 1;
-    if (numQty <= 0) {
-      setError(isRu ? 'Укажите правильное количество товара' : 'Tovar sonini to‘g‘ri kiriting');
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
-      const randomCode = Math.floor(100000 + Math.random() * 900000);
-      const prefix = itemType === 'RAW_MATERIAL' ? 'RAW' : itemType === 'SERVICE' ? 'SRV' : 'PRD';
-      const payload = {
-        name: {
-          uz: finalName,
-          ru: finalName,
-        },
-        sku: `${prefix}-${randomCode}`,
-        type: itemType,
-        unitOfMeasure: unitOfMeasure || 'piece',
-        costPrice: Number(costPrice) || 0,
-        salePrice: Number(sellingPrice) || 0,
-        minStockAlert: 0,
-      };
+      let res: any;
+      if (productToEdit) {
+        const payload = {
+          name: {
+            uz: finalName,
+            ru: finalName,
+          },
+          sku: sku.trim() || undefined,
+          barcode: barcode.trim() || null,
+          categoryId: categoryId || null,
+          type: itemType,
+          unitOfMeasure: unitOfMeasure || 'piece',
+          costPrice: Number(costPrice) || 0,
+          salePrice: Number(sellingPrice) || 0,
+          minStockAlert: Number(minStockAlert) || 0,
+        };
+        res = await apiFetch(`/inventory/products/${productToEdit.id}`, {
+          method: 'PUT',
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
+          body: JSON.stringify(payload),
+        });
+      } else {
+        const randomCode = Date.now().toString().slice(-6);
+        const prefix = itemType === 'RAW_MATERIAL' ? 'RAW' : itemType === 'SERVICE' ? 'SRV' : 'PRD';
+        const payload = {
+          name: {
+            uz: finalName,
+            ru: finalName,
+          },
+          sku: sku.trim() || `${prefix}-${randomCode}`,
+          barcode: barcode.trim() || null,
+          categoryId: categoryId || null,
+          type: itemType,
+          unitOfMeasure: unitOfMeasure || 'piece',
+          costPrice: Number(costPrice) || 0,
+          salePrice: Number(sellingPrice) || 0,
+          minStockAlert: Number(minStockAlert) || 0,
+        };
 
-      const res: any = await apiFetch('/inventory/products', {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: company?.id,
-        locale,
-        body: JSON.stringify(payload),
-      });
+        res = await apiFetch('/inventory/products', {
+          method: 'POST',
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (isMultiTier && res?.id) {
         const priceEntries = Object.entries(tierPrices).filter(([_, val]) => Number(val) > 0);
@@ -135,6 +189,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
   const resetForm = () => {
     setName('');
+    setSku('');
+    setBarcode('');
+    setCategoryId('');
+    setMinStockAlert(0);
     setUnitOfMeasure('piece');
     setQuantity(1);
     setCostPrice('');
@@ -173,12 +231,18 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   };
 
   const getDrawerTitle = () => {
+    if (isEdit) return isRu ? 'Редактировать позицию' : 'Pozitsiyani tahrirlash';
     if (itemType === 'RAW_MATERIAL') return isRu ? 'Новое сырьё / материал' : 'Yangi Xomashyo Qo‘shish';
     if (itemType === 'SERVICE') return isRu ? 'Новая услуга' : 'Yangi Xizmat Qo‘shish';
     return isRu ? 'Новый товар' : 'Yangi Tovar Qo‘shish';
   };
 
   const getDrawerDescription = () => {
+    if (isEdit) {
+      return isRu
+        ? 'Редактирование параметров, цен, категорий и штрихкодов'
+        : 'Parametrlar, narxlar, kategoriya va shtrix-kodlarni tahrirlash';
+    }
     if (itemType === 'RAW_MATERIAL') {
       return isRu
         ? 'Быстрое добавление сырья и производственных материалов в документ'
@@ -195,6 +259,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   };
 
   const getSubmitLabel = () => {
+    if (isEdit) return isRu ? 'Сохранить изменения (Ctrl+Enter)' : 'O‘zgarishlarni saqlash (Ctrl+Enter)';
     if (itemType === 'RAW_MATERIAL') return isRu ? 'Сохранить сырьё (Ctrl+Enter)' : 'Xomashyoni saqlash (Ctrl+Enter)';
     if (itemType === 'SERVICE') return isRu ? 'Сохранить услугу (Ctrl+Enter)' : 'Xizmatni saqlash (Ctrl+Enter)';
     return isRu ? 'Сохранить товар (Ctrl+Enter)' : 'Tovarni saqlash (Ctrl+Enter)';
@@ -330,7 +395,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           </div>
         </div>
 
-        {/* Product Name (Single Unified Field) */}
+        {/* Product Name */}
         <div>
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
             {isRu ? (itemType === 'SERVICE' ? 'Наименование услуги *' : itemType === 'RAW_MATERIAL' ? 'Наименование сырья *' : 'Наименование товара *') : (itemType === 'SERVICE' ? 'Xizmat nomi *' : itemType === 'RAW_MATERIAL' ? 'Xomashyo nomi *' : 'Tovar nomi *')}
@@ -343,8 +408,64 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           />
         </div>
 
-        {/* Unit of Measure & Quantity */}
+        {/* SKU & Barcode */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Артикул (SKU)' : 'Artikul (SKU)'}
+            </label>
+            <Input
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder={isRu ? 'Оставьте пустым для авто' : 'Avto-kod uchun bo‘sh qoldiring'}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Штрихкод' : 'Shtrix-kod'}
+            </label>
+            <Input
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              placeholder={isRu ? 'Штрихкод...' : 'Shtrix-kod...'}
+            />
+          </div>
+        </div>
+
+        {/* Category & Min Stock Alert */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Категория' : 'Kategoriya'}
+            </label>
+            <Select
+              options={[
+                { value: '', label: isRu ? 'Без категории' : 'Kategoriyasiz' },
+                ...categories.map((c) => ({
+                  value: c.id,
+                  label: typeof c.name === 'object' ? (c.name[locale] || c.name.ru || c.name.uz || '') : c.name,
+                })),
+              ]}
+              value={categoryId}
+              onChange={(val) => setCategoryId(val)}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Мин. остаток (оповещение)' : 'Minimal qoldiq chegarasi'}
+            </label>
+            <Input
+              type="number"
+              min="0"
+              value={minStockAlert}
+              onChange={(e) => setMinStockAlert(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+        </div>
+
+        {/* Unit of Measure & Quantity */}
+        <div style={{ display: 'grid', gridTemplateColumns: isEdit ? '1fr' : '1fr 1fr', gap: 'var(--space-3)' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Единица измерения' : 'O‘lchov birligi'}
@@ -356,20 +477,22 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {getQuantityLabel()}
-            </label>
-            <Input
-              type="number"
-              min="0.001"
-              step={isFractionalUnit ? 'any' : '1'}
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="1"
-              style={{ fontWeight: 600 }}
-            />
-          </div>
+          {!isEdit && (
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {getQuantityLabel()}
+              </label>
+              <Input
+                type="number"
+                min="0.001"
+                step={isFractionalUnit ? 'any' : '1'}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="1"
+                style={{ fontWeight: 600 }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Cost Price & Selling Price */}

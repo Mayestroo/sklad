@@ -14,6 +14,7 @@ import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { PurchaseReceipt, PurchaseSummaryStats } from '@shared/types';
+import { Modal } from '@/components/ui/Modal';
 import {
   Building2,
   CreditCard,
@@ -24,6 +25,7 @@ import {
   RotateCcw,
   Search,
   ShoppingBag,
+  Trash2,
   Truck
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -64,6 +66,8 @@ export default function PurchasesPage() {
   const [expenseReceipt, setExpenseReceipt] = useState<PurchaseReceipt | null>(null);
   const [returnReceipt, setReturnReceipt] = useState<PurchaseReceipt | null>(null);
   const [payReceipt, setPayReceipt] = useState<PurchaseReceipt | null>(null);
+  const [deletingReceipt, setDeletingReceipt] = useState<PurchaseReceipt | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchStats = () => {
     if (!token || !company) return;
@@ -97,6 +101,26 @@ export default function PurchasesPage() {
       .then((res) => setReceipts(res || []))
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
+  };
+
+  const handleDeleteReceipt = async () => {
+    if (!deletingReceipt || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/purchases/receipts/${deletingReceipt.id}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingReceipt(null);
+      fetchStats();
+      fetchReceipts();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении черновика' : 'Qoralamani o‘chirishda xatolik'));
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -519,11 +543,22 @@ export default function PurchasesPage() {
                           </Button>
                         </Link>
                         {r.status === 'DRAFT' && (
-                          <Link href={`/purchases/${r.id}`}>
-                            <Button size="sm" variant="secondary">
-                              {isRu ? 'Редактировать' : 'Tahrirlash'}
+                          <>
+                            <Link href={`/purchases/${r.id}`}>
+                              <Button size="sm" variant="secondary">
+                                {isRu ? 'Редактировать' : 'Tahrirlash'}
+                              </Button>
+                            </Link>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              style={{ color: '#ef4444' }}
+                              onClick={() => setDeletingReceipt(r)}
+                              title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
+                            >
+                              <Trash2 size={14} />
                             </Button>
-                          </Link>
+                          </>
                         )}
                       </div>
                     </td>
@@ -571,6 +606,41 @@ export default function PurchasesPage() {
             fetchReceipts();
           }}
         />
+      )}
+
+      {/* Delete Draft Modal */}
+      {deletingReceipt && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingReceipt(null)}
+          title={isRu ? 'Удаление черновика' : 'Qoralamani o‘chirish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить черновик накладной ${deletingReceipt.docNumber}? Это действие необратимо.`
+                : `Haqiqatan ham ${deletingReceipt.docNumber} raqamli qoralamani o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingReceipt(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteReceipt}
+                disabled={deleteLoading}
+              >
+                {deleteLoading
+                  ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...')
+                  : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

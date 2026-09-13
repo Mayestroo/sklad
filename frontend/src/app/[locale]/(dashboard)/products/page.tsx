@@ -19,6 +19,8 @@ import {
   Tag,
   CheckCircle2,
   Eye,
+  Edit2,
+  Trash2,
   RefreshCw,
   Zap,
 } from 'lucide-react';
@@ -36,6 +38,9 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -63,6 +68,25 @@ export default function ProductsPage() {
       console.error('Failed to fetch products catalog:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!deletingProduct || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/inventory/products/${deletingProduct.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingProduct(null);
+      fetchCatalogData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении товара' : 'Tovarni o‘chirishda xatolik'));
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -151,7 +175,13 @@ export default function ProductsPage() {
             <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : undefined }} />
             {isRu ? 'Обновить' : 'Yangilash'}
           </Button>
-          <Button variant="primary" onClick={() => setIsCreateOpen(true)}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingProduct(null);
+              setIsCreateOpen(true);
+            }}
+          >
             <Plus size={18} />
             {isRu ? 'Добавить товар' : 'Yangi tovar qo‘shish'}
           </Button>
@@ -390,10 +420,32 @@ export default function ProductsPage() {
 
                       {/* Actions */}
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedProduct(p)}>
-                          <Eye size={16} />
-                          {isRu ? 'Просмотр' : 'Ko‘rish'}
-                        </Button>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedProduct(p)} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
+                            <Eye size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingProduct(p);
+                              setIsCreateOpen(true);
+                            }}
+                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                            style={{ color: 'var(--color-primary-600)' }}
+                          >
+                            <Edit2 size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeletingProduct(p)}
+                            title={isRu ? 'Удалить' : 'O‘chirish'}
+                            style={{ color: '#ef4444' }}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -473,11 +525,46 @@ export default function ProductsPage() {
         </Modal>
       )}
 
-      {/* Create Product Slide-Over Drawer */}
+      {/* Delete Product Confirmation Modal */}
+      {deletingProduct && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingProduct(null)}
+          title={isRu ? 'Удалить товар?' : 'Tovarni o‘chirishni tasdiqlaysizmi?'}
+          size="sm"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить позицию «${getProductName(deletingProduct)}»? Если по ней уже есть складские партии или документы, она будет безопасно архивирована.`
+                : `Rostdan ham «${getProductName(deletingProduct)}» tovarini o‘chirmoqchimisiz? Agar tovar bo‘yicha partiyalar yoki hujjatlar bo‘lsa, u xavfsiz arxivlanadi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+              <Button variant="secondary" onClick={() => setDeletingProduct(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleDeleteProduct}
+                disabled={deleteLoading}
+                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Create / Edit Product Slide-Over Drawer */}
       {isCreateOpen && (
         <CreateProductDrawer
           isOpen={isCreateOpen}
-          onClose={() => setIsCreateOpen(false)}
+          productToEdit={editingProduct}
+          onClose={() => {
+            setIsCreateOpen(false);
+            setEditingProduct(null);
+          }}
           onSuccess={() => {
             fetchCatalogData();
           }}
@@ -486,3 +573,4 @@ export default function ProductsPage() {
     </div>
   );
 }
+

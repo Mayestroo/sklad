@@ -12,7 +12,8 @@ import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
-import { Plus, Tag, Edit3, Check } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { Plus, Tag, Edit2, Edit3, Check, Trash2 } from 'lucide-react';
 
 interface PriceList {
   id: string;
@@ -47,6 +48,18 @@ export default function PricesPage() {
   const [newPLCurrency, setNewPLCurrency] = useState('UZS');
   const [newPLDefault, setNewPLDefault] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+
+  // Edit Price List state
+  const [showEditPL, setShowEditPL] = useState(false);
+  const [editPLNameUz, setEditPLNameUz] = useState('');
+  const [editPLNameRu, setEditPLNameRu] = useState('');
+  const [editPLCurrency, setEditPLCurrency] = useState('UZS');
+  const [editPLDefault, setEditPLDefault] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Delete Price List state
+  const [deletingPL, setDeletingPL] = useState<PriceList | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Inline price editing
   const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
@@ -125,6 +138,57 @@ export default function PricesPage() {
       alert(err?.message || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
     } finally {
       setCreateLoading(false);
+    }
+  };
+
+  const handleOpenEditPL = (pl: PriceList) => {
+    setEditPLNameUz(typeof pl.name === 'object' ? (pl.name.uz || pl.name.ru || '') : pl.name || '');
+    setEditPLNameRu(typeof pl.name === 'object' ? (pl.name.ru || pl.name.uz || '') : pl.name || '');
+    setEditPLCurrency(pl.currency || 'UZS');
+    setEditPLDefault(Boolean(pl.isDefault));
+    setShowEditPL(true);
+  };
+
+  const handleSaveEditPL = async () => {
+    if (!selectedPL || !token || !company || !editPLNameUz) return;
+    setEditLoading(true);
+    try {
+      await apiFetch(`/sales/price-lists/${selectedPL.id}`, {
+        method: 'PATCH',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({
+          name: { uz: editPLNameUz, ru: editPLNameRu || editPLNameUz },
+          currency: editPLCurrency,
+          isDefault: editPLDefault,
+        }),
+      });
+      setShowEditPL(false);
+      fetchData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка обновления прайс-листа' : 'Narx jadvalini tahrirlashda xatolik'));
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDeletePL = async () => {
+    if (!deletingPL || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/sales/price-lists/${deletingPL.id}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingPL(null);
+      fetchData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка удаления прайс-листа' : 'Narx jadvalini o‘chirishda xatolik'));
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -267,13 +331,35 @@ export default function PricesPage() {
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontWeight: 600 }}>
-                  {typeof selectedPL.name === 'object' ? (selectedPL.name[locale] || selectedPL.name.ru || selectedPL.name.uz) : selectedPL.name}
-                </h3>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                  {selectedPL.currency} • {products.length} {isRu ? 'товаров' : 'ta tovar'}
-                </span>
+              <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <h3 style={{ fontWeight: 600, fontSize: 'var(--text-lg)', margin: 0 }}>
+                    {typeof selectedPL.name === 'object' ? (selectedPL.name[locale] || selectedPL.name.ru || selectedPL.name.uz) : selectedPL.name}
+                  </h3>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                    {selectedPL.currency} {selectedPL.isDefault ? (isRu ? '• Основной' : '• Asosiy') : ''} • {products.length} {isRu ? 'товаров' : 'ta tovar'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleOpenEditPL(selectedPL)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Edit2 size={14} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
+                  </Button>
+                  {!selectedPL.isDefault && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}
+                      onClick={() => setDeletingPL(selectedPL)}
+                    >
+                      <Trash2 size={14} /> {isRu ? 'Удалить' : 'O‘chirish'}
+                    </Button>
+                  )}
+                </div>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -436,6 +522,92 @@ export default function PricesPage() {
           />
         </div>
       </Drawer>
+
+      {/* Edit Price List Side Drawer Panel */}
+      <Drawer
+        isOpen={showEditPL}
+        onClose={() => setShowEditPL(false)}
+        title={isRu ? 'Редактирование прайс-листа' : 'Narx jadvalini tahrirlash'}
+        description={isRu ? 'Изменение параметров прайс-листа' : 'Narx jadvali parametrlarini o\'zgartirish'}
+        icon={<Tag size={20} />}
+        size="md"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
+            <Button variant="secondary" onClick={() => setShowEditPL(false)} disabled={editLoading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button onClick={handleSaveEditPL} disabled={editLoading || !editPLNameUz} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Check size={16} />
+              {editLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <Input
+            id="edit-pl-name-uz"
+            label={isRu ? 'Название (Узбекский) *' : 'Nomi (O\'zbekcha) *'}
+            value={editPLNameUz}
+            onChange={(e) => setEditPLNameUz(e.target.value)}
+            placeholder={isRu ? 'Напр. Розница / Оптовая' : 'Mas. Chakana / Ulgurji narxlar'}
+          />
+          <Input
+            id="edit-pl-name-ru"
+            label={isRu ? 'Название (Русский)' : 'Nomi (Ruscha)'}
+            value={editPLNameRu}
+            onChange={(e) => setEditPLNameRu(e.target.value)}
+            placeholder={isRu ? 'Напр. Розничные цены' : 'Mas. Розничные цены'}
+          />
+          <Select
+            id="edit-pl-currency"
+            label={isRu ? 'Валюта' : 'Valyuta'}
+            value={editPLCurrency}
+            onChange={(val) => setEditPLCurrency(val)}
+            options={CURRENCY_OPTIONS}
+          />
+          <Checkbox
+            id="edit-pl-is-default"
+            checked={editPLDefault}
+            onChange={(e) => setEditPLDefault(e.target.checked)}
+            label={isRu ? 'Установить как основной прайс-лист' : 'Asosiy narx jadvali sifatida belgilash'}
+          />
+        </div>
+      </Drawer>
+
+      {/* Delete Price List Modal */}
+      {deletingPL && (
+        <Modal
+          isOpen={true}
+          onClose={() => setDeletingPL(null)}
+          title={isRu ? 'Удаление прайс-листа' : 'Narx jadvalini o‘chirish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы уверены, что хотите удалить прайс-лист "${typeof deletingPL.name === 'object' ? (deletingPL.name[locale] || deletingPL.name.ru || deletingPL.name.uz) : deletingPL.name}"? Установленные в нем индивидуальные цены на товары будут удалены.`
+                : `Haqiqatan ham "${typeof deletingPL.name === 'object' ? (deletingPL.name[locale] || deletingPL.name.ru || deletingPL.name.uz) : deletingPL.name}" narx jadvalini o‘chirmoqchimisiz? Ushbu jadvalga kiritilgan maxsus tovar narxlari o‘chiriladi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingPL(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeletePL}
+                disabled={deleteLoading}
+              >
+                {deleteLoading
+                  ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...')
+                  : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
