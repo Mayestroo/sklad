@@ -694,7 +694,7 @@ export default function SalesOrdersPage() {
                             </Button>
                           )}
 
-                          {(hasPermission('sales:delete') || hasRole('ADMIN') || hasRole('SUPER_ADMIN') || hasRole('company_admin') || hasRole('MANAGER')) && (ord.status === 'NEW' || ord.status === 'PENDING_APPROVAL' || ord.status === 'CANCELLED') && (
+                          {(hasPermission('sales:delete') || hasRole('ADMIN') || hasRole('SUPER_ADMIN') || hasRole('company_admin') || hasRole('MANAGER')) && ord.status !== 'SHIPPED' && ord.status !== 'COMPLETED' && (
                             <Button
                               variant="secondary"
                               onClick={() => {

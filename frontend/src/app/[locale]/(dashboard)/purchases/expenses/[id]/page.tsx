@@ -102,11 +102,26 @@ export default function ExpenseDetailPage() {
   };
 
   const handleDeleteExpense = async () => {
-    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?')) {
+    const isPosted = expense?.status === 'POSTED';
+    const confirmMessage = isPosted
+      ? (isRu
+          ? 'Этот расход уже проведен и распределен на себестоимость товаров. При удалении он будет автоматически отменен, распределение себестоимости и долг будут откачены, после чего документ будет удален. Продолжить?'
+          : 'Ushbu xarajat tasdiqlangan va tovarlar tannarxiga taqsimlangan. O‘chirish jarayonida u avtomatik bekor qilinadi, tannarx taqsimoti va qarz orqaga qaytariladi, so‘ngra hujjat butunlay o‘chiriladi. Davom ettirasizmi?')
+      : (isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?');
+
+    if (!confirm(confirmMessage)) {
       return;
     }
     setActionLoading(true);
     try {
+      if (isPosted) {
+        await apiFetch(`/purchases/additional-expenses/${id}/cancel`, {
+          token: token || undefined,
+          tenantId: company?.id || undefined,
+          method: 'POST',
+          locale,
+        });
+      }
       await apiFetch(`/purchases/additional-expenses/${id}`, {
         token: token || undefined,
         tenantId: company?.id || undefined,
@@ -224,17 +239,15 @@ export default function ExpenseDetailPage() {
             </Button>
           )}
 
-          {(expense.status === 'DRAFT' || expense.status === 'CANCELLED') && (
-            <Button
-              variant="outline"
-              disabled={actionLoading}
-              onClick={handleDeleteExpense}
-              style={{ color: 'var(--color-danger-600)', borderColor: 'var(--color-danger-200)' }}
-            >
-              <Trash2 size={16} style={{ marginRight: '6px' }} />
-              {isRu ? 'Удалить' : 'O‘chirish'}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            disabled={actionLoading}
+            onClick={handleDeleteExpense}
+            style={{ color: 'var(--color-danger-600)', borderColor: 'var(--color-danger-200)' }}
+          >
+            <Trash2 size={16} style={{ marginRight: '6px' }} />
+            {isRu ? 'Удалить' : 'O‘chirish'}
+          </Button>
         </div>
       </div>
 

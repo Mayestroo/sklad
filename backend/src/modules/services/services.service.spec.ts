@@ -251,5 +251,69 @@ describe('ServicesService Unit Tests', () => {
         where: { id: 'act-1' },
       });
     });
+
+    it('should successfully delete a CANCELLED act', async () => {
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-1',
+        status: ServiceActStatus.CANCELLED,
+      });
+      prisma.serviceAct.delete.mockResolvedValue({ id: 'act-1' });
+
+      await service.remove(tenantId, 'act-1');
+      expect(prisma.serviceAct.delete).toHaveBeenCalledWith({
+        where: { id: 'act-1' },
+      });
+    });
+  });
+
+  describe('Unpost to Draft Lifecycle', () => {
+    it('should block unpost if paidAmount > 0', async () => {
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-1',
+        status: ServiceActStatus.POSTED,
+        paidAmount: 500000,
+      });
+
+      await expect(service.unpost(tenantId, 'act-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should safely unpost an unpaid posted act back to DRAFT', async () => {
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-1',
+        status: ServiceActStatus.POSTED,
+        paidAmount: 0,
+        totalAmount: 1000000,
+        counterpartyId,
+      });
+      prisma.financeTransaction.count.mockResolvedValue(0);
+      prisma.serviceAct.update.mockResolvedValue({
+        id: 'act-1',
+        status: ServiceActStatus.DRAFT,
+      });
+
+      const res = await service.unpost(tenantId, 'act-1');
+
+      expect(prisma.counterparty.update).toHaveBeenCalledWith({
+        where: { id: counterpartyId },
+        data: { debtBalance: { decrement: 1000000 } },
+      });
+
+      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
+        where: {
+          tenantId,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-1',
+        },
+      });
+
+      expect(prisma.serviceAct.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { status: ServiceActStatus.DRAFT },
+        }),
+      );
+      expect(res.status).toBe(ServiceActStatus.DRAFT);
+    });
   });
 });

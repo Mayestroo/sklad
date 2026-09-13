@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   XCircle,
   Edit,
+  Trash2,
   DollarSign,
   AlertCircle,
   ArrowDownRight,
@@ -86,7 +87,13 @@ export function ServiceActDetailsModal({
 
   // Handle Cancel
   const handleCancel = async () => {
-    if (!window.confirm(isRu ? 'Вы уверены, что хотите отменить этот акт?' : 'Ushbu aktni bekor qilmoqchimisiz? Kontragent qarzi va provodkalar bekor qilinadi.')) {
+    if (
+      !window.confirm(
+        isRu
+          ? 'Вы уверены, что хотите отменить этот акт? Контрагентский долг и проводки будут отменены.'
+          : 'Ushbu aktni bekor qilmoqchimisiz? Kontragent qarzi va provodkalar bekor qilinadi.'
+      )
+    ) {
       return;
     }
 
@@ -98,6 +105,58 @@ export function ServiceActDetailsModal({
       onClose();
     } catch (err: any) {
       setError(err.message || 'Bekor qilishda xatolik yuz berdi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Unpost and Edit
+  const handleUnpostAndEdit = async () => {
+    if (
+      !window.confirm(
+        isRu
+          ? 'Для редактирования проведение акта будет отменено (с возвратом проводок и задолженности). Продолжить?'
+          : 'Tahrirlash uchun akt o‘tkazmasi bekor qilinadi (qarz va provodkalar orqaga qaytariladi). Davom etasizmi?'
+      )
+    ) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch<any>(`/services/${act.id}/unpost`, { method: 'POST' });
+      onRefresh();
+      onClose();
+      onEdit(res || { ...act, status: 'DRAFT' });
+    } catch (err: any) {
+      setError(err.message || 'O‘tkazmani bekor qilishda xatolik yuz berdi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Delete from Modal
+  const handleDeleteFromModal = async () => {
+    const confirmMsg = isPosted
+      ? (isRu
+          ? 'Этот акт проведён. При удалении он будет автоматически отменён (с откатом проводок и задолженности) и удалён из базы. Продолжить?'
+          : 'Ushbu akt tasdiqlangan. O‘chirish jarayonida u avtomatik bekor qilinadi (provodkalar va qarz orqaga qaytariladi) hamda bazadan o‘chiriladi. Davom ettirasizmi?')
+      : (isRu ? 'Удалить этот акт?' : 'Ushbu aktni o‘chirishni xohlaysizmi?');
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      if (isPosted) {
+        await apiFetch(`/services/${act.id}/cancel`, { method: 'POST' });
+      }
+      await apiFetch(`/services/${act.id}`, { method: 'DELETE' });
+      onRefresh();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'O‘chirishda xatolik yuz berdi');
     } finally {
       setLoading(false);
     }
@@ -449,6 +508,30 @@ export function ServiceActDetailsModal({
                   {isRu ? 'Редактировать' : 'Tahrirlash'}
                 </Button>
               )}
+
+              {isPosted && paid === 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleUnpostAndEdit}
+                  disabled={loading}
+                  className="flex items-center gap-1.5"
+                >
+                  <Edit className="w-4 h-4" />
+                  {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
+                </Button>
+              )}
+
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleDeleteFromModal}
+                disabled={loading}
+                className="flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
             </div>
 
             <div className="flex items-center gap-2">

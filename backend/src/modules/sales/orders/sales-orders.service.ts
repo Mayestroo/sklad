@@ -582,19 +582,21 @@ export class SalesOrdersService {
     const allowedStatuses: SalesOrderStatus[] = [
       SalesOrderStatus.NEW,
       SalesOrderStatus.PENDING_APPROVAL,
+      SalesOrderStatus.ACCEPTED,
+      SalesOrderStatus.PROCESSING,
+      SalesOrderStatus.READY_FOR_SHIPMENT,
+      SalesOrderStatus.READY_TO_SHIP,
       SalesOrderStatus.CANCELLED,
     ];
 
     if (!allowedStatuses.includes(order.status)) {
       throw new BadRequestException(
-        "Faqat 'Yangi', 'Tasdiqlashda' yoki 'Bekor qilingan' statusidagi buyurtmalarni o'chirish mumkin",
+        "Faqat jo'natilmagan yoki bekor qilingan buyurtmalarni o'chirish mumkin",
       );
     }
 
     // Release stock reservations if any exist
-    await this.prisma.stockReservation.deleteMany({
-      where: { orderId: id },
-    });
+    await this.stockReservationService.releaseOrderReservations(tenantId, id);
 
     // Delete order items
     await this.prisma.salesOrderItem.deleteMany({

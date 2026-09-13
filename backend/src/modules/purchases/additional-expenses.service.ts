@@ -278,11 +278,18 @@ export class AdditionalExpensesService {
       throw new NotFoundException('Qo‘shimcha xarajat hujjati topilmadi');
     }
 
-    if (existing.status !== PurchaseDocStatus.DRAFT) {
+    if (
+      existing.status !== PurchaseDocStatus.DRAFT &&
+      existing.status !== PurchaseDocStatus.CANCELLED
+    ) {
       throw new BadRequestException(
-        'Faqat qoralama holatidagi xarajatlarni o‘chirish mumkin',
+        'Faqat qoralama yoki bekor qilingan xarajatlarni o‘chirish mumkin. Avval bekor qiling.',
       );
     }
+
+    await this.prisma.additionalExpenseItem.deleteMany({
+      where: { expenseId: id },
+    });
 
     await this.prisma.additionalExpense.delete({ where: { id } });
 

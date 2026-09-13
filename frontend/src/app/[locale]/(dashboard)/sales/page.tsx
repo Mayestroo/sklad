@@ -112,9 +112,19 @@ export default function SalesPage() {
     if (!deletingInvoice || !token || !company) return;
     setDeleteLoading(true);
     try {
+      if (deletingInvoice.status === 'POSTED') {
+        // Step 1: Unpost (reverses stock levels, batches, ledger entries, customer debt)
+        await apiFetch(`/sales/invoices/${deletingInvoice.id}/unpost`, {
+          method: 'POST',
+          token,
+          tenantId: company.id,
+          locale,
+        });
+      }
+      // Step 2: Delete invoice
       await apiFetch(`/sales/invoices/${deletingInvoice.id}`, {
         method: 'DELETE',
-        token: token || undefined,
+        token,
         tenantId: company.id,
         locale,
       });
@@ -521,7 +531,7 @@ export default function SalesPage() {
                           </Button>
                         </Link>
 
-                        <Link href={`/sales/${inv.id}`}>
+                        <Link href={`/sales/${inv.id}?edit=true`}>
                           <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
                             <Pencil size={14} />
                           </Button>
@@ -548,16 +558,14 @@ export default function SalesPage() {
                           </>
                         )}
 
-                        {(inv.status === 'DRAFT' || inv.status === 'CANCELLED') && (
-                          <Button
-                            variant="secondary"
-                            onClick={() => setDeletingInvoice(inv)}
-                            style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#ef4444' }}
-                            title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        )}
+                        <Button
+                          variant="secondary"
+                          onClick={() => setDeletingInvoice(inv)}
+                          style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#ef4444' }}
+                          title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -598,11 +606,27 @@ export default function SalesPage() {
         <Modal
           isOpen={true}
           onClose={() => setDeletingInvoice(null)}
-          title={isRu ? (deletingInvoice.status === 'CANCELLED' ? 'Удаление документа' : 'Удаление черновика') : (deletingInvoice.status === 'CANCELLED' ? 'Hujjatni o‘chirish' : 'Qoralamani o‘chirish')}
+          title={
+            deletingInvoice.status === 'POSTED'
+              ? isRu
+                ? 'Удаление проведённого документа'
+                : 'Tasdiqlangan hujjatni o‘chirish'
+              : deletingInvoice.status === 'CANCELLED'
+              ? isRu
+                ? 'Удаление отменённого документа'
+                : 'Bekor qilingan hujjatni o‘chirish'
+              : isRu
+              ? 'Удаление черновика'
+              : 'Qoralamani o‘chirish'
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
+              {deletingInvoice.status === 'POSTED'
+                ? isRu
+                  ? `Накладная продажи ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?`
+                  : `${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} raqamli sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?`
+                : isRu
                 ? `Вы действительно хотите удалить накладную ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber}? Это действие необратимо.`
                 : `Haqiqatan ham ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} raqamli sotuv hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
             </p>

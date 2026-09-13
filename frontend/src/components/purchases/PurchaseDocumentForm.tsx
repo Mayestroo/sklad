@@ -27,10 +27,13 @@ import {
   Barcode,
   Search,
   AlertCircle,
+  AlertTriangle,
+  Pencil,
   UserPlus,
   PackagePlus,
   Sparkles,
 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { PurchaseReceipt } from '@shared/types';
 import { PayPurchaseModal } from './PayPurchaseModal';
 import { AllocateExpenseModal } from './AllocateExpenseModal';
@@ -80,6 +83,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isEditRequested = searchParams?.get('edit') === 'true';
 
   // Dropdowns state
   const [counterparties, setCounterparties] = useState<CounterpartyOption[]>([]);
@@ -504,11 +509,46 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     }
   };
 
-  // Action Handler: Delete Receipt
-  const handleDeleteDraft = async () => {
-    if (!receiptId || !token || !company || mode !== 'edit' || (docStatus !== 'DRAFT' && docStatus !== 'CANCELLED')) return;
+  // Action Handler: Unpost to enable full editing
+  const handleUnpostToEdit = async () => {
+    if (!receiptId || !token || !company) return;
     const confirmed = window.confirm(
       isRu
+        ? 'Для редактирования проведение документа будет отменено (перевод в черновик). После внесения изменений вы сможете провести его снова. Продолжить?'
+        : 'Hujjatni tahrirlash uchun uning tasdiqlanishi bekor qilinadi (qoralamaga qaytadi). O‘zgartirishlarni kiritgach, qayta tasdiqlashingiz mumkin. Davom etasizmi?'
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const unposted = await apiFetch<PurchaseReceipt>(`/purchases/receipts/${receiptId}/unpost`, {
+        method: 'POST',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+
+      setDocStatus('DRAFT');
+      if (unposted) setCurrentReceiptData(unposted);
+      setIsDirty(true);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : undefined;
+      setError(errMsg || (isRu ? 'Ошибка отмены проведения' : 'Tasdiqni bekor qilishda xatolik yuz berdi'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Action Handler: Delete Receipt (Draft, Cancelled, or Posted with unpost)
+  const handleDeleteReceipt = async () => {
+    if (!receiptId || !token || !company || mode !== 'edit') return;
+    const confirmed = window.confirm(
+      docStatus === 'POSTED'
+        ? isRu
+          ? 'Накладная уже проведена. Удаление автоматически отменит проводку, скорректирует складские остатки, партии и задолженность перед поставщиком, после чего удалит документ. Вы уверены?'
+          : 'Hujjat tasdiqlangan (o‘tkazilgan). O‘chirish ombor qoldiqlari, partiyalar va yetkazib beruvchi qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?'
+        : isRu
         ? 'Вы уверены, что хотите удалить этот документ?'
         : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?'
     );
@@ -517,9 +557,17 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     setLoading(true);
     setError(null);
     try {
+      if (docStatus === 'POSTED') {
+        await apiFetch(`/purchases/receipts/${receiptId}/unpost`, {
+          method: 'POST',
+          token,
+          tenantId: company.id,
+          locale,
+        });
+      }
       await apiFetch(`/purchases/receipts/${receiptId}`, {
         method: 'DELETE',
-        token: token || undefined,
+        token,
         tenantId: company.id,
         locale,
       });
@@ -535,6 +583,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       setLoading(false);
     }
   };
+
+  // Auto prompt unpost when edit parameter is present
+  useEffect(() => {
+    if (isEditRequested && docStatus === 'POSTED' && receiptId && !loading) {
+      handleUnpostToEdit();
+    }
+  }, [isEditRequested]);
 
   // Back navigation guard
   const handleBackNavigation = () => {
@@ -735,7 +790,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               {mode === 'edit' && receiptId && (
                 <Button
                   variant="danger"
-                  onClick={handleDeleteDraft}
+                  onClick={handleDeleteReceipt}
                   disabled={loading}
                   style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
@@ -748,7 +803,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           {docStatus === 'CANCELLED' && mode === 'edit' && receiptId && (
             <Button
               variant="danger"
-              onClick={handleDeleteDraft}
+              onClick={handleDeleteReceipt}
               disabled={loading}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
@@ -758,6 +813,15 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
           {docStatus === 'POSTED' && (
             <>
+              <Button
+                variant="secondary"
+                onClick={handleUnpostToEdit}
+                disabled={loading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#d97706', borderColor: '#f59e0b', fontWeight: 600 }}
+              >
+                <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
+              </Button>
+
               <Button
                 variant="secondary"
                 onClick={handleUnpost}
@@ -797,6 +861,15 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               >
                 <RotateCcw size={16} /> {isRu ? 'Возврат' : 'Qaytarish'}
               </Button>
+
+              <Button
+                variant="danger"
+                onClick={handleDeleteReceipt}
+                disabled={loading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Trash2 size={16} /> {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
             </>
           )}
 
@@ -809,6 +882,33 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           </Button>
         </div>
       </div>
+
+      {/* Posted Document Locked Banner */}
+      {docStatus === 'POSTED' && (
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: '#f59e0b', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertTriangle size={20} color="#f59e0b" />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+                {isRu ? 'Документ проведён и заблокирован от изменений' : 'Hujjat tasdiqlangan va o‘zgarishlardan qulflangan'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                {isRu
+                  ? 'Чтобы изменить товары, количество, цены или поставщика, переведите документ в режим редактирования.'
+                  : 'Tovar, miqdor, narx yoki yetkazib beruvchini o‘zgartirish uchun hujjatni tahrirlash rejimiga o‘tkazing.'}
+              </div>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleUnpostToEdit}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f59e0b', color: '#fff', fontWeight: 600 }}
+          >
+            <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
+          </Button>
+        </Card>
+      )}
 
       {/* Error notification banner */}
       {error && (

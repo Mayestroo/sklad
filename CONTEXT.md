@@ -58,6 +58,14 @@ _Avoid_: Over-return, negative batch balance, sold-item return
 The safety rule disallowing the unposting or cancellation of a posted purchase receipt if linked payments exist or if warehouse stock has dropped below received quantities due to sales.
 _Avoid_: Document unlock, forced unpost, stock override
 
+**Unpost-to-Edit Workflow (Purchases)**:
+The operational procedure by which a posted purchase receipt is safely unposted back to `DRAFT` (reversing FIFO batches, stock intake, and supplier debt) to permit line-item, quantity, and price modifications, followed by re-posting.
+_Avoid_: In-place posted edit, unjournaled overwrite
+
+**Atomic Posted Deletion (Purchases)**:
+The coordinated deletion action that executes an unposting reversal before purging the document record, guarded strictly by the Rollback Invariant.
+_Avoid_: Orphan batch deletion, direct cascade drop
+
 **Quick-Add Modal**:
 An inline creation dialog enabling operators to create new products, categories, or counterparties directly within the purchase receipt creation workflow without leaving the page.
 _Avoid_: Context switch, background registration, external entity setup
@@ -142,6 +150,14 @@ _Avoid_: Bad pile, junk bin, broken stock
 **Sales Rollback Invariant**:
 The safety rule disallowing the unposting or cancellation of a posted sales invoice if linked finance payments exist or if sales returns have been registered against it.
 _Avoid_: Force cancel, cash bypass, invoice unlock
+
+**Unpost-to-Edit Workflow (Sales)**:
+The operational procedure by which a posted sales invoice is safely unposted back to `DRAFT` (reversing batch consumption, stock release, and customer debt) to permit line-item corrections, followed by re-posting.
+_Avoid_: In-place sales edit, ledger bypass
+
+**Atomic Posted Deletion (Sales)**:
+The coordinated deletion action that executes an unposting reversal before purging the sales invoice record, guarded strictly by the Sales Rollback Invariant.
+_Avoid_: Phantom stock deletion, direct record drop
 
 ### Counterparties & Balances
 

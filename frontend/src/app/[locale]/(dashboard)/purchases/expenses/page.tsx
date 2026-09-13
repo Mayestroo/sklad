@@ -87,13 +87,28 @@ export default function ExpensesPage() {
     fetchExpenses();
   }, [token, company, locale, search, statusFilter, typeFilter, page]);
 
-  const handleDeleteDraft = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteDraft = async (item: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?')) {
+    const isPosted = item.status === 'POSTED';
+    const confirmMessage = isPosted
+      ? (isRu
+          ? 'Этот расход уже проведен и распределен на себестоимость товаров. При удалении он будет автоматически отменен, распределение себестоимости и долг будут откачены, после чего документ будет удален. Продолжить?'
+          : 'Ushbu xarajat tasdiqlangan va tovarlar tannarxiga taqsimlangan. O‘chirish jarayonida u avtomatik bekor qilinadi, tannarx taqsimoti va qarz orqaga qaytariladi, so‘ngra hujjat butunlay o‘chiriladi. Davom ettirasizmi?')
+      : (isRu ? 'Вы уверены, что хотите удалить этот документ расхода?' : 'Ushbu xarajat hujjatini o‘chirishni xohlaysizmi?');
+
+    if (!confirm(confirmMessage)) {
       return;
     }
     try {
-      await apiFetch(`/purchases/additional-expenses/${id}`, {
+      if (isPosted) {
+        await apiFetch(`/purchases/additional-expenses/${item.id}/cancel`, {
+          token: token || undefined,
+          tenantId: company?.id || undefined,
+          method: 'POST',
+          locale,
+        });
+      }
+      await apiFetch(`/purchases/additional-expenses/${item.id}`, {
         token: token || undefined,
         tenantId: company?.id || undefined,
         method: 'DELETE',
@@ -418,17 +433,15 @@ export default function ExpensesPage() {
                           >
                             <Pencil size={14} />
                           </Button>
-                          {(item.status === 'DRAFT' || item.status === 'CANCELLED') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => handleDeleteDraft(item.id, e)}
-                              style={{ color: 'var(--color-danger-500)', padding: '6px' }}
-                              title={isRu ? 'Удалить' : 'O‘chirish'}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleDeleteDraft(item, e)}
+                            style={{ color: 'var(--color-danger-500)', padding: '6px' }}
+                            title={isRu ? 'Удалить' : 'O‘chirish'}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
                         </div>
                       </td>
                     </tr>

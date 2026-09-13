@@ -108,9 +108,19 @@ export default function PurchasesPage() {
     if (!deletingReceipt || !token || !company) return;
     setDeleteLoading(true);
     try {
+      if (deletingReceipt.status === 'POSTED') {
+        // Step 1: Unpost (reverses stock levels, batches, ledger entries, supplier debt)
+        await apiFetch(`/purchases/receipts/${deletingReceipt.id}/unpost`, {
+          method: 'POST',
+          token,
+          tenantId: company.id,
+          locale,
+        });
+      }
+      // Step 2: Delete receipt
       await apiFetch(`/purchases/receipts/${deletingReceipt.id}`, {
         method: 'DELETE',
-        token: token || undefined,
+        token,
         tenantId: company.id,
         locale,
       });
@@ -543,22 +553,20 @@ export default function PurchasesPage() {
                             <Eye size={14} />
                           </Button>
                         </Link>
-                        <Link href={`/purchases/${r.id}`}>
+                        <Link href={`/purchases/${r.id}?edit=true`}>
                           <Button size="sm" variant="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
                             <Pencil size={14} />
                           </Button>
                         </Link>
-                        {(r.status === 'DRAFT' || r.status === 'CANCELLED') && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            style={{ color: '#ef4444', display: 'flex', alignItems: 'center' }}
-                            onClick={() => setDeletingReceipt(r)}
-                            title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          style={{ color: '#ef4444', display: 'flex', alignItems: 'center' }}
+                          onClick={() => setDeletingReceipt(r)}
+                          title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -612,11 +620,27 @@ export default function PurchasesPage() {
         <Modal
           isOpen={true}
           onClose={() => setDeletingReceipt(null)}
-          title={isRu ? (deletingReceipt.status === 'CANCELLED' ? 'Удаление документа' : 'Удаление черновика') : (deletingReceipt.status === 'CANCELLED' ? 'Hujjatni o‘chirish' : 'Qoralamani o‘chirish')}
+          title={
+            deletingReceipt.status === 'POSTED'
+              ? isRu
+                ? 'Удаление проведённого документа'
+                : 'Tasdiqlangan hujjatni o‘chirish'
+              : deletingReceipt.status === 'CANCELLED'
+              ? isRu
+                ? 'Удаление отменённого документа'
+                : 'Bekor qilingan hujjatni o‘chirish'
+              : isRu
+              ? 'Удаление черновика'
+              : 'Qoralamani o‘chirish'
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
+              {deletingReceipt.status === 'POSTED'
+                ? isRu
+                  ? `Накладная ${deletingReceipt.docNumber} уже проведена. Удаление автоматически отменит проводку, скорректирует складские остатки, партии и задолженность перед поставщиком, после чего удалит документ. Вы уверены?`
+                  : `${deletingReceipt.docNumber} raqamli xarid hujjati tasdiqlangan (o‘tkazilgan). O‘chirish ombor qoldiqlari, partiyalar va yetkazib beruvchi qarzini avtomatik bekor qilib, hujjatni butunlay o‘chiradi. Davom etasizmi?`
+                : isRu
                 ? `Вы действительно хотите удалить накладную ${deletingReceipt.docNumber}? Это действие необратимо.`
                 : `Haqiqatan ham ${deletingReceipt.docNumber} raqamli xarid hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
             </p>
@@ -634,8 +658,12 @@ export default function PurchasesPage() {
                 disabled={deleteLoading}
               >
                 {deleteLoading
-                  ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...')
-                  : (isRu ? 'Удалить' : 'O‘chirish')}
+                  ? isRu
+                    ? 'Удаление...'
+                    : 'O‘chirilmoqda...'
+                  : isRu
+                  ? 'Удалить'
+                  : 'O‘chirish'}
               </Button>
             </div>
           </div>

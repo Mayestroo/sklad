@@ -440,7 +440,73 @@ export class ServicesService {
   }
 
   /**
-   * Delete service act (DRAFT only)
+   * Unpost service act (POSTED -> DRAFT)
+   * Reverses counterparty debt and deletes linked journal entries
+   * Service Rollback Invariant: Blocks unpost if payments are attached
+   */
+  async unpost(tenantId: string, id: string) {
+    const act = await this.prisma.serviceAct.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!act) {
+      throw new NotFoundException('Xizmatlar dalolatnomasi topilmadi');
+    }
+
+    if (act.status !== ServiceActStatus.POSTED) {
+      throw new BadRequestException('Faqat tasdiqlangan (POSTED) akt o‘tkazmasini bekor qilish mumkin');
+    }
+
+    // Check Rollback Invariant: Cannot unpost if any payments were received/made
+    if (Number(act.paidAmount) > 0) {
+      throw new BadRequestException(
+        "To'lov bog'langan xizmat aktini bekor qilib bo'lmaydi. Avval Moliya modulidagi to'lovni bekor qiling.",
+      );
+    }
+
+    const linkedTxs = await this.prisma.financeTransaction.count({
+      where: {
+        tenantId,
+        sourceDocType: 'ServiceAct',
+        sourceDocId: id,
+        isDeleted: false,
+      },
+    });
+
+    if (linkedTxs > 0) {
+      throw new BadRequestException(
+        "Moliya operatsiyasi mavjud bo'lgan xizmat aktini bekor qilib bo'lmaydi.",
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // Reverse counterparty debt
+      if (Number(act.totalAmount) > 0) {
+        await tx.counterparty.update({
+          where: { id: act.counterpartyId },
+          data: { debtBalance: { decrement: act.totalAmount } },
+        });
+      }
+
+      // Delete linked BHMS journal entry
+      await tx.journalEntry.deleteMany({
+        where: {
+          tenantId,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: id,
+        },
+      });
+
+      return tx.serviceAct.update({
+        where: { id },
+        data: { status: ServiceActStatus.DRAFT },
+        include: { counterparty: true, items: true },
+      });
+    });
+  }
+
+  /**
+   * Delete service act (DRAFT or CANCELLED)
    */
   async remove(tenantId: string, id: string) {
     const act = await this.prisma.serviceAct.findFirst({
@@ -451,14 +517,23 @@ export class ServicesService {
       throw new NotFoundException('Xizmatlar dalolatnomasi topilmadi');
     }
 
-    if (act.status !== ServiceActStatus.DRAFT) {
+    if (
+      act.status !== ServiceActStatus.DRAFT &&
+      act.status !== ServiceActStatus.CANCELLED
+    ) {
       throw new BadRequestException(
-        "Faqat qoralama (DRAFT) holatidagi aktni o'chirish mumkin. Tasdiqlangan aktni bekor qiling.",
+        "Faqat qoralama (DRAFT) yoki bekor qilingan (CANCELLED) holatidagi aktni o'chirish mumkin. Avval bekor qiling yoki qoralamaga qaytaring.",
       );
     }
 
-    return this.prisma.serviceAct.delete({
-      where: { id },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.serviceActItem.deleteMany({
+        where: { actId: id },
+      });
+
+      return tx.serviceAct.delete({
+        where: { id },
+      });
     });
   }
 

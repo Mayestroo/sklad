@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useRouter } from '@/i18n/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -25,6 +26,7 @@ import {
   Search,
   AlertCircle,
   AlertTriangle,
+  Pencil,
   PackagePlus,
   TrendingUp,
 } from 'lucide-react';
@@ -80,6 +82,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isEditRequested = searchParams?.get('edit') === 'true';
 
   const isPriceOverrideAllowed =
     hasPermission('sales:override_price') ||
@@ -608,12 +612,60 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
   };
 
-  const handleDeleteDraft = async () => {
-    if (!invoiceId || mode !== 'edit' || (docStatus !== 'DRAFT' && docStatus !== 'CANCELLED')) return;
-    if (!confirm(isRu ? 'Вы уверены, что хотите удалить этот документ?' : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?')) return;
+  const handleUnpostToEdit = async () => {
+    if (!invoiceId) return;
+    const confirmed = window.confirm(
+      isRu
+        ? 'Для редактирования проведение документа будет отменено (перевод в черновик). После внесения изменений вы сможете провести его снова. Продолжить?'
+        : 'Hujjatni tahrirlash uchun uning tasdiqlanishi bekor qilinadi (qoralamaga qaytadi). O‘zgartirishlarni kiritgach, qayta tasdiqlashingiz mumkin. Davom etasizmi?'
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch<SalesInvoice>(`/sales/invoices/${invoiceId}/unpost`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
+      });
+      if (res) {
+        setDocStatus('DRAFT');
+        setCurrentInvoiceData(res);
+        setIsDirty(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!invoiceId || mode !== 'edit') return;
+    const confirmed = window.confirm(
+      docStatus === 'POSTED'
+        ? isRu
+          ? 'Накладная продажи уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?'
+          : 'Sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?'
+        : isRu
+        ? 'Вы уверены, что хотите удалить этот документ?'
+        : 'Ushbu hujjatni o‘chirishga ishonchingiz komilmi?'
+    );
+    if (!confirmed) return;
 
     setLoading(true);
     try {
+      if (docStatus === 'POSTED') {
+        await apiFetch(`/sales/invoices/${invoiceId}/unpost`, {
+          method: 'POST',
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
+        });
+      }
       await apiFetch(`/sales/invoices/${invoiceId}`, {
         method: 'DELETE',
         token: token || undefined,
@@ -628,6 +680,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       setLoading(false);
     }
   };
+
+  // Auto prompt unpost when edit parameter is present
+  useEffect(() => {
+    if (isEditRequested && docStatus === 'POSTED' && invoiceId && !loading) {
+      handleUnpostToEdit();
+    }
+  }, [isEditRequested]);
 
   const handleBackNavigation = () => {
     if (isDirty) {
@@ -761,7 +820,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               {mode === 'edit' && invoiceId && (
                 <Button
                   variant="danger"
-                  onClick={handleDeleteDraft}
+                  onClick={handleDeleteInvoice}
                   disabled={loading}
                   style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
@@ -774,7 +833,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           {docStatus === 'CANCELLED' && mode === 'edit' && invoiceId && (
             <Button
               variant="danger"
-              onClick={handleDeleteDraft}
+              onClick={handleDeleteInvoice}
               disabled={loading}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
@@ -784,6 +843,15 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
           {docStatus === 'POSTED' && (
             <>
+              <Button
+                variant="secondary"
+                onClick={handleUnpostToEdit}
+                disabled={loading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#d97706', borderColor: '#f59e0b', fontWeight: 600 }}
+              >
+                <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
+              </Button>
+
               <Button
                 variant="secondary"
                 onClick={handleUnpost}
@@ -815,6 +883,15 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               >
                 <RotateCcw size={16} /> {isRu ? 'Возврат' : 'Qaytarish'}
               </Button>
+
+              <Button
+                variant="danger"
+                onClick={handleDeleteInvoice}
+                disabled={loading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Trash2 size={16} /> {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
             </>
           )}
 
@@ -827,6 +904,33 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           </Button>
         </div>
       </div>
+
+      {/* Posted Document Locked Banner */}
+      {docStatus === 'POSTED' && (
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: '#f59e0b', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertTriangle size={20} color="#f59e0b" />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+                {isRu ? 'Накладная проведена и заблокирована от изменений' : 'Sotuv hujjati tasdiqlangan va o‘zgarishlardan qulflangan'}
+              </div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                {isRu
+                  ? 'Чтобы изменить товары, количество, цены или покупателя, переведите документ в режим редактирования.'
+                  : 'Tovar, miqdor, narx yoki xaridorni o‘zgartirish uchun hujjatni tahrirlash rejimiga o‘tkazing.'}
+              </div>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleUnpostToEdit}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f59e0b', color: '#fff', fontWeight: 600 }}
+          >
+            <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
+          </Button>
+        </Card>
+      )}
 
       {/* Error notification banner */}
       {error && (

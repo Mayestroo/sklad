@@ -108,14 +108,48 @@ export default function ServicesPage() {
     }
   };
 
-  const handleDeleteDraft = async (id: string, e: React.MouseEvent) => {
+  const handleEditAct = async (act: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (act.status === 'POSTED') {
+      const confirmUnpost = window.confirm(
+        isRu
+          ? 'Этот акт проведён. Для редактирования его проведение будет отменено (с возвратом проводок и задолженности) и он вернётся в черновик. Продолжить?'
+          : 'Ushbu akt tasdiqlangan. Tahrirlash uchun uning o‘tkazmasi bekor qilinadi (provodkalar va qarz orqaga qaytariladi) va qoralama holatiga qaytadi. Davom etasizmi?'
+      );
+      if (!confirmUnpost) return;
+
+      try {
+        const unposted = await apiFetch<any>(`/services/${act.id}/unpost`, { method: 'POST' });
+        await fetchActs();
+        setEditingAct(unposted || { ...act, status: 'DRAFT' });
+        setIsDrawerOpen(true);
+      } catch (err: any) {
+        alert(err.message || (isRu ? 'Ошибка отмены проведения' : 'O‘tkazmani bekor qilishda xatolik'));
+      }
+    } else {
+      setEditingAct(act);
+      setIsDrawerOpen(true);
+    }
+  };
+
+  const handleDeleteAct = async (act: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(isRu ? 'Удалить этот черновик?' : 'Ushbu qoralama aktni o\'chirmoqchimisiz?')) {
+    const isPosted = act.status === 'POSTED';
+    const confirmMessage = isPosted
+      ? (isRu
+          ? 'Этот акт проведён. При удалении он будет автоматически отменён (с откатом проводок и задолженности) и удалён из базы. Продолжить?'
+          : 'Ushbu akt tasdiqlangan. O‘chirish jarayonida u avtomatik bekor qilinadi (provodkalar va qarz orqaga qaytariladi) hamda bazadan o‘chiriladi. Davom ettirasizmi?')
+      : (isRu ? 'Удалить этот акт?' : 'Ushbu aktni o‘chirishni xohlaysizmi?');
+
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
     try {
-      await apiFetch(`/services/${id}`, { method: 'DELETE' });
+      if (isPosted) {
+        await apiFetch(`/services/${act.id}/cancel`, { method: 'POST' });
+      }
+      await apiFetch(`/services/${act.id}`, { method: 'DELETE' });
       fetchActs();
     } catch (err: any) {
       alert(err.message || 'O\'chirishda xatolik yuz berdi');
@@ -417,26 +451,22 @@ export default function ServicesPage() {
                             <Printer className="w-4 h-4" />
                           </button>
 
-                          {isDraft && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEdit(act)}
-                                className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800"
-                                title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => handleDeleteDraft(act.id, e)}
-                                className="p-1.5 rounded hover:bg-red-50 text-red-500 hover:text-red-700"
-                                title={isRu ? 'Удалить' : 'O\'chirish'}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleEditAct(act, e)}
+                            className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800"
+                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteAct(act, e)}
+                            className="p-1.5 rounded hover:bg-red-50 text-red-500 hover:text-red-700"
+                            title={isRu ? 'Удалить' : 'O\'chirish'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>

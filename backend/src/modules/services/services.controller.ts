@@ -87,6 +87,15 @@ export class ServicesController {
     return this.servicesService.cancel(tenantId, id);
   }
 
+  @Post(':id/unpost')
+  @HttpCode(HttpStatus.OK)
+  async unpost(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.servicesService.unpost(tenantId, id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
