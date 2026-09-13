@@ -22,6 +22,7 @@ import {
   Eye,
   Printer,
   Trash2,
+  Edit2,
   Filter,
 } from 'lucide-react';
 
@@ -417,14 +418,24 @@ export default function ServicesPage() {
                           </button>
 
                           {isDraft && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleDeleteDraft(act.id, e)}
-                              className="p-1.5 rounded hover:bg-red-50 text-red-500 hover:text-red-700"
-                              title={isRu ? 'Удалить' : 'O\'chirish'}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEdit(act)}
+                                className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800"
+                                title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteDraft(act.id, e)}
+                                className="p-1.5 rounded hover:bg-red-50 text-red-500 hover:text-red-700"
+                                title={isRu ? 'Удалить' : 'O\'chirish'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>

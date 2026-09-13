@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { ArrowRightLeft, Send, CheckCircle, Plus, Warehouse, Package } from 'lucide-react';
+import { ArrowRightLeft, Send, CheckCircle, Plus, Warehouse, Package, Trash2 } from 'lucide-react';
 import { StockTransfer, Product } from '@shared/types';
 
 export default function StockTransfersPage() {
@@ -33,6 +33,31 @@ export default function StockTransfersPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [items, setItems] = useState<{ productId: string; productName: string; quantity: number }[]>([]);
+
+  // Delete modal state
+  const [deleteConfirmTransfer, setDeleteConfirmTransfer] = useState<StockTransfer | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteTransfer = async () => {
+    if (!token || !company || !deleteConfirmTransfer) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await apiFetch(`/inventory/transfers/${deleteConfirmTransfer.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeleteConfirmTransfer(null);
+      fetchTransfers();
+    } catch (err: any) {
+      setDeleteError(err.message || (isRu ? 'Ошибка удаления перемещения' : "O'chirishda xatolik"));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const fetchTransfers = async () => {
     if (!token || !company) return;
@@ -221,9 +246,23 @@ export default function StockTransfersPage() {
                     <td style={{ padding: '12px' }}>{getStatusBadge(tr.status)}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
                       {tr.status === 'DRAFT' && (
-                        <Button size="sm" variant="primary" onClick={() => handleShip(tr.id)}>
-                          <Send size={14} /> 1. {isRu ? 'Отправить (Ship)' : 'Jo‘natish (Ship)'}
-                        </Button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <Button size="sm" variant="primary" onClick={() => handleShip(tr.id)}>
+                            <Send size={14} /> 1. {isRu ? 'Отправить (Ship)' : 'Jo‘natish (Ship)'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDeleteConfirmTransfer(tr);
+                              setDeleteError(null);
+                            }}
+                            style={{ color: '#ef4444', padding: '4px 8px' }}
+                            title={isRu ? 'Удалить перемещение' : "O'chirish"}
+                          >
+                            <Trash2 size={15} />
+                          </Button>
+                        </div>
                       )}
                       {tr.status === 'IN_TRANSIT' && (
                         <Button size="sm" variant="primary" onClick={() => handleReceive(tr.id)} style={{ backgroundColor: 'var(--color-success-600)' }}>
@@ -299,6 +338,42 @@ export default function StockTransfersPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmTransfer && (
+        <Modal
+          isOpen={Boolean(deleteConfirmTransfer)}
+          onClose={() => setDeleteConfirmTransfer(null)}
+          title={isRu ? 'Удалить перемещение?' : "O'tkazmani o'chirish?"}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {deleteError && (
+              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
+                {deleteError}
+              </div>
+            )}
+
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              {isRu
+                ? `Вы уверены, что хотите удалить перемещение ${deleteConfirmTransfer.transferNumber}?`
+                : `Haqiqatan ham ${deleteConfirmTransfer.transferNumber} raqamli qoralama o'tkazmani o'chirmoqchimisiz?`}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+              <Button variant="secondary" onClick={() => setDeleteConfirmTransfer(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                onClick={handleDeleteTransfer}
+                disabled={deleteLoading}
+                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

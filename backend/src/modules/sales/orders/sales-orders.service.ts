@@ -545,6 +545,80 @@ export class SalesOrdersService {
     return this.enrichOrder(updated);
   }
 
+  // ─── DELETE (only in NEW, PENDING_APPROVAL, or CANCELLED) ─────
+
+  async delete(tenantId: string, userId: string, id: string) {
+    const order = await this.prisma.salesOrder.findFirst({
+      where: { id, tenantId },
+      include: {
+        salesInvoices: { select: { id: true, invoiceNumber: true } },
+        productionOrders: { select: { id: true } },
+        payments: { select: { id: true } },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Buyurtma topilmadi');
+    }
+
+    if (order.salesInvoices.length > 0) {
+      throw new BadRequestException(
+        "Ushbu buyurtma bo'yicha sotuv fakturasi chiqarilgan, uni o'chirish mumkin emas",
+      );
+    }
+
+    if (order.payments.length > 0) {
+      throw new BadRequestException(
+        "Ushbu buyurtma bo'yicha to'lovlar kiritilgan, uni o'chirish mumkin emas",
+      );
+    }
+
+    if (order.productionOrders.length > 0) {
+      throw new BadRequestException(
+        "Ushbu buyurtma bo'yicha ishlab chiqarish topshiriqlari mavjud, uni o'chirish mumkin emas",
+      );
+    }
+
+    const allowedStatuses: SalesOrderStatus[] = [
+      SalesOrderStatus.NEW,
+      SalesOrderStatus.PENDING_APPROVAL,
+      SalesOrderStatus.CANCELLED,
+    ];
+
+    if (!allowedStatuses.includes(order.status)) {
+      throw new BadRequestException(
+        "Faqat 'Yangi', 'Tasdiqlashda' yoki 'Bekor qilingan' statusidagi buyurtmalarni o'chirish mumkin",
+      );
+    }
+
+    // Release stock reservations if any exist
+    await this.prisma.stockReservation.deleteMany({
+      where: { orderId: id },
+    });
+
+    // Delete order items
+    await this.prisma.salesOrderItem.deleteMany({
+      where: { orderId: id },
+    });
+
+    await this.prisma.salesOrder.delete({
+      where: { id },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        entityType: 'SalesOrder',
+        entityId: id,
+        action: 'DELETE',
+        oldValue: { orderNumber: order.orderNumber, status: order.status },
+      },
+    });
+
+    return { success: true, message: "Buyurtma muvaffaqiyatli o'chirildi" };
+  }
+
   // ─── STATUS TRANSITIONS ────────────────────────────────────────
 
   async transition(

@@ -202,6 +202,15 @@ export class PurchasesController {
     return this.purchasesService.cancelReturn(tenantId, user?.id, id);
   }
 
+  @Delete('returns/:id')
+  @RequirePermissions('inventory:delete')
+  async deleteReturn(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.purchasesService.deleteReturn(tenantId, id);
+  }
+
   // ─── SUPPLIER PROFILE & HISTORY ───────────────────────────────
 
   @Get('suppliers/:id')

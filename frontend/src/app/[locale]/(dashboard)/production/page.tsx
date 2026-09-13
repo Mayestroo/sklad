@@ -19,6 +19,8 @@ import {
   AlertCircle,
   FileText,
   Layers,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 
 interface ProductionOrder {
@@ -71,6 +73,16 @@ export default function ProductionPage() {
   const [newQty, setNewQty] = useState('');
   const [newCost, setNewCost] = useState('');
 
+  // Edit State
+  const [editingOrder, setEditingOrder] = useState<ProductionOrder | null>(null);
+  const [editProduct, setEditProduct] = useState('');
+  const [editQty, setEditQty] = useState('');
+  const [editCost, setEditCost] = useState('');
+  const [editStatus, setEditStatus] = useState<ProductionOrder['status']>('IN_PROGRESS');
+
+  // Delete State
+  const [deletingOrder, setDeletingOrder] = useState<ProductionOrder | null>(null);
+
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct || !newQty) return;
@@ -93,6 +105,38 @@ export default function ProductionPage() {
     setNewProduct('');
     setNewQty('');
     setNewCost('');
+  };
+
+  const handleOpenEdit = (ord: ProductionOrder) => {
+    setEditingOrder(ord);
+    setEditProduct(ord.productName);
+    setEditQty(String(ord.quantity));
+    setEditCost(String(ord.estimatedCost));
+    setEditStatus(ord.status);
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder || !editProduct || !editQty) return;
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === editingOrder.id
+          ? {
+              ...o,
+              productName: editProduct,
+              quantity: Number(editQty),
+              estimatedCost: Number(editCost) || o.estimatedCost,
+              status: editStatus,
+            }
+          : o,
+      ),
+    );
+    setEditingOrder(null);
+  };
+
+  const handleDeleteOrder = (id: string) => {
+    setOrders((prev) => prev.filter((o) => o.id !== id));
+    setDeletingOrder(null);
   };
 
   const getStatusBadge = (status: ProductionOrder['status']) => {
@@ -181,6 +225,7 @@ export default function ProductionPage() {
               <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата начала' : 'Boshlanish Sanasi'}</th>
               <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата окончания' : 'Tugash Sanasi'}</th>
               <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holat'}</th>
+              <th style={{ padding: '12px 16px', textAlign: 'right' }}>{isRu ? 'Действия' : 'Amallar'}</th>
             </tr>
           </thead>
           <tbody>
@@ -193,6 +238,28 @@ export default function ProductionPage() {
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{formatDate(ord.startDate, locale)}</td>
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{formatDate(ord.targetDate, locale)}</td>
                 <td style={{ padding: '12px 16px' }}>{getStatusBadge(ord.status)}</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleOpenEdit(ord)}
+                      title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                      style={{ padding: '4px 8px' }}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDeletingOrder(ord)}
+                      title={isRu ? 'Удалить' : "O'chirish"}
+                      style={{ color: '#ef4444', padding: '4px 8px' }}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -230,6 +297,79 @@ export default function ProductionPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Edit Order Modal */}
+      {editingOrder && (
+        <Modal
+          isOpen={Boolean(editingOrder)}
+          onClose={() => setEditingOrder(null)}
+          title={`${isRu ? 'Редактировать заказ' : 'Buyurtmani tahrirlash'} ${editingOrder.orderNumber}`}
+        >
+          <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <Input
+              label={isRu ? 'Наименование производимого товара' : 'Chiqariladigan Mahsulot Nomi'}
+              value={editProduct}
+              onChange={(e) => setEditProduct(e.target.value)}
+              required
+            />
+            <Input
+              label={isRu ? 'Количество' : 'Miqdor'}
+              type="number"
+              value={editQty}
+              onChange={(e) => setEditQty(e.target.value)}
+              required
+            />
+            <Input
+              label={isRu ? 'Плановая себестоимость (UZS)' : 'Reja Tan Narxi (UZS)'}
+              type="number"
+              value={editCost}
+              onChange={(e) => setEditCost(e.target.value)}
+            />
+            <Select
+              label={isRu ? 'Статус заказа' : 'Buyurtma holati'}
+              options={[
+                { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+                { value: 'IN_PROGRESS', label: isRu ? 'В процессе' : 'Jarayonda' },
+                { value: 'COMPLETED', label: isRu ? 'Выполнено' : 'Bajarildi' },
+                { value: 'CANCELLED', label: isRu ? 'Отменено' : 'Bekor qilingan' },
+              ]}
+              value={editStatus}
+              onChange={(val) => setEditStatus(val as any)}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+              <Button type="button" variant="outline" onClick={() => setEditingOrder(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button type="submit" variant="primary">{isRu ? 'Сохранить изменения' : 'O‘zgarishlarni saqlash'}</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingOrder && (
+        <Modal
+          isOpen={Boolean(deletingOrder)}
+          onClose={() => setDeletingOrder(null)}
+          title={isRu ? 'Удалить производственный заказ?' : 'Buyurtmani o‘chirish?'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              {isRu
+                ? `Вы уверены, что хотите удалить производственный заказ ${deletingOrder.orderNumber} (${deletingOrder.productName})?`
+                : `Haqiqatan ham ${deletingOrder.orderNumber} raqamli ishlab chiqarish buyurtmasini o‘chirmoqchimisiz?`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <Button type="button" variant="outline" onClick={() => setDeletingOrder(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button
+                type="button"
+                onClick={() => handleDeleteOrder(deletingOrder.id)}
+                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+              >
+                {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

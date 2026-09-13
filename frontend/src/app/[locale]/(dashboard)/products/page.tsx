@@ -42,6 +42,18 @@ export default function ProductsPage() {
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Category management state
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCatNameUz, setNewCatNameUz] = useState('');
+  const [newCatNameRu, setNewCatNameRu] = useState('');
+  const [createCatLoading, setCreateCatLoading] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editCatNameUz, setEditCatNameUz] = useState('');
+  const [editCatNameRu, setEditCatNameRu] = useState('');
+  const [editCatLoading, setEditCatLoading] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [deleteCatLoading, setDeleteCatLoading] = useState(false);
+
   // Filters
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -90,9 +102,84 @@ export default function ProductsPage() {
     }
   };
 
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !company || !newCatNameUz.trim()) return;
+    setCreateCatLoading(true);
+    try {
+      await apiFetch('/inventory/categories', {
+        method: 'POST',
+        token,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({
+          name: { uz: newCatNameUz.trim(), ru: newCatNameRu.trim() || newCatNameUz.trim() },
+        }),
+      });
+      setNewCatNameUz('');
+      setNewCatNameRu('');
+      fetchCatalogData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при создании категории' : 'Kategoriya yaratishda xatolik'));
+    } finally {
+      setCreateCatLoading(false);
+    }
+  };
+
+  const handleOpenEditCategory = (cat: Category) => {
+    setEditingCategory(cat);
+    const uz = typeof cat.name === 'object' ? (cat.name.uz || '') : cat.name || '';
+    const ru = typeof cat.name === 'object' ? (cat.name.ru || '') : cat.name || '';
+    setEditCatNameUz(uz);
+    setEditCatNameRu(ru);
+  };
+
+  const handleSaveEditCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !company || !editingCategory || !editCatNameUz.trim()) return;
+    setEditCatLoading(true);
+    try {
+      await apiFetch(`/inventory/categories/${editingCategory.id}`, {
+        method: 'PATCH',
+        token,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({
+          name: { uz: editCatNameUz.trim(), ru: editCatNameRu.trim() || editCatNameUz.trim() },
+        }),
+      });
+      setEditingCategory(null);
+      fetchCatalogData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при обновлении категории' : 'Kategoriyani tahrirlashda xatolik'));
+    } finally {
+      setEditCatLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!token || !company || !deletingCategory) return;
+    setDeleteCatLoading(true);
+    try {
+      await apiFetch(`/inventory/categories/${deletingCategory.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingCategory(null);
+      fetchCatalogData();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении категории' : 'Kategoriyani o‘chirishda xatolik'));
+    } finally {
+      setDeleteCatLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchCatalogData();
   }, [token, company, locale]);
+
 
   // Helper for localized name
   const getProductName = (p: Product) => {
@@ -176,6 +263,14 @@ export default function ProductsPage() {
             {isRu ? 'Обновить' : 'Yangilash'}
           </Button>
           <Button
+            variant="secondary"
+            onClick={() => setIsCategoryModalOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Tag size={16} />
+            {isRu ? 'Категории' : 'Kategoriyalar'}
+          </Button>
+          <Button
             variant="primary"
             onClick={() => {
               setEditingProduct(null);
@@ -226,7 +321,11 @@ export default function ProductsPage() {
           </div>
         </Card>
 
-        <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
+        <Card
+          onClick={() => setIsCategoryModalOpen(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', cursor: 'pointer' }}
+          title={isRu ? 'Управление категориями' : 'Kategoriyalarni boshqarish'}
+        >
           <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Tag size={24} />
           </div>
@@ -570,7 +669,187 @@ export default function ProductsPage() {
           }}
         />
       )}
+
+      {/* Category Management Modal */}
+      {isCategoryModalOpen && (
+        <Modal
+          isOpen={isCategoryModalOpen}
+          onClose={() => setIsCategoryModalOpen(false)}
+          title={isRu ? 'Управление категориями товаров' : 'Mahsulot kategoriyalarini boshqarish'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {/* Create category form */}
+            <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', padding: '12px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                {isRu ? 'Новая категория' : 'Yangi kategoriya qo‘shish'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-2)', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  required
+                  value={newCatNameUz}
+                  onChange={(e) => setNewCatNameUz(e.target.value)}
+                  placeholder={isRu ? 'Название (узб) *' : "Nomi (o'zbekcha) *"}
+                  style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+                />
+                <input
+                  type="text"
+                  value={newCatNameRu}
+                  onChange={(e) => setNewCatNameRu(e.target.value)}
+                  placeholder={isRu ? 'Название (рус)' : 'Nomi (ruscha)'}
+                  style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+                />
+                <Button type="submit" size="sm" variant="primary" disabled={createCatLoading}>
+                  <Plus size={14} />
+                  {createCatLoading ? '...' : (isRu ? 'Добавить' : 'Qo‘shish')}
+                </Button>
+              </div>
+            </form>
+
+            {/* Categories List */}
+            <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {categories.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                  {isRu ? 'Категории отсутствуют' : 'Kategoriyalar mavjud emas'}
+                </div>
+              ) : (
+                categories.map((c) => {
+                  const catNameUz = typeof c.name === 'object' ? c.name.uz : c.name;
+                  const catNameRu = typeof c.name === 'object' ? c.name.ru : c.name;
+                  const prodCount = products.filter((p) => p.categoryId === c.id).length;
+
+                  return (
+                    <div
+                      key={c.id}
+                      style={{
+                        padding: '8px 12px',
+                        backgroundColor: 'var(--color-bg-primary)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--color-border-light)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Tag size={14} style={{ color: 'var(--color-primary-600)' }} />
+                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
+                          {isRu ? (catNameRu || catNameUz) : (catNameUz || catNameRu)}
+                        </span>
+                        <Badge variant="neutral">
+                          {prodCount} {isRu ? 'тов.' : 'ta'}
+                        </Badge>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditCategory(c)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-text-secondary)' }}
+                          title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingCategory(c)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: '#ef4444' }}
+                          title={isRu ? 'Удалить' : 'O‘chirish'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
+              <Button variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
+                {isRu ? 'Закрыть' : 'Yopish'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Category Modal */}
+      {editingCategory && (
+        <Modal
+          isOpen={Boolean(editingCategory)}
+          onClose={() => setEditingCategory(null)}
+          title={isRu ? 'Редактировать категорию' : 'Kategoriyani tahrirlash'}
+          size="sm"
+        >
+          <form onSubmit={handleSaveEditCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: '4px' }}>
+                {isRu ? 'Название категории (узбекский) *' : 'Kategoriya nomi (o‘zbekcha) *'}
+              </label>
+              <input
+                type="text"
+                required
+                value={editCatNameUz}
+                onChange={(e) => setEditCatNameUz(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: '4px' }}>
+                {isRu ? 'Название категории (русский)' : 'Kategoriya nomi (ruscha)'}
+              </label>
+              <input
+                type="text"
+                value={editCatNameRu}
+                onChange={(e) => setEditCatNameRu(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+              <Button type="button" variant="secondary" onClick={() => setEditingCategory(null)}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button type="submit" variant="primary" disabled={editCatLoading}>
+                {editCatLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Category Confirm Modal */}
+      {deletingCategory && (
+        <Modal
+          isOpen={Boolean(deletingCategory)}
+          onClose={() => setDeletingCategory(null)}
+          title={isRu ? 'Удалить категорию?' : 'Kategoriyani o‘chirishni tasdiqlaysizmi?'}
+          size="sm"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить категорию «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.ru || deletingCategory.name.uz) : deletingCategory.name}»? Товары в этой категории останутся без категории.`
+                : `Rostdan ham «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.uz || deletingCategory.name.ru) : deletingCategory.name}» kategoriyasini o‘chirmoqchimisiz? Ushbu kategoriyadagi tovarlar kategoriyasiz holatga o‘tadi.`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+              <Button variant="secondary" onClick={() => setDeletingCategory(null)} disabled={deleteCatLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleDeleteCategory}
+                disabled={deleteCatLoading}
+                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+              >
+                {deleteCatLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
+
   );
 }
 

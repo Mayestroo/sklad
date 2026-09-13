@@ -11,7 +11,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
-import { GitBranch, Warehouse, Plus, Building2, MapPin, Phone } from 'lucide-react';
+import { GitBranch, Warehouse, Plus, Building2, MapPin, Phone, Edit2, Trash2 } from 'lucide-react';
 
 export default function BranchesPage() {
   const { token, company } = useAuth();
@@ -38,13 +38,38 @@ export default function BranchesPage() {
   const [warehouseAddress, setWarehouseAddress] = useState('');
   const [warehousePhone, setWarehousePhone] = useState('');
 
+  // Edit Branch state
+  const [editingBranch, setEditingBranch] = useState<any | null>(null);
+  const [editBranchNameUz, setEditBranchNameUz] = useState('');
+  const [editBranchNameRu, setEditBranchNameRu] = useState('');
+  const [editBranchAddress, setEditBranchAddress] = useState('');
+  const [editBranchIsMain, setEditBranchIsMain] = useState(false);
+  const [editBranchLoading, setEditBranchLoading] = useState(false);
+
+  // Delete Branch state
+  const [deletingBranch, setDeletingBranch] = useState<any | null>(null);
+  const [deleteBranchLoading, setDeleteBranchLoading] = useState(false);
+
+  // Edit Warehouse state
+  const [editingWarehouse, setEditingWarehouse] = useState<any | null>(null);
+  const [editWarehouseBranchId, setEditWarehouseBranchId] = useState('');
+  const [editWarehouseNameUz, setEditWarehouseNameUz] = useState('');
+  const [editWarehouseNameRu, setEditWarehouseNameRu] = useState('');
+  const [editWarehouseAddress, setEditWarehouseAddress] = useState('');
+  const [editWarehousePhone, setEditWarehousePhone] = useState('');
+  const [editWarehouseLoading, setEditWarehouseLoading] = useState(false);
+
+  // Delete Warehouse state
+  const [deletingWarehouse, setDeletingWarehouse] = useState<any | null>(null);
+  const [deleteWarehouseLoading, setDeleteWarehouseLoading] = useState(false);
+
   const fetchBranches = async () => {
     if (!token || !company) return;
     setLoading(true);
     try {
       const data = await apiFetch<any[]>('/tenants/branches', { token, tenantId: company.id, locale });
       setBranches(data || []);
-      if (data && data.length > 0) {
+      if (data && data.length > 0 && !selectedBranchId) {
         setSelectedBranchId(data[0].id);
       }
     } catch (err) {
@@ -79,8 +104,62 @@ export default function BranchesPage() {
       setBranchAddress('');
       setBranchIsMain(false);
       fetchBranches();
-    } catch (err) {
-      alert(isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik');
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik'));
+    }
+  };
+
+  const handleOpenEditBranch = (branch: any) => {
+    setEditingBranch(branch);
+    const uz = typeof branch.name === 'object' ? (branch.name.uz || '') : branch.name || '';
+    const ru = typeof branch.name === 'object' ? (branch.name.ru || '') : branch.name || '';
+    setEditBranchNameUz(uz);
+    setEditBranchNameRu(ru);
+    setEditBranchAddress(branch.address || '');
+    setEditBranchIsMain(Boolean(branch.isMain));
+  };
+
+  const handleSaveEditBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !company || !editingBranch) return;
+    setEditBranchLoading(true);
+    try {
+      await apiFetch(`/tenants/branches/${editingBranch.id}`, {
+        method: 'PATCH',
+        token,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({
+          name: { uz: editBranchNameUz, ru: editBranchNameRu || editBranchNameUz },
+          address: editBranchAddress,
+          isMain: editBranchIsMain,
+        }),
+      });
+      setEditingBranch(null);
+      fetchBranches();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка обновления филиала' : 'Filialni tahrirlashda xatolik'));
+    } finally {
+      setEditBranchLoading(false);
+    }
+  };
+
+  const handleDeleteBranch = async () => {
+    if (!token || !company || !deletingBranch) return;
+    setDeleteBranchLoading(true);
+    try {
+      await apiFetch(`/tenants/branches/${deletingBranch.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingBranch(null);
+      fetchBranches();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении филиала' : 'Filialni o‘chirishda xatolik'));
+    } finally {
+      setDeleteBranchLoading(false);
     }
   };
 
@@ -106,10 +185,67 @@ export default function BranchesPage() {
       setWarehouseAddress('');
       setWarehousePhone('');
       fetchBranches();
-    } catch (err) {
-      alert(isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik');
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik'));
     }
   };
+
+  const handleOpenEditWarehouse = (wh: any) => {
+    setEditingWarehouse(wh);
+    setEditWarehouseBranchId(wh.branchId || selectedBranchId || '');
+    const uz = typeof wh.name === 'object' ? (wh.name.uz || '') : wh.name || '';
+    const ru = typeof wh.name === 'object' ? (wh.name.ru || '') : wh.name || '';
+    setEditWarehouseNameUz(uz);
+    setEditWarehouseNameRu(ru);
+    setEditWarehouseAddress(wh.address || '');
+    setEditWarehousePhone(wh.phone || '');
+  };
+
+  const handleSaveEditWarehouse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !company || !editingWarehouse) return;
+    setEditWarehouseLoading(true);
+    try {
+      await apiFetch(`/tenants/warehouses/${editingWarehouse.id}`, {
+        method: 'PATCH',
+        token,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({
+          branchId: editWarehouseBranchId || null,
+          name: { uz: editWarehouseNameUz, ru: editWarehouseNameRu || editWarehouseNameUz },
+          address: editWarehouseAddress,
+          phone: editWarehousePhone,
+        }),
+      });
+      setEditingWarehouse(null);
+      fetchBranches();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка обновления склада' : 'Omborxonani tahrirlashda xatolik'));
+    } finally {
+      setEditWarehouseLoading(false);
+    }
+  };
+
+  const handleDeleteWarehouse = async () => {
+    if (!token || !company || !deletingWarehouse) return;
+    setDeleteWarehouseLoading(true);
+    try {
+      await apiFetch(`/tenants/warehouses/${deletingWarehouse.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingWarehouse(null);
+      fetchBranches();
+    } catch (err: any) {
+      alert(err?.message || (isRu ? 'Ошибка при удалении склада' : 'Omborxonani o‘chirishda xatolik'));
+    } finally {
+      setDeleteWarehouseLoading(false);
+    }
+  };
+
 
   const branchOptions: SelectOption[] = branches.map((b) => ({
     value: b.id,
@@ -168,6 +304,27 @@ export default function BranchesPage() {
                     )}
                   </div>
                 </div>
+
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleOpenEditBranch(branch)}
+                    style={{ padding: '6px', height: 'auto', color: 'var(--color-text-secondary)' }}
+                    title={isRu ? 'Редактировать филиал' : 'Filialni tahrirlash'}
+                  >
+                    <Edit2 size={15} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeletingBranch(branch)}
+                    style={{ padding: '6px', height: 'auto', color: '#ef4444' }}
+                    title={isRu ? 'Удалить филиал' : 'Filialni o‘chirish'}
+                  >
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
               </div>
 
               <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
@@ -188,7 +345,25 @@ export default function BranchesPage() {
                             </div>
                           )}
                         </div>
-                        {wh.isMain && <Badge variant="neutral">{isRu ? 'Главный склад' : 'Asosiy Ombor'}</Badge>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {wh.isMain && <Badge variant="neutral">{isRu ? 'Главный склад' : 'Asosiy Ombor'}</Badge>}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditWarehouse(wh)}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-text-secondary)' }}
+                            title={isRu ? 'Редактировать склад' : 'Omborxonani tahrirlash'}
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingWarehouse(wh)}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: '#ef4444' }}
+                            title={isRu ? 'Удалить склад' : 'Omborxonani o‘chirish'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -222,6 +397,48 @@ export default function BranchesPage() {
         </form>
       </Modal>
 
+      {/* Edit Branch Modal */}
+      {editingBranch && (
+        <Modal isOpen={Boolean(editingBranch)} onClose={() => setEditingBranch(null)} title={isRu ? 'Редактировать филиал' : 'Filialni Tahrirlash'}>
+          <form onSubmit={handleSaveEditBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <Input label={isRu ? 'Название филиала (Узбекский)' : "Filial Nomi (O'zbekcha)"} value={editBranchNameUz} onChange={(e) => setEditBranchNameUz(e.target.value)} required />
+            <Input label={isRu ? 'Название филиала (Русский)' : 'Название Филиала (Русский)'} value={editBranchNameRu} onChange={(e) => setEditBranchNameRu(e.target.value)} />
+            <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={editBranchAddress} onChange={(e) => setEditBranchAddress(e.target.value)} />
+            <Checkbox
+              checked={editBranchIsMain}
+              onChange={(e) => setEditBranchIsMain(e.target.checked)}
+              label={isRu ? 'Отметить как главный филиал' : 'Bosh filial deb belgilash (Main Branch)'}
+              size="sm"
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+              <Button type="button" variant="outline" onClick={() => setEditingBranch(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button type="submit" variant="primary" disabled={editBranchLoading}>
+                {editBranchLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Branch Confirm Modal */}
+      {deletingBranch && (
+        <Modal isOpen={Boolean(deletingBranch)} onClose={() => setDeletingBranch(null)} title={isRu ? 'Удаление филиала' : 'Filialni O‘chirish'}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы уверены, что хотите удалить филиал "${typeof deletingBranch.name === 'object' ? (deletingBranch.name[locale] || deletingBranch.name.ru || deletingBranch.name.uz) : deletingBranch.name}"?`
+                : `Haqiqatan ham "${typeof deletingBranch.name === 'object' ? (deletingBranch.name[locale] || deletingBranch.name.uz || deletingBranch.name.ru) : deletingBranch.name}" filialini o‘chirmoqchimisiz?`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+              <Button type="button" variant="outline" onClick={() => setDeletingBranch(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button type="button" variant="primary" style={{ backgroundColor: '#ef4444' }} onClick={handleDeleteBranch} disabled={deleteBranchLoading}>
+                {deleteBranchLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Add Warehouse Modal */}
       <Modal isOpen={warehouseModalOpen} onClose={() => setWarehouseModalOpen(false)} title={isRu ? 'Привязка нового склада' : 'Yangi Omborxona Biriktirish'}>
         <form onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -241,6 +458,50 @@ export default function BranchesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Edit Warehouse Modal */}
+      {editingWarehouse && (
+        <Modal isOpen={Boolean(editingWarehouse)} onClose={() => setEditingWarehouse(null)} title={isRu ? 'Редактировать склад' : 'Omborxonani Tahrirlash'}>
+          <form onSubmit={handleSaveEditWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <Select
+              label={isRu ? 'Выберите филиал:' : 'Tegishli Filialni Tanlang:'}
+              options={branchOptions}
+              value={editWarehouseBranchId}
+              onChange={(val) => setEditWarehouseBranchId(val)}
+            />
+            <Input label={isRu ? 'Название склада (Узбекский)' : "Ombor Nomi (O'zbekcha)"} value={editWarehouseNameUz} onChange={(e) => setEditWarehouseNameUz(e.target.value)} required />
+            <Input label={isRu ? 'Название склада (Русский)' : 'Название Склада (Русский)'} value={editWarehouseNameRu} onChange={(e) => setEditWarehouseNameRu(e.target.value)} />
+            <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={editWarehouseAddress} onChange={(e) => setEditWarehouseAddress(e.target.value)} />
+            <Input label={isRu ? 'Телефон' : 'Telefon (Phone)'} value={editWarehousePhone} onChange={(e) => setEditWarehousePhone(e.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+              <Button type="button" variant="outline" onClick={() => setEditingWarehouse(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button type="submit" variant="primary" disabled={editWarehouseLoading}>
+                {editWarehouseLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Warehouse Confirm Modal */}
+      {deletingWarehouse && (
+        <Modal isOpen={Boolean(deletingWarehouse)} onClose={() => setDeletingWarehouse(null)} title={isRu ? 'Удаление склада' : 'Omborxonani O‘chirish'}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы уверены, что хотите удалить склад "${typeof deletingWarehouse.name === 'object' ? (deletingWarehouse.name[locale] || deletingWarehouse.name.ru || deletingWarehouse.name.uz) : deletingWarehouse.name}"?`
+                : `Haqiqatan ham "${typeof deletingWarehouse.name === 'object' ? (deletingWarehouse.name[locale] || deletingWarehouse.name.uz || deletingWarehouse.name.ru) : deletingWarehouse.name}" omborxonasini o‘chirmoqchimisiz?`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+              <Button type="button" variant="outline" onClick={() => setDeletingWarehouse(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button type="button" variant="primary" style={{ backgroundColor: '#ef4444' }} onClick={handleDeleteWarehouse} disabled={deleteWarehouseLoading}>
+                {deleteWarehouseLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
+

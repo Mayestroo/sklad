@@ -75,4 +75,56 @@ export class CrmService {
       },
     });
   }
+
+  async updateDeal(
+    tenantId: string,
+    dealId: string,
+    dto: {
+      title?: string;
+      amount?: number;
+      counterpartyId?: string;
+      stage?: DealStageSlug;
+      assignedUserId?: string | null;
+    },
+  ) {
+    const deal = await this.prisma.deal.findFirst({
+      where: { id: dealId, tenantId },
+    });
+
+    if (!deal) {
+      throw new NotFoundException('Deal not found');
+    }
+
+    return this.prisma.deal.update({
+      where: { id: dealId },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.amount !== undefined && { amount: Number(dto.amount) }),
+        ...(dto.counterpartyId !== undefined && { counterpartyId: dto.counterpartyId }),
+        ...(dto.stage !== undefined && { stage: dto.stage }),
+        ...(dto.assignedUserId !== undefined && { assignedUserId: dto.assignedUserId }),
+      },
+      include: {
+        counterparty: true,
+        assignedUser: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  async deleteDeal(tenantId: string, dealId: string) {
+    const deal = await this.prisma.deal.findFirst({
+      where: { id: dealId, tenantId },
+    });
+
+    if (!deal) {
+      throw new NotFoundException('Deal not found');
+    }
+
+    await this.prisma.deal.delete({
+      where: { id: dealId },
+    });
+
+    return { success: true, message: 'Deal deleted successfully' };
+  }
 }
+

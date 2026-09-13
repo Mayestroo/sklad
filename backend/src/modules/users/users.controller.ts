@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -85,5 +86,15 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
   ) {
     return this.usersService.updateUser(tenantId, userId, dto, actorUserId);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('users:delete')
+  deleteUser(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') actorUserId: string,
+    @Param('id') userId: string,
+  ) {
+    return this.usersService.deleteUser(tenantId, userId, actorUserId);
   }
 }

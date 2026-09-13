@@ -130,6 +130,31 @@ export default function SalesReturnsPage() {
   // Action states
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  // Delete state
+  const [deleteConfirmReturn, setDeleteConfirmReturn] = useState<SalesReturnRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteReturn = async () => {
+    if (!token || !company || !deleteConfirmReturn) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await apiFetch(`/sales/returns/${deleteConfirmReturn.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeleteConfirmReturn(null);
+      fetchReturns();
+    } catch (err: any) {
+      setDeleteError(err.message || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const getLocalizedName = (name: any) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
@@ -621,6 +646,21 @@ export default function SalesReturnsPage() {
                             <XCircle size={14} />
                           </Button>
                         )}
+
+                        {(ret.status === 'DRAFT' || ret.status === 'CANCELLED') && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setDeleteConfirmReturn(ret);
+                              setDeleteError(null);
+                            }}
+                            title={isRu ? 'Удалить' : "O'chirish"}
+                            style={{ padding: '4px 8px', color: '#ef4444' }}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -954,6 +994,66 @@ export default function SalesReturnsPage() {
             </div>
           </div>
         </Drawer>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmReturn && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 60,
+            padding: 'var(--space-4)',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--color-bg-primary)',
+              borderRadius: 'var(--radius-lg)',
+              maxWidth: '440px',
+              width: '100%',
+              padding: 'var(--space-6)',
+              boxShadow: 'var(--shadow-xl)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: '#ef4444' }}>
+              <Trash2 size={24} />
+              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                {isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
+              </h2>
+            </div>
+
+            {deleteError && (
+              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
+                {deleteError}
+              </div>
+            )}
+
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
+              {isRu
+                ? `Вы уверены, что хотите удалить возврат покупателя № ${deleteConfirmReturn.returnNumber}?`
+                : `Haqiqatan ham № ${deleteConfirmReturn.returnNumber} xaridor qaytarish hujjatini o‘chirmoqchimisiz?`}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                type="button"
+                onClick={handleDeleteReturn}
+                disabled={deleteLoading}
+                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -42,4 +43,31 @@ export class CrmController {
   ) {
     return this.crmService.updateDealStage(tenantId, dealId, stage);
   }
+
+  @Patch(':id')
+  @RequirePermissions('sales:edit')
+  update(
+    @CurrentTenant() tenantId: string,
+    @Param('id') dealId: string,
+    @Body()
+    dto: {
+      title?: string;
+      amount?: number;
+      counterpartyId?: string;
+      stage?: DealStageSlug;
+      assignedUserId?: string | null;
+    },
+  ) {
+    return this.crmService.updateDeal(tenantId, dealId, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('sales:delete')
+  delete(
+    @CurrentTenant() tenantId: string,
+    @Param('id') dealId: string,
+  ) {
+    return this.crmService.deleteDeal(tenantId, dealId);
+  }
 }
+

@@ -302,6 +302,45 @@ export class StockTransfersService {
     });
   }
 
+  /**
+   * Delete draft stock transfer
+   */
+  async deleteTransfer(tenantId: string, id: string, userId: string) {
+    const transfer = await this.prisma.stockTransfer.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!transfer) {
+      throw new NotFoundException('Stock Transfer not found');
+    }
+
+    if (transfer.status !== 'DRAFT') {
+      throw new BadRequestException(
+        "Faqat 'DRAFT' (qoralama) holatidagi ko'chirishlarni o'chirish mumkin",
+      );
+    }
+
+    await this.prisma.stockTransferItem.deleteMany({
+      where: { transferId: id },
+    });
+
+    await this.prisma.stockTransfer.delete({
+      where: { id },
+    });
+
+    await this.auditService.logAction({
+      tenantId,
+      userId,
+      entityType: 'StockTransfer',
+      entityId: id,
+      action: 'DELETE',
+      oldValue: { transferNumber: transfer.transferNumber },
+      newValue: null,
+    });
+
+    return { success: true, message: "O'tkazma muvaffaqiyatli o'chirildi" };
+  }
+
   private async generateTransferNumber(tenantId: string): Promise<string> {
     const count = await this.prisma.stockTransfer.count({
       where: { tenantId },

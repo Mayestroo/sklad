@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto, UpdateCompanySettingsDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -49,6 +58,32 @@ export class TenantsController {
     );
   }
 
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Patch('branches/:id')
+  @RequirePermissions('settings:edit')
+  updateBranch(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: { uz: string; ru: string };
+      address?: string;
+      isMain?: boolean;
+    },
+  ) {
+    return this.tenantsService.updateBranch(tenantId, id, body);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Delete('branches/:id')
+  @RequirePermissions('settings:edit')
+  deleteBranch(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.tenantsService.deleteBranch(tenantId, id);
+  }
+
   // Warehouse Endpoints
   @UseGuards(JwtAuthGuard, TenantGuard)
   @Get('warehouses')
@@ -77,6 +112,34 @@ export class TenantsController {
       body.phone,
     );
   }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Patch('warehouses/:id')
+  @RequirePermissions('settings:edit')
+  updateWarehouse(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      branchId?: string | null;
+      name?: { uz: string; ru: string };
+      address?: string;
+      phone?: string;
+    },
+  ) {
+    return this.tenantsService.updateWarehouse(tenantId, id, body);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Delete('warehouses/:id')
+  @RequirePermissions('settings:edit')
+  deleteWarehouse(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.tenantsService.deleteWarehouse(tenantId, id);
+  }
+
 
   // Settings Endpoints
   @UseGuards(JwtAuthGuard, TenantGuard)

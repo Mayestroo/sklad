@@ -145,6 +145,16 @@ export class SalesInvoicesController {
     return this.service.cancelReturn(tenantId, userId, id);
   }
 
+  @Delete('returns/:id')
+  @RequirePermissions('sales:delete')
+  deleteReturn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.deleteReturn(tenantId, userId, id);
+  }
+
   // ─── PRICE LISTS ──────────────────────────────────────────────
 
   @Get('price-lists')

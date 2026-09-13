@@ -27,6 +27,7 @@ import {
   PackageCheck,
   CheckCheck,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import { PaySalesOrderModal } from './PaySalesOrderModal';
 import { PartialDispatchModal } from './PartialDispatchModal';
@@ -478,6 +479,29 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     router.push('/sales/orders');
   };
 
+  const handleDeleteOrder = async () => {
+    if (!initialData?.id || !token || !company) return;
+    const msg = isRu
+      ? 'Вы уверены, что хотите безвозвратно удалить этот заказ?'
+      : "Haqiqatan ham bu buyurtmani butunlay o'chirib tashlamoqchimisiz?";
+    if (!window.confirm(msg)) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await apiFetch(`/sales/orders/${initialData.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      router.push('/sales/orders');
+    } catch (err: any) {
+      setError(err.message || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
+      setLoading(false);
+    }
+  };
+
   const statusMeta = ORDER_STATUS_LABELS[orderStatus] || { uz: orderStatus, ru: orderStatus, variant: 'neutral' };
 
   const customerOptions: SelectOption[] = counterparties.map((c) => ({
@@ -692,6 +716,18 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Save size={16} /> {isRu ? 'Сохранить' : 'Saqlash'}
+            </Button>
+          )}
+
+          {mode === 'edit' && (orderStatus === 'NEW' || orderStatus === 'PENDING_APPROVAL' || orderStatus === 'CANCELLED') && (
+            <Button
+              variant="ghost"
+              onClick={handleDeleteOrder}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}
+              title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
+            >
+              <Trash2 size={16} /> {isRu ? 'Удалить' : "O'chirish"}
             </Button>
           )}
 

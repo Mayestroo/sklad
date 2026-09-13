@@ -28,6 +28,7 @@ import {
   ShoppingBag,
   PackageCheck,
   Printer,
+  Trash2,
 } from 'lucide-react';
 import { ORDER_STATUS_LABELS } from '@/components/sales/SalesOrderForm';
 import { PaySalesOrderModal } from '@/components/sales/PaySalesOrderModal';
@@ -101,6 +102,32 @@ export default function SalesOrdersPage() {
   const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<any | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Delete modal state
+  const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<OrderItemSummary | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteOrder = async () => {
+    if (!token || !company || !deleteConfirmOrder) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await apiFetch(`/sales/orders/${deleteConfirmOrder.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeleteConfirmOrder(null);
+      fetchStats();
+      fetchOrders();
+    } catch (err: any) {
+      setDeleteError(err.message || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const isWarehouseOperator = Boolean(
     hasRole('ADMIN') ||
@@ -659,6 +686,20 @@ export default function SalesOrdersPage() {
                               <CreditCard size={14} />
                             </Button>
                           )}
+
+                          {hasPermission('sales:delete') && (ord.status === 'NEW' || ord.status === 'PENDING_APPROVAL' || ord.status === 'CANCELLED') && (
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                setDeleteConfirmOrder(ord);
+                                setDeleteError(null);
+                              }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#ef4444' }}
+                              title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -706,6 +747,66 @@ export default function SalesOrdersPage() {
           companyName={company?.name}
           order={deliveryNoteOrder}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmOrder && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 60,
+            padding: 'var(--space-4)',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--color-bg-primary)',
+              borderRadius: 'var(--radius-lg)',
+              maxWidth: '440px',
+              width: '100%',
+              padding: 'var(--space-6)',
+              boxShadow: 'var(--shadow-xl)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: '#ef4444' }}>
+              <Trash2 size={24} />
+              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                {isRu ? 'Удалить заказ?' : 'Buyurtmani o‘chirish?'}
+              </h2>
+            </div>
+
+            {deleteError && (
+              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
+                {deleteError}
+              </div>
+            )}
+
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
+              {isRu
+                ? `Вы действительно хотите удалить заказ № ${deleteConfirmOrder.orderNumber}? Все связанные позиции и бронь товаров будут аннулированы.`
+                : `Haqiqatan ham № ${deleteConfirmOrder.orderNumber} raqamli buyurtmani o‘chirmoqchimisiz? Undagi tovarlar va zaxira (bron) bekor qilinadi.`}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button type="button" variant="secondary" onClick={() => setDeleteConfirmOrder(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                type="button"
+                onClick={handleDeleteOrder}
+                disabled={deleteLoading}
+                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

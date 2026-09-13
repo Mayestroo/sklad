@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -139,6 +140,16 @@ export class SalesOrdersController {
     @Body() dto: Partial<CreateSalesOrderDto>,
   ) {
     return this.service.update(tenantId, userId, id, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('sales:delete')
+  delete(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.delete(tenantId, userId, id);
   }
 
   // ─── STATUS TRANSITIONS ────────────────────────────────────────

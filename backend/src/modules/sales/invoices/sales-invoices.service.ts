@@ -1312,6 +1312,49 @@ export class SalesInvoicesService {
     });
   }
 
+  async deleteReturn(tenantId: string, userId: string, returnId: string) {
+    const existing = await this.prisma.salesReturn.findFirst({
+      where: { id: returnId, tenantId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Qaytarish hujjati topilmadi');
+    }
+
+    if (
+      existing.status !== SalesReturnDocStatus.DRAFT &&
+      existing.status !== SalesReturnDocStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        "Faqat 'Qoralama' yoki 'Bekor qilingan' holatidagi qaytarish hujjatlarini o'chirish mumkin",
+      );
+    }
+
+    await this.prisma.salesReturnItem.deleteMany({
+      where: { returnId },
+    });
+
+    await this.prisma.salesReturn.delete({
+      where: { id: returnId },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        entityType: 'SalesReturn',
+        entityId: returnId,
+        action: 'DELETE',
+        oldValue: { returnNumber: existing.returnNumber },
+      },
+    });
+
+    return {
+      success: true,
+      message: "Qaytarish hujjati muvaffaqiyatli o'chirildi",
+    };
+  }
+
   async findAllReturns(tenantId: string) {
     return this.prisma.salesReturn.findMany({
       where: { tenantId },

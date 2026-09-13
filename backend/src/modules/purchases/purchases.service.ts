@@ -1720,6 +1720,38 @@ export class PurchasesService {
     });
   }
 
+  async deleteReturn(tenantId: string, id: string) {
+    const pReturn = await this.prisma.purchaseReturn.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!pReturn) {
+      throw new NotFoundException('Qaytarish hujjati topilmadi');
+    }
+
+    if (
+      pReturn.status !== ReturnDocStatus.DRAFT &&
+      pReturn.status !== ReturnDocStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        "Faqat 'Qoralama' yoki 'Bekor qilingan' holatidagi qaytarish hujjatlarini o'chirish mumkin",
+      );
+    }
+
+    await this.prisma.purchaseReturnItem.deleteMany({
+      where: { returnId: id },
+    });
+
+    await this.prisma.purchaseReturn.delete({
+      where: { id },
+    });
+
+    return {
+      success: true,
+      message: "Qaytarish hujjati muvaffaqiyatli o'chirildi",
+    };
+  }
+
   async findAllReturns(
     tenantId: string,
     filters?: {

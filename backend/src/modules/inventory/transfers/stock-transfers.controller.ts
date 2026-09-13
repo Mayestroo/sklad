@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { StockTransfersService } from './stock-transfers.service';
 import { CreateStockTransferDto } from '../dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -47,5 +55,15 @@ export class StockTransfersController {
     @CurrentUser('id') userId: string,
   ) {
     return this.transfersService.receiveTransfer(tenantId, id, userId);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('inventory:delete')
+  delete(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.transfersService.deleteTransfer(tenantId, id, userId);
   }
 }

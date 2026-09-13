@@ -206,6 +206,92 @@ export class UsersService {
     });
   }
 
+  /**
+   * Delete staff user
+   */
+  async deleteUser(tenantId: string, userId: string, actorUserId: string) {
+    if (userId === actorUserId) {
+      throw new BadRequestException(
+        "O'z akkauntingizni o'chira olmaysiz / Cannot delete your own user account",
+      );
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      include: {
+        userRoles: {
+          include: { role: true },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Protect last owner
+    const isOwner = user.userRoles?.some(
+      (ur: any) => ur.role?.slug === 'owner' || ur.role?.slug === 'company_admin',
+    );
+    if (isOwner) {
+      const otherOwners = await this.prisma.userRole.count({
+        where: {
+          role: { slug: { in: ['owner', 'company_admin'] } },
+          user: { tenantId, id: { not: userId } },
+        },
+      });
+      if (otherOwners === 0) {
+        throw new BadRequestException(
+          'Kompaniyada kamida bitta admin/egasi qolishi shart / Cannot delete the sole administrator',
+        );
+      }
+    }
+
+    // Delete role assignments first
+    await this.prisma.userRole.deleteMany({
+      where: { userId },
+    });
+
+    try {
+      await this.prisma.user.delete({
+        where: { id: userId },
+      });
+    } catch (err: any) {
+      // If historical documents link to this user, deactivate instead of crashing
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { isActive: false },
+      });
+
+      return {
+        success: true,
+        action: 'DEACTIVATED',
+        message:
+          "Foydalanuvchi orqali tizimda arxiv hujjatlari mavjudligi sababli u faolsizlantirildi (deactivated).",
+      };
+    }
+
+    await this.auditService.logAction({
+      tenantId,
+      userId: actorUserId,
+      entityType: 'User',
+      entityId: userId,
+      action: 'DELETE',
+      oldValue: {
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+      newValue: null,
+    });
+
+    return {
+      success: true,
+      action: 'DELETED',
+      message: "Foydalanuvchi muvaffaqiyatli o'chirildi.",
+    };
+  }
+
   private sanitizeUser(user: any) {
     const { passwordHash, ...sanitized } = user;
     return {
