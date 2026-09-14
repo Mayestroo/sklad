@@ -4,12 +4,15 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { Select, SelectOption } from '@/components/ui/Select';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { toast } from '@/context/ToastContext';
 import {
   Scale,
   Plus,
@@ -26,13 +29,13 @@ import {
   Users,
   Building2,
   Truck,
-  HelpCircle,
-  FileText,
-  Clock,
+  DollarSign,
   Layers,
-  ChevronRight,
+  Clock,
   Sparkles,
-  ShieldAlert,
+  TrendingUp,
+  TrendingDown,
+  Building,
 } from 'lucide-react';
 import type {
   OpeningBalanceDocument,
@@ -43,10 +46,10 @@ import type {
   ImportErrorItem,
 } from '@shared/types/opening-balances';
 
-type TabKey = 'overview' | 'cash' | 'inventory' | 'customers' | 'suppliers' | 'fixed-assets' | 'other';
+type TabKey = 'cash' | 'inventory' | 'customers' | 'suppliers' | 'advances' | 'fixed-assets' | 'other';
 
 export default function OpeningBalancesPage() {
-  const locale = useLocale();
+  const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
   const companyId = company?.id;
@@ -56,17 +59,17 @@ export default function OpeningBalancesPage() {
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [currentDoc, setCurrentDoc] = useState<OpeningBalanceDocument | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>('cash');
 
   // Lookups
   const [accounts, setAccounts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [counterparties, setCounterparties] = useState<any[]>([]);
+  const [fixedAssets, setFixedAssets] = useState<any[]>([]);
 
-  // Working lines
+  // Working Document Lines & State
   const [lines, setLines] = useState<Array<Partial<OpeningBalanceLine>>>([]);
   const [openingDate, setOpeningDate] = useState<string>('2026-10-01');
   const [notes, setNotes] = useState<string>('');
@@ -80,18 +83,10 @@ export default function OpeningBalancesPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importErrors, setImportErrors] = useState<ImportErrorItem[]>([]);
-  const [importSummary, setImportSummary] = useState<any>(null);
   const [importing, setImporting] = useState(false);
 
   const [showUnpostModal, setShowUnpostModal] = useState(false);
   const [unpostReason, setUnpostReason] = useState('');
-
-  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
-    setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 5000);
-  };
 
   // ─── Fetch Lookups ─────────────────────────────────────────────
 
@@ -100,21 +95,25 @@ export default function OpeningBalancesPage() {
 
     const fetchLookups = async () => {
       try {
-        const [accs, whs, prods, cps] = await Promise.all([
+        const [accs, whs, prods, cps, fas] = await Promise.all([
           apiFetch<any[]>('/finance/accounts', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
-          apiFetch<any[]>('/settings/branches', { token: token || undefined, tenantId: companyId, locale })
-            .then((res: any) => (Array.isArray(res) ? res.flatMap((b) => b.warehouses || []) : []))
+          apiFetch<any>('/tenants/warehouses', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => res?.data || (Array.isArray(res) ? res : []))
             .catch(() => []),
-          apiFetch<any>('/products', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => (res?.data ? res.data : Array.isArray(res) ? res : []))
+          apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => res?.data || (Array.isArray(res) ? res : []))
             .catch(() => []),
-          apiFetch<any[]>('/counterparties', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
+          apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => res?.data || (Array.isArray(res) ? res : []))
+            .catch(() => []),
+          apiFetch<any[]>('/fixed-assets', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
         ]);
 
-        setAccounts(accs || []);
-        setWarehouses(whs || []);
-        setProducts(prods || []);
-        setCounterparties(cps || []);
+        setAccounts(Array.isArray(accs) ? accs : []);
+        setWarehouses(Array.isArray(whs) ? whs : []);
+        setProducts(Array.isArray(prods) ? prods : []);
+        setCounterparties(Array.isArray(cps) ? cps : []);
+        setFixedAssets(Array.isArray(fas) ? fas : []);
       } catch (e) {
         console.error('Failed to load lookups', e);
       }
@@ -144,24 +143,23 @@ export default function OpeningBalancesPage() {
         setLines([]);
       }
     } catch (e: any) {
-      showToast(e.message || 'Xatolik yuz berdi', 'error');
+      toast.error(e?.message || (isRu ? 'Ошибка при загрузке документов' : 'Hujjatlarni yuklashda xatolik'));
     } finally {
       setLoading(false);
     }
-  }, [token, companyId, locale, selectedDocId]);
+  }, [token, companyId, locale, selectedDocId, isRu]);
 
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
 
-  // ─── Load Selected Document ───────────────────────────────────
+  // ─── Load Selected Document Details ────────────────────────────
 
-  useEffect(() => {
-    if (!selectedDocId || !token || !companyId) return;
-
-    const loadDocDetails = async () => {
+  const loadDocumentDetails = useCallback(
+    async (id: string) => {
+      if (!token || !companyId || !id) return;
       try {
-        const doc = await apiFetch<OpeningBalanceDocument>(`/opening-balances/${selectedDocId}`, {
+        const doc = await apiFetch<OpeningBalanceDocument>(`/opening-balances/${id}`, {
           token: token || undefined,
           tenantId: companyId,
           locale,
@@ -171,20 +169,25 @@ export default function OpeningBalancesPage() {
         setOpeningDate(doc.openingDate ? doc.openingDate.slice(0, 10) : '2026-10-01');
         setNotes(doc.notes || '');
       } catch (e: any) {
-        showToast(e.message || 'Hujjatni yuklashda xatolik', 'error');
+        toast.error(e?.message || (isRu ? 'Ошибка загрузки документа' : 'Hujjat tafsilotlarini yuklashda xatolik'));
       }
-    };
+    },
+    [token, companyId, locale, isRu],
+  );
 
-    loadDocDetails();
-  }, [selectedDocId, token, companyId, locale]);
+  useEffect(() => {
+    if (selectedDocId) {
+      loadDocumentDetails(selectedDocId);
+    }
+  }, [selectedDocId, loadDocumentDetails]);
 
-  // ─── Real-Time Balance Metrics Calculation ────────────────────
+  // ─── Real-Time Client-Side Balance Metrics ──────────────────────
 
   const metrics: OpeningBalanceMetrics = useMemo(() => {
     let totalAssets = 0;
     let totalLiabilities = 0;
     let totalEquity = 0;
-    const categoryBreakdown: Record<OpeningBalanceCategory, number> = {
+    const breakdown: Record<OpeningBalanceCategory, number> = {
       CASH: 0,
       BANK: 0,
       INVENTORY: 0,
@@ -200,9 +203,9 @@ export default function OpeningBalancesPage() {
 
     for (const line of lines) {
       const amt = Number(line.amount || 0);
-      const cat = line.category as OpeningBalanceCategory;
-      if (cat && categoryBreakdown[cat] !== undefined) {
-        categoryBreakdown[cat] += amt;
+      const cat = (line.category || 'CASH') as OpeningBalanceCategory;
+      if (breakdown[cat] !== undefined) {
+        breakdown[cat] += amt;
       }
 
       switch (cat) {
@@ -215,9 +218,8 @@ export default function OpeningBalancesPage() {
           totalAssets += amt;
           break;
         case 'FIXED_ASSET': {
-          const net = line.netAmount !== undefined && line.netAmount !== null
-            ? Number(line.netAmount)
-            : Math.max(0, amt - Number(line.accumulatedDepreciation || 0));
+          const accDep = Number(line.accumulatedDepreciation || 0);
+          const net = Math.max(0, amt - accDep);
           totalAssets += net;
           break;
         }
@@ -237,19 +239,166 @@ export default function OpeningBalancesPage() {
     const isBalanced = Math.abs(balanceDifference) < 0.01;
 
     return {
-      totalAssets,
-      totalLiabilities,
-      suggestedEquity,
-      enteredEquity: totalEquity,
+      totalAssets: Math.round(totalAssets * 100) / 100,
+      totalLiabilities: Math.round(totalLiabilities * 100) / 100,
+      enteredEquity: Math.round(totalEquity * 100) / 100,
+      suggestedEquity: Math.round(suggestedEquity * 100) / 100,
       balanceDifference,
       isBalanced,
-      categoryBreakdown,
+      categoryBreakdown: breakdown,
     };
   }, [lines]);
 
   const isReadOnly = currentDoc?.status === 'POSTED';
 
-  // ─── Actions ───────────────────────────────────────────────────
+  // ─── Actions & Handlers ────────────────────────────────────────
+
+  const handleSaveLines = async () => {
+    if (!token || !companyId || !selectedDocId) return;
+    setActionLoading(true);
+    try {
+      await apiFetch(`/opening-balances/${selectedDocId}/lines`, {
+        method: 'PUT',
+        token: token || undefined,
+        tenantId: companyId,
+        locale,
+        body: JSON.stringify({
+          openingDate,
+          notes,
+          lines,
+        }),
+      });
+      toast.success(isRu ? 'Изменения успешно сохранены' : 'Boshlang‘ich qoldiqlar muvaffaqiyatli saqlandi');
+      loadDocumentDetails(selectedDocId);
+    } catch (e: any) {
+      toast.error(e?.message || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    if (!token || !companyId || !selectedDocId) return;
+    setActionLoading(true);
+    try {
+      await apiFetch(`/opening-balances/${selectedDocId}/submit`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: companyId,
+        locale,
+      });
+      toast.success(isRu ? 'Документ отправлен на проверку' : 'Hujjat tekshirishga muvaffaqiyatli yuborildi');
+      loadDocuments();
+      loadDocumentDetails(selectedDocId);
+    } catch (e: any) {
+      toast.error(e?.message || (isRu ? 'Ошибка отправки' : 'Tekshirishga yuborishda xatolik'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePost = async () => {
+    if (!token || !companyId || !selectedDocId) return;
+    if (!metrics.isBalanced) {
+      toast.error(
+        isRu
+          ? `Баланс не сходится! Разница: ${formatCurrency(metrics.balanceDifference, locale, 'UZS')}. Разница должна быть 0.`
+          : `Balans teng emas! Farq: ${formatCurrency(metrics.balanceDifference, locale, 'UZS')}. Boshlang‘ich balans farqi 0 bo‘lishi shart!`,
+      );
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await apiFetch(`/opening-balances/${selectedDocId}/post`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: companyId,
+        locale,
+      });
+      toast.success(
+        isRu
+          ? 'Остатки успешно проведены! Склады, кассы и долги обновлены.'
+          : 'Boshlang‘ich qoldiqlar tasdiqlandi! Ombor, kassa va qarzdorliklar yangilandi.',
+      );
+      loadDocuments();
+      loadDocumentDetails(selectedDocId);
+    } catch (e: any) {
+      toast.error(e?.message || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xatolik'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnpost = async () => {
+    if (!token || !companyId || !selectedDocId) return;
+    setActionLoading(true);
+    try {
+      await apiFetch(`/opening-balances/${selectedDocId}/unpost`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: companyId,
+        locale,
+        body: JSON.stringify({ reason: unpostReason || undefined }),
+      });
+      setShowUnpostModal(false);
+      setUnpostReason('');
+      toast.success(
+        isRu
+          ? 'Документ переоткрыт (черновик). Остатки безопасно возвращены.'
+          : 'Hujjat qayta ochildi (qoralama). Qoldiqlar xavfsiz qaytarildi.',
+      );
+      loadDocuments();
+      loadDocumentDetails(selectedDocId);
+    } catch (e: any) {
+      toast.error(e?.message || (isRu ? 'Ошибка переоткрытия' : 'Hujjatni qayta ochishda xatolik'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAutoBalance = async () => {
+    if (!token || !companyId || !selectedDocId) return;
+    setActionLoading(true);
+    try {
+      await apiFetch(`/opening-balances/${selectedDocId}/balance-equity`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: companyId,
+        locale,
+      });
+      toast.success(
+        isRu
+          ? 'Баланс автоматически уравновешен строкой капитала'
+          : 'Balans ustav kapitali orqali avtomatik tenglashtirildi',
+      );
+      loadDocumentDetails(selectedDocId);
+    } catch (e: any) {
+      toast.error(e?.message || (isRu ? 'Ошибка балансировки' : 'Balansni tenglashtirishda xatolik'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!token || !companyId || !selectedDocId) return;
+    setActionLoading(true);
+    try {
+      await apiFetch(`/opening-balances/${selectedDocId}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: companyId,
+        locale,
+      });
+      toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
+      setSelectedDocId('');
+      loadDocuments();
+    } catch (e: any) {
+      toast.error(e?.message || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleCreateDocument = async () => {
     if (!token || !companyId) return;
@@ -261,191 +410,76 @@ export default function OpeningBalancesPage() {
         tenantId: companyId,
         locale,
         body: JSON.stringify({
-          openingDate: newDocDate,
           docNumber: newDocNumber.trim() || undefined,
+          openingDate: newDocDate,
           notes: newDocNotes.trim() || undefined,
+          lines: [],
         }),
       });
-      showToast(isRu ? 'Документ успешно создан' : 'Yangi hujjat yaratildi');
       setShowNewDocModal(false);
+      setNewDocNumber('');
+      setNewDocNotes('');
+      toast.success(isRu ? 'Новый документ остатков создан' : 'Yangi boshlang‘ich qoldiq hujjati yaratildi');
+      await loadDocuments();
       setSelectedDocId(created.id);
-      await loadDocuments();
     } catch (e: any) {
-      showToast(e.message || 'Xatolik yuz berdi', 'error');
+      toast.error(e?.message || (isRu ? 'Ошибка создания' : 'Yaratishda xatolik'));
     } finally {
       setActionLoading(false);
     }
-  };
-
-  const handleSaveLines = async () => {
-    if (!currentDoc || !token || !companyId) return;
-    setSaving(true);
-    try {
-      const updated = await apiFetch<OpeningBalanceDocument>(`/opening-balances/${currentDoc.id}/lines`, {
-        method: 'PUT',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-        body: JSON.stringify({
-          openingDate,
-          notes,
-          lines,
-        }),
-      });
-      setCurrentDoc(updated);
-      setLines(updated.lines || []);
-      showToast(isRu ? 'Данные успешно сохранены' : 'Qoldiqlar muvaffaqiyatli saqlandi');
-    } catch (e: any) {
-      showToast(e.message || 'Saqlashda xatolik', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSubmitReview = async () => {
-    if (!currentDoc || !token || !companyId) return;
-    setActionLoading(true);
-    try {
-      await apiFetch(`/opening-balances/${currentDoc.id}/review`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
-      showToast(isRu ? 'Документ передан на проверку' : 'Hujjat tekshirishga yuborildi');
-      await loadDocuments();
-    } catch (e: any) {
-      showToast(e.message || 'Xatolik yuz berdi', 'error');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handlePost = async () => {
-    if (!currentDoc || !token || !companyId) return;
-    if (!metrics.isBalanced) {
-      showToast(
-        isRu
-          ? `Баланс не сошелся! Разница: ${metrics.balanceDifference} UZS`
-          : `Balans teng emas! Farq: ${metrics.balanceDifference} so‘m. Boshlang‘ich balans farqi 0 bo‘lishi shart!`,
-        'error',
-      );
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      await apiFetch(`/opening-balances/${currentDoc.id}/post`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
-      showToast(isRu ? 'Начальные остатки успешно проведены!' : 'Boshlang‘ich qoldiqlar muvaffaqiyatli tasdiqlandi!');
-      await loadDocuments();
-    } catch (e: any) {
-      showToast(e.message || 'Tasdiqlashda xatolik yuz berdi', 'error');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleUnpost = async () => {
-    if (!currentDoc || !token || !companyId) return;
-    setActionLoading(true);
-    try {
-      await apiFetch(`/opening-balances/${currentDoc.id}/unpost`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-        body: JSON.stringify({ reason: unpostReason }),
-      });
-      showToast(isRu ? 'Документ успешно возвращен в черновик' : 'Hujjat muvaffaqiyatli qayta ochildi (qoralama holatiga qaytdi)');
-      setShowUnpostModal(false);
-      setUnpostReason('');
-      await loadDocuments();
-    } catch (e: any) {
-      showToast(e.message || 'Qayta ochishda xatolik', 'error');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleBalanceWithEquity = () => {
-    if (metrics.balanceDifference === 0) return;
-    const diff = metrics.balanceDifference;
-    // Find existing equity line or create a new one
-    const eqIdx = lines.findIndex((l) => l.category === 'EQUITY');
-    if (eqIdx >= 0) {
-      const updated = [...lines];
-      updated[eqIdx].amount = Number(updated[eqIdx].amount || 0) + diff;
-      setLines(updated);
-    } else {
-      setLines([
-        ...lines,
-        {
-          category: 'EQUITY',
-          amount: diff,
-          currency: 'UZS',
-          notes: isRu ? 'Уставный капитал / Нераспределенная прибыль' : 'Boshlang‘ich ustav kapitali / taqsimlanmagan foyda',
-        },
-      ]);
-    }
-    showToast(isRu ? 'Разница сбалансирована за счет капитала' : 'Farq Boshlang‘ich Kapital bilan tenglashtirildi');
   };
 
   const handleDownloadTemplate = () => {
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/opening-balances/template`;
-    window.open(url, '_blank');
+    window.open('/api/opening-balances/template/download', '_blank');
   };
 
   const handleImportFile = async () => {
-    if (!importFile || !currentDoc || !token || !companyId) return;
+    if (!importFile || !token || !companyId || !selectedDocId) return;
     setImporting(true);
     setImportErrors([]);
-
-    const formData = new FormData();
-    formData.append('file', importFile);
-
     try {
-      const res: any = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/opening-balances/${currentDoc.id}/import-commit`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'X-Tenant-Id': companyId,
-            'Accept-Language': locale,
-          },
-          body: formData,
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('documentId', selectedDocId);
+
+      const res = await fetch('/api/opening-balances/import/excel', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-tenant-id': companyId,
         },
-      );
+        body: formData,
+      });
 
       const data = await res.json();
-      if (!res.ok || data.success === false) {
+      if (!res.ok) {
         if (data.errors && Array.isArray(data.errors)) {
           setImportErrors(data.errors);
+          toast.error(isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi');
         } else {
-          showToast(data.message || 'Import xatosi', 'error');
+          toast.error(data.message || (isRu ? 'Ошибка импорта' : 'Yuklashda xatolik'));
         }
         return;
       }
 
-      showToast(data.message || 'Excel ma’lumotlari yuklandi');
       setShowImportModal(false);
       setImportFile(null);
-      await loadDocuments();
+      toast.success(
+        isRu
+          ? `Импорт завершен! Загружено строк: ${data.importedCount}`
+          : `Excel muvaffaqiyatli yuklandi! Kiritilgan qatorlar: ${data.importedCount}`,
+      );
+      loadDocumentDetails(selectedDocId);
     } catch (e: any) {
-      showToast(e.message || 'Import jarayonida xatolik', 'error');
+      toast.error(e?.message || (isRu ? 'Ошибка загрузки файла' : 'Faylni yuklashda xatolik'));
     } finally {
       setImporting(false);
     }
   };
 
-  // ─── Line Manipulation Helpers ─────────────────────────────────
+  // ─── Line Management Helpers ────────────────────────────────────
 
-  const addLine = (category: OpeningBalanceCategory, defaults: Partial<OpeningBalanceLine> = {}) => {
+  const addLine = (category: OpeningBalanceCategory, defaults?: Partial<OpeningBalanceLine>) => {
     if (isReadOnly) return;
     const newLine: Partial<OpeningBalanceLine> = {
       category,
@@ -454,377 +488,522 @@ export default function OpeningBalancesPage() {
       exchangeRate: 1,
       ...defaults,
     };
-    setLines([...lines, newLine]);
+    setLines((prev) => [...prev, newLine]);
   };
 
   const removeLine = (index: number) => {
     if (isReadOnly) return;
-    const updated = [...lines];
-    updated.splice(index, 1);
-    setLines(updated);
+    setLines((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateLineField = (index: number, field: keyof OpeningBalanceLine, val: any) => {
+  const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: any) => {
     if (isReadOnly) return;
-    const updated = [...lines];
-    updated[index] = { ...updated[index], [field]: val };
+    setLines((prev) => {
+      const updated = [...prev];
+      const target = { ...updated[index], [field]: value };
 
-    // Auto-compute inventory amount
-    if (updated[index].category === 'INVENTORY') {
-      const q = Number(field === 'quantity' ? val : updated[index].quantity || 0);
-      const c = Number(field === 'unitCost' ? val : updated[index].unitCost || 0);
-      updated[index].amount = Math.round(q * c * 100) / 100;
-    }
+      if (target.category === 'INVENTORY' && (field === 'quantity' || field === 'unitCost')) {
+        const q = Number(field === 'quantity' ? value : target.quantity || 0);
+        const c = Number(field === 'unitCost' ? value : target.unitCost || 0);
+        target.amount = Math.round(q * c * 100) / 100;
+      }
 
-    // Auto-compute fixed asset net amount
-    if (updated[index].category === 'FIXED_ASSET') {
-      const cost = Number(field === 'amount' ? val : updated[index].amount || 0);
-      const dep = Number(field === 'accumulatedDepreciation' ? val : updated[index].accumulatedDepreciation || 0);
-      updated[index].netAmount = Math.max(0, cost - dep);
-    }
+      if (target.category === 'FIXED_ASSET' && (field === 'amount' || field === 'accumulatedDepreciation')) {
+        const init = Number(field === 'amount' ? value : target.amount || 0);
+        const dep = Number(field === 'accumulatedDepreciation' ? value : target.accumulatedDepreciation || 0);
+        target.netAmount = Math.max(0, init - dep);
+      }
 
-    setLines(updated);
+      updated[index] = target;
+      return updated;
+    });
   };
 
-  // ─── Status Badge Helper ───────────────────────────────────────
+  // ─── Status Badge Formatter ────────────────────────────────────
 
-  const statusBadge = (status?: OpeningBalanceStatus) => {
-    switch (status) {
-      case 'POSTED':
-        return <Badge variant="success">{isRu ? 'Проведено' : 'Tasdiqlangan'}</Badge>;
-      case 'PENDING_REVIEW':
-        return <Badge variant="info">{isRu ? 'На проверке' : 'Tekshirilmoqda'}</Badge>;
-      case 'CANCELLED':
-        return <Badge variant="neutral">{isRu ? 'Отменено' : 'Bekor qilingan'}</Badge>;
-      default:
+  const getDocStatusBadge = (st: OpeningBalanceStatus) => {
+    switch (st) {
+      case 'DRAFT':
         return <Badge variant="warning">{isRu ? 'Черновик' : 'Qoralama'}</Badge>;
+      case 'PENDING_REVIEW':
+        return <Badge variant="info">{isRu ? 'На проверке' : 'Tekshirishda'}</Badge>;
+      case 'POSTED':
+        return <Badge variant="success">{isRu ? 'Проведён' : 'Tasdiqlangan'}</Badge>;
+      case 'CANCELLED':
+        return <Badge variant="error">{isRu ? 'Отменён' : 'Bekor qilingan'}</Badge>;
+      default:
+        return <Badge variant="neutral">{st}</Badge>;
     }
   };
+
+  const documentOptions: SelectOption[] = documents.map((d) => ({
+    value: d.id,
+    label: `${d.docNumber} (${d.openingDate ? d.openingDate.slice(0, 10) : ''}) — ${
+      d.status === 'POSTED' ? (isRu ? 'Проведён' : 'Tasdiqlangan') : isRu ? 'Черновик' : 'Qoralama'
+    }`,
+  }));
+
+  // Tab counts
+  const tabCounts = useMemo(() => {
+    const counts = {
+      cash: 0,
+      inventory: 0,
+      customers: 0,
+      suppliers: 0,
+      advances: 0,
+      fixedAssets: 0,
+      other: 0,
+    };
+    for (const l of lines) {
+      if (l.category === 'CASH' || l.category === 'BANK') counts.cash++;
+      else if (l.category === 'INVENTORY') counts.inventory++;
+      else if (l.category === 'CUSTOMER_DEBT') counts.customers++;
+      else if (l.category === 'SUPPLIER_DEBT') counts.suppliers++;
+      else if (l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE') counts.advances++;
+      else if (l.category === 'FIXED_ASSET') counts.fixedAssets++;
+      else counts.other++;
+    }
+    return counts;
+  }, [lines]);
+
+  const navTabs = [
+    { key: 'cash' as TabKey, label: isRu ? 'Деньги в кассе / банке' : 'Pul mablag‘lari', icon: Wallet, count: tabCounts.cash },
+    { key: 'inventory' as TabKey, label: isRu ? 'Товары на складах' : 'Tovar va materiallar', icon: Package, count: tabCounts.inventory },
+    { key: 'customers' as TabKey, label: isRu ? 'Дебиторы (Клиенты)' : 'Mijozlar qarzi', icon: Users, count: tabCounts.customers },
+    { key: 'suppliers' as TabKey, label: isRu ? 'Кредиторы (Поставщики)' : 'Yetkazib beruvchilar', icon: Truck, count: tabCounts.suppliers },
+    { key: 'advances' as TabKey, label: isRu ? 'Авансы (Предоплаты)' : 'Avanslar', icon: DollarSign, count: tabCounts.advances },
+    { key: 'fixed-assets' as TabKey, label: isRu ? 'Основные средства' : 'Asosiy vositalar', icon: Building, count: tabCounts.fixedAssets },
+    { key: 'other' as TabKey, label: isRu ? 'Капитал и прочее' : 'Kapital va boshqalar', icon: Layers, count: tabCounts.other },
+  ];
 
   return (
-    <div style={{ padding: 'var(--space-6)', maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '24px',
-            right: '24px',
-            zIndex: 9999,
-            backgroundColor: toastMessage.type === 'success' ? '#10b981' : '#ef4444',
-            color: '#ffffff',
-            padding: '12px 20px',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-lg)',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            animation: 'fadeIn 0.2s ease-in-out',
-          }}
-        >
-          {toastMessage.type === 'success' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-          {toastMessage.text}
-        </div>
-      )}
-
-      {/* ─── Top Header & Document Controls ───────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      {/* ─── Top Header & Primary Action Controls ─────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 'var(--space-4)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 'var(--radius-lg)',
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+            }}
+          >
+            <Scale size={22} />
+          </div>
+          <div>
+            <h1
               style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                color: '#3b82f6',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                fontSize: 'var(--text-2xl)',
+                fontWeight: 'var(--font-bold)',
+                color: 'var(--color-text-primary)',
+                margin: 0,
               }}
             >
-              <Scale size={24} />
-            </div>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', fontWeight: 700 }}>
-                {isRu ? 'Ввод начальных остатков' : 'Boshlang‘ich qoldiqlar'}
-              </h1>
-              <p style={{ margin: '2px 0 0', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-                {isRu
-                  ? 'Ввод активов, обязательств и капитала предприятия на дату перехода в ERP'
-                  : 'ERP tizimiga o‘tish sanasidagi aktivlar, majburiyatlar va boshlang‘ich kapitalni kiritish'}
-              </p>
-            </div>
+              {isRu ? 'Ввод начальных остатков' : 'Boshlang‘ich qoldiqlarni kiritish'}
+            </h1>
+            <p
+              style={{
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-tertiary)',
+                margin: '2px 0 0 0',
+              }}
+            >
+              {isRu
+                ? 'Управление начальными остатками кассы, склада, контрагентов и капитала по стандарту 1С'
+                : '1C mantiqi asosida kassa, ombor, mijoz/yetkazib beruvchi va kapital boshlang‘ich qoldiqlari'}
+            </p>
           </div>
         </div>
 
         {/* Global Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          <Button variant="secondary" onClick={handleDownloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Download size={16} />
-            {isRu ? 'Шаблон Excel' : 'Excel shablon'}
-          </Button>
-
-          {currentDoc && !isReadOnly && (
-            <Button variant="secondary" onClick={() => setShowImportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Upload size={16} />
-              {isRu ? 'Загрузить из Excel' : 'Excel orqali yuklash'}
-            </Button>
-          )}
-
-          <Button variant="secondary" onClick={() => setShowNewDocModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <Button
+            variant="primary"
+            onClick={() => setShowNewDocModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
             <Plus size={16} />
-            {isRu ? 'Новый документ' : 'Yangi hujjat'}
+            <span>{isRu ? 'Новый документ' : 'Yangi hujjat'}</span>
           </Button>
 
-          {currentDoc && !isReadOnly && (
-            <>
-              <Button
-                variant="secondary"
-                onClick={handleSaveLines}
-                disabled={saving}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Save size={16} />
-                {saving ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}
-              </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setShowImportModal(true)}
+            disabled={!currentDoc || isReadOnly}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Upload size={16} />
+            <span>{isRu ? 'Импорт из Excel' : 'Excel orqali yuklash'}</span>
+          </Button>
 
-              {currentDoc.status === 'DRAFT' && (
-                <Button
-                  variant="secondary"
-                  onClick={handleSubmitReview}
-                  disabled={actionLoading}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Clock size={16} />
-                  {isRu ? 'На проверку' : 'Tekshirishga yuborish'}
-                </Button>
-              )}
-
-              <Button
-                variant="primary"
-                onClick={handlePost}
-                disabled={actionLoading || !metrics.isBalanced}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: metrics.isBalanced ? '#10b981' : undefined,
-                  borderColor: metrics.isBalanced ? '#10b981' : undefined,
-                }}
-              >
-                <CheckCircle2 size={16} />
-                {actionLoading ? (isRu ? 'Проведение...' : 'Tasdiqlanmoqda...') : isRu ? 'Провести остатки' : 'Tasdiqlash (Post)'}
-              </Button>
-            </>
-          )}
-
-          {currentDoc && isReadOnly && (
-            <Button
-              variant="secondary"
-              onClick={() => setShowUnpostModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444', borderColor: '#fca5a5' }}
-            >
-              <RotateCcw size={16} />
-              {isRu ? 'Переоткрыть (Unpost)' : 'Qayta ochish (Unpost)'}
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            onClick={handleDownloadTemplate}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Download size={16} />
+            <span>{isRu ? 'Скачать шаблон' : 'Shablonni yuklab olish'}</span>
+          </Button>
         </div>
       </div>
 
-      {/* Document Selector & Date Bar */}
-      {documents.length > 0 && (
-        <div
+      {/* ─── Executive KPI Cards Grid (Matches Finance / Purchases) ─ */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 'var(--space-4)',
+        }}
+      >
+        {/* Card 1: Total Assets */}
+        <Card
           style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-lg)',
             padding: 'var(--space-4)',
             display: 'flex',
             alignItems: 'center',
+            gap: 'var(--space-3)',
+            borderLeft: '4px solid #10b981',
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#10b981',
+              flexShrink: 0,
+            }}
+          >
+            <TrendingUp size={20} />
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? '1. Активы (Итого)' : '1. Jami Aktivlar'}
+            </div>
+            <div
+              style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
+              className="tabular-nums"
+            >
+              {formatCurrency(metrics.totalAssets, locale, 'UZS')}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Касса, банк, склад, дебиторы' : 'Kassa, bank, tovar, debitorlar'}
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 2: Total Liabilities */}
+        <Card
+          style={{
+            padding: 'var(--space-4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            borderLeft: '4px solid #ef4444',
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ef4444',
+              flexShrink: 0,
+            }}
+          >
+            <TrendingDown size={20} />
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? '2. Обязательства (Итого)' : '2. Jami Majburiyatlar'}
+            </div>
+            <div
+              style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
+              className="tabular-nums"
+            >
+              {formatCurrency(metrics.totalLiabilities, locale, 'UZS')}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Кредиторы, авансы клиентов' : 'Yetkazib beruvchilar, olingan avanslar'}
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 3: Equity */}
+        <Card
+          style={{
+            padding: 'var(--space-4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            borderLeft: '4px solid #6366f1',
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#6366f1',
+              flexShrink: 0,
+            }}
+          >
+            <Building2 size={20} />
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? '3. Собственный капитал' : '3. Boshlang‘ich Kapital'}
+            </div>
+            <div
+              style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
+              className="tabular-nums"
+            >
+              {formatCurrency(metrics.enteredEquity, locale, 'UZS')}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Расчетный:' : 'Kutilayotgan:'} {formatCurrency(metrics.suggestedEquity, locale, 'UZS')}
+            </div>
+          </div>
+        </Card>
+
+        {/* Card 4: Balance Equation Control */}
+        <Card
+          style={{
+            padding: 'var(--space-4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            borderLeft: `4px solid ${metrics.isBalanced ? '#10b981' : '#f59e0b'}`,
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: metrics.isBalanced ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: metrics.isBalanced ? '#10b981' : '#f59e0b',
+              flexShrink: 0,
+            }}
+          >
+            {metrics.isBalanced ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+          </div>
+          <div style={{ overflow: 'hidden', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                {isRu ? 'Баланс (Разница)' : 'Balans (Farq)'}
+              </span>
+              <Badge variant={metrics.isBalanced ? 'success' : 'warning'}>
+                {metrics.isBalanced ? (isRu ? 'Баланс сошёлся' : 'Balans teng') : isRu ? 'Разница' : 'Farq bor'}
+              </Badge>
+            </div>
+            <div
+              style={{
+                fontSize: 'var(--text-lg)',
+                fontWeight: 700,
+                color: metrics.isBalanced ? '#10b981' : '#f59e0b',
+              }}
+              className="tabular-nums"
+            >
+              {formatCurrency(metrics.balanceDifference, locale, 'UZS')}
+            </div>
+            {!metrics.isBalanced && !isReadOnly && (
+              <button
+                type="button"
+                onClick={handleAutoBalance}
+                disabled={actionLoading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  marginTop: '2px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: 'var(--color-primary-600)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Sparkles size={12} />
+                <span>{isRu ? 'Сбалансировать капиталом' : 'Kapital bilan tenglashtirish'}</span>
+              </button>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* ─── Master Document Control Card ─────────────────────────── */}
+      <Card style={{ padding: 'var(--space-4)' }}>
+        <div
+          style={{
+            display: 'flex',
             justifyContent: 'space-between',
+            alignItems: 'center',
             flexWrap: 'wrap',
             gap: 'var(--space-4)',
           }}
         >
+          {/* Left: Document Selector & Cutoff Date */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{isRu ? 'Документ:' : 'Hujjat:'}</span>
-              <select
+            <div style={{ width: '280px' }}>
+              <Select
+                options={documentOptions}
                 value={selectedDocId}
-                onChange={(e) => setSelectedDocId(e.target.value)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: 'var(--color-bg)',
-                  fontSize: 'var(--text-sm)',
-                  fontWeight: 600,
-                }}
-              >
-                {documents.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.docNumber} ({d.openingDate ? d.openingDate.slice(0, 10) : ''}) — {d.status}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {currentDoc && statusBadge(currentDoc.status)}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-                {isRu ? 'Дата среза:' : 'Qoldiq sanasi:'}
-              </span>
-              <input
-                type="date"
-                value={openingDate}
-                disabled={isReadOnly}
-                onChange={(e) => setOpeningDate(e.target.value)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: isReadOnly ? 'var(--color-bg-muted)' : 'var(--color-bg)',
-                  fontSize: 'var(--text-sm)',
-                }}
+                onChange={setSelectedDocId}
+                placeholder={isRu ? 'Выберите документ' : 'Hujjatni tanlang'}
+                size="sm"
               />
             </div>
+
+            {currentDoc && getDocStatusBadge(currentDoc.status)}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                {isRu ? 'Дата среза:' : 'Kesim sanasi:'}
+              </span>
+              <div style={{ width: '150px' }}>
+                <DatePicker
+                  value={openingDate}
+                  onChange={setOpeningDate}
+                  disabled={isReadOnly}
+                  size="sm"
+                />
+              </div>
+            </div>
+
+            <Badge variant="neutral">
+              {lines.length} {isRu ? 'строк' : 'ta qator'}
+            </Badge>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            <span>{isRu ? 'Всего строк:' : 'Jami qatorlar:'} <strong>{lines.length}</strong></span>
+          {/* Right: Operational Status Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            {currentDoc && !isReadOnly && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSaveLines}
+                  disabled={actionLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Save size={14} />
+                  <span>{actionLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}</span>
+                </Button>
+
+                {currentDoc.status === 'DRAFT' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleSubmitForReview}
+                    disabled={actionLoading}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Clock size={14} />
+                    <span>{isRu ? 'На проверку' : 'Tekshirishga'}</span>
+                  </Button>
+                )}
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handlePost}
+                  disabled={actionLoading || !metrics.isBalanced}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    backgroundColor: metrics.isBalanced ? '#10b981' : undefined,
+                    borderColor: metrics.isBalanced ? '#10b981' : undefined,
+                  }}
+                >
+                  <CheckCircle2 size={14} />
+                  <span>{actionLoading ? (isRu ? 'Проведение...' : 'Tasdiqlanmoqda...') : isRu ? 'Провести остатки' : 'Tasdiqlash (Post)'}</span>
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleDeleteDocument}
+                  disabled={actionLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
+                >
+                  <Trash2 size={14} />
+                  <span>{isRu ? 'Удалить' : 'O‘chirish'}</span>
+                </Button>
+              </>
+            )}
+
+            {currentDoc && isReadOnly && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowUnpostModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: 'var(--color-error-600)',
+                  borderColor: 'var(--color-error-100)',
+                }}
+              >
+                <RotateCcw size={14} />
+                <span>{isRu ? 'Переоткрыть (Unpost)' : 'Qayta ochish (Unpost)'}</span>
+              </Button>
+            )}
           </div>
         </div>
-      )}
+      </Card>
 
-      {/* ─── Balance Control Executive KPI Banner ─────────────────── */}
-      <div
-        style={{
-          backgroundColor: 'var(--color-surface)',
-          border: `2px solid ${metrics.isBalanced ? '#10b981' : '#f59e0b'}`,
-          borderRadius: 'var(--radius-xl)',
-          padding: 'var(--space-6)',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 'var(--space-4)',
-          position: 'relative',
-          boxShadow: metrics.isBalanced
-            ? '0 4px 20px -2px rgba(16, 185, 129, 0.12)'
-            : '0 4px 20px -2px rgba(245, 158, 11, 0.15)',
-        }}
-      >
-        {/* 1. Total Assets */}
-        <div>
-          <span style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-            {isRu ? '1. Активы (Итого)' : '1. Jami Aktivlar'}
-          </span>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#10b981', marginTop: '4px' }}>
-            {formatCurrency(metrics.totalAssets, locale, 'UZS')}
-          </div>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            {isRu ? 'Касса, банк, склад, дебиторы' : 'Kassa, bank, tovar, debitorlar'}
-          </span>
-        </div>
-
-        {/* 2. Total Liabilities */}
-        <div>
-          <span style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-            {isRu ? '2. Обязательства' : '2. Jami Majburiyatlar'}
-          </span>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#ef4444', marginTop: '4px' }}>
-            {formatCurrency(metrics.totalLiabilities, locale, 'UZS')}
-          </div>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            {isRu ? 'Поставщики, авансы, долги' : 'Ta’minotchilar, olingan avanslar'}
-          </span>
-        </div>
-
-        {/* 3. Equity */}
-        <div>
-          <span style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-            {isRu ? '3. Капитал (Введено)' : '3. Boshlang‘ich Kapital'}
-          </span>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#3b82f6', marginTop: '4px' }}>
-            {formatCurrency(metrics.enteredEquity, locale, 'UZS')}
-          </div>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            {isRu ? `Расчетный: ${formatCurrency(metrics.suggestedEquity, locale, 'UZS')}` : `Kutilayotgan: ${formatCurrency(metrics.suggestedEquity, locale, 'UZS')}`}
-          </span>
-        </div>
-
-        {/* 4. Balance Difference */}
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <span style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-            {isRu ? 'Балансовая разница' : 'Balans farqi (A - M - K)'}
-          </span>
-          <div
-            style={{
-              fontSize: 'var(--text-xl)',
-              fontWeight: 800,
-              color: metrics.isBalanced ? '#10b981' : '#f59e0b',
-              marginTop: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            {metrics.isBalanced ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-            {formatCurrency(metrics.balanceDifference, locale, 'UZS')}
-          </div>
-
-          {!metrics.isBalanced && !isReadOnly && (
-            <button
-              onClick={handleBalanceWithEquity}
-              style={{
-                marginTop: '6px',
-                padding: '4px 8px',
-                fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                color: '#ffffff',
-                backgroundColor: '#3b82f6',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                width: 'fit-content',
-              }}
-            >
-              <Sparkles size={12} />
-              {isRu ? 'Сбалансировать капиталом' : 'Kapital bilan tenglashtirish'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ─── Navigation Tabs ──────────────────────────────────────── */}
+      {/* ─── Underline Tab Navigation Bar (Matches Finance) ────────── */}
       <div
         style={{
           display: 'flex',
+          borderBottom: '1px solid var(--color-border-light)',
           gap: 'var(--space-2)',
-          borderBottom: '1px solid var(--color-border)',
-          paddingBottom: '2px',
           overflowX: 'auto',
+          paddingBottom: '2px',
         }}
       >
-        {[
-          { key: 'overview', label: isRu ? 'Обзор и баланс' : 'Umumiy balans', icon: Scale },
-          { key: 'cash', label: isRu ? 'Денежные средства' : 'Pul mablag‘lari', icon: Wallet },
-          { key: 'inventory', label: isRu ? 'Товары и материалы' : 'Tovar va materiallar', icon: Package },
-          { key: 'customers', label: isRu ? 'Дебиторы (Клиенты)' : 'Mijozlar qarzi', icon: Users },
-          { key: 'suppliers', label: isRu ? 'Кредиторы (Поставщики)' : 'Yetkazib beruvchilar', icon: Truck },
-          { key: 'fixed-assets', label: isRu ? 'Основные средства' : 'Asosiy vositalar', icon: Building2 },
-          { key: 'other', label: isRu ? 'Прочее и капитал' : 'Boshqa va Kapital', icon: Layers },
-        ].map((tab) => {
+        {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
           return (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key as TabKey)}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -832,8 +1011,8 @@ export default function OpeningBalancesPage() {
                 padding: '10px 16px',
                 border: 'none',
                 background: 'none',
-                borderBottom: isActive ? '3px solid #3b82f6' : '3px solid transparent',
-                color: isActive ? '#3b82f6' : 'var(--color-text-muted)',
+                borderBottom: isActive ? '2px solid var(--color-primary-600)' : '2px solid transparent',
+                color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
                 fontWeight: isActive ? 600 : 500,
                 fontSize: 'var(--text-sm)',
                 cursor: 'pointer',
@@ -842,325 +1021,203 @@ export default function OpeningBalancesPage() {
               }}
             >
               <Icon size={16} />
-              {tab.label}
+              <span>{tab.label}</span>
+              {tab.count > 0 && (
+                <Badge variant={isActive ? 'info' : 'neutral'}>
+                  {tab.count}
+                </Badge>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* ─── Tab Content ─────────────────────────────────────────── */}
+      {/* ─── Sub-Ledger Content Tables ─────────────────────────────── */}
 
-      {/* TAB 1: OVERVIEW */}
-      {activeTab === 'overview' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 'var(--space-4)',
-            }}
-          >
-            {[
-              {
-                title: isRu ? 'Касса и банк' : 'Kassa va bank qoldiqlari',
-                amount: metrics.categoryBreakdown.CASH + metrics.categoryBreakdown.BANK,
-                icon: Wallet,
-                color: '#3b82f6',
-                desc: isRu ? 'Наличные и расчетные счета' : 'Naqd pullar va bank hisobvaraqlari',
-                actionTab: 'cash',
-              },
-              {
-                title: isRu ? 'Складские запасы' : 'Ombor qoldiqlari',
-                amount: metrics.categoryBreakdown.INVENTORY,
-                icon: Package,
-                color: '#10b981',
-                desc: isRu ? 'Товары, материалы, готовая продукция' : 'Tovar, xomashyo va tayyor mahsulotlar',
-                actionTab: 'inventory',
-              },
-              {
-                title: isRu ? 'Долги клиентов (Дебиторка)' : 'Mijozlar qarzdorligi (Debitorlik)',
-                amount: metrics.categoryBreakdown.CUSTOMER_DEBT,
-                icon: Users,
-                color: '#8b5cf6',
-                desc: isRu ? 'Ожидаемые поступления от покупателей' : 'Xaridorlardan kutilayotgan tushumlar',
-                actionTab: 'customers',
-              },
-              {
-                title: isRu ? 'Долги поставщикам (Кредиторка)' : 'Yetkazib beruvchilarga qarzlar',
-                amount: metrics.categoryBreakdown.SUPPLIER_DEBT,
-                icon: Truck,
-                color: '#ef4444',
-                desc: isRu ? 'Задолженность перед контрагентами' : 'Ta’minotchilarga to‘lanishi kerak bo‘lgan qarz',
-                actionTab: 'suppliers',
-              },
-              {
-                title: isRu ? 'Основные средства' : 'Asosiy vositalar (Qoldiq qiymat)',
-                amount: metrics.categoryBreakdown.FIXED_ASSET,
-                icon: Building2,
-                color: '#06b6d4',
-                desc: isRu ? 'Станки, компьютеры, авто, здания' : 'Stanok, texnika, transport va binolar',
-                actionTab: 'fixed-assets',
-              },
-              {
-                title: isRu ? 'Начальный капитал' : 'Boshlang‘ich ustav kapitali',
-                amount: metrics.categoryBreakdown.EQUITY,
-                icon: Layers,
-                color: '#f59e0b',
-                desc: isRu ? 'Собственный капитал учредителей' : 'Ta’sischilarning boshlang‘ich kapitali',
-                actionTab: 'other',
-              },
-            ].map((card, i) => {
-              const Icon = card.icon;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    backgroundColor: 'var(--color-surface)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: 'var(--space-4)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{card.title}</span>
-                      <div
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: 'var(--radius-md)',
-                          backgroundColor: `${card.color}15`,
-                          color: card.color,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Icon size={18} />
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '8px' }}>
-                      {formatCurrency(card.amount, locale, 'UZS')}
-                    </div>
-                    <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                      {card.desc}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setActiveTab(card.actionTab as TabKey)}
-                    style={{
-                      marginTop: '16px',
-                      background: 'none',
-                      border: 'none',
-                      color: card.color,
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: 0,
-                    }}
-                  >
-                    {isRu ? 'Перейти к разделу' : 'Bo‘limga o‘tish'}
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Notes Section */}
-          <div
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-4)',
-            }}
-          >
-            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '8px' }}>
-              {isRu ? 'Примечания к документу:' : 'Hujjatga umumiy izoh:'}
-            </label>
-            <textarea
-              value={notes}
-              disabled={isReadOnly}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={
-                isRu
-                  ? 'Введите примечания, реквизиты инвентаризационной описи или основание ввода остатков...'
-                  : 'Boshlang‘ich qoldiqlarni kiritish asosi, inventarizatsiya dalolatnomasi raqami va izohlarni kiriting...'
-              }
-              style={{
-                width: '100%',
-                minHeight: '80px',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: isReadOnly ? 'var(--color-bg-muted)' : 'var(--color-bg)',
-                fontSize: 'var(--text-sm)',
-                fontFamily: 'inherit',
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: CASH & BANK */}
+      {/* TAB 1: CASH & BANK */}
       {activeTab === 'cash' && (
-        <CategoryTableSection
-          title={isRu ? 'Денежные средства в кассе и банке' : 'Kassa va bankdagi pul mablag‘lari'}
-          category="CASH"
+        <SubledgerCard
+          title={isRu ? 'Денежные средства в кассе и на расчетных счетах' : 'Kassa va bankdagi pul mablag‘lari'}
+          count={tabCounts.cash}
           isReadOnly={isReadOnly}
-          lines={lines}
-          onAddLine={() => addLine('CASH')}
-          onRemoveLine={removeLine}
-          onUpdateField={updateLineField}
-          locale={locale}
-          isRu={isRu}
-          accounts={accounts}
-        />
+          onAdd={() => addLine('CASH')}
+          addText={isRu ? 'Добавить счет / кассу' : 'Kassa / hisob qo‘shish'}
+        >
+          <CashTable
+            lines={lines}
+            isReadOnly={isReadOnly}
+            accounts={accounts}
+            locale={locale}
+            isRu={isRu}
+            onUpdate={updateLineField}
+            onRemove={removeLine}
+          />
+        </SubledgerCard>
       )}
 
-      {/* TAB 3: INVENTORY */}
+      {/* TAB 2: INVENTORY */}
       {activeTab === 'inventory' && (
-        <InventoryTableSection
-          title={isRu ? 'Остатки товаров и материалов на складе' : 'Ombordagi tovar va materiallar qoldig‘i'}
+        <SubledgerCard
+          title={isRu ? 'Товарно-материальные ценности на складах' : 'Ombordagi tovar va materiallar qoldiqlari'}
+          count={tabCounts.inventory}
           isReadOnly={isReadOnly}
-          lines={lines}
-          onAddLine={() => addLine('INVENTORY')}
-          onRemoveLine={removeLine}
-          onUpdateField={updateLineField}
-          locale={locale}
-          isRu={isRu}
-          products={products}
-          warehouses={warehouses}
-        />
+          onAdd={() => addLine('INVENTORY')}
+          addText={isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
+        >
+          <InventoryTable
+            lines={lines}
+            isReadOnly={isReadOnly}
+            products={products}
+            warehouses={warehouses}
+            locale={locale}
+            isRu={isRu}
+            onUpdate={updateLineField}
+            onRemove={removeLine}
+          />
+        </SubledgerCard>
       )}
 
-      {/* TAB 4: CUSTOMER DEBTS */}
+      {/* TAB 3: CUSTOMER DEBT */}
       {activeTab === 'customers' && (
-        <CounterpartyTableSection
-          title={isRu ? 'Задолженность покупателей и авансы' : 'Xaridorlar qarzdorligi va olingan avanslar'}
-          category="CUSTOMER_DEBT"
+        <SubledgerCard
+          title={isRu ? 'Задолженность покупателей (Дебиторы)' : 'Mijozlar qarzdorligi (Debitorlik)'}
+          count={tabCounts.customers}
           isReadOnly={isReadOnly}
-          lines={lines}
-          onAddLine={() => addLine('CUSTOMER_DEBT')}
-          onRemoveLine={removeLine}
-          onUpdateField={updateLineField}
-          locale={locale}
-          isRu={isRu}
-          counterparties={counterparties.filter((c) => c.type === 'CUSTOMER' || c.type === 'BOTH')}
-        />
+          onAdd={() => addLine('CUSTOMER_DEBT')}
+          addText={isRu ? 'Добавить клиента' : 'Mijoz qarzdorligini qo‘shish'}
+        >
+          <CounterpartyTable
+            category="CUSTOMER_DEBT"
+            lines={lines}
+            isReadOnly={isReadOnly}
+            counterparties={counterparties.filter((c) => c.type === 'CUSTOMER' || c.type === 'BOTH')}
+            locale={locale}
+            isRu={isRu}
+            onUpdate={updateLineField}
+            onRemove={removeLine}
+          />
+        </SubledgerCard>
       )}
 
-      {/* TAB 5: SUPPLIER DEBTS */}
+      {/* TAB 4: SUPPLIER DEBT */}
       {activeTab === 'suppliers' && (
-        <CounterpartyTableSection
-          title={isRu ? 'Задолженность поставщикам и выданные авансы' : 'Yetkazib beruvchilarga qarzlar va berilgan avanslar'}
-          category="SUPPLIER_DEBT"
+        <SubledgerCard
+          title={isRu ? 'Задолженность поставщикам (Кредиторы)' : 'Yetkazib beruvchilarga qarzlar (Kreditorlik)'}
+          count={tabCounts.suppliers}
           isReadOnly={isReadOnly}
-          lines={lines}
-          onAddLine={() => addLine('SUPPLIER_DEBT')}
-          onRemoveLine={removeLine}
-          onUpdateField={updateLineField}
-          locale={locale}
-          isRu={isRu}
-          counterparties={counterparties.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH')}
-        />
+          onAdd={() => addLine('SUPPLIER_DEBT')}
+          addText={isRu ? 'Добавить поставщика' : 'Yetkazib beruvchini qo‘shish'}
+        >
+          <CounterpartyTable
+            category="SUPPLIER_DEBT"
+            lines={lines}
+            isReadOnly={isReadOnly}
+            counterparties={counterparties.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH')}
+            locale={locale}
+            isRu={isRu}
+            onUpdate={updateLineField}
+            onRemove={removeLine}
+          />
+        </SubledgerCard>
+      )}
+
+      {/* TAB 5: ADVANCES */}
+      {activeTab === 'advances' && (
+        <SubledgerCard
+          title={isRu ? 'Авансы: выданные поставщикам и полученные от клиентов' : 'Avanslar: yetkazib beruvchilarga berilgan va mijozlardan olingan'}
+          count={tabCounts.advances}
+          isReadOnly={isReadOnly}
+          onAdd={() => addLine('CUSTOMER_ADVANCE')}
+          addText={isRu ? 'Добавить аванс' : 'Avans qo‘shish'}
+        >
+          <AdvancesTable
+            lines={lines}
+            isReadOnly={isReadOnly}
+            counterparties={counterparties}
+            locale={locale}
+            isRu={isRu}
+            onUpdate={updateLineField}
+            onRemove={removeLine}
+          />
+        </SubledgerCard>
       )}
 
       {/* TAB 6: FIXED ASSETS */}
       {activeTab === 'fixed-assets' && (
-        <FixedAssetsTableSection
-          title={isRu ? 'Основные средства (Оборудование, техника, транспорт)' : 'Asosiy vositalar (Stanok, uskunalar, transport)'}
+        <SubledgerCard
+          title={isRu ? 'Основные средства (Оборудование, техника, транспорт)' : 'Asosiy vositalar (Uskunalar, texnika, transport)'}
+          count={tabCounts.fixedAssets}
           isReadOnly={isReadOnly}
-          lines={lines}
-          onAddLine={() => addLine('FIXED_ASSET')}
-          onRemoveLine={removeLine}
-          onUpdateField={updateLineField}
-          locale={locale}
-          isRu={isRu}
-        />
+          onAdd={() => addLine('FIXED_ASSET')}
+          addText={isRu ? 'Добавить объект' : 'Asosiy vosita qo‘shish'}
+        >
+          <FixedAssetsTable
+            lines={lines}
+            isReadOnly={isReadOnly}
+            fixedAssets={fixedAssets}
+            locale={locale}
+            isRu={isRu}
+            onUpdate={updateLineField}
+            onRemove={removeLine}
+          />
+        </SubledgerCard>
       )}
 
       {/* TAB 7: OTHER & EQUITY */}
       {activeTab === 'other' && (
-        <OtherItemsTableSection
-          title={isRu ? 'Прочие активы, обязательства и начальный капитал' : 'Boshqa aktivlar, majburiyatlar va ustav kapitali'}
+        <SubledgerCard
+          title={isRu ? 'Собственный капитал и прочие статьи баланса' : 'Ustav kapitali va boshqa balans moddalari'}
+          count={tabCounts.other}
           isReadOnly={isReadOnly}
-          lines={lines}
-          onAddLine={() => addLine('EQUITY')}
-          onRemoveLine={removeLine}
-          onUpdateField={updateLineField}
-          locale={locale}
-          isRu={isRu}
-        />
+          onAdd={() => addLine('EQUITY')}
+          addText={isRu ? 'Добавить статью' : 'Modda qo‘shish'}
+        >
+          <OtherTable
+            lines={lines}
+            isReadOnly={isReadOnly}
+            locale={locale}
+            isRu={isRu}
+            onUpdate={updateLineField}
+            onRemove={removeLine}
+          />
+        </SubledgerCard>
       )}
 
-      {/* ─── Modal: New Document ─────────────────────────────────── */}
+      {/* ─── Modal: New Document ───────────────────────────────────── */}
       <Modal
         isOpen={showNewDocModal}
-        title={isRu ? 'Создать документ начальных остатков' : 'Yangi boshlang‘ich qoldiq hujjati'}
+        title={isRu ? 'Новый ввод начальных остатков' : 'Yangi boshlang‘ich qoldiq hujjati'}
         onClose={() => setShowNewDocModal(false)}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
               {isRu ? 'Дата среза остатков' : 'Boshlang‘ich qoldiq sanasi'}
             </label>
-            <input
-              type="date"
-              value={newDocDate}
-              onChange={(e) => setNewDocDate(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-bg)',
-              }}
-            />
+            <DatePicker value={newDocDate} onChange={setNewDocDate} />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '6px' }}>
-              {isRu ? 'Номер документа (автоматически при пустом)' : 'Hujjat raqami (avtomatik)'}
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Номер документа (оставьте пустым для автонумерации)' : 'Hujjat raqami (avtomatik yaratish uchun bo‘sh qoldiring)'}
             </label>
-            <input
+            <Input
               type="text"
-              placeholder="Masalan: OB-2026-0001"
+              placeholder="OB-2026-0001"
               value={newDocNumber}
               onChange={(e) => setNewDocNumber(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-bg)',
-              }}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '6px' }}>
-              {isRu ? 'Примечание' : 'Izoh'}
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Примечание / Основание' : 'Izoh / Asos'}
             </label>
-            <textarea
+            <Input
+              type="text"
+              placeholder={isRu ? 'Основание ввода остатков...' : 'Kiritish asosi...'}
               value={newDocNotes}
               onChange={(e) => setNewDocNotes(e.target.value)}
-              placeholder={isRu ? 'Основание ввода остатков...' : 'Kiritish asosi...'}
-              style={{
-                width: '100%',
-                minHeight: '60px',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-bg)',
-              }}
             />
           </div>
 
@@ -1169,23 +1226,23 @@ export default function OpeningBalancesPage() {
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
-              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать' : 'Yaratish'}
+              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать документ' : 'Hujjat yaratish'}
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* ─── Modal: Excel Import ─────────────────────────────────── */}
+      {/* ─── Modal: Excel Import ───────────────────────────────────── */}
       <Modal
         isOpen={showImportModal}
-        title={isRu ? 'Импорт начальных остатков из Excel' : 'Boshlang‘ich qoldiqlarni Exceldan yuklash'}
+        title={isRu ? 'Импорт остатков из Excel' : 'Boshlang‘ich qoldiqlarni Exceldan yuklash'}
         onClose={() => setShowImportModal(false)}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-2)' }}>
-          <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
+          <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             {isRu
-              ? 'Заполните скачанный шаблон Excel со всеми вкладками (Деньги, Склад, Клиенты, Поставщики) и загрузите файл сюда.'
-              : 'Standart Excel shablonini to‘ldiring (Pul, Tovar, Mijozlar, Yetkazib beruvchilar varaqlari bilan) va bu yerga yuklang.'}
+              ? 'Заполните скачанный шаблон Excel со всеми вкладками (Деньги, Склад, Клиенты, Поставщики) и выберите файл для загрузки.'
+              : 'Standart Excel shablonini to‘ldiring (Pul, Tovar, Mijozlar, Yetkazib beruvchilar varaqlari bilan) va yuklash uchun faylni tanlang.'}
           </p>
 
           <div
@@ -1194,10 +1251,10 @@ export default function OpeningBalancesPage() {
               borderRadius: 'var(--radius-lg)',
               padding: 'var(--space-6)',
               textAlign: 'center',
-              backgroundColor: 'rgba(59, 130, 246, 0.03)',
+              backgroundColor: 'var(--color-bg-subtle)',
             }}
           >
-            <FileSpreadsheet size={36} color="#3b82f6" style={{ margin: '0 auto 8px' }} />
+            <FileSpreadsheet size={36} color="var(--color-primary-600)" style={{ margin: '0 auto 8px' }} />
             <input
               type="file"
               accept=".xlsx,.xls"
@@ -1209,18 +1266,18 @@ export default function OpeningBalancesPage() {
           {importErrors.length > 0 && (
             <div
               style={{
-                backgroundColor: '#fef2f2',
-                border: '1px solid #fecaca',
+                backgroundColor: 'var(--color-error-50)',
+                border: '1px solid var(--color-error-100)',
                 borderRadius: 'var(--radius-md)',
                 padding: 'var(--space-3)',
                 maxHeight: '180px',
                 overflowY: 'auto',
               }}
             >
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: '#b91c1c', display: 'block', marginBottom: '4px' }}>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-error-600)', display: 'block', marginBottom: '4px' }}>
                 {isRu ? 'Ошибки в файле Excel:' : 'Excel fayldagi xatoliklar:'}
               </span>
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: '#b91c1c' }}>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}>
                 {importErrors.map((err, idx) => (
                   <li key={idx}>
                     <strong>[{err.sheetName}, Qator {err.rowNumber}]:</strong> {err.errorMessage}
@@ -1241,58 +1298,46 @@ export default function OpeningBalancesPage() {
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Upload size={16} />
-              {importing ? (isRu ? 'Проверка и загрузка...' : 'Tekshirilmoqda...') : isRu ? 'Загрузить и применить' : 'Yuklash va saqlash'}
+              <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Загрузить и применить' : 'Yuklash va saqlash'}</span>
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* ─── Modal: Unpost Confirmation (Rollback Invariant) ──────── */}
+      {/* ─── Modal: Unpost Confirmation (Rollback Invariant) ────────── */}
       <Modal
         isOpen={showUnpostModal}
-        title={isRu ? 'Внимание! Переоткрытие остатков' : 'Diqqat! Qoldiq hujjatini qayta ochish'}
+        title={isRu ? 'Переоткрыть документ остатков (Unpost)' : 'Boshlang‘ich qoldiqni qayta ochish (Unpost)'}
         onClose={() => setShowUnpostModal(false)}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div
             style={{
-              backgroundColor: '#fffbeb',
-              border: '1px solid #fde68a',
+              padding: 'var(--space-3)',
               borderRadius: 'var(--radius-md)',
-              padding: '12px',
+              backgroundColor: 'var(--color-warning-50)',
+              border: '1px solid var(--color-warning-100)',
               display: 'flex',
-              alignItems: 'flex-start',
               gap: '10px',
             }}
           >
-            <ShieldAlert size={24} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ fontSize: 'var(--text-sm)', color: '#92400e' }}>
-              <strong>{isRu ? 'Правило защиты от отката (Rollback Invariant):' : 'Qayta ochish xavfsizlik qoidasi:'}</strong>
-              <p style={{ margin: '4px 0 0' }}>
-                {isRu
-                  ? 'Если товары из начальных партий уже были проданы через счета-фактуры или денежные средства списаны, система заблокирует переоткрытие для защиты целостности данных.'
-                  : 'Agar boshlang‘ich partiyadagi tovarlar allaqachon sotuv orqali kamaygan bo‘lsa yoki kassadagi pul sarflangan bo‘lsa, ombor va moliya buzilishining oldini olish uchun tizim qayta ochishni taqiqlaydi.'}
-              </p>
-            </div>
+            <AlertTriangle size={20} color="var(--color-warning-600)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
+              {isRu
+                ? 'Внимание! Документ вернется в статус черновика. Будет проверен защитный инвариант: если часть товаров уже продана или деньги сняты из кассы, переоткрытие будет заблокировано.'
+                : 'Diqqat! Hujjat qoralama holatiga qaytariladi. Xavfsizlik qoidasi tekshiriladi: agar dastlabki partiyadagi tovarlar sotilgan bo‘lsa yoki kassa kamaygan bo‘lsa, qayta ochish taqiqlanadi.'}
+            </p>
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '6px' }}>
-              {isRu ? 'Причина переоткрытия (для аудита):' : 'Qayta ochish sababi (audit uchun):'}
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Причина переоткрытия' : 'Qayta ochish sababi'}
             </label>
-            <textarea
+            <Input
+              type="text"
+              placeholder={isRu ? 'Например: исправление ошибки в остатках...' : 'Masalan: qoldiqdagi xatolikni tuzatish...'}
               value={unpostReason}
               onChange={(e) => setUnpostReason(e.target.value)}
-              placeholder={isRu ? 'Укажите причину отката остатков...' : 'Qoldiqni qayta tahrirlash sababini yozing...'}
-              style={{
-                width: '100%',
-                minHeight: '70px',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-bg)',
-                fontSize: 'var(--text-sm)',
-              }}
             />
           </div>
 
@@ -1304,9 +1349,9 @@ export default function OpeningBalancesPage() {
               variant="primary"
               onClick={handleUnpost}
               disabled={actionLoading}
-              style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+              style={{ backgroundColor: 'var(--color-error-600)', borderColor: 'var(--color-error-600)' }}
             >
-              {actionLoading ? (isRu ? 'Проверка инвариантов...' : 'Tekshirilmoqda...') : isRu ? 'Подтвердить переоткрытие' : 'Qayta ochishni tasdiqlash'}
+              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Да, переоткрыть' : 'Ha, qayta ochilsin'}
             </Button>
           </div>
         </div>
@@ -1315,655 +1360,972 @@ export default function OpeningBalancesPage() {
   );
 }
 
-// ─── Sub-Component: Cash & Bank Table ─────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-Components & Table Sections
+// ─────────────────────────────────────────────────────────────────────────────
 
-function CategoryTableSection({
+function SubledgerCard({
   title,
-  category,
+  count,
   isReadOnly,
-  lines,
-  onAddLine,
-  onRemoveLine,
-  onUpdateField,
-  locale,
-  isRu,
-  accounts,
-}: any) {
-  const filteredIndices = lines
-    .map((l: any, i: number) => (l.category === category || l.category === 'BANK' ? i : -1))
-    .filter((i: number) => i !== -1);
-
+  onAdd,
+  addText,
+  children,
+}: {
+  title: string;
+  count: number;
+  isReadOnly: boolean;
+  onAdd: () => void;
+  addText: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>{title}</h3>
+    <Card style={{ padding: 0, overflow: 'hidden' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: 'var(--space-4) var(--space-5)',
+          borderBottom: '1px solid var(--color-border-light)',
+          flexWrap: 'wrap',
+          gap: 'var(--space-2)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            {title}
+          </h3>
+          <Badge variant="neutral">
+            {count}
+          </Badge>
+        </div>
         {!isReadOnly && (
-          <Button variant="secondary" onClick={onAddLine} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            {isRu ? 'Добавить счет / кассу' : 'Kassa / hisob qo‘shish'}
+          <Button variant="secondary" size="sm" onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={14} />
+            <span>{addText}</span>
           </Button>
         )}
       </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left', color: 'var(--color-text-muted)' }}>
-              <th style={{ padding: '10px' }}>#</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Касса / Счет' : 'Kassa / Hisobraqam'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Валюта' : 'Valyuta'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Начальный остаток' : 'Boshlang‘ich qoldiq'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Примечание' : 'Izoh'}</th>
-              {!isReadOnly && <th style={{ padding: '10px', textAlign: 'center' }}></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredIndices.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                  {isRu ? 'Нет добавленных счетов' : 'Kassa yoki hisoblar qo‘shilmagan'}
-                </td>
-              </tr>
-            ) : (
-              filteredIndices.map((idx: number, pos: number) => {
-                const line = lines[idx];
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td style={{ padding: '10px', color: 'var(--color-text-muted)' }}>{pos + 1}</td>
-                    <td style={{ padding: '10px' }}>
-                      <select
-                        value={line.accountId || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => {
-                          const acc = accounts.find((a: any) => a.id === e.target.value);
-                          onUpdateField(idx, 'accountId', e.target.value);
-                          if (acc) {
-                            onUpdateField(idx, 'currency', acc.currency || 'UZS');
-                            onUpdateField(idx, 'category', acc.accountType === 'BANK' ? 'BANK' : 'CASH');
-                          }
-                        }}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '100%', maxWidth: '240px' }}
-                      >
-                        <option value="">{isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang'}</option>
-                        {accounts.map((acc: any) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name?.[locale] || acc.name?.uz || acc.name?.ru || 'Kassa'} ({acc.currency})
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <span style={{ fontWeight: 600 }}>{line.currency || 'UZS'}</span>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.amount || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'amount', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '160px', fontWeight: 600 }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="text"
-                        value={line.notes || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'notes', e.target.value)}
-                        placeholder={isRu ? 'Примечание...' : 'Izoh...'}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '100%' }}
-                      />
-                    </td>
-                    {!isReadOnly && (
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => onRemoveLine(idx)}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <div style={{ overflowX: 'auto' }}>{children}</div>
+    </Card>
   );
 }
 
-// ─── Sub-Component: Inventory Table ───────────────────────────────
+// ─── Table 1: Cash & Bank ──────────────────────────────────────────────────
 
-function InventoryTableSection({
-  title,
-  isReadOnly,
+function CashTable({
   lines,
-  onAddLine,
-  onRemoveLine,
-  onUpdateField,
+  isReadOnly,
+  accounts,
   locale,
   isRu,
+  onUpdate,
+  onRemove,
+}: any) {
+  const filtered = lines
+    .map((l: any, i: number) => (l.category === 'CASH' || l.category === 'BANK' ? { line: l, index: i } : null))
+    .filter(Boolean);
+
+  const getAccountName = (acc: any) => {
+    if (!acc) return '—';
+    if (typeof acc.name === 'string') return acc.name;
+    return acc.name?.[locale] || acc.name?.uz || acc.name?.ru || 'Kassa';
+  };
+
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+        <tr>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>{isRu ? 'КАССА / РАСЧЕТНЫЙ СЧЕТ' : 'KASSA / HISOBRAQAM'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '90px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'НАЧАЛЬНЫЙ ОСТАТОК' : 'BOSHLANG‘ICH QOLDIQ'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
+          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.length === 0 ? (
+          <tr>
+            <td colSpan={6} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Нет добавленных счетов или касс' : 'Kassa yoki hisoblar qo‘shilmagan'}
+            </td>
+          </tr>
+        ) : (
+          filtered.map(({ line, index }: any, pos: number) => (
+            <tr
+              key={index}
+              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
+              <td style={{ padding: '12px 16px' }}>
+                <select
+                  value={line.accountId || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => {
+                    const acc = accounts.find((a: any) => a.id === e.target.value);
+                    onUpdate(index, 'accountId', e.target.value);
+                    if (acc) {
+                      onUpdate(index, 'currency', acc.currency || 'UZS');
+                      onUpdate(index, 'category', acc.accountType === 'BANK' ? 'BANK' : 'CASH');
+                    }
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    maxWidth: '300px',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <option value="">{isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang'}</option>
+                  {accounts.map((acc: any) => (
+                    <option key={acc.id} value={acc.id}>
+                      {getAccountName(acc)} ({acc.currency})
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <Badge variant="neutral">
+                  {line.currency || 'UZS'}
+                </Badge>
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={line.amount || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  className="tabular-nums"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '180px',
+                    fontWeight: 600,
+                    textAlign: 'right',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <input
+                  type="text"
+                  value={line.notes || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
+                  placeholder={isRu ? 'Примечание...' : 'Izoh...'}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              {!isReadOnly && (
+                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+                    title={isRu ? 'Удалить' : 'O‘chirish'}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+// ─── Table 2: Inventory ───────────────────────────────────────────────────
+
+function InventoryTable({
+  lines,
+  isReadOnly,
   products,
   warehouses,
+  locale,
+  isRu,
+  onUpdate,
+  onRemove,
 }: any) {
-  const filteredIndices = lines
-    .map((l: any, i: number) => (l.category === 'INVENTORY' ? i : -1))
-    .filter((i: number) => i !== -1);
+  const filtered = lines
+    .map((l: any, i: number) => (l.category === 'INVENTORY' ? { line: l, index: i } : null))
+    .filter(Boolean);
+
+  const getProductName = (p: any) => {
+    if (!p) return '—';
+    if (typeof p.name === 'string') return p.name;
+    return p.name?.[locale] || p.name?.uz || p.name?.ru || 'Tovar';
+  };
+
+  const getWarehouseName = (w: any) => {
+    if (!w) return '—';
+    if (typeof w.name === 'string') return w.name;
+    return w.name?.[locale] || w.name?.uz || w.name?.ru || 'Ombor';
+  };
 
   return (
-    <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>{title}</h3>
-        {!isReadOnly && (
-          <Button variant="secondary" onClick={onAddLine} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            {isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
-          </Button>
-        )}
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left', color: 'var(--color-text-muted)' }}>
-              <th style={{ padding: '10px' }}>#</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Товар (SKU)' : 'Tovar (SKU)'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Склад' : 'Ombor'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Количество' : 'Miqdor'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Себестоимость' : 'Birlik tannarxi'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Сумма' : 'Umumiy summa'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Партия' : 'Partiya raqami'}</th>
-              {!isReadOnly && <th style={{ padding: '10px', textAlign: 'center' }}></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredIndices.length === 0 ? (
-              <tr>
-                <td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                  {isRu ? 'Товары не добавлены' : 'Tovarlar qo‘shilmagan'}
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+        <tr>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '220px' }}>{isRu ? 'ТОВАР (SKU)' : 'TOVAR (SKU)'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px' }}>{isRu ? 'СКЛАД' : 'OMBOR'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '120px', textAlign: 'right' }}>{isRu ? 'КОЛИЧЕСТВО' : 'MIQDOR'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px', textAlign: 'right' }}>{isRu ? 'ТАННАРХ' : 'TANNARX'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px' }}>{isRu ? 'ПАРТИЯ' : 'PARTIYA №'}</th>
+          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.length === 0 ? (
+          <tr>
+            <td colSpan={8} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Остатки товаров не добавлены' : 'Tovarlar qoldig‘i qo‘shilmagan'}
+            </td>
+          </tr>
+        ) : (
+          filtered.map(({ line, index }: any, pos: number) => (
+            <tr
+              key={index}
+              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
+              <td style={{ padding: '12px 16px' }}>
+                <select
+                  value={line.productId || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'productId', e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <option value="">{isRu ? 'Выберите товар' : 'Tovarni tanlang'}</option>
+                  {products.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.sku ? `[${p.sku}] ` : ''}{getProductName(p)}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <select
+                  value={line.warehouseId || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'warehouseId', e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <option value="">{isRu ? 'Выберите склад' : 'Omborni tanlang'}</option>
+                  {warehouses.map((w: any) => (
+                    <option key={w.id} value={w.id}>
+                      {getWarehouseName(w)}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={line.quantity || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'quantity', parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                  className="tabular-nums"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100px',
+                    textAlign: 'right',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={line.unitCost || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'unitCost', parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  className="tabular-nums"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '120px',
+                    textAlign: 'right',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
+                {formatCurrency(Number(line.amount || 0), locale, 'UZS')}
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <input
+                  type="text"
+                  value={line.batchNumber || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'batchNumber', e.target.value)}
+                  placeholder="INIT-BATCH"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              {!isReadOnly && (
+                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+                    title={isRu ? 'Удалить' : 'O‘chirish'}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </td>
-              </tr>
-            ) : (
-              filteredIndices.map((idx: number, pos: number) => {
-                const line = lines[idx];
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td style={{ padding: '10px', color: 'var(--color-text-muted)' }}>{pos + 1}</td>
-                    <td style={{ padding: '10px' }}>
-                      <select
-                        value={line.productId || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'productId', e.target.value)}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '220px' }}
-                      >
-                        <option value="">{isRu ? 'Выберите товар' : 'Tovarni tanlang'}</option>
-                        {products.map((p: any) => (
-                          <option key={p.id} value={p.id}>
-                            {p.sku} — {p.name?.[locale] || p.name?.uz || p.name?.ru || 'Tovar'}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <select
-                        value={line.warehouseId || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'warehouseId', e.target.value)}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '160px' }}
-                      >
-                        <option value="">{isRu ? 'Выберите склад' : 'Omborni tanlang'}</option>
-                        {warehouses.map((w: any) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name?.[locale] || w.name?.uz || w.name?.ru || 'Ombor'}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.quantity || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                        placeholder="0"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '90px' }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.unitCost || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'unitCost', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '120px' }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px', fontWeight: 600, color: '#10b981' }}>
-                      {formatCurrency(Number(line.amount || 0), locale, 'UZS')}
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="text"
-                        value={line.batchNumber || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'batchNumber', e.target.value)}
-                        placeholder="INIT-BATCH-01"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '140px' }}
-                      />
-                    </td>
-                    {!isReadOnly && (
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => onRemoveLine(idx)}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+              )}
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
   );
 }
 
-// ─── Sub-Component: Counterparty (Customers / Suppliers) Table ────
+// ─── Table 3: Counterparties (Debts) ──────────────────────────────────────
 
-function CounterpartyTableSection({
-  title,
+function CounterpartyTable({
   category,
-  isReadOnly,
   lines,
-  onAddLine,
-  onRemoveLine,
-  onUpdateField,
-  locale,
-  isRu,
+  isReadOnly,
   counterparties,
+  locale,
+  isRu,
+  onUpdate,
+  onRemove,
 }: any) {
+  const filtered = lines
+    .map((l: any, i: number) => (l.category === category ? { line: l, index: i } : null))
+    .filter(Boolean);
+
   const isCustomer = category === 'CUSTOMER_DEBT';
-  const filteredIndices = lines
-    .map((l: any, i: number) =>
-      isCustomer
-        ? l.category === 'CUSTOMER_DEBT' || l.category === 'CUSTOMER_ADVANCE'
-          ? i
-          : -1
-        : l.category === 'SUPPLIER_DEBT' || l.category === 'SUPPLIER_ADVANCE'
-        ? i
-        : -1,
-    )
-    .filter((i: number) => i !== -1);
 
   return (
-    <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>{title}</h3>
-        {!isReadOnly && (
-          <Button variant="secondary" onClick={onAddLine} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            {isRu ? 'Добавить контрагента' : 'Kontragent qo‘shish'}
-          </Button>
-        )}
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left', color: 'var(--color-text-muted)' }}>
-              <th style={{ padding: '10px' }}>#</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Контрагент' : 'Kontragent'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Тип остатка' : 'Qoldiq turi'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Договор' : 'Shartnoma'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Сумма долга' : 'Qarzdorlik summasi'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Примечание' : 'Izoh'}</th>
-              {!isReadOnly && <th style={{ padding: '10px', textAlign: 'center' }}></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredIndices.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                  {isRu ? 'Контрагенты не добавлены' : 'Kontragentlar qo‘shilmagan'}
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+        <tr>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>
+            {isCustomer ? (isRu ? 'КЛИЕНТ / ПОКУПАТЕЛЬ' : 'MIJOZ / XARIDOR') : isRu ? 'ПОСТАВЩИК' : 'YETKAZIB BERUVCHI'}
+          </th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '160px' }}>{isRu ? 'ДОГОВОР №' : 'SHARTNOMA №'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>
+            {isCustomer ? (isRu ? 'СУММА ДОЛГА (ДЕБИТОР)' : 'QARZ SUMMASI (DEBITOR)') : isRu ? 'НАШ ДОЛГ (КРЕДИТОР)' : 'QARZIMIZ (KREDITOR)'}
+          </th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
+          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.length === 0 ? (
+          <tr>
+            <td colSpan={6} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Нет добавленных контрагентов' : 'Kontragentlar qo‘shilmagan'}
+            </td>
+          </tr>
+        ) : (
+          filtered.map(({ line, index }: any, pos: number) => (
+            <tr
+              key={index}
+              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
+              <td style={{ padding: '12px 16px' }}>
+                <select
+                  value={line.counterpartyId || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'counterpartyId', e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    maxWidth: '300px',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <option value="">{isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}</option>
+                  {counterparties.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.inn ? `(STIR: ${c.inn})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <input
+                  type="text"
+                  value={line.contractNumber || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'contractNumber', e.target.value)}
+                  placeholder={isRu ? '№ договора...' : 'Shartnoma raqami...'}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={line.amount || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  className="tabular-nums"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: isCustomer ? '#10b981' : '#ef4444',
+                    width: '180px',
+                    fontWeight: 600,
+                    textAlign: 'right',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <input
+                  type="text"
+                  value={line.notes || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
+                  placeholder={isRu ? 'Примечание...' : 'Izoh...'}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              {!isReadOnly && (
+                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+                    title={isRu ? 'Удалить' : 'O‘chirish'}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </td>
-              </tr>
-            ) : (
-              filteredIndices.map((idx: number, pos: number) => {
-                const line = lines[idx];
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td style={{ padding: '10px', color: 'var(--color-text-muted)' }}>{pos + 1}</td>
-                    <td style={{ padding: '10px' }}>
-                      <select
-                        value={line.counterpartyId || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'counterpartyId', e.target.value)}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '220px' }}
-                      >
-                        <option value="">{isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}</option>
-                        {counterparties.map((c: any) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} {c.inn ? `(INN: ${c.inn})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <select
-                        value={line.category}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'category', e.target.value)}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '160px' }}
-                      >
-                        {isCustomer ? (
-                          <>
-                            <option value="CUSTOMER_DEBT">{isRu ? 'Долг покупателя' : 'Mijoz qarzi (debitor)'}</option>
-                            <option value="CUSTOMER_ADVANCE">{isRu ? 'Аванс от клиента' : 'Mijoz avansi'}</option>
-                          </>
-                        ) : (
-                          <>
-                            <option value="SUPPLIER_DEBT">{isRu ? 'Долг поставщику' : 'Yetkazib beruvchiga qarz'}</option>
-                            <option value="SUPPLIER_ADVANCE">{isRu ? 'Аванс поставщику' : 'Yetkazib beruvchiga avans'}</option>
-                          </>
-                        )}
-                      </select>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="text"
-                        value={line.contractNumber || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'contractNumber', e.target.value)}
-                        placeholder="SH-2026-01"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '130px' }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.amount || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'amount', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '150px', fontWeight: 600 }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="text"
-                        value={line.notes || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'notes', e.target.value)}
-                        placeholder={isRu ? 'Примечание...' : 'Izoh...'}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '100%' }}
-                      />
-                    </td>
-                    {!isReadOnly && (
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => onRemoveLine(idx)}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+              )}
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
   );
 }
 
-// ─── Sub-Component: Fixed Assets Table ────────────────────────────
+// ─── Table 4: Advances ────────────────────────────────────────────────────
 
-function FixedAssetsTableSection({
-  title,
-  isReadOnly,
+function AdvancesTable({
   lines,
-  onAddLine,
-  onRemoveLine,
-  onUpdateField,
+  isReadOnly,
+  counterparties,
   locale,
   isRu,
+  onUpdate,
+  onRemove,
 }: any) {
-  const filteredIndices = lines
-    .map((l: any, i: number) => (l.category === 'FIXED_ASSET' ? i : -1))
-    .filter((i: number) => i !== -1);
+  const filtered = lines
+    .map((l: any, i: number) =>
+      l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE' ? { line: l, index: i } : null,
+    )
+    .filter(Boolean);
 
   return (
-    <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>{title}</h3>
-        {!isReadOnly && (
-          <Button variant="secondary" onClick={onAddLine} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            {isRu ? 'Добавить ОС' : 'Asosiy vosita qo‘shish'}
-          </Button>
-        )}
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left', color: 'var(--color-text-muted)' }}>
-              <th style={{ padding: '10px' }}>#</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Наименование' : 'Nomi'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Инв. номер' : 'Inventar raqami'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Первоначальная стоимость' : 'Boshlang‘ich qiymati'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Накопленная амортизация' : 'Amortizatsiya'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Остаточная стоимость' : 'Qoldiq qiymat'}</th>
-              {!isReadOnly && <th style={{ padding: '10px', textAlign: 'center' }}></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredIndices.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                  {isRu ? 'Основные средства не добавлены' : 'Asosiy vositalar kiritilmagan'}
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+        <tr>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '220px' }}>{isRu ? 'ТИП АВАНСА' : 'AVANS TURI'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>{isRu ? 'КОНТРАГЕНТ' : 'KONTRAGENT'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'СУММА АВАНСА' : 'AVANS SUMMASI'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
+          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.length === 0 ? (
+          <tr>
+            <td colSpan={6} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Нет добавленных авансов' : 'Avanslar qo‘shilmagan'}
+            </td>
+          </tr>
+        ) : (
+          filtered.map(({ line, index }: any, pos: number) => (
+            <tr
+              key={index}
+              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
+              <td style={{ padding: '12px 16px' }}>
+                <select
+                  value={line.category}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'category', e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <option value="CUSTOMER_ADVANCE">{isRu ? 'Получен от клиента (Пассив)' : 'Mijozdan olingan (Majburiyat)'}</option>
+                  <option value="SUPPLIER_ADVANCE">{isRu ? 'Выдан поставщику (Актив)' : 'Yetkazib beruvchiga berilgan (Aktiv)'}</option>
+                </select>
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <select
+                  value={line.counterpartyId || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'counterpartyId', e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    maxWidth: '300px',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <option value="">{isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}</option>
+                  {counterparties.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.inn ? `(STIR: ${c.inn})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={line.amount || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  className="tabular-nums"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '180px',
+                    fontWeight: 600,
+                    textAlign: 'right',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <input
+                  type="text"
+                  value={line.notes || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
+                  placeholder={isRu ? 'Примечание...' : 'Izoh...'}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              {!isReadOnly && (
+                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+                    title={isRu ? 'Удалить' : 'O‘chirish'}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </td>
-              </tr>
-            ) : (
-              filteredIndices.map((idx: number, pos: number) => {
-                const line = lines[idx];
-                const netBookValue = Math.max(0, Number(line.amount || 0) - Number(line.accumulatedDepreciation || 0));
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td style={{ padding: '10px', color: 'var(--color-text-muted)' }}>{pos + 1}</td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="text"
-                        value={line.notes || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'notes', e.target.value)}
-                        placeholder={isRu ? 'Станок / Автомобиль / Сервер' : 'Stanok / Mashina / Texnika'}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '220px' }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="text"
-                        value={line.contractNumber || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'contractNumber', e.target.value)}
-                        placeholder="INV-0012"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '130px' }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.amount || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'amount', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '150px', fontWeight: 600 }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.accumulatedDepreciation || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'accumulatedDepreciation', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '150px' }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px', fontWeight: 700, color: '#06b6d4' }}>
-                      {formatCurrency(netBookValue, locale, 'UZS')}
-                    </td>
-                    {!isReadOnly && (
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => onRemoveLine(idx)}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+              )}
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
   );
 }
 
-// ─── Sub-Component: Other Items & Equity Table ────────────────────
+// ─── Table 5: Fixed Assets ────────────────────────────────────────────────
 
-function OtherItemsTableSection({
-  title,
-  isReadOnly,
+function FixedAssetsTable({
   lines,
-  onAddLine,
-  onRemoveLine,
-  onUpdateField,
+  isReadOnly,
+  fixedAssets,
   locale,
   isRu,
+  onUpdate,
+  onRemove,
 }: any) {
-  const filteredIndices = lines
-    .map((l: any, i: number) =>
-      l.category === 'EQUITY' || l.category === 'OTHER_ASSET' || l.category === 'OTHER_LIABILITY' ? i : -1,
-    )
-    .filter((i: number) => i !== -1);
+  const filtered = lines
+    .map((l: any, i: number) => (l.category === 'FIXED_ASSET' ? { line: l, index: i } : null))
+    .filter(Boolean);
 
   return (
-    <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>{title}</h3>
-        {!isReadOnly && (
-          <Button variant="secondary" onClick={onAddLine} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            {isRu ? 'Добавить статью' : 'Qator qo‘shish'}
-          </Button>
-        )}
-      </div>
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+        <tr>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '220px' }}>{isRu ? 'НАИМЕНОВАНИЕ ОС' : 'ASOSIY VOSITA NOMI'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px' }}>{isRu ? 'ИНВ. НОМЕР' : 'INV. RAQAM'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'ПЕРВОНАЧ. СТОИМОСТЬ' : 'BOSHLANG‘ICH QIYMAT'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'ИЗНОС (АМОРТИЗАЦИЯ)' : 'ESKIRISH (AMORTIZATSIYA)'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'ОСТАТОЧНАЯ СТОИМОСТЬ' : 'QOLDIQ QIYMAT'}</th>
+          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.length === 0 ? (
+          <tr>
+            <td colSpan={7} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Основные средства не добавлены' : 'Asosiy vositalar qo‘shilmagan'}
+            </td>
+          </tr>
+        ) : (
+          filtered.map(({ line, index }: any, pos: number) => {
+            const initCost = Number(line.amount || 0);
+            const accDep = Number(line.accumulatedDepreciation || 0);
+            const netBookValue = Math.max(0, initCost - accDep);
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left', color: 'var(--color-text-muted)' }}>
-              <th style={{ padding: '10px' }}>#</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Категория статьи' : 'Modda toifasi'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Наименование' : 'Nomi'}</th>
-              <th style={{ padding: '10px' }}>{isRu ? 'Сумма' : 'Summasi'}</th>
-              {!isReadOnly && <th style={{ padding: '10px', textAlign: 'center' }}></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredIndices.length === 0 ? (
-              <tr>
-                <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                  {isRu ? 'Статьи капитала или прочего не добавлены' : 'Kapital yoki boshqa moddalar kiritilmagan'}
+            return (
+              <tr
+                key={index}
+                style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
+                <td style={{ padding: '12px 16px' }}>
+                  <input
+                    type="text"
+                    value={line.notes || ''}
+                    disabled={isReadOnly}
+                    onChange={(e) => onUpdate(index, 'notes', e.target.value)}
+                    placeholder={isRu ? 'Название станка, оборудования...' : 'Stanok, texnika, bino nomi...'}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-bg-secondary)',
+                      color: 'var(--color-text-primary)',
+                      width: '100%',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                  />
                 </td>
+                <td style={{ padding: '12px 16px' }}>
+                  <input
+                    type="text"
+                    value={line.contractNumber || ''}
+                    disabled={isReadOnly}
+                    onChange={(e) => onUpdate(index, 'contractNumber', e.target.value)}
+                    placeholder="INV-001"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-bg-secondary)',
+                      color: 'var(--color-text-primary)',
+                      width: '100%',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                  />
+                </td>
+                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={line.amount || ''}
+                    disabled={isReadOnly}
+                    onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="tabular-nums"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-bg-secondary)',
+                      color: 'var(--color-text-primary)',
+                      width: '140px',
+                      fontWeight: 600,
+                      textAlign: 'right',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                  />
+                </td>
+                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={line.accumulatedDepreciation || ''}
+                    disabled={isReadOnly}
+                    onChange={(e) => onUpdate(index, 'accumulatedDepreciation', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="tabular-nums"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-bg-secondary)',
+                      color: '#ef4444',
+                      width: '140px',
+                      fontWeight: 600,
+                      textAlign: 'right',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                  />
+                </td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="tabular-nums">
+                  {formatCurrency(netBookValue, locale, 'UZS')}
+                </td>
+                {!isReadOnly && (
+                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(index)}
+                      style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+                      title={isRu ? 'Удалить' : 'O‘chirish'}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                )}
               </tr>
-            ) : (
-              filteredIndices.map((idx: number, pos: number) => {
-                const line = lines[idx];
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td style={{ padding: '10px', color: 'var(--color-text-muted)' }}>{pos + 1}</td>
-                    <td style={{ padding: '10px' }}>
-                      <select
-                        value={line.category}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'category', e.target.value)}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '220px' }}
-                      >
-                        <option value="EQUITY">{isRu ? 'Капитал (Уставный / Прибыль)' : 'Boshlang‘ich Kapital'}</option>
-                        <option value="OTHER_ASSET">{isRu ? 'Прочий актив (Переплата налога и т.д.)' : 'Boshqa aktiv (Soliq ortiqcha to‘lovi)'}</option>
-                        <option value="OTHER_LIABILITY">{isRu ? 'Прочее обязательство (Зарплата, налоги)' : 'Boshqa majburiyat (Ish haqi, soliq)'}</option>
-                      </select>
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="text"
-                        value={line.notes || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'notes', e.target.value)}
-                        placeholder={isRu ? 'Уставный капитал...' : 'Boshlang‘ich ustav kapitali...'}
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '100%' }}
-                      />
-                    </td>
-                    <td style={{ padding: '10px' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={line.amount || ''}
-                        disabled={isReadOnly}
-                        onChange={(e) => onUpdateField(idx, 'amount', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        style={{ padding: '6px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', width: '170px', fontWeight: 700 }}
-                      />
-                    </td>
-                    {!isReadOnly && (
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => onRemoveLine(idx)}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            );
+          })
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+// ─── Table 6: Other & Equity ──────────────────────────────────────────────
+
+function OtherTable({
+  lines,
+  isReadOnly,
+  locale,
+  isRu,
+  onUpdate,
+  onRemove,
+}: any) {
+  const filtered = lines
+    .map((l: any, i: number) =>
+      l.category === 'EQUITY' || l.category === 'OTHER_ASSET' || l.category === 'OTHER_LIABILITY'
+        ? { line: l, index: i }
+        : null,
+    )
+    .filter(Boolean);
+
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+        <tr>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '240px' }}>{isRu ? 'КАТЕГОРИЯ' : 'KATEGORIYA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '220px' }}>{isRu ? 'НАИМЕНОВАНИЕ СТАТЬИ' : 'MODDA NOMI'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
+          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.length === 0 ? (
+          <tr>
+            <td colSpan={5} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Нет добавленных статей капитала или прочих остатков' : 'Kapital yoki boshqa moddalar qo‘shilmagan'}
+            </td>
+          </tr>
+        ) : (
+          filtered.map(({ line, index }: any, pos: number) => (
+            <tr
+              key={index}
+              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
+              <td style={{ padding: '12px 16px' }}>
+                <select
+                  value={line.category}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'category', e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <option value="EQUITY">{isRu ? 'Собственный капитал (8330)' : 'Ustav kapitali / Taqsimlanmagan foyda'}</option>
+                  <option value="OTHER_ASSET">{isRu ? 'Прочие активы' : 'Boshqa aktivlar'}</option>
+                  <option value="OTHER_LIABILITY">{isRu ? 'Прочие обязательства' : 'Boshqa majburiyatlar'}</option>
+                </select>
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <input
+                  type="text"
+                  value={line.notes || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
+                  placeholder={isRu ? 'Например: Уставный фонд или переплата по налогу...' : 'Masalan: Ustav fondi yoki soliq ortiqcha to‘lovi...'}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: 'var(--color-text-primary)',
+                    width: '100%',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={line.amount || ''}
+                  disabled={isReadOnly}
+                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  className="tabular-nums"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    color: line.category === 'EQUITY' ? 'var(--color-primary-600)' : 'var(--color-text-primary)',
+                    width: '180px',
+                    fontWeight: 600,
+                    textAlign: 'right',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </td>
+              {!isReadOnly && (
+                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+                    title={isRu ? 'Удалить' : 'O‘chirish'}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
   );
 }
