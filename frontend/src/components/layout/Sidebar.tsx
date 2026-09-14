@@ -108,7 +108,6 @@ export function Sidebar() {
     { href: '/analytics', label: t('analytics'), icon: BarChart3 },
     { href: '/accounting', label: t('accounting'), icon: BookOpen },
     { href: '/users', label: t('users'), icon: Users },
-    { href: '/super-admin', label: t('superAdmin'), icon: Crown },
   ];
 
   const itemBaseStyle: React.CSSProperties = {

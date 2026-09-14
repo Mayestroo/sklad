@@ -6,7 +6,7 @@ import { AuthResponse } from '../../../shared/types';
 
 interface AuthUser {
   id: string;
-  tenantId: string;
+  tenantId?: string | null;
   email: string;
   firstName: string;
   lastName: string;
@@ -37,8 +37,11 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isImpersonated: boolean;
   login: (authData: AuthResponse) => void;
   logout: () => void;
+  startImpersonation: (authData: AuthResponse) => void;
+  exitImpersonation: () => void;
   hasPermission: (permissionSlug: string) => boolean;
   hasRole: (roleSlug: string) => boolean;
   updateCompanySettings: (settings: any) => void;
@@ -51,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [company, setCompany] = useState<AuthCompany | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isImpersonated, setIsImpersonated] = useState<boolean>(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -58,14 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem('crm_access_token');
     const storedUser = localStorage.getItem('crm_user');
     const storedCompany = localStorage.getItem('crm_company');
+    const hasBackup = !!localStorage.getItem('crm_superadmin_backup');
 
-    if (storedToken && storedUser && storedCompany) {
+    if (storedToken && storedUser) {
       try {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
-        setCompany(JSON.parse(storedCompany));
+        setCompany(storedCompany && storedCompany !== 'undefined' ? JSON.parse(storedCompany) : null);
+        setIsImpersonated(hasBackup);
       } catch {
         localStorage.removeItem('crm_access_token');
+        localStorage.removeItem('crm_refresh_token');
         localStorage.removeItem('crm_user');
         localStorage.removeItem('crm_company');
       }
@@ -76,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setUser(null);
       setCompany(null);
+      setIsImpersonated(false);
       router.push('/login');
     };
 
@@ -88,7 +96,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (authData: AuthResponse) => {
     setToken(authData.tokens.accessToken);
     setUser(authData.user as AuthUser);
+    setCompany(authData.company as AuthCompany | null);
+    setIsImpersonated(false);
+
+    localStorage.setItem('crm_access_token', authData.tokens.accessToken);
+    localStorage.setItem('crm_refresh_token', authData.tokens.refreshToken);
+    localStorage.setItem('crm_user', JSON.stringify(authData.user));
+    if (authData.company) {
+      localStorage.setItem('crm_company', JSON.stringify(authData.company));
+    } else {
+      localStorage.removeItem('crm_company');
+    }
+
+    if (authData.user.roles.includes('super_admin')) {
+      router.push('/admin');
+    } else {
+      router.push('/');
+    }
+  };
+
+  const startImpersonation = (authData: AuthResponse) => {
+    // Back up current superadmin session
+    const backupSession = {
+      token,
+      user,
+      company,
+    };
+    localStorage.setItem('crm_superadmin_backup', JSON.stringify(backupSession));
+
+    // Set impersonated tenant session
+    setToken(authData.tokens.accessToken);
+    setUser(authData.user as AuthUser);
     setCompany(authData.company as AuthCompany);
+    setIsImpersonated(true);
 
     localStorage.setItem('crm_access_token', authData.tokens.accessToken);
     localStorage.setItem('crm_refresh_token', authData.tokens.refreshToken);
@@ -98,15 +138,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/');
   };
 
+  const exitImpersonation = () => {
+    const backupStr = localStorage.getItem('crm_superadmin_backup');
+    if (backupStr) {
+      try {
+        const backup = JSON.parse(backupStr);
+        setToken(backup.token);
+        setUser(backup.user);
+        setCompany(backup.company);
+        setIsImpersonated(false);
+
+        localStorage.setItem('crm_access_token', backup.token);
+        localStorage.setItem('crm_user', JSON.stringify(backup.user));
+        if (backup.company) {
+          localStorage.setItem('crm_company', JSON.stringify(backup.company));
+        } else {
+          localStorage.removeItem('crm_company');
+        }
+        localStorage.removeItem('crm_superadmin_backup');
+
+        router.push('/admin');
+        return;
+      } catch {
+        // Fallback logout if corrupt
+      }
+    }
+    logout();
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
     setCompany(null);
+    setIsImpersonated(false);
 
     localStorage.removeItem('crm_access_token');
     localStorage.removeItem('crm_refresh_token');
     localStorage.removeItem('crm_user');
     localStorage.removeItem('crm_company');
+    localStorage.removeItem('crm_superadmin_backup');
 
     router.push('/login');
   };
@@ -163,8 +233,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isAuthenticated: !!token && !!user,
         isLoading,
+        isImpersonated,
         login,
         logout,
+        startImpersonation,
+        exitImpersonation,
         hasPermission,
         hasRole,
         updateCompanySettings,

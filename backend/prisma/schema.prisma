@@ -407,7 +407,7 @@ model SubscriptionPayment {
 
 model User {
   id                 String    @id @default(uuid())
-  tenantId           String    @map("tenant_id")
+  tenantId           String?   @map("tenant_id")
   email              String
   passwordHash       String    @map("password_hash")
   firstName          String    @map("first_name")
@@ -419,7 +419,7 @@ model User {
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  company            Company   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company            Company?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userRoles          UserRole[]
   auditLogs          AuditLog[]
   createdInventoryDocs InventoryDocument[]

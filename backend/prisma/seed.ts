@@ -163,6 +163,17 @@ async function main() {
         .map((p) => p.id),
     },
     {
+      slug: 'cashier',
+      name: { uz: 'Kassir', ru: 'Кассир' },
+      permissions: allPermissions
+        .filter((p) =>
+          (p.module === 'sales' && ['VIEW', 'CREATE'].includes(p.action)) ||
+          (p.module === 'finance' && ['VIEW', 'CREATE'].includes(p.action)) ||
+          p.module === 'dashboard',
+        )
+        .map((p) => p.id),
+    },
+    {
       slug: 'viewer',
       name: { uz: "Faqat ko'rish", ru: 'Только просмотр' },
       permissions: allPermissions
@@ -202,6 +213,43 @@ async function main() {
     }
   }
   console.log('  ✅ System roles seeded');
+
+  // ─── 4.5. Global Super Admin User ────────────────────────────────
+  const superAdminRole = await prisma.role.findFirst({
+    where: { slug: 'super_admin', tenantId: null },
+  });
+
+  const superAdminHashedPassword = await bcrypt.hash('SuperAdmin123!', 10);
+  let superAdminUser = await prisma.user.findFirst({
+    where: { email: 'superadmin@sklad.uz' },
+  });
+
+  if (!superAdminUser) {
+    superAdminUser = await prisma.user.create({
+      data: {
+        tenantId: null,
+        email: 'superadmin@sklad.uz',
+        passwordHash: superAdminHashedPassword,
+        firstName: 'SaaS',
+        lastName: 'Superadmin',
+        preferredLanguage: 'uz',
+        isActive: true,
+      },
+    });
+
+    if (superAdminRole) {
+      await prisma.userRole.create({
+        data: { userId: superAdminUser.id, roleId: superAdminRole.id },
+      });
+    }
+    console.log('  ✅ Global Super Admin User "superadmin@sklad.uz" (Parol: SuperAdmin123!) created');
+  } else {
+    await prisma.user.update({
+      where: { id: superAdminUser.id },
+      data: { passwordHash: superAdminHashedPassword, isActive: true },
+    });
+    console.log('  ✅ Global Super Admin User "superadmin@sklad.uz" updated');
+  }
 
   // ─── 5. Demo Tenant Company & Admin User ─────────────────────────
   let company = await prisma.company.findUnique({

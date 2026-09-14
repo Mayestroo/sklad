@@ -39,7 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       },
     });
 
-    if (!user || !user.isActive || user.company.status === 'BLOCKED') {
+    if (!user || !user.isActive || (user.company && user.company.status === 'BLOCKED')) {
       throw new UnauthorizedException('User account is inactive or blocked');
     }
 

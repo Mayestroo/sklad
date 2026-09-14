@@ -191,7 +191,7 @@ export class AuthService {
       throw new UnauthorizedException('User account is deactivated');
     }
 
-    if (user.company.status === 'BLOCKED') {
+    if (user.company && user.company.status === 'BLOCKED') {
       console.log(`[LOGIN_FAILED] Company blocked for user: "${cleanEmail}"`);
       throw new UnauthorizedException(
         'Company account is suspended or blocked',
@@ -215,7 +215,7 @@ export class AuthService {
 
     // Audit log login
     await this.auditService.logAction({
-      tenantId: user.tenantId,
+      tenantId: user.tenantId || (user.company ? user.company.id : 'SYSTEM'),
       userId: user.id,
       entityType: 'User',
       entityId: user.id,
@@ -347,14 +347,16 @@ export class AuthService {
         roles: roleSlugs,
         permissions: Array.from(permissions),
       },
-      company: {
-        id: user.company.id,
-        name: user.company.name,
-        slug: user.company.slug,
-        status: user.company.status,
-        defaultLanguage: user.company.defaultLanguage,
-        trialEndsAt: user.company.trialEndsAt,
-      },
+      company: user.company
+        ? {
+            id: user.company.id,
+            name: user.company.name,
+            slug: user.company.slug,
+            status: user.company.status,
+            defaultLanguage: user.company.defaultLanguage,
+            trialEndsAt: user.company.trialEndsAt,
+          }
+        : null,
     };
   }
 
@@ -364,13 +366,13 @@ export class AuthService {
     roles: string[],
     permissions: string[],
   ): AuthResponse {
-    const payload: JwtPayload = {
+    const payload: any = {
       sub: user.id,
-      tenantId: company.id,
+      tenantId: company ? company.id : null,
       email: user.email,
       roles,
       permissions,
-      locale: user.preferredLanguage,
+      locale: user.preferredLanguage || 'uz',
     };
 
     const jwtExpiration = this.configService.get<string>(
@@ -392,7 +394,7 @@ export class AuthService {
     return {
       user: {
         id: user.id,
-        tenantId: company.id,
+        tenantId: user.tenantId ?? null,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
@@ -400,13 +402,15 @@ export class AuthService {
         roles,
         permissions,
       },
-      company: {
-        id: company.id,
-        name: company.name,
-        slug: company.slug,
-        status: company.status,
-        defaultLanguage: company.defaultLanguage,
-      },
+      company: company
+        ? {
+            id: company.id,
+            name: company.name,
+            slug: company.slug,
+            status: company.status,
+            defaultLanguage: company.defaultLanguage,
+          }
+        : (null as any),
       tokens: {
         accessToken,
         refreshToken,

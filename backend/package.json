@@ -22,7 +22,8 @@
     "db:seed": "npx prisma db seed",
     "db:reset": "npx prisma migrate reset",
     "db:studio": "npx prisma studio",
-    "db:generate": "npx prisma generate"
+    "db:generate": "npx prisma generate",
+    "create:superadmin": "ts-node scripts/create-superadmin.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

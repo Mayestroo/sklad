@@ -215,6 +215,8 @@ export default function UsersPage() {
         return 'error';
       case 'accountant':
         return 'warning';
+      case 'cashier':
+        return 'info';
       case 'warehouse_manager':
         return 'info';
       case 'salesperson':
@@ -447,6 +449,7 @@ export default function UsersPage() {
                   options={[
                     { value: 'company_admin', label: 'Company Admin' },
                     { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
+                    { value: 'cashier', label: isRu ? 'Кассир (Cashier)' : 'Kassir (Cashier)' },
                     { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
                     { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
                     { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },

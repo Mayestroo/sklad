@@ -251,6 +251,18 @@ export async function autoSeedIfEmpty(prisma: any) {
           .map((p: any) => p.id),
       },
       {
+        slug: 'cashier',
+        name: { uz: 'Kassir', ru: 'Кассир' },
+        permissions: allPermissions
+          .filter(
+            (p: any) =>
+              (p.module === 'sales' && ['VIEW', 'CREATE'].includes(p.action)) ||
+              (p.module === 'finance' && ['VIEW', 'CREATE'].includes(p.action)) ||
+              p.module === 'dashboard',
+          )
+          .map((p: any) => p.id),
+      },
+      {
         slug: 'viewer',
         name: { uz: "Faqat ko'rish", ru: 'Только просмотр' },
         permissions: allPermissions

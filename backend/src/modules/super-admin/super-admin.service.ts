@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
 import {
   GlobalMetrics,
@@ -7,10 +12,256 @@ import {
 } from '../../../../shared/types';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+
+export class CreateTenantDto {
+  name: { uz: string; ru: string } | string;
+  slug: string;
+  plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
+  trialDays?: number;
+  adminEmail: string;
+  adminPassword?: string;
+  adminFirstName: string;
+  adminLastName: string;
+}
 
 @Injectable()
 export class SuperAdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  async impersonateTenant(superAdminUserId: string, companyId: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { tenantId: companyId, isActive: true },
+      include: {
+        userRoles: {
+          include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: { permission: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!users || users.length === 0) {
+      throw new NotFoundException('No active administrator found for this tenant');
+    }
+
+    const adminUser =
+      users.find((u) =>
+        u.userRoles.some((ur) => ur.role.slug === 'company_admin'),
+      ) || users[0];
+
+    const roleSlugs = adminUser.userRoles.map((ur) => ur.role.slug);
+    const permissionSlugs = new Set<string>();
+
+    adminUser.userRoles.forEach((ur) => {
+      ur.role.rolePermissions.forEach((rp) => {
+        permissionSlugs.add(rp.permission.slug);
+      });
+    });
+
+    const payload = {
+      sub: adminUser.id,
+      tenantId: company.id,
+      email: adminUser.email,
+      roles: roleSlugs,
+      permissions: Array.from(permissionSlugs),
+      locale: adminUser.preferredLanguage || 'uz',
+      isImpersonated: true,
+      impersonatedBy: superAdminUserId,
+    };
+
+    const jwtExpiration = this.configService.get<string>(
+      'JWT_EXPIRATION',
+      '1d',
+    );
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: jwtExpiration as any,
+    });
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: this.configService.get(
+        'JWT_REFRESH_SECRET',
+        'dev-jwt-refresh-secret-change-me-in-production',
+      ),
+      expiresIn: '7d',
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId: company.id,
+        userId: superAdminUserId,
+        entityType: 'Company',
+        entityId: company.id,
+        action: 'LOGIN',
+        newValue: { impersonated: true, targetUserId: adminUser.id },
+      },
+    });
+
+    return {
+      user: {
+        id: adminUser.id,
+        tenantId: company.id,
+        email: adminUser.email,
+        firstName: adminUser.firstName,
+        lastName: adminUser.lastName,
+        preferredLanguage: adminUser.preferredLanguage,
+        roles: roleSlugs,
+        permissions: Array.from(permissionSlugs),
+      },
+      company: {
+        id: company.id,
+        name: company.name,
+        slug: company.slug,
+        status: company.status,
+        defaultLanguage: company.defaultLanguage,
+      },
+      tokens: {
+        accessToken,
+        refreshToken,
+        expiresIn: 86400,
+      },
+      isImpersonated: true,
+      impersonatedBy: superAdminUserId,
+    };
+  }
+
+  async createTenant(dto: CreateTenantDto): Promise<TenantCompanySummary> {
+    const cleanSlug = dto.slug.trim().toLowerCase();
+    const cleanEmail = dto.adminEmail.trim().toLowerCase();
+
+    // 1. Check existing company slug
+    const existingCompany = await this.prisma.company.findUnique({
+      where: { slug: cleanSlug },
+    });
+    if (existingCompany) {
+      throw new ConflictException('Company with this slug already exists');
+    }
+
+    // 2. Check existing admin email
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: cleanEmail },
+    });
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    // 3. Find system role "company_admin"
+    const companyAdminRole = await this.prisma.role.findFirst({
+      where: { slug: 'company_admin', tenantId: null },
+    });
+    if (!companyAdminRole) {
+      throw new BadRequestException('System role company_admin not found.');
+    }
+
+    const password = dto.adminPassword || 'Admin123!';
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const trialDays = dto.trialDays ?? 14;
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+
+    const plan = dto.plan || 'PROFESSIONAL';
+
+    const company = await this.prisma.$transaction(async (tx) => {
+      const newCompany = await tx.company.create({
+        data: {
+          name:
+            typeof dto.name === 'string'
+              ? { uz: dto.name, ru: dto.name }
+              : (dto.name as any),
+          slug: cleanSlug,
+          status: 'ACTIVE',
+          trialEndsAt,
+        },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          tenantId: newCompany.id,
+          email: cleanEmail,
+          passwordHash,
+          firstName: dto.adminFirstName,
+          lastName: dto.adminLastName,
+          preferredLanguage: 'uz',
+          isActive: true,
+        },
+      });
+
+      await tx.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: companyAdminRole.id,
+        },
+      });
+
+      const branch = await tx.branch.create({
+        data: {
+          tenantId: newCompany.id,
+          name: { uz: 'Bosh filial', ru: 'Главный филиал' },
+          isMain: true,
+        },
+      });
+
+      await tx.warehouse.create({
+        data: {
+          tenantId: newCompany.id,
+          branchId: branch.id,
+          name: { uz: 'Asosiy omborxona', ru: 'Основной склад' },
+        },
+      });
+
+      const subEndDate = new Date();
+      subEndDate.setDate(subEndDate.getDate() + 30);
+      await tx.subscription.create({
+        data: {
+          tenantId: newCompany.id,
+          plan,
+          status: 'ACTIVE',
+          amount:
+            plan === 'STARTER'
+              ? 490000
+              : plan === 'PROFESSIONAL'
+                ? 990000
+                : 1990000,
+          currency: 'UZS',
+          startDate: new Date(),
+          endDate: subEndDate,
+          nextBillingAt: subEndDate,
+        },
+      });
+
+      return newCompany;
+    });
+
+    return {
+      id: company.id,
+      name: company.name as any,
+      slug: company.slug,
+      status: company.status as any,
+      plan,
+      userCount: 1,
+      createdAt: company.createdAt.toISOString(),
+      trialEndsAt: company.trialEndsAt ? company.trialEndsAt.toISOString() : null,
+    };
+  }
 
   async getGlobalMetrics(): Promise<GlobalMetrics> {
     const [companies, subscriptions, totalUsersCount] = await Promise.all([
