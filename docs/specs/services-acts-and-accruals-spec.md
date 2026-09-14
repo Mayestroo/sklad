@@ -1,4 +1,4 @@
-# Specification: Service Acts and Accruals Module (Moliya Modulidan Ajratilgan Arxitektura)
+# Specification: Service Acts & Accruals Module (Xizmatlar Aktai va Hisob-Kitob Boshqaruvi Moduli - Moliya Modulidan Ajratilgan Arxitektura) v2.0
 
 ## Problem Statement
 
@@ -51,11 +51,14 @@ A decoupled, full-stack **Services Management Module** (`Service Acts & Accruals
 22. As an accountant, I want to view a printed/PDF version of the "Xizmatlar ko'rsatish dalolatnomasi" (Certificate of Completed Work / Act) formatted according to standard business document norms in Uzbekistan, including signature and stamp blocks, so that it can be signed by both parties.
 23. As an administrator, I want the system to block any attempt to cancel or delete a posted service act that has linked payments (`Service Rollback Invariant`), so that financial audit trails cannot be corrupted.
 24. As an administrator, I want to safely cancel a posted service act that has zero linked payments, so that erroneous documents can be voided, reversing counterparty debt and accounting ledger entries.
+25. As an operations manager recording a received service act, I want to classify the expense into categories (e.g. Office rent, Marketing, IT hosting, Logistics), so that company expenses are categorized cleanly.
+26. As a cashier in the Finance module settling a Service Act, I want the system to prevent overpayment beyond the remaining open act balance, so that accidental overbilling is prevented.
+27. As a business manager viewing the counterparties directory, I want counterparties associated with posted Service Acts to accurately display updated debitor or kreditor balances, so that whole-enterprise reconciliation remains accurate.
 
 ## Implementation Decisions
 
-### 1. Database Schema & Architecture (`schema.prisma`)
-The system introduces two dedicated Prisma models: `ServiceAct` and `ServiceActItem`:
+### 1. Architectural Data Model & Schema Decisions
+To ensure strict multi-tenant isolation, immutable auditing, and seamless compatibility with both the raw specification requirements and Sklad ERP's enterprise standard, the schema model encapsulates:
 
 ```prisma
 enum ServiceActType {
@@ -132,21 +135,19 @@ model ServiceActItem {
 ```
 
 ### 2. Modules and Interfaces
-1. **Backend Module: `src/modules/services`**:
-   - `services.controller.ts`: REST endpoints for CRUD, state transitions (`post`, `cancel`), and print data.
-   - `services.service.ts`: Business logic, document numbering (`ACT-YYYY-XXXX`), line total computations, and database transactions.
-   - DTOs: `CreateServiceActDto`, `UpdateServiceActDto`, `FilterServiceActsDto`.
-2. **Finance Module Reconciliation Extension (`src/modules/finance/finance.service.ts`)**:
-   - Extended `createIncome` and `createExpense`:
-     When `sourceDocType === 'ServiceAct'` and `sourceDocId` is provided:
-     - Atomically increments `ServiceAct.paidAmount` by `dto.amount`.
-     - Recalibrates `paymentStatus`:
+1. **Services Management Core**:
+   - Manages CRUD operations, auto-generated sequence numbering (`ACT-YYYY-XXXX`), line total computations, and database transactions.
+   - Governs the 3-state document lifecycle: `DRAFT` (editable, zero debt impact) → `POSTED` (immutable, debts accrued, ledgers posted) → `CANCELLED` (voided, ledgers reversed).
+2. **Finance Module Settlement Extension**:
+   - `createIncome` and `createExpense` transactions with `sourceDocType: 'ServiceAct'`:
+     - Atomically increment `ServiceAct.paidAmount` by the payment amount.
+     - Recalibrate `paymentStatus`:
        - `paidAmount >= totalAmount` → `PAID`
        - `paidAmount > 0` → `PARTIALLY_PAID`
        - `paidAmount === 0` → `UNPAID`
-     - Decrements counterparty debt (`debtBalance`) in direction-consistent terms.
-3. **Accounting Double-Entry Postings (`src/modules/accounting/journal/journal.service.ts`)**:
-   - Integrated into `postServiceAct`:
+     - Decrement counterparty debt (`debtBalance`) in direction-consistent terms.
+3. **National Accounting Standards Dual-Entry Engine**:
+   - Triggered automatically upon `postServiceAct`:
      - **PROVIDED**:
        - Debit 4010 (`Customer Receivables`): `totalAmount`
        - Credit 9030 (`Service Revenue`): `subtotal`
@@ -155,14 +156,14 @@ model ServiceActItem {
        - Debit 9420/9430 (`Operating/Administrative Expenses`): `subtotal`
        - Debit 4410 (`Input VAT Asset`): `vatAmount` (if > 0)
        - Credit 6010 (`Supplier Payables`): `totalAmount`
-4. **Frontend Architecture (`frontend/src/`)**:
-   - Pages: `/services` with segmented views for "Ko'rsatilgan xizmatlar" and "Olingan xizmatlar".
-   - Components: `ServiceActList`, `ServiceActDrawerForm`, `ServiceActDetailsModal`, `ServiceActPrintView`.
-   - Action buttons: "Tasdiqlash" (Post), "Tahrirlash" (Edit, only when Draft), "Bekor qilish" (Cancel), "Moliya to'lovi" (Opens Finance modal pre-populated with counterparty and act ID).
+4. **Frontend Architecture & Navigation**:
+   - Main page with tabbed views for "Ko'rsatilgan xizmatlar" (`PROVIDED`) and "Olingan xizmatlar" (`RECEIVED`).
+   - Drawers and Modals: Slide-over form for creating/editing acts, detailed view with financial settlement history, and official print view compliant with Uzbekistan commercial norms.
+   - Contextual payment button: Navigates to the Finance module with pre-filled counterparty and document metadata, keeping physical cash handling strictly inside the Finance domain.
 
 ### 3. API Contracts
 - `POST /api/services`: Create draft service act.
-- `GET /api/services`: Paginated search and filtering.
+- `GET /api/services`: Paginated search and filtering (by date range, counterparty, status, payment status).
 - `GET /api/services/:id`: Fetch act details with line items and linked finance transactions.
 - `PUT /api/services/:id`: Update draft act.
 - `POST /api/services/:id/post`: Confirm and post act (creates journal entries and accrues debt).
@@ -173,38 +174,37 @@ model ServiceActItem {
 ### 4. Invariants and Guardrails
 - **Service Rollback Invariant**: Cancelling or deleting an act is rejected with HTTP 400 if `paidAmount > 0` or linked `FinanceTransaction` records exist.
 - **Immutability of Posted Documents**: Header and line items cannot be modified once `status === POSTED`.
-- **Zero Cash Drawer Impact from Services**: The services service makes no direct mutations to `CashAccount`.
+- **Zero Cash Drawer Impact from Services**: The services module performs no direct mutations to `CashAccount` or cash registers.
 
 ## Testing Decisions
 
-### Seam Architecture
-The primary testing seam is the **NestJS Service Layer (`ServicesService` + `FinanceService`)** using an isolated testing module against Prisma.
+### 1. Characteristics of Good Tests
+- Tests verify observable business behavior (API response contracts, lifecycle state transitions, debt adjustments, accounting entries, and rollback guardrails), never private implementation details.
+- Arithmetic invariants must be strictly tested: `lineTotal = (quantity * unitPrice) + vatAmount`, and `totalAmount = sum(lineTotal)`.
 
-### Test Suites
-1. **Document Lifecycle & Calculations (`services.service.spec.ts`)**:
-   - Verify line item arithmetic: `lineTotal = (qty * unitPrice) + vatAmount`.
-   - Verify document subtotal, vatAmount, and totalAmount aggregations.
-   - Verify `DRAFT` creation does not alter `counterparty.debtBalance` or generate `JournalEntry`.
-2. **Posting & Debt Accrual (`services.service.spec.ts`)**:
-   - Verify posting `PROVIDED` increments customer `debtBalance` and creates Debit 4010 / Credit 9030 entries.
-   - Verify posting `RECEIVED` decrements supplier `debtBalance` (increases company debt) and creates Debit 9420 / Credit 6010 entries.
-3. **Finance Payment Reconciliation Seam (`finance.service.spec.ts`)**:
-   - Record `FinanceTransaction` Income linked to `sourceDocType: 'ServiceAct'`: verify `paidAmount` increments and status updates to `PARTIALLY_PAID`.
-   - Record full payment: verify status updates to `PAID`.
-   - Record `FinanceTransaction` Expense against a `RECEIVED` service act: verify proper debt settlement.
-4. **Service Rollback Guardrail (`services.service.spec.ts`)**:
-   - Assert that attempting to cancel or delete an act with `paidAmount > 0` throws `BadRequestException` ("To'lov bog'langan aktni bekor qilib bo'lmaydi").
+### 2. Seam Architecture & Tested Modules
+- **Primary Seam: NestJS Service Layer (`ServicesService` + `FinanceService`)**:
+  - `create`: Line total and grand total calculation, catalog default rate propagation.
+  - `post`: Counterparty debt increment/decrement, double-entry journal postings (4010/9030/6410 and 9420/4410/6010).
+  - `cancel`: Safe reversal of unpaid posted acts, restoration of counterparty debt and voiding of journal entries.
+  - `unpost`: Reversion of unpaid posted acts back to `DRAFT`.
+  - `Service Rollback Invariant`: Verification that attempting to cancel or delete an act with `paidAmount > 0` throws `BadRequestException`.
+- **Secondary Seam: Finance Settlement Integration (`FinanceService`)**:
+  - Verification that recording an income or expense transaction linked to a `ServiceAct` updates `paidAmount`, transitions `paymentStatus` (`UNPAID` → `PARTIALLY_PAID` → `PAID`), and settles counterparty debt.
 
-### Prior Art
+### 3. Prior Art in Codebase
+- `backend/src/modules/services/services.service.spec.ts` (Core services unit test harness).
+- `backend/src/modules/finance/finance-settlement.spec.ts` (Finance settlement against operational documents).
 - `backend/src/modules/sales/invoices/sales-invoices.service.spec.ts` (Orthogonal status, finance settlement).
 - `backend/src/modules/purchases/purchase-invariant.spec.ts` (Rollback guardrails, counterparty debt mutations).
-- `backend/src/modules/finance/finance-settlement.spec.ts` (Invoice and expense payment allocations).
 
 ## Out of Scope
-- Physical warehouse stock movement (handled by Inventory / Purchases / Sales modules).
-- Inventory batch consumption and Landed Cost allocation (handled by `PurchaseExpense` and `AdditionalExpenseDocument`).
-- Automatic tax portal synchronization (Didox / Soliq.uz e-imzo API integrations are deferred to subsequent integrations).
+
+1. **Physical Warehouse Stock Movement**: Intangible services do not decrement or increment inventory quantities or create warehouse batches.
+2. **Inventory Batch Landed Cost Capitalization**: Capitalizing freight or brokerage costs directly into item unit purchase prices is handled by `AdditionalExpenseDocument` in the Purchases module.
+3. **Electronic Tax Portal API Synchronization**: Direct REST integrations with national e-invoicing operators (Didox / Soliq.uz e-imzo) are scheduled for a subsequent dedicated integration phase.
 
 ## Further Notes
+
 - Currency formatting and options adhere strictly to ADR-0010 and the project's frontend conventions.
-- All numbers use decimal arithmetic (`Decimal.js` in backend, proper formatting utilities in frontend) to avoid floating-point drift.
+- All calculations utilize high-precision decimal arithmetic to prevent floating-point rounding errors.
