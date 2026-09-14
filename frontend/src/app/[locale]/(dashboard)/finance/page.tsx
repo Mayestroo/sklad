@@ -250,34 +250,17 @@ export default function FinancePage() {
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div
+        <div>
+          <h1
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 'var(--radius-lg)',
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+              fontSize: 'var(--text-2xl)',
+              fontWeight: 'var(--font-bold)',
+              color: 'var(--color-text-primary)',
+              margin: 0,
             }}
           >
-            <Wallet size={22} />
-          </div>
-          <div>
-            <h1
-              style={{
-                fontSize: 'var(--text-2xl)',
-                fontWeight: 'var(--font-bold)',
-                color: 'var(--color-text-primary)',
-                margin: 0,
-              }}
-            >
-              {isRu ? 'Финансы и Касса' : 'Moliya va Kassalar'}
-            </h1>
-          </div>
+            {isRu ? 'Финансы' : 'Moliya'}
+          </h1>
         </div>
 
         {/* Action Buttons */}

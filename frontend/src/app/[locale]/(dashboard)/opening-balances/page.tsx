@@ -588,34 +588,17 @@ export default function OpeningBalancesPage() {
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div
+        <div>
+          <h1
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 'var(--radius-lg)',
-              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+              fontSize: 'var(--text-2xl)',
+              fontWeight: 'var(--font-bold)',
+              color: 'var(--color-text-primary)',
+              margin: 0,
             }}
           >
-            <Scale size={22} />
-          </div>
-          <div>
-            <h1
-              style={{
-                fontSize: 'var(--text-2xl)',
-                fontWeight: 'var(--font-bold)',
-                color: 'var(--color-text-primary)',
-                margin: 0,
-              }}
-            >
-              {isRu ? 'Ввод начальных остатков' : 'Boshlang‘ich qoldiqlarni kiritish'}
-            </h1>
-          </div>
+            {isRu ? 'Ввод начальных остатков' : 'Boshlang‘ich qoldiqlarni kiritish'}
+          </h1>
         </div>
 
         {/* Global Action Buttons */}

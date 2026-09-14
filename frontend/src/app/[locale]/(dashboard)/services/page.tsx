@@ -237,34 +237,17 @@ export default function ServicesPage() {
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div
+        <div>
+          <h1
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 'var(--radius-lg)',
-              background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(14, 165, 233, 0.25)',
+              fontSize: 'var(--text-2xl)',
+              fontWeight: 'var(--font-bold)',
+              color: 'var(--color-text-primary)',
+              margin: 0,
             }}
           >
-            <Briefcase style={{ width: 22, height: 22, color: '#ffffff' }} />
-          </div>
-          <div>
-            <h1
-              style={{
-                fontSize: 'var(--text-2xl)',
-                fontWeight: 'var(--font-bold)',
-                color: 'var(--color-text-primary)',
-                lineHeight: 1.2,
-                margin: 0,
-              }}
-            >
-              {isRu ? 'Акты и расчеты по услугам' : 'Xizmatlar aktlari va hisob-kitoblar'}
-            </h1>
-          </div>
+            {isRu ? 'Услуги' : 'Xizmatlar'}
+          </h1>
         </div>
 
         <Button
@@ -276,11 +259,11 @@ export default function ServicesPage() {
           <span>
             {activeType === 'PROVIDED'
               ? isRu
-                ? 'Новая оказанная услуга'
-                : 'Yangi ko‘rsatilgan xizmat'
+                ? 'Новая услуга'
+                : 'Yangi xizmat'
               : isRu
-              ? 'Новая полученная услуга'
-              : 'Yangi olingan xizmat'}
+              ? 'Новая услуга'
+              : 'Yangi xizmat'}
           </span>
         </Button>
       </div>
@@ -293,7 +276,7 @@ export default function ServicesPage() {
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--color-border-light)',
           padding: '4px',
-          maxWidth: '520px',
+          maxWidth: '440px',
           width: '100%',
           boxShadow: 'var(--shadow-sm)',
         }}
@@ -320,10 +303,11 @@ export default function ServicesPage() {
             border: activeType === 'PROVIDED' ? '1px solid var(--color-border-light)' : 'none',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
           }}
         >
           <ArrowUpRight className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{isRu ? 'Оказанные услуги (Клиентам)' : 'Ko‘rsatilgan xizmatlar (Mijozlarga)'}</span>
+          <span>{isRu ? 'Оказанные услуги' : 'Ko‘rsatilgan xizmatlar'}</span>
         </button>
 
         <button
@@ -348,10 +332,11 @@ export default function ServicesPage() {
             border: activeType === 'RECEIVED' ? '1px solid var(--color-border-light)' : 'none',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
           }}
         >
           <ArrowDownRight className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>{isRu ? 'Полученные услуги (От поставщиков)' : 'Olingan xizmatlar (Yetkazib beruvchilardan)'}</span>
+          <span>{isRu ? 'Полученные услуги' : 'Olingan xizmatlar'}</span>
         </button>
       </div>
 

@@ -99,12 +99,9 @@ export default function SalesSettingsPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <ShoppingCart size={24} style={{ color: 'var(--color-primary-600)' }} />
-            <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {isRu ? 'Настройки продаж' : 'Savdo sozlamalari'}
-            </h1>
-          </div>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Настройки продаж' : 'Savdo sozlamalari'}
+          </h1>
         </div>
 
         <Button
