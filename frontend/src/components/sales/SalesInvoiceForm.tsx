@@ -1201,29 +1201,29 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
         {/* Table container */}
         <div style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                   {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
-                  {isRu ? 'Цена продажи' : 'Sotish narxi'}
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', minWidth: '130px', width: '140px', whiteSpace: 'nowrap' }}>
+                  {isRu ? `Цена продажи (${currency})` : `Sotish narxi (${currency})`}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Скидка %' : 'Skidka %'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '90px' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
-                  {isRu ? 'Итого' : 'Jami Summa'}
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', minWidth: '200px', whiteSpace: 'nowrap' }}>
+                  {isRu ? `Итого (${currency})` : `Jami Summa (${currency})`}
                 </th>
-                {!isReadOnly && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}
+                {!isReadOnly && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -1351,7 +1351,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                     </td>
 
                     {/* Line Total */}
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
                       {formatCurrency(lineTotal, locale, currency)}
                     </td>
 

@@ -746,18 +746,18 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
         {/* Table */}
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'center', width: '40px' }}>№</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>{isRu ? 'Наименование' : 'Nomi'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px' }}>{isRu ? 'Тип' : 'Turi'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>{isRu ? 'Кол-во' : 'Miqdor'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>{isRu ? 'Цена возврата' : 'Qaytarish narxi'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '90px' }}>{isRu ? 'НДС %' : 'QQS %'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '130px' }}>{isRu ? 'Сумма НДС' : 'QQS summasi'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>{isRu ? 'Итого' : 'Jami'}</th>
-                {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }} />}
+                <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '220px' }}>{isRu ? 'Наименование' : 'Nomi'}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'center', width: '90px', whiteSpace: 'nowrap' }}>{isRu ? 'Тип' : 'Turi'}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>{isRu ? 'Кол-во' : 'Miqdor'}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '130px', width: '140px', whiteSpace: 'nowrap' }}>{isRu ? `Цена (${currency})` : `Narxi (${currency})`}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>{isRu ? 'НДС %' : 'QQS %'}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '150px', whiteSpace: 'nowrap' }}>{isRu ? `Сумма НДС (${currency})` : `QQS summasi (${currency})`}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '180px', whiteSpace: 'nowrap' }}>{isRu ? `Итого (${currency})` : `Jami (${currency})`}</th>
+                {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }} />}
               </tr>
             </thead>
             <tbody>
@@ -870,10 +870,10 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                         </select>
                       )}
                     </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }} className="tabular-nums">
                       {formatCurrency(row.vatAmount, locale, currency)}
                     </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }} className="tabular-nums">
                       {formatCurrency(row.totalPrice, locale, currency)}
                     </td>
                     {!isReadOnly && (

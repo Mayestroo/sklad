@@ -1316,32 +1316,32 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
         {/* Table container */}
         <div style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <table style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                   {isRu ? 'Номенклатура / Позиция' : 'Nomenklatura / Mahsulot'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '130px', width: '140px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Цена за ед. (${currency})` : `Birlik narxi (${currency})`}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '110px', width: '120px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Скидка (${currency})` : `Chegirma (${currency})`}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '90px' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '130px' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '160px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Сумма НДС (${currency})` : `QQS summasi (${currency})`}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '220px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Итого (${currency})` : `Jami Summa (${currency})`}
                 </th>
-                {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}></th>}
+                {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}></th>}
               </tr>
             </thead>
             <tbody>
@@ -1429,15 +1429,15 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     </td>
 
                     {/* VAT Amount */}
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }} className="tabular-nums">
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500, whiteSpace: 'nowrap' }} className="tabular-nums">
                       {formatCurrency(lineVat, locale, currency)}
                     </td>
 
                     {/* Line Total */}
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
-                      <div>{formatCurrency(lineTotal, locale, currency)}</div>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
+                      <div style={{ whiteSpace: 'nowrap' }}>{formatCurrency(lineTotal, locale, currency)}</div>
                       {currency !== 'UZS' && exchangeRate > 1 && (
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 400, marginTop: '2px' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 400, marginTop: '2px', whiteSpace: 'nowrap' }}>
                           ≈ {formatCurrency(lineTotal * exchangeRate, locale, 'UZS')}
                         </div>
                       )}
