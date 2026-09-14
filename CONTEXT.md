@@ -252,6 +252,10 @@ _Avoid_: Silent default substitution, lazy fallback, masking nulls
 The rule requiring every monetary transaction and document to carry an explicitly validated currency (`USD` or `UZS`). For non-base currencies (`currency !== 'UZS'`), an `exchangeRate > 0` is strictly mandatory and must never silently default to `1`.
 _Avoid_: Currency guessing, unitary exchange fallback, implicit UZS assumption
 
+**Multi-Currency KPI Segregation Invariant**:
+Summary KPI cards (in Purchases, Sales, Finance, etc.) must never artificially collapse, sum across distinct currencies without conversion, or silently force foreign currency amounts to UZS. Each currency with active transactions in the reporting period (e.g. UZS, USD, EUR) must be computed and displayed distinctly in its own native currency unit.
+_Avoid_: Cross-currency flat summing, hardcoded UZS summary assumption, single-currency card flattening
+
 **Line Item Quantity & Price Invariant**:
 The rule requiring all document items (sales invoices, purchase receipts, service acts, production orders) to carry explicitly verified `quantity > 0` and `unitPrice >= 0`. Missing or invalid numbers must not default to 1 or 0.
 _Avoid_: Zero-price masking, phantom unit quantity, missing price substitution
