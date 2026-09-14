@@ -98,7 +98,7 @@ export default function BillingSettingsPage() {
       {/* Page Header */}
       <div>
         <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-          Tariflar va Obuna Sozlamalari (Billing & Subscription)
+          {locale === 'ru' ? 'Тарифы и подписка' : 'Tariflar va obuna'}
         </h1>
       </div>
 

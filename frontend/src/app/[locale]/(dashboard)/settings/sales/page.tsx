@@ -105,11 +105,6 @@ export default function SalesSettingsPage() {
               {isRu ? 'Настройки продаж' : 'Savdo sozlamalari'}
             </h1>
           </div>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-1)' }}>
-            {isRu
-              ? 'Управление ценовой политикой, многоуровневыми прайс-листами и правами изменения цен'
-              : 'Narx siyosati, ko\'p darajali narx jadvallari va narxni o\'zgartirish huquqlarini boshqarish'}
-          </p>
         </div>
 
         <Button

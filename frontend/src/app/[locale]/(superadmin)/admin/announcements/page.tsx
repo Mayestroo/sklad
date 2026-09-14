@@ -99,13 +99,8 @@ export default function SuperAdminAnnouncementsPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
-            {isRu ? 'Оповещения системы (Announcements)' : 'Tizim Bildirishnomalari (Announcements)'}
+            {isRu ? 'Оповещения системы' : 'Tizim bildirishnomalari'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
-            {isRu
-              ? 'Глобальные уведомления о технических работах и обновлениях для всех предприятий'
-              : 'Barcha korxonalar foydalanuvchilariga rejaviy profilaktika va yangilanishlar haqida xabar yuborish'}
-          </p>
         </div>
 
         <Button onClick={() => setModalOpen(true)} variant="primary">

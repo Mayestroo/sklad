@@ -241,14 +241,9 @@ export default function ReturnsPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Возврат Товаров Поставщику' : 'Yetkazib Beruvchiga Qaytarishlar'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Возврат поставщикам' : 'Ta’minotchiga qaytarish'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu
-              ? 'Документы возврата поставщику, списание остатков со склада и перерасчет задолженности'
-              : 'Tovarlarni yetkazib beruvchiga qaytarish, ombordan chiqim va qarzni qayta hisoblash jurnali'}
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>

@@ -70,11 +70,8 @@ export default function SuperAdminTicketsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
         <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
-          {isRu ? 'Обращения клиентов (Техподдержка)' : 'Mijozlar Murojaatlari (Texnik yordam)'}
+          {isRu ? 'Техподдержка' : 'Mijozlar murojaatlari'}
         </h1>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
-          {isRu ? 'Список запросов и тикетов от пользователей предприятий' : 'Korxona xodimlari tomonidan yuborilgan savol va murojaatlar'}
-        </p>
       </div>
 
       <div

@@ -161,8 +161,8 @@ export default function ProductionPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Производство и Сборка (Production & Assembly)' : 'Ishlab chiqarish (Production & Assembly)'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Производство' : 'Ishlab chiqarish'}
           </h1>
         </div>
 

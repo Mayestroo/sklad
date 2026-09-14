@@ -94,12 +94,9 @@ export default function SuppliersPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Каталог Поставщиков и Договоры' : 'Yetkazib Beruvchilar Katalogi va Shartnomalar'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Поставщики' : 'Ta’minotchilar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu ? 'Список поставщиков, реквизиты, договоры, история закупок и баланс задолженности' : 'Barcha yetkazib beruvchilar ro\'yxati, rekvizitlari, shartnomalari, xaridlar va o\'zaro qarzdorlik balansi'}
-          </p>
         </div>
         <Button
           onClick={() => setIsCreateOpen(true)}

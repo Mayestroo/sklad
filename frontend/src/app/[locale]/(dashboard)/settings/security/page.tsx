@@ -25,6 +25,7 @@ import { BackupMetadata } from '@shared/types';
 export default function SecurityPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
   const [backups, setBackups] = useState<BackupMetadata[]>([]);
@@ -85,7 +86,7 @@ export default function SecurityPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Xavfsizlik, Zaxira Nusxalash va Qonuniy Muvofiqlik (Security & Compliance)
+            {isRu ? 'Безопасность и соответствие' : 'Xavfsizlik va muvofiqlik'}
           </h1>
         </div>
 

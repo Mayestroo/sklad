@@ -239,12 +239,9 @@ export default function SalesPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Продажи и Реализация' : 'Sotuvlar va Mahsulot Chiqimi'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Продажи' : 'Sotuvlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-            {isRu ? 'Накладные продажи, списание остатков со склада по FIFO, взаиморасчеты и валовая прибыль' : 'Sotuv fakturalari, ombordan FIFO bo‘yicha hisobdan chiqarish, mijoz qarzdorligi va yalpi foyda hisobi'}
-          </p>
         </div>
         <Link href="/sales/new">
           <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>

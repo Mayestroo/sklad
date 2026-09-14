@@ -82,8 +82,8 @@ export default function AnalyticsPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'BI-Аналитика и Дашборд Руководителя' : 'BI Analitika va Rahbar Dashboardi (Executive BI)'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'BI-Аналитика' : 'BI Analitika'}
           </h1>
         </div>
 

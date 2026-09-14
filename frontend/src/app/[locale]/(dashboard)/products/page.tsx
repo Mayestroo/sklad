@@ -254,12 +254,9 @@ export default function ProductsPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Каталог товаров и услуг' : 'Tovarlar va Xizmatlar Katalogi'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Товары и услуги' : 'Tovarlar va xizmatlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu ? 'Управление номенклатурой, ценами и карточками товаров' : 'Nomenklatura, narxlar va mahsulot kartochkalarini boshqarish'}
-          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>

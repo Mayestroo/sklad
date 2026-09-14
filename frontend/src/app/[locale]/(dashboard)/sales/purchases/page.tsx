@@ -33,12 +33,9 @@ export default function PurchasesPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Xaridlar va Yetkazib Beruvchilar Shartnomalari
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            Xaridlar
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Yetkazib beruvchilardan tovarlarni omborga qabul qilish va to&apos;lovlar hisobi
-          </p>
         </div>
       </div>
 

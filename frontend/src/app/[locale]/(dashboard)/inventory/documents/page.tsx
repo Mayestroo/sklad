@@ -176,12 +176,9 @@ export default function InventoryDocumentsPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Складские Документы' : 'Ombor Hujjatlari'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Складские документы' : 'Ombor hujjatlari'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu ? 'Приход (Поступление), Расход (Списание) и Инвентаризация' : 'Kirim (Tushum), Chiqim (Hisobdan chiqarish) va Inventarizatsiya amallari'}
-          </p>
         </div>
 
         <Button variant="primary" onClick={() => setShowModal(true)}>

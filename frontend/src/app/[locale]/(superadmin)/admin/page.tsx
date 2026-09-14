@@ -320,13 +320,8 @@ export default function SuperAdminTenantsPage() {
               margin: 0,
             }}
           >
-            {isRu ? 'Предприятия (Tenants)' : 'Korxonalar Boshqaruvi (Tenants)'}
+            {isRu ? 'Предприятия' : 'Korxonalar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
-            {isRu
-              ? 'Управление учетными записями клиентов, тарифными планами и прямой вход в систему'
-              : 'Mijoz korxonalarni ro‘yxatga olish, tariflarni boshqarish va kabinetga bevosita kirish'}
-          </p>
         </div>
 
         <Button onClick={() => setCreateModalOpen(true)} variant="primary">
@@ -361,9 +356,6 @@ export default function SuperAdminTenantsPage() {
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics ? formatCurrency(metrics.totalMrr, locale, 'UZS') : '0 UZS'}
           </div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <TrendingUp size={13} /> {isRu ? 'Активные подписки' : 'Faol obunalardan tushum'}
-          </div>
         </Card>
 
         {/* Card 2: Active Tenants */}
@@ -389,9 +381,6 @@ export default function SuperAdminTenantsPage() {
           </div>
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics?.activeTenantsCount ?? 0}
-          </div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary-600)', marginTop: '4px' }}>
-            {isRu ? 'Платные аккаунты' : 'Haq to‘langan korxonalar'}
           </div>
         </Card>
 
@@ -419,9 +408,6 @@ export default function SuperAdminTenantsPage() {
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics?.trialTenantsCount ?? 0}
           </div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-600)', marginTop: '4px' }}>
-            {isRu ? '14 дней бесплатного доступа' : '14 kunlik bepul sinov'}
-          </div>
         </Card>
 
         {/* Card 4: Total Users */}
@@ -447,9 +433,6 @@ export default function SuperAdminTenantsPage() {
           </div>
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics?.totalUsersCount ?? 0}
-          </div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-            {isRu ? 'По всем предприятиям' : 'Barcha korxonalar bo‘yicha'}
           </div>
         </Card>
       </div>
@@ -648,7 +631,7 @@ export default function SuperAdminTenantsPage() {
       <Modal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        title={isRu ? 'Регистрация нового предприятия' : 'Yangi korxonani ro‘yxatga olish'}
+        title={isRu ? 'Регистрация предприятия' : 'Yangi korxona qo‘shish'}
         size="lg"
       >
         <form onSubmit={handleCreateTenant} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>

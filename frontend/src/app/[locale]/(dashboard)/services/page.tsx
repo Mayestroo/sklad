@@ -259,21 +259,11 @@ export default function ServicesPage() {
                 fontWeight: 'var(--font-bold)',
                 color: 'var(--color-text-primary)',
                 lineHeight: 1.2,
+                margin: 0,
               }}
             >
               {isRu ? 'Акты и расчеты по услугам' : 'Xizmatlar aktlari va hisob-kitoblar'}
             </h1>
-            <p
-              style={{
-                fontSize: 'var(--text-sm)',
-                color: 'var(--color-text-tertiary)',
-                marginTop: '2px',
-              }}
-            >
-              {isRu
-                ? 'Раздельный учет услуг (Accruals) и автоматическая синхронизация расчетов с Модулем Финансов'
-                : 'Xizmatlar hisobi (Accruals) va Moliya moduli orqali hisob-kitoblarni so‘ndirish'}
-            </p>
           </div>
         </div>
 

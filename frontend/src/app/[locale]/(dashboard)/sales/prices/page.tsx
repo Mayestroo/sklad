@@ -267,12 +267,9 @@ export default function PricesPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
             {isRu ? 'Цены и прайс-листы' : 'Narxlar va chegirmalar'}
           </h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {isRu ? 'Управление прайс-листами для различных групп клиентов' : 'Har bir mijoz guruhi uchun alohida narx jadvalini boshqaring'}
-          </p>
         </div>
         <Button id="create-price-list-btn" onClick={() => setShowCreatePL(true)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Plus size={16} /> {isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'}

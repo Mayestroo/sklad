@@ -277,17 +277,6 @@ export default function FinancePage() {
             >
               {isRu ? 'Финансы и Касса' : 'Moliya va Kassalar'}
             </h1>
-            <p
-              style={{
-                fontSize: 'var(--text-xs)',
-                color: 'var(--color-text-tertiary)',
-                margin: '2px 0 0 0',
-              }}
-            >
-              {isRu
-                ? 'Управление денежными потоками, взаиморасчетами и кассами по стандарту 1С'
-                : '1C mantiqi asosida pul oqimi, kassa qoldiqlari va qarzdorlik boshqaruvi'}
-            </p>
           </div>
         </div>
 

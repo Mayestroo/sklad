@@ -12,6 +12,7 @@ import { Account } from '@shared/types';
 export default function ChartOfAccountsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -46,12 +47,9 @@ export default function ChartOfAccountsPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            O&apos;zbekiston Buxgalteriya Hisoblari Rejasi (BHMS / NAS)
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'План счетов (НСБУ)' : 'Hisoblar rejasi (BHMS)'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Milliy Standartlar bo&apos;yicha tizim va sintetik hisobvaraqlar ma&apos;lumotnomasi
-          </p>
         </div>
       </div>
 

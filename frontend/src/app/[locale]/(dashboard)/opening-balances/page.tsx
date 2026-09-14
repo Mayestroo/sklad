@@ -615,17 +615,6 @@ export default function OpeningBalancesPage() {
             >
               {isRu ? 'Ввод начальных остатков' : 'Boshlang‘ich qoldiqlarni kiritish'}
             </h1>
-            <p
-              style={{
-                fontSize: 'var(--text-xs)',
-                color: 'var(--color-text-tertiary)',
-                margin: '2px 0 0 0',
-              }}
-            >
-              {isRu
-                ? 'Управление начальными остатками кассы, склада, контрагентов и капитала по стандарту 1С'
-                : '1C mantiqi asosida kassa, ombor, mijoz/yetkazib beruvchi va kapital boshlang‘ich qoldiqlari'}
-            </p>
           </div>
         </div>
 

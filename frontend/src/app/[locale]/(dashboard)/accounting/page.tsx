@@ -58,8 +58,8 @@ export default function AccountingPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Двойная Бухгалтерия и Отчёт ОСВ (НСБУ / НСФО)' : 'Ikki Yo‘lama Buxgalteriya va OSV Hisoboti (BHMS / NAS)'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Бухгалтерия (ОСВ)' : 'Buxgalteriya (OSV)'}
           </h1>
         </div>
 

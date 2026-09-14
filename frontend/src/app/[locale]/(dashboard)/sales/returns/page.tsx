@@ -477,14 +477,9 @@ export default function SalesReturnsPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
             {isRu ? 'Возврат от покупателей' : 'Mijozdan qaytarish'}
           </h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {isRu
-              ? 'Управление возвратами проданных товаров, автоматическое восстановление партий FIFO, изоляция брака и перерасчет долга'
-              : 'Sotilgan tovarlar qaytarilishi, FIFO partiyalarini asl tannarxda tiklash, brak ombori nazorati va mijoz balansi to\'g\'rilanishi'}
-          </p>
         </div>
         <Button
           id="create-return-btn"

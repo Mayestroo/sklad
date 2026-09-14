@@ -209,12 +209,9 @@ export default function CrmKanbanPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'CRM Канбан Воронка Сделок' : 'CRM Kanban Bitimlar Quvuri'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'CRM Сделки' : 'CRM Bitimlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu ? 'Движение сделок от лидов до успешного контракта по этапам' : 'Lidlardan shartnoma va sotuvgacha bo‘lgan bitimlar bosqichlari bo‘yicha harakati'}
-          </p>
         </div>
 
         <Button variant="primary" onClick={() => setShowModal(true)}>

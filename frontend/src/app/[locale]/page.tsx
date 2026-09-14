@@ -386,14 +386,9 @@ export default function DashboardPage() {
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Главная' : 'Bosh sahifa'}
-          </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu ? 'Финансовое состояние вашей компании' : 'Kompaniyangizning moliyaviy holati'}
-          </p>
-        </div>
+        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+          {isRu ? 'Главная' : 'Bosh sahifa'}
+        </h1>
         <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading}>
           <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : undefined }} />
           {isRu ? 'Обновить' : 'Yangilash'}

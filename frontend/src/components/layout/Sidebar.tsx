@@ -212,7 +212,7 @@ export function Sidebar() {
           <div
             style={{
               fontWeight: 'var(--font-bold)',
-              fontSize: 'var(--text-sm)',
+              fontSize: 'var(--text-base)',
               color: 'var(--color-text-primary)',
               lineHeight: 1.2,
               whiteSpace: 'nowrap',
@@ -221,16 +221,6 @@ export function Sidebar() {
             }}
           >
             {companyDisplayName}
-          </div>
-          <div
-            style={{
-              fontSize: '11px',
-              color: 'var(--color-text-tertiary)',
-              marginTop: '2px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {isRu ? 'Система торговли и склада' : 'Ombor & Savdo tizimi'}
           </div>
         </div>
       </div>
@@ -555,29 +545,6 @@ export function Sidebar() {
           )}
         </div>
       </nav>
-
-      {/* Footer System Status */}
-      <div
-        style={{
-          padding: 'var(--space-3) var(--space-4)',
-          borderTop: '1px solid var(--color-border-light)',
-          fontSize: 'var(--text-xs)',
-          color: 'var(--color-text-tertiary)',
-          fontFamily: 'var(--font-sans)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--color-success-600)',
-            }}
-          />
-          <span>O&apos;zbekiston NAS / BHMS</span>
-        </div>
-      </div>
     </aside>
   );
 }

@@ -50,11 +50,8 @@ export default function SuperAdminBillingPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
         <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
-          {isRu ? 'Тарифы и Подписки (Billing)' : 'Tariflar va Obunalar (Billing)'}
+          {isRu ? 'Тарифы и подписки' : 'Tariflar va obunalar'}
         </h1>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
-          {isRu ? 'Мониторинг тарифных планов, выручки MRR и статусов оплаты' : 'Tarif rejalari taqsimoti, oylik tushum (MRR) va to‘lov muddatlari'}
-        </p>
       </div>
 
       {/* Pricing Cards */}

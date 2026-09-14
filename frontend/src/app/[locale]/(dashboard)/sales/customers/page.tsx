@@ -133,12 +133,9 @@ export default function CustomersPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
             {isRu ? 'Клиенты' : 'Mijozlar'}
           </h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {isRu ? 'Список клиентов, состояние задолженности и история продаж' : 'Mijozlar ro\'yxati, qarz holati va sotuv tarixi'}
-          </p>
         </div>
         <Button
           onClick={() => setIsCreateOpen(true)}

@@ -13,6 +13,7 @@ import { JournalEntry } from '@shared/types';
 export default function JournalPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -32,12 +33,9 @@ export default function JournalPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            General Ledger — Buxgalteriya Provodkalari Jurnali
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Журнал проводок' : 'Provodkalar jurnali'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            Avtomatik va qo&apos;lda kiritilgan ikki yo&apos;lama debet/kredit provodkalari
-          </p>
         </div>
       </div>
 

@@ -469,12 +469,9 @@ export default function CounterpartiesPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
             {isRu ? 'Контрагенты' : 'Kontragentlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {isRu ? 'База данных клиентов и поставщиков, папки и задолженности' : 'Mijozlar va yetkazib beruvchilar bazasi, guruhlar va qarz balansi'}
-          </p>
         </div>
         <Button onClick={handleOpenCreateModal} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Plus size={16} />

@@ -245,12 +245,9 @@ export default function PurchasesPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Закупки и Приход Товаров' : 'Xaridlar va Tovar Qabul Qilish'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Закупки' : 'Xaridlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-            {isRu ? 'Приход товаров от поставщиков, формирование себестоимости (Landed Cost) и учёт задолженности' : 'Yetkazib beruvchilardan tovar kirim qilish, tannarx (`Landed Cost`) shakllantirish va qarzdorlik hisobi'}
-          </p>
         </div>
         <Link href="/purchases/new">
           <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>

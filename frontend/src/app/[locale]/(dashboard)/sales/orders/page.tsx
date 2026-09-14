@@ -310,12 +310,9 @@ export default function SalesOrdersPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Заказы покупателей' : 'Mijoz Buyurtmalari'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Заказы покупателей' : 'Buyurtmalar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-            {isRu ? '13-этапный пайплайн, предварительные обязательства, производство и контроль отгрузки' : '13 bosqichli jarayon, majburiyatlar, ishlab chiqarish va jo‘natish nazorati'}
-          </p>
         </div>
         <Link href="/sales/orders/new">
           <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>

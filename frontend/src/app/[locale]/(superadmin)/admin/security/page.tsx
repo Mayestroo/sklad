@@ -83,13 +83,8 @@ export default function SuperAdminSecurityPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
-            {isRu ? 'Безопасность и Резервное копирование' : 'Xavfsizlik va Zaxira Nusxalar (Backups)'}
+            {isRu ? 'Безопасность и бэкапы' : 'Xavfsizlik va zaxira nusxalar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
-            {isRu
-              ? 'Глобальный аудит действий, соответствие закону ZRU-547 и создание бэкапов БД'
-              : 'Global audit jurnali, ZRU-547 qonuniga muvofiqlik va PostgreSQL zaxira nusxalari'}
-          </p>
         </div>
 
         <Button onClick={handleTriggerBackup} disabled={backupTriggering} variant="primary">

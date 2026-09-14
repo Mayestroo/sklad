@@ -264,12 +264,9 @@ export default function BranchesPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Филиалы и Склады' : 'Filiallar va Omborxonalar'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Филиалы и склады' : 'Filiallar va omborlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-            {isRu ? 'Управление структурой филиалов и складов компании' : 'Kompaniyaning filiallar va omborxonalar tuzilmasini boshqarish'}
-          </p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
           <Button variant="secondary" onClick={() => setBranchModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

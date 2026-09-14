@@ -156,16 +156,6 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
             >
               Sklad SuperAdmin
             </div>
-            <div
-              style={{
-                fontSize: 'var(--text-xs)',
-                color: 'var(--color-primary-600)',
-                fontWeight: 'var(--font-semibold)',
-                marginTop: '2px',
-              }}
-            >
-              SaaS Owner Console
-            </div>
           </div>
         </div>
 
@@ -370,10 +360,6 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
               }}
             >
               PLATFORM OWNER
-            </span>
-            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>•</span>
-            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>
-              Sklad ERP Global Multi-Tenant Core
             </span>
           </div>
 

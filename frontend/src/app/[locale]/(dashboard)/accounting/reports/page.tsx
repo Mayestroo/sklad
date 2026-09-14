@@ -13,6 +13,7 @@ import { PieChart, ShieldCheck, Printer, FileText } from 'lucide-react';
 export default function FinancialReportsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
   const [statements, setStatements] = useState<any | null>(null);
@@ -32,12 +33,9 @@ export default function FinancialReportsPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            Moliyaviy Hisobotlar (Shakl 1 va Shakl 2)
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Финансовые отчеты' : 'Moliyaviy hisobotlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            O&apos;zbekiston NAS / BHMS standartlariga mos Balans (Forma 1) va Moliyaviy Natijalar (Forma 2)
-          </p>
         </div>
 
         <Button variant="primary" onClick={() => window.print()}>

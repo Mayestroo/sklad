@@ -180,14 +180,9 @@ export default function ExpensesPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Дополнительные Расходы и Себестоимость (Landed Cost)' : 'Qo‘shimcha Xarajatlar va Tannarx (Landed Cost)'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Дополнительные расходы' : 'Qo‘shimcha xarajatlar'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu
-              ? 'Распределение транспортных, таможенных и брокерских расходов на себестоимость товаров'
-              : 'Transport, bojxona va brokerlik xarajatlarini tovarlar tannarxiga mutanosib taqsimlash'}
-          </p>
         </div>
         <Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}>
           <Plus size={16} style={{ marginRight: '6px' }} />

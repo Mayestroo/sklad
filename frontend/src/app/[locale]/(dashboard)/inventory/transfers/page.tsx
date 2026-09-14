@@ -212,12 +212,9 @@ export default function StockTransfersPage() {
       {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Межскладские Перемещения (Stock Transfers)' : 'Omborlararo Tovar Ko‘chirish (Stock Transfers)'}
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Перемещение товаров' : 'Omborlararo ko‘chirish'}
           </h1>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-            {isRu ? 'Двухэтапный процесс отгрузки (Ship) и приёмки (Receive), проводки по счёту 2920' : 'Ikki bosqichli jo‘natish (Ship) va qabul qilish (Receive) workflow hamda 2920 Yo‘ldagi tovarlar provodkasi'}
-          </p>
         </div>
 
         <Button variant="primary" onClick={() => setModalOpen(true)}>
