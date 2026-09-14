@@ -537,6 +537,43 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     router.push('/sales/orders');
   };
 
+  // Intercept internal link clicks when isDirty to show custom modal instead of losing changes
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleAnchorClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (target && target.href && !target.href.startsWith('javascript:')) {
+        try {
+          const url = new URL(target.href, window.location.origin);
+          if (url.origin === window.location.origin && url.pathname !== window.location.pathname) {
+            e.preventDefault();
+            e.stopPropagation();
+            confirm({
+              title: isRu ? 'Несохраненные изменения' : 'Saqlanmagan o‘zgarishlar',
+              description: isRu
+                ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
+                : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?',
+              variant: 'warning',
+              confirmText: isRu ? 'Выйти' : 'Chiqish',
+              cancelText: isRu ? 'Остаться' : 'Qolish',
+            }).then((confirmed) => {
+              if (confirmed) {
+                setIsDirty(false);
+                router.push(url.pathname + url.search);
+              }
+            });
+          }
+        } catch {
+          // ignore invalid URLs
+        }
+      }
+    };
+
+    document.addEventListener('click', handleAnchorClick, true);
+    return () => document.removeEventListener('click', handleAnchorClick, true);
+  }, [isDirty, isRu, confirm, router]);
+
   const handleDeleteOrder = async () => {
     if (!initialData?.id || !token || !company) return;
     const confirmed = await confirm({

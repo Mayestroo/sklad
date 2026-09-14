@@ -459,7 +459,7 @@ export default function NewExpensePage() {
               </label>
               <Select
                 value={currency}
-                placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
+                placeholder={isRu ? 'Валюта' : 'Valyuta'}
                 onChange={(val) => setCurrency(val)}
                 options={CURRENCY_OPTIONS}
               />

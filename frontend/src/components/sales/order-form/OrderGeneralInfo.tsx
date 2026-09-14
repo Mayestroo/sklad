@@ -169,14 +169,14 @@ export function OrderGeneralInfo({
             label={isRu ? 'Валюта *' : 'Valyuta *'}
             options={CURRENCY_OPTIONS}
             value={currency}
-            placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+            placeholder={isRu ? 'Валюта' : 'Valyuta'}
             onChange={onCurrencyChange}
             disabled={isLocked}
           />
         </div>
 
         {/* Exchange Rate (when currency is not UZS) */}
-        {currency !== 'UZS' && (
+        {currency && currency !== 'UZS' && (
           <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
             <Input
               label={isRu ? 'Курс валюты' : 'Valyuta kursi'}

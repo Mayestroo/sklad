@@ -634,6 +634,43 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     router.push('/purchases');
   };
 
+  // Intercept internal link clicks when isDirty to show custom modal instead of losing changes
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleAnchorClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (target && target.href && !target.href.startsWith('javascript:')) {
+        try {
+          const url = new URL(target.href, window.location.origin);
+          if (url.origin === window.location.origin && url.pathname !== window.location.pathname) {
+            e.preventDefault();
+            e.stopPropagation();
+            confirm({
+              title: isRu ? 'Несохраненные изменения' : 'Saqlanmagan o‘zgarishlar',
+              description: isRu
+                ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
+                : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?',
+              variant: 'warning',
+              confirmText: isRu ? 'Выйти' : 'Chiqish',
+              cancelText: isRu ? 'Остаться' : 'Qolish',
+            }).then((confirmed) => {
+              if (confirmed) {
+                setIsDirty(false);
+                router.push(url.pathname + url.search);
+              }
+            });
+          }
+        } catch {
+          // ignore invalid URLs
+        }
+      }
+    };
+
+    document.addEventListener('click', handleAnchorClick, true);
+    return () => document.removeEventListener('click', handleAnchorClick, true);
+  }, [isDirty, isRu, confirm, router]);
+
   const supplierOptions: SelectOption[] = counterparties.map((c) => ({
     value: c.id,
     label: c.name,
@@ -1039,7 +1076,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               label={isRu ? 'Валюта *' : 'Valyuta *'}
               options={CURRENCY_OPTIONS}
               value={currency}
-              placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+              placeholder={isRu ? 'Валюта' : 'Valyuta'}
               onChange={(val) => {
                 markDirty();
                 setCurrency(val);
@@ -1049,17 +1086,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             />
           </div>
 
-          {/* Exchange Rate */}
-          <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Курс валюты' : 'Valyuta kursi'}
-            </label>
-            <CurrencyInput
-              value={exchangeRate}
-              onChange={(val) => { markDirty(); setExchangeRate(val); }}
-              disabled={isReadOnly}
-            />
-          </div>
+          {/* Exchange Rate (only needed for foreign currency) */}
+          {currency && currency !== 'UZS' && (
+            <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Курс валюты' : 'Valyuta kursi'}
+              </label>
+              <CurrencyInput
+                value={exchangeRate}
+                onChange={(val) => { markDirty(); setExchangeRate(val); }}
+                disabled={isReadOnly}
+              />
+            </div>
+          )}
 
           {/* Comment */}
           <div>

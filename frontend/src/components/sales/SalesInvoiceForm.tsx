@@ -780,6 +780,43 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     router.push('/sales');
   };
 
+  // Intercept internal link clicks when isDirty to show custom modal instead of losing changes
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleAnchorClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (target && target.href && !target.href.startsWith('javascript:')) {
+        try {
+          const url = new URL(target.href, window.location.origin);
+          if (url.origin === window.location.origin && url.pathname !== window.location.pathname) {
+            e.preventDefault();
+            e.stopPropagation();
+            confirm({
+              title: isRu ? 'Несохраненные изменения' : 'Saqlanmagan o‘zgarishlar',
+              description: isRu
+                ? 'У вас есть несохраненные изменения. Вы уверены, что хотите выйти?'
+                : 'Sizda saqlanmagan o‘zgarishlar bor. Haqiqatan ham chiqib ketmoqchimisiz?',
+              variant: 'warning',
+              confirmText: isRu ? 'Выйти' : 'Chiqish',
+              cancelText: isRu ? 'Остаться' : 'Qolish',
+            }).then((confirmed) => {
+              if (confirmed) {
+                setIsDirty(false);
+                router.push(url.pathname + url.search);
+              }
+            });
+          }
+        } catch {
+          // ignore invalid URLs
+        }
+      }
+    };
+
+    document.addEventListener('click', handleAnchorClick, true);
+    return () => document.removeEventListener('click', handleAnchorClick, true);
+  }, [isDirty, isRu, confirm, router]);
+
   const customerOptions: SelectOption[] = counterparties.map((c) => ({
     value: c.id,
     label: c.name,
@@ -1152,14 +1189,14 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               label={isRu ? 'Валюта *' : 'Valyuta *'}
               options={CURRENCY_OPTIONS}
               value={currency}
-              placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+              placeholder={isRu ? 'Валюта' : 'Valyuta'}
               onChange={handleCurrencyChange}
               disabled={isReadOnly}
             />
           </div>
 
           {/* Exchange Rate */}
-          {currency !== 'UZS' && (
+          {currency && currency !== 'UZS' && (
             <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
               <Input
                 label={isRu ? 'Курс валюты' : 'Valyuta kursi'}

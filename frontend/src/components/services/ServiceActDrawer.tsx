@@ -395,7 +395,7 @@ export function ServiceActDrawer({
             <Select
               options={CURRENCY_OPTIONS}
               value={currency}
-              placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
+              placeholder={isRu ? 'Валюта' : 'Valyuta'}
               onChange={(val) => setCurrency(val)}
             />
           </div>

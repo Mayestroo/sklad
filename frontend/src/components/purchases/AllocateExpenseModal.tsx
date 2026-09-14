@@ -215,7 +215,7 @@ export function AllocateExpenseModal({
             <Select
               options={currencyOptions}
               value={currency}
-              placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
+              placeholder={isRu ? 'Валюта' : 'Valyuta'}
               onChange={(val) => setCurrency(val)}
             />
           </div>

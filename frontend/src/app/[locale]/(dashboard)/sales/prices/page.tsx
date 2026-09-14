@@ -521,7 +521,7 @@ export default function PricesPage() {
             id="pl-currency"
             label={isRu ? 'Валюта *' : 'Valyuta *'}
             value={newPLCurrency}
-            placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
+            placeholder={isRu ? 'Валюта' : 'Valyuta'}
             onChange={(val) => setNewPLCurrency(val)}
             options={CURRENCY_OPTIONS}
           />
@@ -573,7 +573,7 @@ export default function PricesPage() {
             id="edit-pl-currency"
             label={isRu ? 'Валюта *' : 'Valyuta *'}
             value={editPLCurrency}
-            placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
+            placeholder={isRu ? 'Валюта' : 'Valyuta'}
             onChange={(val) => setEditPLCurrency(val)}
             options={CURRENCY_OPTIONS}
           />

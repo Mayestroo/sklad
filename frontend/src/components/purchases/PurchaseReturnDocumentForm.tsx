@@ -701,7 +701,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               label={isRu ? 'Валюта *' : 'Valyuta *'}
               options={CURRENCY_OPTIONS}
               value={currency}
-              placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+              placeholder={isRu ? 'Валюта' : 'Valyuta'}
               onChange={(val) => setCurrency(val)}
               disabled={isReadOnly}
             />
