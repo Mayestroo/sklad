@@ -78,7 +78,7 @@ export function OrderItemsTable({
                   {isRu ? 'Готово (Пр-во)' : 'Tayyorlandi'}
                 </th>
               )}
-              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
+              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
                 {isRu ? 'Цена за ед.' : 'Birlik narxi'}
               </th>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px' }}>

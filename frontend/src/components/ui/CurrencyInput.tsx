@@ -120,7 +120,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     const displayValue = isFocused ? textValue : formatCurrencyValue(value, decimals);
     const charLen = displayValue ? displayValue.length : (placeholder ? placeholder.length : 5);
-    const dynamicCh = Math.max(minWidthCh, charLen + 4);
+    const dynamicCh = autoWidth ? Math.max(minWidthCh, charLen + 4) : Math.max(0, charLen + 3);
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(true);
@@ -193,7 +193,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         style={{
           boxSizing: 'border-box',
           height: '38px',
-          padding: '8px 12px',
+          padding: '6px 10px',
           borderRadius: 'var(--radius-md)',
           border: '1px solid var(--color-border)',
           backgroundColor: disabled ? 'var(--color-bg-secondary)' : 'var(--color-bg-input)',
@@ -202,9 +202,14 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
           textAlign: 'right',
           fontVariantNumeric: 'tabular-nums',
           fontSize: 'var(--text-sm)',
-          transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast)',
+          position: 'relative',
+          zIndex: isFocused ? 5 : 1,
+          borderColor: isFocused ? 'var(--color-primary-500, #3b82f6)' : (style?.borderColor || 'var(--color-border)'),
+          boxShadow: isFocused ? '0 0 0 3px rgba(59, 130, 246, 0.15)' : undefined,
+          transition:
+            'border-color var(--transition-fast), box-shadow var(--transition-fast), width 0.2s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           cursor: disabled ? 'not-allowed' : 'text',
-          width: autoWidth ? `${dynamicCh}ch` : '100%',
+          width: autoWidth ? `${dynamicCh}ch` : `max(100%, ${dynamicCh}ch)`,
           minWidth: autoWidth ? `${dynamicCh}ch` : undefined,
           ...style,
         }}
