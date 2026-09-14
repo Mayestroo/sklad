@@ -10,3 +10,5 @@ export * from './super-admin';
 export * from './finance';
 export * from './dashboard';
 export * from './purchases';
+export * from './opening-balances';
+export * from './fixed-assets';

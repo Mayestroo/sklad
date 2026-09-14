@@ -303,6 +303,11 @@ model Company {
   stockReservations    StockReservation[]
   serviceActs          ServiceAct[]
 
+    openingBalanceDocs     OpeningBalanceDocument[]
+  openingBalanceLines    OpeningBalanceLine[]
+  fixedAssets            FixedAsset[]
+  openingBalanceImportSessions OpeningBalanceImportSession[]
+
   @@map("companies")
 }
 
@@ -435,6 +440,10 @@ model User {
 
   @@unique([tenantId, email])
   @@index([tenantId])
+    createdOpeningBalances OpeningBalanceDocument[] @relation("CreatedOpeningBalances")
+  approvedOpeningBalances OpeningBalanceDocument[] @relation("ApprovedOpeningBalances")
+  custodianFixedAssets   FixedAsset[]           @relation("CustodianFixedAssets")
+
   @@map("users")
 }
 
@@ -543,6 +552,8 @@ model Warehouse {
   isDefect          Boolean            @default(false) @map("is_defect")
 
   @@index([tenantId])
+    openingBalanceLines OpeningBalanceLine[]
+
   @@map("warehouses")
 }
 
@@ -663,6 +674,8 @@ model Product {
   @@unique([tenantId, sku])
   @@index([tenantId])
   @@index([tenantId, barcode])
+    openingBalanceLines OpeningBalanceLine[]
+
   @@map("products")
 }
 
@@ -830,6 +843,8 @@ model Counterparty {
   @@index([tenantId])
   @@index([tenantId, folderId])
   @@index([tenantId, inn])
+    openingBalanceLines OpeningBalanceLine[]
+
   @@map("counterparties")
 }
 
@@ -1267,6 +1282,8 @@ model CashAccount {
 
   @@unique([tenantId, accountType])
   @@index([tenantId])
+    openingBalanceLines OpeningBalanceLine[]
+
   @@map("cash_accounts")
 }
 
@@ -1649,3 +1666,165 @@ model ServiceActItem {
   @@map("service_act_items")
 }
 
+
+
+// ============================================
+// OPENING BALANCES & FIXED ASSETS
+// ============================================
+
+enum OpeningBalanceStatus {
+  DRAFT
+  PENDING_REVIEW
+  POSTED
+  CANCELLED
+}
+
+enum OpeningBalanceCategory {
+  CASH
+  BANK
+  INVENTORY
+  CUSTOMER_DEBT
+  SUPPLIER_DEBT
+  CUSTOMER_ADVANCE
+  SUPPLIER_ADVANCE
+  FIXED_ASSET
+  OTHER_ASSET
+  OTHER_LIABILITY
+  EQUITY
+}
+
+enum FixedAssetStatus {
+  ACTIVE
+  IN_REPAIR
+  DISPOSED
+  WRITTEN_OFF
+}
+
+model OpeningBalanceDocument {
+  id                String                 @id @default(uuid())
+  tenantId          String                 @map("tenant_id")
+  docNumber         String                 @map("doc_number")
+  openingDate       DateTime               @map("opening_date")
+  status            OpeningBalanceStatus   @default(DRAFT)
+  totalAssets       Decimal                @default(0) @db.Decimal(15, 2) @map("total_assets")
+  totalLiabilities  Decimal                @default(0) @db.Decimal(15, 2) @map("total_liabilities")
+  totalEquity       Decimal                @default(0) @db.Decimal(15, 2) @map("total_equity")
+  balanceDifference Decimal                @default(0) @db.Decimal(15, 2) @map("balance_difference")
+  notes             String?
+  createdById       String?                @map("created_by_id")
+  approvedById      String?                @map("approved_by_id")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  approvedAt        DateTime?              @map("approved_at")
+
+  company           Company                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy         User?                  @relation("CreatedOpeningBalances", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy        User?                  @relation("ApprovedOpeningBalances", fields: [approvedById], references: [id], onDelete: SetNull)
+  lines             OpeningBalanceLine[]
+  importSessions    OpeningBalanceImportSession[]
+
+  @@unique([tenantId, docNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, openingDate])
+  @@map("opening_balance_documents")
+}
+
+model OpeningBalanceLine {
+  id                      String                 @id @default(uuid())
+  documentId              String                 @map("document_id")
+  tenantId                String                 @map("tenant_id")
+  category                OpeningBalanceCategory
+  accountId               String?                @map("account_id")
+  productId               String?                @map("product_id")
+  warehouseId             String?                @map("warehouse_id")
+  counterpartyId          String?                @map("counterparty_id")
+  fixedAssetId            String?                @map("fixed_asset_id")
+  quantity                Decimal?               @db.Decimal(15, 3)
+  unitCost                Decimal?               @db.Decimal(15, 2) @map("unit_cost")
+  amount                  Decimal                @default(0) @db.Decimal(15, 2)
+  accumulatedDepreciation Decimal?               @default(0) @db.Decimal(15, 2) @map("accumulated_depreciation")
+  netAmount               Decimal                @default(0) @db.Decimal(15, 2) @map("net_amount")
+  currency                String                 @default("UZS")
+  exchangeRate            Decimal                @default(1.0) @db.Decimal(12, 4) @map("exchange_rate")
+  batchNumber             String?                @map("batch_number")
+  contractNumber          String?                @map("contract_number")
+  notes                   String?
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+
+  document                OpeningBalanceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  company                 Company                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account                 CashAccount?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  product                 Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  warehouse               Warehouse?             @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  counterparty            Counterparty?          @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+  fixedAsset              FixedAsset?            @relation(fields: [fixedAssetId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, documentId])
+  @@index([tenantId, category])
+  @@map("opening_balance_lines")
+}
+
+model FixedAsset {
+  id                      String             @id @default(uuid())
+  tenantId                String             @map("tenant_id")
+  name                    String
+  inventoryNumber         String             @map("inventory_number")
+  assetType               String             @default("EQUIPMENT") @map("asset_type")
+  acquisitionDate         DateTime           @default(now()) @map("acquisition_date")
+  initialCost             Decimal            @default(0) @db.Decimal(15, 2) @map("initial_cost")
+  accumulatedDepreciation Decimal            @default(0) @db.Decimal(15, 2) @map("accumulated_depreciation")
+  netBookValue            Decimal            @default(0) @db.Decimal(15, 2) @map("net_book_value")
+  usefulLifeMonths        Int                @default(60) @map("useful_life_months")
+  depreciationMethod      String             @default("STRAIGHT_LINE") @map("depreciation_method")
+  custodianUserId         String?            @map("custodian_user_id")
+  status                  FixedAssetStatus   @default(ACTIVE)
+  notes                   String?
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+
+  company                 Company            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  custodian               User?              @relation("CustodianFixedAssets", fields: [custodianUserId], references: [id], onDelete: SetNull)
+  openingBalanceLines     OpeningBalanceLine[]
+
+  @@unique([tenantId, inventoryNumber])
+  @@index([tenantId, status])
+  @@map("fixed_assets")
+}
+
+model OpeningBalanceImportSession {
+  id              String                    @id @default(uuid())
+  documentId      String                    @map("document_id")
+  tenantId        String                    @map("tenant_id")
+  fileName        String                    @map("file_name")
+  status          String                    @default("COMPLETED")
+  totalRows       Int                       @default(0) @map("total_rows")
+  validRows       Int                       @default(0) @map("valid_rows")
+  errorCount      Int                       @default(0) @map("error_count")
+  createdById     String?                   @map("created_by_id")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+
+  document        OpeningBalanceDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  company         Company                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  errors          OpeningBalanceImportError[]
+
+  @@index([tenantId, documentId])
+  @@map("opening_balance_import_sessions")
+}
+
+model OpeningBalanceImportError {
+  id              String                      @id @default(uuid())
+  sessionId       String                      @map("session_id")
+  tenantId        String                      @map("tenant_id")
+  sheetName       String                      @map("sheet_name")
+  rowNumber       Int                         @map("row_number")
+  fieldName       String?                     @map("field_name")
+  invalidValue    String?                     @map("invalid_value")
+  errorMessage    String                      @map("error_message")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+
+  session         OpeningBalanceImportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, sessionId])
+  @@map("opening_balance_import_errors")
+}

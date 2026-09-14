@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   CreditCard,
   Briefcase,
+  Scale,
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -97,6 +98,11 @@ export function Sidebar() {
     { href: '/products', label: t('products'), icon: PackageCheck },
     { href: '/inventory', label: t('inventory'), icon: Package },
     { href: '/finance', label: t('finance'), icon: Wallet },
+    {
+      href: '/opening-balances',
+      label: isRu ? 'Начальные остатки' : 'Boshlang‘ich qoldiqlar',
+      icon: Scale,
+    },
     { href: '/services', label: t('services'), icon: Briefcase },
     { href: '/production', label: t('production'), icon: Factory },
     { href: '/analytics', label: t('analytics'), icon: BarChart3 },

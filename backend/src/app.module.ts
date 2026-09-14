@@ -23,6 +23,8 @@ import { FinanceModule } from './modules/finance/finance.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PurchasesModule } from './modules/purchases/purchases.module';
 import { ServicesModule } from './modules/services/services.module';
+import { OpeningBalancesModule } from './modules/opening-balances/opening-balances.module';
+import { FixedAssetsModule } from './modules/fixed-assets/fixed-assets.module';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { ServicesModule } from './modules/services/services.module';
     FinanceModule,
     DashboardModule,
     ServicesModule,
+    OpeningBalancesModule,
+    FixedAssetsModule,
   ],
 })
 export class AppModule implements NestModule {
