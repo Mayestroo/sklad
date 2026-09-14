@@ -1,8 +1,8 @@
-# Specification: Sales Returns (Mijozdan Qaytarish) Lifecycle, Defective Stock Routing & Financial Realignment
+# Specification: Mijozdan Qaytarish (Sales Return) Moduli v2.0 — Asl Sotuvga Bog'lanish, Brak Ombori va Moliya Balansi
 
 ## Problem Statement
 
-In distribution, wholesale, and retail operations, customers regularly return previously purchased items due to factory defects, expired shelf-life, shipping errors, or customer rejection. Previously:
+In distribution, wholesale, and retail operations, customers regularly return previously purchased items due to factory defects, expired shelf-life, shipping discrepancies, or customer order cancellations. Previously:
 1. **Unconstrained & Untraced Returns**: Returns could be recorded arbitrarily without a strict link to an original posted Sales Invoice, leading to inaccurate sales prices, unverified quantities, and potential fraud.
 2. **Over-Return Vulnerability**: Without automated tracking of historical return quantities against original invoice line items, operators could return more items than were originally sold (`over-return`), creating phantom inventory.
 3. **Improper Inventory Valuation & Batch Contamination**: Returned goods were often restored at current catalog prices rather than the exact historical unit landed cost (`unitCogs`) recognized during the original sale's batch consumption, distorting real-time Cost of Goods Sold (COGS) and gross margin analytics.
@@ -68,7 +68,7 @@ Sales Returns adopt a deterministic state model:
   - `remainingQuantity`: Returned quantity
   - `unitPrice`: Base purchase price from originating batch
   - `landedCost`: Original unit landed cost (`unitCogs`)
-  - `batchNumber`: Standard return batch identifier (`BATCH-RET-{returnNumber}-{productId}`)
+  - `batchNumber`: Standard return batch identifier (`RET-{returnNumber}-{productId}`)
 - This guarantees full auditability and ensures that subsequent FIFO sales consume the restocked batch at the authentic landed cost.
 
 ### 4. Dual-Warehouse Defect Routing (Brak Ombori Isolation)
@@ -98,25 +98,23 @@ A good test exercises external observable behavior (REST API requests, database 
 
 ### Test Scenarios & Suites
 1. **Invoice Returnable Items Query**: Verify `GET /sales/invoices/:id/returnable-items` calculates correct remaining returnable quantities after partial returns.
-2. **Over-Return Invariant Rejection**: Verify attempting to return a quantity greater than `returnableQuantity` is rejected with HTTP 400.
-3. **Atomic Posting Execution**: Verify confirming a return:
-   - Increments physical `StockLevel` in the correct warehouse (standard vs defect).
-   - Generates a new `ProductBatch` with exact historical `unitCogs`.
-   - Decrements customer accounts receivable and updates invoice `returnStatus` (`PARTIALLY_RETURNED` or `FULLY_RETURNED`).
-   - Generates balanced double-entry `JournalEntry` records (Debit 9010/Credit 4010, Debit 2910/Credit 9110).
-4. **Cancellation Rollback Guardrail**: Verify cancelling a posted return reverses stock and balance adjustments, but blocks cancellation if the returned stock was already consumed by subsequent sales.
+2. **Draft Return Lifecycle**: Creating a return with status `DRAFT` persists document lines without changing warehouse stock or customer balances.
+3. **Confirm & Post Return**: Confirming a draft executes atomic inventory restocking, batch creation at historical `unitCogs`, customer debt decrement, and journal entries.
+4. **Over-Return Invariant**: Attempting to post a return with quantity exceeding `returnableQuantity` throws `BadRequestException`.
+5. **Defective Item Routing**: Confirming a return with defective items routes those quantities into `defectWarehouseId` and non-defective items into `warehouseId`.
+6. **Rollback Invariant**: Cancelling a posted return succeeds if goods are present, but fails if restocked items have already been consumed by subsequent sales.
 
 ### Prior Art
-- `backend/src/modules/sales/invoices/sales-invoices.service.spec.ts` (Existing return posting unit & integration tests)
-- `backend/src/modules/purchases/purchase-invariant.spec.ts` (Purchase return invariants and batch rollback guardrails)
+- `backend/src/modules/sales/invoices/sales-invoices.service.spec.ts` (Section 4: Sales Returns at Historical Landed Cost — 6 dedicated invariant tests passing).
+- `backend/src/modules/purchases/purchase-returns.spec.ts` (Purchase return rollback invariants).
 
 ## Out of Scope
 
-- Direct physical cash drawer payout from within the return modal (cash payouts remain in the Finance module via cash/bank expense vouchers).
-- Complex supplier warranty claims and manufacturer replacement RMA tracking (handled in future Procurement RMA phase).
-- Automatic customer loyalty point clawback (handled in future Marketing module).
+- Supplier warranty claim workflows (handling defective returns back to the original manufacturer is covered under Purchase Returns).
+- Mobile WMS camera-based barcode scanning (hardware USB/Bluetooth scanners supported via standard keyboard emulation).
+- Automatic bank disbursement integration without cashier confirmation.
 
 ## Further Notes
 
-- Document number generation convention: `RET-YYYY-XXXX` (e.g. `RET-2026-0001`), scoped per tenant.
-- All monetary amounts use standard 2-decimal precision (`Decimal(15, 2)`), quantities use 3-decimal precision (`Decimal(15, 3)`).
+- Primary keys use UUIDs (`String @id @default(uuid())`) and `sales_returns.invoice_id` is indexed.
+- Frontend uses responsive Next.js 16 drawers and modal dialogs with full i18n support (`uz` / `ru`).
