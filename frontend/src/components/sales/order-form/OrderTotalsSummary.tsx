@@ -46,18 +46,18 @@ export function OrderTotalsSummary({
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
           <span>{isRu ? 'Сумма заказа:' : 'Buyurtma summasi:'}</span>
-          <span className="tabular-nums font-medium">{formatCurrency(calculations.grandTotal, locale, currency)}</span>
+          <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.grandTotal, locale, currency) : '—'}</span>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#10b981' }}>
           <span>{isRu ? 'Оплачено (Аванс):' : 'To‘langan (Avans):'}</span>
-          <span className="tabular-nums font-medium">{formatCurrency(calculations.paid, locale, currency)}</span>
+          <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.paid, locale, currency) : '—'}</span>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
           <span>{isRu ? 'ОСТАТОК К ОПЛАТЕ:' : 'QOLDIQ TO‘LOV:'}</span>
           <span className="tabular-nums" style={{ color: calculations.remaining > 0 ? '#ef4444' : '#10b981' }}>
-            {formatCurrency(calculations.remaining, locale, currency)}
+            {currency ? formatCurrency(calculations.remaining, locale, currency) : '—'}
           </span>
         </div>
 

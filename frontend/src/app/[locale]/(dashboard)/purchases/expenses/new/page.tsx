@@ -77,7 +77,7 @@ export default function NewExpensePage() {
   const [counterpartyId, setCounterpartyId] = useState('');
   const [receiptId, setReceiptId] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
-  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [currency, setCurrency] = useState('');
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [allocationMethod, setAllocationMethod] = useState<ExpenseAllocationMethod>('BY_AMOUNT');
   const [isPaid, setIsPaid] = useState(false);
@@ -196,6 +196,10 @@ export default function NewExpensePage() {
     }
     if (!amount || Number(amount) <= 0) {
       setErrorMsg(isRu ? 'Сумма расхода должна быть больше 0' : 'Xarajat summasi 0 dan katta bo‘lishi kerak');
+      return;
+    }
+    if (!currency) {
+      setErrorMsg(isRu ? 'Пожалуйста, выберите валюту' : 'Iltimos, valyutani tanlang');
       return;
     }
     if (selectedItemIds.length === 0) {
@@ -451,10 +455,11 @@ export default function NewExpensePage() {
 
             <div>
               <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                {isRu ? 'Валюта' : 'Valyuta'}
+                {isRu ? 'Валюта *' : 'Valyuta *'}
               </label>
               <Select
                 value={currency}
+                placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
                 onChange={(val) => setCurrency(val)}
                 options={CURRENCY_OPTIONS}
               />
@@ -981,22 +986,22 @@ export default function NewExpensePage() {
                         {Number(item.quantity)} {item.product?.unitOfMeasure || 'dona'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(item.unitPrice, locale, selectedReceipt?.currency || currency)}
+                        {formatCurrency(item.unitPrice, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(item.totalPrice, locale, selectedReceipt?.currency || currency)}
+                        {formatCurrency(item.totalPrice, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(item.landedCost || item.unitPrice, locale, selectedReceipt?.currency || currency)}
+                        {formatCurrency(item.landedCost || item.unitPrice, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                        {preview ? formatCurrency(preview.allocatedAmount, locale, selectedReceipt?.currency || currency) : '—'}
+                        {preview ? formatCurrency(preview.allocatedAmount, locale, selectedReceipt.currency) : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {preview ? `+${formatCurrency(preview.allocatedPerUnit, locale, selectedReceipt?.currency || currency)}` : '—'}
+                        {preview ? `+${formatCurrency(preview.allocatedPerUnit, locale, selectedReceipt.currency)}` : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                        {preview ? formatCurrency(preview.newLandedCost, locale, selectedReceipt?.currency || currency) : formatCurrency(item.landedCost || item.unitPrice, locale, selectedReceipt?.currency || currency)}
+                        {preview ? formatCurrency(preview.newLandedCost, locale, selectedReceipt.currency) : formatCurrency(item.landedCost || item.unitPrice, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'center' }} className="tabular-nums">
                         {preview && preview.costIncreasePercent > 0 ? (
@@ -1115,7 +1120,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Итого распределено' : 'Jami taqsimlandi'}
                 </span>
                 <strong style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-900)' }} className="tabular-nums">
-                  {formatCurrency(previewResult.allocatedTotal, locale, currency)}
+                  {currency ? formatCurrency(previewResult.allocatedTotal, locale, currency) : '—'}
                 </strong>
               </div>
             </div>

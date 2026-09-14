@@ -201,7 +201,7 @@ export default function ExpensesPage() {
               {isRu ? 'Транспортные расходы' : 'Transport Xarajatlari'}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalTransport || 0, locale)}
+              {formatCurrency(data?.stats.totalTransport || 0, locale, 'UZS')}
             </div>
           </div>
         </Card>
@@ -215,7 +215,7 @@ export default function ExpensesPage() {
               {isRu ? 'Таможенные пошлины' : 'Bojxona To‘lovlari'}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalCustoms || 0, locale)}
+              {formatCurrency(data?.stats.totalCustoms || 0, locale, 'UZS')}
             </div>
           </div>
         </Card>
@@ -229,7 +229,7 @@ export default function ExpensesPage() {
               {isRu ? 'Брокерские услуги' : 'Brokerlik Xizmatlari'}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalBroker || 0, locale)}
+              {formatCurrency(data?.stats.totalBroker || 0, locale, 'UZS')}
             </div>
           </div>
         </Card>
@@ -243,7 +243,7 @@ export default function ExpensesPage() {
               {isRu ? 'Всего распределено' : 'Jami Taqsimlangan'}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalAll || 0, locale)}
+              {formatCurrency(data?.stats.totalAll || 0, locale, 'UZS')}
             </div>
           </div>
         </Card>

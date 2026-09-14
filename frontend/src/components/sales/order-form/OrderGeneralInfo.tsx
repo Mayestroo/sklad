@@ -166,9 +166,10 @@ export function OrderGeneralInfo({
         {/* Currency */}
         <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
           <Select
-            label={isRu ? 'Валюта' : 'Valyuta'}
+            label={isRu ? 'Валюта *' : 'Valyuta *'}
             options={CURRENCY_OPTIONS}
             value={currency}
+            placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
             onChange={onCurrencyChange}
             disabled={isLocked}
           />

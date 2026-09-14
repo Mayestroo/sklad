@@ -741,7 +741,7 @@ export default function CounterpartiesPage() {
               </div>
               <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: 2 }}>+ HAQDORLIK</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#059669', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                {formatCurrency(summary?.receivables.total_amount ?? 0, locale)}
+                {formatCurrency(summary?.receivables.total_amount ?? 0, locale, 'UZS')}
               </div>
             </div>
 
@@ -778,7 +778,7 @@ export default function CounterpartiesPage() {
               </div>
               <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600, marginBottom: 2 }}>− QARZDORLIK</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                {formatCurrency(summary?.payables.total_amount ?? 0, locale)}
+                {formatCurrency(summary?.payables.total_amount ?? 0, locale, 'UZS')}
               </div>
             </div>
           </div>
@@ -1016,15 +1016,15 @@ export default function CounterpartiesPage() {
                               >
                                 {net > 0 ? (
                                   <span style={{ fontWeight: 700, color: '#10b981' }}>
-                                    + {formatCurrency(net, locale)}
+                                    + {formatCurrency(net, locale, 'UZS')}
                                   </span>
                                 ) : net < 0 ? (
                                   <span style={{ fontWeight: 700, color: '#ef4444' }}>
-                                    - {formatCurrency(Math.abs(net), locale)}
+                                    - {formatCurrency(Math.abs(net), locale, 'UZS')}
                                   </span>
                                 ) : (
                                   <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                                    {formatCurrency(0, locale)}
+                                    {formatCurrency(0, locale, 'UZS')}
                                   </span>
                                 )}
                                 {isCustomerAdvance && (
@@ -1358,19 +1358,19 @@ export default function CounterpartiesPage() {
                     if (net > 0) {
                       return (
                         <span style={{ color: '#10b981' }}>
-                          + {formatCurrency(net, locale)}
+                          + {formatCurrency(net, locale, 'UZS')}
                         </span>
                       );
                     } else if (net < 0) {
                       return (
                         <span style={{ color: '#ef4444' }}>
-                          - {formatCurrency(Math.abs(net), locale)}
+                          - {formatCurrency(Math.abs(net), locale, 'UZS')}
                         </span>
                       );
                     } else {
                       return (
                         <span style={{ color: 'var(--color-text-secondary)' }}>
-                          {formatCurrency(0, locale)}
+                          {formatCurrency(0, locale, 'UZS')}
                         </span>
                       );
                     }
@@ -1401,7 +1401,7 @@ export default function CounterpartiesPage() {
                 </h4>
                 {customerOrdersData?.summary && (
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale)}</strong>
+                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale, 'UZS')}</strong>
                   </span>
                 )}
               </div>
@@ -1429,8 +1429,8 @@ export default function CounterpartiesPage() {
                       {customerOrdersData.orders.map((ord: any) => (
                         <tr key={ord.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                           <td style={{ padding: '6px 8px', fontWeight: 600 }}>{ord.orderNumber}</td>
-                          <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.totalAmount), ord.currency)}</td>
-                          <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.paidAmount), ord.currency)} ({ord.paymentPercent}%)</td>
+                          <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.totalAmount), locale, ord.currency)}</td>
+                          <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.paidAmount), locale, ord.currency)} ({ord.paymentPercent}%)</td>
                           <td style={{ padding: '6px 8px' }}>
                             <Badge variant={ord.status === 'COMPLETED' ? 'success' : ord.status === 'CANCELLED' ? 'error' : 'warning'}>
                               {ord.status}

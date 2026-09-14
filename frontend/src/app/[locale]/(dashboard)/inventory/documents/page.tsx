@@ -226,7 +226,7 @@ export default function InventoryDocumentsPage() {
                       {formatDate(doc.docDate, locale)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {formatCurrency(Number(doc.totalAmount), locale)}
+                      {formatCurrency(Number(doc.totalAmount), locale, 'UZS')}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       <Badge variant="success">{isRu ? 'Проведён' : 'O\'tkazilgan'}</Badge>
@@ -344,9 +344,9 @@ export default function InventoryDocumentsPage() {
                         <tr key={idx} style={{ borderTop: '1px solid var(--color-border-light)' }}>
                           <td style={{ padding: '8px' }}>{item.productName}</td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity}</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, 'UZS')}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
-                            {formatCurrency(item.quantity * item.unitPrice, locale)}
+                            {formatCurrency(item.quantity * item.unitPrice, locale, 'UZS')}
                           </td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-600)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
@@ -431,8 +431,8 @@ export default function InventoryDocumentsPage() {
                     <td style={{ padding: '8px', fontWeight: 'bold' }}>{(item.product as any)?.name?.[locale] || (item.product as any)?.name?.ru || (item.product as any)?.name?.uz}</td>
                     <td style={{ padding: '8px' }}>{(item.product as any)?.sku}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{Number(item.quantity)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(Number(item.unitPrice), locale)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(Number(item.totalPrice), locale)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(Number(item.unitPrice), locale, 'UZS')}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(Number(item.totalPrice), locale, 'UZS')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -441,7 +441,7 @@ export default function InventoryDocumentsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #000', paddingTop: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: '#666' }}>{isRu ? 'Подпись:' : 'Imzo:'} _________________________</div>
               <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-                {isRu ? 'Итого:' : 'Jami:'} {formatCurrency(Number(printDoc.totalAmount), locale)}
+                {isRu ? 'Итого:' : 'Jami:'} {formatCurrency(Number(printDoc.totalAmount), locale, 'UZS')}
               </div>
             </div>
           </div>

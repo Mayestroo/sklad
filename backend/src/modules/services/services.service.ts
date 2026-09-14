@@ -18,6 +18,7 @@ import {
 } from './dto/create-service-act.dto';
 import { UpdateServiceActDto } from './dto/update-service-act.dto';
 import { FilterServiceActsDto } from './dto/filter-service-acts.dto';
+import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 
 @Injectable()
 export class ServicesService {
@@ -46,10 +47,19 @@ export class ServicesService {
    * Helper: Calculate line item amounts
    */
   private calculateItem(item: CreateServiceActItemDto) {
-    const qty = Number(item.quantity) || 1;
-    const price = Number(item.unitPrice) || 0;
+    const qty = Number(item.quantity);
+    if (item.quantity == null || isNaN(qty) || qty <= 0) {
+      throw new BadRequestException("Xizmat qatorida miqdor (quantity) 0 dan katta bo'lishi shart");
+    }
+    const price = Number(item.unitPrice);
+    if (item.unitPrice == null || isNaN(price) || price < 0) {
+      throw new BadRequestException("Xizmat qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart");
+    }
     const subtotal = qty * price;
-    const vatRate = Number(item.vatRate) || 0;
+    const vatRate = item.vatRate != null ? Number(item.vatRate) : 0;
+    if (isNaN(vatRate) || vatRate < 0) {
+      throw new BadRequestException("QQS stavkasi (vatRate) 0 yoki undan katta bo'lishi shart");
+    }
     const vatAmount = (subtotal * vatRate) / 100;
     const lineTotal = subtotal + vatAmount;
 
@@ -97,6 +107,28 @@ export class ServicesService {
       throw new BadRequestException("Kamida bitta xizmat qatori kiritilishi shart");
     }
 
+    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
+    let exchangeRate = 1.0;
+    if (dto.currency !== 'UZS') {
+      if (
+        dto.exchangeRate == null ||
+        isNaN(Number(dto.exchangeRate)) ||
+        Number(dto.exchangeRate) <= 0
+      ) {
+        throw new BadRequestException(
+          "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
+        );
+      }
+      exchangeRate = Number(dto.exchangeRate);
+    }
+
+    const calculatedItems = dto.items.map((item) => this.calculateItem(item));
+
     const counterparty = await this.prisma.counterparty.findFirst({
       where: { id: dto.counterpartyId, tenantId },
     });
@@ -107,7 +139,6 @@ export class ServicesService {
     const actDate = dto.actDate ? new Date(dto.actDate) : new Date();
     await this.checkCutoffDate(tenantId, actDate);
 
-    const calculatedItems = dto.items.map((item) => this.calculateItem(item));
     const subtotal = calculatedItems.reduce((s, i) => s + i.subtotalNumber, 0);
     const vatAmount = calculatedItems.reduce((s, i) => s + i.vatAmountNumber, 0);
     const totalAmount = calculatedItems.reduce((s, i) => s + i.totalNumber, 0);
@@ -124,7 +155,7 @@ export class ServicesService {
         paymentStatus: ServicePaymentStatus.UNPAID,
         actDate,
         currency: dto.currency,
-        exchangeRate: dto.exchangeRate ? new Prisma.Decimal(dto.exchangeRate) : new Prisma.Decimal(1.0),
+        exchangeRate: new Prisma.Decimal(exchangeRate),
         externalNumber: dto.externalNumber || null,
         externalDate: dto.externalDate ? new Date(dto.externalDate) : null,
         subtotal: new Prisma.Decimal(subtotal),

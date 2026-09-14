@@ -111,7 +111,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [docDate, setDocDate] = useState(
     initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))
   );
-  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || '');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
   const [contractNumber, setContractNumber] = useState(initialData?.contractNumber || '');
   const [contractDate, setContractDate] = useState(
@@ -518,10 +518,33 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       return null;
     }
 
-    const validItems = items.filter((i) => i.productId && i.quantity > 0);
+    if (!currency) {
+      setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
+      return null;
+    }
+    if (currency !== 'UZS') {
+      const rateNum = Number(exchangeRate);
+      if (!exchangeRate || isNaN(rateNum) || rateNum <= 0) {
+        setError(isRu ? 'Курс валюты должен быть больше 0' : 'Valyuta kursi 0 dan katta bo‘lishi shart');
+        return null;
+      }
+    }
+
+    const validItems = items.filter((i) => i.productId && Number(i.quantity) > 0);
     if (validItems.length === 0) {
       setError(isRu ? 'Добавьте хотя бы один товар с количеством > 0' : 'Kamida bitta tovar va miqdorni kiriting');
       return null;
+    }
+
+    for (const i of validItems) {
+      if (isNaN(Number(i.quantity)) || Number(i.quantity) <= 0) {
+        setError(isRu ? 'Количество товара должно быть больше 0' : 'Tovar miqdori 0 dan katta bo‘lishi shart');
+        return null;
+      }
+      if (isNaN(Number(i.unitPrice)) || Number(i.unitPrice) < 0) {
+        setError(isRu ? 'Цена товара не может быть отрицательной' : 'Tovar narxi manfiy bo‘lishi mumkin emas');
+        return null;
+      }
     }
 
     setLoading(true);
@@ -532,7 +555,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         warehouseId,
         invoiceDate: docDate,
         currency,
-        exchangeRate: Number(exchangeRate) || 1,
+        exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
         priceListId: priceListId || undefined,
         contractNumber: contractNumber.trim() || undefined,
         contractDate: contractDate || undefined,
@@ -1054,7 +1077,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       color: debt > 0 ? '#ef4444' : debt < 0 ? '#10b981' : 'var(--color-text-secondary)',
                     }}
                   >
-                    {formatCurrency(debt, locale, currency)}
+                    {currency ? formatCurrency(debt, locale, currency) : '—'}
                   </span>
                 </div>
               );
@@ -1126,9 +1149,10 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           {/* Currency */}
           <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
             <Select
-              label={isRu ? 'Валюта' : 'Valyuta'}
+              label={isRu ? 'Валюта *' : 'Valyuta *'}
               options={CURRENCY_OPTIONS}
               value={currency}
+              placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
               onChange={handleCurrencyChange}
               disabled={isReadOnly}
             />
@@ -1255,7 +1279,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       />
                       {prd && (
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          <span>Tannarx: {formatCurrency(prd.costPrice, locale, currency)}</span>
+                          <span>Tannarx: {currency ? formatCurrency(prd.costPrice, locale, currency) : '—'}</span>
                           <span>•</span>
                           <span>Birlik: {prd.unitOfMeasure || 'dona'}</span>
                           {warehouseStockMap[item.productId] !== undefined && (
@@ -1352,7 +1376,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
                     {/* Line Total */}
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
-                      {formatCurrency(lineTotal, locale, currency)}
+                      {currency ? formatCurrency(lineTotal, locale, currency) : '—'}
                     </td>
 
                     {/* Actions (Delete Row) */}
@@ -1407,27 +1431,27 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'Подитог без скидки:' : 'Jami (chegirmasiz):'}</span>
-            <span className="tabular-nums font-medium">{formatCurrency(calculations.subtotal, locale, currency)}</span>
+            <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.subtotal, locale, currency) : '—'}</span>
           </div>
 
           {calculations.totalDiscount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#10b981' }}>
               <span>{isRu ? 'Сумма скидки:' : 'Chegirma summasi:'}</span>
-              <span className="tabular-nums font-medium">- {formatCurrency(calculations.totalDiscount, locale, currency)}</span>
+              <span className="tabular-nums font-medium">- {currency ? formatCurrency(calculations.totalDiscount, locale, currency) : '—'}</span>
             </div>
           )}
 
           {calculations.totalVat > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               <span>{isRu ? 'Сумма НДС:' : 'QQS summasi:'}</span>
-              <span className="tabular-nums font-medium">{formatCurrency(calculations.totalVat, locale, currency)}</span>
+              <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.totalVat, locale, currency) : '—'}</span>
             </div>
           )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
             <span>{isRu ? 'ИТОГО К ОПЛАТЕ:' : 'JAMI TO‘LOV:'}</span>
             <span className="tabular-nums" style={{ color: 'var(--color-primary-600)' }}>
-              {formatCurrency(calculations.grandTotal, locale, currency)}
+              {currency ? formatCurrency(calculations.grandTotal, locale, currency) : '—'}
             </span>
           </div>
 
@@ -1440,7 +1464,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Валовая прибыль:' : 'Yalpi foyda:'}</span>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? '#10b981' : '#ef4444' }} className="tabular-nums">
-                {formatCurrency(calculations.estimatedProfit, locale, currency)}
+                {currency ? formatCurrency(calculations.estimatedProfit, locale, currency) : '—'}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>

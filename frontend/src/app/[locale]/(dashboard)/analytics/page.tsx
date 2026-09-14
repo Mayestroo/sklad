@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
                 <TrendingUp size={18} style={{ color: 'var(--color-primary-600)' }} />
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.totalRevenue || 0, locale)}
+                {formatCurrency(kpi?.totalRevenue || 0, locale, 'UZS')}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <ArrowUpRight size={14} /> <span>{isRu ? 'Сумма по документам реализации' : 'Shartnomalar bo\'yicha yig\'indi'}</span>
@@ -158,7 +158,7 @@ export default function AnalyticsPage() {
                 <Badge variant="success">+{kpi?.netProfitMargin || 0}% Margin</Badge>
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.grossProfit || 0, locale)}
+                {formatCurrency(kpi?.grossProfit || 0, locale, 'UZS')}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Выручка минус себестоимость (COGS)' : 'Sotuv tushumi minus tovarlar tannarxi (COGS)'}
@@ -170,7 +170,7 @@ export default function AnalyticsPage() {
                 {isRu ? 'ДЕБИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'DEBITORLIK (MIJOZLAR QARZI)'}
               </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.totalAccountsReceivable || 0, locale)}
+                {formatCurrency(kpi?.totalAccountsReceivable || 0, locale, 'UZS')}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Ожидаемые поступления от клиентов' : 'Mijozlardan kelib tushishi kutilayotgan mablag\'}'}
@@ -182,7 +182,7 @@ export default function AnalyticsPage() {
                 {isRu ? 'КРЕДИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'KREDITORLIK (POSTAVSHIKLAR QARZI)'}
               </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.totalAccountsPayable || 0, locale)}
+                {formatCurrency(kpi?.totalAccountsPayable || 0, locale, 'UZS')}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Задолженность перед поставщиками' : 'Yetkazib beruvchilar oldidagi qarzimiz'}
@@ -216,7 +216,7 @@ export default function AnalyticsPage() {
                     return (
                       <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%', justifyContent: 'flex-end' }}>
                         <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                          {formatCurrency(point.revenue, locale)}
+                          {formatCurrency(point.revenue, locale, 'UZS')}
                         </div>
                         <div
                           style={{
@@ -261,7 +261,7 @@ export default function AnalyticsPage() {
                         <span style={{ fontWeight: 'var(--font-medium)' }}>
                           {cat.categoryName[locale] || cat.categoryName.ru || cat.categoryName.uz}
                         </span>
-                        <span style={{ fontWeight: 'var(--font-bold)' }}>{cat.percentage}% ({formatCurrency(cat.revenue, locale)})</span>
+                        <span style={{ fontWeight: 'var(--font-bold)' }}>{cat.percentage}% ({formatCurrency(cat.revenue, locale, 'UZS')})</span>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
                         <div style={{ width: `${cat.percentage}%`, height: '100%', backgroundColor: 'var(--color-primary-600)', borderRadius: 'var(--radius-full)' }} />
@@ -312,7 +312,7 @@ export default function AnalyticsPage() {
                           <td style={{ padding: '8px', fontFamily: 'var(--font-mono)' }}>{p.sku}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{p.totalQuantity} {p.unitOfMeasure}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                            {formatCurrency(p.totalRevenue, locale)}
+                            {formatCurrency(p.totalRevenue, locale, 'UZS')}
                           </td>
                         </tr>
                       ))}
@@ -350,7 +350,7 @@ export default function AnalyticsPage() {
                           </div>
                         </div>
                         <div style={{ fontWeight: 'bold', color: 'var(--color-success-600)' }} className="tabular-nums">
-                          {formatCurrency(client.totalSpent, locale)}
+                          {formatCurrency(client.totalSpent, locale, 'UZS')}
                         </div>
                       </div>
                     ))}
@@ -372,7 +372,7 @@ export default function AnalyticsPage() {
                       {isRu ? 'ЧИСТЫЙ ОБОРОТНЫЙ КАПИТАЛ' : 'SOF AYLANMA MABLAG\' (WORKING CAPITAL)'}
                     </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                      {formatCurrency(ratios?.workingCapital || 0, locale)}
+                      {formatCurrency(ratios?.workingCapital || 0, locale, 'UZS')}
                     </div>
                   </div>
 

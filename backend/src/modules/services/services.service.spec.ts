@@ -85,6 +85,7 @@ describe('ServicesService Unit Tests', () => {
       const res = await service.create(tenantId, {
         type: ServiceActType.PROVIDED,
         counterpartyId,
+        currency: 'UZS',
         items: [
           {
             serviceName: 'Yuk yetkazish',
@@ -117,6 +118,58 @@ describe('ServicesService Unit Tests', () => {
       expect(Number(res.subtotal)).toBe(1100000);
       expect(Number(res.vatAmount)).toBe(120000);
       expect(Number(res.totalAmount)).toBe(1220000);
+    });
+
+    it('should throw BadRequestException if currency is missing or unsupported in service act', async () => {
+      await expect(
+        service.create(tenantId, {
+          type: ServiceActType.PROVIDED,
+          counterpartyId,
+          currency: '' as any,
+          items: [{ serviceName: 'Test', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if service act currency is USD and exchangeRate is missing, 0, or negative', async () => {
+      await expect(
+        service.create(tenantId, {
+          type: ServiceActType.PROVIDED,
+          counterpartyId,
+          currency: 'USD',
+          items: [{ serviceName: 'Test', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.create(tenantId, {
+          type: ServiceActType.PROVIDED,
+          counterpartyId,
+          currency: 'USD',
+          exchangeRate: 0,
+          items: [{ serviceName: 'Test', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if service item quantity <= 0 or unitPrice < 0', async () => {
+      await expect(
+        service.create(tenantId, {
+          type: ServiceActType.PROVIDED,
+          counterpartyId,
+          currency: 'UZS',
+          items: [{ serviceName: 'Test', quantity: 0, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.create(tenantId, {
+          type: ServiceActType.PROVIDED,
+          counterpartyId,
+          currency: 'UZS',
+          items: [{ serviceName: 'Test', quantity: 1, unitPrice: -50 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

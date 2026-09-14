@@ -23,6 +23,7 @@ import {
 } from '@prisma/client';
 
 import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
+import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 
 @Injectable()
 export class PurchasesService {
@@ -165,19 +166,61 @@ export class PurchasesService {
       );
     }
 
+    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
+    let exchangeRate = 1;
+    if (dto.currency !== 'UZS') {
+      if (
+        dto.exchangeRate == null ||
+        isNaN(Number(dto.exchangeRate)) ||
+        Number(dto.exchangeRate) <= 0
+      ) {
+        throw new BadRequestException(
+          "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
+        );
+      }
+      exchangeRate = Number(dto.exchangeRate);
+    }
+
+    for (const item of dto.items) {
+      const qty = Number(item.quantity);
+      if (item.quantity == null || isNaN(qty) || qty <= 0) {
+        throw new BadRequestException(
+          "Xarid qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+        );
+      }
+      const unitPrice = Number(item.unitPrice);
+      if (item.unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+        throw new BadRequestException(
+          "Xarid qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+      if (
+        item.discount != null &&
+        (isNaN(Number(item.discount)) || Number(item.discount) < 0)
+      ) {
+        throw new BadRequestException(
+          "Chegirma (discount) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+    }
+
     const docNumber = await this.generateDocNumber(tenantId);
-    const exchangeRate = dto.exchangeRate || 1;
 
     let subtotalAmount = 0;
     let discountAmount = 0;
     let vatAmount = 0;
 
     const preparedItems = dto.items.map((item) => {
-      const qty = item.quantity;
-      const weight = item.weight || 0;
-      const unitPrice = item.unitPrice;
-      const disc = item.discount || 0;
-      const vatRate = item.vatRate || 0;
+      const qty = Number(item.quantity);
+      const weight = item.weight ? Number(item.weight) : 0;
+      const unitPrice = Number(item.unitPrice);
+      const disc = item.discount ? Number(item.discount) : 0;
+      const vatRate = item.vatRate ? Number(item.vatRate) : 0;
 
       const itemSubtotal = qty * unitPrice;
       const itemAfterDisc = Math.max(0, itemSubtotal - disc);
@@ -268,18 +311,60 @@ export class PurchasesService {
       );
     }
 
-    const exchangeRate = dto.exchangeRate || existing.exchangeRate;
+    const targetCurrency = dto.currency || existing.currency;
+    if (!SUPPORTED_CURRENCIES.includes(targetCurrency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
+    let exchangeRate = Number(existing.exchangeRate);
+    if (targetCurrency !== 'UZS') {
+      const rateToCheck =
+        dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : exchangeRate;
+      if (isNaN(rateToCheck) || rateToCheck <= 0) {
+        throw new BadRequestException(
+          "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
+        );
+      }
+      exchangeRate = rateToCheck;
+    } else {
+      exchangeRate = 1;
+    }
+
+    for (const item of dto.items) {
+      const qty = Number(item.quantity);
+      if (item.quantity == null || isNaN(qty) || qty <= 0) {
+        throw new BadRequestException(
+          "Xarid qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+        );
+      }
+      const unitPrice = Number(item.unitPrice);
+      if (item.unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+        throw new BadRequestException(
+          "Xarid qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+      if (
+        item.discount != null &&
+        (isNaN(Number(item.discount)) || Number(item.discount) < 0)
+      ) {
+        throw new BadRequestException(
+          "Chegirma (discount) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+    }
 
     let subtotalAmount = 0;
     let discountAmount = 0;
     let vatAmount = 0;
 
     const preparedItems = dto.items.map((item) => {
-      const qty = item.quantity;
-      const weight = item.weight || 0;
-      const unitPrice = item.unitPrice;
-      const disc = item.discount || 0;
-      const vatRate = item.vatRate || 0;
+      const qty = Number(item.quantity);
+      const weight = item.weight ? Number(item.weight) : 0;
+      const unitPrice = Number(item.unitPrice);
+      const disc = item.discount ? Number(item.discount) : 0;
+      const vatRate = item.vatRate ? Number(item.vatRate) : 0;
 
       const itemSubtotal = qty * unitPrice;
       const itemAfterDisc = Math.max(0, itemSubtotal - disc);
@@ -1093,6 +1178,19 @@ export class PurchasesService {
 
     // Validate products and check that SERVICE and BUNDLE are rejected
     for (const item of dto.items) {
+      const qty = Number(item.quantity);
+      if (item.quantity == null || isNaN(qty) || qty <= 0) {
+        throw new BadRequestException(
+          "Qaytarish qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+        );
+      }
+      const unitPrice = Number(item.unitPrice);
+      if (item.unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+        throw new BadRequestException(
+          "Qaytarish qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+
       const product = await this.prisma.product.findFirst({
         where: { id: item.productId, tenantId },
       });
@@ -1116,9 +1214,9 @@ export class PurchasesService {
         },
       });
       const availableStock = stockLevel ? Number(stockLevel.quantity) : 0;
-      if (item.quantity > availableStock) {
+      if (qty > availableStock) {
         throw new BadRequestException(
-          `Qaytariladigan miqdor (${item.quantity}) omborda mavjud qoldiqdan (${availableStock}) oshishi mumkin emas`,
+          `Qaytariladigan miqdor (${qty}) omborda mavjud qoldiqdan (${availableStock}) oshishi mumkin emas`,
         );
       }
     }

@@ -19,6 +19,7 @@ import {
 
 import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
+import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 
 @Injectable()
 export class AdditionalExpensesService {
@@ -87,6 +88,32 @@ export class AdditionalExpensesService {
     userId: string,
     dto: CreateAdditionalExpenseDto,
   ) {
+    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
+    let exchangeRate = 1;
+    if (dto.currency !== 'UZS') {
+      if (
+        dto.exchangeRate == null ||
+        isNaN(Number(dto.exchangeRate)) ||
+        Number(dto.exchangeRate) <= 0
+      ) {
+        throw new BadRequestException(
+          "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
+        );
+      }
+      exchangeRate = Number(dto.exchangeRate);
+    }
+
+    if (dto.amount == null || isNaN(Number(dto.amount)) || Number(dto.amount) <= 0) {
+      throw new BadRequestException(
+        "Xarajat summasi (amount) 0 dan katta bo'lishi shart",
+      );
+    }
+
     const docNumber = await this.generateDocNumber(tenantId);
     const allocation = await this.calculateAllocationPreview(tenantId, {
       receiptId: dto.receiptId,
@@ -96,7 +123,6 @@ export class AdditionalExpensesService {
     });
 
     const docDate = dto.docDate ? new Date(dto.docDate) : new Date();
-    const exchangeRate = dto.exchangeRate || 1;
     const vatRate = dto.vatRate || 0;
     const vatAmount =
       vatRate > 0 ? (Number(dto.amount) * vatRate) / (100 + vatRate) : 0;
@@ -188,7 +214,34 @@ export class AdditionalExpensesService {
     }
 
     const receiptId = dto.receiptId || existing.receiptId;
-    const amount = dto.amount !== undefined ? dto.amount : Number(existing.amount);
+    const amount = dto.amount !== undefined ? Number(dto.amount) : Number(existing.amount);
+    if (amount <= 0 || isNaN(amount)) {
+      throw new BadRequestException(
+        "Xarajat summasi (amount) 0 dan katta bo'lishi shart",
+      );
+    }
+
+    const targetCurrency = dto.currency || existing.currency;
+    if (!SUPPORTED_CURRENCIES.includes(targetCurrency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
+    let exchangeRate = Number(existing.exchangeRate);
+    if (targetCurrency !== 'UZS') {
+      const rateToCheck =
+        dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : exchangeRate;
+      if (isNaN(rateToCheck) || rateToCheck <= 0) {
+        throw new BadRequestException(
+          "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
+        );
+      }
+      exchangeRate = rateToCheck;
+    } else {
+      exchangeRate = 1;
+    }
+
     const allocationMethod =
       dto.allocationMethod || existing.allocationMethod;
 
@@ -199,10 +252,6 @@ export class AdditionalExpensesService {
       selectedItemIds: dto.selectedItemIds,
     });
 
-    const exchangeRate =
-      dto.exchangeRate !== undefined
-        ? dto.exchangeRate
-        : Number(existing.exchangeRate);
     const vatRate =
       dto.vatRate !== undefined ? dto.vatRate : Number(existing.vatRate);
     const vatAmount =

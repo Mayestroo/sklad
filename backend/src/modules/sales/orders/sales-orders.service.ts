@@ -24,6 +24,7 @@ import {
   isWarehouseOrAbove,
 } from '../../../common/utils/roles.util';
 import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
+import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -363,6 +364,49 @@ export class SalesOrdersService {
       throw new BadRequestException('Buyurtmada kamida bitta tovar tanlanishi shart');
     }
 
+    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
+    let exchangeRate = 1;
+    if (dto.currency !== 'UZS') {
+      if (
+        dto.exchangeRate == null ||
+        isNaN(Number(dto.exchangeRate)) ||
+        Number(dto.exchangeRate) <= 0
+      ) {
+        throw new BadRequestException(
+          "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
+        );
+      }
+      exchangeRate = Number(dto.exchangeRate);
+    }
+
+    for (const item of dto.items) {
+      const qty = Number(item.quantity);
+      if (item.quantity == null || isNaN(qty) || qty <= 0) {
+        throw new BadRequestException(
+          "Buyurtma qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+        );
+      }
+      const unitPrice = Number(item.unitPrice);
+      if (item.unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+        throw new BadRequestException(
+          "Buyurtma qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+      if (
+        item.discount != null &&
+        (isNaN(Number(item.discount)) || Number(item.discount) < 0)
+      ) {
+        throw new BadRequestException(
+          "Chegirma (discount) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+    }
+
     const orderNumber = await this.generateOrderNumber(tenantId);
 
     let subtotalAmount = 0;
@@ -377,22 +421,24 @@ export class SalesOrdersService {
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     const preparedItems = dto.items.map((item) => {
-      const lineSubtotal = item.quantity * item.unitPrice;
-      const disc = item.discount || 0;
+      const qty = Number(item.quantity);
+      const unitPrice = Number(item.unitPrice);
+      const disc = item.discount ? Number(item.discount) : 0;
+      const lineSubtotal = qty * unitPrice;
       subtotalAmount += lineSubtotal;
       discountAmount += disc;
 
       const prd = productMap.get(item.productId);
       const cost = Number(prd?.costPrice || 0);
-      const effectivePrice = item.unitPrice * (1 - disc / 100);
+      const effectivePrice = unitPrice * (1 - disc / 100);
       if (cost > 0 && effectivePrice < cost) {
         isAnyBelowCost = true;
       }
 
       return {
         productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        quantity: qty,
+        unitPrice: unitPrice,
         discount: disc,
         totalPrice: Math.max(0, lineSubtotal - disc),
         reservedQty: 0,
@@ -415,7 +461,7 @@ export class SalesOrdersService {
         orderNumber,
         counterpartyId: dto.counterpartyId,
         currency: dto.currency,
-        exchangeRate: dto.exchangeRate || 1,
+        exchangeRate: exchangeRate,
         paymentCondition: dto.paymentCondition as PaymentCondition,
         requiredPaymentPercent:
           dto.paymentCondition === 'PARTIAL' ? dto.requiredPaymentPercent : null,

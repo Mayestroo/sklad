@@ -375,13 +375,13 @@ export default function ExpenseDetailPage() {
                       <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(oldCost, locale)}
+                      {formatCurrency(oldCost, locale, expense.currency)}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                      {formatCurrency(item.allocatedAmount, locale)} (+{formatCurrency(perUnit, locale)}/dona)
+                      {formatCurrency(item.allocatedAmount, locale, expense.currency)} (+{formatCurrency(perUnit, locale, expense.currency)}/dona)
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                      {formatCurrency(newCost, locale)}
+                      {formatCurrency(newCost, locale, expense.currency)}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
                       +{percent.toFixed(1)}%

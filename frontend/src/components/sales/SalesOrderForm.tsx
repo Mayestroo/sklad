@@ -96,7 +96,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const [orderStatus, setOrderStatus] = useState<string>(initialData?.status || 'NEW');
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [priceListId, setPriceListId] = useState(initialData?.priceListId || '');
-  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || '');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
   const [paymentCondition, setPaymentCondition] = useState<'PREPAID_100' | 'PARTIAL' | 'CREDIT'>(
     initialData?.paymentCondition || 'PREPAID_100'
@@ -347,15 +347,33 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   // Save Order
   const handleSave = async () => {
     setError(null);
-    if (!counterpartyId) {
-      setError(isRu ? 'Выберите клиента' : 'Mijozni tanlang');
+    if (!currency) {
+      setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
       return;
     }
+    if (currency !== 'UZS') {
+      const rateNum = Number(exchangeRate);
+      if (!exchangeRate || isNaN(rateNum) || rateNum <= 0) {
+        setError(isRu ? 'Курс валюты должен быть больше 0' : 'Valyuta kursi 0 dan katta bo‘lishi shart');
+        return;
+      }
+    }
 
-    const validItems = items.filter((i) => i.productId && i.quantity > 0);
+    const validItems = items.filter((i) => i.productId && Number(i.quantity) > 0);
     if (validItems.length === 0) {
       setError(isRu ? 'Добавьте хотя бы один товар' : 'Kamida bitta tovar kiriting');
       return;
+    }
+
+    for (const i of validItems) {
+      if (isNaN(Number(i.quantity)) || Number(i.quantity) <= 0) {
+        setError(isRu ? 'Количество товара должно быть больше 0' : 'Tovar miqdori 0 dan katta bo‘lishi shart');
+        return;
+      }
+      if (isNaN(Number(i.unitPrice)) || Number(i.unitPrice) < 0) {
+        setError(isRu ? 'Цена товара не может быть отрицательной' : 'Tovar narxi manfiy bo‘lishi mumkin emas');
+        return;
+      }
     }
 
     setLoading(true);
@@ -364,7 +382,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       const payload = {
         counterpartyId,
         currency,
-        exchangeRate: Number(exchangeRate) || 1,
+        exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
         priceListId: priceListId || undefined,
         paymentCondition,
         requiredPaymentPercent: paymentCondition === 'PARTIAL' ? Number(requiredPaymentPercent) : undefined,

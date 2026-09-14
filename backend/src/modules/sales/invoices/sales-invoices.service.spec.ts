@@ -154,7 +154,125 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should throw BadRequestException if currency is missing or unsupported', async () => {
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: '' as any,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'EUR' as any,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if currency is USD and exchangeRate is missing, 0, or negative', async () => {
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'USD',
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'USD',
+          exchangeRate: 0,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'USD',
+          exchangeRate: -1,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should accept currency USD with valid positive exchangeRate', async () => {
+      prisma.salesInvoice.count.mockResolvedValue(0);
+      prisma.salesInvoice.create.mockImplementation(({ data }: any) => ({
+        id: 'inv-usd',
+        ...data,
+      }));
+
+      const res = await service.createInvoice('tenant-1', 'user-1', {
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'USD',
+        exchangeRate: 12850,
+        items: [{ productId: 'p1', quantity: 2, unitPrice: 50 }],
+      });
+
+      expect(res.id).toBe('inv-usd');
+      expect(prisma.salesInvoice.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            currency: 'USD',
+            exchangeRate: 12850,
+          }),
+        }),
+      );
+    });
+
+    it('should throw BadRequestException if item quantity is zero or negative', async () => {
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [{ productId: 'p1', quantity: 0, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [{ productId: 'p1', quantity: -5, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if item unitPrice is negative or invalid', async () => {
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [{ productId: 'p1', quantity: 1, unitPrice: -10 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createInvoice('tenant-1', 'user-1', {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 'invalid' as any }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
+
 
   describe('2. Post Invoice, Stock Validation & FIFO Landed Cost (COGS)', () => {
     it('should reject posting if available stock in warehouse is insufficient (Stock Invariant)', async () => {

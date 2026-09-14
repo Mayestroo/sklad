@@ -54,7 +54,7 @@ export function ServiceActDrawer({
   const [type, setType] = useState<'PROVIDED' | 'RECEIVED'>(defaultType);
   const [counterpartyId, setCounterpartyId] = useState('');
   const [actDate, setActDate] = useState(new Date().toISOString().split('T')[0]);
-  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || '');
   const [exchangeRate, setExchangeRate] = useState(1.0);
   const [externalNumber, setExternalNumber] = useState('');
   const [externalDate, setExternalDate] = useState('');
@@ -114,7 +114,7 @@ export function ServiceActDrawer({
           ? new Date(initialData.actDate).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
       );
-      setCurrency(initialData.currency || company?.settings?.sales?.defaultCurrency || 'UZS');
+      setCurrency(initialData.currency || '');
       setExchangeRate(Number(initialData.exchangeRate) || 1.0);
       setExternalNumber(initialData.externalNumber || '');
       setExternalDate(
@@ -141,7 +141,7 @@ export function ServiceActDrawer({
       setType(defaultType);
       setCounterpartyId('');
       setActDate(new Date().toISOString().split('T')[0]);
-      setCurrency(company?.settings?.sales?.defaultCurrency || 'UZS');
+      setCurrency('');
       setExchangeRate(1.0);
       setExternalNumber('');
       setExternalDate('');
@@ -219,6 +219,10 @@ export function ServiceActDrawer({
     e.preventDefault();
     if (!counterpartyId) {
       setError(isRu ? 'Пожалуйста, выберите контрагента' : 'Iltimos, kontragentni tanlang');
+      return;
+    }
+    if (!currency) {
+      setError(isRu ? 'Пожалуйста, выберите валюту' : 'Iltimos, valyutani tanlang');
       return;
     }
 
@@ -386,16 +390,17 @@ export function ServiceActDrawer({
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Валюта' : 'Valyuta'}
+              {isRu ? 'Валюта *' : 'Valyuta *'}
             </label>
             <Select
               options={CURRENCY_OPTIONS}
               value={currency}
+              placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
               onChange={(val) => setCurrency(val)}
             />
           </div>
 
-          {currency !== 'UZS' && (
+          {currency && currency !== 'UZS' && (
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 {isRu ? 'Курс валюты' : 'Valyuta kursi'}
@@ -574,7 +579,7 @@ export function ServiceActDrawer({
                 <div className="flex justify-end pt-1 text-xs text-gray-700">
                   <span className="font-semibold">
                     {isRu ? 'Итого по строке: ' : 'Qator summasi: '}
-                    {formatCurrency(calculatedRows[idx]?.total || 0, locale, currency)}
+                    {currency ? formatCurrency(calculatedRows[idx]?.total || 0, locale, currency) : '—'}
                   </span>
                 </div>
               </div>
@@ -600,15 +605,15 @@ export function ServiceActDrawer({
         <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-100 space-y-2 text-sm">
           <div className="flex justify-between text-gray-600">
             <span>{isRu ? 'Сумма без НДС:' : 'QQSsiz summa:'}</span>
-            <span className="font-medium">{formatCurrency(totalSubtotal, locale, currency)}</span>
+            <span className="font-medium">{currency ? formatCurrency(totalSubtotal, locale, currency) : '—'}</span>
           </div>
           <div className="flex justify-between text-gray-600">
             <span>{isRu ? 'НДС:' : 'QQS summasi:'}</span>
-            <span className="font-medium">{formatCurrency(totalVat, locale, currency)}</span>
+            <span className="font-medium">{currency ? formatCurrency(totalVat, locale, currency) : '—'}</span>
           </div>
           <div className="flex justify-between text-gray-900 font-bold text-base border-t border-blue-200 pt-2">
             <span>{isRu ? 'ИТОГО К НАЧИСЛЕНИЮ:' : 'JAMI SUMMA:'}</span>
-            <span className="text-blue-700">{formatCurrency(grandTotal, locale, currency)}</span>
+            <span className="text-blue-700">{currency ? formatCurrency(grandTotal, locale, currency) : '—'}</span>
           </div>
         </div>
 

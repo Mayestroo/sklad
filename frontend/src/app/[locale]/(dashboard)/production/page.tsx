@@ -204,7 +204,7 @@ export default function ProductionPage() {
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Плановая себестоимость' : 'Jami rejalashtirilgan tan narx'}</div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {formatCurrency(totalCost, locale)}
+              {formatCurrency(totalCost, locale, 'UZS')}
             </div>
           </div>
         </Card>
@@ -234,7 +234,7 @@ export default function ProductionPage() {
                 <td style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)' }}>{ord.orderNumber}</td>
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-primary)' }}>{ord.productName}</td>
                 <td style={{ padding: '12px 16px' }}>{ord.quantity} {ord.unit}</td>
-                <td style={{ padding: '12px 16px', fontWeight: 'var(--font-medium)' }}>{formatCurrency(ord.estimatedCost, locale)}</td>
+                <td style={{ padding: '12px 16px', fontWeight: 'var(--font-medium)' }}>{formatCurrency(ord.estimatedCost, locale, 'UZS')}</td>
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{formatDate(ord.startDate, locale)}</td>
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{formatDate(ord.targetDate, locale)}</td>
                 <td style={{ padding: '12px 16px' }}>{getStatusBadge(ord.status)}</td>

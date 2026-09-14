@@ -492,12 +492,12 @@ export default function ProductsPage() {
 
                       {/* Cost price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
-                        {formatCurrency(cost, locale)}
+                        {formatCurrency(cost, locale, 'UZS')}
                       </td>
 
                       {/* Sale price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                        {formatCurrency(sale, locale)}
+                        {formatCurrency(sale, locale, 'UZS')}
                       </td>
 
                       {/* Margin % */}
@@ -595,13 +595,13 @@ export default function ProductsPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Себестоимость' : 'Tannarxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>
-                  {formatCurrency(selectedProduct.costPrice, locale)}
+                  {formatCurrency(selectedProduct.costPrice, locale, 'UZS')}
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Цена продажи' : 'Sotish narxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary-600)' }}>
-                  {formatCurrency(selectedProduct.salePrice, locale)}
+                  {formatCurrency(selectedProduct.salePrice, locale, 'UZS')}
                 </div>
               </div>
               <div>

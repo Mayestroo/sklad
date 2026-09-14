@@ -46,7 +46,7 @@ export default function PricesPage() {
   const [showCreatePL, setShowCreatePL] = useState(false);
   const [newPLNameUz, setNewPLNameUz] = useState('');
   const [newPLNameRu, setNewPLNameRu] = useState('');
-  const [newPLCurrency, setNewPLCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [newPLCurrency, setNewPLCurrency] = useState('');
   const [newPLDefault, setNewPLDefault] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
 
@@ -116,6 +116,10 @@ export default function PricesPage() {
 
   const handleCreatePL = async () => {
     if (!token || !company || !newPLNameUz) return;
+    if (!newPLCurrency) {
+      toast.error(isRu ? 'Пожалуйста, выберите валюту' : 'Iltimos, valyutani tanlang');
+      return;
+    }
     setCreateLoading(true);
     try {
       const created = await apiFetch<PriceList>('/sales/price-lists', {
@@ -146,13 +150,17 @@ export default function PricesPage() {
   const handleOpenEditPL = (pl: PriceList) => {
     setEditPLNameUz(typeof pl.name === 'object' ? (pl.name.uz || pl.name.ru || '') : pl.name || '');
     setEditPLNameRu(typeof pl.name === 'object' ? (pl.name.ru || pl.name.uz || '') : pl.name || '');
-    setEditPLCurrency(pl.currency || 'UZS');
+    setEditPLCurrency(pl.currency || '');
     setEditPLDefault(Boolean(pl.isDefault));
     setShowEditPL(true);
   };
 
   const handleSaveEditPL = async () => {
     if (!selectedPL || !token || !company || !editPLNameUz) return;
+    if (!editPLCurrency) {
+      toast.error(isRu ? 'Пожалуйста, выберите валюту' : 'Iltimos, valyutani tanlang');
+      return;
+    }
     setEditLoading(true);
     try {
       await apiFetch(`/sales/price-lists/${selectedPL.id}`, {
@@ -511,8 +519,9 @@ export default function PricesPage() {
           />
           <Select
             id="pl-currency"
-            label={isRu ? 'Валюта' : 'Valyuta'}
+            label={isRu ? 'Валюта *' : 'Valyuta *'}
             value={newPLCurrency}
+            placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
             onChange={(val) => setNewPLCurrency(val)}
             options={CURRENCY_OPTIONS}
           />
@@ -562,8 +571,9 @@ export default function PricesPage() {
           />
           <Select
             id="edit-pl-currency"
-            label={isRu ? 'Валюта' : 'Valyuta'}
+            label={isRu ? 'Валюта *' : 'Valyuta *'}
             value={editPLCurrency}
+            placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
             onChange={(val) => setEditPLCurrency(val)}
             options={CURRENCY_OPTIONS}
           />

@@ -106,7 +106,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [docDate, setDocDate] = useState(
     initialData?.docDate ? initialData.docDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
-  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || '');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
   const [contractNumber, setContractNumber] = useState(initialData?.contractNumber || '');
   const [contractDate, setContractDate] = useState(
@@ -377,11 +377,31 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       setError(isRu ? 'Выберите склад' : 'Omborni tanlang');
       return null;
     }
-    if (items.some((i) => !i.productId || i.quantity <= 0)) {
+    if (!currency) {
+      setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
+      return null;
+    }
+
+    if (currency !== 'UZS') {
+      const rateNum = Number(exchangeRate);
+      if (!exchangeRate || isNaN(rateNum) || rateNum <= 0) {
+        setError(isRu ? 'Курс валюты должен быть больше 0' : 'Valyuta kursi 0 dan katta bo‘lishi shart');
+        return null;
+      }
+    }
+
+    if (items.some((i) => !i.productId || Number(i.quantity) <= 0 || isNaN(Number(i.quantity)))) {
       setError(
         isRu
           ? 'Выберите номенклатуру и укажите правильное количество во всех строках'
           : 'Barcha qatorlarda nomenklatura tanlanishi va miqdor kiritilishi shart'
+      );
+      return null;
+    }
+
+    if (items.some((i) => Number(i.unitPrice) < 0 || isNaN(Number(i.unitPrice)))) {
+      setError(
+        isRu ? 'Цена товара не может быть отрицательной' : 'Tovar narxi manfiy bo‘lishi mumkin emas'
       );
       return null;
     }
@@ -394,7 +414,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       warehouseId,
       docDate,
       currency,
-      exchangeRate,
+      exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
       contractNumber: contractNumber || undefined,
       contractDate: contractDate || undefined,
       comment: comment || undefined,
@@ -972,7 +992,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                       color: debt > 0 ? '#ef4444' : debt < 0 ? '#10b981' : 'var(--color-text-secondary)',
                     }}
                   >
-                    {formatCurrency(debt, locale, currency)}
+                    {currency ? formatCurrency(debt, locale, currency) : '—'}
                   </span>
                 </div>
               );
@@ -1027,15 +1047,15 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           {/* Currency */}
           <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
             <Select
-              label={isRu ? 'Валюта' : 'Valyuta'}
-              options={[
-                { value: 'UZS', label: 'UZS' },
-                { value: 'USD', label: 'USD' },
-                { value: 'EUR', label: 'EUR' },
-                { value: 'RUB', label: 'RUB' },
-              ]}
+              label={isRu ? 'Валюта *' : 'Valyuta *'}
+              options={CURRENCY_OPTIONS}
               value={currency}
-              onChange={(val) => { markDirty(); setCurrency(val); }}
+              placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+              onChange={(val) => {
+                markDirty();
+                setCurrency(val);
+                if (val === 'UZS') setExchangeRate(1);
+              }}
               disabled={isReadOnly}
             />
           </div>
@@ -1429,15 +1449,15 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     </td>
 
                     {/* VAT Amount */}
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500, whiteSpace: 'nowrap' }} className="tabular-nums">
-                      {formatCurrency(lineVat, locale, currency)}
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, whiteSpace: 'nowrap' }} className="tabular-nums">
+                      {currency ? formatCurrency(lineVat, locale, currency) : '—'}
                     </td>
 
                     {/* Line Total */}
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
-                      <div style={{ whiteSpace: 'nowrap' }}>{formatCurrency(lineTotal, locale, currency)}</div>
-                      {currency !== 'UZS' && exchangeRate > 1 && (
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 400, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
+                      <div style={{ whiteSpace: 'nowrap' }}>{currency ? formatCurrency(lineTotal, locale, currency) : '—'}</div>
+                      {currency !== 'UZS' && exchangeRate > 0 && (
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
                           ≈ {formatCurrency(lineTotal * exchangeRate, locale, 'UZS')}
                         </div>
                       )}
@@ -1485,17 +1505,17 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'Сумма позиций:' : 'Pozitsiyalar summasi:'}</span>
-            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.subtotal, locale, currency)}</span>
+            <span className="tabular-nums" style={{ fontWeight: 500 }}>{currency ? formatCurrency(totals.subtotal, locale, currency) : '—'}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'Общая скидка:' : 'Umumiy chegirma:'}</span>
-            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.discount, locale, currency)}</span>
+            <span className="tabular-nums" style={{ fontWeight: 500 }}>{currency ? formatCurrency(totals.discount, locale, currency) : '—'}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'НДС total:' : 'QQS total:'}</span>
-            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.vat, locale, currency)}</span>
+            <span className="tabular-nums" style={{ fontWeight: 500 }}>{currency ? formatCurrency(totals.vat, locale, currency) : '—'}</span>
           </div>
 
           <div style={{ borderTop: '2px solid var(--color-border-light)', paddingTop: 'var(--space-3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1504,9 +1524,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             </span>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                {formatCurrency(totals.grandTotal, locale, currency)}
+                {currency ? formatCurrency(totals.grandTotal, locale, currency) : '—'}
               </div>
-              {currency !== 'UZS' && exchangeRate > 1 && (
+              {currency && currency !== 'UZS' && exchangeRate > 0 && (
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
                   ≈ {formatCurrency(totals.grandTotal * exchangeRate, locale, 'UZS')} ({isRu ? 'курс:' : 'kurs:'} {exchangeRate.toLocaleString()})
                 </div>

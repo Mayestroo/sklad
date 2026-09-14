@@ -91,7 +91,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [receiptId, setReceiptId] = useState<string>(initialData?.receiptId || '');
-  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || '');
   const [actNumber, setActNumber] = useState(initialData?.actNumber || '');
   const [reason, setReason] = useState(initialData?.reason || '');
   const [comment, setComment] = useState(initialData?.comment || '');
@@ -371,11 +371,29 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       setError(isRu ? 'Выберите склад' : 'Omborni tanlang');
       return;
     }
+    if (!currency) {
+      setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
+      return;
+    }
     if (items.length === 0) {
       setError(
         isRu
           ? 'Добавьте хотя бы один товар для возврата'
           : 'Kamida bitta tovar qo‘shing',
+      );
+      return;
+    }
+    if (items.some((i) => !i.productId || Number(i.quantity) <= 0 || isNaN(Number(i.quantity)))) {
+      setError(
+        isRu
+          ? 'Выберите номенклатуру и укажите правильное количество во всех строках'
+          : 'Barcha qatorlarda nomenklatura tanlanishi va miqdor kiritilishi shart',
+      );
+      return;
+    }
+    if (items.some((i) => Number(i.unitPrice) < 0 || isNaN(Number(i.unitPrice)))) {
+      setError(
+        isRu ? 'Цена товара не может быть отрицательной' : 'Tovar narxi manfiy bo‘lishi mumkin emas',
       );
       return;
     }
@@ -475,7 +493,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
   const supplierSelectOptions: SelectOption[] = counterparties.map((c) => ({
     value: c.id,
-    label: `${c.name} (${formatCurrency(Number(c.debtBalance || 0), locale, currency)})`,
+    label: `${c.name}${currency ? ` (${formatCurrency(Number(c.debtBalance || 0), locale, currency)})` : ''}`,
   }));
 
   const warehouseSelectOptions: SelectOption[] = warehouses.map((w) => ({
@@ -680,9 +698,10 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
           <div>
             <Select
-              label={isRu ? 'Валюта' : 'Valyuta'}
+              label={isRu ? 'Валюта *' : 'Valyuta *'}
               options={CURRENCY_OPTIONS}
               value={currency}
+              placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
               onChange={(val) => setCurrency(val)}
               disabled={isReadOnly}
             />
@@ -840,7 +859,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       {isReadOnly ? (
-                        formatCurrency(row.unitPrice, locale, currency)
+                        currency ? formatCurrency(row.unitPrice, locale, currency) : '—'
                       ) : (
                         <CurrencyInput
                           value={row.unitPrice}
@@ -870,10 +889,10 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                       )}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }} className="tabular-nums">
-                      {formatCurrency(row.vatAmount, locale, currency)}
+                      {currency ? formatCurrency(row.vatAmount, locale, currency) : '—'}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }} className="tabular-nums">
-                      {formatCurrency(row.totalPrice, locale, currency)}
+                      {currency ? formatCurrency(row.totalPrice, locale, currency) : '—'}
                     </td>
                     {!isReadOnly && (
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
@@ -904,17 +923,17 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
           </h4>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span>{isRu ? 'Текущий долг перед поставщиком:' : 'Yetkazib beruvchiga joriy qarz:'}</span>
-            <span style={{ fontWeight: 600 }}>{formatCurrency(currentSupplierDebt, locale, currency)}</span>
+            <span style={{ fontWeight: 600 }}>{currency ? formatCurrency(currentSupplierDebt, locale, currency) : '—'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-danger-600)' }}>
             <span>{isRu ? 'Сумма возврата (уменьшение долга):' : 'Qaytarish summasi (qarz kamayishi):'}</span>
-            <span style={{ fontWeight: 600 }}>- {formatCurrency(totalAmount, locale, currency)}</span>
+            <span style={{ fontWeight: 600 }}>- {currency ? formatCurrency(totalAmount, locale, currency) : '—'}</span>
           </div>
           <div style={{ height: '1px', backgroundColor: 'var(--color-border-light)', margin: '4px 0' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
             <span>{isRu ? 'Остаток долга после проведения:' : 'Tasdiqlangandan so‘ng qarz:'}</span>
             <span style={{ color: projectedSupplierDebt >= 0 ? 'var(--color-text-primary)' : 'var(--color-success-600)' }}>
-              {formatCurrency(projectedSupplierDebt, locale, currency)}
+              {currency ? formatCurrency(projectedSupplierDebt, locale, currency) : '—'}
               {projectedSupplierDebt < 0 && (
                 <span style={{ fontSize: '11px', display: 'block', color: 'var(--color-success-600)', fontWeight: 500 }}>
                   ({isRu ? 'Аванс поставщику' : 'Yetkazib beruvchiga avans'})
@@ -928,16 +947,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Сумма без НДС:' : 'QQSsiz summa:'}</span>
-            <span style={{ fontWeight: 600 }}>{formatCurrency(subtotal, locale, currency)}</span>
+            <span style={{ fontWeight: 600 }}>{currency ? formatCurrency(subtotal, locale, currency) : '—'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Сумма НДС:' : 'QQS summasi:'}</span>
-            <span style={{ fontWeight: 600 }}>{formatCurrency(totalVat, locale, currency)}</span>
+            <span style={{ fontWeight: 600 }}>{currency ? formatCurrency(totalVat, locale, currency) : '—'}</span>
           </div>
           <div style={{ height: '1px', backgroundColor: 'var(--color-border-light)', margin: '4px 0' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-primary-600)' }}>
             <span>{isRu ? 'ИТОГО К ВОЗВРАТУ:' : 'JAMI QAYTARISH:'}</span>
-            <span>{formatCurrency(totalAmount, locale, currency)}</span>
+            <span>{currency ? formatCurrency(totalAmount, locale, currency) : '—'}</span>
           </div>
 
           {!isReadOnly && (

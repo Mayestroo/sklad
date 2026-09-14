@@ -119,6 +119,7 @@ describe('SalesOrdersService', () => {
       const dto: any = {
         counterpartyId: 'cust-1',
         paymentCondition: 'PREPAID_100',
+        currency: 'UZS',
         items: [
           { productId: 'prod-1', quantity: 5, unitPrice: 100000, discount: 50000 },
           { productId: 'prod-2', quantity: 2, unitPrice: 200000, discount: 0 },
@@ -140,7 +141,60 @@ describe('SalesOrdersService', () => {
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
           paymentCondition: 'CREDIT',
+          currency: 'UZS',
           items: [],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if currency is missing or unsupported in sales order', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', ['SELLER'], {
+          counterpartyId: 'cust-1',
+          paymentCondition: 'CREDIT',
+          currency: '' as any,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.create('tenant-1', 'user-1', ['SELLER'], {
+          counterpartyId: 'cust-1',
+          paymentCondition: 'CREDIT',
+          currency: 'RUB' as any,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if order currency is USD and exchangeRate is missing, 0, or negative', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', ['SELLER'], {
+          counterpartyId: 'cust-1',
+          paymentCondition: 'CREDIT',
+          currency: 'USD',
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.create('tenant-1', 'user-1', ['SELLER'], {
+          counterpartyId: 'cust-1',
+          paymentCondition: 'CREDIT',
+          currency: 'USD',
+          exchangeRate: 0,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if order item quantity is zero or negative', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', ['SELLER'], {
+          counterpartyId: 'cust-1',
+          paymentCondition: 'CREDIT',
+          currency: 'UZS',
+          items: [{ productId: 'p1', quantity: 0, unitPrice: 100 }],
         }),
       ).rejects.toThrow(BadRequestException);
     });

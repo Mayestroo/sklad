@@ -214,14 +214,17 @@ export class AuthService {
     });
 
     // Audit log login
-    await this.auditService.logAction({
-      tenantId: user.tenantId || (user.company ? user.company.id : 'SYSTEM'),
-      userId: user.id,
-      entityType: 'User',
-      entityId: user.id,
-      action: 'LOGIN',
-      ipAddress,
-    });
+    const targetTenantId = user.tenantId ?? user.company?.id;
+    if (targetTenantId) {
+      await this.auditService.logAction({
+        tenantId: targetTenantId,
+        userId: user.id,
+        entityType: 'User',
+        entityId: user.id,
+        action: 'LOGIN',
+        ipAddress,
+      });
+    }
 
     return this.buildAuthResponse(
       user,

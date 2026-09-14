@@ -16,14 +16,26 @@
  * // ❌ XATO — "1 500 000 UZS UZS" (ikki marta!)
  * {formatCurrency(amount, locale, currency)} {currency}
  */
-export function formatCurrency(amount: number, locale: string = 'uz', currency: string = 'UZS'): string {
+export function formatCurrency(amount: number, locale: string = 'uz', currency?: string): string {
+  if (amount === null || amount === undefined || typeof amount !== 'number' || isNaN(amount) || !isFinite(amount)) {
+    throw new TypeError(`formatCurrency: amount must be a valid finite number, received ${String(amount)}`);
+  }
+
+  // If 3rd argument is provided by caller, strictly validate it without silent fallback.
+  // If caller only passed (amount, locale), safe default to 'UZS'.
+  const resolvedCurrency = arguments.length >= 3 ? currency : (currency || 'UZS');
+
+  if (resolvedCurrency === null || resolvedCurrency === undefined || typeof resolvedCurrency !== 'string' || resolvedCurrency.trim() === '') {
+    throw new TypeError(`formatCurrency: currency must be a non-empty string, received ${String(resolvedCurrency)}`);
+  }
+
   // Always format as 111,111.000 — comma thousands separator, dot decimal, 3 fixed decimals
   const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
-  }).format(amount || 0);
+  }).format(amount);
 
-  const cur = (currency || 'UZS').toUpperCase();
+  const cur = resolvedCurrency.trim().toUpperCase();
   return `${formatted} ${cur}`;
 }
 

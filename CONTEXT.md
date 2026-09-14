@@ -242,11 +242,25 @@ _Avoid_: Orphan payment unlink, forced service delete, silent de-reconciliation
 The automated creation of National Accounting Standards (BHMS/NAS) double-entry records (e.g. Debit 2910, Debit 4410, Credit 6010 for purchases; Debit 4010, Credit 9010, Debit 9110, Credit 2910 for sales) triggered by operational document status changes without manual user accounting intervention.
 _Avoid_: Manual debit-credit, voucher posting, provodka input
 
+### Data Integrity & Validation Invariants
+
+**Zero-Tolerance Data Fallback Invariant**:
+The strict architectural rule forbidding silent fallback substitutions (e.g. `order.currency || 'UZS'`, `dto.exchangeRate || 1`, `Number(item.quantity) || 1`, `Number(item.unitPrice) || 0`, `user.tenantId || 'SYSTEM'`) for semantically required fields. If a required value is null, undefined, empty, or out-of-range, execution must halt immediately with an explicit validation error.
+_Avoid_: Silent default substitution, lazy fallback, masking nulls
+
+**Currency & Exchange Rate Invariant**:
+The rule requiring every monetary transaction and document to carry an explicitly validated currency (`USD` or `UZS`). For non-base currencies (`currency !== 'UZS'`), an `exchangeRate > 0` is strictly mandatory and must never silently default to `1`.
+_Avoid_: Currency guessing, unitary exchange fallback, implicit UZS assumption
+
+**Line Item Quantity & Price Invariant**:
+The rule requiring all document items (sales invoices, purchase receipts, service acts, production orders) to carry explicitly verified `quantity > 0` and `unitPrice >= 0`. Missing or invalid numbers must not default to 1 or 0.
+_Avoid_: Zero-price masking, phantom unit quantity, missing price substitution
+
 ## Frontend Conventions
 
 ### Currency Display
 
-**`formatCurrency(amount, locale, currency)`** always returns the formatted number with the currency code already appended (e.g. `"1 500 000 UZS"`). Never add a separate `{currency}` expression after calling it — doing so produces `"1 500 000 UZS UZS"`.
+**`formatCurrency(amount, locale, currency)`** always returns the formatted number with the currency code already appended (e.g. `"1 500 000 UZS"`). Both `amount` (finite number) and `currency` (non-empty string) are strictly required; passing `null`, `undefined`, or empty string throws an explicit error rather than silently defaulting. Never add a separate `{currency}` expression after calling it — doing so produces `"1 500 000 UZS UZS"`.
 
 ```tsx
 // ✅ Correct
@@ -254,6 +268,9 @@ _Avoid_: Manual debit-credit, voucher posting, provodka input
 
 // ❌ Wrong — renders "1 500 000 UZS UZS"
 {formatCurrency(amount, locale, currency)} {currency}
+
+// ❌ Wrong — silent fallbacks are prohibited
+{formatCurrency(amount || 0, locale, currency || 'UZS')}
 ```
 
 **`CURRENCY_OPTIONS`** is the single source of truth for currency select options across the entire frontend. Import it from `@/lib/utils`; never define an inline array. Currency labels must be bare ISO codes (`UZS`, `USD`) — no parenthetical additions like `(So'm)` or `($)`.
@@ -263,3 +280,4 @@ import { CURRENCY_OPTIONS } from '@/lib/utils';
 // ...
 <Select options={CURRENCY_OPTIONS} />
 ```
+

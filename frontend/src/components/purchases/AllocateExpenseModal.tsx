@@ -37,7 +37,7 @@ export function AllocateExpenseModal({
   const [expenseType, setExpenseType] = useState('TRANSPORT');
   const [supplierId, setSupplierId] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [currency, setCurrency] = useState('');
   const [allocationMethod, setAllocationMethod] = useState('BY_AMOUNT');
   const [comment, setComment] = useState('');
 
@@ -60,6 +60,10 @@ export function AllocateExpenseModal({
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {
       setError(isRu ? 'Введите сумму расхода' : 'Xarajat summasini kiriting');
+      return;
+    }
+    if (!currency) {
+      setError(isRu ? 'Пожалуйста, выберите валюту' : 'Iltimos, valyutani tanlang');
       return;
     }
 
@@ -206,11 +210,12 @@ export function AllocateExpenseModal({
           </div>
           <div>
             <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
-              {isRu ? 'Валюта' : 'Valyuta'}
+              {isRu ? 'Валюта *' : 'Valyuta *'}
             </label>
             <Select
               options={currencyOptions}
               value={currency}
+              placeholder={isRu ? 'Выберите валюту *' : 'Valyutani tanlang *'}
               onChange={(val) => setCurrency(val)}
             />
           </div>

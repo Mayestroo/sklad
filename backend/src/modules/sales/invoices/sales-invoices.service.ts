@@ -15,6 +15,7 @@ import {
   SalesReturnDocStatus,
 } from '@prisma/client';
 import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
+import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
 
 @Injectable()
 export class SalesInvoicesService {
@@ -115,7 +116,7 @@ export class SalesInvoicesService {
     return invoice;
   }
 
-  // ─── CREATE (DRAFT) ───────────────────────────────────────────
+  // ─── INVOICE CRUD & DRAFT CREATION ────────────────────────────
 
   async createInvoice(
     tenantId: string,
@@ -128,18 +129,60 @@ export class SalesInvoicesService {
       );
     }
 
+    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
+    let exchangeRate = 1;
+    if (dto.currency !== 'UZS') {
+      if (
+        dto.exchangeRate == null ||
+        isNaN(Number(dto.exchangeRate)) ||
+        Number(dto.exchangeRate) <= 0
+      ) {
+        throw new BadRequestException(
+          "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
+        );
+      }
+      exchangeRate = Number(dto.exchangeRate);
+    }
+
+    for (const item of dto.items) {
+      const qty = Number(item.quantity);
+      if (item.quantity == null || isNaN(qty) || qty <= 0) {
+        throw new BadRequestException(
+          "Hujjat qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+        );
+      }
+      const unitPrice = Number(item.unitPrice);
+      if (item.unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+        throw new BadRequestException(
+          "Hujjat qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+      if (
+        item.discount != null &&
+        (isNaN(Number(item.discount)) || Number(item.discount) < 0)
+      ) {
+        throw new BadRequestException(
+          "Chegirma (discount) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+    }
+
     const invoiceNumber = await this.generateInvoiceNumber(tenantId);
-    const exchangeRate = dto.exchangeRate || 1;
 
     let subtotalAmount = 0;
     let discountAmount = 0;
     let vatAmount = 0;
 
     const preparedItems = dto.items.map((item) => {
-      const qty = item.quantity;
-      const unitPrice = item.unitPrice;
-      const disc = item.discount || 0;
-      const vatRate = item.vatRate || 0;
+      const qty = Number(item.quantity);
+      const unitPrice = Number(item.unitPrice);
+      const disc = item.discount ? Number(item.discount) : 0;
+      const vatRate = item.vatRate ? Number(item.vatRate) : 0;
 
       const lineSubtotal = qty * unitPrice;
       const lineAfterDisc = Math.max(0, lineSubtotal - disc);
@@ -680,6 +723,12 @@ export class SalesInvoicesService {
       );
     }
 
+    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+      throw new BadRequestException(
+        `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
+      );
+    }
+
     const returnNumber = await this.generateReturnNumber(tenantId);
     let totalAmount = 0;
     let totalCogs = 0;
@@ -732,7 +781,20 @@ export class SalesInvoicesService {
     }> = [];
 
     for (const i of dto.items) {
-      const lineTotal = i.quantity * i.unitPrice;
+      const qty = Number(i.quantity);
+      if (i.quantity == null || isNaN(qty) || qty <= 0) {
+        throw new BadRequestException(
+          "Qaytarish qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+        );
+      }
+      const unitPrice = Number(i.unitPrice);
+      if (i.unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
+        throw new BadRequestException(
+          "Qaytarish qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+        );
+      }
+
+      const lineTotal = qty * unitPrice;
       totalAmount += lineTotal;
 
       let unitCogs = 0;

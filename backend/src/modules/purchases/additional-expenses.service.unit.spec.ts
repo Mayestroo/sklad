@@ -229,12 +229,60 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receiptId,
         counterpartyId: 'carrier-1',
         expenseType: ExpenseType.TRANSPORT,
+        currency: 'UZS',
         amount: 2000000,
       });
 
       expect(prisma.additionalExpense.create).toHaveBeenCalled();
       expect(res.docNumber).toBe('EXP-2026-0001');
       expect(res.status).toBe(PurchaseDocStatus.DRAFT);
+    });
+
+    it('rejects createDraft if currency is missing or unsupported', async () => {
+      await expect(
+        service.createDraft(tenantId, userId, {
+          receiptId,
+          counterpartyId: 'carrier-1',
+          expenseType: ExpenseType.TRANSPORT,
+          currency: '' as any,
+          amount: 1000,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects createDraft if currency is USD and exchangeRate is missing, 0, or negative', async () => {
+      await expect(
+        service.createDraft(tenantId, userId, {
+          receiptId,
+          counterpartyId: 'carrier-1',
+          expenseType: ExpenseType.TRANSPORT,
+          currency: 'USD',
+          amount: 1000,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createDraft(tenantId, userId, {
+          receiptId,
+          counterpartyId: 'carrier-1',
+          expenseType: ExpenseType.TRANSPORT,
+          currency: 'USD',
+          exchangeRate: 0,
+          amount: 1000,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects createDraft if amount is zero or negative', async () => {
+      await expect(
+        service.createDraft(tenantId, userId, {
+          receiptId,
+          counterpartyId: 'carrier-1',
+          expenseType: ExpenseType.TRANSPORT,
+          currency: 'UZS',
+          amount: 0,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('rejects update if expense is not in DRAFT status', async () => {

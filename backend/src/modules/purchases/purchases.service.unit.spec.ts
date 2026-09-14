@@ -152,6 +152,67 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       expect(createCall.data.status).toBe(PurchaseDocStatus.DRAFT);
     });
 
+    it('should throw BadRequestException if currency is missing or unsupported in purchase receipt', async () => {
+      await expect(
+        service.createReceipt('tenant-123', 'user-456', {
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          currency: '' as any,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createReceipt('tenant-123', 'user-456', {
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          currency: 'JPY' as any,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if purchase receipt currency is USD and exchangeRate is missing, 0, or negative', async () => {
+      await expect(
+        service.createReceipt('tenant-123', 'user-456', {
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          currency: 'USD',
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createReceipt('tenant-123', 'user-456', {
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          currency: 'USD',
+          exchangeRate: 0,
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if purchase receipt item quantity is <= 0 or unitPrice < 0', async () => {
+      await expect(
+        service.createReceipt('tenant-123', 'user-456', {
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [{ productId: 'p1', quantity: 0, unitPrice: 100 }],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createReceipt('tenant-123', 'user-456', {
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [{ productId: 'p1', quantity: 1, unitPrice: -50 }],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('should disallow deleting a POSTED receipt', async () => {
       prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-1',
