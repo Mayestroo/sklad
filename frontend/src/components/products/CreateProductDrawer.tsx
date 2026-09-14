@@ -83,8 +83,36 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setSellingPrice(productToEdit.salePrice !== undefined ? String(productToEdit.salePrice) : '');
         setMinStockAlert(productToEdit.minStockAlert !== undefined ? String(productToEdit.minStockAlert) : '0');
         setError(null);
+
+        // Pre-populate tier prices
+        const initialTiers: Record<string, number | string> = {};
+        if (Array.isArray(productToEdit.productPrices)) {
+          productToEdit.productPrices.forEach((pp: any) => {
+            if (pp.priceListId && pp.price !== undefined) {
+              initialTiers[pp.priceListId] = Number(pp.price);
+            }
+          });
+          setTierPrices(initialTiers);
+        } else if (productToEdit.id && isMultiTier && token && company?.id) {
+          apiFetch<any>(`/inventory/products/${productToEdit.id}`, { token, tenantId: company.id, locale })
+            .then((fullProd) => {
+              if (Array.isArray(fullProd?.productPrices)) {
+                const loadedTiers: Record<string, number | string> = {};
+                fullProd.productPrices.forEach((pp: any) => {
+                  if (pp.priceListId && pp.price !== undefined) {
+                    loadedTiers[pp.priceListId] = Number(pp.price);
+                  }
+                });
+                setTierPrices(loadedTiers);
+              }
+            })
+            .catch(console.error);
+        } else {
+          setTierPrices({});
+        }
       } else {
         setItemType(initialType || 'PRODUCT');
+        setTierPrices({});
         if (initialSkuOrBarcode) {
           if (!/^\d{8,14}$/.test(initialSkuOrBarcode)) {
             setName(initialSkuOrBarcode);
@@ -94,7 +122,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         }
       }
     }
-  }, [isOpen, productToEdit, initialType, initialSkuOrBarcode, locale]);
+  }, [isOpen, productToEdit, initialType, initialSkuOrBarcode, locale, isMultiTier, token, company]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -160,8 +188,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         });
       }
 
-      if (isMultiTier && res?.id) {
-        const priceEntries = Object.entries(tierPrices).filter(([_, val]) => Number(val) > 0);
+      const targetProductId = productToEdit?.id || res?.id;
+      if (isMultiTier && targetProductId) {
+        const priceEntries = Object.entries(tierPrices).filter(
+          ([_, val]) => val !== '' && !isNaN(Number(val)) && Number(val) >= 0,
+        );
         for (const [plId, val] of priceEntries) {
           await apiFetch(`/sales/price-lists/${plId}/items`, {
             method: 'POST',
@@ -169,7 +200,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             tenantId: company?.id,
             locale,
             body: JSON.stringify({
-              productId: res.id,
+              productId: targetProductId,
               price: Number(val),
             }),
           }).catch(console.error);

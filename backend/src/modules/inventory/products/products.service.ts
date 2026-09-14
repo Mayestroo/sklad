@@ -66,6 +66,13 @@ export class ProductsService {
         stockLevels: {
           include: { warehouse: true },
         },
+        productPrices: {
+          select: {
+            id: true,
+            priceListId: true,
+            price: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -109,6 +116,14 @@ export class ProductsService {
           include: { warehouse: true },
         },
         variants: true,
+        productPrices: {
+          select: {
+            id: true,
+            priceListId: true,
+            price: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 
@@ -237,6 +252,14 @@ export class ProductsService {
       },
       include: {
         category: true,
+        productPrices: {
+          select: {
+            id: true,
+            priceListId: true,
+            price: true,
+            updatedAt: true,
+          },
+        },
       },
     });
   }

@@ -114,4 +114,52 @@ describe('ProductsService', () => {
       expect(mockPrisma.product.delete).not.toHaveBeenCalled();
     });
   });
+
+  describe('findById and findAll with productPrices', () => {
+    it('should include productPrices when finding by id', async () => {
+      const tenantId = 't-1';
+      const id = 'p-1';
+      mockPrisma.product.findFirst.mockResolvedValue({
+        id,
+        tenantId,
+        stockLevels: [],
+        productPrices: [
+          { id: 'pp-1', priceListId: 'pl-1', price: 150000 },
+        ],
+      });
+
+      const result = await service.findById(tenantId, id);
+      expect(result.productPrices).toHaveLength(1);
+      expect(mockPrisma.product.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id, tenantId },
+          include: expect.objectContaining({
+            productPrices: expect.any(Object),
+          }),
+        }),
+      );
+    });
+
+    it('should include productPrices when finding all products', async () => {
+      const tenantId = 't-1';
+      mockPrisma.product.findMany.mockResolvedValue([
+        {
+          id: 'p-1',
+          name: { uz: 'Lampa' },
+          stockLevels: [],
+          productPrices: [{ id: 'pp-1', priceListId: 'pl-1', price: 120000 }],
+        },
+      ]);
+
+      const result = await service.findAll(tenantId);
+      expect(result[0].productPrices).toHaveLength(1);
+      expect(mockPrisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            productPrices: expect.any(Object),
+          }),
+        }),
+      );
+    });
+  });
 });

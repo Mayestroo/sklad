@@ -33,6 +33,8 @@ export interface OrderGeneralInfoProps {
   onDeliveryDateChange: (date: string) => void;
   currency: string;
   onCurrencyChange: (curr: string) => void;
+  exchangeRate?: number;
+  onExchangeRateChange?: (rate: number) => void;
   deliveryAddress: string;
   onDeliveryAddressChange: (addr: string) => void;
   comment: string;
@@ -60,6 +62,8 @@ export function OrderGeneralInfo({
   onDeliveryDateChange,
   currency,
   onCurrencyChange,
+  exchangeRate = 1,
+  onExchangeRateChange,
   deliveryAddress,
   onDeliveryAddressChange,
   comment,
@@ -169,6 +173,21 @@ export function OrderGeneralInfo({
             disabled={isLocked}
           />
         </div>
+
+        {/* Exchange Rate (when currency is not UZS) */}
+        {currency !== 'UZS' && (
+          <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
+            <Input
+              label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
+              type="number"
+              min={0.0001}
+              step="any"
+              value={exchangeRate}
+              onChange={(e) => onExchangeRateChange?.(parseFloat(e.target.value) || 1)}
+              disabled={isLocked}
+            />
+          </div>
+        )}
 
         {/* Delivery Address */}
         <div style={{ minWidth: '220px', flex: '2 1 250px' }}>

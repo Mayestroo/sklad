@@ -54,10 +54,12 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       },
       counterparty: {
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
         update: jest.fn(),
         aggregate: jest.fn(),
       },
       product: {
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
       },
       account: {
@@ -85,15 +87,6 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       productPrice: {
         upsert: jest.fn(),
         findUnique: jest.fn(),
-      },
-      product: {
-        findFirst: jest.fn(),
-        findUnique: jest.fn(),
-      },
-      counterparty: {
-        findFirst: jest.fn(),
-        findUnique: jest.fn(),
-        update: jest.fn(),
       },
       company: {
         findUnique: jest.fn(),

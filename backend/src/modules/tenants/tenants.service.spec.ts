@@ -103,7 +103,7 @@ describe('TenantsService - Settings Management', () => {
         }),
       });
 
-      expect(res.sales.enableMultiTierPriceLists).toBe(true);
+      expect((res as any)?.sales?.enableMultiTierPriceLists).toBe(true);
     });
   });
 });

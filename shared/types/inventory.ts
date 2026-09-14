@@ -33,6 +33,7 @@ export interface Product {
   updatedAt: string;
   category?: Category;
   totalStock?: number;
+  productPrices?: { id: string; priceListId: string; price: number; updatedAt?: string }[];
 }
 
 export interface StockLevel {

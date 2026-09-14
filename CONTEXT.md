@@ -159,6 +159,32 @@ _Avoid_: In-place sales edit, ledger bypass
 The coordinated deletion action that executes an unposting reversal before purging the sales invoice record, guarded strictly by the Sales Rollback Invariant.
 _Avoid_: Phantom stock deletion, direct record drop
 
+### Pricing & Price Lists
+
+**Price List (Narx jadvali)**:
+A named pricing catalog (`UZS` or `USD`) defining customized unit selling prices for products, assigned to counterparties or selectable on sales orders/invoices to enable tiered pricing (e.g. Retail, Wholesale, VIP).
+_Avoid_: Discount table, price category, tier sheet
+
+**Tiered Pricing (Ko'p darajali narxlar)**:
+The capability to maintain multiple price levels per product mapped to distinct price lists, activated or deactivated globally via company sales settings (`enableMultiTierPriceLists`).
+_Avoid_: Multi-pricing, customer discount rules, price matrix
+
+**Product Tier Price (Tovar jadval narxi)**:
+A specific custom selling price defined for a product within an active Price List. When resolved against an order, automatically computes the discount or markup percentage relative to the catalog Base Sale Price.
+_Avoid_: Special price, fixed discount, counterparty price
+
+**Auto-Pricing Resolution (Avtomatik narxlash algoritmi)**:
+The deterministic pricing pipeline that determines an item's selling price on a Sales Order or Sales Invoice based on: (1) multi-tier setting enablement, (2) order-level price list override or counterparty assigned price list, (3) fallback to product Base Sale Price if unlisted, and (4) real-time exchange rate conversion if currencies differ.
+_Avoid_: Dynamic price lookup, order discount calc, silent re-price
+
+**Seller Price Override (Sotuvchi narxini qo'lda kiritishi)**:
+The capability for an authorized sales manager to manually adjust unit prices on order lines, governed by company settings (`allowSellerPriceOverride`) and permission checks, constrained by the Below-Cost Guardrail.
+_Avoid_: Arbitrary price edit, unvalidated price change, manager discount bypass
+
+**Price List Soft-Deactivation (Narx jadvalini arxivlash)**:
+The safety rule disallowing the hard deletion of a Price List referenced by active counterparties, sales orders, or invoices, switching its state to `isActive: false` to preserve historical document and accounting integrity.
+_Avoid_: Force-delete price list, cascade orphan drop
+
 ### Counterparties & Balances
 
 **Supplier Debt**:

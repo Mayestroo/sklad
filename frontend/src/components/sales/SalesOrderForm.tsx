@@ -203,7 +203,12 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     };
   }, [items, currentOrderData, paymentCondition, requiredPaymentPercent]);
 
-  const getProductPriceForList = (pId: string, pListId?: string) => {
+  const getProductPriceForList = (
+    pId: string,
+    pListId?: string,
+    overrideRate?: number,
+    overrideCurrency?: string,
+  ) => {
     const prd = products.find((p) => p.id === pId);
     if (!prd) return 0;
     const activeListId = pListId !== undefined ? pListId : priceListId;
@@ -219,16 +224,44 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       }
     }
 
-    if (itemCurrency !== currency) {
-      const rate = Number(exchangeRate) || 1;
-      if (currency === 'UZS' && itemCurrency === 'USD') {
+    const docCurrency = overrideCurrency || currency;
+    const rate = overrideRate !== undefined ? overrideRate : (Number(exchangeRate) || 1);
+
+    if (itemCurrency !== docCurrency) {
+      if (docCurrency === 'UZS' && itemCurrency === 'USD') {
         price = Math.round(price * rate);
-      } else if (currency === 'USD' && itemCurrency === 'UZS' && rate > 0) {
+      } else if (docCurrency === 'USD' && itemCurrency === 'UZS' && rate > 0) {
         price = Number((price / rate).toFixed(2));
       }
     }
 
     return price;
+  };
+
+  const handleCurrencyChange = (newCurr: string) => {
+    markDirty();
+    setCurrency(newCurr);
+    const newRate = newCurr === 'UZS' ? 1 : exchangeRate;
+    if (newCurr === 'UZS') setExchangeRate(1);
+    setItems((prev) =>
+      prev.map((row) => {
+        if (!row.productId) return row;
+        const unitPrice = getProductPriceForList(row.productId, priceListId, newRate, newCurr);
+        return { ...row, unitPrice };
+      })
+    );
+  };
+
+  const handleExchangeRateChange = (newRate: number) => {
+    markDirty();
+    setExchangeRate(newRate);
+    setItems((prev) =>
+      prev.map((row) => {
+        if (!row.productId) return row;
+        const unitPrice = getProductPriceForList(row.productId, priceListId, newRate, currency);
+        return { ...row, unitPrice };
+      })
+    );
   };
 
   const handleCounterpartySelect = (cpId: string) => {
@@ -787,11 +820,9 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         deliveryDate={deliveryDate}
         onDeliveryDateChange={(val) => { markDirty(); setDeliveryDate(val); }}
         currency={currency}
-        onCurrencyChange={(val) => {
-          markDirty();
-          setCurrency(val);
-          if (val === 'UZS') setExchangeRate(1);
-        }}
+        onCurrencyChange={handleCurrencyChange}
+        exchangeRate={exchangeRate}
+        onExchangeRateChange={handleExchangeRateChange}
         deliveryAddress={deliveryAddress}
         onDeliveryAddressChange={(val) => { markDirty(); setDeliveryAddress(val); }}
         comment={comment}

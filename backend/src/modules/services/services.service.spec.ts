@@ -77,7 +77,7 @@ describe('ServicesService Unit Tests', () => {
     it('should calculate line subtotal, VAT, and total correctly on create', async () => {
       prisma.counterparty.findFirst.mockResolvedValue({ id: counterpartyId });
       prisma.serviceAct.count.mockResolvedValue(0);
-      prisma.serviceAct.create.mockImplementation(({ data }) => ({
+      prisma.serviceAct.create.mockImplementation(({ data }: any) => ({
         id: 'act-1',
         ...data,
       }));
