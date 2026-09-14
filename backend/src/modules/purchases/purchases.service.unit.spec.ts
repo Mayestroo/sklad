@@ -58,6 +58,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       },
       counterparty: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
         update: jest.fn(),
       },
       account: {
@@ -904,6 +906,57 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         where: { id: 'stock-1' },
         data: { quantity: { decrement: 1 } },
       });
+    });
+  });
+
+  // ─── TICKET #18: MULTI-CURRENCY PURCHASES SUMMARY & KPI SEPARATION ─────
+
+  describe('Multi-Currency Purchases Summary (ADR 0023)', () => {
+    it('should return segregated currency totals for purchases, debts, and returns without flattening to UZS', async () => {
+      // Mock receipts: 1 in UZS (12,000,000 UZS), 1 in USD ($1,500)
+      (prisma.purchaseReceipt.findMany as jest.Mock).mockImplementation(({ where }: { where: any }) => {
+        if (where?.paymentStatus) {
+          // Unpaid receipts for debt by currency
+          return Promise.resolve([
+            { totalAmount: 2000000, paidAmount: 0, currency: 'UZS' },
+            { totalAmount: 500, paidAmount: 0, currency: 'USD' },
+          ]);
+        }
+        // Monthly posted receipts
+        return Promise.resolve([
+          { totalAmount: 12000000, currency: 'UZS', exchangeRate: 1 },
+          { totalAmount: 1500, currency: 'USD', exchangeRate: 12800 },
+        ]);
+      });
+
+      // Mock returns: 1 in USD ($200)
+      (prisma.purchaseReturn.findMany as jest.Mock).mockResolvedValue([
+        { totalAmount: 200, currency: 'USD' },
+      ]);
+
+      // Mock suppliers with debt
+      (prisma.counterparty.findMany as jest.Mock).mockResolvedValue([
+        { id: 'supp-1', supplierDebt: 2000000, debtBalance: 2000000 },
+        { id: 'supp-2', supplierDebt: 500, debtBalance: 500 },
+      ]);
+      (prisma.counterparty.count as jest.Mock).mockResolvedValue(2);
+
+      const stats = await service.getSummaryStats('tenant-123');
+
+      // Assert segregated currency lists exist and accurately reflect native amounts
+      expect(stats.monthlyPurchasesByCurrency).toEqual([
+        { currency: 'UZS', amount: 12000000 },
+        { currency: 'USD', amount: 1500 },
+      ]);
+      expect(stats.totalSupplierDebtByCurrency).toEqual([
+        { currency: 'UZS', amount: 2000000 },
+        { currency: 'USD', amount: 500 },
+      ]);
+      expect(stats.monthlyReturnsByCurrency).toEqual([
+        { currency: 'USD', amount: 200 },
+      ]);
+      expect(stats.monthlyPurchasesCount).toBe(2);
+      expect(stats.suppliersWithDebtCount).toBe(2);
     });
   });
 });

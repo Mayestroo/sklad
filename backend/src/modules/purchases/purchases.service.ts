@@ -2021,11 +2021,18 @@ export class PurchasesService {
       select: { totalAmount: true, currency: true, exchangeRate: true },
     });
 
+    const purchasesByCurrMap: Record<string, number> = {};
     let monthlyPurchasesTotal = 0;
     for (const r of monthlyReceipts) {
       const amt = Number(r.totalAmount || 0);
+      const curr = r.currency || 'UZS';
+      purchasesByCurrMap[curr] = (purchasesByCurrMap[curr] || 0) + amt;
       monthlyPurchasesTotal += amt;
     }
+    const monthlyPurchasesByCurrency = Object.entries(purchasesByCurrMap).map(([currency, amount]) => ({
+      currency,
+      amount,
+    }));
 
     const suppliers = await this.prisma.counterparty.findMany({
       where: {
@@ -2054,18 +2061,58 @@ export class PurchasesService {
       }
     }
 
+    // Determine debt by currency from unpaid posted receipts
+    const unpaidReceipts = await this.prisma.purchaseReceipt.findMany({
+      where: {
+        tenantId,
+        status: PurchaseDocStatus.POSTED,
+        paymentStatus: { in: [PurchasePaymentStatus.UNPAID, PurchasePaymentStatus.PARTIALLY_PAID] },
+      },
+      select: {
+        totalAmount: true,
+        paidAmount: true,
+        currency: true,
+      },
+    });
+
+    const debtByCurrMap: Record<string, number> = {};
+    for (const r of unpaidReceipts) {
+      const remaining = Number(r.totalAmount || 0) - Number(r.paidAmount || 0);
+      if (remaining > 0) {
+        const curr = r.currency || 'UZS';
+        debtByCurrMap[curr] = (debtByCurrMap[curr] || 0) + remaining;
+      }
+    }
+
+    let totalSupplierDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
+      currency,
+      amount,
+    }));
+
+    if (totalSupplierDebtByCurrency.length === 0 && totalSupplierDebt > 0) {
+      totalSupplierDebtByCurrency = [{ currency: 'UZS', amount: totalSupplierDebt }];
+    }
+
     const monthlyReturns = await this.prisma.purchaseReturn.findMany({
       where: {
         tenantId,
         returnDate: { gte: startOfMonth },
       },
-      select: { totalAmount: true },
+      select: { totalAmount: true, currency: true },
     });
 
+    const returnsByCurrMap: Record<string, number> = {};
     let monthlyReturnsTotal = 0;
     for (const ret of monthlyReturns) {
-      monthlyReturnsTotal += Number(ret.totalAmount || 0);
+      const amt = Number(ret.totalAmount || 0);
+      const curr = (ret as any).currency || 'UZS';
+      returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
+      monthlyReturnsTotal += amt;
     }
+    const monthlyReturnsByCurrency = Object.entries(returnsByCurrMap).map(([currency, amount]) => ({
+      currency,
+      amount,
+    }));
 
     const activeSuppliers = await this.prisma.counterparty.count({
       where: {
@@ -2082,7 +2129,10 @@ export class PurchasesService {
       monthlyReturnsTotal,
       monthlyReturnsCount: monthlyReturns.length,
       activeSuppliersCount: activeSuppliers,
-      currency: 'UZS',
+      currency: monthlyPurchasesByCurrency.length === 1 ? monthlyPurchasesByCurrency[0].currency : 'UZS',
+      monthlyPurchasesByCurrency,
+      totalSupplierDebtByCurrency,
+      monthlyReturnsByCurrency,
     };
   }
 }

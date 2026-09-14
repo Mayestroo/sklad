@@ -149,6 +149,11 @@ export interface SalesSummaryStats {
   totalCustomerDebt: number;
   customersWithDebtCount: number;
   monthlyReturnsTotal: number;
+  currency?: string;
+  monthlySalesByCurrency?: Array<{ currency: string; amount: number }>;
+  totalCustomerDebtByCurrency?: Array<{ currency: string; amount: number }>;
+  monthlyReturnsByCurrency?: Array<{ currency: string; amount: number }>;
+  monthlyGrossProfitByCurrency?: Array<{ currency: string; amount: number }>;
 }
 
 export interface SalesPayment {

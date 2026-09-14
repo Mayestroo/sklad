@@ -1774,21 +1774,68 @@ export class SalesInvoicesService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const monthlySales = await this.prisma.salesInvoice.aggregate({
+    const postedInvoices = await this.prisma.salesInvoice.findMany({
       where: {
         tenantId,
         status: SalesDocStatus.POSTED,
         invoiceDate: { gte: startOfMonth },
       },
-      _sum: { totalAmount: true, totalCogs: true, grossProfit: true },
-      _count: { id: true },
+      select: {
+        totalAmount: true,
+        totalCogs: true,
+        grossProfit: true,
+        currency: true,
+        exchangeRate: true,
+      },
     });
 
-    const monthlyReturns = await this.prisma.salesReturn.aggregate({
+    const salesByCurrMap: Record<string, number> = {};
+    const profitByCurrMap: Record<string, number> = {};
+    let totalSales = 0;
+    let totalCogs = 0;
+    let grossProfit = 0;
+
+    for (const inv of postedInvoices) {
+      const amt = Number(inv.totalAmount || 0);
+      const cogs = Number(inv.totalCogs || 0);
+      const profit = Number(inv.grossProfit || 0);
+      const curr = inv.currency || 'UZS';
+
+      salesByCurrMap[curr] = (salesByCurrMap[curr] || 0) + amt;
+      profitByCurrMap[curr] = (profitByCurrMap[curr] || 0) + profit;
+
+      totalSales += amt;
+      totalCogs += cogs;
+      grossProfit += profit;
+    }
+
+    const monthlySalesByCurrency = Object.entries(salesByCurrMap).map(([currency, amount]) => ({
+      currency,
+      amount,
+    }));
+    const monthlyGrossProfitByCurrency = Object.entries(profitByCurrMap).map(([currency, amount]) => ({
+      currency,
+      amount,
+    }));
+
+    const postedReturns = await this.prisma.salesReturn.findMany({
       where: { tenantId, returnDate: { gte: startOfMonth } },
-      _sum: { totalAmount: true },
-      _count: { id: true },
+      select: { totalAmount: true, currency: true },
     });
+
+    const returnsByCurrMap: Record<string, number> = {};
+    let monthlyReturnsTotal = 0;
+    for (const ret of postedReturns) {
+      const amt = Number(ret.totalAmount || 0);
+      const curr = (ret as any).currency || 'UZS';
+      returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
+      monthlyReturnsTotal += amt;
+    }
+
+    const monthlyReturnsByCurrency = Object.entries(returnsByCurrMap).map(([currency, amount]) => ({
+      currency,
+      amount,
+    }));
 
     const customerDebt = await this.prisma.counterparty.aggregate({
       where: {
@@ -1800,20 +1847,55 @@ export class SalesInvoicesService {
       _count: { id: true },
     });
 
-    const totalSales = Number(monthlySales._sum.totalAmount || 0);
-    const totalCogs = Number(monthlySales._sum.totalCogs || 0);
-    const grossProfit = Number(monthlySales._sum.grossProfit || 0);
+    // Unpaid invoices to break down debt by currency
+    const unpaidInvoices = await this.prisma.salesInvoice.findMany({
+      where: {
+        tenantId,
+        status: SalesDocStatus.POSTED,
+        paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
+      },
+      select: {
+        totalAmount: true,
+        paidAmount: true,
+        currency: true,
+      },
+    });
+
+    const debtByCurrMap: Record<string, number> = {};
+    for (const inv of unpaidInvoices) {
+      const remaining = Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0);
+      if (remaining > 0) {
+        const curr = inv.currency || 'UZS';
+        debtByCurrMap[curr] = (debtByCurrMap[curr] || 0) + remaining;
+      }
+    }
+
+    let totalCustomerDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
+      currency,
+      amount,
+    }));
+
+    const rawTotalDebt = Number(customerDebt._sum.debtBalance || 0);
+    if (totalCustomerDebtByCurrency.length === 0 && rawTotalDebt > 0) {
+      totalCustomerDebtByCurrency = [{ currency: 'UZS', amount: rawTotalDebt }];
+    }
+
     const margin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
 
     return {
       monthlySalesTotal: totalSales,
-      monthlySalesCount: monthlySales._count.id,
+      monthlySalesCount: postedInvoices.length,
       monthlyCogsTotal: totalCogs,
       monthlyGrossProfit: grossProfit,
       monthlyGrossProfitMargin: Math.round(margin * 100) / 100,
-      totalCustomerDebt: Number(customerDebt._sum.debtBalance || 0),
+      totalCustomerDebt: rawTotalDebt,
       customersWithDebtCount: customerDebt._count.id,
-      monthlyReturnsTotal: Number(monthlyReturns._sum.totalAmount || 0),
+      monthlyReturnsTotal,
+      currency: monthlySalesByCurrency.length === 1 ? monthlySalesByCurrency[0].currency : 'UZS',
+      monthlySalesByCurrency,
+      totalCustomerDebtByCurrency,
+      monthlyReturnsByCurrency,
+      monthlyGrossProfitByCurrency,
     };
   }
 

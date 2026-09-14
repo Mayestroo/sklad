@@ -13,6 +13,7 @@ import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import {
@@ -266,9 +267,12 @@ export default function PurchasesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Закупки за месяц' : 'Shu Oydagi Xaridlar'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyPurchasesTotal || 0, locale, stats?.currency || 'UZS')}
-            </div>
+            <MultiCurrencyValue
+              items={stats?.monthlyPurchasesByCurrency}
+              fallbackAmount={stats?.monthlyPurchasesTotal || 0}
+              fallbackCurrency={stats?.currency || 'UZS'}
+              locale={locale}
+            />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.monthlyPurchasesCount || 0} {isRu ? 'документов' : 'ta hujjat'}
             </div>
@@ -283,9 +287,13 @@ export default function PurchasesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Долг поставщикам' : 'Yetkazib Beruvchilarga Qarzimiz'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#ef4444', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.totalSupplierDebt || 0, locale, stats?.currency || 'UZS')}
-            </div>
+            <MultiCurrencyValue
+              items={stats?.totalSupplierDebtByCurrency}
+              fallbackAmount={stats?.totalSupplierDebt || 0}
+              fallbackCurrency={stats?.currency || 'UZS'}
+              locale={locale}
+              color="#ef4444"
+            />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.suppliersWithDebtCount || 0} {isRu ? 'контрагентам' : 'ta kontragent oldida'}
             </div>
@@ -300,9 +308,13 @@ export default function PurchasesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Возвраты (За месяц)' : 'Qaytarishlar (Shu oy)'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#f59e0b', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyReturnsTotal || 0, locale, stats?.currency || 'UZS')}
-            </div>
+            <MultiCurrencyValue
+              items={stats?.monthlyReturnsByCurrency}
+              fallbackAmount={stats?.monthlyReturnsTotal || 0}
+              fallbackCurrency={stats?.currency || 'UZS'}
+              locale={locale}
+              color="#f59e0b"
+            />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.monthlyReturnsCount || 0} {isRu ? 'возвратов' : 'ta qaytaruv'}
             </div>

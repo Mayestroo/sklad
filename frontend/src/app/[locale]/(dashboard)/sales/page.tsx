@@ -6,6 +6,7 @@ import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -260,9 +261,12 @@ export default function SalesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Продажи за месяц' : 'Shu Oydagi Sotuvlar'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlySalesTotal || 0, locale)}
-            </div>
+            <MultiCurrencyValue
+              items={stats?.monthlySalesByCurrency}
+              fallbackAmount={stats?.monthlySalesTotal || 0}
+              fallbackCurrency={stats?.currency || 'UZS'}
+              locale={locale}
+            />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.monthlySalesCount || 0} {isRu ? 'накладных' : 'ta faktura'}
             </div>
@@ -277,9 +281,13 @@ export default function SalesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Дебиторская задолженность' : 'Mijozlarning Qarzdorligi'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#ef4444', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.totalCustomerDebt || 0, locale)}
-            </div>
+            <MultiCurrencyValue
+              items={stats?.totalCustomerDebtByCurrency}
+              fallbackAmount={stats?.totalCustomerDebt || 0}
+              fallbackCurrency={stats?.currency || 'UZS'}
+              locale={locale}
+              color="#ef4444"
+            />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.customersWithDebtCount || 0} {isRu ? 'клиентов' : 'ta mijoz qarzdor'}
             </div>
@@ -294,9 +302,13 @@ export default function SalesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Возвраты (За месяц)' : 'Qaytarishlar (Shu oy)'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#f59e0b', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyReturnsTotal || 0, locale)}
-            </div>
+            <MultiCurrencyValue
+              items={stats?.monthlyReturnsByCurrency}
+              fallbackAmount={stats?.monthlyReturnsTotal || 0}
+              fallbackCurrency={stats?.currency || 'UZS'}
+              locale={locale}
+              color="#f59e0b"
+            />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {isRu ? 'Сумма возвратов' : 'Qaytarilgan tovarlar'}
             </div>
@@ -311,9 +323,13 @@ export default function SalesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Валовая прибыль' : 'Yalpi Foyda (Marja)'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#10b981', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyGrossProfit || 0, locale)}
-            </div>
+            <MultiCurrencyValue
+              items={stats?.monthlyGrossProfitByCurrency}
+              fallbackAmount={stats?.monthlyGrossProfit || 0}
+              fallbackCurrency={stats?.currency || 'UZS'}
+              locale={locale}
+              color="#10b981"
+            />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {isRu ? 'Маржинальность:' : 'Marja:'} {Number(stats?.monthlyGrossProfitMargin || 0).toFixed(1)}%
             </div>

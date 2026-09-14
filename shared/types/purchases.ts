@@ -143,6 +143,11 @@ export interface PurchaseReturn {
   items?: PurchaseReturnItem[];
 }
 
+export interface CurrencyStatItem {
+  currency: string;
+  amount: number;
+}
+
 export interface PurchaseSummaryStats {
   monthlyPurchasesTotal: number;
   monthlyPurchasesCount: number;
@@ -152,6 +157,9 @@ export interface PurchaseSummaryStats {
   monthlyReturnsCount: number;
   activeSuppliersCount: number;
   currency?: string;
+  monthlyPurchasesByCurrency?: CurrencyStatItem[];
+  totalSupplierDebtByCurrency?: CurrencyStatItem[];
+  monthlyReturnsByCurrency?: CurrencyStatItem[];
 }
 
 export interface AdditionalExpenseItem {
