@@ -684,13 +684,13 @@ export default function ServicesPage() {
                   </td>
                 </tr>
               ) : (
-                acts.map((act) => {
+                acts.map((act, idx) => {
                   return (
                     <tr
                       key={act.id}
                       onClick={() => handleOpenDetails(act)}
                       style={{
-                        borderBottom: '1px solid var(--color-border-light)',
+                        borderBottom: idx === acts.length - 1 ? 'none' : '1px solid var(--color-border-light)',
                         cursor: 'pointer',
                         transition: 'background-color 0.15s ease',
                       }}

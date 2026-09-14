@@ -391,7 +391,7 @@ export default function ProductsPage() {
       </Card>
 
       {/* Products Table */}
-      <Card style={{ padding: 0 }}>
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
@@ -423,16 +423,17 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((p) => {
+                {filteredProducts.map((p, idx) => {
                   const cost = Number(p.costPrice || 0);
                   const sale = Number(p.salePrice || 0);
                   const marginPct = cost > 0 ? (((sale - cost) / cost) * 100).toFixed(1) : '—';
+                  const isLastRow = idx === filteredProducts.length - 1;
 
                   return (
                     <tr
                       key={p.id}
                       style={{
-                        borderBottom: '1px solid var(--color-border-light)',
+                        borderBottom: isLastRow ? 'none' : '1px solid var(--color-border-light)',
                         transition: 'background-color var(--transition-fast)',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}

@@ -229,8 +229,8 @@ export default function ProductionPage() {
             </tr>
           </thead>
           <tbody>
-            {orders.map((ord) => (
-              <tr key={ord.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+            {orders.map((ord, idx) => (
+              <tr key={ord.id} style={{ borderBottom: idx === orders.length - 1 ? 'none' : '1px solid var(--color-border-light)' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)' }}>{ord.orderNumber}</td>
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-primary)' }}>{ord.productName}</td>
                 <td style={{ padding: '12px 16px' }}>{ord.quantity} {ord.unit}</td>

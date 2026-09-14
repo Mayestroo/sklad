@@ -430,10 +430,10 @@ export default function ReturnsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {returns.map((ret) => (
+                    {returns.map((ret, idx) => (
                       <tr
                         key={ret.id}
-                        style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
+                        style={{ borderBottom: idx === returns.length - 1 ? 'none' : '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
