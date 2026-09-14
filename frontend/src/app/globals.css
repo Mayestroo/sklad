@@ -24,13 +24,23 @@
   --color-bg-secondary: #ffffff;
   --color-bg-tertiary: #f5f5f4;
   --color-bg-hover: #f0f0ee;
+  --color-bg-subtle: #f8fafc;
   --color-bg-sidebar: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f5f5f4;
   --color-border: #e7e5e4;
   --color-border-light: #f0f0ee;
   --color-text-primary: #1c1917;
   --color-text-secondary: #57534e;
   --color-text-tertiary: #a8a29e;
   --color-text-inverse: #ffffff;
+
+  /* Segmented Controls / Tabs (Light Mode) */
+  --color-segmented-bg: #f1f5f9;
+  --color-segmented-border: #e2e8f0;
+  --color-segmented-active-bg: #ffffff;
+  --color-segmented-active-border: #cbd5e1;
+  --color-segmented-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 
   /* Colors — Status (low saturation for professional feel) */
   --color-success-50: #f0fdf4;
@@ -119,18 +129,29 @@
 }
 
 /* ─── Dark Mode Overrides ─── */
-[data-theme='dark'] {
+[data-theme='dark'],
+.dark {
   --color-bg-primary: #121212;
   --color-bg-secondary: #1e1e1e;
   --color-bg-tertiary: #2a2a2a;
   --color-bg-hover: #333333;
+  --color-bg-subtle: #18181b;
   --color-bg-sidebar: #1e1e1e;
   --color-bg-input: #242424;
+  --color-surface: #27272a;
+  --color-surface-hover: #323238;
   --color-border: #333333;
   --color-border-light: #2a2a2a;
   --color-text-primary: #f5f5f4;
   --color-text-secondary: #a8a29e;
   --color-text-tertiary: #78716c;
+
+  /* Segmented Controls / Tabs (Dark Mode — Distinct, elevated active pills) */
+  --color-segmented-bg: #141416;
+  --color-segmented-border: #2e2e33;
+  --color-segmented-active-bg: #323238;
+  --color-segmented-active-border: #52525c;
+  --color-segmented-active-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   /* Primary Colors for Dark Mode */
   --color-btn-primary-bg: #5850ec;
   --color-btn-primary-text: #ffffff;

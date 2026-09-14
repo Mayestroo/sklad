@@ -168,8 +168,17 @@ export function QuickAddProductModal({
         </div>
 
         {/* Type Segmented Switch */}
-        <div className="px-6 pt-4">
-          <div className="flex rounded-xl bg-surface-hover/60 p-1 border border-border">
+        <div style={{ padding: '16px 24px 0' }}>
+          <div
+            style={{
+              display: 'flex',
+              borderRadius: 'var(--radius-lg)',
+              backgroundColor: 'var(--color-segmented-bg)',
+              border: '1px solid var(--color-segmented-border)',
+              padding: '4px',
+              gap: '4px',
+            }}
+          >
             <button
               type="button"
               onClick={() => {
@@ -178,11 +187,19 @@ export function QuickAddProductModal({
                   setSku(`PRD-${sku.slice(4)}`);
                 }
               }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                itemType === 'PRODUCT'
-                  ? 'bg-white dark:bg-zinc-800 text-primary shadow-sm'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                fontSize: 'var(--text-xs)',
+                fontWeight: itemType === 'PRODUCT' ? 700 : 500,
+                borderRadius: 'var(--radius-md)',
+                border: itemType === 'PRODUCT' ? '1px solid var(--color-primary-500)' : '1px solid transparent',
+                backgroundColor: itemType === 'PRODUCT' ? 'var(--color-primary-100)' : 'transparent',
+                color: itemType === 'PRODUCT' ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
+                boxShadow: itemType === 'PRODUCT' ? 'var(--shadow-sm)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
             >
               {isRu ? 'Товар' : 'Tovar'}
             </button>
@@ -194,11 +211,19 @@ export function QuickAddProductModal({
                   setSku(`RAW-${sku.slice(4)}`);
                 }
               }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                itemType === 'RAW_MATERIAL'
-                  ? 'bg-white dark:bg-zinc-800 text-emerald-600 shadow-sm'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                fontSize: 'var(--text-xs)',
+                fontWeight: itemType === 'RAW_MATERIAL' ? 700 : 500,
+                borderRadius: 'var(--radius-md)',
+                border: itemType === 'RAW_MATERIAL' ? '1px solid var(--color-success-500)' : '1px solid transparent',
+                backgroundColor: itemType === 'RAW_MATERIAL' ? 'var(--color-success-100)' : 'transparent',
+                color: itemType === 'RAW_MATERIAL' ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
+                boxShadow: itemType === 'RAW_MATERIAL' ? 'var(--shadow-sm)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
             >
               {isRu ? 'Сырьё / Материал' : 'Xomashyo'}
             </button>
@@ -210,11 +235,19 @@ export function QuickAddProductModal({
                   setSku(`SRV-${sku.slice(4)}`);
                 }
               }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                itemType === 'SERVICE'
-                  ? 'bg-white dark:bg-zinc-800 text-amber-600 shadow-sm'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                fontSize: 'var(--text-xs)',
+                fontWeight: itemType === 'SERVICE' ? 700 : 500,
+                borderRadius: 'var(--radius-md)',
+                border: itemType === 'SERVICE' ? '1px solid var(--color-warning-500)' : '1px solid transparent',
+                backgroundColor: itemType === 'SERVICE' ? 'var(--color-warning-100)' : 'transparent',
+                color: itemType === 'SERVICE' ? 'var(--color-warning-600)' : 'var(--color-text-secondary)',
+                boxShadow: itemType === 'SERVICE' ? 'var(--shadow-sm)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
             >
               {isRu ? 'Услуга' : 'Xizmat'}
             </button>

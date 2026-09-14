@@ -18,10 +18,10 @@ export function LanguageSwitcher() {
         display: 'inline-flex',
         alignItems: 'center',
         gap: '4px',
-        backgroundColor: 'var(--color-bg-tertiary)',
+        backgroundColor: 'var(--color-segmented-bg)',
         padding: '3px',
         borderRadius: 'var(--radius-full)',
-        border: '1px solid var(--color-border)',
+        border: '1px solid var(--color-segmented-border)',
       }}
     >
       <div style={{ marginLeft: '8px', display: 'flex', alignItems: 'center', color: 'var(--color-text-tertiary)' }}>
@@ -37,10 +37,10 @@ export function LanguageSwitcher() {
           borderRadius: 'var(--radius-full)',
           fontSize: 'var(--text-xs)',
           fontWeight: locale === 'uz' ? 'var(--font-semibold)' : 'var(--font-medium)',
-          backgroundColor: locale === 'uz' ? 'var(--color-bg-secondary)' : 'transparent',
+          backgroundColor: locale === 'uz' ? 'var(--color-segmented-active-bg)' : 'transparent',
           color: locale === 'uz' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-          border: 'none',
-          boxShadow: locale === 'uz' ? 'var(--shadow-xs)' : 'none',
+          border: locale === 'uz' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
+          boxShadow: locale === 'uz' ? 'var(--color-segmented-active-shadow)' : 'none',
           cursor: 'pointer',
           transition: 'all var(--transition-fast)',
         }}
@@ -57,10 +57,10 @@ export function LanguageSwitcher() {
           borderRadius: 'var(--radius-full)',
           fontSize: 'var(--text-xs)',
           fontWeight: locale === 'ru' ? 'var(--font-semibold)' : 'var(--font-medium)',
-          backgroundColor: locale === 'ru' ? 'var(--color-bg-secondary)' : 'transparent',
+          backgroundColor: locale === 'ru' ? 'var(--color-segmented-active-bg)' : 'transparent',
           color: locale === 'ru' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-          border: 'none',
-          boxShadow: locale === 'ru' ? 'var(--shadow-xs)' : 'none',
+          border: locale === 'ru' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
+          boxShadow: locale === 'ru' ? 'var(--color-segmented-active-shadow)' : 'none',
           cursor: 'pointer',
           transition: 'all var(--transition-fast)',
         }}

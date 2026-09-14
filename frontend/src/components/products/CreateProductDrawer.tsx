@@ -365,20 +365,20 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
             {isRu ? 'Тип номенклатуры' : 'Nomenklatura turi'}
           </label>
-          <div style={{ display: 'flex', borderRadius: 'var(--radius-md)', padding: '3px', backgroundColor: 'var(--color-bg-subtle)', border: '1px solid var(--color-border-light)' }}>
+          <div style={{ display: 'flex', borderRadius: 'var(--radius-lg)', padding: '4px', gap: '4px', backgroundColor: 'var(--color-segmented-bg)', border: '1px solid var(--color-segmented-border)' }}>
             <button
               type="button"
               onClick={() => setItemType('PRODUCT')}
               style={{
                 flex: 1,
-                padding: '6px 12px',
+                padding: '8px 12px',
                 fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
+                fontWeight: itemType === 'PRODUCT' ? 700 : 500,
+                borderRadius: 'var(--radius-md)',
+                border: itemType === 'PRODUCT' ? '1px solid var(--color-primary-500)' : '1px solid transparent',
                 cursor: 'pointer',
-                backgroundColor: itemType === 'PRODUCT' ? 'var(--color-surface)' : 'transparent',
-                color: itemType === 'PRODUCT' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                backgroundColor: itemType === 'PRODUCT' ? 'var(--color-primary-100)' : 'transparent',
+                color: itemType === 'PRODUCT' ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
                 boxShadow: itemType === 'PRODUCT' ? 'var(--shadow-sm)' : 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -390,14 +390,14 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               onClick={() => setItemType('RAW_MATERIAL')}
               style={{
                 flex: 1,
-                padding: '6px 12px',
+                padding: '8px 12px',
                 fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
+                fontWeight: itemType === 'RAW_MATERIAL' ? 700 : 500,
+                borderRadius: 'var(--radius-md)',
+                border: itemType === 'RAW_MATERIAL' ? '1px solid var(--color-success-500)' : '1px solid transparent',
                 cursor: 'pointer',
-                backgroundColor: itemType === 'RAW_MATERIAL' ? 'var(--color-surface)' : 'transparent',
-                color: itemType === 'RAW_MATERIAL' ? '#059669' : 'var(--color-text-secondary)',
+                backgroundColor: itemType === 'RAW_MATERIAL' ? 'var(--color-success-100)' : 'transparent',
+                color: itemType === 'RAW_MATERIAL' ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
                 boxShadow: itemType === 'RAW_MATERIAL' ? 'var(--shadow-sm)' : 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -409,14 +409,14 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               onClick={() => setItemType('SERVICE')}
               style={{
                 flex: 1,
-                padding: '6px 12px',
+                padding: '8px 12px',
                 fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
+                fontWeight: itemType === 'SERVICE' ? 700 : 500,
+                borderRadius: 'var(--radius-md)',
+                border: itemType === 'SERVICE' ? '1px solid var(--color-warning-500)' : '1px solid transparent',
                 cursor: 'pointer',
-                backgroundColor: itemType === 'SERVICE' ? 'var(--color-surface)' : 'transparent',
-                color: itemType === 'SERVICE' ? '#d97706' : 'var(--color-text-secondary)',
+                backgroundColor: itemType === 'SERVICE' ? 'var(--color-warning-100)' : 'transparent',
+                color: itemType === 'SERVICE' ? 'var(--color-warning-600)' : 'var(--color-text-secondary)',
                 boxShadow: itemType === 'SERVICE' ? 'var(--shadow-sm)' : 'none',
                 transition: 'all 0.15s ease',
               }}

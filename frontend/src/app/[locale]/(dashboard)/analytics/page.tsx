@@ -89,7 +89,7 @@ export default function AnalyticsPage() {
 
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
           {/* Time Range Selector */}
-          <div style={{ display: 'flex', backgroundColor: 'var(--color-bg-tertiary)', padding: '3px', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ display: 'flex', gap: '3px', backgroundColor: 'var(--color-segmented-bg)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-segmented-border)' }}>
             {(['today', 'week', 'month', 'quarter', 'year'] as const).map((range) => (
               <button
                 key={range}
@@ -98,13 +98,14 @@ export default function AnalyticsPage() {
                 style={{
                   padding: '6px 12px',
                   fontSize: 'var(--text-xs)',
-                  fontWeight: timeRange === range ? 'var(--font-semibold)' : 'var(--font-medium)',
+                  fontWeight: timeRange === range ? 600 : 500,
                   borderRadius: 'var(--radius-sm)',
-                  border: 'none',
-                  backgroundColor: timeRange === range ? '#fff' : 'transparent',
+                  border: timeRange === range ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
+                  backgroundColor: timeRange === range ? 'var(--color-segmented-active-bg)' : 'transparent',
                   color: timeRange === range ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
                   cursor: 'pointer',
-                  boxShadow: timeRange === range ? 'var(--shadow-sm)' : 'none',
+                  boxShadow: timeRange === range ? 'var(--color-segmented-active-shadow)' : 'none',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {range === 'today'

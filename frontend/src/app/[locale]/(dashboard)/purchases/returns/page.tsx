@@ -247,7 +247,7 @@ export default function ReturnsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-bg-subtle)', padding: '3px', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-segmented-bg)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-segmented-border)' }}>
             <button
               onClick={() => setActiveTab('LIST')}
               style={{
@@ -255,11 +255,12 @@ export default function ReturnsPage() {
                 borderRadius: 'var(--radius-sm)',
                 fontWeight: 600,
                 fontSize: 'var(--text-xs)',
-                backgroundColor: activeTab === 'LIST' ? 'var(--color-bg-primary)' : 'transparent',
+                backgroundColor: activeTab === 'LIST' ? 'var(--color-segmented-active-bg)' : 'transparent',
                 color: activeTab === 'LIST' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                border: 'none',
+                border: activeTab === 'LIST' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
                 cursor: 'pointer',
-                boxShadow: activeTab === 'LIST' ? 'var(--shadow-sm)' : 'none',
+                boxShadow: activeTab === 'LIST' ? 'var(--color-segmented-active-shadow)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
               {isRu ? 'Документы' : 'Hujjatlar'}
@@ -271,11 +272,12 @@ export default function ReturnsPage() {
                 borderRadius: 'var(--radius-sm)',
                 fontWeight: 600,
                 fontSize: 'var(--text-xs)',
-                backgroundColor: activeTab === 'ANALYTICS' ? 'var(--color-bg-primary)' : 'transparent',
+                backgroundColor: activeTab === 'ANALYTICS' ? 'var(--color-segmented-active-bg)' : 'transparent',
                 color: activeTab === 'ANALYTICS' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                border: 'none',
+                border: activeTab === 'ANALYTICS' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
                 cursor: 'pointer',
-                boxShadow: activeTab === 'ANALYTICS' ? 'var(--shadow-sm)' : 'none',
+                boxShadow: activeTab === 'ANALYTICS' ? 'var(--color-segmented-active-shadow)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
               {isRu ? 'Аналитика причин' : 'Sabablar tahlili'}

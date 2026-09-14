@@ -11,6 +11,7 @@ export function ThemeSwitcher() {
     if (saved) {
       setTheme(saved);
       document.documentElement.setAttribute('data-theme', saved);
+      document.documentElement.classList.toggle('dark', saved === 'dark');
     }
   }, []);
 
@@ -19,6 +20,7 @@ export function ThemeSwitcher() {
     setTheme(nextTheme);
     localStorage.setItem('crm_theme', nextTheme);
     document.documentElement.setAttribute('data-theme', nextTheme);
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
   };
 
   return (
