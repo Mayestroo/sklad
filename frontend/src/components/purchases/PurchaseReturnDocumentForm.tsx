@@ -747,7 +747,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
+              <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'center', width: '40px' }}>№</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left' }}>{isRu ? 'Наименование' : 'Nomi'}</th>
                 <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px' }}>{isRu ? 'Тип' : 'Turi'}</th>

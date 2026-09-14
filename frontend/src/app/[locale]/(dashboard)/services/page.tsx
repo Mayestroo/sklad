@@ -590,6 +590,7 @@ export default function ServicesPage() {
           <table
             style={{
               width: '100%',
+              minWidth: '800px',
               borderCollapse: 'collapse',
               fontSize: 'var(--text-sm)',
               textAlign: 'left',
@@ -598,8 +599,7 @@ export default function ServicesPage() {
             <thead>
               <tr
                 style={{
-                  backgroundColor: 'var(--color-bg-primary)',
-                  borderBottom: '1px solid var(--color-border-light)',
+                  borderBottom: '1px solid var(--color-border)',
                   color: 'var(--color-text-tertiary)',
                   fontSize: 'var(--text-xs)',
                   textTransform: 'uppercase',

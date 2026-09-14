@@ -1151,7 +1151,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
               {/* Split-button for creating new nomenclature items */}
               <div style={{ position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'stretch' }}>
                   <Button
                     type="button"
                     variant="secondary"
@@ -1165,9 +1165,10 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
+                      height: '32px',
                       borderTopRightRadius: 0,
                       borderBottomRightRadius: 0,
-                      borderRight: '1px solid var(--color-border-light)',
+                      borderRight: 'none',
                     }}
                   >
                     <PackagePlus size={14} /> {isRu ? 'Новая позиция' : '+ Yangi tovar'}
@@ -1178,9 +1179,14 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     size="sm"
                     onClick={() => setIsCreateDropdownOpen((prev) => !prev)}
                     style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '32px',
                       padding: '0 8px',
                       borderTopLeftRadius: 0,
                       borderBottomLeftRadius: 0,
+                      borderLeft: '1px solid var(--color-border)',
                     }}
                     aria-label={isRu ? 'Выбрать тип' : 'Turini tanlash'}
                   >
@@ -1310,7 +1316,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         <div style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
+              <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
                 <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                   {isRu ? 'Номенклатура / Позиция' : 'Nomenklatura / Mahsulot'}

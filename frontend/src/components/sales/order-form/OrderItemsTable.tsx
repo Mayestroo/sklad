@@ -150,7 +150,7 @@ export function OrderItemsTable({
       <div style={{ overflowX: 'auto', minHeight: '280px', paddingBottom: '40px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
+            <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                 {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
