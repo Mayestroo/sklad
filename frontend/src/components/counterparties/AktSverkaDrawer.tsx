@@ -224,7 +224,7 @@ export function AktSverkaDrawer({
           ) : (
             <>
               {(() => {
-                const aktCurrency = data.transactions?.[0]?.currency || (cp as any)?.currency || 'USD';
+                const aktCurrency = data.transactions?.[0]?.currency || (cp as any)?.currency || 'UZS';
                 return (
                   <>
                     {/* Financial Balance Overview Cards */}

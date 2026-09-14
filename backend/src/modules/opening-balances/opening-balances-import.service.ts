@@ -222,7 +222,7 @@ export class OpeningBalancesImportService {
       sheetPul.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
         const accountName = String(row.getCell(1).value || '').trim();
-        const currency = String(row.getCell(2).value || 'USD').trim().toUpperCase();
+        const currency = String(row.getCell(2).value || 'UZS').trim().toUpperCase();
         const rawAmount = row.getCell(3).value;
         const notes = String(row.getCell(4).value || '').trim();
 
@@ -383,7 +383,7 @@ export class OpeningBalancesImportService {
         const customerIdent = String(row.getCell(1).value || '').trim();
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
+        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!customerIdent && !rawAmount) return;
@@ -448,7 +448,7 @@ export class OpeningBalancesImportService {
         const suppIdent = String(row.getCell(1).value || '').trim();
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
+        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!suppIdent && !rawAmount) return;
@@ -513,7 +513,7 @@ export class OpeningBalancesImportService {
         const cpIdent = String(row.getCell(1).value || '').trim();
         const typeStr = String(row.getCell(2).value || 'MIJOZ_AVANSI').trim().toUpperCase();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
+        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!cpIdent && !rawAmount) return;
@@ -632,7 +632,7 @@ export class OpeningBalancesImportService {
         const typeStr = String(row.getCell(1).value || 'KAPITAL').trim().toUpperCase();
         const title = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
+        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!rawAmount) return;

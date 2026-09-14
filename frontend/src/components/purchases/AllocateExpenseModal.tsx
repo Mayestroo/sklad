@@ -37,7 +37,7 @@ export function AllocateExpenseModal({
   const [expenseType, setExpenseType] = useState('TRANSPORT');
   const [supplierId, setSupplierId] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'USD');
+  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'UZS');
   const [allocationMethod, setAllocationMethod] = useState('BY_AMOUNT');
   const [comment, setComment] = useState('');
 

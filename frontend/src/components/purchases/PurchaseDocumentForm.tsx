@@ -106,7 +106,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [docDate, setDocDate] = useState(
     initialData?.docDate ? initialData.docDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
   );
-  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'USD');
+  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'UZS');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
   const [contractNumber, setContractNumber] = useState(initialData?.contractNumber || '');
   const [contractDate, setContractDate] = useState(

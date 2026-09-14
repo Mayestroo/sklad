@@ -167,22 +167,70 @@ export class DashboardService {
   async getDebts(tenantId: string) {
     const counterparties = await this.prisma.counterparty.findMany({
       where: { tenantId },
-      select: { id: true, name: true, type: true, debtBalance: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        customerDebt: true,
+        supplierDebt: true,
+        debtBalance: true,
+        salesInvoices: {
+          select: { currency: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        purchaseReceipts: {
+          select: { currency: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
     });
 
     let totalReceivable = 0;
     let totalPayable = 0;
-    const debtors: Array<{ id: string; name: string; amount: number }> = [];
-    const creditors: Array<{ id: string; name: string; amount: number }> = [];
+    const debtors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
+    const creditors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
 
     counterparties.forEach((c) => {
-      const debt = Number(c.debtBalance);
-      if (debt > 0) {
-        totalReceivable += debt;
-        debtors.push({ id: c.id, name: c.name, amount: debt });
-      } else if (debt < 0) {
-        totalPayable += Math.abs(debt);
-        creditors.push({ id: c.id, name: c.name, amount: Math.abs(debt) });
+      const custDebt = Number((c as any).customerDebt || 0);
+      const suppDebt = Number((c as any).supplierDebt || 0);
+      const rawBalance = Number(c.debtBalance || 0);
+      const currency =
+        (c as any).salesInvoices?.[0]?.currency ||
+        (c as any).purchaseReceipts?.[0]?.currency ||
+        'UZS';
+
+      if (custDebt > 0) {
+        totalReceivable += custDebt;
+        debtors.push({ id: c.id, name: c.name, amount: custDebt, currency });
+      } else if (custDebt < 0) {
+        totalPayable += Math.abs(custDebt);
+        creditors.push({ id: c.id, name: c.name, amount: Math.abs(custDebt), currency });
+      }
+
+      if (suppDebt > 0) {
+        totalPayable += suppDebt;
+        creditors.push({ id: c.id, name: c.name, amount: suppDebt, currency });
+      } else if (suppDebt < 0) {
+        totalReceivable += Math.abs(suppDebt);
+        debtors.push({ id: c.id, name: c.name, amount: Math.abs(suppDebt), currency });
+      }
+
+      // Fallback for counterparties with only debtBalance
+      if (custDebt === 0 && suppDebt === 0 && rawBalance !== 0) {
+        if (c.type === 'SUPPLIER') {
+          totalPayable += Math.abs(rawBalance);
+          creditors.push({ id: c.id, name: c.name, amount: Math.abs(rawBalance), currency });
+        } else {
+          if (rawBalance > 0) {
+            totalReceivable += rawBalance;
+            debtors.push({ id: c.id, name: c.name, amount: rawBalance, currency });
+          } else {
+            totalPayable += Math.abs(rawBalance);
+            creditors.push({ id: c.id, name: c.name, amount: Math.abs(rawBalance), currency });
+          }
+        }
       }
     });
 

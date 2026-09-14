@@ -77,7 +77,7 @@ export default function NewExpensePage() {
   const [counterpartyId, setCounterpartyId] = useState('');
   const [receiptId, setReceiptId] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
-  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'USD');
+  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'UZS');
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [allocationMethod, setAllocationMethod] = useState<ExpenseAllocationMethod>('BY_AMOUNT');
   const [isPaid, setIsPaid] = useState(false);

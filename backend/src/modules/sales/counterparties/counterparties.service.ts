@@ -322,7 +322,7 @@ export class CounterpartiesService {
       const currency =
         (cp as any).purchaseReceipts?.[0]?.currency ||
         (cp as any).salesInvoices?.[0]?.currency ||
-        'USD';
+        'UZS';
       return {
         ...cp,
         currency,
@@ -360,7 +360,7 @@ export class CounterpartiesService {
     const currency =
       (counterparty as any).purchaseReceipts?.[0]?.currency ||
       (counterparty as any).salesInvoices?.[0]?.currency ||
-      'USD';
+      'UZS';
 
     return {
       ...counterparty,

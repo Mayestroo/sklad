@@ -151,6 +151,7 @@ export interface PurchaseSummaryStats {
   monthlyReturnsTotal: number;
   monthlyReturnsCount: number;
   activeSuppliersCount: number;
+  currency?: string;
 }
 
 export interface AdditionalExpenseItem {

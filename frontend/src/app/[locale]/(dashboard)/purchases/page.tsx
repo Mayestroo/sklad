@@ -267,7 +267,7 @@ export default function PurchasesPage() {
               {isRu ? 'Закупки за месяц' : 'Shu Oydagi Xaridlar'}
             </div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyPurchasesTotal || 0, locale)}
+              {formatCurrency(stats?.monthlyPurchasesTotal || 0, locale, stats?.currency || 'UZS')}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.monthlyPurchasesCount || 0} {isRu ? 'документов' : 'ta hujjat'}
@@ -284,7 +284,7 @@ export default function PurchasesPage() {
               {isRu ? 'Долг поставщикам' : 'Yetkazib Beruvchilarga Qarzimiz'}
             </div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#ef4444', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.totalSupplierDebt || 0, locale)}
+              {formatCurrency(stats?.totalSupplierDebt || 0, locale, stats?.currency || 'UZS')}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.suppliersWithDebtCount || 0} {isRu ? 'контрагентам' : 'ta kontragent oldida'}
@@ -301,7 +301,7 @@ export default function PurchasesPage() {
               {isRu ? 'Возвраты (За месяц)' : 'Qaytarishlar (Shu oy)'}
             </div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#f59e0b', marginTop: '2px' }} className="tabular-nums">
-              {formatCurrency(stats?.monthlyReturnsTotal || 0, locale)}
+              {formatCurrency(stats?.monthlyReturnsTotal || 0, locale, stats?.currency || 'UZS')}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.monthlyReturnsCount || 0} {isRu ? 'возвратов' : 'ta qaytaruv'}

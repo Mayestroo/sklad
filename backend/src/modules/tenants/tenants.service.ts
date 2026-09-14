@@ -268,7 +268,7 @@ export class TenantsService {
       sales: {
         enableMultiTierPriceLists: false,
         allowSellerPriceOverride: false,
-        defaultCurrency: 'USD',
+        defaultCurrency: 'UZS',
         ...(settings.sales || {}),
       },
       inventory: settings.inventory || {},

@@ -1914,34 +1914,60 @@ export class PurchasesService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const monthlyReceipts = await this.prisma.purchaseReceipt.aggregate({
+    const monthlyReceipts = await this.prisma.purchaseReceipt.findMany({
       where: {
         tenantId,
         docDate: { gte: startOfMonth },
         status: PurchaseDocStatus.POSTED,
       },
-      _sum: { totalAmount: true },
-      _count: { id: true },
+      select: { totalAmount: true, currency: true, exchangeRate: true },
     });
 
-    const suppliersWithDebt = await this.prisma.counterparty.aggregate({
+    let monthlyPurchasesTotal = 0;
+    for (const r of monthlyReceipts) {
+      const amt = Number(r.totalAmount || 0);
+      monthlyPurchasesTotal += amt;
+    }
+
+    const suppliers = await this.prisma.counterparty.findMany({
       where: {
         tenantId,
         type: { in: ['SUPPLIER', 'BOTH'] },
-        debtBalance: { gt: 0 },
+        OR: [
+          { supplierDebt: { gt: 0 } },
+          { debtBalance: { not: 0 } },
+        ],
       },
-      _sum: { debtBalance: true },
-      _count: { id: true },
+      select: {
+        supplierDebt: true,
+        debtBalance: true,
+      },
     });
 
-    const monthlyReturns = await this.prisma.purchaseReturn.aggregate({
+    let totalSupplierDebt = 0;
+    let suppliersWithDebtCount = 0;
+    for (const s of suppliers) {
+      const suppDebt = Number((s as any).supplierDebt || 0);
+      const rawDebt = Number(s.debtBalance || 0);
+      const debt = suppDebt > 0 ? suppDebt : Math.abs(rawDebt);
+      if (debt > 0) {
+        suppliersWithDebtCount++;
+        totalSupplierDebt += debt;
+      }
+    }
+
+    const monthlyReturns = await this.prisma.purchaseReturn.findMany({
       where: {
         tenantId,
         returnDate: { gte: startOfMonth },
       },
-      _sum: { totalAmount: true },
-      _count: { id: true },
+      select: { totalAmount: true },
     });
+
+    let monthlyReturnsTotal = 0;
+    for (const ret of monthlyReturns) {
+      monthlyReturnsTotal += Number(ret.totalAmount || 0);
+    }
 
     const activeSuppliers = await this.prisma.counterparty.count({
       where: {
@@ -1951,13 +1977,14 @@ export class PurchasesService {
     });
 
     return {
-      monthlyPurchasesTotal: Number(monthlyReceipts._sum.totalAmount || 0),
-      monthlyPurchasesCount: monthlyReceipts._count.id,
-      totalSupplierDebt: Number(suppliersWithDebt._sum.debtBalance || 0),
-      suppliersWithDebtCount: suppliersWithDebt._count.id,
-      monthlyReturnsTotal: Number(monthlyReturns._sum.totalAmount || 0),
-      monthlyReturnsCount: monthlyReturns._count.id,
+      monthlyPurchasesTotal,
+      monthlyPurchasesCount: monthlyReceipts.length,
+      totalSupplierDebt,
+      suppliersWithDebtCount,
+      monthlyReturnsTotal,
+      monthlyReturnsCount: monthlyReturns.length,
       activeSuppliersCount: activeSuppliers,
+      currency: 'UZS',
     };
   }
 }

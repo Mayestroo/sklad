@@ -63,7 +63,7 @@ export function OrderDeliveryNoteModal({
   if (!isOpen || !order) return null;
 
   const items = order.items || order.orderItems || [];
-  const currency = order.currency || 'USD';
+  const currency = order.currency || 'UZS';
 
   const warehouseName =
     typeof order.warehouse?.name === 'object'

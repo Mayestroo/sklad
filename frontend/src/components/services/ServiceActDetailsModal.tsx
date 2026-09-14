@@ -272,7 +272,7 @@ export function ServiceActDetailsModal({
           accountId: selectedAccountId,
           counterpartyId: act.counterpartyId,
           amount: paymentAmount,
-          currency: act.currency || 'USD',
+          currency: act.currency || 'UZS',
           sourceDocType: 'ServiceAct',
           sourceDocId: act.id,
           comment: paymentComment,

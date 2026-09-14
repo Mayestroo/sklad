@@ -16,14 +16,14 @@
  * // ❌ XATO — "1 500 000 UZS UZS" (ikki marta!)
  * {formatCurrency(amount, locale, currency)} {currency}
  */
-export function formatCurrency(amount: number, locale: string = 'uz', currency: string = 'USD'): string {
+export function formatCurrency(amount: number, locale: string = 'uz', currency: string = 'UZS'): string {
   // Always format as 111,111.000 — comma thousands separator, dot decimal, 3 fixed decimals
   const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   }).format(amount || 0);
 
-  const cur = (currency || 'USD').toUpperCase();
+  const cur = (currency || 'UZS').toUpperCase();
   return `${formatted} ${cur}`;
 }
 
