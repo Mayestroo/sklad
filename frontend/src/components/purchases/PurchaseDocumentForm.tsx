@@ -12,6 +12,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
   Plus,
@@ -1041,11 +1042,12 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
           {/* Exchange Rate */}
           <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
-            <Input
-              label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
-              type="number"
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Курс валюты' : 'Valyuta kursi'}
+            </label>
+            <CurrencyInput
               value={exchangeRate}
-              onChange={(e) => { markDirty(); setExchangeRate(Number(e.target.value)); }}
+              onChange={(val) => { markDirty(); setExchangeRate(val); }}
               disabled={isReadOnly}
             />
           </div>
@@ -1395,27 +1397,21 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
                     {/* Unit Price */}
                     <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="any"
+                      <CurrencyInput
                         value={item.unitPrice}
-                        onChange={(e) => handleItemChange(idx, 'unitPrice', Number(e.target.value))}
-                        style={{ textAlign: 'right' }}
+                        onChange={(val) => handleItemChange(idx, 'unitPrice', val)}
                         disabled={isReadOnly}
+                        aria-label={isRu ? `Цена за ед. для строки ${idx + 1}` : `Birlik narxi ${idx + 1}`}
                       />
                     </td>
 
                     {/* Discount */}
                     <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="any"
+                      <CurrencyInput
                         value={item.discount}
-                        onChange={(e) => handleItemChange(idx, 'discount', Number(e.target.value))}
-                        style={{ textAlign: 'right' }}
+                        onChange={(val) => handleItemChange(idx, 'discount', val)}
                         disabled={isReadOnly}
+                        aria-label={isRu ? `Скидка для строки ${idx + 1}` : `Chegirma ${idx + 1}`}
                       />
                     </td>
 

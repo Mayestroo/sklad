@@ -13,6 +13,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
   Plus,
@@ -1305,17 +1306,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
                     {/* Unit Price */}
                     <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="any"
+                      <CurrencyInput
                         value={item.unitPrice}
-                        onChange={(e) => handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(val) => handleItemChange(idx, 'unitPrice', val)}
                         disabled={isReadOnly || !isPriceOverrideAllowed}
                         title={!isPriceOverrideAllowed ? (isRu ? 'Ручное изменение цены запрещено настройками' : 'Narxni qo‘lda o‘zgartirish taqiqlangan') : undefined}
                         aria-label={`${isRu ? 'Цена продажи для строки' : 'Sotish narxi'} ${idx + 1}`}
                         style={{
-                          textAlign: 'right',
                           borderColor: isBelowCost ? '#ef4444' : undefined,
                           color: isBelowCost ? '#ef4444' : undefined,
                           ...(!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : {}),

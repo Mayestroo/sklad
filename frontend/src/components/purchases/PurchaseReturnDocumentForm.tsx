@@ -12,6 +12,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
   Plus,
@@ -841,21 +842,10 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                       {isReadOnly ? (
                         formatCurrency(row.unitPrice, locale, currency)
                       ) : (
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
+                        <CurrencyInput
                           value={row.unitPrice}
-                          onChange={(e) => handleUpdateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          style={{
-                            width: '110px',
-                            padding: '6px 8px',
-                            textAlign: 'right',
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--color-border-light)',
-                            backgroundColor: 'var(--color-bg-primary)',
-                            color: 'var(--color-text-primary)',
-                          }}
+                          onChange={(val) => handleUpdateItem(idx, 'unitPrice', val)}
+                          style={{ width: '130px' }}
                         />
                       )}
                     </td>
