@@ -1317,6 +1317,14 @@ export class SalesOrdersService {
         };
       });
       const invoiceTotal = subtotal - discountAmt;
+      const orderPaid = Number(order.paidAmount || 0);
+      const allocatedPaid = Math.min(orderPaid, invoiceTotal);
+      const invoicePaymentStatus =
+        allocatedPaid >= invoiceTotal && invoiceTotal > 0
+          ? SalesPaymentStatus.PAID
+          : allocatedPaid > 0
+            ? SalesPaymentStatus.PARTIALLY_PAID
+            : SalesPaymentStatus.UNPAID;
 
       // 4. Create the SalesInvoice
       const invoice = await tx.salesInvoice.create({
@@ -1330,13 +1338,13 @@ export class SalesOrdersService {
           exchangeRate: order.exchangeRate,
           comment: `Buyurtma ${order.orderNumber} bo'yicha chiqim`,
           status: SalesDocStatus.DRAFT,
-          paymentStatus: SalesPaymentStatus.UNPAID,
+          paymentStatus: invoicePaymentStatus,
           returnStatus: SalesReturnStatus.NONE,
           subtotalAmount: subtotal,
           discountAmount: discountAmt,
           vatAmount: 0,
           totalAmount: invoiceTotal,
-          paidAmount: 0,
+          paidAmount: allocatedPaid,
           totalCogs: 0,
           grossProfit: 0,
           createdById: userId,
@@ -1347,6 +1355,13 @@ export class SalesOrdersService {
           counterparty: true,
         },
       });
+
+      if (allocatedPaid > 0) {
+        await tx.payment.updateMany({
+          where: { tenantId, orderId: id, invoiceId: null },
+          data: { invoiceId: invoice.id },
+        });
+      }
 
       // 5. Deduct FIFO stock batches & consume reservations
       let totalCogs = 0;

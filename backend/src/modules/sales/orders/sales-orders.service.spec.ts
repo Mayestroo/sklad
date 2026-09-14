@@ -7,6 +7,7 @@ import {
   PaymentCondition,
   ProductionOrderStatus,
   SalesDocStatus,
+  SalesPaymentStatus,
 } from '@prisma/client';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
@@ -55,6 +56,7 @@ describe('SalesOrdersService', () => {
       },
       payment: {
         aggregate: jest.fn(),
+        updateMany: jest.fn(),
       },
       salesInvoice: {
         count: jest.fn(),
@@ -454,6 +456,90 @@ describe('SalesOrdersService', () => {
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
         where: { id: 'order-1' },
         data: { status: SalesOrderStatus.SHIPPED, warehouseId: 'wh-1' },
+      });
+    });
+
+    it('should allocate order advance payments to created sales invoice and set paymentStatus to PAID', async () => {
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-prepaid-1',
+        tenantId: 'tenant-1',
+        orderNumber: 'Z-2026-0002',
+        counterpartyId: 'cust-1',
+        currency: 'UZS',
+        exchangeRate: 1,
+        status: SalesOrderStatus.READY_FOR_SHIPMENT,
+        paymentCondition: PaymentCondition.PREPAID_100,
+        paidAmount: 1000000,
+        totalAmount: 1000000,
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 5,
+            unitPrice: 200000,
+            discount: 0,
+            shippedQty: 0,
+            product: { name: { uz: 'Mahsulot 1' }, costPrice: 120000 },
+          },
+        ],
+      });
+
+      prisma.salesOrderItem.findMany.mockResolvedValue([
+        { id: 'item-1', quantity: 5, shippedQty: 5 },
+      ]);
+
+      prisma.salesInvoice.count.mockResolvedValue(1);
+      prisma.salesInvoice.create.mockResolvedValue({
+        id: 'inv-prepaid-1',
+        tenantId: 'tenant-1',
+        totalAmount: 1000000,
+        paidAmount: 1000000,
+        paymentStatus: SalesPaymentStatus.PAID,
+        items: [
+          {
+            id: 'inv-item-1',
+            productId: 'prod-1',
+            quantity: 5,
+            unitPrice: 200000,
+            totalPrice: 1000000,
+            product: { name: { uz: 'Mahsulot 1' } },
+          },
+        ],
+      });
+
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 10,
+      });
+
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-1',
+          remainingQty: 5,
+          landedCost: 120000,
+          purchasePrice: 120000,
+        },
+      ]);
+
+      await service.dispatch(
+        'tenant-1',
+        'user-1',
+        'order-prepaid-1',
+        { warehouseId: 'wh-1' },
+      );
+
+      expect(prisma.salesInvoice.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            paidAmount: 1000000,
+            paymentStatus: SalesPaymentStatus.PAID,
+          }),
+        }),
+      );
+
+      expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', orderId: 'order-prepaid-1', invoiceId: null },
+        data: { invoiceId: 'inv-prepaid-1' },
       });
     });
   });

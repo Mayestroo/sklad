@@ -167,6 +167,14 @@ export default function SalesOrdersPage() {
   };
 
   const getNextStatuses = (currentStatus: string): Array<{ status: string; labelUz: string; labelRu: string }> => {
+    // Sellers can only cancel their own unaccepted orders
+    if (!isWarehouseOperator) {
+      if (currentStatus === 'NEW' || currentStatus === 'PENDING_APPROVAL') {
+        return [{ status: 'CANCELLED', labelUz: 'Bekor qilish', labelRu: 'Отменить' }];
+      }
+      return [];
+    }
+
     switch (currentStatus) {
       case 'NEW':
         return [
