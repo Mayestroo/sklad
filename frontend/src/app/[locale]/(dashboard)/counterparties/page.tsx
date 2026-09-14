@@ -644,141 +644,255 @@ export default function CounterpartiesPage() {
         {/* Right Main Panel: KPIs, Filters, Table */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {/* KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
-            <Card
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
+            {/* Customers */}
+            <div
               onClick={() => setTypeFilter(typeFilter === 'CUSTOMER' ? '' : 'CUSTOMER')}
               style={{
-                padding: 'var(--space-3) var(--space-4)',
-                borderTop: '3px solid var(--color-primary-500, #3b82f6)',
+                position: 'relative',
+                padding: '18px 20px 16px',
+                borderRadius: 'var(--radius-lg, 10px)',
+                background: typeFilter === 'CUSTOMER'
+                  ? 'linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.06) 100%)'
+                  : 'var(--color-bg-card, var(--color-bg-surface))',
+                border: typeFilter === 'CUSTOMER'
+                  ? '1.5px solid rgba(59,130,246,0.45)'
+                  : '1.5px solid var(--color-border)',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                boxShadow: typeFilter === 'CUSTOMER' ? '0 0 0 2px var(--color-primary-500)' : undefined,
+                transition: 'all 0.18s ease',
+                overflow: 'hidden',
+                boxShadow: typeFilter === 'CUSTOMER'
+                  ? '0 0 0 3px rgba(59,130,246,0.12), 0 4px 16px rgba(59,130,246,0.08)'
+                  : '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                {isRu ? 'Клиенты' : 'Mijozlar'}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                borderRadius: '10px 10px 0 0',
+              }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Клиенты' : 'Mijozlar'}
+                </span>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Users size={15} style={{ color: '#3b82f6' }} />
+                </div>
               </div>
-              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: 4, color: 'var(--color-primary-600, #2563eb)' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: '#3b82f6' }}>
                 {summary?.total_customers ?? totalCustomers}
               </div>
-            </Card>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
+                {isRu ? 'активных клиентов' : 'ta faol mijoz'}
+              </div>
+            </div>
 
-            <Card
+            {/* Suppliers */}
+            <div
               onClick={() => setTypeFilter(typeFilter === 'SUPPLIER' ? '' : 'SUPPLIER')}
               style={{
-                padding: 'var(--space-3) var(--space-4)',
-                borderTop: '3px solid #f59e0b',
+                position: 'relative',
+                padding: '18px 20px 16px',
+                borderRadius: 'var(--radius-lg, 10px)',
+                background: typeFilter === 'SUPPLIER'
+                  ? 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(245,158,11,0.06) 100%)'
+                  : 'var(--color-bg-card, var(--color-bg-surface))',
+                border: typeFilter === 'SUPPLIER'
+                  ? '1.5px solid rgba(245,158,11,0.45)'
+                  : '1.5px solid var(--color-border)',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                boxShadow: typeFilter === 'SUPPLIER' ? '0 0 0 2px #f59e0b' : undefined,
+                transition: 'all 0.18s ease',
+                overflow: 'hidden',
+                boxShadow: typeFilter === 'SUPPLIER'
+                  ? '0 0 0 3px rgba(245,158,11,0.12), 0 4px 16px rgba(245,158,11,0.08)'
+                  : '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                {isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                borderRadius: '10px 10px 0 0',
+              }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
+                </span>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Tag size={15} style={{ color: '#f59e0b' }} />
+                </div>
               </div>
-              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginTop: 4, color: '#d97706' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: '#d97706' }}>
                 {summary?.total_suppliers ?? totalSuppliers}
               </div>
-            </Card>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
+                {isRu ? 'активных поставщиков' : 'ta yetkazib beruvchi'}
+              </div>
+            </div>
 
-            <Card
+            {/* Receivables */}
+            <div
               onClick={() => setBalanceFilter(balanceFilter === 'receivables' ? 'all' : 'receivables')}
               style={{
-                padding: 'var(--space-3) var(--space-4)',
-                borderTop: '3px solid #10b981',
+                position: 'relative',
+                padding: '18px 20px 16px',
+                borderRadius: 'var(--radius-lg, 10px)',
+                background: balanceFilter === 'receivables'
+                  ? 'linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(16,185,129,0.06) 100%)'
+                  : 'var(--color-bg-card, var(--color-bg-surface))',
+                border: balanceFilter === 'receivables'
+                  ? '1.5px solid rgba(16,185,129,0.45)'
+                  : '1.5px solid var(--color-border)',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                boxShadow: balanceFilter === 'receivables' ? '0 0 0 2px #10b981' : undefined,
+                transition: 'all 0.18s ease',
+                overflow: 'hidden',
+                boxShadow: balanceFilter === 'receivables'
+                  ? '0 0 0 3px rgba(16,185,129,0.12), 0 4px 16px rgba(16,185,129,0.08)'
+                  : '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                  {isRu ? 'Нам должны (Дебиторы)' : 'Bizga qarzdorlar (Haqdorlik)'}
-                </div>
-                <span style={{ fontSize: '11px', color: '#059669', background: 'rgba(16, 185, 129, 0.12)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
-                  {summary?.receivables.count ?? 0} {isRu ? 'контр.' : 'ta'}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                background: 'linear-gradient(90deg, #10b981, #34d399)',
+                borderRadius: '10px 10px 0 0',
+              }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Нам должны' : 'Bizga qarzdorlar'}
+                </span>
+                <span style={{
+                  fontSize: '11px', fontWeight: 700,
+                  background: 'rgba(16,185,129,0.15)',
+                  color: '#059669',
+                  padding: '3px 9px', borderRadius: 20,
+                  border: '1px solid rgba(16,185,129,0.25)',
+                }}>
+                  {summary?.receivables.count ?? 0} {isRu ? 'кл.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: '#059669' }}>
-                + {formatCurrency(summary?.receivables.total_amount ?? 0, locale)}
+              <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: 2 }}>+ HAQDORLIK</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#059669', lineHeight: 1.2, wordBreak: 'break-all' }}>
+                {formatCurrency(summary?.receivables.total_amount ?? 0, locale)}
               </div>
-            </Card>
+            </div>
 
-            <Card
+            {/* Payables */}
+            <div
               onClick={() => setBalanceFilter(balanceFilter === 'payables' ? 'all' : 'payables')}
               style={{
-                padding: 'var(--space-3) var(--space-4)',
-                borderTop: '3px solid #ef4444',
+                position: 'relative',
+                padding: '18px 20px 16px',
+                borderRadius: 'var(--radius-lg, 10px)',
+                background: balanceFilter === 'payables'
+                  ? 'linear-gradient(135deg, rgba(239,68,68,0.18) 0%, rgba(239,68,68,0.06) 100%)'
+                  : 'var(--color-bg-card, var(--color-bg-surface))',
+                border: balanceFilter === 'payables'
+                  ? '1.5px solid rgba(239,68,68,0.45)'
+                  : '1.5px solid var(--color-border)',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                boxShadow: balanceFilter === 'payables' ? '0 0 0 2px #ef4444' : undefined,
+                transition: 'all 0.18s ease',
+                overflow: 'hidden',
+                boxShadow: balanceFilter === 'payables'
+                  ? '0 0 0 3px rgba(239,68,68,0.12), 0 4px 16px rgba(239,68,68,0.08)'
+                  : '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                  {isRu ? 'Наш долг (Кредиторы)' : 'Bizning qarzimiz (Qarzdorlik)'}
-                </div>
-                <span style={{ fontSize: '11px', color: '#dc2626', background: 'rgba(239, 68, 68, 0.12)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
-                  {summary?.payables.count ?? 0} {isRu ? 'контр.' : 'ta'}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                background: 'linear-gradient(90deg, #ef4444, #f87171)',
+                borderRadius: '10px 10px 0 0',
+              }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Наш долг' : 'Bizning qarzimiz'}
+                </span>
+                <span style={{
+                  fontSize: '11px', fontWeight: 700,
+                  background: 'rgba(239,68,68,0.12)',
+                  color: '#dc2626',
+                  padding: '3px 9px', borderRadius: 20,
+                  border: '1px solid rgba(239,68,68,0.22)',
+                }}>
+                  {summary?.payables.count ?? 0} {isRu ? 'пост.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: '#dc2626' }}>
-                - {formatCurrency(summary?.payables.total_amount ?? 0, locale)}
+              <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600, marginBottom: 2 }}>− QARZDORLIK</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', lineHeight: 1.2, wordBreak: 'break-all' }}>
+                {formatCurrency(summary?.payables.total_amount ?? 0, locale)}
               </div>
-            </Card>
+            </div>
           </div>
 
-          {/* Quick Balance Filter Tabs */}
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Quick Balance Filter — Segmented Pill Bar */}
+          <div style={{
+            display: 'flex',
+            gap: 0,
+            background: 'var(--color-bg-subtle)',
+            border: '1.5px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg, 10px)',
+            padding: 4,
+            width: 'fit-content',
+          }}>
             {[
-              { id: 'all', label: isRu ? 'Все контрагенты' : 'Barcha kontragentlar' },
+              { id: 'all', label: isRu ? 'Barchasi' : 'Barchasi', color: null },
               {
                 id: 'receivables',
-                label: isRu ? 'Нам должны (Дебиторы)' : 'Bizga qarzdorlar (Haqdorlik)',
+                label: isRu ? 'Haqdorlar' : 'Haqdorlar',
                 count: summary?.receivables.count,
-                color: '#10b981',
+                color: '#059669',
+                dot: '#10b981',
               },
               {
                 id: 'payables',
-                label: isRu ? 'Наш долг (Кредиторы)' : 'Bizning qarzimiz (Kreditorlik)',
+                label: isRu ? 'Qarzdorlar' : 'Qarzdorlar',
                 count: summary?.payables.count,
-                color: '#ef4444',
+                color: '#dc2626',
+                dot: '#ef4444',
               },
               {
                 id: 'settled',
-                label: isRu ? 'Расчет окончен (Баланс = 0)' : 'Hisob-kitob qilinganlar (Balans = 0)',
+                label: isRu ? 'Hisob-kitob' : 'Hisob-kitob',
+                color: null,
               },
             ].map((tab) => {
               const active = balanceFilter === tab.id;
               return (
                 <button
                   key={tab.id}
+                  id={`balance-filter-${tab.id}`}
                   onClick={() => setBalanceFilter(tab.id as any)}
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: 'var(--radius-md, 6px)',
-                    border: active ? '1px solid var(--color-primary-500, #3b82f6)' : '1px solid var(--color-border)',
-                    background: active ? 'var(--color-primary-50, rgba(59, 130, 246, 0.08))' : 'var(--color-bg-surface, #fff)',
-                    color: active ? 'var(--color-primary-700, #1d4ed8)' : 'var(--color-text-secondary)',
-                    fontWeight: active ? 600 : 500,
-                    fontSize: 'var(--text-sm)',
+                    padding: '7px 16px',
+                    borderRadius: 'var(--radius-md, 7px)',
+                    border: 'none',
+                    background: active ? 'var(--color-bg-surface)' : 'transparent',
+                    color: active
+                      ? (tab.color || 'var(--color-primary-700, #1d4ed8)')
+                      : 'var(--color-text-secondary)',
+                    fontWeight: active ? 700 : 500,
+                    fontSize: '13px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
                     transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap',
+                    boxShadow: active ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
                   }}
                 >
+                  {tab.dot && (
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: tab.dot, flexShrink: 0 }} />
+                  )}
                   <span>{tab.label}</span>
                   {tab.count !== undefined && tab.count > 0 && (
                     <span
                       style={{
                         fontSize: '11px',
-                        padding: '1px 6px',
-                        borderRadius: '10px',
-                        background: active ? tab.color : 'var(--color-bg-subtle)',
-                        color: active ? '#fff' : 'var(--color-text-secondary)',
+                        padding: '1px 7px',
+                        borderRadius: '20px',
+                        background: active && tab.color ? `${tab.dot}22` : 'var(--color-bg-subtle)',
+                        color: active && tab.color ? tab.color : 'var(--color-text-secondary)',
                         fontWeight: 700,
+                        border: active && tab.color ? `1px solid ${tab.dot}44` : '1px solid transparent',
                       }}
                     >
                       {tab.count}
@@ -847,20 +961,25 @@ export default function CounterpartiesPage() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left' }}>{isRu ? 'НАИМЕНОВАНИЕ' : 'KONTRAGENT NOMI'}</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', whiteSpace: 'nowrap' }}>{isRu ? 'ТИП' : 'TURI'}</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', whiteSpace: 'nowrap' }}>{isRu ? 'ПАПКА' : 'PAPKA'}</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', whiteSpace: 'nowrap' }}>{isRu ? 'ИНН / STIR' : 'STIR / INN'}</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', whiteSpace: 'nowrap' }}>{isRu ? 'ТЕЛЕФОН' : 'TELEFON'}</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>{isRu ? 'БАЛАНС ДОЛГА' : 'QARZ BALANSI'}</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
+                    <tr style={{ borderBottom: '2px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>{isRu ? 'Наименование' : 'Kontragent nomi'}</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Тип' : 'Turi'}</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Папка' : 'Papka'}</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'ИНН / STIR' : 'STIR / INN'}</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Телефон' : 'Telefon'}</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Qarz balansi' : 'Qarz balansi'}</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Amallar' : 'Amallar'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item) => (
-                      <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                        <td style={{ padding: '12px 16px', fontWeight: 600 }}>{item.name}</td>
+                      <tr
+                        key={item.id}
+                        style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background 0.12s ease' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <td style={{ padding: '13px 16px', fontWeight: 600 }}>{item.name}</td>
                         <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>{getTypeBadge(item.type)}</td>
                         <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                           {item.folder ? (
