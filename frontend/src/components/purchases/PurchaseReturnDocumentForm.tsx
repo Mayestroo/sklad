@@ -772,10 +772,10 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                 <th style={{ padding: '10px 12px', textAlign: 'left', minWidth: '220px' }}>{isRu ? 'Наименование' : 'Nomi'}</th>
                 <th style={{ padding: '10px 12px', textAlign: 'center', width: '90px', whiteSpace: 'nowrap' }}>{isRu ? 'Тип' : 'Turi'}</th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>{isRu ? 'Кол-во' : 'Miqdor'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '140px', whiteSpace: 'nowrap' }}>{isRu ? `Цена (${currency})` : `Narxi (${currency})`}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>{isRu ? `Цена (${currency})` : `Narxi (${currency})`}</th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>{isRu ? 'НДС %' : 'QQS %'}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '150px', whiteSpace: 'nowrap' }}>{isRu ? `Сумма НДС (${currency})` : `QQS summasi (${currency})`}</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '180px', whiteSpace: 'nowrap' }}>{isRu ? `Итого (${currency})` : `Jami (${currency})`}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>{isRu ? `Сумма НДС (${currency})` : `QQS summasi (${currency})`}</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '180px', whiteSpace: 'nowrap' }}>{isRu ? `Итого (${currency})` : `Jami (${currency})`}</th>
                 {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }} />}
               </tr>
             </thead>

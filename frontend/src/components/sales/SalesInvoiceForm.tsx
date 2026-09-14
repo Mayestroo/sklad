@@ -1235,7 +1235,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', minWidth: '140px', whiteSpace: 'nowrap' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Цена продажи (${currency})` : `Sotish narxi (${currency})`}
                 </th>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
@@ -1244,7 +1244,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', minWidth: '200px', whiteSpace: 'nowrap' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '180px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Итого (${currency})` : `Jami Summa (${currency})`}
                 </th>
                 {!isReadOnly && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}

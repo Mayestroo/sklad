@@ -1346,19 +1346,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '140px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Цена за ед. (${currency})` : `Birlik narxi (${currency})`}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '120px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '130px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Скидка (${currency})` : `Chegirma (${currency})`}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '160px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Сумма НДС (${currency})` : `QQS summasi (${currency})`}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '220px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '180px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Итого (${currency})` : `Jami Summa (${currency})`}
                 </th>
                 {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}></th>}

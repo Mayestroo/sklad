@@ -97,7 +97,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       disabled = false,
       min = 0,
       max,
-      autoWidth = true,
+      autoWidth = false,
       minWidthCh = 13,
       style,
       className,
