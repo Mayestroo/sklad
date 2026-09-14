@@ -23,6 +23,11 @@ enum TransactionDirection {
   TRANSFER
 }
 
+enum TransactionStatus {
+  POSTED
+  CANCELLED
+}
+
 enum CompanyStatus {
   TRIAL
   ACTIVE
@@ -800,6 +805,8 @@ model Counterparty {
   folderId        String?          @map("folder_id")
   priceListId     String?          @map("price_list_id")
   discountPercent Decimal          @default(0) @db.Decimal(5, 2) @map("discount_percent")
+  customerDebt    Decimal          @default(0) @db.Decimal(15, 2) @map("customer_debt")
+  supplierDebt    Decimal          @default(0) @db.Decimal(15, 2) @map("supplier_debt")
   debtBalance     Decimal          @default(0) @db.Decimal(15, 2) @map("debt_balance")
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
@@ -1294,12 +1301,17 @@ model FinanceTransaction {
   transactionDate   DateTime            @default(now()) @map("transaction_date")
   comment           String?
   docNumber         String?             @map("doc_number")
-  sourceDocType     String?             @map("source_doc_type")
-  sourceDocId       String?             @map("source_doc_id")
-  createdById       String?             @map("created_by_id")
-  isDeleted         Boolean             @default(false) @map("is_deleted")
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
+  sourceDocType      String?             @map("source_doc_type")
+  sourceDocId        String?             @map("source_doc_id")
+  status             TransactionStatus   @default(POSTED)
+  responsibleUserId  String?             @map("responsible_user_id")
+  cancelledById      String?             @map("cancelled_by_id")
+  cancelledAt        DateTime?           @map("cancelled_at")
+  cancellationReason String?             @map("cancellation_reason")
+  createdById        String?             @map("created_by_id")
+  isDeleted          Boolean             @default(false) @map("is_deleted")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
 
   company           Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   account           CashAccount?     @relation("TxAccount", fields: [accountId], references: [id], onDelete: SetNull)

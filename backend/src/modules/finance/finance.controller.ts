@@ -22,11 +22,20 @@ import { CreateIncomeDto } from './dto/create-income.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
+import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/finance')
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
+
+  // ─── Dashboard Metrics ───────────────────────────────────────
+
+  @Get('dashboard')
+  @RequirePermissions('finance:view')
+  async getDashboard(@CurrentTenant() tenantId: string) {
+    return this.financeService.getDashboardMetrics(tenantId);
+  }
 
   // ─── Accounts ────────────────────────────────────────────────
 
@@ -118,6 +127,20 @@ export class FinanceController {
     @Body() body: { comment?: string; transactionTypeId?: string },
   ) {
     return this.financeService.updateTransaction(tenantId, id, body);
+  }
+
+  // ─── Cancel (Storno) ─────────────────────────────────────────
+
+  @Post('transactions/:id/cancel')
+  @RequirePermissions('finance:delete')
+  @HttpCode(HttpStatus.OK)
+  async cancelTransaction(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() dto: CancelTransactionDto,
+  ) {
+    return this.financeService.cancelTransaction(tenantId, id, dto, user?.id);
   }
 
   // ─── Delete (restricted) ─────────────────────────────────────

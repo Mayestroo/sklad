@@ -63,4 +63,11 @@ export class CreateIncomeDto {
   )
   @IsString()
   sourceDocId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
+  @IsString()
+  responsibleUserId?: string;
 }

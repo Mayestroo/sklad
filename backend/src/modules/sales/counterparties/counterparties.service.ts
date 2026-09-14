@@ -140,6 +140,8 @@ export class CounterpartiesService {
           select: {
             id: true,
             type: true,
+            customerDebt: true,
+            supplierDebt: true,
             debtBalance: true,
           },
         }),
@@ -151,20 +153,29 @@ export class CounterpartiesService {
     let payablesAmount = 0;
 
     for (const cp of counterpartiesWithBalance) {
-      const rawBalance = Number(cp.debtBalance);
+      const custDebt = Number((cp as any).customerDebt || 0);
+      const suppDebt = Number((cp as any).supplierDebt || 0);
       let netReceivable = 0;
-      if (cp.type === CounterpartyType.SUPPLIER) {
-        netReceivable = -rawBalance;
+      if (custDebt > 0 || suppDebt > 0) {
+        netReceivable = custDebt - suppDebt;
+        if (custDebt > 0) {
+          receivablesCount++;
+          receivablesAmount += custDebt;
+        }
+        if (suppDebt > 0) {
+          payablesCount++;
+          payablesAmount += suppDebt;
+        }
       } else {
-        netReceivable = rawBalance;
-      }
-
-      if (netReceivable > 0) {
-        receivablesCount++;
-        receivablesAmount += netReceivable;
-      } else if (netReceivable < 0) {
-        payablesCount++;
-        payablesAmount += Math.abs(netReceivable);
+        const rawBalance = Number(cp.debtBalance);
+        netReceivable = cp.type === CounterpartyType.SUPPLIER ? -rawBalance : rawBalance;
+        if (netReceivable > 0) {
+          receivablesCount++;
+          receivablesAmount += netReceivable;
+        } else if (netReceivable < 0) {
+          payablesCount++;
+          payablesAmount += Math.abs(netReceivable);
+        }
       }
     }
 
@@ -190,7 +201,7 @@ export class CounterpartiesService {
     hasDebt?: boolean,
     balanceFilter?: 'all' | 'receivables' | 'payables' | 'settled',
   ) {
-    const where: Prisma.CounterpartyWhereInput = { tenantId };
+    const where: any = { tenantId };
 
     if (type) {
       where.type = type as CounterpartyType;
@@ -246,10 +257,16 @@ export class CounterpartiesService {
     });
 
     return counterparties.map((cp) => {
+      const custDebt = Number((cp as any).customerDebt || 0);
+      const suppDebt = Number((cp as any).supplierDebt || 0);
       const raw = Number(cp.debtBalance || 0);
-      const net = cp.type === CounterpartyType.SUPPLIER ? -raw : raw;
+      const net = custDebt > 0 || suppDebt > 0
+        ? custDebt - suppDebt
+        : cp.type === CounterpartyType.SUPPLIER ? -raw : raw;
       return {
         ...cp,
+        customerDebt: custDebt,
+        supplierDebt: suppDebt,
         netBalance: net,
       };
     });

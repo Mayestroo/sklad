@@ -372,7 +372,10 @@ export class SalesInvoicesService {
       // 3. Increase customer (debitor) debt
       await tx.counterparty.update({
         where: { id: invoice.counterpartyId },
-        data: { debtBalance: { increment: invoice.totalAmount } },
+        data: {
+          customerDebt: { increment: invoice.totalAmount },
+          debtBalance: { increment: invoice.totalAmount },
+        },
       });
 
       // 4. NAS / BHMS Accounting Journal Entries
@@ -551,7 +554,10 @@ export class SalesInvoicesService {
       // Reduce customer debt
       await tx.counterparty.update({
         where: { id: invoice.counterpartyId },
-        data: { debtBalance: { decrement: invoice.totalAmount } },
+        data: {
+          customerDebt: { decrement: invoice.totalAmount },
+          debtBalance: { decrement: invoice.totalAmount },
+        },
       });
 
       // Remove journal entries
@@ -945,7 +951,10 @@ export class SalesInvoicesService {
       // Reduce customer debt
       await tx.counterparty.update({
         where: { id: params.counterpartyId },
-        data: { debtBalance: { decrement: params.totalAmount } },
+        data: {
+          customerDebt: { decrement: params.totalAmount },
+          debtBalance: { decrement: params.totalAmount },
+        },
       });
 
       // Update originating invoice returnStatus
@@ -1204,7 +1213,10 @@ export class SalesInvoicesService {
       // Reverse customer debt
       await tx.counterparty.update({
         where: { id: existing.counterpartyId },
-        data: { debtBalance: { increment: Number(existing.totalAmount) } },
+        data: {
+          customerDebt: { increment: Number(existing.totalAmount) },
+          debtBalance: { increment: Number(existing.totalAmount) },
+        },
       });
 
       // Update invoice return status

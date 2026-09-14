@@ -372,7 +372,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       // 3. Supplier debt increased
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: 'supp-1' },
-        data: { debtBalance: { increment: 1170000 } },
+        data: {
+          supplierDebt: { increment: 1170000 },
+          debtBalance: { increment: 1170000 },
+        },
       });
 
       // 4. Double-entry BHMS journal entry created
@@ -539,7 +542,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       // Reduced supplier debt by 200,000
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: 'supp-1' },
-        data: { debtBalance: { decrement: 200000 } },
+        data: {
+          supplierDebt: { decrement: 200000 },
+          debtBalance: { decrement: 200000 },
+        },
       });
 
       // Updated return status on receipt to PARTIALLY_RETURNED
@@ -652,7 +658,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       expect(result.status).toBe(ReturnDocStatus.CANCELLED);
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: 'supp-1' },
-        data: { debtBalance: { increment: 200000 } },
+        data: {
+          supplierDebt: { increment: 200000 },
+          debtBalance: { increment: 200000 },
+        },
       });
     });
 

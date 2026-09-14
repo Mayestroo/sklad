@@ -431,6 +431,7 @@ export class PurchasesService {
       await tx.counterparty.update({
         where: { id: receipt.counterpartyId },
         data: {
+          supplierDebt: { increment: receipt.totalAmount },
           debtBalance: { increment: receipt.totalAmount },
         },
       });
@@ -659,6 +660,7 @@ export class PurchasesService {
       await tx.counterparty.update({
         where: { id: receipt.counterpartyId },
         data: {
+          supplierDebt: { decrement: receipt.totalAmount },
           debtBalance: { decrement: receipt.totalAmount },
         },
       });
@@ -787,7 +789,10 @@ export class PurchasesService {
       // 3. Decrease counterparty debt
       await tx.counterparty.update({
         where: { id: receipt.counterpartyId },
-        data: { debtBalance: { decrement: payAmount } },
+        data: {
+          supplierDebt: { decrement: payAmount },
+          debtBalance: { decrement: payAmount },
+        },
       });
 
       // 4. Create Finance Transaction (EXPENSE)
@@ -1380,6 +1385,7 @@ export class PurchasesService {
     await tx.counterparty.update({
       where: { id: counterpartyId },
       data: {
+        supplierDebt: { decrement: basePurchaseTotalReduction },
         debtBalance: { decrement: basePurchaseTotalReduction },
       },
     });
@@ -1665,6 +1671,7 @@ export class PurchasesService {
         await tx.counterparty.update({
           where: { id: pReturn.counterpartyId },
           data: {
+            supplierDebt: { increment: basePurchaseTotal },
             debtBalance: { increment: basePurchaseTotal },
           },
         });

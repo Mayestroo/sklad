@@ -2,6 +2,7 @@
 
 export type CashAccountType = 'USD_CASH' | 'UZS_CASH' | 'BANK';
 export type TransactionDirection = 'INCOME' | 'EXPENSE' | 'TRANSFER';
+export type TransactionStatus = 'POSTED' | 'CANCELLED';
 
 export interface CashAccount {
   id: string;
@@ -27,6 +28,7 @@ export interface FinanceTransaction {
   id: string;
   tenantId: string;
   direction: TransactionDirection;
+  status: TransactionStatus;
   accountId?: string | null;
   transferToId?: string | null;
   counterpartyId?: string | null;
@@ -38,6 +40,10 @@ export interface FinanceTransaction {
   docNumber?: string | null;
   sourceDocType?: string | null;
   sourceDocId?: string | null;
+  responsibleUserId?: string | null;
+  cancelledById?: string | null;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
   createdById?: string | null;
   isDeleted: boolean;
   createdAt: string;
@@ -61,9 +67,34 @@ export interface FinanceSummary {
   accounts: CashAccount[];
 }
 
+export interface FinanceDashboardMetrics {
+  balances: {
+    dollarKassa: number;
+    naqdKassa: number;
+    hisobRaqam: number;
+    totalLiquidUZSEquivalent: number;
+  };
+  today: {
+    income: number;
+    expense: number;
+    netCashFlow: number;
+  };
+  month: {
+    income: number;
+    expense: number;
+    netCashFlow: number;
+  };
+  debts: {
+    receivables: number;
+    payables: number;
+  };
+  accounts: CashAccount[];
+}
+
 export interface TransactionJournal {
   total: number;
   page: number;
   limit: number;
   data: FinanceTransaction[];
 }
+

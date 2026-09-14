@@ -1,20 +1,23 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
 import {
   TransactionDirection,
+  TransactionStatus,
   SalesDocStatus,
   SalesPaymentStatus,
+  PurchaseDocStatus,
+  PurchasePaymentStatus,
   ServicePaymentStatus,
 } from '@prisma/client';
 import { CreateIncomeDto } from './dto/create-income.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
+import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 
 @Injectable()
 export class FinanceService {
@@ -33,17 +36,17 @@ export class FinanceService {
     const defaults = [
       {
         accountType: 'UZS_CASH' as const,
-        name: { uz: 'Naqd pul (UZS)', ru: 'Наличные (UZS)' },
+        name: { uz: 'Naqd kassa (UZS)', ru: 'Наличная касса (UZS)' },
         currency: 'UZS',
       },
       {
         accountType: 'USD_CASH' as const,
-        name: { uz: 'Naqd pul (USD)', ru: 'Наличные (USD)' },
+        name: { uz: 'Dollar kassa (USD)', ru: 'Долларовая касса (USD)' },
         currency: 'USD',
       },
       {
         accountType: 'BANK' as const,
-        name: { uz: 'Bank hisobi', ru: 'Банковский счёт' },
+        name: { uz: 'Hisobraqam (Bank)', ru: 'Расчетный счет (Банк)' },
         currency: 'UZS',
       },
     ];
@@ -70,6 +73,7 @@ export class FinanceService {
     const where: any = {
       tenantId,
       isDeleted: false,
+      status: TransactionStatus.POSTED,
     };
 
     if (filters.date_from || filters.date_to) {
@@ -89,11 +93,10 @@ export class FinanceService {
       select: { direction: true, amount: true, currency: true },
     });
 
-    // Group by currency
     const byCurrency: Record<string, { income: number; expense: number }> = {};
 
     for (const tx of transactions) {
-      if (tx.direction === TransactionDirection.TRANSFER) continue; // never counted
+      if (tx.direction === TransactionDirection.TRANSFER) continue;
       if (!byCurrency[tx.currency])
         byCurrency[tx.currency] = { income: 0, expense: 0 };
       if (tx.direction === TransactionDirection.INCOME) {
@@ -112,11 +115,121 @@ export class FinanceService {
       }),
     );
 
-    // Account balances
     const accounts = await this.getAccounts(tenantId);
 
     return {
       summaryByCurrency,
+      accounts: accounts.map((a) => ({
+        id: a.id,
+        accountType: a.accountType,
+        name: a.name,
+        currency: a.currency,
+        balance: Number(a.balance),
+      })),
+    };
+  }
+
+  // ─── Dashboard Metrics ───────────────────────────────────────
+
+  async getDashboardMetrics(tenantId: string) {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Accounts
+    const accounts = await this.getAccounts(tenantId);
+    let dollarKassa = 0;
+    let naqdKassa = 0;
+    let hisobRaqam = 0;
+
+    for (const acc of accounts) {
+      const bal = Number(acc.balance || 0);
+      if (acc.accountType === 'USD_CASH') dollarKassa += bal;
+      else if (acc.accountType === 'UZS_CASH') naqdKassa += bal;
+      else if (acc.accountType === 'BANK') hisobRaqam += bal;
+    }
+
+    // Today's and Monthly transactions
+    const txs = await this.prisma.financeTransaction.findMany({
+      where: {
+        tenantId,
+        isDeleted: false,
+        status: TransactionStatus.POSTED,
+        transactionDate: { gte: startOfMonth },
+      },
+      select: {
+        direction: true,
+        amount: true,
+        currency: true,
+        transactionDate: true,
+      },
+    });
+
+    let todayIncomeUZS = 0;
+    let todayExpenseUZS = 0;
+    let monthIncomeUZS = 0;
+    let monthExpenseUZS = 0;
+
+    for (const tx of txs) {
+      if (tx.direction === TransactionDirection.TRANSFER) continue;
+      const amt = Number(tx.amount || 0);
+      const isToday = new Date(tx.transactionDate) >= startOfToday;
+
+      if (tx.direction === TransactionDirection.INCOME) {
+        monthIncomeUZS += amt;
+        if (isToday) todayIncomeUZS += amt;
+      } else if (tx.direction === TransactionDirection.EXPENSE) {
+        monthExpenseUZS += amt;
+        if (isToday) todayExpenseUZS += amt;
+      }
+    }
+
+    // Counterparty Debts
+    const counterparties = await this.prisma.counterparty.findMany({
+      where: { tenantId },
+      select: { customerDebt: true, supplierDebt: true, debtBalance: true, type: true },
+    });
+
+    let totalCustomerDebt = 0; // Receivables (Kutilayotgan tushumlar)
+    let totalSupplierDebt = 0; // Payables (To'lanishi kerak bo'lgan qarzlar)
+
+    for (const cp of counterparties) {
+      const cDebt = Number((cp as any).customerDebt || 0);
+      const sDebt = Number((cp as any).supplierDebt || 0);
+      if (cDebt > 0 || sDebt > 0) {
+        totalCustomerDebt += cDebt;
+        totalSupplierDebt += sDebt;
+      } else {
+        const raw = Number(cp.debtBalance || 0);
+        if (cp.type === 'SUPPLIER') {
+          if (raw > 0) totalSupplierDebt += raw;
+        } else {
+          if (raw > 0) totalCustomerDebt += raw;
+        }
+      }
+    }
+
+    return {
+      balances: {
+        dollarKassa,
+        naqdKassa,
+        hisobRaqam,
+        totalLiquidUZSEquivalent: naqdKassa + hisobRaqam, // primary UZS
+      },
+      today: {
+        income: todayIncomeUZS,
+        expense: todayExpenseUZS,
+        netCashFlow: todayIncomeUZS - todayExpenseUZS,
+      },
+      month: {
+        income: monthIncomeUZS,
+        expense: monthExpenseUZS,
+        netCashFlow: monthIncomeUZS - monthExpenseUZS,
+      },
+      debts: {
+        receivables: totalCustomerDebt,
+        payables: totalSupplierDebt,
+      },
       accounts: accounts.map((a) => ({
         id: a.id,
         accountType: a.accountType,
@@ -199,6 +312,7 @@ export class FinanceService {
         data: {
           tenantId,
           direction: TransactionDirection.INCOME,
+          status: TransactionStatus.POSTED,
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
@@ -210,25 +324,29 @@ export class FinanceService {
           comment: dto.comment,
           sourceDocType: dto.sourceDocType,
           sourceDocId: dto.sourceDocId,
+          responsibleUserId: dto.responsibleUserId,
           createdById,
         },
         include: { account: true, counterparty: true, transactionType: true },
       });
 
-      // Update account balance
+      // 1. Update cash account balance
       await tx.cashAccount.update({
         where: { id: dto.accountId },
         data: { balance: { increment: dto.amount } },
       });
 
-      // Update counterparty debt (reduce debt if they pay us)
+      // 2. Update counterparty customer debt
       if (dto.counterpartyId) {
         await tx.counterparty.update({
           where: { id: dto.counterpartyId },
-          data: { debtBalance: { decrement: dto.amount } },
+          data: {
+            customerDebt: { decrement: dto.amount },
+            debtBalance: { decrement: dto.amount },
+          },
         });
 
-        // 1. Direct Invoice Settlement
+        // 3. Direct Sales Invoice Settlement
         if (dto.sourceDocType === 'SalesInvoice' && dto.sourceDocId) {
           const invoice = await tx.salesInvoice.findFirst({
             where: { id: dto.sourceDocId, tenantId },
@@ -248,7 +366,37 @@ export class FinanceService {
               data: { paidAmount: newPaid, paymentStatus },
             });
           }
-        } else if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
+        }
+        // 4. Direct Sales Order Pre-Payment Settlement
+        else if (dto.sourceDocType === 'SalesOrder' && dto.sourceDocId) {
+          const order = await tx.salesOrder.findFirst({
+            where: { id: dto.sourceDocId, tenantId },
+          });
+          if (order) {
+            const newPaid = Number(order.paidAmount) + Number(dto.amount);
+            const total = Number(order.totalAmount);
+            let newStatus = order.status;
+
+            if (order.status === 'AWAITING_PAYMENT') {
+              if (order.paymentCondition === 'PREPAID_100' && newPaid >= total) {
+                newStatus = 'PAYMENT_CONFIRMED';
+              } else if (order.paymentCondition === 'PARTIAL') {
+                const reqPercent = Number(order.requiredPaymentPercent || 50);
+                const reqAmount = (total * reqPercent) / 100;
+                if (newPaid >= reqAmount) {
+                  newStatus = 'PAYMENT_CONFIRMED';
+                }
+              }
+            }
+
+            await tx.salesOrder.update({
+              where: { id: order.id },
+              data: { paidAmount: newPaid, status: newStatus },
+            });
+          }
+        }
+        // 5. Direct ServiceAct Settlement
+        else if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
           const act = await tx.serviceAct.findFirst({
             where: { id: dto.sourceDocId, tenantId },
           });
@@ -267,8 +415,9 @@ export class FinanceService {
               data: { paidAmount: newPaid, paymentStatus },
             });
           }
-        } else if (!dto.sourceDocId) {
-          // 2. FIFO Auto-Allocation across open unpaid/partially-paid sales invoices
+        }
+        // 6. FIFO Auto-Allocation across open unpaid/partially-paid sales invoices
+        else if (!dto.sourceDocId) {
           const openInvoices = await tx.salesInvoice.findMany({
             where: {
               tenantId,
@@ -320,11 +469,19 @@ export class FinanceService {
     });
     if (!account) throw new NotFoundException('Cash account not found');
 
+    // Invariant: Cash account cannot go negative
+    if (Number(account.balance) < Number(dto.amount)) {
+      throw new BadRequestException(
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${account.balance} ${account.currency}, so'ralgan: ${dto.amount} ${dto.currency}`,
+      );
+    }
+
     const tx = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.financeTransaction.create({
         data: {
           tenantId,
           direction: TransactionDirection.EXPENSE,
+          status: TransactionStatus.POSTED,
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
@@ -336,26 +493,51 @@ export class FinanceService {
           comment: dto.comment,
           sourceDocType: dto.sourceDocType,
           sourceDocId: dto.sourceDocId,
+          responsibleUserId: dto.responsibleUserId,
           createdById,
         },
         include: { account: true, counterparty: true, transactionType: true },
       });
 
-      // Update account balance (decrease)
+      // 1. Update account balance (decrease)
       await tx.cashAccount.update({
         where: { id: dto.accountId },
         data: { balance: { decrement: dto.amount } },
       });
 
-      // Update counterparty debt (reduce our debt to them)
+      // 2. Update counterparty supplier debt
       if (dto.counterpartyId) {
         await tx.counterparty.update({
           where: { id: dto.counterpartyId },
-          data: { debtBalance: { decrement: dto.amount } },
+          data: {
+            supplierDebt: { decrement: dto.amount },
+            debtBalance: { decrement: dto.amount },
+          },
         });
 
-        // Direct ServiceAct Settlement (for RECEIVED services)
-        if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
+        // 3. Direct Purchase Receipt Settlement
+        if (dto.sourceDocType === 'PurchaseReceipt' && dto.sourceDocId) {
+          const receipt = await tx.purchaseReceipt.findFirst({
+            where: { id: dto.sourceDocId, tenantId },
+          });
+          if (receipt) {
+            const newPaid = Number(receipt.paidAmount) + Number(dto.amount);
+            const total = Number(receipt.totalAmount);
+            const paymentStatus =
+              newPaid >= total
+                ? PurchasePaymentStatus.PAID
+                : newPaid > 0
+                ? PurchasePaymentStatus.PARTIALLY_PAID
+                : PurchasePaymentStatus.UNPAID;
+
+            await tx.purchaseReceipt.update({
+              where: { id: receipt.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
+        }
+        // 4. Direct ServiceAct Settlement (for RECEIVED services)
+        else if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
           const act = await tx.serviceAct.findFirst({
             where: { id: dto.sourceDocId, tenantId },
           });
@@ -373,6 +555,39 @@ export class FinanceService {
               where: { id: act.id },
               data: { paidAmount: newPaid, paymentStatus },
             });
+          }
+        }
+        // 5. FIFO Auto-Allocation across open purchase receipts
+        else if (!dto.sourceDocId) {
+          const openReceipts = await tx.purchaseReceipt.findMany({
+            where: {
+              tenantId,
+              counterpartyId: dto.counterpartyId,
+              status: PurchaseDocStatus.POSTED,
+              paymentStatus: {
+                in: [PurchasePaymentStatus.UNPAID, PurchasePaymentStatus.PARTIALLY_PAID],
+              },
+            },
+            orderBy: { docDate: 'asc' },
+          });
+
+          let remainingPayment = Number(dto.amount);
+          for (const receipt of openReceipts) {
+            if (remainingPayment <= 0) break;
+            const remainingDebt =
+              Number(receipt.totalAmount) - Number(receipt.paidAmount);
+            const allocate = Math.min(remainingDebt, remainingPayment);
+            const newPaid = Number(receipt.paidAmount) + allocate;
+            const paymentStatus =
+              newPaid >= Number(receipt.totalAmount)
+                ? PurchasePaymentStatus.PAID
+                : PurchasePaymentStatus.PARTIALLY_PAID;
+
+            await tx.purchaseReceipt.update({
+              where: { id: receipt.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+            remainingPayment -= allocate;
           }
         }
       }
@@ -450,6 +665,7 @@ export class FinanceService {
         data: {
           tenantId,
           direction: TransactionDirection.TRANSFER,
+          status: TransactionStatus.POSTED,
           accountId: dto.fromAccountId,
           transferToId: dto.toAccountId,
           amount: fromAmount,
@@ -481,6 +697,214 @@ export class FinanceService {
     return tx;
   }
 
+  // ─── Cancel Transaction (Storno) ──────────────────────────────
+
+  async cancelTransaction(
+    tenantId: string,
+    id: string,
+    dto?: CancelTransactionDto,
+    cancelledById?: string,
+  ) {
+    const existing = await this.prisma.financeTransaction.findFirst({
+      where: { id, tenantId, isDeleted: false, status: TransactionStatus.POSTED },
+      include: { account: true, transferToAccount: true },
+    });
+    if (!existing) throw new NotFoundException('Transaction not found or already cancelled');
+
+    const amount = Number(existing.amount);
+
+    await this.prisma.$transaction(async (tx) => {
+      if (existing.direction === TransactionDirection.INCOME) {
+        // Safe check: Account balance cannot go negative
+        if (existing.accountId) {
+          const acc = await tx.cashAccount.findUnique({
+            where: { id: existing.accountId },
+          });
+          if (!acc || Number(acc.balance) < amount) {
+            throw new BadRequestException(
+              "Kirimni bekor qilish imkonsiz: kassada yetarli qoldiq mavjud emas (manfiy qoldiq yuzaga keladi)",
+            );
+          }
+          await tx.cashAccount.update({
+            where: { id: existing.accountId },
+            data: { balance: { decrement: amount } },
+          });
+        }
+
+        // Restore counterparty customer debt
+        if (existing.counterpartyId) {
+          await tx.counterparty.update({
+            where: { id: existing.counterpartyId },
+            data: {
+              customerDebt: { increment: amount },
+              debtBalance: { increment: amount },
+            },
+          });
+        }
+
+        // Revert SalesInvoice paidAmount
+        if (existing.sourceDocType === 'SalesInvoice' && existing.sourceDocId) {
+          const invoice = await tx.salesInvoice.findFirst({
+            where: { id: existing.sourceDocId, tenantId },
+          });
+          if (invoice) {
+            const newPaid = Math.max(0, Number(invoice.paidAmount) - amount);
+            const total = Number(invoice.totalAmount);
+            const paymentStatus =
+              newPaid <= 0
+                ? SalesPaymentStatus.UNPAID
+                : newPaid >= total
+                ? SalesPaymentStatus.PAID
+                : SalesPaymentStatus.PARTIALLY_PAID;
+            await tx.salesInvoice.update({
+              where: { id: invoice.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
+        }
+        // Revert SalesOrder paidAmount
+        else if (existing.sourceDocType === 'SalesOrder' && existing.sourceDocId) {
+          const order = await tx.salesOrder.findFirst({
+            where: { id: existing.sourceDocId, tenantId },
+          });
+          if (order) {
+            const newPaid = Math.max(0, Number(order.paidAmount) - amount);
+            let newStatus = order.status;
+            if (order.status === 'PAYMENT_CONFIRMED') {
+              const total = Number(order.totalAmount);
+              if (order.paymentCondition === 'PREPAID_100' && newPaid < total) {
+                newStatus = 'AWAITING_PAYMENT';
+              } else if (order.paymentCondition === 'PARTIAL') {
+                const reqPercent = Number(order.requiredPaymentPercent || 50);
+                if (newPaid < (total * reqPercent) / 100) {
+                  newStatus = 'AWAITING_PAYMENT';
+                }
+              }
+            }
+            await tx.salesOrder.update({
+              where: { id: order.id },
+              data: { paidAmount: newPaid, status: newStatus },
+            });
+          }
+        }
+        // Revert ServiceAct paidAmount
+        else if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
+          const act = await tx.serviceAct.findFirst({
+            where: { id: existing.sourceDocId, tenantId },
+          });
+          if (act) {
+            const newPaid = Math.max(0, Number(act.paidAmount) - amount);
+            const total = Number(act.totalAmount);
+            const paymentStatus =
+              newPaid <= 0
+                ? ServicePaymentStatus.UNPAID
+                : newPaid >= total
+                ? ServicePaymentStatus.PAID
+                : ServicePaymentStatus.PARTIALLY_PAID;
+            await tx.serviceAct.update({
+              where: { id: act.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
+        }
+      } else if (existing.direction === TransactionDirection.EXPENSE) {
+        // Return money to account
+        if (existing.accountId) {
+          await tx.cashAccount.update({
+            where: { id: existing.accountId },
+            data: { balance: { increment: amount } },
+          });
+        }
+
+        // Restore counterparty supplier debt
+        if (existing.counterpartyId) {
+          await tx.counterparty.update({
+            where: { id: existing.counterpartyId },
+            data: {
+              supplierDebt: { increment: amount },
+              debtBalance: { increment: amount },
+            },
+          });
+        }
+
+        // Revert PurchaseReceipt paidAmount
+        if (existing.sourceDocType === 'PurchaseReceipt' && existing.sourceDocId) {
+          const receipt = await tx.purchaseReceipt.findFirst({
+            where: { id: existing.sourceDocId, tenantId },
+          });
+          if (receipt) {
+            const newPaid = Math.max(0, Number(receipt.paidAmount) - amount);
+            const total = Number(receipt.totalAmount);
+            const paymentStatus =
+              newPaid <= 0
+                ? PurchasePaymentStatus.UNPAID
+                : newPaid >= total
+                ? PurchasePaymentStatus.PAID
+                : PurchasePaymentStatus.PARTIALLY_PAID;
+            await tx.purchaseReceipt.update({
+              where: { id: receipt.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
+        }
+        // Revert ServiceAct paidAmount
+        else if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
+          const act = await tx.serviceAct.findFirst({
+            where: { id: existing.sourceDocId, tenantId },
+          });
+          if (act) {
+            const newPaid = Math.max(0, Number(act.paidAmount) - amount);
+            const total = Number(act.totalAmount);
+            const paymentStatus =
+              newPaid <= 0
+                ? ServicePaymentStatus.UNPAID
+                : newPaid >= total
+                ? ServicePaymentStatus.PAID
+                : ServicePaymentStatus.PARTIALLY_PAID;
+            await tx.serviceAct.update({
+              where: { id: act.id },
+              data: { paidAmount: newPaid, paymentStatus },
+            });
+          }
+        }
+      } else if (existing.direction === TransactionDirection.TRANSFER) {
+        if (existing.transferToId) {
+          const toAcc = await tx.cashAccount.findUnique({
+            where: { id: existing.transferToId },
+          });
+          if (!toAcc || Number(toAcc.balance) < amount) {
+            throw new BadRequestException(
+              "O'tkazmani bekor qilish imkonsiz: qabul qiluvchi kassada yetarli qoldiq mavjud emas",
+            );
+          }
+          await tx.cashAccount.update({
+            where: { id: existing.transferToId },
+            data: { balance: { decrement: amount } },
+          });
+        }
+        if (existing.accountId) {
+          await tx.cashAccount.update({
+            where: { id: existing.accountId },
+            data: { balance: { increment: amount } },
+          });
+        }
+      }
+
+      // Mark transaction status CANCELLED
+      await tx.financeTransaction.update({
+        where: { id },
+        data: {
+          status: TransactionStatus.CANCELLED,
+          cancelledById: cancelledById || null,
+          cancelledAt: new Date(),
+          cancellationReason: dto?.reason || null,
+        },
+      });
+    });
+
+    return { success: true, id, status: TransactionStatus.CANCELLED };
+  }
+
   // ─── Edit Transaction ─────────────────────────────────────────
 
   async updateTransaction(
@@ -503,125 +927,10 @@ export class FinanceService {
     });
   }
 
-  // ─── Delete Transaction ───────────────────────────────────────
+  // ─── Delete Transaction (Soft-delete fallback) ────────────────
 
   async deleteTransaction(tenantId: string, id: string) {
-    const existing = await this.prisma.financeTransaction.findFirst({
-      where: { id, tenantId, isDeleted: false },
-    });
-    if (!existing) throw new NotFoundException('Transaction not found');
-
-    // Soft-delete and reverse the balance change
-    await this.prisma.$transaction(async (tx) => {
-      await tx.financeTransaction.update({
-        where: { id },
-        data: { isDeleted: true },
-      });
-
-      if (existing.accountId) {
-        if (existing.direction === TransactionDirection.INCOME) {
-          await tx.cashAccount.update({
-            where: { id: existing.accountId },
-            data: { balance: { decrement: Number(existing.amount) } },
-          });
-          if (existing.counterpartyId) {
-            await tx.counterparty.update({
-              where: { id: existing.counterpartyId },
-              data: { debtBalance: { increment: Number(existing.amount) } },
-            });
-          }
-          if (existing.sourceDocType === 'SalesInvoice' && existing.sourceDocId) {
-            const invoice = await tx.salesInvoice.findFirst({
-              where: { id: existing.sourceDocId, tenantId },
-            });
-            if (invoice) {
-              const newPaid = Math.max(
-                0,
-                Number(invoice.paidAmount) - Number(existing.amount),
-              );
-              const total = Number(invoice.totalAmount);
-              const paymentStatus =
-                newPaid <= 0
-                  ? SalesPaymentStatus.UNPAID
-                  : newPaid >= total
-                  ? SalesPaymentStatus.PAID
-                  : SalesPaymentStatus.PARTIALLY_PAID;
-              await tx.salesInvoice.update({
-                where: { id: invoice.id },
-                data: { paidAmount: newPaid, paymentStatus },
-              });
-            }
-          } else if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
-            const act = await tx.serviceAct.findFirst({
-              where: { id: existing.sourceDocId, tenantId },
-            });
-            if (act) {
-              const newPaid = Math.max(
-                0,
-                Number(act.paidAmount) - Number(existing.amount),
-              );
-              const total = Number(act.totalAmount);
-              const paymentStatus =
-                newPaid <= 0
-                  ? ServicePaymentStatus.UNPAID
-                  : newPaid >= total
-                  ? ServicePaymentStatus.PAID
-                  : ServicePaymentStatus.PARTIALLY_PAID;
-              await tx.serviceAct.update({
-                where: { id: act.id },
-                data: { paidAmount: newPaid, paymentStatus },
-              });
-            }
-          }
-        } else if (existing.direction === TransactionDirection.EXPENSE) {
-          await tx.cashAccount.update({
-            where: { id: existing.accountId },
-            data: { balance: { increment: Number(existing.amount) } },
-          });
-          if (existing.counterpartyId) {
-            await tx.counterparty.update({
-              where: { id: existing.counterpartyId },
-              data: { debtBalance: { increment: Number(existing.amount) } },
-            });
-          }
-          if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
-            const act = await tx.serviceAct.findFirst({
-              where: { id: existing.sourceDocId, tenantId },
-            });
-            if (act) {
-              const newPaid = Math.max(
-                0,
-                Number(act.paidAmount) - Number(existing.amount),
-              );
-              const total = Number(act.totalAmount);
-              const paymentStatus =
-                newPaid <= 0
-                  ? ServicePaymentStatus.UNPAID
-                  : newPaid >= total
-                  ? ServicePaymentStatus.PAID
-                  : ServicePaymentStatus.PARTIALLY_PAID;
-              await tx.serviceAct.update({
-                where: { id: act.id },
-                data: { paidAmount: newPaid, paymentStatus },
-              });
-            }
-          }
-        } else if (existing.direction === TransactionDirection.TRANSFER) {
-          await tx.cashAccount.update({
-            where: { id: existing.accountId },
-            data: { balance: { increment: Number(existing.amount) } },
-          });
-          if (existing.transferToId) {
-            await tx.cashAccount.update({
-              where: { id: existing.transferToId },
-              data: { balance: { decrement: Number(existing.amount) } },
-            });
-          }
-        }
-      }
-    });
-
-    return { success: true, id };
+    return this.cancelTransaction(tenantId, id);
   }
 
   // ─── Transaction Types ────────────────────────────────────────

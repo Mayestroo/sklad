@@ -270,7 +270,10 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: 'cust-1' },
-        data: { debtBalance: { increment: 5000000 } },
+        data: {
+          customerDebt: { increment: 5000000 },
+          debtBalance: { increment: 5000000 },
+        },
       });
 
       expect(prisma.journalEntry.create).toHaveBeenCalledWith(
@@ -386,7 +389,10 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       });
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: 'cust-1' },
-        data: { debtBalance: { decrement: 5000000 } },
+        data: {
+          customerDebt: { decrement: 5000000 },
+          debtBalance: { decrement: 5000000 },
+        },
       });
       expect(res.status).toBe(SalesDocStatus.DRAFT);
     });
@@ -463,7 +469,10 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       // Counterparty debt reduced
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: 'cust-1' },
-        data: { debtBalance: { decrement: 1000000 } },
+        data: {
+          customerDebt: { decrement: 1000000 },
+          debtBalance: { decrement: 1000000 },
+        },
       });
 
       // Parent invoice updated to PARTIALLY_RETURNED
