@@ -5,6 +5,11 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
 import {
   Building2,
   Users,
@@ -14,16 +19,12 @@ import {
   Search,
   LogIn,
   Edit2,
-  ShieldCheck,
   AlertTriangle,
   CheckCircle2,
   Clock,
   XCircle,
-  Shield,
-  Layers,
 } from 'lucide-react';
 import { GlobalMetrics, TenantCompanySummary } from '@shared/types';
-import { toast } from '@/context/ToastContext';
 
 export default function SuperAdminTenantsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -72,7 +73,7 @@ export default function SuperAdminTenantsPage() {
       setMetrics(m);
       setTenants(t);
     } catch (err: any) {
-      toast.error(err.message || 'Maʼlumotlarni yuklashda xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка загрузки данных' : 'Maʼlumotlarni yuklashda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -109,7 +110,7 @@ export default function SuperAdminTenantsPage() {
       resetCreateForm();
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'Xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка при создании' : 'Xatolik yuz berdi'));
     } finally {
       setCreateLoading(false);
     }
@@ -154,7 +155,7 @@ export default function SuperAdminTenantsPage() {
       setEditModalOpen(false);
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'Xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка сохранения' : 'Xatolik yuz berdi'));
     } finally {
       setEditLoading(false);
     }
@@ -178,7 +179,7 @@ export default function SuperAdminTenantsPage() {
 
       startImpersonation(res);
     } catch (err: any) {
-      toast.error(err.message || 'Kabinetga kirishda xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка входа в кабинет' : 'Kabinetga kirishda xatolik yuz berdi'));
     } finally {
       setImpersonateLoadingId(null);
     }
@@ -204,30 +205,38 @@ export default function SuperAdminTenantsPage() {
     switch (status) {
       case 'ACTIVE':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}>
-            <CheckCircle2 size={12} /> {isRu ? 'Активен' : 'Faol'}
-          </span>
+          <Badge variant="success">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <CheckCircle2 size={12} /> {isRu ? 'Активен' : 'Faol'}
+            </span>
+          </Badge>
         );
       case 'TRIAL':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' }}>
-            <Clock size={12} /> {isRu ? 'Пробный (Trial)' : 'Sinov (Trial)'}
-          </span>
+          <Badge variant="info">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Clock size={12} /> {isRu ? 'Пробный (Trial)' : 'Sinov (Trial)'}
+            </span>
+          </Badge>
         );
       case 'SUSPENDED':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
-            <AlertTriangle size={12} /> {isRu ? 'Приостановлен' : 'To‘xtatilgan'}
-          </span>
+          <Badge variant="warning">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <AlertTriangle size={12} /> {isRu ? 'Приостановлен' : 'To‘xtatilgan'}
+            </span>
+          </Badge>
         );
       case 'BLOCKED':
         return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
-            <XCircle size={12} /> {isRu ? 'Заблокирован' : 'Bloklangan'}
-          </span>
+          <Badge variant="error">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <XCircle size={12} /> {isRu ? 'Заблокирован' : 'Bloklangan'}
+            </span>
+          </Badge>
         );
       default:
-        return <span>{status}</span>;
+        return <Badge variant="neutral">{status}</Badge>;
     }
   };
 
@@ -235,229 +244,312 @@ export default function SuperAdminTenantsPage() {
     switch (plan) {
       case 'ENTERPRISE':
         return (
-          <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#c084fc' }}>
+          <span
+            style={{
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: 'var(--text-xs)',
+              fontWeight: 'var(--font-bold)',
+              backgroundColor: 'rgba(168, 85, 247, 0.12)',
+              color: '#9333ea',
+              border: '1px solid rgba(168, 85, 247, 0.25)',
+            }}
+          >
             ENTERPRISE
           </span>
         );
       case 'PROFESSIONAL':
         return (
-          <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
+          <span
+            style={{
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: 'var(--text-xs)',
+              fontWeight: 'var(--font-bold)',
+              backgroundColor: 'var(--color-primary-50)',
+              color: 'var(--color-primary-700)',
+              border: '1px solid var(--color-primary-200)',
+            }}
+          >
             PROFESSIONAL
           </span>
         );
       default:
         return (
-          <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' }}>
+          <span
+            style={{
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: 'var(--text-xs)',
+              fontWeight: 'var(--font-bold)',
+              backgroundColor: 'var(--color-bg-tertiary)',
+              color: 'var(--color-text-secondary)',
+              border: '1px solid var(--color-border)',
+            }}
+          >
             STARTER
           </span>
         );
     }
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 12px',
+    backgroundColor: 'var(--color-bg-tertiary)',
+    border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--color-text-primary)',
+    fontSize: 'var(--text-sm)',
+    outline: 'none',
+    boxSizing: 'border-box',
+    transition: 'border-color var(--transition-fast)',
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Page Title & Add Button */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1
+            style={{
+              fontSize: 'var(--text-2xl)',
+              fontWeight: 'var(--font-bold)',
+              color: 'var(--color-text-primary)',
+              letterSpacing: '-0.02em',
+              margin: 0,
+            }}
+          >
             {isRu ? 'Предприятия (Tenants)' : 'Korxonalar Boshqaruvi (Tenants)'}
           </h1>
-          <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px', margin: 0 }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
             {isRu
               ? 'Управление учетными записями клиентов, тарифными планами и прямой вход в систему'
               : 'Mijoz korxonalarni ro‘yxatga olish, tariflarni boshqarish va kabinetga bevosita kirish'}
           </p>
         </div>
 
-        <button
-          onClick={() => setCreateModalOpen(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            borderRadius: '8px',
-            backgroundColor: '#6366f1',
-            color: '#ffffff',
-            fontWeight: 600,
-            fontSize: '13px',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 2px 10px rgba(99, 102, 241, 0.3)',
-          }}
-        >
+        <Button onClick={() => setCreateModalOpen(true)} variant="primary">
           <Plus size={16} />
           <span>{isRu ? 'Добавить предприятие' : 'Yangi korxona qo‘shish'}</span>
-        </button>
+        </Button>
       </div>
 
-      {/* KPI Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+      {/* KPI Metric Cards using official Card component */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
         {/* Card 1: Total MRR */}
-        <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#64748b' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500 }}>{isRu ? 'Месячный доход (MRR)' : 'Oylik daromad (MRR)'}</span>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(34, 197, 94, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4ade80' }}>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? 'Месячный доход (MRR)' : 'Oylik daromad (MRR)'}
+            </span>
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-success-50)',
+                color: 'var(--color-success-600)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
               <DollarSign size={18} />
             </div>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc', marginTop: '12px' }}>
+          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics ? formatCurrency(metrics.totalMrr, locale, 'UZS') : '0 UZS'}
           </div>
-          <div style={{ fontSize: '12px', color: '#4ade80', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <TrendingUp size={13} /> {isRu ? 'Активные подписки' : 'Faol obunalardan tushum'}
           </div>
-        </div>
+        </Card>
 
         {/* Card 2: Active Tenants */}
-        <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#64748b' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500 }}>{isRu ? 'Активные клиенты' : 'Faol korxonalar'}</span>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(99, 102, 241, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8' }}>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? 'Активные клиенты' : 'Faol korxonalar'}
+            </span>
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-primary-50)',
+                color: 'var(--color-primary-600)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
               <Building2 size={18} />
             </div>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc', marginTop: '12px' }}>
+          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics?.activeTenantsCount ?? 0}
           </div>
-          <div style={{ fontSize: '12px', color: '#818cf8', marginTop: '4px' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary-600)', marginTop: '4px' }}>
             {isRu ? 'Платные аккаунты' : 'Haq to‘langan korxonalar'}
           </div>
-        </div>
+        </Card>
 
         {/* Card 3: Trial Tenants */}
-        <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#64748b' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500 }}>{isRu ? 'Пробный период (Trial)' : 'Sinov davridagilar'}</span>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? 'Пробный период (Trial)' : 'Sinov davridagilar'}
+            </span>
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-info-50)',
+                color: 'var(--color-info-600)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
               <Clock size={18} />
             </div>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc', marginTop: '12px' }}>
+          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics?.trialTenantsCount ?? 0}
           </div>
-          <div style={{ fontSize: '12px', color: '#60a5fa', marginTop: '4px' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-600)', marginTop: '4px' }}>
             {isRu ? '14 дней бесплатного доступа' : '14 kunlik bepul sinov'}
           </div>
-        </div>
+        </Card>
 
         {/* Card 4: Total Users */}
-        <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#64748b' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500 }}>{isRu ? 'Всего пользователей' : 'Jami foydalanuvchilar'}</span>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(168, 85, 247, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c084fc' }}>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? 'Всего пользователей' : 'Jami foydalanuvchilar'}
+            </span>
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
               <Users size={18} />
             </div>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc', marginTop: '12px' }}>
+          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
             {metrics?.totalUsersCount ?? 0}
           </div>
-          <div style={{ fontSize: '12px', color: '#c084fc', marginTop: '4px' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
             {isRu ? 'По всем предприятиям' : 'Barcha korxonalar bo‘yicha'}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Filter & Search Bar */}
-      <div
-        style={{
-          backgroundColor: '#0f172a',
-          border: '1px solid #1e293b',
-          borderRadius: '12px',
-          padding: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          flexWrap: 'wrap',
-        }}
-      >
-        {/* Search */}
-        <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
-          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={isRu ? 'Поиск по названию или slug...' : 'Korxona nomi yoki slug bo‘yicha qidiruv...'}
-            style={{
-              width: '100%',
-              padding: '8px 12px 8px 36px',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              color: '#f8fafc',
-              fontSize: '13px',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
+      <Card style={{ padding: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+          {/* Search */}
+          <div style={{ flex: 1, minWidth: '240px', position: 'relative' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isRu ? 'Поиск по названию или slug...' : 'Korxona nomi yoki slug bo‘yicha qidiruv...'}
+              style={{
+                ...inputStyle,
+                paddingLeft: '36px',
+              }}
+            />
+          </div>
 
-        {/* Status Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', color: '#64748b' }}>{isRu ? 'Статус:' : 'Status:'}</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              color: '#f8fafc',
-              fontSize: '13px',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="ALL">{isRu ? 'Все статусы' : 'Barcha statuslar'}</option>
-            <option value="ACTIVE">{isRu ? 'Активные' : 'Faol'}</option>
-            <option value="TRIAL">{isRu ? 'Пробный (Trial)' : 'Sinov (Trial)'}</option>
-            <option value="SUSPENDED">{isRu ? 'Приостановленные' : 'To‘xtatilgan'}</option>
-            <option value="BLOCKED">{isRu ? 'Заблокированные' : 'Bloklangan'}</option>
-          </select>
-        </div>
+          {/* Status Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>
+              {isRu ? 'Статус:' : 'Status:'}
+            </span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                ...inputStyle,
+                width: 'auto',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="ALL">{isRu ? 'Все статусы' : 'Barcha statuslar'}</option>
+              <option value="ACTIVE">{isRu ? 'Активные' : 'Faol'}</option>
+              <option value="TRIAL">{isRu ? 'Пробный (Trial)' : 'Sinov (Trial)'}</option>
+              <option value="SUSPENDED">{isRu ? 'Приостановленные' : 'To‘xtatilgan'}</option>
+              <option value="BLOCKED">{isRu ? 'Заблокированные' : 'Bloklangan'}</option>
+            </select>
+          </div>
 
-        {/* Plan Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', color: '#64748b' }}>{isRu ? 'Тариф:' : 'Tarif:'}</span>
-          <select
-            value={planFilter}
-            onChange={(e) => setPlanFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              color: '#f8fafc',
-              fontSize: '13px',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="ALL">{isRu ? 'Все тарифы' : 'Barcha tariflar'}</option>
-            <option value="STARTER">STARTER</option>
-            <option value="PROFESSIONAL">PROFESSIONAL</option>
-            <option value="ENTERPRISE">ENTERPRISE</option>
-          </select>
+          {/* Plan Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>
+              {isRu ? 'Тариф:' : 'Tarif:'}
+            </span>
+            <select
+              value={planFilter}
+              onChange={(e) => setPlanFilter(e.target.value)}
+              style={{
+                ...inputStyle,
+                width: 'auto',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="ALL">{isRu ? 'Все тарифы' : 'Barcha tariflar'}</option>
+              <option value="STARTER">STARTER</option>
+              <option value="PROFESSIONAL">PROFESSIONAL</option>
+              <option value="ENTERPRISE">ENTERPRISE</option>
+            </select>
+          </div>
         </div>
-      </div>
+      </Card>
 
       {/* Tenants Table Card */}
-      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', overflow: 'hidden' }}>
+      <div
+        style={{
+          backgroundColor: 'var(--color-bg-secondary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-sm)',
+          overflow: 'hidden',
+        }}
+      >
         {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             Yuklanmoqda...
           </div>
         ) : filteredTenants.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             {isRu ? 'Предприятия не найдены' : 'Hech qanday korxona topilmadi'}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #1e293b', backgroundColor: '#0b1120', color: '#64748b', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <tr
+                  style={{
+                    borderBottom: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-tertiary)',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 'var(--font-semibold)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
                   <th style={{ padding: '12px 20px' }}>{isRu ? 'Предприятие' : 'Korxona Nomi'}</th>
                   <th style={{ padding: '12px 16px' }}>Slug / ID</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Status'}</th>
@@ -478,82 +570,69 @@ export default function SuperAdminTenantsPage() {
                     <tr
                       key={t.id}
                       style={{
-                        borderBottom: '1px solid #1e293b',
-                        transition: 'background-color 0.15s ease',
+                        borderBottom: '1px solid var(--color-border-light)',
+                        transition: 'background-color var(--transition-fast)',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#131f37')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      <td style={{ padding: '16px 20px' }}>
-                        <div style={{ fontWeight: 600, color: '#f8fafc' }}>{companyName}</div>
+                      <td style={{ padding: '14px 20px' }}>
+                        <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{companyName}</div>
                         {t.trialEndsAt && (
-                          <div style={{ fontSize: '11px', color: '#60a5fa', marginTop: '2px' }}>
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-600)', marginTop: '2px' }}>
                             {isRu ? 'Пробный до:' : 'Sinov muddati:'} {formatDate(t.trialEndsAt, locale)}
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '16px', color: '#94a3b8', fontFamily: 'monospace' }}>
+                      <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
                         {t.slug}
                       </td>
-                      <td style={{ padding: '16px' }}>{getStatusBadge(t.status)}</td>
-                      <td style={{ padding: '16px' }}>{getPlanBadge(t.plan)}</td>
-                      <td style={{ padding: '16px', color: '#cbd5e1' }}>
+                      <td style={{ padding: '14px 16px' }}>{getStatusBadge(t.status)}</td>
+                      <td style={{ padding: '14px 16px' }}>{getPlanBadge(t.plan)}</td>
+                      <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>
                         {t.userCount} {isRu ? 'чел.' : 'ta'}
                       </td>
-                      <td style={{ padding: '16px', color: '#64748b' }}>
+                      <td style={{ padding: '14px 16px', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
                         {formatDate(t.createdAt, locale)}
                       </td>
-                      <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
                           {/* Impersonate Button */}
-                          <button
+                          <Button
+                            size="sm"
+                            variant="primary"
                             onClick={() => handleImpersonate(t)}
                             disabled={impersonateLoadingId === t.id}
                             title={isRu ? 'Войти в кабинет как админ' : 'Korxona nomidan kabinetga kirish'}
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                              border: '1px solid rgba(99, 102, 241, 0.3)',
-                              color: '#818cf8',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
+                              padding: '5px 10px',
+                              fontSize: 'var(--text-xs)',
                             }}
                           >
                             <LogIn size={13} />
                             <span>
                               {impersonateLoadingId === t.id
-                                ? 'Kirilmoqda...'
+                                ? (isRu ? 'Вход...' : 'Kirilmoqda...')
                                 : isRu
                                   ? 'Кабинет'
                                   : 'Kirish'}
                             </span>
-                          </button>
+                          </Button>
 
                           {/* Edit Button */}
-                          <button
+                          <Button
+                            size="sm"
+                            variant="secondary"
                             onClick={() => handleOpenEditModal(t)}
                             title={isRu ? 'Редактировать статус и тариф' : 'Status va tarifni o‘zgartirish'}
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '32px',
+                              padding: '6px',
+                              minWidth: '32px',
                               height: '32px',
-                              borderRadius: '6px',
-                              backgroundColor: '#1e293b',
-                              border: '1px solid #334155',
-                              color: '#94a3b8',
-                              cursor: 'pointer',
                             }}
                           >
-                            <Edit2 size={13} />
-                          </button>
+                            <Edit2 size={14} />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -565,291 +644,199 @@ export default function SuperAdminTenantsPage() {
         )}
       </div>
 
-      {/* MODAL: Create New Tenant (Onboarding) */}
-      {createModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#0f172a',
-              border: '1px solid #334155',
-              borderRadius: '16px',
-              maxWidth: '580px',
-              width: '100%',
-              overflow: 'hidden',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8' }}>
-                  <Building2 size={20} />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>
-                    {isRu ? 'Регистрация нового предприятия' : 'Yangi korxonani ro‘yxatga olish'}
-                  </h3>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>
-                    {isRu ? 'Автоматическое создание филиала, склада и админа' : 'Bosh filial, ombor va admin hisobi avtomatik ochiladi'}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setCreateModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '18px' }}
-              >
-                ✕
-              </button>
+      {/* MODAL: Create New Tenant using standard Modal component */}
+      <Modal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        title={isRu ? 'Регистрация нового предприятия' : 'Yangi korxonani ro‘yxatga olish'}
+        size="lg"
+      >
+        <form onSubmit={handleCreateTenant} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Название (UZ)' : 'Korxona nomi (UZ)'} *
+              </label>
+              <input
+                type="text"
+                required
+                value={companyNameUz}
+                onChange={(e) => setCompanyNameUz(e.target.value)}
+                placeholder="Orient Trading MCHJ"
+                style={inputStyle}
+              />
             </div>
 
-            <form onSubmit={handleCreateTenant} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                    {isRu ? 'Название (UZ)' : 'Korxona nomi (UZ)'} *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={companyNameUz}
-                    onChange={(e) => setCompanyNameUz(e.target.value)}
-                    placeholder="Orient Trading MCHJ"
-                    style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                    {isRu ? 'Название (RU)' : 'Korxona nomi (RU)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={companyNameRu}
-                    onChange={(e) => setCompanyNameRu(e.target.value)}
-                    placeholder="ООО Orient Trading"
-                    style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                    Slug / Identifikator *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={companySlug}
-                    onChange={(e) => setCompanySlug(e.target.value)}
-                    placeholder="orient-trading"
-                    style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                    {isRu ? 'Тарифный план' : 'Tarif rejasi'}
-                  </label>
-                  <select
-                    value={companyPlan}
-                    onChange={(e) => setCompanyPlan(e.target.value as any)}
-                    style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                  >
-                    <option value="STARTER">STARTER (490 000 soʻm/oy)</option>
-                    <option value="PROFESSIONAL">PROFESSIONAL (990 000 soʻm/oy)</option>
-                    <option value="ENTERPRISE">ENTERPRISE (1 990 000 soʻm/oy)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid #1e293b', paddingTop: '16px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
-                  {isRu ? 'Учетная запись Главного Администратора' : 'Bosh Administrator Maʼlumotlari'}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                      {isRu ? 'Имя' : 'Ism'} *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={adminFirstName}
-                      onChange={(e) => setAdminFirstName(e.target.value)}
-                      placeholder="Jasur"
-                      style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                      {isRu ? 'Фамилия' : 'Familiya'} *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={adminLastName}
-                      onChange={(e) => setAdminLastName(e.target.value)}
-                      placeholder="Alimov"
-                      style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
-                      placeholder="admin@orient.uz"
-                      style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                      {isRu ? 'Начальный пароль' : 'Dastlabki parol'} *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  style={{ padding: '8px 16px', borderRadius: '8px', backgroundColor: '#1e293b', border: '1px solid #334155', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  {isRu ? 'Отмена' : 'Bekor qilish'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={createLoading}
-                  style={{ padding: '8px 20px', borderRadius: '8px', backgroundColor: '#6366f1', color: '#ffffff', fontWeight: 600, fontSize: '13px', border: 'none', cursor: 'pointer' }}
-                >
-                  {createLoading ? 'Yaratilmoqda...' : isRu ? 'Создать и активировать' : 'Yaratish va Faollashtirish'}
-                </button>
-              </div>
-            </form>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Название (RU)' : 'Korxona nomi (RU)'}
+              </label>
+              <input
+                type="text"
+                value={companyNameRu}
+                onChange={(e) => setCompanyNameRu(e.target.value)}
+                placeholder="ООО Orient Trading"
+                style={inputStyle}
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                Slug / Identifikator *
+              </label>
+              <input
+                type="text"
+                required
+                value={companySlug}
+                onChange={(e) => setCompanySlug(e.target.value)}
+                placeholder="orient-trading"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Тарифный план' : 'Tarif rejasi'}
+              </label>
+              <select
+                value={companyPlan}
+                onChange={(e) => setCompanyPlan(e.target.value as any)}
+                style={inputStyle}
+              >
+                <option value="STARTER">STARTER (490 000 soʻm/oy)</option>
+                <option value="PROFESSIONAL">PROFESSIONAL (990 000 soʻm/oy)</option>
+                <option value="ENTERPRISE">ENTERPRISE (1 990 000 soʻm/oy)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-4)' }}>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
+              {isRu ? 'Учетная запись Главного Администратора' : 'Bosh Administrator Maʼlumotlari'}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                  {isRu ? 'Имя' : 'Ism'} *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminFirstName}
+                  onChange={(e) => setAdminFirstName(e.target.value)}
+                  placeholder="Jasur"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                  {isRu ? 'Фамилия' : 'Familiya'} *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminLastName}
+                  onChange={(e) => setAdminLastName(e.target.value)}
+                  placeholder="Alimov"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="admin@orient.uz"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                  {isRu ? 'Начальный пароль' : 'Dastlabki parol'} *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+            <Button variant="secondary" onClick={() => setCreateModalOpen(false)}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button variant="primary" type="submit" disabled={createLoading}>
+              {createLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать и активировать' : 'Yaratish va Faollashtirish'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* MODAL: Edit Tenant Status & Plan */}
-      {editModalOpen && selectedTenant && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#0f172a',
-              border: '1px solid #334155',
-              borderRadius: '16px',
-              maxWidth: '460px',
-              width: '100%',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>
-                {isRu ? 'Настройки предприятия' : 'Korxona sozlamalari'}
-              </h3>
-              <button
-                onClick={() => setEditModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '18px' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateTenant} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                  {isRu ? 'Статус аккаунта' : 'Akkaunt holati'}
-                </label>
-                <select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as any)}
-                  style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none' }}
-                >
-                  <option value="ACTIVE">{isRu ? 'ACTIVE (Активен)' : 'ACTIVE (Faol)'}</option>
-                  <option value="TRIAL">{isRu ? 'TRIAL (Пробный доступ)' : 'TRIAL (Sinov davri)'}</option>
-                  <option value="SUSPENDED">{isRu ? 'SUSPENDED (Приостановлен)' : 'SUSPENDED (To‘xtatilgan)'}</option>
-                  <option value="BLOCKED">{isRu ? 'BLOCKED (Заблокирован)' : 'BLOCKED (Bloklangan)'}</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-                  {isRu ? 'Тарифный план' : 'Tarif rejasi'}
-                </label>
-                <select
-                  value={editPlan}
-                  onChange={(e) => setEditPlan(e.target.value as any)}
-                  style={{ width: '100%', padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc', fontSize: '13px', outline: 'none' }}
-                >
-                  <option value="STARTER">STARTER</option>
-                  <option value="PROFESSIONAL">PROFESSIONAL</option>
-                  <option value="ENTERPRISE">ENTERPRISE</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  onClick={() => setEditModalOpen(false)}
-                  style={{ padding: '8px 16px', borderRadius: '8px', backgroundColor: '#1e293b', border: '1px solid #334155', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  {isRu ? 'Отмена' : 'Bekor qilish'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={editLoading}
-                  style={{ padding: '8px 20px', borderRadius: '8px', backgroundColor: '#6366f1', color: '#ffffff', fontWeight: 600, fontSize: '13px', border: 'none', cursor: 'pointer' }}
-                >
-                  {editLoading ? 'Saqlanmoqda...' : isRu ? 'Сохранить' : 'Saqlash'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={editModalOpen && !!selectedTenant}
+        onClose={() => setEditModalOpen(false)}
+        title={isRu ? 'Настройки предприятия' : 'Korxona sozlamalari'}
+        size="md"
+      >
+        <form onSubmit={handleUpdateTenant} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Статус аккаунта' : 'Akkaunt holati'}
+            </label>
+            <select
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value as any)}
+              style={inputStyle}
+            >
+              <option value="ACTIVE">{isRu ? 'ACTIVE (Активен)' : 'ACTIVE (Faol)'}</option>
+              <option value="TRIAL">{isRu ? 'TRIAL (Пробный доступ)' : 'TRIAL (Sinov davri)'}</option>
+              <option value="SUSPENDED">{isRu ? 'SUSPENDED (Приостановлен)' : 'SUSPENDED (To‘xtatilgan)'}</option>
+              <option value="BLOCKED">{isRu ? 'BLOCKED (Заблокирован)' : 'BLOCKED (Bloklangan)'}</option>
+            </select>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Тарифный план' : 'Tarif rejasi'}
+            </label>
+            <select
+              value={editPlan}
+              onChange={(e) => setEditPlan(e.target.value as any)}
+              style={inputStyle}
+            >
+              <option value="STARTER">STARTER</option>
+              <option value="PROFESSIONAL">PROFESSIONAL</option>
+              <option value="ENTERPRISE">ENTERPRISE</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+            <Button variant="secondary" onClick={() => setEditModalOpen(false)}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button variant="primary" type="submit" disabled={editLoading}>
+              {editLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

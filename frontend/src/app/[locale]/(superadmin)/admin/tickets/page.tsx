@@ -5,7 +5,11 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
-import { LifeBuoy, MessageSquare, Send, CheckCircle2, Clock } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { CheckCircle2, Clock } from 'lucide-react';
 import { SupportTicket } from '@shared/types';
 import { toast } from '@/context/ToastContext';
 
@@ -29,7 +33,7 @@ export default function SuperAdminTicketsPage() {
       const res = await apiFetch<SupportTicket[]>('/super-admin/tickets', { token, locale });
       setTickets(res);
     } catch (err: any) {
-      toast.error(err.message || 'Xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка загрузки тикетов' : 'Xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -56,37 +60,55 @@ export default function SuperAdminTicketsPage() {
       setReplyMessage('');
       fetchTickets();
     } catch (err: any) {
-      toast.error(err.message || 'Xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка отправки ответа' : 'Xatolik yuz berdi'));
     } finally {
       setReplyLoading(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
           {isRu ? 'Обращения клиентов (Техподдержка)' : 'Mijozlar Murojaatlari (Texnik yordam)'}
         </h1>
-        <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px', margin: 0 }}>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
           {isRu ? 'Список запросов и тикетов от пользователей предприятий' : 'Korxona xodimlari tomonidan yuborilgan savol va murojaatlar'}
         </p>
       </div>
 
-      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', overflow: 'hidden' }}>
+      <div
+        style={{
+          backgroundColor: 'var(--color-bg-secondary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-sm)',
+          overflow: 'hidden',
+        }}
+      >
         {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             Yuklanmoqda...
           </div>
         ) : tickets.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             {isRu ? 'Нет активных тикетов' : 'Hozircha hech qanday murojaat yo‘q'}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #1e293b', backgroundColor: '#0b1120', color: '#64748b', fontSize: '12px', textTransform: 'uppercase' }}>
+                <tr
+                  style={{
+                    borderBottom: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-tertiary)',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 'var(--font-semibold)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
                   <th style={{ padding: '12px 20px' }}>{isRu ? 'Тема' : 'Mavzu'}</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Предприятие' : 'Korxona'}</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holat'}</th>
@@ -96,48 +118,52 @@ export default function SuperAdminTicketsPage() {
               </thead>
               <tbody>
                 {tickets.map((ticket) => (
-                  <tr key={ticket.id} style={{ borderBottom: '1px solid #1e293b' }}>
-                    <td style={{ padding: '16px 20px', fontWeight: 600, color: '#f8fafc' }}>
+                  <tr
+                    key={ticket.id}
+                    style={{
+                      borderBottom: '1px solid var(--color-border-light)',
+                      transition: 'background-color var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <td style={{ padding: '14px 20px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                       <div>{ticket.subject}</div>
                       {ticket.messages?.[0]?.message && (
-                        <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 400, marginTop: '2px' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)', marginTop: '2px' }}>
                           {ticket.messages[0].message}
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: '16px', color: '#cbd5e1' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>
                       {(ticket as any).company?.name?.uz || (ticket as any).company?.slug || 'Korxona'}
                     </td>
-                    <td style={{ padding: '16px' }}>
+                    <td style={{ padding: '14px 16px' }}>
                       {ticket.status === 'RESOLVED' ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#4ade80', fontSize: '12px', fontWeight: 600 }}>
-                          <CheckCircle2 size={13} /> {isRu ? 'Решен' : 'Hal qilindi'}
-                        </span>
+                        <Badge variant="success">
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle2 size={12} /> {isRu ? 'Решен' : 'Hal qilindi'}
+                          </span>
+                        </Badge>
                       ) : (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#fbbf24', fontSize: '12px', fontWeight: 600 }}>
-                          <Clock size={13} /> {isRu ? 'Открыт' : 'Ochiq'}
-                        </span>
+                        <Badge variant="warning">
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Clock size={12} /> {isRu ? 'Открыт' : 'Ochiq'}
+                          </span>
+                        </Badge>
                       )}
                     </td>
-                    <td style={{ padding: '16px', color: '#64748b' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
                       {formatDate(ticket.createdAt, locale)}
                     </td>
-                    <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                      <button
+                    <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
                         onClick={() => setSelectedTicket(ticket)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          backgroundColor: '#1e293b',
-                          border: '1px solid #334155',
-                          color: '#818cf8',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
                       >
                         {isRu ? 'Ответить' : 'Javob berish'}
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -148,37 +174,27 @@ export default function SuperAdminTicketsPage() {
       </div>
 
       {/* Reply Modal */}
-      {selectedTicket && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#0f172a',
-              border: '1px solid #334155',
-              borderRadius: '16px',
-              maxWidth: '520px',
-              width: '100%',
-              padding: '24px',
-            }}
-          >
-            <h3 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>
-              {isRu ? 'Ответ на обращение' : 'Murojaatga javob berish'}
-            </h3>
-            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#94a3b8' }}>
-              {selectedTicket.subject}
-            </p>
+      <Modal
+        isOpen={!!selectedTicket}
+        onClose={() => setSelectedTicket(null)}
+        title={isRu ? 'Ответ на обращение' : 'Murojaatga javob berish'}
+        size="md"
+      >
+        {selectedTicket && (
+          <form onSubmit={handleReply} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>
+                {isRu ? 'Тема обращения:' : 'Murojaat mavzusi:'}
+              </div>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+                {selectedTicket.subject}
+              </div>
+            </div>
 
-            <form onSubmit={handleReply}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Текст ответа' : 'Javob matni'} *
+              </label>
               <textarea
                 required
                 rows={4}
@@ -187,38 +203,31 @@ export default function SuperAdminTicketsPage() {
                 placeholder={isRu ? 'Введите текст ответа...' : 'Javob matnini kiriting...'}
                 style={{
                   width: '100%',
-                  padding: '12px',
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
-                  fontSize: '13px',
+                  padding: '10px 12px',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--color-text-primary)',
+                  fontSize: 'var(--text-sm)',
                   outline: 'none',
                   boxSizing: 'border-box',
                   resize: 'vertical',
+                  fontFamily: 'inherit',
                 }}
               />
+            </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTicket(null)}
-                  style={{ padding: '8px 16px', borderRadius: '8px', backgroundColor: '#1e293b', border: '1px solid #334155', color: '#94a3b8', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  {isRu ? 'Отмена' : 'Bekor qilish'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={replyLoading}
-                  style={{ padding: '8px 20px', borderRadius: '8px', backgroundColor: '#6366f1', color: '#ffffff', fontWeight: 600, fontSize: '13px', border: 'none', cursor: 'pointer' }}
-                >
-                  {replyLoading ? 'Yuborilmoqda...' : isRu ? 'Отправить ответ' : 'Yuborish'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+              <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="primary" type="submit" disabled={replyLoading}>
+                {replyLoading ? (isRu ? 'Отправка...' : 'Yuborilmoqda...') : isRu ? 'Отправить ответ' : 'Yuborish'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

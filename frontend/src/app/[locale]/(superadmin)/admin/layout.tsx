@@ -4,6 +4,8 @@ import { ReactNode, useEffect } from 'react';
 import { usePathname, useRouter, Link } from '@/i18n/navigation';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
+import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import {
   ShieldCheck,
   Building2,
@@ -12,7 +14,6 @@ import {
   Megaphone,
   HardDrive,
   LogOut,
-  Globe,
   ExternalLink,
 } from 'lucide-react';
 
@@ -46,9 +47,10 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#0f172a',
-          color: '#94a3b8',
-          fontSize: '14px',
+          backgroundColor: 'var(--color-bg-primary)',
+          color: 'var(--color-text-secondary)',
+          fontSize: 'var(--text-sm)',
+          fontFamily: 'var(--font-sans)',
         }}
       >
         Yuklanmoqda...
@@ -90,13 +92,21 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#090d16', color: '#f8fafc' }}>
-      {/* Superadmin Dark Slate Sidebar */}
+    <div
+      style={{
+        display: 'flex',
+        minHeight: '100vh',
+        backgroundColor: 'var(--color-bg-primary)',
+        color: 'var(--color-text-primary)',
+        fontFamily: 'var(--font-sans)',
+      }}
+    >
+      {/* Superadmin Sidebar — matches Platform design system */}
       <aside
         style={{
-          width: '260px',
-          backgroundColor: '#0f172a',
-          borderRight: '1px solid #1e293b',
+          width: 'var(--sidebar-width)',
+          backgroundColor: 'var(--color-bg-sidebar)',
+          borderRight: '1px solid var(--color-border)',
           display: 'flex',
           flexDirection: 'column',
           position: 'fixed',
@@ -104,47 +114,82 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
           left: 0,
           bottom: 0,
           zIndex: 40,
+          boxShadow: 'var(--shadow-xs)',
         }}
       >
         {/* Brand Header */}
         <div
           style={{
-            height: '64px',
-            padding: '0 20px',
+            height: 'var(--header-height)',
+            padding: '0 var(--space-5)',
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            borderBottom: '1px solid #1e293b',
+            gap: 'var(--space-3)',
+            borderBottom: '1px solid var(--color-border-light)',
           }}
         >
           <div
             style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              backgroundColor: '#6366f1',
+              width: '38px',
+              height: '38px',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--color-primary-600)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
-              boxShadow: '0 0 12px rgba(99, 102, 241, 0.4)',
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              flexShrink: 0,
             }}
           >
             <ShieldCheck size={22} />
           </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '15px', color: '#ffffff', letterSpacing: '-0.02em' }}>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <div
+              style={{
+                fontWeight: 'var(--font-bold)',
+                fontSize: 'var(--text-base)',
+                color: 'var(--color-text-primary)',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.2,
+              }}
+            >
               Sklad SuperAdmin
             </div>
-            <div style={{ fontSize: '11px', color: '#6366f1', fontWeight: 600 }}>
+            <div
+              style={{
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-primary-600)',
+                fontWeight: 'var(--font-semibold)',
+                marginTop: '2px',
+              }}
+            >
               SaaS Owner Console
             </div>
           </div>
         </div>
 
         {/* Navigation Links */}
-        <nav style={{ padding: '16px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ padding: '0 8px 8px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <nav
+          style={{
+            padding: 'var(--space-4) var(--space-3)',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            overflowY: 'auto',
+          }}
+        >
+          <div
+            style={{
+              padding: '0 var(--space-2) var(--space-2)',
+              fontSize: '11px',
+              fontWeight: 'var(--font-semibold)',
+              color: 'var(--color-text-tertiary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
             {isRu ? 'Управление платформой' : 'Platforma Boshqaruvi'}
           </div>
 
@@ -161,20 +206,39 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 500,
+                  gap: 'var(--space-3)',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: 'var(--text-sm)',
+                  fontWeight: isActive ? 'var(--font-semibold)' : 'var(--font-medium)',
                   textDecoration: 'none',
-                  color: isActive ? '#ffffff' : '#94a3b8',
-                  backgroundColor: isActive ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                  border: isActive ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent',
-                  transition: 'all 0.15s ease',
+                  color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                  backgroundColor: isActive ? 'var(--color-primary-50)' : 'transparent',
+                  transition: 'all var(--transition-fast)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
+                    e.currentTarget.style.color = 'var(--color-text-primary)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                  }
                 }}
               >
-                <Icon size={18} style={{ color: isActive ? '#818cf8' : '#64748b' }} />
-                <span>{item.label}</span>
+                <Icon
+                  size={18}
+                  style={{
+                    color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.label}
+                </span>
               </Link>
             );
           })}
@@ -183,54 +247,82 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
         {/* User profile & Logout */}
         <div
           style={{
-            padding: '16px',
-            borderTop: '1px solid #1e293b',
-            backgroundColor: '#0c1322',
+            padding: 'var(--space-4)',
+            borderTop: '1px solid var(--color-border-light)',
+            backgroundColor: 'var(--color-bg-sidebar)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: 'var(--space-2)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
             <div
               style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                backgroundColor: '#334155',
+                width: '36px',
+                height: '36px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--color-primary-100)',
+                color: 'var(--color-primary-700)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 600,
-                fontSize: '13px',
-                color: '#e2e8f0',
+                fontWeight: 'var(--font-semibold)',
+                fontSize: 'var(--text-sm)',
+                flexShrink: 0,
               }}
             >
-              {user?.firstName?.[0] || 'S'}
+              {user?.firstName?.[0]?.toUpperCase() || 'S'}
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div
+                style={{
+                  fontSize: 'var(--text-sm)',
+                  fontWeight: 'var(--font-semibold)',
+                  color: 'var(--color-text-primary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {user?.firstName} {user?.lastName}
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div
+                style={{
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--color-text-tertiary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {user?.email}
               </div>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={logout}
             title={isRu ? 'Выйти' : 'Chiqish'}
             style={{
               background: 'none',
               border: 'none',
-              color: '#ef4444',
+              color: 'var(--color-error-600)',
               cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '6px',
+              padding: '8px',
+              borderRadius: 'var(--radius-md)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              transition: 'background-color var(--transition-fast)',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--color-error-50)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
             <LogOut size={16} />
@@ -239,66 +331,102 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
       </aside>
 
       {/* Main SuperAdmin Content Area */}
-      <div style={{ marginLeft: '260px', flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div
+        style={{
+          marginLeft: 'var(--sidebar-width)',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+        }}
+      >
         {/* Top Header Bar */}
         <header
           style={{
-            height: '64px',
-            backgroundColor: '#0f172a',
-            borderBottom: '1px solid #1e293b',
+            height: 'var(--header-height)',
+            backgroundColor: 'var(--color-bg-secondary)',
+            borderBottom: '1px solid var(--color-border-light)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 32px',
+            padding: '0 var(--space-6)',
             position: 'sticky',
             top: 0,
             zIndex: 30,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Header Title & Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <span
               style={{
-                padding: '3px 8px',
-                borderRadius: '4px',
-                backgroundColor: 'rgba(99, 102, 241, 0.2)',
-                color: '#818cf8',
-                fontSize: '11px',
-                fontWeight: 700,
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--color-primary-50)',
+                color: 'var(--color-primary-600)',
+                border: '1px solid var(--color-primary-100)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 'var(--font-bold)',
                 letterSpacing: '0.05em',
               }}
             >
               PLATFORM OWNER
             </span>
-            <span style={{ fontSize: '13px', color: '#64748b' }}>•</span>
-            <span style={{ fontSize: '13px', color: '#94a3b8' }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>•</span>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>
               Sklad ERP Global Multi-Tenant Core
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Right Controls: Customer portal link, ThemeSwitcher, LanguageSwitcher */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <Link
               href="/"
               target="_blank"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                fontSize: '12px',
-                color: '#94a3b8',
+                gap: 'var(--space-2)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 'var(--font-medium)',
+                color: 'var(--color-text-secondary)',
                 textDecoration: 'none',
                 padding: '6px 12px',
-                borderRadius: '6px',
-                backgroundColor: '#1e293b',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                border: '1px solid var(--color-border)',
+                transition: 'all var(--transition-fast)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
+                e.currentTarget.style.color = 'var(--color-text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
               }}
             >
               <ExternalLink size={13} />
               <span>{isRu ? 'Портал клиента' : 'Mijoz portali'}</span>
             </Link>
+
+            {/* Theme Switcher (Light / Dark) */}
+            <ThemeSwitcher />
+
+            {/* Language Switcher (UZ / RU) */}
+            <LanguageSwitcher />
           </div>
         </header>
 
         {/* Page Content */}
-        <main style={{ flex: 1, padding: '32px', backgroundColor: '#090d16' }}>
+        <main
+          style={{
+            flex: 1,
+            padding: 'var(--space-6)',
+            maxWidth: '100%',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
           {children}
         </main>
       </div>

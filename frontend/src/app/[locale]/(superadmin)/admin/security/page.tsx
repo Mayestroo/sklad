@@ -5,7 +5,9 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
-import { HardDrive, ShieldCheck, Download, RefreshCw, Database } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { HardDrive, ShieldCheck, Database } from 'lucide-react';
 import { BackupMetadata } from '@shared/types';
 import { toast } from '@/context/ToastContext';
 
@@ -46,7 +48,7 @@ export default function SuperAdminSecurityPage() {
       setBackups(b);
       setLogs(l);
     } catch (err: any) {
-      toast.error(err.message || 'Xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка загрузки данных' : 'Xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -70,67 +72,68 @@ export default function SuperAdminSecurityPage() {
       );
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'Xatolik yuz berdi');
+      toast.error(err.message || (isRu ? 'Ошибка создания бэкапа' : 'Xatolik yuz berdi'));
     } finally {
       setBackupTriggering(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
             {isRu ? 'Безопасность и Резервное копирование' : 'Xavfsizlik va Zaxira Nusxalar (Backups)'}
           </h1>
-          <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px', margin: 0 }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: '4px', margin: 0 }}>
             {isRu
               ? 'Глобальный аудит действий, соответствие закону ZRU-547 и создание бэкапов БД'
               : 'Global audit jurnali, ZRU-547 qonuniga muvofiqlik va PostgreSQL zaxira nusxalari'}
           </p>
         </div>
 
-        <button
-          onClick={handleTriggerBackup}
-          disabled={backupTriggering}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            borderRadius: '8px',
-            backgroundColor: '#10b981',
-            color: '#ffffff',
-            fontWeight: 600,
-            fontSize: '13px',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 2px 10px rgba(16, 185, 129, 0.3)',
-          }}
-        >
+        <Button onClick={handleTriggerBackup} disabled={backupTriggering} variant="primary">
           <Database size={16} />
-          <span>{backupTriggering ? 'Yaratilmoqda...' : isRu ? 'Создать бэкап' : 'Zaxira nusxa olish'}</span>
-        </button>
+          <span>{backupTriggering ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать бэкап' : 'Zaxira nusxa olish'}</span>
+        </Button>
       </div>
 
       {/* Backups Card */}
-      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <HardDrive size={18} style={{ color: '#10b981' }} />
+      <div
+        style={{
+          backgroundColor: 'var(--color-bg-secondary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-sm)',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <HardDrive size={18} style={{ color: 'var(--color-success-600)' }} />
             <span>{isRu ? 'История резервных копий (SQL Dumps)' : 'Mavjud Zaxira Fayllari (SQL Dumps)'}</span>
           </div>
-          <span style={{ fontSize: '12px', color: '#64748b' }}>{backups.length} ta nusxa</span>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{backups.length} ta nusxa</span>
         </div>
 
         {backups.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             {isRu ? 'Резервные копии еще не создавались' : 'Hozircha hech qanday zaxira nusxa yaratilmagan'}
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1e293b', backgroundColor: '#0b1120', color: '#64748b', fontSize: '12px' }}>
+              <tr
+                style={{
+                  borderBottom: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: 'var(--text-xs)',
+                  fontWeight: 'var(--font-semibold)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                }}
+              >
                 <th style={{ padding: '12px 20px' }}>{isRu ? 'Файл' : 'Fayl nomi'}</th>
                 <th style={{ padding: '12px 16px' }}>{isRu ? 'Размер' : 'Hajmi'}</th>
                 <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holati'}</th>
@@ -139,11 +142,23 @@ export default function SuperAdminSecurityPage() {
             </thead>
             <tbody>
               {backups.map((b, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid #1e293b' }}>
-                  <td style={{ padding: '14px 20px', fontFamily: 'monospace', color: '#93c5fd' }}>{b.filename}</td>
-                  <td style={{ padding: '14px 16px', color: '#cbd5e1' }}>{(b.sizeBytes / 1024).toFixed(1)} KB</td>
-                  <td style={{ padding: '14px 16px', color: '#4ade80', fontWeight: 600 }}>{b.status}</td>
-                  <td style={{ padding: '14px 20px', color: '#64748b' }}>{formatDate(b.createdAt, locale)}</td>
+                <tr
+                  key={idx}
+                  style={{
+                    borderBottom: '1px solid var(--color-border-light)',
+                    transition: 'background-color var(--transition-fast)',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <td style={{ padding: '14px 20px', fontFamily: 'var(--font-mono)', color: 'var(--color-primary-600)', fontSize: 'var(--text-xs)' }}>
+                    {b.filename}
+                  </td>
+                  <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>{(b.sizeBytes / 1024).toFixed(1)} KB</td>
+                  <td style={{ padding: '14px 16px' }}>
+                    <Badge variant="success">{b.status}</Badge>
+                  </td>
+                  <td style={{ padding: '14px 20px', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{formatDate(b.createdAt, locale)}</td>
                 </tr>
               ))}
             </tbody>
@@ -152,21 +167,39 @@ export default function SuperAdminSecurityPage() {
       </div>
 
       {/* Global Audit Logs Card */}
-      <div style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e293b', fontSize: '14px', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ShieldCheck size={18} style={{ color: '#818cf8' }} />
+      <div
+        style={{
+          backgroundColor: 'var(--color-bg-secondary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-sm)',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <ShieldCheck size={18} style={{ color: 'var(--color-primary-600)' }} />
           <span>{isRu ? 'Глобальный журнал аудита (Последние 50 записей)' : 'Global Audit Jurnali (So‘nggi 50 ta amal)'}</span>
         </div>
 
         {logs.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             {isRu ? 'Записи аудита отсутствуют' : 'Audit yozuvlari yo‘q'}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #1e293b', backgroundColor: '#0b1120', color: '#64748b', fontSize: '12px' }}>
+                <tr
+                  style={{
+                    borderBottom: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-bg-tertiary)',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 'var(--font-semibold)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
                   <th style={{ padding: '12px 20px' }}>{isRu ? 'Пользователь' : 'Foydalanuvchi'}</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Действие' : 'Amal'}</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Сущность' : 'Obyekt'}</th>
@@ -176,21 +209,27 @@ export default function SuperAdminSecurityPage() {
               </thead>
               <tbody>
                 {logs.map((log) => (
-                  <tr key={log.id} style={{ borderBottom: '1px solid #1e293b' }}>
+                  <tr
+                    key={log.id}
+                    style={{
+                      borderBottom: '1px solid var(--color-border-light)',
+                      transition: 'background-color var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
                     <td style={{ padding: '14px 20px' }}>
-                      <div style={{ fontWeight: 600, color: '#f8fafc' }}>
+                      <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                         {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'Tizim'}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>{log.user?.email}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{log.user?.email}</div>
                     </td>
                     <td style={{ padding: '14px 16px' }}>
-                      <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', fontWeight: 600, fontSize: '11px' }}>
-                        {log.action}
-                      </span>
+                      <Badge variant="info">{log.action}</Badge>
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#cbd5e1' }}>{log.entityType}</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontFamily: 'monospace' }}>{log.ipAddress || '-'}</td>
-                    <td style={{ padding: '14px 20px', color: '#64748b' }}>{formatDate(log.createdAt, locale)}</td>
+                    <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>{log.entityType}</td>
+                    <td style={{ padding: '14px 16px', color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{log.ipAddress || '-'}</td>
+                    <td style={{ padding: '14px 20px', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{formatDate(log.createdAt, locale)}</td>
                   </tr>
                 ))}
               </tbody>
