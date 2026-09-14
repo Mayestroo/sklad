@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -100,6 +101,7 @@ export default function CounterpartiesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const defaultCurrency = useDefaultCurrency();
 
   const [items, setItems] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -741,7 +743,7 @@ export default function CounterpartiesPage() {
               </div>
               <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: 2 }}>+ HAQDORLIK</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#059669', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                {formatCurrency(summary?.receivables.total_amount ?? 0, locale, 'UZS')}
+                {formatCurrency(summary?.receivables.total_amount ?? 0, locale, (summary as any)?.currency || defaultCurrency)}
               </div>
             </div>
 
@@ -778,7 +780,7 @@ export default function CounterpartiesPage() {
               </div>
               <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600, marginBottom: 2 }}>− QARZDORLIK</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                {formatCurrency(summary?.payables.total_amount ?? 0, locale, 'UZS')}
+                {formatCurrency(summary?.payables.total_amount ?? 0, locale, (summary as any)?.currency || defaultCurrency)}
               </div>
             </div>
           </div>
@@ -1016,15 +1018,15 @@ export default function CounterpartiesPage() {
                               >
                                 {net > 0 ? (
                                   <span style={{ fontWeight: 700, color: '#10b981' }}>
-                                    + {formatCurrency(net, locale, 'UZS')}
+                                    + {formatCurrency(net, locale, (item as any)?.currency || (summary as any)?.currency || defaultCurrency)}
                                   </span>
                                 ) : net < 0 ? (
                                   <span style={{ fontWeight: 700, color: '#ef4444' }}>
-                                    - {formatCurrency(Math.abs(net), locale, 'UZS')}
+                                    - {formatCurrency(Math.abs(net), locale, (item as any)?.currency || (summary as any)?.currency || defaultCurrency)}
                                   </span>
                                 ) : (
                                   <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                                    {formatCurrency(0, locale, 'UZS')}
+                                    {formatCurrency(0, locale, (item as any)?.currency || (summary as any)?.currency || defaultCurrency)}
                                   </span>
                                 )}
                                 {isCustomerAdvance && (
@@ -1358,19 +1360,19 @@ export default function CounterpartiesPage() {
                     if (net > 0) {
                       return (
                         <span style={{ color: '#10b981' }}>
-                          + {formatCurrency(net, locale, 'UZS')}
+                          + {formatCurrency(net, locale, (detailItem as any)?.currency || (summary as any)?.currency || defaultCurrency)}
                         </span>
                       );
                     } else if (net < 0) {
                       return (
                         <span style={{ color: '#ef4444' }}>
-                          - {formatCurrency(Math.abs(net), locale, 'UZS')}
+                          - {formatCurrency(Math.abs(net), locale, (detailItem as any)?.currency || (summary as any)?.currency || defaultCurrency)}
                         </span>
                       );
                     } else {
                       return (
                         <span style={{ color: 'var(--color-text-secondary)' }}>
-                          {formatCurrency(0, locale, 'UZS')}
+                          {formatCurrency(0, locale, (detailItem as any)?.currency || (summary as any)?.currency || defaultCurrency)}
                         </span>
                       );
                     }
@@ -1401,7 +1403,7 @@ export default function CounterpartiesPage() {
                 </h4>
                 {customerOrdersData?.summary && (
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale, 'UZS')}</strong>
+                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale, (customerOrdersData.summary as any)?.currency || (detailItem as any)?.currency || defaultCurrency)}</strong>
                   </span>
                 )}
               </div>

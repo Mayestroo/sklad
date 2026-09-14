@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { apiFetch } from '@/lib/api';
 import { formatDate, CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -79,6 +80,7 @@ export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   // Active Tab: dashboard | journal | income | expense | transfers | debts
   const [activeTab, setActiveTab] = useState<
@@ -90,6 +92,7 @@ export default function FinancePage() {
 
   // Data States
   const [dashboardMetrics, setDashboardMetrics] = useState<FinanceDashboardMetrics | null>(null);
+  const reportCurrency = (dashboardMetrics as any)?.currency || defaultCurrency || 'USD';
   const [journal, setJournal] = useState<TransactionJournal | null>(null);
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [txTypes, setTxTypes] = useState<TransactionType[]>([]);
@@ -377,10 +380,10 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Наличная касса (UZS)' : 'Naqd kassa (UZS)'}
+              {isRu ? `Наличная касса (${reportCurrency})` : `Naqd kassa (${reportCurrency})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(dashboardMetrics?.balances.naqdKassa || 0, locale, 'UZS')}
+              {formatCurrency(dashboardMetrics?.balances.naqdKassa || 0, locale, reportCurrency)}
             </div>
           </div>
         </Card>
@@ -412,10 +415,10 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Расчетный счет (Банк)' : 'Hisobraqam (Bank UZS)'}
+              {isRu ? `Расчетный счет (${reportCurrency})` : `Hisobraqam (${reportCurrency})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(dashboardMetrics?.balances.hisobRaqam || 0, locale, 'UZS')}
+              {formatCurrency(dashboardMetrics?.balances.hisobRaqam || 0, locale, reportCurrency)}
             </div>
           </div>
         </Card>
@@ -463,7 +466,7 @@ export default function FinancePage() {
                 color: (dashboardMetrics?.month.netCashFlow || 0) >= 0 ? '#10b981' : '#ef4444',
               }}
             >
-              {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, 'UZS')}
+              {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, reportCurrency)}
             </div>
           </div>
         </Card>
@@ -562,16 +565,16 @@ export default function FinancePage() {
                     </span>
                     <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
                       <span style={{ color: '#10b981' }}>
-                        +{formatCurrency(dashboardMetrics?.today.income || 0, locale, 'UZS')}
+                        +{formatCurrency(dashboardMetrics?.today.income || 0, locale, reportCurrency)}
                       </span>
                       <span style={{ margin: '0 6px', color: 'var(--color-text-tertiary)' }}>/</span>
                       <span style={{ color: '#ef4444' }}>
-                        -{formatCurrency(dashboardMetrics?.today.expense || 0, locale, 'UZS')}
+                        -{formatCurrency(dashboardMetrics?.today.expense || 0, locale, reportCurrency)}
                       </span>
                     </div>
                   </div>
                   <Badge variant={(dashboardMetrics?.today.netCashFlow || 0) >= 0 ? 'success' : 'error'}>
-                    {formatCurrency(dashboardMetrics?.today.netCashFlow || 0, locale, 'UZS')}
+                    {formatCurrency(dashboardMetrics?.today.netCashFlow || 0, locale, reportCurrency)}
                   </Badge>
                 </div>
 
@@ -592,16 +595,16 @@ export default function FinancePage() {
                     </span>
                     <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
                       <span style={{ color: '#10b981' }}>
-                        +{formatCurrency(dashboardMetrics?.month.income || 0, locale, 'UZS')}
+                        +{formatCurrency(dashboardMetrics?.month.income || 0, locale, reportCurrency)}
                       </span>
                       <span style={{ margin: '0 6px', color: 'var(--color-text-tertiary)' }}>/</span>
                       <span style={{ color: '#ef4444' }}>
-                        -{formatCurrency(dashboardMetrics?.month.expense || 0, locale, 'UZS')}
+                        -{formatCurrency(dashboardMetrics?.month.expense || 0, locale, reportCurrency)}
                       </span>
                     </div>
                   </div>
                   <Badge variant={(dashboardMetrics?.month.netCashFlow || 0) >= 0 ? 'success' : 'error'}>
-                    {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, 'UZS')}
+                    {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, reportCurrency)}
                   </Badge>
                 </div>
               </div>
@@ -639,9 +642,13 @@ export default function FinancePage() {
                   <div style={{ fontSize: 'var(--text-xs)', color: '#059669', fontWeight: 500 }}>
                     {isRu ? 'Ожидаемые поступления (Дебиторка)' : 'Kutilayotgan tushumlar (Debitorlik)'}
                   </div>
-                  <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#059669', marginTop: '4px' }}>
-                    {formatCurrency(dashboardMetrics?.debts.receivables || 0, locale, 'UZS')}
-                  </div>
+                  <MultiCurrencyValue
+                    items={(dashboardMetrics?.debts as any)?.receivablesByCurrency}
+                    fallbackAmount={dashboardMetrics?.debts.receivables || 0}
+                    fallbackCurrency={reportCurrency}
+                    locale={locale}
+                    color="#059669"
+                  />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Клиенты должны нам' : 'Mijozlar bizga to‘lashi kerak'}
                   </div>
@@ -659,9 +666,13 @@ export default function FinancePage() {
                   <div style={{ fontSize: 'var(--text-xs)', color: '#dc2626', fontWeight: 500 }}>
                     {isRu ? 'К оплате поставщикам (Кредиторка)' : 'Bizning qarzlarimiz (Kreditorlik)'}
                   </div>
-                  <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#dc2626', marginTop: '4px' }}>
-                    {formatCurrency(dashboardMetrics?.debts.payables || 0, locale, 'UZS')}
-                  </div>
+                  <MultiCurrencyValue
+                    items={(dashboardMetrics?.debts as any)?.payablesByCurrency}
+                    fallbackAmount={dashboardMetrics?.debts.payables || 0}
+                    fallbackCurrency={reportCurrency}
+                    locale={locale}
+                    color="#dc2626"
+                  />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Мы должны поставщикам' : 'Ta’minotchilarga to‘lashimiz kerak'}
                   </div>
@@ -963,7 +974,7 @@ export default function FinancePage() {
                             color: debtsSubTab === 'receivables' ? '#059669' : '#dc2626',
                           }}
                         >
-                          {formatCurrency(displayDebt, locale, 'UZS')}
+                          {formatCurrency(displayDebt, locale, cp.currency || (cp as any).purchaseReceipts?.[0]?.currency || (cp as any).salesInvoices?.[0]?.currency || reportCurrency)}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'center' }}>
                           {debtsSubTab === 'receivables' ? (

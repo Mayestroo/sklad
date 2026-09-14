@@ -191,7 +191,37 @@ export class CounterpartiesService {
       }
     }
 
+    const [recentReceipt, recentInvoice, company] = await Promise.all([
+      this.prisma.purchaseReceipt?.findFirst
+        ? this.prisma.purchaseReceipt.findFirst({
+            where: { tenantId, status: 'POSTED' },
+            select: { currency: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve(null),
+      this.prisma.salesInvoice?.findFirst
+        ? this.prisma.salesInvoice.findFirst({
+            where: { tenantId, status: 'POSTED' },
+            select: { currency: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve(null),
+      this.prisma.company?.findUnique
+        ? this.prisma.company.findUnique({
+            where: { id: tenantId },
+            select: { settings: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const reportCurrency =
+      recentReceipt?.currency ||
+      recentInvoice?.currency ||
+      (company?.settings as any)?.sales?.defaultCurrency ||
+      'USD';
+
     return {
+      currency: reportCurrency,
       total_customers: customersCount,
       total_suppliers: suppliersCount,
       receivables: {

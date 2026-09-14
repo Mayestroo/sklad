@@ -10,5 +10,11 @@ import { useAuth } from '@/context/AuthContext';
  */
 export function useDefaultCurrency(): string {
   const { company } = useAuth();
-  return company?.settings?.sales?.defaultCurrency || 'UZS';
+  return (
+    company?.settings?.sales?.defaultCurrency ||
+    (company?.settings as any)?.accounting?.defaultCurrency ||
+    (company?.settings as any)?.currency ||
+    'USD'
+  );
 }
+

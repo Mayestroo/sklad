@@ -185,31 +185,107 @@ export class FinanceService {
     }
 
     // Counterparty Debts
-    const counterparties = await this.prisma.counterparty.findMany({
-      where: { tenantId },
-      select: { customerDebt: true, supplierDebt: true, debtBalance: true, type: true },
-    });
+    const [counterparties, recentReceipt, recentInvoice, company] = await Promise.all([
+      this.prisma.counterparty.findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          customerDebt: true,
+          supplierDebt: true,
+          debtBalance: true,
+          type: true,
+          salesInvoices: {
+            where: { status: 'POSTED' },
+            select: { currency: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          purchaseReceipts: {
+            where: { status: 'POSTED' },
+            select: { currency: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+      this.prisma.purchaseReceipt.findFirst({
+        where: { tenantId, status: 'POSTED' },
+        select: { currency: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.salesInvoice.findFirst({
+        where: { tenantId, status: 'POSTED' },
+        select: { currency: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.company.findUnique({
+        where: { id: tenantId },
+        select: { settings: true },
+      }),
+    ]);
+
+    const reportCurrency =
+      recentReceipt?.currency ||
+      recentInvoice?.currency ||
+      (company?.settings as any)?.sales?.defaultCurrency ||
+      'USD';
 
     let totalCustomerDebt = 0; // Receivables (Kutilayotgan tushumlar)
     let totalSupplierDebt = 0; // Payables (To'lanishi kerak bo'lgan qarzlar)
+    const receivablesByCurr: Record<string, number> = {};
+    const payablesByCurr: Record<string, number> = {};
 
     for (const cp of counterparties) {
       const cDebt = Number((cp as any).customerDebt || 0);
       const sDebt = Number((cp as any).supplierDebt || 0);
-      if (cDebt > 0 || sDebt > 0) {
-        totalCustomerDebt += cDebt;
-        totalSupplierDebt += sDebt;
+      const currency =
+        (cp as any).purchaseReceipts?.[0]?.currency ||
+        (cp as any).salesInvoices?.[0]?.currency ||
+        reportCurrency;
+
+      if (cDebt !== 0 || sDebt !== 0) {
+        if (cDebt > 0) {
+          totalCustomerDebt += cDebt;
+          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + cDebt;
+        } else if (cDebt < 0) {
+          totalSupplierDebt += Math.abs(cDebt);
+          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(cDebt);
+        }
+
+        if (sDebt > 0) {
+          totalSupplierDebt += sDebt;
+          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + sDebt;
+        } else if (sDebt < 0) {
+          totalCustomerDebt += Math.abs(sDebt);
+          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(sDebt);
+        }
       } else {
         const raw = Number(cp.debtBalance || 0);
         if (cp.type === 'SUPPLIER') {
-          if (raw > 0) totalSupplierDebt += raw;
+          if (raw > 0) {
+            totalSupplierDebt += raw;
+            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + raw;
+          } else if (raw < 0) {
+            totalCustomerDebt += Math.abs(raw);
+            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(raw);
+          }
         } else {
-          if (raw > 0) totalCustomerDebt += raw;
+          if (raw > 0) {
+            totalCustomerDebt += raw;
+            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + raw;
+          } else if (raw < 0) {
+            totalSupplierDebt += Math.abs(raw);
+            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(raw);
+          }
         }
       }
     }
 
+    const receivablesByCurrency = Object.entries(receivablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    const payablesByCurrency = Object.entries(payablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+
     return {
+      currency: reportCurrency,
       balances: {
         dollarKassa,
         naqdKassa,
@@ -229,6 +305,8 @@ export class FinanceService {
       debts: {
         receivables: totalCustomerDebt,
         payables: totalSupplierDebt,
+        receivablesByCurrency,
+        payablesByCurrency,
       },
       accounts: accounts.map((a) => ({
         id: a.id,

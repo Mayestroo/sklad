@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -42,6 +43,7 @@ export default function CrmKanbanPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   const [kanbanData, setKanbanData] = useState<Record<string, Deal[]>>({});
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
@@ -242,7 +244,7 @@ export default function CrmKanbanPage() {
                     <Badge variant="neutral">{deals.length}</Badge>
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
-                    {formatCurrency(columnTotal, locale)}
+                    {formatCurrency(columnTotal, locale, defaultCurrency)}
                   </div>
                 </div>
 
@@ -280,7 +282,7 @@ export default function CrmKanbanPage() {
                       </div>
 
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: stg.color, marginTop: '2px' }} className="tabular-nums">
-                        {formatCurrency(Number(deal.amount), locale)}
+                        {formatCurrency(Number(deal.amount), locale, deal.currency || defaultCurrency)}
                       </div>
 
                       {/* Stage Selector Action */}

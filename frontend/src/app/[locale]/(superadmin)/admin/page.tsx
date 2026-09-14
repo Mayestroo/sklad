@@ -354,7 +354,7 @@ export default function SuperAdminTenantsPage() {
             </div>
           </div>
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
-            {metrics ? formatCurrency(metrics.totalMrr, locale, 'UZS') : '0 UZS'}
+            {metrics ? formatCurrency(metrics.totalMrr, locale, (metrics as any)?.currency || 'USD') : '—'}
           </div>
         </Card>
 

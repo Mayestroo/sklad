@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -37,8 +38,10 @@ export default function ReturnsPage() {
   const router = useRouter();
   const { token, company } = useAuth();
   const confirm = useConfirm();
+  const defaultCurrency = useDefaultCurrency();
 
   const [returns, setReturns] = useState<PurchaseReturn[]>([]);
+  const returnsCurrency = returns[0]?.currency || defaultCurrency;
   const [loading, setLoading] = useState(true);
 
   // Filters state
@@ -299,7 +302,7 @@ export default function ReturnsPage() {
             {isRu ? 'Всего возвращено (Проведено)' : 'Jami Qaytarilgan (Tasdiqlangan)'}
           </div>
           <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-primary-600)', marginTop: '6px' }}>
-            {formatCurrency(totalReturnedSum, locale, 'UZS')}
+            {formatCurrency(totalReturnedSum, locale, returnsCurrency)}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
             {postedCount} {isRu ? 'проведенных операций' : 'ta tasdiqlangan hujjat'}
@@ -561,7 +564,7 @@ export default function ReturnsPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
                       <span style={{ fontWeight: 600 }}>{reasonName}</span>
                       <span>
-                        <strong>{formatCurrency(data.total, locale, 'UZS')}</strong> ({data.count} {isRu ? 'операций' : 'ta'})
+                        <strong>{formatCurrency(data.total, locale, returnsCurrency)}</strong> ({data.count} {isRu ? 'операций' : 'ta'})
                       </span>
                     </div>
                     <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: '4px', overflow: 'hidden' }}>

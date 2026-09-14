@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -41,6 +42,7 @@ export default function CustomersPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const defaultCurrency = useDefaultCurrency();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,7 +165,7 @@ export default function CustomersPage() {
             </div>
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Общий долг' : 'Umumiy qarz'}</span>
           </div>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(totalDebt, locale)}</div>
+          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(totalDebt, locale, defaultCurrency)}</div>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{customersWithDebt} {isRu ? 'клиентов' : 'ta mijozda'}</div>
         </Card>
       </div>
@@ -214,7 +216,7 @@ export default function CustomersPage() {
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.phone || '—'}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: debt > 0 ? 600 : 400, color: debt > 0 ? '#f59e0b' : 'var(--color-text-secondary)' }}>
-                        {debt > 0 ? formatCurrency(debt, locale, (c as any).currency || 'UZS') : '—'}
+                        {debt > 0 ? formatCurrency(debt, locale, (c as any).currency || defaultCurrency) : '—'}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <Badge variant={c.type === 'BOTH' ? 'warning' : 'neutral'}>
@@ -260,7 +262,7 @@ export default function CustomersPage() {
 
       {/* Customer Profile Modal */}
       {selectedCustomer && (() => {
-        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || 'UZS';
+        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || defaultCurrency;
         return (
           <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`${isRu ? 'Профиль клиента' : 'Mijoz'}: ${selectedCustomer.name}`} size="xl">
             {profileLoading ? (

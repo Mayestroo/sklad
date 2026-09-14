@@ -1774,20 +1774,51 @@ export class SalesInvoicesService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const postedInvoices = await this.prisma.salesInvoice.findMany({
-      where: {
-        tenantId,
-        status: SalesDocStatus.POSTED,
-        invoiceDate: { gte: startOfMonth },
-      },
-      select: {
-        totalAmount: true,
-        totalCogs: true,
-        grossProfit: true,
-        currency: true,
-        exchangeRate: true,
-      },
-    });
+    const [postedInvoices, company, recentReceipt, recentInvoice] = await Promise.all([
+      this.prisma.salesInvoice?.findMany
+        ? this.prisma.salesInvoice.findMany({
+            where: {
+              tenantId,
+              status: SalesDocStatus.POSTED,
+              invoiceDate: { gte: startOfMonth },
+            },
+            select: {
+              totalAmount: true,
+              totalCogs: true,
+              grossProfit: true,
+              currency: true,
+              exchangeRate: true,
+            },
+          })
+        : Promise.resolve([]),
+      this.prisma.company?.findUnique
+        ? this.prisma.company.findUnique({
+            where: { id: tenantId },
+            select: { settings: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.purchaseReceipt?.findFirst
+        ? this.prisma.purchaseReceipt.findFirst({
+            where: { tenantId, status: 'POSTED' },
+            orderBy: { docDate: 'desc' },
+            select: { currency: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.salesInvoice?.findFirst
+        ? this.prisma.salesInvoice.findFirst({
+            where: { tenantId, status: SalesDocStatus.POSTED },
+            orderBy: { invoiceDate: 'desc' },
+            select: { currency: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const reportCurrency =
+      recentReceipt?.currency ||
+      recentInvoice?.currency ||
+      (company?.settings as any)?.sales?.defaultCurrency ||
+      (company?.settings as any)?.currency ||
+      'USD';
 
     const salesByCurrMap: Record<string, number> = {};
     const profitByCurrMap: Record<string, number> = {};
@@ -1799,7 +1830,7 @@ export class SalesInvoicesService {
       const amt = Number(inv.totalAmount || 0);
       const cogs = Number(inv.totalCogs || 0);
       const profit = Number(inv.grossProfit || 0);
-      const curr = inv.currency || 'UZS';
+      const curr = inv.currency || reportCurrency;
 
       salesByCurrMap[curr] = (salesByCurrMap[curr] || 0) + amt;
       profitByCurrMap[curr] = (profitByCurrMap[curr] || 0) + profit;
@@ -1827,7 +1858,7 @@ export class SalesInvoicesService {
     let monthlyReturnsTotal = 0;
     for (const ret of postedReturns) {
       const amt = Number(ret.totalAmount || 0);
-      const curr = (ret as any).currency || 'UZS';
+      const curr = (ret as any).currency || reportCurrency;
       returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
       monthlyReturnsTotal += amt;
     }
@@ -1865,7 +1896,7 @@ export class SalesInvoicesService {
     for (const inv of unpaidInvoices) {
       const remaining = Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0);
       if (remaining > 0) {
-        const curr = inv.currency || 'UZS';
+        const curr = inv.currency || reportCurrency;
         debtByCurrMap[curr] = (debtByCurrMap[curr] || 0) + remaining;
       }
     }
@@ -1877,7 +1908,7 @@ export class SalesInvoicesService {
 
     const rawTotalDebt = Number(customerDebt._sum.debtBalance || 0);
     if (totalCustomerDebtByCurrency.length === 0 && rawTotalDebt > 0) {
-      totalCustomerDebtByCurrency = [{ currency: 'UZS', amount: rawTotalDebt }];
+      totalCustomerDebtByCurrency = [{ currency: reportCurrency, amount: rawTotalDebt }];
     }
 
     const margin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
@@ -1891,7 +1922,7 @@ export class SalesInvoicesService {
       totalCustomerDebt: rawTotalDebt,
       customersWithDebtCount: customerDebt._count.id,
       monthlyReturnsTotal,
-      currency: monthlySalesByCurrency.length === 1 ? monthlySalesByCurrency[0].currency : 'UZS',
+      currency: monthlySalesByCurrency.length === 1 ? monthlySalesByCurrency[0].currency : reportCurrency,
       monthlySalesByCurrency,
       totalCustomerDebtByCurrency,
       monthlyReturnsByCurrency,

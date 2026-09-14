@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -27,6 +28,7 @@ export default function InventoryDocumentsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   const [documents, setDocuments] = useState<InventoryDocument[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -226,7 +228,7 @@ export default function InventoryDocumentsPage() {
                       {formatDate(doc.docDate, locale)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {formatCurrency(Number(doc.totalAmount), locale, 'UZS')}
+                      {formatCurrency(Number(doc.totalAmount), locale, (doc as any).currency || defaultCurrency)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       <Badge variant="success">{isRu ? 'Проведён' : 'O\'tkazilgan'}</Badge>
@@ -344,9 +346,9 @@ export default function InventoryDocumentsPage() {
                         <tr key={idx} style={{ borderTop: '1px solid var(--color-border-light)' }}>
                           <td style={{ padding: '8px' }}>{item.productName}</td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity}</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, 'UZS')}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, defaultCurrency)}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
-                            {formatCurrency(item.quantity * item.unitPrice, locale, 'UZS')}
+                            {formatCurrency(item.quantity * item.unitPrice, locale, defaultCurrency)}
                           </td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-600)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
@@ -431,8 +433,8 @@ export default function InventoryDocumentsPage() {
                     <td style={{ padding: '8px', fontWeight: 'bold' }}>{(item.product as any)?.name?.[locale] || (item.product as any)?.name?.ru || (item.product as any)?.name?.uz}</td>
                     <td style={{ padding: '8px' }}>{(item.product as any)?.sku}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{Number(item.quantity)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(Number(item.unitPrice), locale, 'UZS')}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(Number(item.totalPrice), locale, 'UZS')}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(Number(item.unitPrice), locale, (printDoc as any).currency || defaultCurrency)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(Number(item.totalPrice), locale, (printDoc as any).currency || defaultCurrency)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -441,7 +443,7 @@ export default function InventoryDocumentsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #000', paddingTop: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: '#666' }}>{isRu ? 'Подпись:' : 'Imzo:'} _________________________</div>
               <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-                {isRu ? 'Итого:' : 'Jami:'} {formatCurrency(Number(printDoc.totalAmount), locale, 'UZS')}
+                {isRu ? 'Итого:' : 'Jami:'} {formatCurrency(Number(printDoc.totalAmount), locale, (printDoc as any).currency || defaultCurrency)}
               </div>
             </div>
           </div>

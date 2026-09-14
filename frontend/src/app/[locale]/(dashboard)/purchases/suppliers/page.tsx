@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -30,6 +31,7 @@ export default function SuppliersPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   const [suppliers, setSuppliers] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,7 +129,7 @@ export default function SuppliersPage() {
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Наш общий долг' : 'Umumiy Bizning Qarzimiz'}</div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-600)' }} className="tabular-nums">
-              {formatCurrency(totalDebt, locale)}
+              {formatCurrency(totalDebt, locale, defaultCurrency)}
             </div>
           </div>
         </Card>
@@ -190,7 +192,7 @@ export default function SuppliersPage() {
                         }}
                         className="tabular-nums"
                       >
-                        {formatCurrency(debt, locale, (s as any).currency || 'UZS')}
+                        {formatCurrency(debt, locale, (s as any).currency || defaultCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>

@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -31,6 +32,7 @@ export default function InventoryPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const { token, company, hasPermission } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -319,10 +321,10 @@ export default function InventoryPage() {
                         {t(`units.${product.unitOfMeasure}` as any) || product.unitOfMeasure}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                        {formatCurrency(Number(product.costPrice), locale, 'UZS')}
+                        {formatCurrency(Number(product.costPrice), locale, (product as any).currency || defaultCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {formatCurrency(Number(product.salePrice), locale, 'UZS')}
+                        {formatCurrency(Number(product.salePrice), locale, (product as any).currency || defaultCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                         {(product as any).totalStock || 0} {t(`units.${product.unitOfMeasure}` as any)}
@@ -375,7 +377,7 @@ export default function InventoryPage() {
                 <div style={{ fontWeight: 'var(--font-bold)' }}>{getLocalizedName(scanResult.name)}</div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>SKU: {scanResult.sku} | Barcode: {scanResult.barcode}</div>
                 <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-primary-600)', marginTop: '4px' }}>
-                  Narxi: {formatCurrency(Number(scanResult.salePrice), locale, 'UZS')}
+                  Narxi: {formatCurrency(Number(scanResult.salePrice), locale, (scanResult as any).currency || defaultCurrency)}
                 </div>
               </div>
             )}

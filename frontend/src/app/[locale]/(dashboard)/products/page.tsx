@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -34,6 +35,7 @@ export default function ProductsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -492,12 +494,12 @@ export default function ProductsPage() {
 
                       {/* Cost price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
-                        {formatCurrency(cost, locale, 'UZS')}
+                        {formatCurrency(cost, locale, (p as any).currency || defaultCurrency)}
                       </td>
 
                       {/* Sale price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                        {formatCurrency(sale, locale, 'UZS')}
+                        {formatCurrency(sale, locale, (p as any).currency || defaultCurrency)}
                       </td>
 
                       {/* Margin % */}
@@ -595,13 +597,13 @@ export default function ProductsPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Себестоимость' : 'Tannarxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>
-                  {formatCurrency(selectedProduct.costPrice, locale, 'UZS')}
+                  {formatCurrency(selectedProduct.costPrice, locale, (selectedProduct as any).currency || defaultCurrency)}
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Цена продажи' : 'Sotish narxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary-600)' }}>
-                  {formatCurrency(selectedProduct.salePrice, locale, 'UZS')}
+                  {formatCurrency(selectedProduct.salePrice, locale, (selectedProduct as any).currency || defaultCurrency)}
                 </div>
               </div>
               <div>

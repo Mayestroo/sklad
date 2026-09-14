@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { FileText, ArrowRightLeft } from 'lucide-react';
@@ -15,6 +16,7 @@ export default function JournalPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +92,7 @@ export default function JournalPage() {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                       {(entry.lines || []).map((line, idx) => (
-                        <div key={idx}>{formatCurrency(Number(line.amount), locale)}</div>
+                        <div key={idx}>{formatCurrency(Number(line.amount), locale, (line as any).currency || (entry as any)?.currency || defaultCurrency)}</div>
                       ))}
                     </td>
                   </tr>

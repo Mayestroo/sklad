@@ -5,6 +5,8 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -35,6 +37,7 @@ export default function AnalyticsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | 'quarter' | 'year'>('month');
   const [kpi, setKpi] = useState<KpiSummary | null>(null);
@@ -44,6 +47,8 @@ export default function AnalyticsPage() {
   const [topClients, setTopClients] = useState<any[]>([]);
   const [ratios, setRatios] = useState<FinancialRatios | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const reportCurrency = (kpi as any)?.currency || defaultCurrency || 'USD';
 
   const fetchData = async () => {
     if (!token || !company) return;
@@ -79,24 +84,34 @@ export default function AnalyticsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
+      {/* Header with Title and Range Segmented Control */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'BI-Аналитика' : 'BI Analitika'}
+            {isRu ? 'Аналитика и Бизнес-показатели' : 'Tahlil va Biznes Ko\'rsatkichlari'}
           </h1>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+            {isRu ? 'Сводный обзор финансовых и операционных метрик компании' : 'Kompaniyaning moliyaviy va operatsion holati bo\'yicha tahliliy hisobot'}
+          </p>
         </div>
 
+        {/* Range Selector & Action Buttons */}
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-          {/* Time Range Selector */}
-          <div style={{ display: 'flex', gap: '3px', backgroundColor: 'var(--color-segmented-bg)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-segmented-border)' }}>
+          <div
+            style={{
+              display: 'flex',
+              backgroundColor: 'var(--color-segmented-bg)',
+              padding: '2px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-segmented-border)',
+            }}
+          >
             {(['today', 'week', 'month', 'quarter', 'year'] as const).map((range) => (
               <button
                 key={range}
-                type="button"
                 onClick={() => setTimeRange(range)}
                 style={{
-                  padding: '6px 12px',
+                  padding: '6px 14px',
                   fontSize: 'var(--text-xs)',
                   fontWeight: timeRange === range ? 600 : 500,
                   borderRadius: 'var(--radius-sm)',
@@ -143,7 +158,7 @@ export default function AnalyticsPage() {
                 <TrendingUp size={18} style={{ color: 'var(--color-primary-600)' }} />
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.totalRevenue || 0, locale, 'UZS')}
+                {formatCurrency(kpi?.totalRevenue || 0, locale, reportCurrency)}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <ArrowUpRight size={14} /> <span>{isRu ? 'Сумма по документам реализации' : 'Shartnomalar bo\'yicha yig\'indi'}</span>
@@ -158,7 +173,7 @@ export default function AnalyticsPage() {
                 <Badge variant="success">+{kpi?.netProfitMargin || 0}% Margin</Badge>
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.grossProfit || 0, locale, 'UZS')}
+                {formatCurrency(kpi?.grossProfit || 0, locale, reportCurrency)}
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Выручка минус себестоимость (COGS)' : 'Sotuv tushumi minus tovarlar tannarxi (COGS)'}
@@ -169,11 +184,15 @@ export default function AnalyticsPage() {
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
                 {isRu ? 'ДЕБИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'DEBITORLIK (MIJOZLAR QARZI)'}
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.totalAccountsReceivable || 0, locale, 'UZS')}
-              </div>
+              <MultiCurrencyValue
+                items={(kpi as any)?.receivablesByCurrency}
+                fallbackAmount={kpi?.totalAccountsReceivable || 0}
+                fallbackCurrency={reportCurrency}
+                locale={locale}
+                color="var(--color-warning-600)"
+              />
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                {isRu ? 'Ожидаемые поступления от клиентов' : 'Mijozlardan kelib tushishi kutilayotgan mablag\'}'}
+                {isRu ? 'Ожидаемые поступления от клиентов' : 'Mijozlardan kelib tushishi kutilayotgan mablag\''}
               </div>
             </Card>
 
@@ -181,9 +200,13 @@ export default function AnalyticsPage() {
               <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
                 {isRu ? 'КРЕДИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'KREDITORLIK (POSTAVSHIKLAR QARZI)'}
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.totalAccountsPayable || 0, locale, 'UZS')}
-              </div>
+              <MultiCurrencyValue
+                items={(kpi as any)?.payablesByCurrency}
+                fallbackAmount={kpi?.totalAccountsPayable || 0}
+                fallbackCurrency={reportCurrency}
+                locale={locale}
+                color="var(--color-error-600)"
+              />
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Задолженность перед поставщиками' : 'Yetkazib beruvchilar oldidagi qarzimiz'}
               </div>
@@ -216,7 +239,7 @@ export default function AnalyticsPage() {
                     return (
                       <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%', justifyContent: 'flex-end' }}>
                         <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                          {formatCurrency(point.revenue, locale, 'UZS')}
+                          {formatCurrency(point.revenue, locale, reportCurrency)}
                         </div>
                         <div
                           style={{
@@ -261,7 +284,7 @@ export default function AnalyticsPage() {
                         <span style={{ fontWeight: 'var(--font-medium)' }}>
                           {cat.categoryName[locale] || cat.categoryName.ru || cat.categoryName.uz}
                         </span>
-                        <span style={{ fontWeight: 'var(--font-bold)' }}>{cat.percentage}% ({formatCurrency(cat.revenue, locale, 'UZS')})</span>
+                        <span style={{ fontWeight: 'var(--font-bold)' }}>{cat.percentage}% ({formatCurrency(cat.revenue, locale, reportCurrency)})</span>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
                         <div style={{ width: `${cat.percentage}%`, height: '100%', backgroundColor: 'var(--color-primary-600)', borderRadius: 'var(--radius-full)' }} />
@@ -312,7 +335,7 @@ export default function AnalyticsPage() {
                           <td style={{ padding: '8px', fontFamily: 'var(--font-mono)' }}>{p.sku}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{p.totalQuantity} {p.unitOfMeasure}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                            {formatCurrency(p.totalRevenue, locale, 'UZS')}
+                            {formatCurrency(p.totalRevenue, locale, reportCurrency)}
                           </td>
                         </tr>
                       ))}
@@ -350,7 +373,7 @@ export default function AnalyticsPage() {
                           </div>
                         </div>
                         <div style={{ fontWeight: 'bold', color: 'var(--color-success-600)' }} className="tabular-nums">
-                          {formatCurrency(client.totalSpent, locale, 'UZS')}
+                          {formatCurrency(client.totalSpent, locale, reportCurrency)}
                         </div>
                       </div>
                     ))}
@@ -372,7 +395,7 @@ export default function AnalyticsPage() {
                       {isRu ? 'ЧИСТЫЙ ОБОРОТНЫЙ КАПИТАЛ' : 'SOF AYLANMA MABLAG\' (WORKING CAPITAL)'}
                     </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                      {formatCurrency(ratios?.workingCapital || 0, locale, 'UZS')}
+                      {formatCurrency(ratios?.workingCapital || 0, locale, reportCurrency)}
                     </div>
                   </div>
 

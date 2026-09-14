@@ -177,6 +177,7 @@ describe('CounterpartiesService', () => {
       expect(result).toEqual({
         total_customers: 3,
         total_suppliers: 2,
+        currency: 'USD',
         receivables: {
           count: 1,
           total_amount: 12500000,

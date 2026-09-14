@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -37,6 +38,7 @@ export default function PricesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const defaultCurrency = useDefaultCurrency();
 
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -54,7 +56,7 @@ export default function PricesPage() {
   const [showEditPL, setShowEditPL] = useState(false);
   const [editPLNameUz, setEditPLNameUz] = useState('');
   const [editPLNameRu, setEditPLNameRu] = useState('');
-  const [editPLCurrency, setEditPLCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'UZS');
+  const [editPLCurrency, setEditPLCurrency] = useState(defaultCurrency);
   const [editPLDefault, setEditPLDefault] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -413,7 +415,7 @@ export default function PricesPage() {
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', fontWeight: 500 }}>{getProductName(prod)}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{prod.sku || '—'}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)' }}>
-                          {formatCurrency(basePrice, locale)}
+                          {formatCurrency(basePrice, locale, (prod as any).currency || selectedPL?.currency || defaultCurrency)}
                         </td>
                         <td style={{ padding: '10px 14px' }}>
                           {isEditing ? (
@@ -434,7 +436,7 @@ export default function PricesPage() {
                             />
                           ) : (
                             <span style={{ fontWeight: listPrice > 0 ? 600 : 400, color: listPrice > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                              {listPrice > 0 ? formatCurrency(listPrice, locale) : '—'}
+                              {listPrice > 0 ? formatCurrency(listPrice, locale, selectedPL?.currency || defaultCurrency) : '—'}
                             </span>
                           )}
                         </td>

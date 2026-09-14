@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
@@ -98,6 +99,7 @@ export default function SalesReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const confirm = useConfirm();
+  const defaultCurrency = useDefaultCurrency();
 
   const [returns, setReturns] = useState<SalesReturnRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +117,7 @@ export default function SalesReturnsPage() {
   const [warehouseId, setWarehouseId] = useState('');
   const [defectWarehouseId, setDefectWarehouseId] = useState('');
   const [invoiceId, setInvoiceId] = useState('');
+  const activeReturnCurrency = invoices.find((inv) => inv.id === invoiceId)?.currency || defaultCurrency;
   const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState('');
   const [items, setItems] = useState<ReturnableItemRow[]>([]);
@@ -877,10 +880,10 @@ export default function SalesReturnsPage() {
                             />
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                            {formatCurrency(item.unitPrice, locale)}
+                            {formatCurrency(item.unitPrice, locale, activeReturnCurrency)}
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }} className="tabular-nums">
-                            {formatCurrency(item.quantity * item.unitPrice, locale)}
+                            {formatCurrency(item.quantity * item.unitPrice, locale, activeReturnCurrency)}
                           </td>
                         </tr>
                       );
@@ -892,7 +895,7 @@ export default function SalesReturnsPage() {
                         {isRu ? 'Итого к возврату:' : 'Jami qaytariladigan summa:'}
                       </td>
                       <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: '#f59e0b' }} className="tabular-nums">
-                        {formatCurrency(totalReturnAmount, locale)}
+                        {formatCurrency(totalReturnAmount, locale, activeReturnCurrency)}
                       </td>
                     </tr>
                   </tfoot>

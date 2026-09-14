@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -40,6 +41,7 @@ export default function ServicesPage() {
   const isRu = locale === 'ru';
   const confirm = useConfirm();
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
 
   // Active Tab: PROVIDED vs RECEIVED
   const [activeType, setActiveType] = useState<'PROVIDED' | 'RECEIVED'>('PROVIDED');
@@ -113,6 +115,8 @@ export default function ServicesPage() {
       totalPages: pages,
     };
   }, [acts, total, pageSize]);
+
+  const pageCurrency = acts[0]?.currency || defaultCurrency;
 
   const handleOpenCreate = () => {
     setEditingAct(null);
@@ -381,7 +385,7 @@ export default function ServicesPage() {
               marginTop: 'var(--space-2)',
             }}
           >
-            {formatCurrency(totalAmountSum, locale, 'UZS')}
+            {formatCurrency(totalAmountSum, locale, pageCurrency)}
           </p>
           <span
             style={{
@@ -428,7 +432,7 @@ export default function ServicesPage() {
               marginTop: 'var(--space-2)',
             }}
           >
-            {formatCurrency(totalPaidSum, locale, 'UZS')}
+            {formatCurrency(totalPaidSum, locale, pageCurrency)}
           </p>
           <span
             style={{
@@ -483,7 +487,7 @@ export default function ServicesPage() {
               marginTop: 'var(--space-2)',
             }}
           >
-            {formatCurrency(totalDebtSum, locale, 'UZS')}
+            {formatCurrency(totalDebtSum, locale, pageCurrency)}
           </p>
           <span
             style={{

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -54,6 +55,7 @@ export default function ExpensesPage() {
   const router = useRouter();
   const { token, company } = useAuth();
   const confirm = useConfirm();
+  const defaultCurrency = useDefaultCurrency();
 
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
   const [data, setData] = useState<ExpensesResponse | null>(null);
@@ -191,63 +193,68 @@ export default function ExpensesPage() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-600)' }}>
-            <Truck size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Транспортные расходы' : 'Transport Xarajatlari'}
-            </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalTransport || 0, locale, 'UZS')}
-            </div>
-          </div>
-        </Card>
+      {(() => {
+        const expenseCurrency = (data?.stats as any)?.currency || data?.items?.[0]?.currency || defaultCurrency;
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-600)' }}>
+                <Truck size={24} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Транспортные расходы' : 'Transport Xarajatlari'}
+                </div>
+                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
+                  {formatCurrency(data?.stats.totalTransport || 0, locale, expenseCurrency)}
+                </div>
+              </div>
+            </Card>
 
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)' }}>
-            <Receipt size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Таможенные пошлины' : 'Bojxona To‘lovlari'}
-            </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalCustoms || 0, locale, 'UZS')}
-            </div>
-          </div>
-        </Card>
+            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)' }}>
+                <Receipt size={24} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Таможенные пошлины' : 'Bojxona To‘lovlari'}
+                </div>
+                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
+                  {formatCurrency(data?.stats.totalCustoms || 0, locale, expenseCurrency)}
+                </div>
+              </div>
+            </Card>
 
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-secondary-100)', color: 'var(--color-text-primary)' }}>
-            <Building2 size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Брокерские услуги' : 'Brokerlik Xizmatlari'}
-            </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalBroker || 0, locale, 'UZS')}
-            </div>
-          </div>
-        </Card>
+            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-secondary-100)', color: 'var(--color-text-primary)' }}>
+                <Building2 size={24} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Брокерские услуги' : 'Brokerlik Xizmatlari'}
+                </div>
+                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
+                  {formatCurrency(data?.stats.totalBroker || 0, locale, expenseCurrency)}
+                </div>
+              </div>
+            </Card>
 
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-600)' }}>
-            <TrendingUp size={24} />
+            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-600)' }}>
+                <TrendingUp size={24} />
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Всего распределено' : 'Jami Taqsimlangan'}
+                </div>
+                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
+                  {formatCurrency(data?.stats.totalAll || 0, locale, expenseCurrency)}
+                </div>
+              </div>
+            </Card>
           </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Всего распределено' : 'Jami Taqsimlangan'}
-            </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {formatCurrency(data?.stats.totalAll || 0, locale, 'UZS')}
-            </div>
-          </div>
-        </Card>
-      </div>
+        );
+      })()}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '1px solid var(--color-border-subtle)', paddingBottom: 'var(--space-2)' }}>

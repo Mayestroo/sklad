@@ -6,19 +6,59 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getKpiSummary(tenantId: string) {
-    const [invoices, counterparties, stockLevels] = await Promise.all([
+    const [invoices, counterparties, stockLevels, recentReceipt, recentInvoice, company] = await Promise.all([
       this.prisma.salesInvoice.findMany({
         where: { tenantId },
         include: { items: { include: { product: true } } },
       }),
       this.prisma.counterparty.findMany({
         where: { tenantId },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          customerDebt: true,
+          supplierDebt: true,
+          debtBalance: true,
+          purchaseReceipts: {
+            where: { status: 'POSTED' },
+            select: { currency: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          salesInvoices: {
+            where: { status: 'POSTED' },
+            select: { currency: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
       }),
       this.prisma.stockLevel.findMany({
         where: { tenantId },
         include: { product: true },
       }),
+      this.prisma.purchaseReceipt.findFirst({
+        where: { tenantId, status: 'POSTED' },
+        select: { currency: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.salesInvoice.findFirst({
+        where: { tenantId, status: 'POSTED' },
+        select: { currency: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.company.findUnique({
+        where: { id: tenantId },
+        select: { settings: true },
+      }),
     ]);
+
+    const reportCurrency =
+      recentReceipt?.currency ||
+      recentInvoice?.currency ||
+      (company?.settings as any)?.sales?.defaultCurrency ||
+      'USD';
 
     const totalRevenue = invoices.reduce(
       (sum, inv) => sum + Number(inv.totalAmount),
@@ -39,15 +79,57 @@ export class AnalyticsService {
 
     let totalAccountsReceivable = 0;
     let totalAccountsPayable = 0;
+    const receivablesByCurr: Record<string, number> = {};
+    const payablesByCurr: Record<string, number> = {};
 
     counterparties.forEach((c) => {
-      const debt = Number(c.debtBalance);
-      if (debt > 0) {
-        totalAccountsReceivable += debt;
-      } else if (debt < 0) {
-        totalAccountsPayable += Math.abs(debt);
+      const custDebt = Number((c as any).customerDebt || 0);
+      const suppDebt = Number((c as any).supplierDebt || 0);
+      const raw = Number(c.debtBalance || 0);
+      const currency =
+        (c as any).purchaseReceipts?.[0]?.currency ||
+        (c as any).salesInvoices?.[0]?.currency ||
+        reportCurrency;
+
+      if (custDebt !== 0 || suppDebt !== 0) {
+        if (custDebt > 0) {
+          totalAccountsReceivable += custDebt;
+          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + custDebt;
+        } else if (custDebt < 0) {
+          totalAccountsPayable += Math.abs(custDebt);
+          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(custDebt);
+        }
+
+        if (suppDebt > 0) {
+          totalAccountsPayable += suppDebt;
+          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + suppDebt;
+        } else if (suppDebt < 0) {
+          totalAccountsReceivable += Math.abs(suppDebt);
+          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(suppDebt);
+        }
+      } else {
+        if (c.type === 'SUPPLIER') {
+          if (raw > 0) {
+            totalAccountsPayable += raw;
+            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + raw;
+          } else if (raw < 0) {
+            totalAccountsReceivable += Math.abs(raw);
+            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(raw);
+          }
+        } else {
+          if (raw > 0) {
+            totalAccountsReceivable += raw;
+            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + raw;
+          } else if (raw < 0) {
+            totalAccountsPayable += Math.abs(raw);
+            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(raw);
+          }
+        }
       }
     });
+
+    const receivablesByCurrency = Object.entries(receivablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    const payablesByCurrency = Object.entries(payablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
 
     const inventoryValuation = stockLevels.reduce(
       (sum, stock) =>
@@ -56,12 +138,15 @@ export class AnalyticsService {
     );
 
     return {
+      currency: reportCurrency,
       totalRevenue,
       grossProfit,
       netProfitMargin: Math.round(netProfitMargin * 10) / 10,
       totalAccountsReceivable,
       totalAccountsPayable,
       inventoryValuation,
+      receivablesByCurrency,
+      payablesByCurrency,
     };
   }
 

@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -58,6 +59,8 @@ export default function OpeningBalancesPage() {
   const [documents, setDocuments] = useState<OpeningBalanceDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [currentDoc, setCurrentDoc] = useState<OpeningBalanceDocument | null>(null);
+  const defaultCurrency = useDefaultCurrency();
+  const docCurrency = (currentDoc as any)?.currency || defaultCurrency;
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('cash');
@@ -302,8 +305,8 @@ export default function OpeningBalancesPage() {
     if (!metrics.isBalanced) {
       toast.error(
         isRu
-          ? `Баланс не сходится! Разница: ${formatCurrency(metrics.balanceDifference, locale, 'UZS')}. Разница должна быть 0.`
-          : `Balans teng emas! Farq: ${formatCurrency(metrics.balanceDifference, locale, 'UZS')}. Boshlang‘ich balans farqi 0 bo‘lishi shart!`,
+          ? `Баланс не сходится! Разница: ${formatCurrency(metrics.balanceDifference, locale, docCurrency)}. Разница должна быть 0.`
+          : `Balans teng emas! Farq: ${formatCurrency(metrics.balanceDifference, locale, docCurrency)}. Boshlang‘ich balans farqi 0 bo‘lishi shart!`,
       );
       return;
     }
@@ -674,7 +677,7 @@ export default function OpeningBalancesPage() {
               style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
               className="tabular-nums"
             >
-              {formatCurrency(metrics.totalAssets, locale, 'UZS')}
+              {formatCurrency(metrics.totalAssets, locale, docCurrency)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Касса, банк, склад, дебиторы' : 'Kassa, bank, tovar, debitorlar'}
@@ -715,7 +718,7 @@ export default function OpeningBalancesPage() {
               style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
               className="tabular-nums"
             >
-              {formatCurrency(metrics.totalLiabilities, locale, 'UZS')}
+              {formatCurrency(metrics.totalLiabilities, locale, docCurrency)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Кредиторы, авансы клиентов' : 'Yetkazib beruvchilar, olingan avanslar'}
@@ -756,10 +759,10 @@ export default function OpeningBalancesPage() {
               style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
               className="tabular-nums"
             >
-              {formatCurrency(metrics.enteredEquity, locale, 'UZS')}
+              {formatCurrency(metrics.enteredEquity, locale, docCurrency)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Расчетный:' : 'Kutilayotgan:'} {formatCurrency(metrics.suggestedEquity, locale, 'UZS')}
+              {isRu ? 'Расчетный:' : 'Kutilayotgan:'} {formatCurrency(metrics.suggestedEquity, locale, docCurrency)}
             </div>
           </div>
         </Card>
@@ -790,7 +793,7 @@ export default function OpeningBalancesPage() {
             {metrics.isBalanced ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
           </div>
           <div style={{ overflow: 'hidden', width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
                 {isRu ? 'Баланс (Разница)' : 'Balans (Farq)'}
               </span>
@@ -806,7 +809,7 @@ export default function OpeningBalancesPage() {
               }}
               className="tabular-nums"
             >
-              {formatCurrency(metrics.balanceDifference, locale, 'UZS')}
+              {formatCurrency(metrics.balanceDifference, locale, docCurrency)}
             </div>
             {!metrics.isBalanced && !isReadOnly && (
               <button
@@ -1043,6 +1046,7 @@ export default function OpeningBalancesPage() {
             warehouses={warehouses}
             locale={locale}
             isRu={isRu}
+            currency={docCurrency}
             onUpdate={updateLineField}
             onRemove={removeLine}
           />
@@ -1129,6 +1133,7 @@ export default function OpeningBalancesPage() {
             fixedAssets={fixedAssets}
             locale={locale}
             isRu={isRu}
+            currency={docCurrency}
             onUpdate={updateLineField}
             onRemove={removeLine}
           />
@@ -1539,6 +1544,7 @@ function InventoryTable({
   warehouses,
   locale,
   isRu,
+  currency,
   onUpdate,
   onRemove,
 }: any) {
@@ -1679,7 +1685,7 @@ function InventoryTable({
                 />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                {formatCurrency(Number(line.amount || 0), locale, 'UZS')}
+                {formatCurrency(Number(line.amount || 0), locale, currency || 'USD')}
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <input
@@ -2029,6 +2035,7 @@ function FixedAssetsTable({
   fixedAssets,
   locale,
   isRu,
+  currency,
   onUpdate,
   onRemove,
 }: any) {
@@ -2153,7 +2160,7 @@ function FixedAssetsTable({
                   />
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="tabular-nums">
-                  {formatCurrency(netBookValue, locale, 'UZS')}
+                  {formatCurrency(netBookValue, locale, currency || 'USD')}
                 </td>
                 {!isReadOnly && (
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>

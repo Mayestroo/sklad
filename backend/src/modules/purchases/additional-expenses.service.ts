@@ -422,7 +422,7 @@ export class AdditionalExpensesService {
     // KPI Aggregations across all posted expenses
     const allPosted = await this.prisma.additionalExpense.findMany({
       where: { tenantId, status: PurchaseDocStatus.POSTED },
-      select: { expenseType: true, amount: true },
+      select: { expenseType: true, amount: true, currency: true },
     });
 
     const totalTransport = allPosted
@@ -447,6 +447,7 @@ export class AdditionalExpensesService {
         totalCustoms,
         totalBroker,
         totalAll,
+        currency: allPosted[0]?.currency || (items[0] as any)?.currency || 'USD',
       },
     };
   }
