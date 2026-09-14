@@ -644,23 +644,14 @@ export default function CounterpartiesPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
             {/* Customers */}
             <div
-              onClick={() => setTypeFilter(typeFilter === 'CUSTOMER' ? '' : 'CUSTOMER')}
               style={{
                 position: 'relative',
                 padding: '18px 20px 16px',
                 borderRadius: 'var(--radius-lg, 10px)',
-                background: typeFilter === 'CUSTOMER'
-                  ? 'linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.06) 100%)'
-                  : 'var(--color-bg-card, var(--color-bg-surface))',
-                border: typeFilter === 'CUSTOMER'
-                  ? '1.5px solid rgba(59,130,246,0.45)'
-                  : '1.5px solid var(--color-border)',
-                cursor: 'pointer',
-                transition: 'all 0.18s ease',
+                background: 'var(--color-bg-card, var(--color-bg-surface))',
+                border: '1.5px solid var(--color-border)',
                 overflow: 'hidden',
-                boxShadow: typeFilter === 'CUSTOMER'
-                  ? '0 0 0 3px rgba(59,130,246,0.12), 0 4px 16px rgba(59,130,246,0.08)'
-                  : '0 1px 4px rgba(0,0,0,0.06)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
               <div style={{
@@ -686,23 +677,14 @@ export default function CounterpartiesPage() {
 
             {/* Suppliers */}
             <div
-              onClick={() => setTypeFilter(typeFilter === 'SUPPLIER' ? '' : 'SUPPLIER')}
               style={{
                 position: 'relative',
                 padding: '18px 20px 16px',
                 borderRadius: 'var(--radius-lg, 10px)',
-                background: typeFilter === 'SUPPLIER'
-                  ? 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(245,158,11,0.06) 100%)'
-                  : 'var(--color-bg-card, var(--color-bg-surface))',
-                border: typeFilter === 'SUPPLIER'
-                  ? '1.5px solid rgba(245,158,11,0.45)'
-                  : '1.5px solid var(--color-border)',
-                cursor: 'pointer',
-                transition: 'all 0.18s ease',
+                background: 'var(--color-bg-card, var(--color-bg-surface))',
+                border: '1.5px solid var(--color-border)',
                 overflow: 'hidden',
-                boxShadow: typeFilter === 'SUPPLIER'
-                  ? '0 0 0 3px rgba(245,158,11,0.12), 0 4px 16px rgba(245,158,11,0.08)'
-                  : '0 1px 4px rgba(0,0,0,0.06)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
               <div style={{
@@ -728,23 +710,14 @@ export default function CounterpartiesPage() {
 
             {/* Receivables */}
             <div
-              onClick={() => setBalanceFilter(balanceFilter === 'receivables' ? 'all' : 'receivables')}
               style={{
                 position: 'relative',
                 padding: '18px 20px 16px',
                 borderRadius: 'var(--radius-lg, 10px)',
-                background: balanceFilter === 'receivables'
-                  ? 'linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(16,185,129,0.06) 100%)'
-                  : 'var(--color-bg-card, var(--color-bg-surface))',
-                border: balanceFilter === 'receivables'
-                  ? '1.5px solid rgba(16,185,129,0.45)'
-                  : '1.5px solid var(--color-border)',
-                cursor: 'pointer',
-                transition: 'all 0.18s ease',
+                background: 'var(--color-bg-card, var(--color-bg-surface))',
+                border: '1.5px solid var(--color-border)',
                 overflow: 'hidden',
-                boxShadow: balanceFilter === 'receivables'
-                  ? '0 0 0 3px rgba(16,185,129,0.12), 0 4px 16px rgba(16,185,129,0.08)'
-                  : '0 1px 4px rgba(0,0,0,0.06)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
               <div style={{
@@ -774,23 +747,14 @@ export default function CounterpartiesPage() {
 
             {/* Payables */}
             <div
-              onClick={() => setBalanceFilter(balanceFilter === 'payables' ? 'all' : 'payables')}
               style={{
                 position: 'relative',
                 padding: '18px 20px 16px',
                 borderRadius: 'var(--radius-lg, 10px)',
-                background: balanceFilter === 'payables'
-                  ? 'linear-gradient(135deg, rgba(239,68,68,0.18) 0%, rgba(239,68,68,0.06) 100%)'
-                  : 'var(--color-bg-card, var(--color-bg-surface))',
-                border: balanceFilter === 'payables'
-                  ? '1.5px solid rgba(239,68,68,0.45)'
-                  : '1.5px solid var(--color-border)',
-                cursor: 'pointer',
-                transition: 'all 0.18s ease',
+                background: 'var(--color-bg-card, var(--color-bg-surface))',
+                border: '1.5px solid var(--color-border)',
                 overflow: 'hidden',
-                boxShadow: balanceFilter === 'payables'
-                  ? '0 0 0 3px rgba(239,68,68,0.12), 0 4px 16px rgba(239,68,68,0.08)'
-                  : '0 1px 4px rgba(0,0,0,0.06)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
               }}
             >
               <div style={{
@@ -822,32 +786,48 @@ export default function CounterpartiesPage() {
           {/* Quick Balance Filter — Segmented Pill Bar */}
           <div style={{
             display: 'flex',
-            gap: 0,
-            background: 'var(--color-bg-subtle)',
-            border: '1.5px solid var(--color-border)',
+            gap: 4,
+            background: 'var(--color-bg-card, var(--color-bg-secondary))',
+            border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-lg, 10px)',
             padding: 4,
             width: 'fit-content',
           }}>
             {[
-              { id: 'all', label: isRu ? 'Barchasi' : 'Barchasi', color: null },
+              {
+                id: 'all',
+                label: isRu ? 'Все' : 'Barchasi',
+                activeBg: 'rgba(59, 130, 246, 0.20)',
+                activeBorder: 'rgba(59, 130, 246, 0.50)',
+                activeColor: '#3b82f6',
+                color: null,
+              },
               {
                 id: 'receivables',
-                label: isRu ? 'Haqdorlar' : 'Haqdorlar',
+                label: isRu ? 'Нам должны' : 'Haqdorlar',
                 count: summary?.receivables.count,
+                activeBg: 'rgba(16, 185, 129, 0.22)',
+                activeBorder: 'rgba(16, 185, 129, 0.55)',
+                activeColor: '#10b981',
                 color: '#059669',
                 dot: '#10b981',
               },
               {
                 id: 'payables',
-                label: isRu ? 'Qarzdorlar' : 'Qarzdorlar',
+                label: isRu ? 'Наш долг' : 'Qarzdorlar',
                 count: summary?.payables.count,
+                activeBg: 'rgba(239, 68, 68, 0.22)',
+                activeBorder: 'rgba(239, 68, 68, 0.55)',
+                activeColor: '#ef4444',
                 color: '#dc2626',
                 dot: '#ef4444',
               },
               {
                 id: 'settled',
-                label: isRu ? 'Hisob-kitob' : 'Hisob-kitob',
+                label: isRu ? 'Расчет окончен' : 'Hisob-kitob',
+                activeBg: 'rgba(148, 163, 184, 0.22)',
+                activeBorder: 'rgba(148, 163, 184, 0.45)',
+                activeColor: 'var(--color-text-primary)',
                 color: null,
               },
             ].map((tab) => {
@@ -860,11 +840,9 @@ export default function CounterpartiesPage() {
                   style={{
                     padding: '7px 16px',
                     borderRadius: 'var(--radius-md, 7px)',
-                    border: 'none',
-                    background: active ? 'var(--color-bg-surface)' : 'transparent',
-                    color: active
-                      ? (tab.color || 'var(--color-primary-700, #1d4ed8)')
-                      : 'var(--color-text-secondary)',
+                    border: active ? `1px solid ${tab.activeBorder}` : '1px solid transparent',
+                    background: active ? tab.activeBg : 'transparent',
+                    color: active ? tab.activeColor : 'var(--color-text-secondary)',
                     fontWeight: active ? 700 : 500,
                     fontSize: '13px',
                     cursor: 'pointer',
@@ -873,11 +851,11 @@ export default function CounterpartiesPage() {
                     gap: 6,
                     transition: 'all 0.15s ease',
                     whiteSpace: 'nowrap',
-                    boxShadow: active ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                    boxShadow: active ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
                   }}
                 >
                   {tab.dot && (
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: tab.dot, flexShrink: 0 }} />
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: tab.dot, flexShrink: 0 }} />
                   )}
                   <span>{tab.label}</span>
                   {tab.count !== undefined && tab.count > 0 && (
@@ -886,10 +864,10 @@ export default function CounterpartiesPage() {
                         fontSize: '11px',
                         padding: '1px 7px',
                         borderRadius: '20px',
-                        background: active && tab.color ? `${tab.dot}22` : 'var(--color-bg-subtle)',
-                        color: active && tab.color ? tab.color : 'var(--color-text-secondary)',
+                        background: active ? `${tab.dot}33` : 'var(--color-bg-subtle)',
+                        color: active ? tab.activeColor : 'var(--color-text-secondary)',
                         fontWeight: 700,
-                        border: active && tab.color ? `1px solid ${tab.dot}44` : '1px solid transparent',
+                        border: active ? `1px solid ${tab.dot}66` : '1px solid var(--color-border)',
                       }}
                     >
                       {tab.count}
