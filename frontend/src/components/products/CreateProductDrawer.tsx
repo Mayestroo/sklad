@@ -567,7 +567,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               value={unitOfMeasure}
               onChange={(val) => setUnitOfMeasure(val)}
               onCreateNew={() => setShowNewUnitModal(true)}
-              createNewLabel={isRu ? '+ Новая единица' : '+ Yangi'}
+              createNewLabel={isRu ? 'Новая единица' : 'Yangi birlik'}
             />
           </div>
 

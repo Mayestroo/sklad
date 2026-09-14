@@ -483,7 +483,13 @@ export function Select({
                 }}
               >
                 <Plus size={16} />
-                <span>{createNewLabel || (isRu ? '+ Создать новое' : '+ Yangi')}</span>
+                <span>
+                  {createNewLabel
+                    ? createNewLabel.replace(/^\+\s*/, '')
+                    : isRu
+                    ? 'Создать новое'
+                    : 'Yangi qo‘shish'}
+                </span>
               </button>
             </div>
           )}
