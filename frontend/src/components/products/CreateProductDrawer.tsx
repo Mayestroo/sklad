@@ -8,7 +8,9 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { PackagePlus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/context/ToastContext';
+import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 
 export interface CreateProductDrawerProps {
   isOpen: boolean;
@@ -50,6 +52,21 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [customUnits, setCustomUnits] = useState<{ value: string; label: string; baseUnit: string }[]>([]);
+  const [showNewUnitModal, setShowNewUnitModal] = useState(false);
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitCode, setNewUnitCode] = useState('');
+  const [newUnitBaseType, setNewUnitBaseType] = useState('piece');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('sklad_custom_units');
+      if (stored) {
+        setCustomUnits(JSON.parse(stored));
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!token || !company?.id || !isOpen || !isMultiTier) return;
@@ -138,6 +155,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setError(null);
 
     try {
+      const customMatch = customUnits.find((u) => u.value === unitOfMeasure);
+      const validDbUnit = ['piece', 'kg', 'liter', 'meter', 'box', 'pack'].includes(unitOfMeasure)
+        ? unitOfMeasure
+        : (customMatch?.baseUnit || 'piece');
+
       let res: any;
       if (productToEdit) {
         const payload = {
@@ -149,7 +171,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           barcode: barcode.trim() || null,
           categoryId: categoryId || null,
           type: itemType,
-          unitOfMeasure: unitOfMeasure || 'piece',
+          unitOfMeasure: validDbUnit,
           costPrice: Number(costPrice) || 0,
           salePrice: Number(sellingPrice) || 0,
           minStockAlert: Number(minStockAlert) || 0,
@@ -173,7 +195,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           barcode: barcode.trim() || null,
           categoryId: categoryId || null,
           type: itemType,
-          unitOfMeasure: unitOfMeasure || 'piece',
+          unitOfMeasure: validDbUnit,
           costPrice: Number(costPrice) || 0,
           salePrice: Number(sellingPrice) || 0,
           minStockAlert: Number(minStockAlert) || 0,
@@ -232,6 +254,33 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setError(null);
   };
 
+  const handleAddCustomUnit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = newUnitName.trim();
+    if (!trimmedName) return;
+    const trimmedCode = newUnitCode.trim() || trimmedName.toLowerCase().replace(/\s+/g, '_');
+    const label = `${trimmedName} (${newUnitCode.trim() || trimmedCode})`;
+
+    const exists =
+      customUnits.some((u) => u.value === trimmedCode) ||
+      ['piece', 'kg', 'liter', 'meter', 'box', 'pack'].includes(trimmedCode);
+    if (exists) {
+      toast.warning(isRu ? 'Такая единица измерения уже существует' : 'Bunday o‘lchov birligi allaqachon mavjud');
+      return;
+    }
+
+    const updated = [...customUnits, { value: trimmedCode, label, baseUnit: newUnitBaseType }];
+    setCustomUnits(updated);
+    try {
+      localStorage.setItem('sklad_custom_units', JSON.stringify(updated));
+    } catch {}
+    setUnitOfMeasure(trimmedCode);
+    setShowNewUnitModal(false);
+    setNewUnitName('');
+    setNewUnitCode('');
+    toast.success(isRu ? 'Единица измерения успешно добавлена' : 'Yangi o‘lchov birligi muvaffaqiyatli qo‘shildi');
+  };
+
   const unitOptions = [
     { value: 'piece', label: isRu ? 'Штука (шт)' : 'Dona (dona)' },
     { value: 'kg', label: isRu ? 'Килограмм (кг)' : 'Kilogramm (kg)' },
@@ -241,7 +290,14 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     { value: 'pack', label: isRu ? 'Пачка' : 'Pachka' },
   ];
 
-  const isFractionalUnit = unitOfMeasure === 'kg' || unitOfMeasure === 'liter' || unitOfMeasure === 'meter';
+  const allUnitOptions = [
+    ...unitOptions,
+    ...customUnits.map((u) => ({ value: u.value, label: u.label })),
+  ];
+
+  const customMatch = customUnits.find((u) => u.value === unitOfMeasure);
+  const effectiveBaseUnit = customMatch ? customMatch.baseUnit : unitOfMeasure;
+  const isFractionalUnit = effectiveBaseUnit === 'kg' || effectiveBaseUnit === 'liter' || effectiveBaseUnit === 'meter';
 
   const getQuantityLabel = () => {
     switch (unitOfMeasure) {
@@ -256,8 +312,13 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       case 'pack':
         return isRu ? 'Количество (пачек) *' : 'Soni (pachka) *';
       case 'piece':
-      default:
         return isRu ? 'Количество (шт) *' : 'Soni (dona) *';
+      default: {
+        const custom = customUnits.find((u) => u.value === unitOfMeasure);
+        return isRu
+          ? `Количество (${custom ? custom.label : unitOfMeasure}) *`
+          : `Soni (${custom ? custom.label : unitOfMeasure}) *`;
+      }
     }
   };
 
@@ -502,9 +563,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               {isRu ? 'Единица измерения' : 'O‘lchov birligi'}
             </label>
             <Select
-              options={unitOptions}
+              options={allUnitOptions}
               value={unitOfMeasure}
               onChange={(val) => setUnitOfMeasure(val)}
+              onCreateNew={() => setShowNewUnitModal(true)}
+              createNewLabel={isRu ? '+ Новая единица' : '+ Yangi'}
             />
           </div>
 
@@ -608,6 +671,77 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           </div>
         )}
       </form>
+
+      <Modal
+        isOpen={showNewUnitModal}
+        onClose={() => {
+          setShowNewUnitModal(false);
+          setNewUnitName('');
+          setNewUnitCode('');
+        }}
+        title={isRu ? 'Новая единица измерения' : 'Yangi o‘lchov birligi'}
+        size="sm"
+      >
+        <form onSubmit={handleAddCustomUnit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Название единицы * (напр. Грамм, Рулон)' : 'Birlik nomi * (masalan: Gramm, Rulon, Qop)'}
+            </label>
+            <Input
+              value={newUnitName}
+              onChange={(e) => setNewUnitName(e.target.value)}
+              placeholder={isRu ? 'Напр. Грамм' : 'Masalan: Gramm'}
+              autoFocus
+              required
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Краткое обозначение (напр. г, т, рул)' : 'Qisqartmasi (masalan: g, t, rul, m²)'}
+            </label>
+            <Input
+              value={newUnitCode}
+              onChange={(e) => setNewUnitCode(e.target.value)}
+              placeholder={isRu ? 'г' : 'g'}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              {isRu ? 'Базовый тип для учета' : 'Baza turi (hisob-kitob uchun)'}
+            </label>
+            <Select
+              options={[
+                { value: 'piece', label: isRu ? 'Штучный (шт, коробка, пачка)' : 'Donali (dona, quti, blok)' },
+                { value: 'kg', label: isRu ? 'Весовой (кг, грамм, тонна)' : 'Vaznli (kg, gramm, tonna)' },
+                { value: 'liter', label: isRu ? 'Объемный (литр, миллилитр)' : 'Hajmli (litr, ml)' },
+                { value: 'meter', label: isRu ? 'Метражный (метр, рулон, погонный)' : 'Uzunlik/Meyor (metr, rulon)' },
+              ]}
+              value={newUnitBaseType}
+              onChange={(val) => setNewUnitBaseType(val)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowNewUnitModal(false);
+                setNewUnitName('');
+                setNewUnitCode('');
+              }}
+            >
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button type="submit" variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Plus size={16} />
+              {isRu ? 'Добавить' : 'Qo‘shish'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </Drawer>
   );
 };

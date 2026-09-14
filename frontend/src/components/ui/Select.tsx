@@ -355,50 +355,6 @@ export function Select({
             </div>
           )}
 
-          {/* Pinned Create New Action Bar */}
-          {onCreateNew && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsOpen(false);
-                onCreateNew(searchQuery);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '8px 10px',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                color: 'var(--color-primary-600)',
-                backgroundColor: 'var(--color-primary-50, rgba(99, 102, 241, 0.08))',
-                border: '1px dashed var(--color-primary-300, rgba(99, 102, 241, 0.35))',
-                cursor: 'pointer',
-                marginBottom: '4px',
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--color-primary-100, rgba(99, 102, 241, 0.16))';
-                e.currentTarget.style.borderColor = 'var(--color-primary-600)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--color-primary-50, rgba(99, 102, 241, 0.08))';
-                e.currentTarget.style.borderColor = 'var(--color-primary-300, rgba(99, 102, 241, 0.35))';
-              }}
-            >
-              <Plus size={14} style={{ flexShrink: 0 }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {createNewLabel || (isRu ? 'Создать новую запись' : 'Yangi qo‘shish')}
-                {searchQuery ? ` «${searchQuery}»` : ''}
-              </span>
-            </button>
-          )}
-
           {/* Options List */}
           <div
             role="listbox"
@@ -488,6 +444,49 @@ export function Select({
               })
             )}
           </div>
+
+          {onCreateNew && (
+            <div
+              style={{
+                borderTop: '1px solid var(--color-border)',
+                padding: '4px',
+                backgroundColor: 'var(--color-bg-secondary)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onCreateNew(searchQuery);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  fontSize: 'var(--text-sm)',
+                  fontWeight: 600,
+                  color: 'var(--color-primary-600)',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background-color var(--transition-fast)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--color-primary-50)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <Plus size={16} />
+                <span>{createNewLabel || (isRu ? '+ Создать новое' : '+ Yangi')}</span>
+              </button>
+            </div>
+          )}
         </div>,
         document.body
       )}
