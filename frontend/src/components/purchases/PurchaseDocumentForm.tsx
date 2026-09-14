@@ -1326,10 +1326,10 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '130px', width: '140px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '140px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Цена за ед. (${currency})` : `Birlik narxi (${currency})`}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '110px', width: '120px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '120px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Скидка (${currency})` : `Chegirma (${currency})`}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
@@ -1396,7 +1396,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     </td>
 
                     {/* Unit Price */}
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <CurrencyInput
                         value={item.unitPrice}
                         onChange={(val) => handleItemChange(idx, 'unitPrice', val)}
@@ -1406,7 +1406,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     </td>
 
                     {/* Discount */}
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <CurrencyInput
                         value={item.discount}
                         onChange={(val) => handleItemChange(idx, 'discount', val)}

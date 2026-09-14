@@ -101,8 +101,14 @@ function FormattedNumInput({
     setRawStr(e.target.value);
   }, []);
 
+  const valStr = focused ? rawStr : formatNum(value);
+  const charLen = valStr ? valStr.length : 5;
+  const dynamicCh = Math.max(13, charLen + 4);
+
   const computedStyle: React.CSSProperties = {
     ...numInputStyle,
+    width: `${dynamicCh}ch`,
+    minWidth: `${dynamicCh}ch`,
     ...(disabled ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed', opacity: 0.7 } : {}),
     ...extraStyle,
   };
@@ -163,7 +169,7 @@ export function OrderItemsTable({
                   {isRu ? 'Готово (Пр-во)' : 'Tayyorlandi'}
                 </th>
               )}
-              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
+              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', minWidth: '160px' }}>
                 {isRu ? 'Цена за ед.' : 'Birlik narxi'}
               </th>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
@@ -221,7 +227,7 @@ export function OrderItemsTable({
                   )}
 
                   {/* Unit Price */}
-                  <td style={{ padding: '10px 12px' }}>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                     <FormattedNumInput
                       value={item.unitPrice}
                       onChange={(val) => onItemChange(idx, 'unitPrice', val)}
@@ -238,7 +244,7 @@ export function OrderItemsTable({
                   </td>
 
                   {/* Discount % */}
-                  <td style={{ padding: '10px 12px' }}>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                     <FormattedNumInput
                       value={item.discount}
                       onChange={(val) => onItemChange(idx, 'discount', val)}

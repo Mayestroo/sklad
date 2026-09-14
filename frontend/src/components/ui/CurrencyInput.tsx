@@ -10,6 +10,8 @@ export interface CurrencyInputProps {
   disabled?: boolean;
   min?: number;
   max?: number;
+  autoWidth?: boolean;
+  minWidthCh?: number;
   style?: React.CSSProperties;
   className?: string;
   id?: string;
@@ -95,6 +97,8 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       disabled = false,
       min = 0,
       max,
+      autoWidth = true,
+      minWidthCh = 13,
       style,
       className,
       id,
@@ -113,6 +117,10 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         setTextValue(formatCurrencyValue(value, decimals));
       }
     }, [value, decimals, isFocused]);
+
+    const displayValue = isFocused ? textValue : formatCurrencyValue(value, decimals);
+    const charLen = displayValue ? displayValue.length : (placeholder ? placeholder.length : 5);
+    const dynamicCh = Math.max(minWidthCh, charLen + 4);
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(true);
@@ -196,7 +204,8 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
           fontSize: 'var(--text-sm)',
           transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast)',
           cursor: disabled ? 'not-allowed' : 'text',
-          width: '100%',
+          width: autoWidth ? `${dynamicCh}ch` : '100%',
+          minWidth: autoWidth ? `${dynamicCh}ch` : undefined,
           ...style,
         }}
       />

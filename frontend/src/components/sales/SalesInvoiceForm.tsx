@@ -1211,7 +1211,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', minWidth: '130px', width: '140px', whiteSpace: 'nowrap' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', minWidth: '140px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Цена продажи (${currency})` : `Sotish narxi (${currency})`}
                 </th>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
@@ -1305,7 +1305,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                     </td>
 
                     {/* Unit Price */}
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <CurrencyInput
                         value={item.unitPrice}
                         onChange={(val) => handleItemChange(idx, 'unitPrice', val)}
