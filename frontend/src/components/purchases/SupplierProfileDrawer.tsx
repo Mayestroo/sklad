@@ -87,68 +87,73 @@ export function SupplierProfileDrawer({
         ) : (
           <>
             {/* Header Debt KPI Banner */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: 'var(--space-4)',
-              }}
-            >
-              <div
-                style={{
-                  padding: 'var(--space-4)',
-                  backgroundColor: 'var(--color-bg-tertiary)',
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                  {isRu ? 'Общая сумма закупок' : 'Jami Xaridlar Summasi'}
-                </div>
-                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }} className="tabular-nums">
-                  {formatCurrency(data.metrics.totalPurchased, locale)}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: 'var(--space-4)',
-                  backgroundColor: 'var(--color-bg-tertiary)',
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                  {isRu ? 'Оплаченная сумма' : 'To\'langan Summa'}
-                </div>
-                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
-                  {formatCurrency(data.metrics.totalPaid, locale)}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: 'var(--space-4)',
-                  backgroundColor: 'var(--color-bg-tertiary)',
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                  {isRu ? 'Наш долг' : 'Bizning Qarzimiz'}
-                </div>
+            {(() => {
+              const supplierCurrency = data.receipts?.[0]?.currency || data.payments?.[0]?.currency || 'UZS';
+              return (
                 <div
                   style={{
-                    fontSize: 'var(--text-xl)',
-                    fontWeight: 'var(--font-bold)',
-                    color: data.metrics.debtBalance > 0 ? 'var(--color-danger-600)' : 'var(--color-text-primary)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: 'var(--space-4)',
                   }}
-                  className="tabular-nums"
                 >
-                  {formatCurrency(data.metrics.debtBalance, locale)}
+                  <div
+                    style={{
+                      padding: 'var(--space-4)',
+                      backgroundColor: 'var(--color-bg-tertiary)',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                      {isRu ? 'Общая сумма закупок' : 'Jami Xaridlar Summasi'}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }} className="tabular-nums">
+                      {formatCurrency(data.metrics.totalPurchased, locale, supplierCurrency)}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: 'var(--space-4)',
+                      backgroundColor: 'var(--color-bg-tertiary)',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                      {isRu ? 'Оплаченная сумма' : 'To\'langan Summa'}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
+                      {formatCurrency(data.metrics.totalPaid, locale, supplierCurrency)}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: 'var(--space-4)',
+                      backgroundColor: 'var(--color-bg-tertiary)',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                      {isRu ? 'Наш долг' : 'Bizning Qarzimiz'}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 'var(--text-xl)',
+                        fontWeight: 'var(--font-bold)',
+                        color: data.metrics.debtBalance > 0 ? 'var(--color-danger-600)' : 'var(--color-text-primary)',
+                      }}
+                      className="tabular-nums"
+                    >
+                      {formatCurrency(data.metrics.debtBalance, locale, supplierCurrency)}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Navigation Tabs */}
             <div style={{ display: 'flex', gap: 'var(--space-1)', borderBottom: '1px solid var(--color-border)', overflowX: 'auto', paddingBottom: '1px' }}>

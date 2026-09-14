@@ -220,7 +220,7 @@ export function QuickPaymentModal({
                 color: isIncome ? '#10b981' : '#ef4444',
               }}
             >
-              {isIncome ? '+' : '-'} {formatCurrency(Math.abs(net), locale)}
+              {isIncome ? '+' : '-'} {formatCurrency(Math.abs(net), locale, selectedAccount?.currency || (counterparty as any)?.currency || 'UZS')}
             </div>
           </div>
         </div>

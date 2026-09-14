@@ -223,79 +223,86 @@ export function AktSverkaDrawer({
             </div>
           ) : (
             <>
-              {/* Financial Balance Overview Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
-                {/* Net Balance Card */}
-                <div
-                  style={{
-                    padding: 'var(--space-4)',
-                    borderRadius: 'var(--radius-lg)',
-                    border: `1px solid ${net > 0 ? '#10b981' : net < 0 ? '#ef4444' : 'var(--color-border)'}`,
-                    backgroundColor: net > 0 ? 'rgba(16, 185, 129, 0.06)' : net < 0 ? 'rgba(239, 68, 68, 0.06)' : 'var(--color-bg-subtle)',
-                  }}
-                >
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                    {net > 0
-                      ? isRu ? 'Сальдо в нашу пользу (Дебитор)' : "Bizning foydamizga qoldiq (Haqdorlik)"
-                      : net < 0
-                      ? isRu ? 'Сальдо в пользу контрагента (Кредитор)' : "Kontragent foydasiga qoldiq (Qarzdorlik)"
-                      : isRu ? 'Расчет окончен (Сальдо 0)' : "To'liq hisob-kitob qilingan (Balans 0)"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 'var(--text-2xl)',
-                      fontWeight: 800,
-                      marginTop: 6,
-                      color: net > 0 ? '#059669' : net < 0 ? '#dc2626' : 'var(--color-text-primary)',
-                    }}
-                  >
-                    {net > 0 ? '+ ' : net < 0 ? '- ' : ''}
-                    {formatCurrency(Math.abs(net), locale)}
-                  </div>
-                  {onOpenPayment && net !== 0 && (
-                    <Button
-                      size="sm"
-                      onClick={() => onOpenPayment(cp)}
-                      style={{
-                        marginTop: 10,
-                        backgroundColor: net > 0 ? '#10b981' : '#ef4444',
-                        color: '#fff',
-                        width: '100%',
-                      }}
-                    >
-                      {net > 0
-                        ? isRu ? 'Принять оплату' : "To'lov qabul qilish"
-                        : isRu ? 'Выплатить долг' : "Qarzni to'lash"}
-                    </Button>
-                  )}
-                </div>
+              {(() => {
+                const aktCurrency = data.transactions?.[0]?.currency || (cp as any)?.currency || 'UZS';
+                return (
+                  <>
+                    {/* Financial Balance Overview Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
+                      {/* Net Balance Card */}
+                      <div
+                        style={{
+                          padding: 'var(--space-4)',
+                          borderRadius: 'var(--radius-lg)',
+                          border: `1px solid ${net > 0 ? '#10b981' : net < 0 ? '#ef4444' : 'var(--color-border)'}`,
+                          backgroundColor: net > 0 ? 'rgba(16, 185, 129, 0.06)' : net < 0 ? 'rgba(239, 68, 68, 0.06)' : 'var(--color-bg-subtle)',
+                        }}
+                      >
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                          {net > 0
+                            ? isRu ? 'Сальдо в нашу пользу (Дебитор)' : "Bizning foydamizga qoldiq (Haqdorlik)"
+                            : net < 0
+                            ? isRu ? 'Сальдо в пользу контрагента (Кредитор)' : "Kontragent foydasiga qoldiq (Qarzdorlik)"
+                            : isRu ? 'Расчет окончен (Сальдо 0)' : "To'liq hisob-kitob qilingan (Balans 0)"}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 'var(--text-2xl)',
+                            fontWeight: 800,
+                            marginTop: 6,
+                            color: net > 0 ? '#059669' : net < 0 ? '#dc2626' : 'var(--color-text-primary)',
+                          }}
+                        >
+                          {net > 0 ? '+ ' : net < 0 ? '- ' : ''}
+                          {formatCurrency(Math.abs(net), locale, aktCurrency)}
+                        </div>
+                        {onOpenPayment && net !== 0 && (
+                          <Button
+                            size="sm"
+                            onClick={() => onOpenPayment(cp)}
+                            style={{
+                              marginTop: 10,
+                              backgroundColor: net > 0 ? '#10b981' : '#ef4444',
+                              color: '#fff',
+                              width: '100%',
+                            }}
+                          >
+                            {net > 0
+                              ? isRu ? 'Принять оплату' : "To'lov qabul qilish"
+                              : isRu ? 'Выплатить долг' : "Qarzni to'lash"}
+                          </Button>
+                        )}
+                      </div>
 
-                {/* Sales Turnover Card */}
-                <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-surface)' }}>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                    {isRu ? 'Всего отгружено (Продажи)' : "Jami sotilgan mahsulotlar"}
-                  </div>
-                  <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
-                    {formatCurrency(data.summary.totalSalesInvoiced, locale)}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
-                    {data.transactions.filter((t) => t.type === 'SALES_INVOICE').length} {isRu ? 'счетов-фактур' : 'ta invoys'}
-                  </div>
-                </div>
+                      {/* Sales Turnover Card */}
+                      <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-surface)' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                          {isRu ? 'Всего отгружено (Продажи)' : "Jami sotilgan mahsulotlar"}
+                        </div>
+                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
+                          {formatCurrency(data.summary.totalSalesInvoiced, locale, aktCurrency)}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                          {data.transactions.filter((t) => t.type === 'SALES_INVOICE').length} {isRu ? 'счетов-фактур' : 'ta invoys'}
+                        </div>
+                      </div>
 
-                {/* Purchase Turnover Card */}
-                <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-surface)' }}>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                    {isRu ? 'Всего получено (Закупки)' : "Jami qabul qilingan tovarlar"}
-                  </div>
-                  <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
-                    {formatCurrency(data.summary.totalPurchasesInvoiced, locale)}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
-                    {data.transactions.filter((t) => t.type === 'PURCHASE_RECEIPT').length} {isRu ? 'приходных документов' : 'ta kirim hujjati'}
-                  </div>
-                </div>
-              </div>
+                      {/* Purchase Turnover Card */}
+                      <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-surface)' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                          {isRu ? 'Всего получено (Закупки)' : "Jami qabul qilingan tovarlar"}
+                        </div>
+                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
+                          {formatCurrency(data.summary.totalPurchasesInvoiced, locale, aktCurrency)}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                          {data.transactions.filter((t) => t.type === 'PURCHASE_RECEIPT').length} {isRu ? 'приходных документов' : 'ta kirim hujjati'}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Filter Tabs */}
               <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>

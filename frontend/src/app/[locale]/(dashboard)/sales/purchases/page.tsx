@@ -68,7 +68,7 @@ export default function PurchasesPage() {
                     <td style={{ padding: '12px' }}>{(p as any).counterparty?.name || '—'}</td>
                     <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{formatDate((p as any).orderDate || p.docDate, locale)}</td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {formatCurrency(Number(p.totalAmount), locale)}
+                      {formatCurrency(Number(p.totalAmount), locale, (p as any).currency)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}><Badge variant="success">Qabul qilingan</Badge></td>
                   </tr>

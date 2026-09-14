@@ -214,7 +214,7 @@ export default function CustomersPage() {
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.phone || '—'}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: debt > 0 ? 600 : 400, color: debt > 0 ? '#f59e0b' : 'var(--color-text-secondary)' }}>
-                        {debt > 0 ? formatCurrency(debt, locale) : '—'}
+                        {debt > 0 ? formatCurrency(debt, locale, (c as any).currency || 'UZS') : '—'}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <Badge variant={c.type === 'BOTH' ? 'warning' : 'neutral'}>
@@ -259,63 +259,66 @@ export default function CustomersPage() {
       </Card>
 
       {/* Customer Profile Modal */}
-      {selectedCustomer && (
-        <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`${isRu ? 'Профиль клиента' : 'Mijoz'}: ${selectedCustomer.name}`} size="xl">
-          {profileLoading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
-          ) : profile ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
-                {[
-                  { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatCurrency(profile.metrics.totalSales, locale), color: undefined },
-                  { label: isRu ? 'Оплачено' : 'To\'langan', value: formatCurrency(profile.metrics.totalPaid, locale), color: '#10b981' },
-                  { label: isRu ? 'Долг' : 'Qarz', value: formatCurrency(profile.metrics.debtBalance, locale), color: '#f59e0b' },
-                  { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatCurrency(profile.metrics.totalReturned, locale), color: '#ef4444' },
-                  { label: isRu ? 'Валовая прибыль' : 'Yalpi foyda', value: formatCurrency(profile.metrics.grossProfit, locale), color: profile.metrics.grossProfit >= 0 ? '#10b981' : '#ef4444' },
-                ].map((m) => (
-                  <div key={m.label} style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</div>
-                    <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: m.color }}>{m.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              {profile.invoices.length > 0 && (
-                <div>
-                  <h3 style={{ fontWeight: 600, marginBottom: 10 }}>{isRu ? 'Последние продажи' : 'So\'nggi sotuvlar'}</h3>
-                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr style={{ background: 'var(--color-bg-subtle)' }}>
-                          {[isRu ? '№ Документа' : 'Hujjat №', isRu ? 'Дата' : 'Sana', isRu ? 'Сумма' : 'Summa', isRu ? 'Статус' : 'Holat'].map((h) => (
-                            <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {profile.invoices.slice(0, 8).map((inv: any) => (
-                          <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                            <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{inv.invoiceNumber}</td>
-                            <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate, locale)}</td>
-                            <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(inv.totalAmount), locale)}</td>
-                            <td style={{ padding: '8px 12px' }}>
-                              <Badge variant={inv.status === 'POSTED' ? 'success' : inv.status === 'DRAFT' ? 'warning' : 'error'}>
-                                {inv.status === 'POSTED' ? (isRu ? 'Проведён' : 'Tasdiqlangan') : inv.status === 'DRAFT' ? (isRu ? 'Черновик' : 'Qoralama') : inv.status}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+      {selectedCustomer && (() => {
+        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || 'UZS';
+        return (
+          <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`${isRu ? 'Профиль клиента' : 'Mijoz'}: ${selectedCustomer.name}`} size="xl">
+            {profileLoading ? (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
+            ) : profile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
+                  {[
+                    { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatCurrency(profile.metrics.totalSales, locale, custCurrency), color: undefined },
+                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatCurrency(profile.metrics.totalPaid, locale, custCurrency), color: '#10b981' },
+                    { label: isRu ? 'Долг' : 'Qarz', value: formatCurrency(profile.metrics.debtBalance, locale, custCurrency), color: '#f59e0b' },
+                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatCurrency(profile.metrics.totalReturned, locale, custCurrency), color: '#ef4444' },
+                    { label: isRu ? 'Валовая прибыль' : 'Yalpi foyda', value: formatCurrency(profile.metrics.grossProfit, locale, custCurrency), color: profile.metrics.grossProfit >= 0 ? '#10b981' : '#ef4444' },
+                  ].map((m) => (
+                    <div key={m.label} style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</div>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: m.color }}>{m.value}</div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Данные не загружены' : 'Ma\'lumot yuklanmadi'}</div>
-          )}
-        </Modal>
-      )}
+
+                {profile.invoices.length > 0 && (
+                  <div>
+                    <h3 style={{ fontWeight: 600, marginBottom: 10 }}>{isRu ? 'Последние продажи' : 'So\'nggi sotuvlar'}</h3>
+                    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--color-bg-subtle)' }}>
+                            {[isRu ? '№ Документа' : 'Hujjat №', isRu ? 'Дата' : 'Sana', isRu ? 'Сумма' : 'Summa', isRu ? 'Статус' : 'Holat'].map((h) => (
+                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {profile.invoices.slice(0, 8).map((inv: any) => (
+                            <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{inv.invoiceNumber}</td>
+                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate, locale)}</td>
+                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(inv.totalAmount), locale, inv.currency || custCurrency)}</td>
+                              <td style={{ padding: '8px 12px' }}>
+                                <Badge variant={inv.status === 'POSTED' ? 'success' : inv.status === 'DRAFT' ? 'warning' : 'error'}>
+                                  {inv.status === 'POSTED' ? (isRu ? 'Проведён' : 'Tasdiqlangan') : inv.status === 'DRAFT' ? (isRu ? 'Черновик' : 'Qoralama') : inv.status}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Данные не загружены' : 'Ma\'lumot yuklanmadi'}</div>
+            )}
+          </Modal>
+        );
+      })()}
       {/* Create Customer Drawer */}
       {isCreateOpen && (
         <CreateCounterpartyDrawer

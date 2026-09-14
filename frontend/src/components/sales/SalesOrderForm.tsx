@@ -558,9 +558,9 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     value: c.id,
     label: c.name,
     description: c.phone
-      ? `${c.phone}${Number(c.debtBalance) > 0 ? ` · ${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, 'UZS')}` : ''}`
+      ? `${c.phone}${Number(c.debtBalance) > 0 ? ` · ${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, (c as any).currency || currency)}` : ''}`
       : Number(c.debtBalance) > 0
-      ? `${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, 'UZS')}`
+      ? `${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, (c as any).currency || currency)}`
       : undefined,
   }));
 

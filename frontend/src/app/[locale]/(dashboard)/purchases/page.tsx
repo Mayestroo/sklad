@@ -518,7 +518,7 @@ export default function PurchasesPage() {
                       {formatCurrency(Number(r.totalAmount), locale, r.currency)}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? '#f59e0b' : 'var(--color-text-tertiary)' }} className="tabular-nums">
-                      {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), locale)}` : '—'}
+                      {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), locale, r.currency)}` : '—'}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>

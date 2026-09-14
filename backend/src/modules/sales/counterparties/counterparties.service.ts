@@ -295,6 +295,16 @@ export class CounterpartiesService {
       include: {
         folder: true,
         priceList: true,
+        purchaseReceipts: {
+          select: { currency: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        salesInvoices: {
+          select: { currency: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
         _count: {
           select: { salesInvoices: true, deals: true, payments: true },
         },
@@ -309,8 +319,13 @@ export class CounterpartiesService {
       const net = (custDebt !== 0 || suppDebt !== 0)
         ? custDebt - suppDebt
         : cp.type === CounterpartyType.SUPPLIER ? -raw : raw;
+      const currency =
+        (cp as any).purchaseReceipts?.[0]?.currency ||
+        (cp as any).salesInvoices?.[0]?.currency ||
+        'UZS';
       return {
         ...cp,
+        currency,
         customerDebt: custDebt,
         supplierDebt: suppDebt,
         netBalance: net,
@@ -326,6 +341,7 @@ export class CounterpartiesService {
         folder: true,
         priceList: true,
         salesInvoices: { orderBy: { createdAt: 'desc' }, take: 10 },
+        purchaseReceipts: { orderBy: { createdAt: 'desc' }, take: 10 },
         payments: { orderBy: { createdAt: 'desc' }, take: 10 },
         deals: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
@@ -335,7 +351,24 @@ export class CounterpartiesService {
       throw new NotFoundException('Counterparty not found');
     }
 
-    return counterparty;
+    const custDebt = Number((counterparty as any).customerDebt || 0);
+    const suppDebt = Number((counterparty as any).supplierDebt || 0);
+    const raw = Number(counterparty.debtBalance || 0);
+    const net = (custDebt !== 0 || suppDebt !== 0)
+      ? custDebt - suppDebt
+      : counterparty.type === CounterpartyType.SUPPLIER ? -raw : raw;
+    const currency =
+      (counterparty as any).purchaseReceipts?.[0]?.currency ||
+      (counterparty as any).salesInvoices?.[0]?.currency ||
+      'UZS';
+
+    return {
+      ...counterparty,
+      currency,
+      customerDebt: custDebt,
+      supplierDebt: suppDebt,
+      netBalance: net,
+    };
   }
 
   async update(tenantId: string, id: string, dto: UpdateCounterpartyDto) {

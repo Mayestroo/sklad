@@ -972,7 +972,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                       color: debt > 0 ? '#ef4444' : debt < 0 ? '#10b981' : 'var(--color-text-secondary)',
                     }}
                   >
-                    {formatCurrency(debt, locale)}
+                    {formatCurrency(debt, locale, currency)}
                   </span>
                 </div>
               );

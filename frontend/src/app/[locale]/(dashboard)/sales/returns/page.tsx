@@ -76,6 +76,7 @@ interface InvoiceItem {
   invoiceNumber: string;
   counterpartyId: string;
   totalAmount: number;
+  currency?: string;
 }
 
 interface ReturnableItemRow {
@@ -456,7 +457,7 @@ export default function SalesReturnsPage() {
     { value: '', label: isRu ? '— Выберите накладную —' : '— Asl sotuv fakturasini tanlang —' },
     ...filteredInvoices.map((inv) => ({
       value: inv.id,
-      label: `${inv.invoiceNumber} (${formatCurrency(Number(inv.totalAmount), locale)})`,
+      label: `${inv.invoiceNumber} (${formatCurrency(Number(inv.totalAmount), locale, inv.currency)})`,
     })),
   ];
 
@@ -608,7 +609,7 @@ export default function SalesReturnsPage() {
                       )}
                     </td>
                     <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                      {formatCurrency(Number(ret.totalAmount), locale)}
+                      {formatCurrency(Number(ret.totalAmount), locale, ret.currency)}
                     </td>
                     <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                       {getStatusBadge(ret.status)}
@@ -969,8 +970,8 @@ export default function SalesReturnsPage() {
                           )}
                         </td>
                         <td style={{ padding: '8px 10px', textAlign: 'right' }}>{Number(item.quantity)}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right' }} className="tabular-nums">{formatCurrency(Number(item.unitPrice), locale)}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{formatCurrency(Number(item.totalPrice), locale)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right' }} className="tabular-nums">{formatCurrency(Number(item.unitPrice), locale, selectedReturn.currency)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{formatCurrency(Number(item.totalPrice), locale, selectedReturn.currency)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -978,7 +979,7 @@ export default function SalesReturnsPage() {
                     <tr style={{ background: 'var(--color-bg-subtle)' }}>
                       <td colSpan={4} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{isRu ? 'Итого:' : 'Jami:'}</td>
                       <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#f59e0b' }} className="tabular-nums">
-                        {formatCurrency(Number(selectedReturn.totalAmount), locale)}
+                        {formatCurrency(Number(selectedReturn.totalAmount), locale, selectedReturn.currency)}
                       </td>
                     </tr>
                   </tfoot>

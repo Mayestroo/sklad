@@ -190,7 +190,7 @@ export default function SuppliersPage() {
                         }}
                         className="tabular-nums"
                       >
-                        {formatCurrency(debt, locale)}
+                        {formatCurrency(debt, locale, (s as any).currency || 'UZS')}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>

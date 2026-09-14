@@ -431,20 +431,20 @@ export class PurchasesService {
         });
 
         // Sync Product catalog costPrice in base currency
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { costPrice: landedCostInBase },
-        });
+        if (tx.product?.update) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { costPrice: landedCostInBase },
+          });
+        }
       }
 
-      // 2. Increase supplier debt (converted to base currency UZS)
-      const rate = Number(receipt.exchangeRate) || 1;
-      const totalAmountInBase = Math.round((Number(receipt.totalAmount) * rate) * 100) / 100;
+      // 2. Increase supplier debt (in document currency)
       await tx.counterparty.update({
         where: { id: receipt.counterpartyId },
         data: {
-          supplierDebt: { increment: totalAmountInBase },
-          debtBalance: { increment: totalAmountInBase },
+          supplierDebt: { increment: Number(receipt.totalAmount) },
+          debtBalance: { increment: Number(receipt.totalAmount) },
         },
       });
 
@@ -679,14 +679,12 @@ export class PurchasesService {
         where: { receiptId: id },
       });
 
-      // 2. Reduce supplier debt (in Base Currency UZS)
-      const rate = Number(receipt.exchangeRate) || 1;
-      const totalAmountInBase = Math.round((Number(receipt.totalAmount) * rate) * 100) / 100;
+      // 2. Reduce supplier debt (in document currency)
       await tx.counterparty.update({
         where: { id: receipt.counterpartyId },
         data: {
-          supplierDebt: { decrement: totalAmountInBase },
-          debtBalance: { decrement: totalAmountInBase },
+          supplierDebt: { decrement: Number(receipt.totalAmount) },
+          debtBalance: { decrement: Number(receipt.totalAmount) },
         },
       });
 
