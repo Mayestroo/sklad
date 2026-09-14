@@ -9,6 +9,7 @@ import {
   ServiceActStatus,
   ServicePaymentStatus,
   ServiceActType,
+  OpeningBalanceStatus,
   Prisma,
 } from '@prisma/client';
 import {
@@ -24,6 +25,22 @@ export class ServicesService {
     private readonly prisma: PrismaService,
     private readonly journalService: JournalService,
   ) {}
+
+  /**
+   * Helper: Ensure transaction date is not before the posted opening balance cutoff date
+   */
+  private async checkCutoffDate(tenantId: string, transactionDate: Date) {
+    const postedDoc = await this.prisma.openingBalanceDocument.findFirst({
+      where: { tenantId, status: OpeningBalanceStatus.POSTED },
+      orderBy: { openingDate: 'asc' },
+    });
+
+    if (postedDoc && new Date(transactionDate) < new Date(postedDoc.openingDate)) {
+      throw new BadRequestException(
+        `Hujjat sanasi korxonaning boshlang‘ich qoldiq sanasidan (${postedDoc.openingDate.toISOString().slice(0, 10)}) oldin bo‘lishi mumkin emas`,
+      );
+    }
+  }
 
   /**
    * Helper: Calculate line item amounts
@@ -87,6 +104,9 @@ export class ServicesService {
       throw new NotFoundException('Kontragent topilmadi');
     }
 
+    const actDate = dto.actDate ? new Date(dto.actDate) : new Date();
+    await this.checkCutoffDate(tenantId, actDate);
+
     const calculatedItems = dto.items.map((item) => this.calculateItem(item));
     const subtotal = calculatedItems.reduce((s, i) => s + i.subtotalNumber, 0);
     const vatAmount = calculatedItems.reduce((s, i) => s + i.vatAmountNumber, 0);
@@ -102,7 +122,7 @@ export class ServicesService {
         counterpartyId: dto.counterpartyId,
         status: ServiceActStatus.DRAFT,
         paymentStatus: ServicePaymentStatus.UNPAID,
-        actDate: dto.actDate ? new Date(dto.actDate) : new Date(),
+        actDate,
         currency: dto.currency || 'UZS',
         exchangeRate: dto.exchangeRate ? new Prisma.Decimal(dto.exchangeRate) : new Prisma.Decimal(1.0),
         externalNumber: dto.externalNumber || null,
@@ -274,6 +294,10 @@ export class ServicesService {
       }
     }
 
+    if (dto.actDate) {
+      await this.checkCutoffDate(tenantId, new Date(dto.actDate));
+    }
+
     let subtotal = Number(act.subtotal);
     let vatAmount = Number(act.vatAmount);
     let totalAmount = Number(act.totalAmount);
@@ -352,6 +376,8 @@ export class ServicesService {
       throw new BadRequestException("Faqat qoralama (DRAFT) holatidagi akt tasdiqlanishi mumkin");
     }
 
+    await this.checkCutoffDate(tenantId, act.actDate);
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.serviceAct.update({
         where: { id },
@@ -360,12 +386,26 @@ export class ServicesService {
       });
 
       // Update counterparty debt balance
-      // Both PROVIDED (customer owes us) and RECEIVED (we owe supplier) increment debtBalance in positive scale
+      // PROVIDED (customer owes us): increment customerDebt, increment debtBalance
+      // RECEIVED (we owe supplier): increment supplierDebt, decrement debtBalance
       if (Number(act.totalAmount) > 0) {
-        await tx.counterparty.update({
-          where: { id: act.counterpartyId },
-          data: { debtBalance: { increment: act.totalAmount } },
-        });
+        if (act.type === ServiceActType.PROVIDED) {
+          await tx.counterparty.update({
+            where: { id: act.counterpartyId },
+            data: {
+              customerDebt: { increment: act.totalAmount },
+              debtBalance: { increment: act.totalAmount },
+            },
+          });
+        } else {
+          await tx.counterparty.update({
+            where: { id: act.counterpartyId },
+            data: {
+              supplierDebt: { increment: act.totalAmount },
+              debtBalance: { decrement: act.totalAmount },
+            },
+          });
+        }
       }
 
       // Create automated BHMS double-entry journal postings
@@ -417,10 +457,23 @@ export class ServicesService {
     return this.prisma.$transaction(async (tx) => {
       // If was POSTED, reverse counterparty debt and remove journal entry
       if (act.status === ServiceActStatus.POSTED && Number(act.totalAmount) > 0) {
-        await tx.counterparty.update({
-          where: { id: act.counterpartyId },
-          data: { debtBalance: { decrement: act.totalAmount } },
-        });
+        if (act.type === ServiceActType.PROVIDED) {
+          await tx.counterparty.update({
+            where: { id: act.counterpartyId },
+            data: {
+              customerDebt: { decrement: act.totalAmount },
+              debtBalance: { decrement: act.totalAmount },
+            },
+          });
+        } else {
+          await tx.counterparty.update({
+            where: { id: act.counterpartyId },
+            data: {
+              supplierDebt: { decrement: act.totalAmount },
+              debtBalance: { increment: act.totalAmount },
+            },
+          });
+        }
 
         await tx.journalEntry.deleteMany({
           where: {
@@ -482,10 +535,23 @@ export class ServicesService {
     return this.prisma.$transaction(async (tx) => {
       // Reverse counterparty debt
       if (Number(act.totalAmount) > 0) {
-        await tx.counterparty.update({
-          where: { id: act.counterpartyId },
-          data: { debtBalance: { decrement: act.totalAmount } },
-        });
+        if (act.type === ServiceActType.PROVIDED) {
+          await tx.counterparty.update({
+            where: { id: act.counterpartyId },
+            data: {
+              customerDebt: { decrement: act.totalAmount },
+              debtBalance: { decrement: act.totalAmount },
+            },
+          });
+        } else {
+          await tx.counterparty.update({
+            where: { id: act.counterpartyId },
+            data: {
+              supplierDebt: { decrement: act.totalAmount },
+              debtBalance: { increment: act.totalAmount },
+            },
+          });
+        }
       }
 
       // Delete linked BHMS journal entry

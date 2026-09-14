@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useLocale } from 'next-intl';
+import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Modal } from '@/components/ui/Modal';
@@ -44,6 +45,7 @@ export function ServiceActDetailsModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const confirm = useConfirm();
+  const { token, company } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +85,12 @@ export function ServiceActDetailsModal({
     setLoading(true);
     setError(null);
     try {
-      await apiFetch(`/services/${act.id}/post`, { method: 'POST' });
+      await apiFetch(`/services/${act.id}/post`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
+      });
       toast.success(isRu ? 'Акт успешно проведен' : 'Akt muvaffaqiyatli tasdiqlandi');
       onRefresh();
       onClose();
@@ -112,7 +119,12 @@ export function ServiceActDetailsModal({
     setLoading(true);
     setError(null);
     try {
-      await apiFetch(`/services/${act.id}/cancel`, { method: 'POST' });
+      await apiFetch(`/services/${act.id}/cancel`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
+      });
       toast.success(isRu ? 'Акт успешно отменен' : 'Akt muvaffaqiyatli bekor qilindi');
       onRefresh();
       onClose();
@@ -141,7 +153,12 @@ export function ServiceActDetailsModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch<any>(`/services/${act.id}/unpost`, { method: 'POST' });
+      const res = await apiFetch<any>(`/services/${act.id}/unpost`, {
+        method: 'POST',
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
+      });
       toast.success(isRu ? 'Проведение акта отменено' : 'Akt o‘tkazmasi bekor qilindi');
       onRefresh();
       onClose();
@@ -176,9 +193,19 @@ export function ServiceActDetailsModal({
     setError(null);
     try {
       if (isPosted) {
-        await apiFetch(`/services/${act.id}/cancel`, { method: 'POST' });
+        await apiFetch(`/services/${act.id}/cancel`, {
+          method: 'POST',
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
+        });
       }
-      await apiFetch(`/services/${act.id}`, { method: 'DELETE' });
+      await apiFetch(`/services/${act.id}`, {
+        method: 'DELETE',
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
+      });
       toast.success(isRu ? 'Акт успешно удален' : 'Akt muvaffaqiyatli o‘chirildi');
       onRefresh();
       onClose();
@@ -203,7 +230,11 @@ export function ServiceActDetailsModal({
     setIsPaymentModalOpen(true);
 
     try {
-      const res = await apiFetch<any[]>('/finance/accounts');
+      const res = await apiFetch<any[]>('/finance/accounts', {
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
+      });
       if (res && Array.isArray(res)) {
         setAccounts(res);
         if (res.length > 0) {
@@ -234,6 +265,9 @@ export function ServiceActDetailsModal({
       const endpoint = isProvided ? '/finance/income' : '/finance/expense';
       await apiFetch(endpoint, {
         method: 'POST',
+        token: token || undefined,
+        tenantId: company?.id,
+        locale,
         body: JSON.stringify({
           accountId: selectedAccountId,
           counterpartyId: act.counterpartyId,

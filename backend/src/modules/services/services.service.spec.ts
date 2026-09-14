@@ -42,6 +42,9 @@ describe('ServicesService Unit Tests', () => {
       journalEntry: {
         deleteMany: jest.fn(),
       },
+      openingBalanceDocument: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       $transaction: jest.fn(async (cb) => cb(prisma)),
     };
 
@@ -118,7 +121,7 @@ describe('ServicesService Unit Tests', () => {
   });
 
   describe('Posting & Debt Accrual', () => {
-    it('should post a DRAFT act, update counterparty debt, and trigger journal auto-posting', async () => {
+    it('should post a PROVIDED DRAFT act, increment customerDebt & debtBalance, and trigger journal auto-posting', async () => {
       prisma.serviceAct.findFirst.mockResolvedValue({
         id: 'act-1',
         tenantId,
@@ -126,9 +129,11 @@ describe('ServicesService Unit Tests', () => {
         type: ServiceActType.PROVIDED,
         status: ServiceActStatus.DRAFT,
         totalAmount: 1000000,
+        actDate: new Date('2026-10-15'),
       });
       prisma.serviceAct.update.mockResolvedValue({
         id: 'act-1',
+        type: ServiceActType.PROVIDED,
         status: ServiceActStatus.POSTED,
         totalAmount: 1000000,
       });
@@ -142,14 +147,46 @@ describe('ServicesService Unit Tests', () => {
         }),
       );
 
-      // Verify counterparty debt was incremented
+      // Verify customer debt and positive debt balance were incremented
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: counterpartyId },
-        data: { debtBalance: { increment: 1000000 } },
+        data: {
+          customerDebt: { increment: 1000000 },
+          debtBalance: { increment: 1000000 },
+        },
       });
 
       // Verify double-entry journal posting was called
       expect(journalService.autoPostServiceAct).toHaveBeenCalled();
+    });
+
+    it('should post a RECEIVED DRAFT act, increment supplierDebt & decrement debtBalance', async () => {
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-2',
+        tenantId,
+        counterpartyId,
+        type: ServiceActType.RECEIVED,
+        status: ServiceActStatus.DRAFT,
+        totalAmount: 500000,
+        actDate: new Date('2026-10-15'),
+      });
+      prisma.serviceAct.update.mockResolvedValue({
+        id: 'act-2',
+        type: ServiceActType.RECEIVED,
+        status: ServiceActStatus.POSTED,
+        totalAmount: 500000,
+      });
+
+      await service.post(tenantId, 'act-2');
+
+      // Verify supplier debt incremented and debtBalance decremented
+      expect(prisma.counterparty.update).toHaveBeenCalledWith({
+        where: { id: counterpartyId },
+        data: {
+          supplierDebt: { increment: 500000 },
+          debtBalance: { decrement: 500000 },
+        },
+      });
     });
 
     it('should throw BadRequestException if posting an already posted act', async () => {
@@ -161,6 +198,30 @@ describe('ServicesService Unit Tests', () => {
       await expect(service.post(tenantId, 'act-1')).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    it('should throw BadRequestException if actDate is before cutoff date', async () => {
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue({
+        id: 'ob-doc-1',
+        openingDate: new Date('2026-10-01'),
+      });
+
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-1',
+        tenantId,
+        counterpartyId,
+        type: ServiceActType.PROVIDED,
+        status: ServiceActStatus.DRAFT,
+        totalAmount: 1000000,
+        actDate: new Date('2026-09-15'),
+      });
+
+      await expect(service.post(tenantId, 'act-1')).rejects.toThrow(
+        BadRequestException,
+      );
+
+      // Reset mock
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(null);
     });
   });
 
@@ -190,9 +251,10 @@ describe('ServicesService Unit Tests', () => {
       );
     });
 
-    it('should safely cancel an un-paid posted act, decrement counterparty debt, and delete journal entries', async () => {
+    it('should safely cancel an unpaid PROVIDED posted act, revert customerDebt, and delete journal entries', async () => {
       prisma.serviceAct.findFirst.mockResolvedValue({
         id: 'act-1',
+        type: ServiceActType.PROVIDED,
         counterpartyId,
         status: ServiceActStatus.POSTED,
         paidAmount: 0,
@@ -208,7 +270,10 @@ describe('ServicesService Unit Tests', () => {
 
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: counterpartyId },
-        data: { debtBalance: { decrement: 1000000 } },
+        data: {
+          customerDebt: { decrement: 1000000 },
+          debtBalance: { decrement: 1000000 },
+        },
       });
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
@@ -224,6 +289,32 @@ describe('ServicesService Unit Tests', () => {
           data: { status: ServiceActStatus.CANCELLED },
         }),
       );
+    });
+
+    it('should safely cancel an unpaid RECEIVED posted act, revert supplierDebt, and delete journal entries', async () => {
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-2',
+        type: ServiceActType.RECEIVED,
+        counterpartyId,
+        status: ServiceActStatus.POSTED,
+        paidAmount: 0,
+        totalAmount: 500000,
+      });
+      prisma.financeTransaction.count.mockResolvedValue(0);
+      prisma.serviceAct.update.mockResolvedValue({
+        id: 'act-2',
+        status: ServiceActStatus.CANCELLED,
+      });
+
+      await service.cancel(tenantId, 'act-2');
+
+      expect(prisma.counterparty.update).toHaveBeenCalledWith({
+        where: { id: counterpartyId },
+        data: {
+          supplierDebt: { decrement: 500000 },
+          debtBalance: { increment: 500000 },
+        },
+      });
     });
   });
 
@@ -279,9 +370,10 @@ describe('ServicesService Unit Tests', () => {
       );
     });
 
-    it('should safely unpost an unpaid posted act back to DRAFT', async () => {
+    it('should safely unpost an unpaid PROVIDED posted act back to DRAFT', async () => {
       prisma.serviceAct.findFirst.mockResolvedValue({
         id: 'act-1',
+        type: ServiceActType.PROVIDED,
         status: ServiceActStatus.POSTED,
         paidAmount: 0,
         totalAmount: 1000000,
@@ -297,7 +389,10 @@ describe('ServicesService Unit Tests', () => {
 
       expect(prisma.counterparty.update).toHaveBeenCalledWith({
         where: { id: counterpartyId },
-        data: { debtBalance: { decrement: 1000000 } },
+        data: {
+          customerDebt: { decrement: 1000000 },
+          debtBalance: { decrement: 1000000 },
+        },
       });
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
@@ -314,6 +409,32 @@ describe('ServicesService Unit Tests', () => {
         }),
       );
       expect(res.status).toBe(ServiceActStatus.DRAFT);
+    });
+
+    it('should safely unpost an unpaid RECEIVED posted act back to DRAFT', async () => {
+      prisma.serviceAct.findFirst.mockResolvedValue({
+        id: 'act-2',
+        type: ServiceActType.RECEIVED,
+        status: ServiceActStatus.POSTED,
+        paidAmount: 0,
+        totalAmount: 500000,
+        counterpartyId,
+      });
+      prisma.financeTransaction.count.mockResolvedValue(0);
+      prisma.serviceAct.update.mockResolvedValue({
+        id: 'act-2',
+        status: ServiceActStatus.DRAFT,
+      });
+
+      await service.unpost(tenantId, 'act-2');
+
+      expect(prisma.counterparty.update).toHaveBeenCalledWith({
+        where: { id: counterpartyId },
+        data: {
+          supplierDebt: { decrement: 500000 },
+          debtBalance: { increment: 500000 },
+        },
+      });
     });
   });
 });

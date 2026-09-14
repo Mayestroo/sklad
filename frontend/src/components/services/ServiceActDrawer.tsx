@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
+import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
 import { Drawer } from '@/components/ui/Drawer';
@@ -36,7 +37,7 @@ const UNIT_OPTIONS = [
   { value: 'trip', label: 'reys / рейс' },
   { value: 'month', label: 'oy / месяц' },
   { value: 'sq_m', label: 'm² / кв.м' },
-  { value: 'service', label: 'xizmat / услуга' },
+  { value: 'service', label: 'xizmat / услуga' },
 ];
 
 export function ServiceActDrawer({
@@ -48,6 +49,7 @@ export function ServiceActDrawer({
 }: ServiceActDrawerProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const { token, company } = useAuth();
 
   const [type, setType] = useState<'PROVIDED' | 'RECEIVED'>(defaultType);
   const [counterpartyId, setCounterpartyId] = useState('');
@@ -78,7 +80,11 @@ export function ServiceActDrawer({
     if (!isOpen) return;
 
     // Fetch counterparties
-    apiFetch<{ items: any[] }>('/sales/counterparties')
+    apiFetch<{ items: any[] }>('/sales/counterparties', {
+      token: token || undefined,
+      tenantId: company?.id,
+      locale,
+    })
       .then((res) => {
         if (res && res.items) {
           setCounterparties(res.items);
@@ -87,7 +93,11 @@ export function ServiceActDrawer({
       .catch(() => {});
 
     // Fetch catalog services (Product with type SERVICE)
-    apiFetch<{ items: any[] }>('/products?type=SERVICE&limit=100')
+    apiFetch<{ items: any[] }>('/inventory/products?type=SERVICE&limit=100', {
+      token: token || undefined,
+      tenantId: company?.id,
+      locale,
+    })
       .then((res) => {
         if (res && res.items) {
           setServicesCatalog(res.items);
@@ -247,11 +257,17 @@ export function ServiceActDrawer({
         await apiFetch(`/services/${initialData.id}`, {
           method: 'PUT',
           body: JSON.stringify(payload),
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
         });
       } else {
         await apiFetch('/services', {
           method: 'POST',
           body: JSON.stringify(payload),
+          token: token || undefined,
+          tenantId: company?.id,
+          locale,
         });
       }
       onSuccess();
