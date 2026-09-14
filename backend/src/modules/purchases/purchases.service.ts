@@ -411,6 +411,10 @@ export class PurchasesService {
           });
         }
 
+        const rate = Number(receipt.exchangeRate) || 1;
+        const purchasePriceInBase = Math.round((Number(item.unitPrice) * rate) * 100) / 100;
+        const landedCostInBase = Math.round((Number(item.landedCost) * rate) * 100) / 100;
+
         // Create product batch record
         await tx.productBatch.create({
           data: {
@@ -421,18 +425,26 @@ export class PurchasesService {
             batchNumber: `${receipt.docNumber}-${item.id.substring(0, 6)}`,
             initialQty: item.quantity,
             remainingQty: item.quantity,
-            purchasePrice: item.unitPrice,
-            landedCost: item.landedCost,
+            purchasePrice: purchasePriceInBase,
+            landedCost: landedCostInBase,
           },
+        });
+
+        // Sync Product catalog costPrice in base currency
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { costPrice: landedCostInBase },
         });
       }
 
-      // 2. Increase supplier debt
+      // 2. Increase supplier debt (converted to base currency UZS)
+      const rate = Number(receipt.exchangeRate) || 1;
+      const totalAmountInBase = Math.round((Number(receipt.totalAmount) * rate) * 100) / 100;
       await tx.counterparty.update({
         where: { id: receipt.counterpartyId },
         data: {
-          supplierDebt: { increment: receipt.totalAmount },
-          debtBalance: { increment: receipt.totalAmount },
+          supplierDebt: { increment: totalAmountInBase },
+          debtBalance: { increment: totalAmountInBase },
         },
       });
 
@@ -472,10 +484,11 @@ export class PurchasesService {
         let rawMaterialSum = 0;
         let serviceSum = 0;
 
+        const rate = Number(receipt.exchangeRate) || 1;
         const totalNet =
-          Number(receipt.subtotalAmount || 0) -
-          Number(receipt.discountAmount || 0) +
-          Number(receipt.additionalExpensesTotal || 0);
+          Math.round((Number(receipt.subtotalAmount || 0) -
+            Number(receipt.discountAmount || 0) +
+            Number(receipt.additionalExpensesTotal || 0)) * rate * 100) / 100;
 
         const hasSpecialTypes = receipt.items.some(
           (i: any) =>
@@ -487,24 +500,24 @@ export class PurchasesService {
         } else {
           for (const item of receipt.items) {
             const lineTotal =
-              item.totalPrice !== undefined
+              (item.totalPrice !== undefined
                 ? Number(item.totalPrice)
-                : Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            const allocated = Number(item.allocatedExpenses || 0);
-            const itemNet = lineTotal + allocated;
+                : Number(item.quantity || 0) * Number(item.unitPrice || 0)) * rate;
+            const allocated = Number(item.allocatedExpenses || 0) * rate;
+            const itemNet = Math.round((lineTotal + allocated) * 100) / 100;
             const itemType = item.product?.type || 'PRODUCT';
 
             if (itemType === 'RAW_MATERIAL') {
               rawMaterialSum += itemNet;
             } else if (itemType === 'SERVICE') {
-              serviceSum += lineTotal;
+              serviceSum += Math.round(lineTotal * 100) / 100;
             } else {
               productSum += itemNet;
             }
           }
         }
 
-        const vatSum = Number(receipt.vatAmount);
+        const vatSum = Math.round(Number(receipt.vatAmount) * rate * 100) / 100;
         const journalLines: any[] = [];
 
         if (productSum > 0 && inventoryAcc) {
@@ -666,12 +679,14 @@ export class PurchasesService {
         where: { receiptId: id },
       });
 
-      // 2. Reduce supplier debt
+      // 2. Reduce supplier debt (in Base Currency UZS)
+      const rate = Number(receipt.exchangeRate) || 1;
+      const totalAmountInBase = Math.round((Number(receipt.totalAmount) * rate) * 100) / 100;
       await tx.counterparty.update({
         where: { id: receipt.counterpartyId },
         data: {
-          supplierDebt: { decrement: receipt.totalAmount },
-          debtBalance: { decrement: receipt.totalAmount },
+          supplierDebt: { decrement: totalAmountInBase },
+          debtBalance: { decrement: totalAmountInBase },
         },
       });
 

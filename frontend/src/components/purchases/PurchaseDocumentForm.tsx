@@ -1319,19 +1319,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px' }}>
-                  {isRu ? 'Цена за ед.' : 'Birlik narxi'}
+                  {isRu ? `Цена за ед. (${currency})` : `Birlik narxi (${currency})`}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
-                  {isRu ? 'Скидка' : 'Chegirma'}
+                  {isRu ? `Скидка (${currency})` : `Chegirma (${currency})`}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '90px' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '120px' }}>
-                  {isRu ? 'Сумма НДС' : 'QQS summasi'}
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '130px' }}>
+                  {isRu ? `Сумма НДС (${currency})` : `QQS summasi (${currency})`}
                 </th>
-                <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px' }}>
-                  {isRu ? 'Итого' : 'Jami Summa'}
+                <th style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
+                  {isRu ? `Итого (${currency})` : `Jami Summa (${currency})`}
                 </th>
                 {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}></th>}
               </tr>
@@ -1428,12 +1428,17 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
                     {/* VAT Amount */}
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 500 }} className="tabular-nums">
-                      {formatCurrency(lineVat, locale)}
+                      {formatCurrency(lineVat, locale, currency)}
                     </td>
 
                     {/* Line Total */}
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
-                      {formatCurrency(lineTotal, locale)}
+                      <div>{formatCurrency(lineTotal, locale, currency)}</div>
+                      {currency !== 'UZS' && exchangeRate > 1 && (
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 400, marginTop: '2px' }}>
+                          ≈ {formatCurrency(lineTotal * exchangeRate, locale, 'UZS')}
+                        </div>
+                      )}
                     </td>
 
                     {/* Remove button */}
@@ -1478,26 +1483,33 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'Сумма позиций:' : 'Pozitsiyalar summasi:'}</span>
-            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.subtotal, locale)}</span>
+            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.subtotal, locale, currency)}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'Общая скидка:' : 'Umumiy chegirma:'}</span>
-            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.discount, locale)}</span>
+            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.discount, locale, currency)}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'НДС total:' : 'QQS total:'}</span>
-            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.vat, locale)}</span>
+            <span className="tabular-nums" style={{ fontWeight: 500 }}>{formatCurrency(totals.vat, locale, currency)}</span>
           </div>
 
           <div style={{ borderTop: '2px solid var(--color-border-light)', paddingTop: 'var(--space-3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
               {isRu ? 'ИТОГО К ОПЛАТЕ:' : 'JAMI TO‘LANISHI KERAK:'}
             </span>
-            <span style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-              {formatCurrency(totals.grandTotal, locale, currency)}
-            </span>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
+                {formatCurrency(totals.grandTotal, locale, currency)}
+              </div>
+              {currency !== 'UZS' && exchangeRate > 1 && (
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
+                  ≈ {formatCurrency(totals.grandTotal * exchangeRate, locale, 'UZS')} ({isRu ? 'курс:' : 'kurs:'} {exchangeRate.toLocaleString()})
+                </div>
+              )}
+            </div>
           </div>
         </Card>
       </div>
