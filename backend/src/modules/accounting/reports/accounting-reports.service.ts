@@ -62,9 +62,31 @@ export class AccountingReportsService {
       };
     });
 
+    const recentReceipt = await this.prisma.purchaseReceipt.findFirst({
+      where: { tenantId, status: 'POSTED' },
+      select: { currency: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const recentInvoice = await this.prisma.salesInvoice.findFirst({
+      where: { tenantId, status: 'POSTED' },
+      select: { currency: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const company = await this.prisma.company.findUnique({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+
+    const reportCurrency =
+      recentReceipt?.currency ||
+      recentInvoice?.currency ||
+      (company?.settings as any)?.sales?.defaultCurrency ||
+      'UZS';
+
     return {
       periodStart: new Date(new Date().getFullYear(), 0, 1).toISOString(),
       periodEnd: new Date().toISOString(),
+      currency: reportCurrency,
       items,
       totalDebitTurnover,
       totalCreditTurnover,
@@ -98,6 +120,7 @@ export class AccountingReportsService {
     const netProfit = grossProfit; // Simplification before operating expenses
 
     return {
+      currency: osv.currency || 'UZS',
       balanceSheet: {
         totalAssets,
         totalLiabilities,

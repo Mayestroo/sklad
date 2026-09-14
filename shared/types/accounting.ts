@@ -49,7 +49,25 @@ export interface TrialBalanceItem {
 export interface TrialBalanceReport {
   periodStart: string;
   periodEnd: string;
+  currency?: string;
   items: TrialBalanceItem[];
   totalDebitTurnover: number;
   totalCreditTurnover: number;
 }
+
+export interface FinancialStatements {
+  currency?: string;
+  balanceSheet: {
+    totalAssets: number;
+    totalLiabilities: number;
+    totalEquity: number;
+    isBalanced: boolean;
+  };
+  profitLoss: {
+    totalRevenue: number;
+    totalCogs: number;
+    grossProfit: number;
+    netProfit: number;
+  };
+}
+

@@ -18,6 +18,7 @@ import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -462,7 +463,11 @@ export default function DashboardPage() {
         {/* Sales */}
         <KpiCard
           title={isRu ? 'Объём продаж' : 'Sotuv hajmi'}
-          value={`${fmt(data?.sales?.totalSales ?? 0)} UZS`}
+          value={
+            (data?.sales as any)?.byCurrency && (data?.sales as any).byCurrency.length > 0
+              ? (data?.sales as any).byCurrency.map((c: any) => formatCurrency(c.amount, locale, c.currency)).join(' / ')
+              : `${fmt(data?.sales?.totalSales ?? 0)} UZS`
+          }
           subtitle={`${data?.sales?.invoiceCount ?? 0} ${isRu ? 'документов' : 'ta hujjat'}`}
           icon={ShoppingCart}
           iconColor="var(--color-info-600)"
@@ -567,10 +572,14 @@ export default function DashboardPage() {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
-              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>
-                {fmt(data?.debts?.receivable?.total ?? 0)} UZS
-              </div>
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+              <MultiCurrencyValue
+                items={(data?.debts?.receivable as any)?.byCurrency}
+                fallbackAmount={data?.debts?.receivable?.total ?? 0}
+                fallbackCurrency={(data?.debts?.receivable as any)?.byCurrency?.[0]?.currency || 'UZS'}
+                locale={locale}
+                color="var(--color-success-600)"
+              />
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                 {data?.debts?.receivable?.count ?? 0} {isRu ? 'контрагентов' : 'ta kontragent'}
               </div>
             </div>
@@ -593,10 +602,14 @@ export default function DashboardPage() {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
-              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>
-                {fmt(data?.debts?.payable?.total ?? 0)} UZS
-              </div>
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+              <MultiCurrencyValue
+                items={(data?.debts?.payable as any)?.byCurrency}
+                fallbackAmount={data?.debts?.payable?.total ?? 0}
+                fallbackCurrency={(data?.debts?.payable as any)?.byCurrency?.[0]?.currency || 'UZS'}
+                locale={locale}
+                color="var(--color-error-600)"
+              />
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                 {data?.debts?.payable?.count ?? 0} {isRu ? 'контрагентов' : 'ta kontragent'}
               </div>
             </div>

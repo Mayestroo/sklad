@@ -28,6 +28,8 @@ export default function FinancialReportsPage() {
       .finally(() => setLoading(false));
   }, [token, company]);
 
+  const reportCurrency = (statements as any)?.currency || 'UZS';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Page Header */}
@@ -70,27 +72,27 @@ export default function FinancialReportsPage() {
               <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>I. JAMI AKTIVLAR (ASSETS)</div>
                 <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', marginTop: '4px' }} className="tabular-nums">
-                  {formatCurrency(Number(statements.balanceSheet.totalAssets), locale, 'UZS')}
+                  {formatCurrency(Number(statements.balanceSheet.totalAssets), locale, reportCurrency)}
                 </div>
               </div>
 
               <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>II. MAJBURIYATLAR (LIABILITIES)</div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)', marginTop: '4px' }} className="tabular-nums">
-                  {formatCurrency(Number(statements.balanceSheet.totalLiabilities), locale, 'UZS')}
+                  {formatCurrency(Number(statements.balanceSheet.totalLiabilities), locale, reportCurrency)}
                 </div>
               </div>
 
               <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>III. XUSUSIY KAPITAL / SOF FOYDA (EQUITY)</div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', marginTop: '4px' }} className="tabular-nums">
-                  {formatCurrency(Number(statements.balanceSheet.totalEquity), locale, 'UZS')}
+                  {formatCurrency(Number(statements.balanceSheet.totalEquity), locale, reportCurrency)}
                 </div>
               </div>
 
               <div style={{ borderTop: '2px solid var(--color-border)', paddingTop: 'var(--space-3)', display: 'flex', justifyContent: 'space-between', fontWeight: 'var(--font-bold)' }}>
                 <span>JAMI PASSIVLAR:</span>
-                <span className="tabular-nums">{formatCurrency(Number(statements.balanceSheet.totalLiabilities) + Number(statements.balanceSheet.totalEquity), locale, 'UZS')}</span>
+                <span className="tabular-nums">{formatCurrency(Number(statements.balanceSheet.totalLiabilities) + Number(statements.balanceSheet.totalEquity), locale, reportCurrency)}</span>
               </div>
             </div>
           </Card>
@@ -107,25 +109,25 @@ export default function FinancialReportsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--color-border-light)' }}>
                 <span>1. Sotuvdan daromad (Net Revenue - Schyot 9010):</span>
                 <strong className="tabular-nums" style={{ color: 'var(--color-success-600)' }}>
-                  {formatCurrency(Number(statements.profitLoss.totalRevenue), locale, 'UZS')}
+                  {formatCurrency(Number(statements.profitLoss.totalRevenue), locale, reportCurrency)}
                 </strong>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--color-border-light)' }}>
                 <span>2. Sotilgan tovarlar tannarxi (COGS - Schyot 9110):</span>
                 <strong className="tabular-nums" style={{ color: 'var(--color-error-600)' }}>
-                  - {formatCurrency(Number(statements.profitLoss.totalCogs), locale, 'UZS')}
+                  - {formatCurrency(Number(statements.profitLoss.totalCogs), locale, reportCurrency)}
                 </strong>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: 'var(--color-primary-50)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
                 <span>YALPI FOYDA (GROSS PROFIT):</span>
-                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.grossProfit), locale, 'UZS')}</span>
+                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.grossProfit), locale, reportCurrency)}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: 'var(--color-success-50)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-base)', color: 'var(--color-success-600)', marginTop: 'var(--space-4)' }}>
                 <span>SOF FOYDA (NET PROFIT):</span>
-                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.netProfit), locale, 'UZS')}</span>
+                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.netProfit), locale, reportCurrency)}</span>
               </div>
             </div>
           </Card>

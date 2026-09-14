@@ -131,10 +131,19 @@ export class DashboardService {
 
     const invoices = await this.prisma.salesInvoice.findMany({
       where: { tenantId, invoiceDate: { gte: from, lte: to } },
-      select: { id: true, invoiceDate: true, totalAmount: true, status: true },
+      select: { id: true, invoiceDate: true, totalAmount: true, status: true, currency: true },
     });
 
-    const totalSales = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
+    const salesByCurr: Record<string, number> = {};
+    let totalSales = 0;
+    invoices.forEach((inv) => {
+      const amt = Number(inv.totalAmount || 0);
+      const curr = inv.currency || 'UZS';
+      salesByCurr[curr] = (salesByCurr[curr] || 0) + amt;
+      totalSales += amt;
+    });
+
+    const byCurrency = Object.entries(salesByCurr).map(([currency, amount]) => ({ currency, amount }));
 
     // Sales dynamics by granularity
     const granularity = filters.granularity ?? 'day';
@@ -159,7 +168,7 @@ export class DashboardService {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([period, amount]) => ({ period, amount }));
 
-    return { totalSales, invoiceCount: invoices.length, dynamics };
+    return { totalSales, invoiceCount: invoices.length, byCurrency, dynamics };
   }
 
   // ─── /api/dashboard/debts ────────────────────────────────────────
@@ -175,11 +184,13 @@ export class DashboardService {
         supplierDebt: true,
         debtBalance: true,
         salesInvoices: {
+          where: { status: 'POSTED' },
           select: { currency: true },
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
         purchaseReceipts: {
+          where: { status: 'POSTED' },
           select: { currency: true },
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -197,8 +208,8 @@ export class DashboardService {
       const suppDebt = Number((c as any).supplierDebt || 0);
       const rawBalance = Number(c.debtBalance || 0);
       const currency =
-        (c as any).salesInvoices?.[0]?.currency ||
         (c as any).purchaseReceipts?.[0]?.currency ||
+        (c as any).salesInvoices?.[0]?.currency ||
         'UZS';
 
       if (custDebt > 0) {
@@ -237,15 +248,30 @@ export class DashboardService {
     debtors.sort((a, b) => b.amount - a.amount);
     creditors.sort((a, b) => b.amount - a.amount);
 
+    const receivableByCurr: Record<string, number> = {};
+    debtors.forEach((d) => {
+      receivableByCurr[d.currency] = (receivableByCurr[d.currency] || 0) + d.amount;
+    });
+
+    const payableByCurr: Record<string, number> = {};
+    creditors.forEach((c) => {
+      payableByCurr[c.currency] = (payableByCurr[c.currency] || 0) + c.amount;
+    });
+
+    const receivableByCurrency = Object.entries(receivableByCurr).map(([currency, amount]) => ({ currency, amount }));
+    const payableByCurrency = Object.entries(payableByCurr).map(([currency, amount]) => ({ currency, amount }));
+
     return {
       receivable: {
         total: totalReceivable,
         count: debtors.length,
+        byCurrency: receivableByCurrency,
         topDebtors: debtors.slice(0, 5),
       },
       payable: {
         total: totalPayable,
         count: creditors.length,
+        byCurrency: payableByCurrency,
         topCreditors: creditors.slice(0, 5),
       },
     };
