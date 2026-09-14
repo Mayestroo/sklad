@@ -596,7 +596,11 @@ export class PurchasesService {
     const receipt = await this.prisma.purchaseReceipt.findFirst({
       where: { id, tenantId },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
         counterparty: true,
       },
     });
@@ -630,6 +634,12 @@ export class PurchasesService {
     return this.prisma.$transaction(async (tx) => {
       // 1. Decrement stock levels & delete batches
       for (const item of receipt.items) {
+        const itemType = (item as any).product?.type || 'PRODUCT';
+        if (itemType === 'SERVICE') {
+          // Services do not have physical warehouse stock or product batches
+          continue;
+        }
+
         const stockLevel = await tx.stockLevel.findUnique({
           where: {
             tenantId_warehouseId_productId: {
@@ -1274,6 +1284,12 @@ export class PurchasesService {
       const unitPrice = Number(item.unitPrice);
       const vatAmount = Number(item.vatAmount || 0);
       const itemType = item.product?.type || 'PRODUCT';
+
+      if (itemType === 'SERVICE' || itemType === 'BUNDLE') {
+        throw new BadRequestException(
+          `Xizmat (SERVICE) yoki to'plam (BUNDLE) turidagi mahsulotlarni ombordan qaytarish taqiqlanadi.`,
+        );
+      }
 
       totalVatAmount += vatAmount;
       basePurchaseTotalReduction += qty * unitPrice + vatAmount;

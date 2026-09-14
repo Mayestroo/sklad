@@ -476,6 +476,98 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         service.unpostReceipt('tenant-123', 'user-1', 'rec-paid'),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should unpost receipt with mixed PRODUCT, RAW_MATERIAL, and SERVICE: decrement stock only for physical items and skip SERVICE', async () => {
+      const receipt = {
+        id: 'rec-unpost-mixed',
+        tenantId: 'tenant-123',
+        status: PurchaseDocStatus.POSTED,
+        paidAmount: 0,
+        paymentStatus: PurchasePaymentStatus.UNPAID,
+        returnStatus: PurchaseReturnStatus.NONE,
+        warehouseId: 'wh-1',
+        counterpartyId: 'supp-1',
+        totalAmount: 392000,
+        items: [
+          {
+            id: 'item-prod',
+            productId: 'prod-1',
+            quantity: 2,
+            product: { id: 'prod-1', type: 'PRODUCT' },
+          },
+          {
+            id: 'item-raw',
+            productId: 'raw-1',
+            quantity: 5,
+            product: { id: 'raw-1', type: 'RAW_MATERIAL' },
+          },
+          {
+            id: 'item-srv',
+            productId: 'srv-1',
+            quantity: 1,
+            product: { id: 'srv-1', type: 'SERVICE' },
+          },
+        ],
+        counterparty: { id: 'supp-1' },
+      };
+
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+      prisma.stockLevel.findUnique.mockImplementation(({ where }: { where: any }) => {
+        if (where.tenantId_warehouseId_productId.productId === 'prod-1') {
+          return Promise.resolve({ id: 'stock-prod', quantity: 10 });
+        }
+        if (where.tenantId_warehouseId_productId.productId === 'raw-1') {
+          return Promise.resolve({ id: 'stock-raw', quantity: 20 });
+        }
+        return Promise.resolve(null);
+      });
+      prisma.stockLevel.update.mockResolvedValue({});
+      prisma.productBatch.deleteMany.mockResolvedValue({});
+      prisma.counterparty.update.mockResolvedValue({});
+      prisma.journalEntry.deleteMany.mockResolvedValue({});
+      prisma.auditLog.create.mockResolvedValue({});
+      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({
+        ...receipt,
+        ...data,
+      }));
+
+      const res = await service.unpostReceipt('tenant-123', 'user-1', 'rec-unpost-mixed');
+
+      expect(res.status).toBe(PurchaseDocStatus.DRAFT);
+      // Stock updated for prod-1 (10 -> 8) and raw-1 (20 -> 15), NOT for srv-1
+      expect(prisma.stockLevel.update).toHaveBeenCalledTimes(2);
+      expect(prisma.stockLevel.update).toHaveBeenCalledWith({
+        where: { id: 'stock-prod' },
+        data: { quantity: 8 },
+      });
+      expect(prisma.stockLevel.update).toHaveBeenCalledWith({
+        where: { id: 'stock-raw' },
+        data: { quantity: 15 },
+      });
+
+      // Product batches deleted for receipt
+      expect(prisma.productBatch.deleteMany).toHaveBeenCalledWith({
+        where: { receiptId: 'rec-unpost-mixed' },
+      });
+
+      // Supplier debt reversed
+      expect(prisma.counterparty.update).toHaveBeenCalledWith({
+        where: { id: 'supp-1' },
+        data: {
+          supplierDebt: { decrement: 392000 },
+          debtBalance: { decrement: 392000 },
+        },
+      });
+
+      // Journal entries removed
+      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
+        where: {
+          tenantId: 'tenant-123',
+          sourceDocType: 'PurchaseReceipt',
+          sourceDocId: 'rec-unpost-mixed',
+        },
+      });
+    });
   });
 
   // ─── TICKET #17: PURCHASE RETURNS ──────────────────────────────────
