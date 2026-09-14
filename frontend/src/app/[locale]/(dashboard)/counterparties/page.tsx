@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
+import { QuickPaymentModal } from '@/components/counterparties/QuickPaymentModal';
+import { AktSverkaDrawer } from '@/components/counterparties/AktSverkaDrawer';
 import {
   Users,
   Plus,
@@ -28,6 +30,9 @@ import {
   MoveRight,
   Inbox,
   Tag,
+  ArrowDownLeft,
+  ArrowUpRight,
+  FileText,
 } from 'lucide-react';
 
 interface CounterpartyFolder {
@@ -111,6 +116,10 @@ export default function CounterpartiesPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [hasDebtOnly, setHasDebtOnly] = useState(false);
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'receivables' | 'payables' | 'settled'>('all');
+
+  // Quick Payment & Akt Sverka Drawer states
+  const [paymentCounterparty, setPaymentCounterparty] = useState<Counterparty | null>(null);
+  const [statementCounterpartyId, setStatementCounterpartyId] = useState<string | null>(null);
 
   // Create Counterparty Modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -636,7 +645,16 @@ export default function CounterpartiesPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {/* KPI Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
-            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid var(--color-primary-500, #3b82f6)' }}>
+            <Card
+              onClick={() => setTypeFilter(typeFilter === 'CUSTOMER' ? '' : 'CUSTOMER')}
+              style={{
+                padding: 'var(--space-3) var(--space-4)',
+                borderTop: '3px solid var(--color-primary-500, #3b82f6)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: typeFilter === 'CUSTOMER' ? '0 0 0 2px var(--color-primary-500)' : undefined,
+              }}
+            >
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                 {isRu ? 'Клиенты' : 'Mijozlar'}
               </div>
@@ -645,7 +663,16 @@ export default function CounterpartiesPage() {
               </div>
             </Card>
 
-            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid #f59e0b' }}>
+            <Card
+              onClick={() => setTypeFilter(typeFilter === 'SUPPLIER' ? '' : 'SUPPLIER')}
+              style={{
+                padding: 'var(--space-3) var(--space-4)',
+                borderTop: '3px solid #f59e0b',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: typeFilter === 'SUPPLIER' ? '0 0 0 2px #f59e0b' : undefined,
+              }}
+            >
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                 {isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
               </div>
@@ -654,7 +681,16 @@ export default function CounterpartiesPage() {
               </div>
             </Card>
 
-            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid #10b981' }}>
+            <Card
+              onClick={() => setBalanceFilter(balanceFilter === 'receivables' ? 'all' : 'receivables')}
+              style={{
+                padding: 'var(--space-3) var(--space-4)',
+                borderTop: '3px solid #10b981',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: balanceFilter === 'receivables' ? '0 0 0 2px #10b981' : undefined,
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                   {isRu ? 'Нам должны (Дебиторы)' : 'Bizga qarzdorlar (Haqdorlik)'}
@@ -668,7 +704,16 @@ export default function CounterpartiesPage() {
               </div>
             </Card>
 
-            <Card style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '3px solid #ef4444' }}>
+            <Card
+              onClick={() => setBalanceFilter(balanceFilter === 'payables' ? 'all' : 'payables')}
+              style={{
+                padding: 'var(--space-3) var(--space-4)',
+                borderTop: '3px solid #ef4444',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: balanceFilter === 'payables' ? '0 0 0 2px #ef4444' : undefined,
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
                   {isRu ? 'Наш долг (Кредиторы)' : 'Bizning qarzimiz (Qarzdorlik)'}
@@ -844,36 +889,111 @@ export default function CounterpartiesPage() {
                         <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{item.phone || '—'}</td>
                         <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           {(() => {
+                            const custDebt = Number((item as any).customerDebt || 0);
+                            const suppDebt = Number((item as any).supplierDebt || 0);
+                            const raw = Number(item.debtBalance || 0);
                             const net =
                               item.netBalance !== undefined
                                 ? Number(item.netBalance)
+                                : custDebt !== 0 || suppDebt !== 0
+                                ? custDebt - suppDebt
                                 : item.type === 'SUPPLIER'
-                                ? -Number(item.debtBalance || 0)
-                                : Number(item.debtBalance || 0);
+                                ? -raw
+                                : raw;
 
-                            if (net > 0) {
-                              return (
-                                <span style={{ fontWeight: 600, color: '#10b981' }}>
-                                  + {formatCurrency(net, locale)}
-                                </span>
-                              );
-                            } else if (net < 0) {
-                              return (
-                                <span style={{ fontWeight: 600, color: '#ef4444' }}>
-                                  - {formatCurrency(Math.abs(net), locale)}
-                                </span>
-                              );
-                            } else {
-                              return (
-                                <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                                  {formatCurrency(0, locale)}
-                                </span>
-                              );
-                            }
+                            const isCustomerAdvance = net < 0 && (custDebt < 0 || item.type === 'CUSTOMER');
+
+                            return (
+                              <div
+                                onClick={() => setStatementCounterpartyId(item.id)}
+                                title={isRu ? 'Нажмите для просмотра акта сверки' : 'Akt sverkani ko‘rish uchun bosing'}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'flex-end',
+                                  gap: 6,
+                                  cursor: 'pointer',
+                                  padding: '4px 8px',
+                                  borderRadius: 'var(--radius-sm, 4px)',
+                                  transition: 'background 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
+                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                              >
+                                {net > 0 ? (
+                                  <span style={{ fontWeight: 700, color: '#10b981' }}>
+                                    + {formatCurrency(net, locale)}
+                                  </span>
+                                ) : net < 0 ? (
+                                  <span style={{ fontWeight: 700, color: '#ef4444' }}>
+                                    - {formatCurrency(Math.abs(net), locale)}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+                                    {formatCurrency(0, locale)}
+                                  </span>
+                                )}
+                                {isCustomerAdvance && (
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      padding: '1px 5px',
+                                      borderRadius: 4,
+                                      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                                      color: '#2563eb',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {isRu ? 'Аванс' : 'Avans'}
+                                  </span>
+                                )}
+                              </div>
+                            );
                           })()}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
+                            {/* 1-Click Quick Payment Button */}
+                            {(() => {
+                              const net = item.netBalance !== undefined ? Number(item.netBalance) : Number(item.debtBalance || 0);
+                              if (net !== 0) {
+                                const isIncome = net > 0;
+                                return (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => setPaymentCounterparty(item)}
+                                    title={
+                                      isIncome
+                                        ? isRu ? 'Принять оплату (Приход)' : "To'lov qabul qilish (Kirim)"
+                                        : isRu ? 'Выплатить долг (Расход)' : "Qarzni to'lash (Chiqim)"
+                                    }
+                                    style={{
+                                      backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                      color: isIncome ? '#059669' : '#dc2626',
+                                      borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                                      padding: '0 8px',
+                                    }}
+                                  >
+                                    {isIncome ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+                                    <span style={{ fontSize: '11px', fontWeight: 600, marginLeft: 4 }}>
+                                      {isRu ? 'Оплата' : "To'lov"}
+                                    </span>
+                                  </Button>
+                                );
+                              }
+                              return null;
+                            })()}
+
+                            {/* Akt Sverka Button */}
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setStatementCounterpartyId(item.id)}
+                              title={isRu ? 'Акт сверки' : 'Akt sverka'}
+                            >
+                              <FileText size={14} />
+                            </Button>
+
                             <Button
                               size="sm"
                               variant="secondary"
@@ -1231,6 +1351,33 @@ export default function CounterpartiesPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Quick Payment Modal */}
+      {paymentCounterparty && (
+        <QuickPaymentModal
+          isOpen={true}
+          counterparty={paymentCounterparty}
+          onClose={() => setPaymentCounterparty(null)}
+          onSuccess={() => {
+            setPaymentCounterparty(null);
+            fetchSummary();
+            fetchCounterparties();
+          }}
+        />
+      )}
+
+      {/* Akt Sverka Statement Drawer */}
+      {statementCounterpartyId && (
+        <AktSverkaDrawer
+          isOpen={true}
+          counterpartyId={statementCounterpartyId}
+          onClose={() => setStatementCounterpartyId(null)}
+          onOpenPayment={(cp) => {
+            setStatementCounterpartyId(null);
+            setPaymentCounterparty(cp);
+          }}
+        />
       )}
     </div>
   );

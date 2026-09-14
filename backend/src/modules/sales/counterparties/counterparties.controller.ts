@@ -103,6 +103,12 @@ export class CounterpartiesController {
     );
   }
 
+  @Get(':id/statement')
+  @RequirePermissions('sales:view')
+  getStatement(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.counterpartiesService.getStatement(tenantId, id);
+  }
+
   @Get(':id')
   @RequirePermissions('sales:view')
   findById(@CurrentTenant() tenantId: string, @Param('id') id: string) {
