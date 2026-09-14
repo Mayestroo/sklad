@@ -11,6 +11,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SalesReturnDocStatus } from '@prisma/client';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class SalesReturnItemDto {
   @IsString()
@@ -51,9 +52,8 @@ export class CreateSalesReturnDto {
   @IsString()
   returnDate?: string;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsString()

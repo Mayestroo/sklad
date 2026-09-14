@@ -112,7 +112,7 @@ export class AdditionalExpensesService {
           counterpartyId: dto.counterpartyId,
           receiptId: dto.receiptId,
           amount: dto.amount,
-          currency: dto.currency || 'UZS',
+          currency: dto.currency,
           exchangeRate,
           vatRate,
           vatAmount,

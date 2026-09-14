@@ -36,7 +36,7 @@ describe('TenantsService - Settings Management', () => {
 
       const res = await service.getSettings('tenant-1');
       expect(res.sales.enableMultiTierPriceLists).toBe(false);
-      expect(res.sales.defaultCurrency).toBe('UZS');
+      expect(res.sales.defaultCurrency).toBe('USD');
     });
 
     it('should return existing stored settings', async () => {

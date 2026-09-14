@@ -115,6 +115,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       const dto = {
         counterpartyId: 'cust-1',
         warehouseId: 'wh-1',
+        currency: 'UZS',
         items: [
           {
             productId: 'prod-1',
@@ -148,6 +149,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         service.createInvoice('tenant-1', 'user-1', {
           counterpartyId: 'cust-1',
           warehouseId: 'wh-1',
+          currency: 'UZS',
           items: [],
         }),
       ).rejects.toThrow(BadRequestException);
@@ -427,6 +429,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         invoiceId: 'inv-1',
         counterpartyId: 'cust-1',
         warehouseId: 'wh-1',
+        currency: 'UZS',
         items: [
           {
             productId: 'prod-1',
@@ -541,6 +544,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           invoiceId: 'inv-1',
           counterpartyId: 'cust-1',
           warehouseId: 'wh-1',
+          currency: 'UZS',
           items: [
             {
               productId: 'prod-1',
@@ -568,6 +572,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         invoiceId: 'inv-1',
         counterpartyId: 'cust-1',
         warehouseId: 'wh-1',
+        currency: 'UZS',
         status: SalesReturnDocStatus.DRAFT,
         items: [{ productId: 'prod-1', quantity: 2, unitPrice: 70000 }],
       });

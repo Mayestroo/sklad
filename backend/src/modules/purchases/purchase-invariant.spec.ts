@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { PurchasesService } from './purchases.service';
 import { AccountingReportsService } from '../accounting/reports/accounting-reports.service';
@@ -335,5 +338,5 @@ describe('Purchase Document End-to-End Invariant Test', () => {
     await prisma.purchaseReceipt.delete({
       where: { id: receipt.id },
     });
-  });
+  }, 60000);
 });

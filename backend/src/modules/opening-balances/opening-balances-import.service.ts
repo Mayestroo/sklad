@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OpeningBalanceCategory } from '@prisma/client';
+import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 export interface ImportErrorItem {
   sheetName: string;
   rowNumber: number;
@@ -221,12 +222,23 @@ export class OpeningBalancesImportService {
       sheetPul.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
         const accountName = String(row.getCell(1).value || '').trim();
-        const currency = String(row.getCell(2).value || 'UZS').trim().toUpperCase();
+        const currency = String(row.getCell(2).value || 'USD').trim().toUpperCase();
         const rawAmount = row.getCell(3).value;
         const notes = String(row.getCell(4).value || '').trim();
 
         if (!accountName && !rawAmount) return; // Skip empty row
         totalRows++;
+
+        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+          errors.push({
+            sheetName: '1_Pul',
+            rowNumber,
+            fieldName: 'Valyuta',
+            invalidValue: currency,
+            errorMessage: `Valyuta noto‘g‘ri. Qo‘llab-quvvatlanadigan valyutalar: ${SUPPORTED_CURRENCIES.join(', ')}`,
+          });
+          return;
+        }
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -371,11 +383,22 @@ export class OpeningBalancesImportService {
         const customerIdent = String(row.getCell(1).value || '').trim();
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim();
+        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!customerIdent && !rawAmount) return;
         totalRows++;
+
+        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+          errors.push({
+            sheetName: '3_Mijozlar',
+            rowNumber,
+            fieldName: 'Valyuta',
+            invalidValue: currency,
+            errorMessage: `Valyuta noto‘g‘ri. Qo‘llab-quvvatlanadigan valyutalar: ${SUPPORTED_CURRENCIES.join(', ')}`,
+          });
+          return;
+        }
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -425,11 +448,22 @@ export class OpeningBalancesImportService {
         const suppIdent = String(row.getCell(1).value || '').trim();
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim();
+        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!suppIdent && !rawAmount) return;
         totalRows++;
+
+        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+          errors.push({
+            sheetName: '4_Yetkazib_beruvchilar',
+            rowNumber,
+            fieldName: 'Valyuta',
+            invalidValue: currency,
+            errorMessage: `Valyuta noto‘g‘ri. Qo‘llab-quvvatlanadigan valyutalar: ${SUPPORTED_CURRENCIES.join(', ')}`,
+          });
+          return;
+        }
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -479,11 +513,22 @@ export class OpeningBalancesImportService {
         const cpIdent = String(row.getCell(1).value || '').trim();
         const typeStr = String(row.getCell(2).value || 'MIJOZ_AVANSI').trim().toUpperCase();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim();
+        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!cpIdent && !rawAmount) return;
         totalRows++;
+
+        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+          errors.push({
+            sheetName: '5_Avanslar',
+            rowNumber,
+            fieldName: 'Valyuta',
+            invalidValue: currency,
+            errorMessage: `Valyuta noto‘g‘ri. Qo‘llab-quvvatlanadigan valyutalar: ${SUPPORTED_CURRENCIES.join(', ')}`,
+          });
+          return;
+        }
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -587,11 +632,22 @@ export class OpeningBalancesImportService {
         const typeStr = String(row.getCell(1).value || 'KAPITAL').trim().toUpperCase();
         const title = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim();
+        const currency = String(row.getCell(4).value || 'USD').trim().toUpperCase();
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!rawAmount) return;
         totalRows++;
+
+        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+          errors.push({
+            sheetName: '7_Boshqa_qoldiqlar',
+            rowNumber,
+            fieldName: 'Valyuta',
+            invalidValue: currency,
+            errorMessage: `Valyuta noto‘g‘ri. Qo‘llab-quvvatlanadigan valyutalar: ${SUPPORTED_CURRENCIES.join(', ')}`,
+          });
+          return;
+        }
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {

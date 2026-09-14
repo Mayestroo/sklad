@@ -257,7 +257,7 @@ export function OrderItemsTable({
 
                   {/* Line Total */}
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatNum(lineTotal)} {(currency || 'UZS').toUpperCase()}
+                    {formatNum(lineTotal)} {(currency || 'USD').toUpperCase()}
                   </td>
 
                   {/* Delete */}

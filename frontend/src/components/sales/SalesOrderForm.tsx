@@ -96,7 +96,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const [orderStatus, setOrderStatus] = useState<string>(initialData?.status || 'NEW');
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [priceListId, setPriceListId] = useState(initialData?.priceListId || '');
-  const [currency, setCurrency] = useState(initialData?.currency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'USD');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
   const [paymentCondition, setPaymentCondition] = useState<'PREPAID_100' | 'PARTIAL' | 'CREDIT'>(
     initialData?.paymentCondition || 'PREPAID_100'
@@ -213,14 +213,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     if (!prd) return 0;
     const activeListId = pListId !== undefined ? pListId : priceListId;
     let price = Number(prd.salePrice) || 0;
-    let itemCurrency = (prd as any).currency || 'UZS';
+    let itemCurrency = (prd as any).currency || 'USD';
 
     if (activeListId) {
       const pl = priceLists.find((l: any) => l.id === activeListId);
       const custom = (pl as any)?.prices?.find((item: any) => item.productId === pId);
       if (custom && Number(custom.price) > 0) {
         price = Number(custom.price);
-        itemCurrency = pl?.currency || 'UZS';
+        itemCurrency = pl?.currency || 'USD';
       }
     }
 

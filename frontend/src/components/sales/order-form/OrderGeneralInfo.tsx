@@ -100,7 +100,7 @@ export function OrderGeneralInfo({
               { value: '', label: isRu ? '— Базовый (Основной) —' : '— Asosiy (Bazaviy) —' },
               ...priceLists.map((pl) => {
                 const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
-                return { value: pl.id, label: `${plName} (${pl.currency || 'UZS'})` };
+                return { value: pl.id, label: `${plName} (${pl.currency || 'USD'})` };
               }),
             ]}
             value={priceListId}

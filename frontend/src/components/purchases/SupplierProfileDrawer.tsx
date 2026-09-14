@@ -88,7 +88,7 @@ export function SupplierProfileDrawer({
           <>
             {/* Header Debt KPI Banner */}
             {(() => {
-              const supplierCurrency = data.receipts?.[0]?.currency || data.payments?.[0]?.currency || 'UZS';
+              const supplierCurrency = data.receipts?.[0]?.currency || data.payments?.[0]?.currency || 'USD';
               return (
                 <div
                   style={{

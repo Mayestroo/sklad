@@ -9,6 +9,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class PurchaseReceiptItemDto {
   @IsString()
@@ -52,9 +53,8 @@ export class CreatePurchaseReceiptDto {
   @IsString()
   docDate?: string;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsNumber()

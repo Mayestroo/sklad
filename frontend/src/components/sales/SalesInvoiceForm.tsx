@@ -111,7 +111,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [docDate, setDocDate] = useState(
     initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))
   );
-  const [currency, setCurrency] = useState(initialData?.currency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'USD');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
   const [contractNumber, setContractNumber] = useState(initialData?.contractNumber || '');
   const [contractDate, setContractDate] = useState(
@@ -346,14 +346,14 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     if (!prd) return 0;
     const activeListId = pListId !== undefined ? pListId : priceListId;
     let price = Number(prd.salePrice) || 0;
-    let itemCurrency = (prd as any).currency || 'UZS';
+    let itemCurrency = (prd as any).currency || 'USD';
 
     if (activeListId) {
       const pl = priceLists.find((l) => l.id === activeListId);
       const custom = pl?.prices?.find((item: any) => item.productId === pId);
       if (custom && Number(custom.price) > 0) {
         price = Number(custom.price);
-        itemCurrency = pl.currency || 'UZS';
+        itemCurrency = pl.currency || 'USD';
       }
     }
 

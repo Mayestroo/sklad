@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ServiceActType } from '@prisma/client';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class CreateServiceActItemDto {
   @IsOptional()
@@ -62,9 +63,8 @@ export class CreateServiceActDto {
   @IsString()
   actDate?: string;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsNumber()

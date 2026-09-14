@@ -12,6 +12,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ExpenseType, ExpenseAllocationMethod } from '@prisma/client';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class CreateAdditionalExpenseDto {
   @IsOptional()
@@ -36,9 +37,8 @@ export class CreateAdditionalExpenseDto {
   @Type(() => Number)
   amount: number;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsNumber()

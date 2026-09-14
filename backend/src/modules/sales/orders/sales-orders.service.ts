@@ -414,7 +414,7 @@ export class SalesOrdersService {
         tenantId,
         orderNumber,
         counterpartyId: dto.counterpartyId,
-        currency: dto.currency || 'UZS',
+        currency: dto.currency,
         exchangeRate: dto.exchangeRate || 1,
         paymentCondition: dto.paymentCondition as PaymentCondition,
         requiredPaymentPercent:

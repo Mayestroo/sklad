@@ -6,6 +6,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class CreatePaymentDto {
   @IsString()
@@ -27,6 +28,9 @@ export class CreatePaymentDto {
   @Min(0.01)
   amount: number;
 
+  @IsValidCurrency()
+  currency: string;
+
   @IsString()
   @IsOptional()
   cashAccountId?: string;
@@ -35,4 +39,3 @@ export class CreatePaymentDto {
   @IsOptional()
   comment?: string;
 }
-

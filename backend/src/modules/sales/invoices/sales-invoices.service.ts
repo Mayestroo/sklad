@@ -174,7 +174,7 @@ export class SalesInvoicesService {
         invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : new Date(),
         counterpartyId: dto.counterpartyId,
         warehouseId: dto.warehouseId,
-        currency: dto.currency || 'UZS',
+        currency: dto.currency,
         exchangeRate,
         contractNumber: dto.contractNumber || null,
         contractDate: dto.contractDate ? new Date(dto.contractDate) : null,
@@ -792,7 +792,7 @@ export class SalesInvoicesService {
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
           defectWarehouseId: dto.defectWarehouseId || null,
-          currency: dto.currency || 'UZS',
+          currency: dto.currency,
           reason: dto.reason || null,
           status: SalesReturnDocStatus.DRAFT,
           totalAmount,
@@ -819,7 +819,7 @@ export class SalesInvoicesService {
       counterpartyId: dto.counterpartyId,
       warehouseId: dto.warehouseId,
       defectWarehouseId: dto.defectWarehouseId,
-      currency: dto.currency || 'UZS',
+      currency: dto.currency,
       reason: dto.reason,
       totalAmount,
       totalCogs,
@@ -1421,7 +1421,7 @@ export class SalesInvoicesService {
     tenantId: string,
     data: {
       name: { uz: string; ru: string };
-      currency?: string;
+      currency: string;
       isDefault?: boolean;
     },
   ) {
@@ -1429,7 +1429,7 @@ export class SalesInvoicesService {
       data: {
         tenantId,
         name: data.name,
-        currency: data.currency || 'UZS',
+        currency: data.currency,
         isDefault: data.isDefault || false,
       },
     });
@@ -1588,7 +1588,7 @@ export class SalesInvoicesService {
         isTierPrice: false,
         priceListId: null,
         priceListName: null,
-        currency: options.currency || 'UZS',
+        currency: options.currency || 'USD',
       };
     }
 
@@ -1623,7 +1623,7 @@ export class SalesInvoicesService {
         isTierPrice: false,
         priceListId: null,
         priceListName: null,
-        currency: options.currency || 'UZS',
+        currency: options.currency || 'USD',
       };
     }
 
@@ -1640,7 +1640,7 @@ export class SalesInvoicesService {
         isTierPrice: false,
         priceListId: null,
         priceListName: null,
-        currency: options.currency || 'UZS',
+        currency: options.currency || 'USD',
       };
     }
 

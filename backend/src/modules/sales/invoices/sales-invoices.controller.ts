@@ -13,6 +13,7 @@ import { SalesInvoicesService } from './sales-invoices.service';
 import { CreateSalesInvoiceDto } from '../dto/create-sales-invoice.dto';
 import { FilterSalesInvoicesDto } from '../dto/filter-sales-invoices.dto';
 import { CreateSalesReturnDto } from '../dto/create-sales-return.dto';
+import { CreatePriceListDto } from '../dto/create-price-list.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
@@ -167,14 +168,9 @@ export class SalesInvoicesController {
   @RequirePermissions('sales:create')
   createPriceList(
     @CurrentTenant() tenantId: string,
-    @Body()
-    body: {
-      name: { uz: string; ru: string };
-      currency?: string;
-      isDefault?: boolean;
-    },
+    @Body() dto: CreatePriceListDto,
   ) {
-    return this.service.createPriceList(tenantId, body);
+    return this.service.createPriceList(tenantId, dto);
   }
 
   @Patch('price-lists/:id')

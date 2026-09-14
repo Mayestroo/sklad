@@ -54,7 +54,7 @@ export function ServiceActDrawer({
   const [type, setType] = useState<'PROVIDED' | 'RECEIVED'>(defaultType);
   const [counterpartyId, setCounterpartyId] = useState('');
   const [actDate, setActDate] = useState(new Date().toISOString().split('T')[0]);
-  const [currency, setCurrency] = useState('UZS');
+  const [currency, setCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'USD');
   const [exchangeRate, setExchangeRate] = useState(1.0);
   const [externalNumber, setExternalNumber] = useState('');
   const [externalDate, setExternalDate] = useState('');
@@ -114,7 +114,7 @@ export function ServiceActDrawer({
           ? new Date(initialData.actDate).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
       );
-      setCurrency(initialData.currency || 'UZS');
+      setCurrency(initialData.currency || company?.settings?.sales?.defaultCurrency || 'USD');
       setExchangeRate(Number(initialData.exchangeRate) || 1.0);
       setExternalNumber(initialData.externalNumber || '');
       setExternalDate(
@@ -141,7 +141,7 @@ export function ServiceActDrawer({
       setType(defaultType);
       setCounterpartyId('');
       setActDate(new Date().toISOString().split('T')[0]);
-      setCurrency('UZS');
+      setCurrency(company?.settings?.sales?.defaultCurrency || 'USD');
       setExchangeRate(1.0);
       setExternalNumber('');
       setExternalDate('');

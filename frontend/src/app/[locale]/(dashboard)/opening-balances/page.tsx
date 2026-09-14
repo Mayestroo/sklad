@@ -1441,7 +1441,7 @@ function CashTable({
                     const acc = accounts.find((a: any) => a.id === e.target.value);
                     onUpdate(index, 'accountId', e.target.value);
                     if (acc) {
-                      onUpdate(index, 'currency', acc.currency || 'UZS');
+                      onUpdate(index, 'currency', acc.currency || 'USD');
                       onUpdate(index, 'category', acc.accountType === 'BANK' ? 'BANK' : 'CASH');
                     }
                   }}
@@ -1466,7 +1466,7 @@ function CashTable({
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <Badge variant="neutral">
-                  {line.currency || 'UZS'}
+                  {line.currency || 'USD'}
                 </Badge>
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>

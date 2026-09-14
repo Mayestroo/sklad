@@ -95,7 +95,7 @@ export class PaymentsService {
             accountId: cashAccountId,
             counterpartyId: dto.counterpartyId,
             amount: dto.amount,
-            currency: 'UZS',
+            currency: dto.currency,
             comment: dto.comment || `To'lov ${paymentNumber} qabul qilindi`,
             docNumber: paymentNumber,
             sourceDocType: 'PAYMENT',

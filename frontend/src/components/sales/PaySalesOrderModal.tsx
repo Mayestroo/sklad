@@ -81,7 +81,7 @@ export function PaySalesOrderModal({
   const cashAccountOptions: SelectOption[] = cashAccounts.length > 0
     ? cashAccounts.map((ca) => {
         const name = typeof ca.name === 'object' ? ca.name[locale] || ca.name.uz || ca.name.ru : ca.name;
-        const cur = ca.currency || 'UZS';
+        const cur = ca.currency || 'USD';
         const bal = formatCurrency(Number(ca.balance || 0), locale, cur);
         return {
           value: ca.id,

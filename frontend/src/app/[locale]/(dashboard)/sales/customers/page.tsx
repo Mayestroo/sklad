@@ -214,7 +214,7 @@ export default function CustomersPage() {
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.phone || '—'}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: debt > 0 ? 600 : 400, color: debt > 0 ? '#f59e0b' : 'var(--color-text-secondary)' }}>
-                        {debt > 0 ? formatCurrency(debt, locale, (c as any).currency || 'UZS') : '—'}
+                        {debt > 0 ? formatCurrency(debt, locale, (c as any).currency || 'USD') : '—'}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <Badge variant={c.type === 'BOTH' ? 'warning' : 'neutral'}>
@@ -260,7 +260,7 @@ export default function CustomersPage() {
 
       {/* Customer Profile Modal */}
       {selectedCustomer && (() => {
-        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || 'UZS';
+        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || 'USD';
         return (
           <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`${isRu ? 'Профиль клиента' : 'Mijoz'}: ${selectedCustomer.name}`} size="xl">
             {profileLoading ? (

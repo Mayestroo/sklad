@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { apiFetch } from '@/lib/api';
 import { formatDate, CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
@@ -1339,7 +1340,8 @@ function FinanceTransactionDrawer({
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id || '');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('UZS');
+  const defaultCurrency = useDefaultCurrency();
+  const [currency, setCurrency] = useState(defaultCurrency);
   const [counterpartyId, setCounterpartyId] = useState(prefilledCounterpartyId || '');
   const [typeId, setTypeId] = useState('');
   const [comment, setComment] = useState('');

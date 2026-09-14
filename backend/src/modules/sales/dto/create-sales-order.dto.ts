@@ -12,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class SalesOrderItemDto {
   @IsString()
@@ -41,9 +42,8 @@ export class CreateSalesOrderDto {
   @IsString()
   warehouseId?: string;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsNumber()

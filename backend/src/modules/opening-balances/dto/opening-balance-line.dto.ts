@@ -8,6 +8,7 @@ import {
   Min,
 } from 'class-validator';
 import { OpeningBalanceCategory } from '@prisma/client';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class OpeningBalanceLineDto {
   @IsOptional()
@@ -62,9 +63,8 @@ export class OpeningBalanceLineDto {
   @IsNumber()
   netAmount?: number;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsNumber()

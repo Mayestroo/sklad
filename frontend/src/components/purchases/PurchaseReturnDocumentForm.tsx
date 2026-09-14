@@ -91,7 +91,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [receiptId, setReceiptId] = useState<string>(initialData?.receiptId || '');
-  const [currency, setCurrency] = useState(initialData?.currency || 'UZS');
+  const [currency, setCurrency] = useState(initialData?.currency || company?.settings?.sales?.defaultCurrency || 'USD');
   const [actNumber, setActNumber] = useState(initialData?.actNumber || '');
   const [reason, setReason] = useState(initialData?.reason || '');
   const [comment, setComment] = useState(initialData?.comment || '');

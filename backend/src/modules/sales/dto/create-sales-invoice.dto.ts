@@ -9,6 +9,7 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class SalesInvoiceItemDto {
   @IsString()
@@ -47,9 +48,8 @@ export class CreateSalesInvoiceDto {
   @IsString()
   invoiceDate?: string;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsNumber()

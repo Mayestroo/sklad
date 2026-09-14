@@ -46,7 +46,7 @@ export default function PricesPage() {
   const [showCreatePL, setShowCreatePL] = useState(false);
   const [newPLNameUz, setNewPLNameUz] = useState('');
   const [newPLNameRu, setNewPLNameRu] = useState('');
-  const [newPLCurrency, setNewPLCurrency] = useState('UZS');
+  const [newPLCurrency, setNewPLCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'USD');
   const [newPLDefault, setNewPLDefault] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
 
@@ -54,7 +54,7 @@ export default function PricesPage() {
   const [showEditPL, setShowEditPL] = useState(false);
   const [editPLNameUz, setEditPLNameUz] = useState('');
   const [editPLNameRu, setEditPLNameRu] = useState('');
-  const [editPLCurrency, setEditPLCurrency] = useState('UZS');
+  const [editPLCurrency, setEditPLCurrency] = useState(company?.settings?.sales?.defaultCurrency || 'USD');
   const [editPLDefault, setEditPLDefault] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -146,7 +146,7 @@ export default function PricesPage() {
   const handleOpenEditPL = (pl: PriceList) => {
     setEditPLNameUz(typeof pl.name === 'object' ? (pl.name.uz || pl.name.ru || '') : pl.name || '');
     setEditPLNameRu(typeof pl.name === 'object' ? (pl.name.ru || pl.name.uz || '') : pl.name || '');
-    setEditPLCurrency(pl.currency || 'UZS');
+    setEditPLCurrency(pl.currency || 'USD');
     setEditPLDefault(Boolean(pl.isDefault));
     setShowEditPL(true);
   };

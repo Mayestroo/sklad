@@ -123,7 +123,7 @@ export class ServicesService {
         status: ServiceActStatus.DRAFT,
         paymentStatus: ServicePaymentStatus.UNPAID,
         actDate,
-        currency: dto.currency || 'UZS',
+        currency: dto.currency,
         exchangeRate: dto.exchangeRate ? new Prisma.Decimal(dto.exchangeRate) : new Prisma.Decimal(1.0),
         externalNumber: dto.externalNumber || null,
         externalDate: dto.externalDate ? new Date(dto.externalDate) : null,
