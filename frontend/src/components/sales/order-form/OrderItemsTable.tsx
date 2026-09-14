@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { Plus, Trash2 } from 'lucide-react';
 import { ProductDropdownItem } from '@/hooks/useDocumentDropdowns';
 
@@ -37,92 +38,6 @@ function formatNum(value: number): string {
   }).format(value || 0);
 }
 
-const numInputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '6px 10px',
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-md)',
-  background: 'var(--color-bg-input)',
-  color: 'var(--color-text-primary)',
-  fontSize: 'var(--text-sm)',
-  textAlign: 'right',
-  fontVariantNumeric: 'tabular-nums',
-  boxSizing: 'border-box' as const,
-  outline: 'none',
-};
-
-interface FormattedNumInputProps {
-  value: number;
-  onChange: (val: number) => void;
-  disabled?: boolean;
-  min?: number;
-  max?: number;
-  extraStyle?: React.CSSProperties;
-  ariaLabel?: string;
-  title?: string;
-}
-
-/**
- * Shows formatted number (e.g. 12,000.000) when blurred.
- * Shows raw editable value when focused.
- */
-function FormattedNumInput({
-  value,
-  onChange,
-  disabled,
-  min,
-  max,
-  extraStyle,
-  ariaLabel,
-  title,
-}: FormattedNumInputProps) {
-  const [focused, setFocused] = useState(false);
-  const [rawStr, setRawStr] = useState('');
-
-  const handleFocus = useCallback(() => {
-    setFocused(true);
-    setRawStr(value === 0 ? '' : String(value));
-  }, [value]);
-
-  const handleBlur = useCallback(() => {
-    setFocused(false);
-    const parsed = parseFloat(rawStr.replace(/,/g, ''));
-    const next = isNaN(parsed) ? 0 : parsed;
-    if (max !== undefined && next > max) {
-      onChange(max);
-    } else if (min !== undefined && next < min) {
-      onChange(min);
-    } else {
-      onChange(next);
-    }
-  }, [rawStr, onChange, min, max]);
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setRawStr(e.target.value);
-  }, []);
-
-  const computedStyle: React.CSSProperties = {
-    ...numInputStyle,
-    ...(disabled ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed', opacity: 0.7 } : {}),
-    ...extraStyle,
-  };
-
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={focused ? rawStr : formatNum(value)}
-      onFocus={disabled ? undefined : handleFocus}
-      onBlur={disabled ? undefined : handleBlur}
-      onChange={focused && !disabled ? handleChange : undefined}
-      readOnly={!focused || disabled}
-      disabled={disabled}
-      style={computedStyle}
-      aria-label={ariaLabel}
-      title={title}
-    />
-  );
-}
 
 export function OrderItemsTable({
   locale,
@@ -202,12 +117,13 @@ export function OrderItemsTable({
 
                   {/* Quantity */}
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <FormattedNumInput
+                    <CurrencyInput
                       value={item.quantity}
                       onChange={(val) => onItemChange(idx, 'quantity', val)}
                       disabled={isLocked}
                       min={0}
-                      ariaLabel={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
+                      decimals={3}
+                      aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
                     />
                   </td>
 
@@ -222,13 +138,14 @@ export function OrderItemsTable({
 
                   {/* Unit Price */}
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <FormattedNumInput
+                    <CurrencyInput
                       value={item.unitPrice}
                       onChange={(val) => onItemChange(idx, 'unitPrice', val)}
                       disabled={isLocked || !isPriceOverrideAllowed}
                       min={0}
-                      extraStyle={!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : undefined}
-                      ariaLabel={`${isRu ? 'Цена за единицу для строки' : 'Birlik narxi'} ${idx + 1}`}
+                      decimals={3}
+                      style={!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : undefined}
+                      aria-label={`${isRu ? 'Цена за единицу для строки' : 'Birlik narxi'} ${idx + 1}`}
                       title={
                         !isPriceOverrideAllowed
                           ? (isRu ? 'Ручное изменение цены запрещено настройками' : "Narxni qo'lda o'zgartirish taqiqlangan")
@@ -239,13 +156,14 @@ export function OrderItemsTable({
 
                   {/* Discount % */}
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <FormattedNumInput
+                    <CurrencyInput
                       value={item.discount}
                       onChange={(val) => onItemChange(idx, 'discount', val)}
                       disabled={isLocked}
                       min={0}
                       max={100}
-                      ariaLabel={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
+                      decimals={2}
+                      aria-label={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
                     />
                   </td>
 
