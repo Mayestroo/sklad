@@ -253,17 +253,6 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       .catch((err) => console.error('Data load error:', err));
   }, [token, company, locale, counterpartyId, warehouseId, initialData]);
 
-  // Unsaved changes window listener
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
 
   const getProductName = (name: Record<string, string> | string | null | undefined) => {
     if (!name) return '—';
