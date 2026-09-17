@@ -39,6 +39,7 @@ interface CounterpartyOption {
   name: string;
   type: string;
   debtBalance?: number;
+  currency?: string;
 }
 
 interface WarehouseOption {
@@ -209,6 +210,19 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       })
       .catch((err) => console.error(err));
   }, [token, company, counterpartyId, warehouseId, locale]);
+
+  // Handle Counterparty selection
+  const handleSelectCounterparty = (chosenId: string) => {
+    setCounterpartyId(chosenId);
+    setReceiptId('');
+    setSelectedReceipt(null);
+    if (!chosenId) return;
+
+    const supp = counterparties.find((c) => c.id === chosenId);
+    if (!currency && supp?.currency) {
+      setCurrency(supp.currency);
+    }
+  };
 
   // Handle Receipt selection
   const handleSelectReceipt = (chosenReceiptId: string) => {
@@ -491,10 +505,14 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     }
   };
 
-  const supplierSelectOptions: SelectOption[] = counterparties.map((c) => ({
-    value: c.id,
-    label: `${c.name}${currency ? ` (${formatCurrency(Number(c.debtBalance || 0), locale, currency)})` : ''}`,
-  }));
+  const supplierSelectOptions: SelectOption[] = counterparties.map((c) => {
+    const debt = Number(c.debtBalance || 0);
+    const curr = currency || c.currency || 'UZS';
+    return {
+      value: c.id,
+      label: `${c.name}${debt !== 0 ? ` (${formatCurrency(debt, locale, curr)})` : ''}`,
+    };
+  });
 
   const warehouseSelectOptions: SelectOption[] = warehouses.map((w) => ({
     value: w.id,
@@ -505,7 +523,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     { value: '', label: isRu ? '— Без накладной (С нуля) —' : '— Xaridsiz (Noldan mustaqil) —' },
     ...availableReceipts.map((r) => ({
       value: r.id,
-      label: `№ ${r.docNumber} (${formatDate(r.docDate, locale)}) — ${formatCurrency(Number(r.totalAmount), locale, r.currency)}`,
+      label: `№ ${r.docNumber} (${formatDate(r.docDate, locale)}) — ${formatCurrency(Number(r.totalAmount) || 0, locale, r.currency || currency || 'UZS')}`,
     })),
   ];
 
@@ -597,14 +615,20 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               label={isRu ? 'Поставщик *' : 'Yetkazib beruvchi *'}
               options={supplierSelectOptions}
               value={counterpartyId}
-              onChange={(val) => setCounterpartyId(val)}
+              onChange={handleSelectCounterparty}
               disabled={isReadOnly}
               placeholder={isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang'}
             />
             {selectedSupplier && (
               <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px', color: currentSupplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-success-600)' }}>
                 {isRu ? 'Текущий долг: ' : 'Joriy qarzdorlik: '}
-                <strong>{formatCurrency(currentSupplierDebt, locale, currency)}</strong>
+                <strong>
+                  {formatCurrency(
+                    currentSupplierDebt,
+                    locale,
+                    currency || selectedSupplier.currency || 'UZS',
+                  )}
+                </strong>
               </div>
             )}
           </div>
