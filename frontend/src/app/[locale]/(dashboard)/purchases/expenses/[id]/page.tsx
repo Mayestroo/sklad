@@ -310,7 +310,7 @@ export default function ExpenseDetailPage() {
             <div>
               <strong>{isRu ? 'Сумма расхода:' : 'Xarajat summasi:'}</strong>{' '}
               <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
-                {formatCurrency(expense.amount, locale, expense.currency)}
+                {formatCurrency(Number(expense.amount) || 0, locale, expense.currency || 'UZS')}
               </span>
             </div>
             <div style={{ marginTop: '4px' }}>
@@ -371,17 +371,17 @@ export default function ExpenseDetailPage() {
                 return (
                   <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
                     <td style={{ padding: '8px 12px', fontWeight: 'var(--font-medium)' }}>
-                      {(item.product?.name as any)?.uz || item.product?.name}
+                      {(item.product?.name as any)?.[locale] || (item.product?.name as any)?.uz || item.product?.name || '—'}
                       <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(oldCost, locale, expense.currency)}
+                      {formatCurrency(oldCost, locale, expense.currency || 'UZS')}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                      {formatCurrency(item.allocatedAmount, locale, expense.currency)} (+{formatCurrency(perUnit, locale, expense.currency)}/dona)
+                      {formatCurrency(Number(item.allocatedAmount) || 0, locale, expense.currency || 'UZS')} (+{formatCurrency(perUnit, locale, expense.currency || 'UZS')}/dona)
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                      {formatCurrency(newCost, locale, expense.currency)}
+                      {formatCurrency(newCost, locale, expense.currency || 'UZS')}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
                       +{percent.toFixed(1)}%
@@ -438,7 +438,7 @@ export default function ExpenseDetailPage() {
                     </td>
                     <td style={{ padding: '6px 10px' }}>{impact.customerName || '—'}</td>
                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-700)' }} className="tabular-nums">
-                      +{formatCurrency(impact.totalDeltaCogs, locale, expense.currency)}
+                      +{formatCurrency(Number(impact.totalDeltaCogs) || 0, locale, expense.currency || 'UZS')}
                     </td>
                   </tr>
                 ))}

@@ -60,4 +60,26 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
     const res = (formatCurrency as any)(100, 'uz');
     assert.strictEqual(res, '100.000 UZS');
   });
+
+  test('should correctly parse numeric string amounts from API/Decimal responses', () => {
+    const res = formatCurrency('1500000.00', 'uz', 'UZS');
+    assert.strictEqual(res, '1,500,000.000 UZS');
+
+    const resInt = formatCurrency('50000', 'ru', 'USD');
+    assert.strictEqual(resInt, '50,000.000 USD');
+  });
+
+  test('should throw TypeError when string amount is non-numeric or empty', () => {
+    assert.throws(() => {
+      formatCurrency('', 'uz', 'UZS');
+    }, TypeError);
+
+    assert.throws(() => {
+      formatCurrency('   ', 'uz', 'UZS');
+    }, TypeError);
+
+    assert.throws(() => {
+      formatCurrency('not-a-number', 'uz', 'UZS');
+    }, TypeError);
+  });
 });

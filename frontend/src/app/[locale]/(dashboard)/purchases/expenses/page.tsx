@@ -206,7 +206,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Транспортные расходы' : 'Transport Xarajatlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(data?.stats.totalTransport || 0, locale, expenseCurrency)}
+                  {formatCurrency(Number(data?.stats.totalTransport) || 0, locale, expenseCurrency || 'UZS')}
                 </div>
               </div>
             </Card>
@@ -220,7 +220,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Таможенные пошлины' : 'Bojxona To‘lovlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(data?.stats.totalCustoms || 0, locale, expenseCurrency)}
+                  {formatCurrency(Number(data?.stats.totalCustoms) || 0, locale, expenseCurrency || 'UZS')}
                 </div>
               </div>
             </Card>
@@ -234,7 +234,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Брокерские услуги' : 'Brokerlik Xizmatlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(data?.stats.totalBroker || 0, locale, expenseCurrency)}
+                  {formatCurrency(Number(data?.stats.totalBroker) || 0, locale, expenseCurrency || 'UZS')}
                 </div>
               </div>
             </Card>
@@ -248,7 +248,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Всего распределено' : 'Jami Taqsimlangan'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(data?.stats.totalAll || 0, locale, expenseCurrency)}
+                  {formatCurrency(Number(data?.stats.totalAll) || 0, locale, expenseCurrency || 'UZS')}
                 </div>
               </div>
             </Card>
@@ -409,7 +409,7 @@ export default function ExpensesPage() {
                         </div>
                       </td>
                       <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {formatCurrency(item.amount, locale, item.currency)}
+                        {formatCurrency(Number(item.amount) || 0, locale, item.currency || 'UZS')}
                       </td>
                       <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center' }}>
                         {item.isPaid ? (
@@ -543,7 +543,7 @@ export default function ExpensesPage() {
                           {getExpenseTypeBadge(expense.expenseType)}
                         </td>
                         <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                          {formatCurrency(expense.amount, locale, expense.currency)}
+                          {formatCurrency(Number(expense.amount) || 0, locale, expense.currency || 'UZS')}
                         </td>
                         <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                           {expense.allocationMethod === 'BY_AMOUNT' ? (isRu ? 'По стоимости' : 'Qiymatiga mutanosib') : expense.allocationMethod === 'BY_QUANTITY' ? (isRu ? 'По количеству' : 'Miqdoriga mutanosib') : (isRu ? 'По весу' : 'Vazniga mutanosib')}

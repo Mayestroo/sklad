@@ -426,7 +426,7 @@ export default function NewExpensePage() {
               placeholder={isRu ? 'Выберите или найдите поставщика...' : 'Kontragentni qidiring yoki tanlang...'}
               options={counterparties.map((c) => ({
                 value: c.id,
-                label: `${c.name}${c.phone ? ` (${c.phone})` : ''}`,
+                label: `${c.name || '—'}${c.phone ? ` (${c.phone})` : ''}`,
               }))}
             />
           </div>
@@ -482,10 +482,16 @@ export default function NewExpensePage() {
                 <Select
                   value={cashAccountId}
                   onChange={(val) => setCashAccountId(val)}
-                  options={cashAccounts.map((a) => ({
-                    value: a.id,
-                    label: `${(a.name as any)?.uz || a.name} (${formatCurrency(a.balance, locale, a.currency)})`,
-                  }))}
+                  options={cashAccounts.map((a) => {
+                    const accName =
+                      typeof a.name === 'object' && a.name
+                        ? a.name[locale] || a.name.uz || a.name.ru || 'Kassa'
+                        : a.name || 'Kassa';
+                    return {
+                      value: a.id,
+                      label: `${accName} (${formatCurrency(Number(a.balance) || 0, locale, a.currency || 'UZS')})`,
+                    };
+                  })}
                 />
               </div>
             )}
@@ -557,7 +563,7 @@ export default function NewExpensePage() {
               placeholder={isRu ? 'Выберите или найдите партию закупки...' : 'Xarid hujjatini qidiring yoki tanlang...'}
               options={receipts.map((r) => ({
                 value: r.id,
-                label: `${r.docNumber} — ${r.counterparty?.name || 'Yetkazib beruvchi'} (${formatDate(r.docDate, locale)}) [${formatCurrency(r.totalAmount, locale, r.currency)}]`,
+                label: `${r.docNumber} — ${r.counterparty?.name || 'Yetkazib beruvchi'} (${formatDate(r.docDate, locale)}) [${formatCurrency(Number(r.totalAmount) || 0, locale, r.currency || 'UZS')}]`,
               }))}
             />
           </div>
@@ -587,7 +593,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Склад назначения' : 'Ombor'}
                 </span>
                 <strong style={{ color: 'var(--color-text-primary)' }}>
-                  {(selectedReceipt.warehouse?.name as any)?.uz || selectedReceipt.warehouse?.name || 'Asosiy ombor'}
+                  {(selectedReceipt.warehouse?.name as any)?.[locale] || (selectedReceipt.warehouse?.name as any)?.uz || selectedReceipt.warehouse?.name || 'Asosiy ombor'}
                 </strong>
               </div>
               <div>
@@ -595,7 +601,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Сумма закупки' : 'Xarid summasi'}
                 </span>
                 <strong style={{ color: 'var(--color-primary-600)' }}>
-                  {formatCurrency(selectedReceipt.totalAmount, locale, selectedReceipt.currency)}
+                  {formatCurrency(Number(selectedReceipt.totalAmount) || 0, locale, selectedReceipt.currency || 'UZS')}
                 </strong>
               </div>
               <div>
@@ -974,7 +980,7 @@ export default function NewExpensePage() {
                       </td>
                       <td style={{ padding: '10px 12px' }}>
                         <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                          {(item.product?.name as any)?.uz || item.product?.name}
+                          {(item.product?.name as any)?.[locale] || (item.product?.name as any)?.uz || item.product?.name || '—'}
                         </div>
                         {item.product?.sku && (
                           <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>
@@ -983,25 +989,25 @@ export default function NewExpensePage() {
                         )}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {Number(item.quantity)} {item.product?.unitOfMeasure || 'dona'}
+                        {Number(item.quantity) || 0} {item.product?.unitOfMeasure || 'dona'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(item.unitPrice, locale, selectedReceipt.currency)}
+                        {formatCurrency(Number(item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(item.totalPrice, locale, selectedReceipt.currency)}
+                        {formatCurrency(Number(item.totalPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(item.landedCost || item.unitPrice, locale, selectedReceipt.currency)}
+                        {formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                        {preview ? formatCurrency(preview.allocatedAmount, locale, selectedReceipt.currency) : '—'}
+                        {preview ? formatCurrency(Number(preview.allocatedAmount) || 0, locale, selectedReceipt.currency || 'UZS') : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {preview ? `+${formatCurrency(preview.allocatedPerUnit, locale, selectedReceipt.currency)}` : '—'}
+                        {preview ? `+${formatCurrency(Number(preview.allocatedPerUnit) || 0, locale, selectedReceipt.currency || 'UZS')}` : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                        {preview ? formatCurrency(preview.newLandedCost, locale, selectedReceipt.currency) : formatCurrency(item.landedCost || item.unitPrice, locale, selectedReceipt.currency)}
+                        {preview ? formatCurrency(Number(preview.newLandedCost) || 0, locale, selectedReceipt.currency || 'UZS') : formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'center' }} className="tabular-nums">
                         {preview && preview.costIncreasePercent > 0 ? (
@@ -1120,7 +1126,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Итого распределено' : 'Jami taqsimlandi'}
                 </span>
                 <strong style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-900)' }} className="tabular-nums">
-                  {currency ? formatCurrency(previewResult.allocatedTotal, locale, currency) : '—'}
+                  {currency && previewResult ? formatCurrency(Number(previewResult.allocatedTotal) || 0, locale, currency) : '—'}
                 </strong>
               </div>
             </div>
