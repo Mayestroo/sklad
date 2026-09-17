@@ -575,6 +575,8 @@ export class SalesOrdersService {
         };
       });
 
+      // Existing reservations reference the old order items and must not survive an edit.
+      await this.stockReservationService.releaseOrderReservations(tenantId, id);
       await this.prisma.salesOrderItem.deleteMany({ where: { orderId: id } });
       updateData.subtotalAmount = subtotalAmount;
       updateData.discountAmount = discountAmount;
@@ -588,7 +590,31 @@ export class SalesOrdersService {
       include: this.buildOrderInclude(),
     });
 
-    return this.enrichOrder(updated);
+    if (dto.items?.length) {
+      let reservationWarehouseId = updated.warehouseId;
+      if (!reservationWarehouseId) {
+        const firstWarehouse = await this.prisma.warehouse.findFirst({ where: { tenantId } });
+        reservationWarehouseId = firstWarehouse?.id ?? null;
+      }
+      if (reservationWarehouseId) {
+        await this.stockReservationService.reserveStockForOrder(
+          tenantId,
+          id,
+          reservationWarehouseId,
+          updated.items.map((item) => ({
+            orderItemId: item.id,
+            productId: item.productId,
+            quantity: Number(item.quantity),
+          })),
+        );
+      }
+    }
+
+    const refreshed = await this.prisma.salesOrder.findFirst({
+      where: { id, tenantId },
+      include: this.buildOrderInclude(),
+    });
+    return this.enrichOrder(refreshed || updated);
   }
 
   // ─── DELETE (only in NEW, PENDING_APPROVAL, or CANCELLED) ─────
@@ -748,16 +774,21 @@ export class SalesOrdersService {
             tenantId,
             id,
             warehouseId,
-            order.items.map((i) => ({
+            order.items
+              .filter((i) => Number(i.reservedQty) < Number(i.quantity))
+              .map((i) => ({
               orderItemId: i.id,
               productId: i.productId,
-              quantity: Number(i.quantity),
-            })),
+              quantity: Number(i.quantity) - Number(i.reservedQty),
+              })),
             tx,
           );
 
           // If 100% fulfilled from stock reservation
-          const is100Fulfilled = resResults.every((r) => r.remainingGap === 0);
+          const freshItems = await tx.salesOrderItem.findMany({ where: { orderId: id } });
+          const is100Fulfilled =
+            resResults.every((r) => r.remainingGap === 0) &&
+            freshItems.every((item) => Number(item.reservedQty) >= Number(item.quantity));
           if (is100Fulfilled) {
             // Update readyQty to match quantity for all items
             for (const item of order.items) {
@@ -1364,7 +1395,18 @@ export class SalesOrdersService {
       });
       const invoiceTotal = subtotal - discountAmt;
       const orderPaid = Number(order.paidAmount || 0);
-      const allocatedPaid = Math.min(orderPaid, invoiceTotal);
+      const priorInvoices = await tx.salesInvoice.findMany({
+        where: { tenantId, salesOrderId: id, status: SalesDocStatus.POSTED },
+        select: { paidAmount: true },
+      });
+      const previouslyAllocated = priorInvoices.reduce(
+        (sum, priorInvoice) => sum + Number(priorInvoice.paidAmount),
+        0,
+      );
+      const allocatedPaid = Math.min(
+        Math.max(0, orderPaid - previouslyAllocated),
+        invoiceTotal,
+      );
       const invoicePaymentStatus =
         allocatedPaid >= invoiceTotal && invoiceTotal > 0
           ? SalesPaymentStatus.PAID
@@ -1401,13 +1443,6 @@ export class SalesOrdersService {
           counterparty: true,
         },
       });
-
-      if (allocatedPaid > 0) {
-        await tx.payment.updateMany({
-          where: { tenantId, orderId: id, invoiceId: null },
-          data: { invoiceId: invoice.id },
-        });
-      }
 
       // 5. Deduct FIFO stock batches & consume reservations
       let totalCogs = 0;
@@ -1511,13 +1546,61 @@ export class SalesOrdersService {
         );
       }
 
-      const grossProfit = Number(invoice.totalAmount) - totalCogs;
+      const ledgerRate = order.currency === 'UZS' ? 1 : Number(order.exchangeRate);
+      if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
+        throw new BadRequestException(
+          `Buyurtma uchun valyuta kursi noto'g'ri: ${order.currency}`,
+        );
+      }
+      const grossProfit = Number(invoice.totalAmount) * ledgerRate - totalCogs;
 
       // 6. Post Invoice & increase customer debt
       await tx.counterparty.update({
         where: { id: order.counterpartyId },
-        data: { debtBalance: { increment: invoice.totalAmount } },
+        data: {
+          customerDebt: { increment: invoice.totalAmount },
+          debtBalance: { increment: invoice.totalAmount },
+        },
       });
+      await tx.counterpartyBalance.upsert({
+        where: { counterpartyId_currency: { counterpartyId: order.counterpartyId, currency: order.currency } },
+        create: { tenantId, counterpartyId: order.counterpartyId, currency: order.currency, customerDebt: invoice.totalAmount },
+        update: { customerDebt: { increment: invoice.totalAmount } },
+      });
+
+      const [revenueAcc, receivableAcc, cogsAcc, inventoryAcc] = await Promise.all([
+        tx.account.findFirst({ where: { tenantId, code: '9010' } }),
+        tx.account.findFirst({ where: { tenantId, code: '4010' } }),
+        tx.account.findFirst({ where: { tenantId, code: '9110' } }),
+        tx.account.findFirst({ where: { tenantId, code: '2910' } }),
+      ]);
+      if (revenueAcc && receivableAcc) {
+        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
+        const lines = [{
+          debitAccountId: receivableAcc.id,
+          creditAccountId: revenueAcc.id,
+          amount: invoiceTotal * ledgerRate,
+          description: `Sotuv tushumi № ${invoiceNumber}`,
+        }];
+        if (totalCogs > 0 && cogsAcc && inventoryAcc) {
+          lines.push({
+            debitAccountId: cogsAcc.id,
+            creditAccountId: inventoryAcc.id,
+            amount: totalCogs,
+            description: `Sotilgan tovar tannarxi (COGS) № ${invoiceNumber}`,
+          });
+        }
+        await tx.journalEntry.create({
+          data: {
+            tenantId,
+            entryNumber: `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`,
+            description: `Buyurtma ${order.orderNumber} bo'yicha sotuv`,
+            sourceDocType: 'SalesInvoice',
+            sourceDocId: invoice.id,
+            lines: { create: lines },
+          },
+        });
+      }
 
       await tx.salesInvoice.update({
         where: { id: invoice.id },

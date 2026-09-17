@@ -56,9 +56,10 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
     }, TypeError);
   });
 
-  test('should default to UZS when currency is omitted', () => {
-    const res = (formatCurrency as any)(100, 'uz');
-    assert.strictEqual(res, '100.000 UZS');
+  test('should throw TypeError when currency is omitted', () => {
+    assert.throws(() => {
+      (formatCurrency as any)(100, 'uz');
+    }, TypeError);
   });
 
   test('should correctly parse numeric string amounts from API/Decimal responses', () => {

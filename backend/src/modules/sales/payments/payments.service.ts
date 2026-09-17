@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
@@ -27,6 +27,32 @@ export class PaymentsService {
     if (!counterparty) {
       throw new NotFoundException('Mijoz topilmadi');
     }
+    if (dto.invoiceId && dto.orderId) {
+      throw new BadRequestException("To'lov faqat bitta hujjatga: invoice yoki buyurtmaga biriktirilishi mumkin");
+    }
+
+    if (dto.invoiceId) {
+      const invoice = await this.prisma.salesInvoice.findFirst({
+        where: { id: dto.invoiceId, tenantId, counterpartyId: dto.counterpartyId, status: 'POSTED' },
+      });
+      if (!invoice || invoice.currency !== dto.currency) {
+        throw new BadRequestException("Sotuv hujjati topilmadi yoki to'lov valyutasi mos emas");
+      }
+      if (Number(invoice.paidAmount) + Number(dto.amount) > Number(invoice.totalAmount)) {
+        throw new BadRequestException("To'lov sotuv hujjatining qolgan qarzidan oshishi mumkin emas");
+      }
+    }
+    if (dto.orderId) {
+      const order = await this.prisma.salesOrder.findFirst({
+        where: { id: dto.orderId, tenantId, counterpartyId: dto.counterpartyId },
+      });
+      if (!order || order.currency !== dto.currency) {
+        throw new BadRequestException("Buyurtma topilmadi yoki to'lov valyutasi mos emas");
+      }
+      if (Number(order.paidAmount) + Number(dto.amount) > Number(order.totalAmount)) {
+        throw new BadRequestException("To'lov buyurtmaning qolgan summasidan oshishi mumkin emas");
+      }
+    }
 
     const paymentNumber = await this.generatePaymentNumber(tenantId);
 
@@ -41,7 +67,16 @@ export class PaymentsService {
         where: { tenantId, accountType: targetType },
       });
       if (defaultAccount) {
+        if (defaultAccount.currency !== dto.currency) {
+          throw new BadRequestException("Tanlangan standart kassa to'lov valyutasiga mos emas");
+        }
         cashAccountId = defaultAccount.id;
+      }
+    }
+    if (cashAccountId) {
+      const cashAccount = await this.prisma.cashAccount.findFirst({ where: { id: cashAccountId, tenantId } });
+      if (!cashAccount || cashAccount.currency !== dto.currency) {
+        throw new BadRequestException("Kassa hisobi topilmadi yoki to'lov valyutasiga mos emas");
       }
     }
 
@@ -76,6 +111,13 @@ export class PaymentsService {
           },
         },
       });
+      if (dto.invoiceId) {
+        await tx.counterpartyBalance.upsert({
+          where: { counterpartyId_currency: { counterpartyId: dto.counterpartyId, currency: dto.currency } },
+          create: { tenantId, counterpartyId: dto.counterpartyId, currency: dto.currency, customerDebt: -dto.amount },
+          update: { customerDebt: { decrement: dto.amount } },
+        });
+      }
 
       // 3. Update CashAccount balance & create FinanceTransaction
       if (cashAccountId) {
@@ -107,8 +149,8 @@ export class PaymentsService {
 
       // 4. If linked to an invoice, update invoice paid amount and status
       if (dto.invoiceId) {
-        const invoice = await tx.salesInvoice.findUnique({
-          where: { id: dto.invoiceId },
+        const invoice = await tx.salesInvoice.findFirst({
+          where: { id: dto.invoiceId, tenantId, counterpartyId: dto.counterpartyId },
         });
 
         if (invoice) {
@@ -125,6 +167,11 @@ export class PaymentsService {
             },
           });
         }
+      } else if (dto.orderId) {
+        await tx.salesOrder.update({
+          where: { id: dto.orderId },
+          data: { paidAmount: { increment: dto.amount } },
+        });
       }
 
       return payment;

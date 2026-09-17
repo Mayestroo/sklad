@@ -62,6 +62,7 @@ describe('SalesOrdersService', () => {
         count: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       salesInvoiceItem: {
         update: jest.fn(),
@@ -79,6 +80,12 @@ describe('SalesOrdersService', () => {
       },
       counterparty: {
         update: jest.fn(),
+      },
+      counterpartyBalance: {
+        upsert: jest.fn(),
+      },
+      account: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       auditLog: {
         create: jest.fn(),

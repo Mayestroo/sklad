@@ -839,6 +839,7 @@ model Counterparty {
   salesReturns        SalesReturn[]
   additionalExpenses  AdditionalExpense[]
   serviceActs         ServiceAct[]
+  balances            CounterpartyBalance[]
 
   @@index([tenantId])
   @@index([tenantId, folderId])
@@ -846,6 +847,24 @@ model Counterparty {
     openingBalanceLines OpeningBalanceLine[]
 
   @@map("counterparties")
+}
+
+/// Native-currency settlement balance. Do not combine values from different rows.
+model CounterpartyBalance {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  counterpartyId String       @map("counterparty_id")
+  currency       String
+  customerDebt   Decimal      @default(0) @db.Decimal(15, 2) @map("customer_debt")
+  supplierDebt   Decimal      @default(0) @db.Decimal(15, 2) @map("supplier_debt")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  counterparty Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+
+  @@unique([counterpartyId, currency])
+  @@index([tenantId, currency])
+  @@map("counterparty_balances")
 }
 
 model CounterpartyFolder {
@@ -1314,6 +1333,8 @@ model FinanceTransaction {
   counterpartyId    String?             @map("counterparty_id")
   transactionTypeId String?             @map("transaction_type_id")
   amount            Decimal             @db.Decimal(15, 2)
+  /// For TRANSFER only: exact amount credited to the destination account.
+  transferToAmount  Decimal?            @db.Decimal(15, 2) @map("transfer_to_amount")
   currency          String              @default("UZS")
   transactionDate   DateTime            @default(now()) @map("transaction_date")
   comment           String?

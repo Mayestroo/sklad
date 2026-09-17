@@ -16,7 +16,7 @@
  * // ❌ XATO — "1 500 000 UZS UZS" (ikki marta!)
  * {formatCurrency(amount, locale, currency)} {currency}
  */
-export function formatCurrency(amount: number | string, locale: string = 'uz', currency?: string): string {
+export function formatCurrency(amount: number | string, locale: string = 'uz', currency: string): string {
   const numericAmount =
     typeof amount === 'string' && amount.trim() !== ''
       ? Number(amount)
@@ -26,12 +26,8 @@ export function formatCurrency(amount: number | string, locale: string = 'uz', c
     throw new TypeError(`formatCurrency: amount must be a valid finite number, received ${String(amount)}`);
   }
 
-  // If 3rd argument is provided by caller, strictly validate it without silent fallback.
-  // If caller only passed (amount, locale), safe default to 'UZS'.
-  const resolvedCurrency = arguments.length >= 3 ? currency : (currency || 'UZS');
-
-  if (resolvedCurrency === null || resolvedCurrency === undefined || typeof resolvedCurrency !== 'string' || resolvedCurrency.trim() === '') {
-    throw new TypeError(`formatCurrency: currency must be a non-empty string, received ${String(resolvedCurrency)}`);
+  if (currency === null || currency === undefined || typeof currency !== 'string' || currency.trim() === '') {
+    throw new TypeError(`formatCurrency: currency must be a non-empty string, received ${String(currency)}`);
   }
 
   // Always format as 111,111.000 — comma thousands separator, dot decimal, 3 fixed decimals
@@ -40,7 +36,7 @@ export function formatCurrency(amount: number | string, locale: string = 'uz', c
     maximumFractionDigits: 3,
   }).format(numericAmount);
 
-  const cur = resolvedCurrency.trim().toUpperCase();
+  const cur = currency.trim().toUpperCase();
   return `${formatted} ${cur}`;
 }
 

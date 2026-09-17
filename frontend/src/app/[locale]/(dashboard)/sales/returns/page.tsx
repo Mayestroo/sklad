@@ -77,7 +77,7 @@ interface InvoiceItem {
   invoiceNumber: string;
   counterpartyId: string;
   totalAmount: number;
-  currency?: string;
+  currency: string;
 }
 
 interface ReturnableItemRow {

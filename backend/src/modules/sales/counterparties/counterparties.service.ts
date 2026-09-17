@@ -113,12 +113,16 @@ export class CounterpartiesService {
       include: {
         folder: true,
         priceList: true,
+        balances: {
+          select: { currency: true, customerDebt: true, supplierDebt: true },
+          orderBy: { currency: 'asc' },
+        },
       },
     });
   }
 
   async getSummary(tenantId: string) {
-    const [customersCount, suppliersCount, counterpartiesWithBalance] =
+    const [customersCount, suppliersCount, balances] =
       await Promise.all([
         this.prisma.counterparty.count({
           where: {
@@ -132,105 +136,46 @@ export class CounterpartiesService {
             type: { in: [CounterpartyType.SUPPLIER, CounterpartyType.BOTH] },
           },
         }),
-        this.prisma.counterparty.findMany({
-          where: {
-            tenantId,
-            OR: [
-              { customerDebt: { not: 0 } },
-              { supplierDebt: { not: 0 } },
-              { debtBalance: { not: 0 } },
-            ],
-          },
+        this.prisma.counterpartyBalance.findMany({
+          where: { tenantId },
           select: {
-            id: true,
-            type: true,
+            counterpartyId: true,
+            currency: true,
             customerDebt: true,
             supplierDebt: true,
-            debtBalance: true,
           },
         }),
       ]);
 
-    let receivablesCount = 0;
-    let receivablesAmount = 0;
-    let payablesCount = 0;
-    let payablesAmount = 0;
-
-    for (const cp of counterpartiesWithBalance) {
-      const custDebt = Number((cp as any).customerDebt || 0);
-      const suppDebt = Number((cp as any).supplierDebt || 0);
-
-      if (custDebt !== 0 || suppDebt !== 0) {
-        if (custDebt > 0) {
-          receivablesCount++;
-          receivablesAmount += custDebt;
-        } else if (custDebt < 0) {
-          // Customer advance / prepayment received: liability (we owe goods/services)
-          payablesCount++;
-          payablesAmount += Math.abs(custDebt);
-        }
-
-        if (suppDebt > 0) {
-          payablesCount++;
-          payablesAmount += suppDebt;
-        } else if (suppDebt < 0) {
-          // Supplier overpayment / prepayment held with vendor: asset
-          receivablesCount++;
-          receivablesAmount += Math.abs(suppDebt);
-        }
-      } else {
-        const rawBalance = Number(cp.debtBalance || 0);
-        const netReceivable = cp.type === CounterpartyType.SUPPLIER ? -rawBalance : rawBalance;
-        if (netReceivable > 0) {
-          receivablesCount++;
-          receivablesAmount += netReceivable;
-        } else if (netReceivable < 0) {
-          payablesCount++;
-          payablesAmount += Math.abs(netReceivable);
-        }
+    const receivableCounterparties = new Set<string>();
+    const payableCounterparties = new Set<string>();
+    const receivablesByCurrency: Record<string, number> = {};
+    const payablesByCurrency: Record<string, number> = {};
+    for (const balance of balances) {
+      const customerDebt = Number(balance.customerDebt);
+      const supplierDebt = Number(balance.supplierDebt);
+      if (customerDebt > 0) {
+        receivableCounterparties.add(balance.counterpartyId);
+        receivablesByCurrency[balance.currency] = (receivablesByCurrency[balance.currency] ?? 0) + customerDebt;
+      }
+      if (supplierDebt > 0) {
+        payableCounterparties.add(balance.counterpartyId);
+        payablesByCurrency[balance.currency] = (payablesByCurrency[balance.currency] ?? 0) + supplierDebt;
       }
     }
 
-    const [recentReceipt, recentInvoice, company] = await Promise.all([
-      this.prisma.purchaseReceipt?.findFirst
-        ? this.prisma.purchaseReceipt.findFirst({
-            where: { tenantId, status: 'POSTED' },
-            select: { currency: true },
-            orderBy: { createdAt: 'desc' },
-          })
-        : Promise.resolve(null),
-      this.prisma.salesInvoice?.findFirst
-        ? this.prisma.salesInvoice.findFirst({
-            where: { tenantId, status: 'POSTED' },
-            select: { currency: true },
-            orderBy: { createdAt: 'desc' },
-          })
-        : Promise.resolve(null),
-      this.prisma.company?.findUnique
-        ? this.prisma.company.findUnique({
-            where: { id: tenantId },
-            select: { settings: true },
-          })
-        : Promise.resolve(null),
-    ]);
-
-    const reportCurrency =
-      recentReceipt?.currency ||
-      recentInvoice?.currency ||
-      (company?.settings as any)?.sales?.defaultCurrency ||
-      'USD';
-
     return {
-      currency: reportCurrency,
       total_customers: customersCount,
       total_suppliers: suppliersCount,
       receivables: {
-        count: receivablesCount,
-        total_amount: Math.round(receivablesAmount * 100) / 100,
+        count: receivableCounterparties.size,
+        total_amount: 0,
+        byCurrency: Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount })),
       },
       payables: {
-        count: payablesCount,
-        total_amount: Math.round(payablesAmount * 100) / 100,
+        count: payableCounterparties.size,
+        total_amount: 0,
+        byCurrency: Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount })),
       },
     };
   }
@@ -325,6 +270,10 @@ export class CounterpartiesService {
       include: {
         folder: true,
         priceList: true,
+        balances: {
+          select: { currency: true, customerDebt: true, supplierDebt: true },
+          orderBy: { currency: 'asc' },
+        },
         purchaseReceipts: {
           select: { currency: true },
           orderBy: { createdAt: 'desc' },
@@ -343,22 +292,15 @@ export class CounterpartiesService {
     });
 
     return counterparties.map((cp) => {
-      const custDebt = Number((cp as any).customerDebt || 0);
-      const suppDebt = Number((cp as any).supplierDebt || 0);
-      const raw = Number(cp.debtBalance || 0);
-      const net = (custDebt !== 0 || suppDebt !== 0)
-        ? custDebt - suppDebt
-        : cp.type === CounterpartyType.SUPPLIER ? -raw : raw;
-      const currency =
-        (cp as any).purchaseReceipts?.[0]?.currency ||
-        (cp as any).salesInvoices?.[0]?.currency ||
-        'UZS';
+      const balancesByCurrency = cp.balances.map((balance) => ({
+        currency: balance.currency,
+        customerDebt: Number(balance.customerDebt),
+        supplierDebt: Number(balance.supplierDebt),
+        netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+      }));
       return {
         ...cp,
-        currency,
-        customerDebt: custDebt,
-        supplierDebt: suppDebt,
-        netBalance: net,
+        balancesByCurrency,
       };
     });
   }
@@ -370,6 +312,10 @@ export class CounterpartiesService {
       include: {
         folder: true,
         priceList: true,
+        balances: {
+          select: { currency: true, customerDebt: true, supplierDebt: true },
+          orderBy: { currency: 'asc' },
+        },
         salesInvoices: { orderBy: { createdAt: 'desc' }, take: 10 },
         purchaseReceipts: { orderBy: { createdAt: 'desc' }, take: 10 },
         payments: { orderBy: { createdAt: 'desc' }, take: 10 },
@@ -381,23 +327,16 @@ export class CounterpartiesService {
       throw new NotFoundException('Counterparty not found');
     }
 
-    const custDebt = Number((counterparty as any).customerDebt || 0);
-    const suppDebt = Number((counterparty as any).supplierDebt || 0);
-    const raw = Number(counterparty.debtBalance || 0);
-    const net = (custDebt !== 0 || suppDebt !== 0)
-      ? custDebt - suppDebt
-      : counterparty.type === CounterpartyType.SUPPLIER ? -raw : raw;
-    const currency =
-      (counterparty as any).purchaseReceipts?.[0]?.currency ||
-      (counterparty as any).salesInvoices?.[0]?.currency ||
-      'UZS';
+    const balancesByCurrency = counterparty.balances.map((balance) => ({
+      currency: balance.currency,
+      customerDebt: Number(balance.customerDebt),
+      supplierDebt: Number(balance.supplierDebt),
+      netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+    }));
 
     return {
       ...counterparty,
-      currency,
-      customerDebt: custDebt,
-      supplierDebt: suppDebt,
-      netBalance: net,
+      balancesByCurrency,
     };
   }
 
@@ -692,4 +631,3 @@ export class CounterpartiesService {
     };
   }
 }
-

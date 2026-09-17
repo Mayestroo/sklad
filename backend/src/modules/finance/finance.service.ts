@@ -384,6 +384,11 @@ export class FinanceService {
       where: { id: dto.accountId, tenantId },
     });
     if (!account) throw new NotFoundException('Cash account not found');
+    if (account.currency && account.currency !== dto.currency) {
+      throw new BadRequestException(
+        `Kassa valyutasi (${account.currency}) va kirim valyutasi (${dto.currency}) bir xil bo'lishi shart`,
+      );
+    }
 
     const tx = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.financeTransaction.create({
@@ -422,6 +427,11 @@ export class FinanceService {
             customerDebt: { decrement: dto.amount },
             debtBalance: { decrement: dto.amount },
           },
+        });
+        await tx.counterpartyBalance.upsert({
+          where: { counterpartyId_currency: { counterpartyId: dto.counterpartyId, currency: dto.currency } },
+          create: { tenantId, counterpartyId: dto.counterpartyId, currency: dto.currency, customerDebt: -dto.amount },
+          update: { customerDebt: { decrement: dto.amount } },
         });
 
         // 3. Direct Sales Invoice Settlement
@@ -500,6 +510,7 @@ export class FinanceService {
             where: {
               tenantId,
               counterpartyId: dto.counterpartyId,
+              currency: dto.currency,
               status: SalesDocStatus.POSTED,
               paymentStatus: {
                 in: [SalesPaymentStatus.UNPAID, SalesPaymentStatus.PARTIALLY_PAID],
@@ -546,6 +557,11 @@ export class FinanceService {
       where: { id: dto.accountId, tenantId },
     });
     if (!account) throw new NotFoundException('Cash account not found');
+    if (account.currency && account.currency !== dto.currency) {
+      throw new BadRequestException(
+        `Kassa valyutasi (${account.currency}) va chiqim valyutasi (${dto.currency}) bir xil bo'lishi shart`,
+      );
+    }
 
     // Invariant: Cash account cannot go negative
     if (Number(account.balance) < Number(dto.amount)) {
@@ -592,13 +608,24 @@ export class FinanceService {
             debtBalance: { decrement: dto.amount },
           },
         });
+        await tx.counterpartyBalance.upsert({
+          where: { counterpartyId_currency: { counterpartyId: dto.counterpartyId, currency: dto.currency } },
+          create: { tenantId, counterpartyId: dto.counterpartyId, currency: dto.currency, supplierDebt: -dto.amount },
+          update: { supplierDebt: { decrement: dto.amount } },
+        });
 
         // 3. Direct Purchase Receipt Settlement
         if (dto.sourceDocType === 'PurchaseReceipt' && dto.sourceDocId) {
           const receipt = await tx.purchaseReceipt.findFirst({
             where: { id: dto.sourceDocId, tenantId },
           });
-          if (receipt) {
+          if (!receipt || receipt.counterpartyId !== dto.counterpartyId || receipt.currency !== dto.currency) {
+            throw new BadRequestException("To'lov xarid hujjatining kontragent va valyutasiga mos bo'lishi shart");
+          }
+          if (Number(receipt.paidAmount) + Number(dto.amount) > Number(receipt.totalAmount)) {
+            throw new BadRequestException("To'lov xarid hujjatining qolgan qarzidan oshishi mumkin emas");
+          }
+          {
             const newPaid = Number(receipt.paidAmount) + Number(dto.amount);
             const total = Number(receipt.totalAmount);
             const paymentStatus =
@@ -641,6 +668,7 @@ export class FinanceService {
             where: {
               tenantId,
               counterpartyId: dto.counterpartyId,
+              currency: dto.currency,
               status: PurchaseDocStatus.POSTED,
               paymentStatus: {
                 in: [PurchasePaymentStatus.UNPAID, PurchasePaymentStatus.PARTIALLY_PAID],
@@ -747,6 +775,7 @@ export class FinanceService {
           accountId: dto.fromAccountId,
           transferToId: dto.toAccountId,
           amount: fromAmount,
+          transferToAmount: toAmount,
           currency: fromCurrency,
           transactionDate: dto.transactionDate
             ? new Date(dto.transactionDate)
@@ -817,6 +846,11 @@ export class FinanceService {
               customerDebt: { increment: amount },
               debtBalance: { increment: amount },
             },
+          });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: existing.counterpartyId, currency: existing.currency } },
+            create: { tenantId, counterpartyId: existing.counterpartyId, currency: existing.currency, customerDebt: amount },
+            update: { customerDebt: { increment: amount } },
           });
         }
 
@@ -903,6 +937,11 @@ export class FinanceService {
               debtBalance: { increment: amount },
             },
           });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: existing.counterpartyId, currency: existing.currency } },
+            create: { tenantId, counterpartyId: existing.counterpartyId, currency: existing.currency, supplierDebt: amount },
+            update: { supplierDebt: { increment: amount } },
+          });
         }
 
         // Revert PurchaseReceipt paidAmount
@@ -946,18 +985,19 @@ export class FinanceService {
           }
         }
       } else if (existing.direction === TransactionDirection.TRANSFER) {
+        const destinationAmount = Number(existing.transferToAmount ?? amount);
         if (existing.transferToId) {
           const toAcc = await tx.cashAccount.findUnique({
             where: { id: existing.transferToId },
           });
-          if (!toAcc || Number(toAcc.balance) < amount) {
+          if (!toAcc || Number(toAcc.balance) < destinationAmount) {
             throw new BadRequestException(
               "O'tkazmani bekor qilish imkonsiz: qabul qiluvchi kassada yetarli qoldiq mavjud emas",
             );
           }
           await tx.cashAccount.update({
             where: { id: existing.transferToId },
-            data: { balance: { decrement: amount } },
+            data: { balance: { decrement: destinationAmount } },
           });
         }
         if (existing.accountId) {

@@ -174,76 +174,59 @@ export class DashboardService {
   // ─── /api/dashboard/debts ────────────────────────────────────────
 
   async getDebts(tenantId: string) {
-    const counterparties = await this.prisma.counterparty.findMany({
-      where: { tenantId },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        customerDebt: true,
-        supplierDebt: true,
-        debtBalance: true,
-        salesInvoices: {
-          where: { status: 'POSTED' },
-          select: { currency: true },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+    const [invoices, receipts] = await Promise.all([
+      this.prisma.salesInvoice.findMany({
+        where: { tenantId, status: 'POSTED' },
+        select: {
+          counterpartyId: true,
+          currency: true,
+          totalAmount: true,
+          paidAmount: true,
+          counterparty: { select: { name: true } },
         },
-        purchaseReceipts: {
-          where: { status: 'POSTED' },
-          select: { currency: true },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+      }),
+      this.prisma.purchaseReceipt.findMany({
+        where: { tenantId, status: 'POSTED' },
+        select: {
+          counterpartyId: true,
+          currency: true,
+          totalAmount: true,
+          paidAmount: true,
+          counterparty: { select: { name: true } },
         },
-      },
-    });
+      }),
+    ]);
 
-    let totalReceivable = 0;
-    let totalPayable = 0;
     const debtors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
     const creditors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
-
-    counterparties.forEach((c) => {
-      const custDebt = Number((c as any).customerDebt || 0);
-      const suppDebt = Number((c as any).supplierDebt || 0);
-      const rawBalance = Number(c.debtBalance || 0);
-      const currency =
-        (c as any).purchaseReceipts?.[0]?.currency ||
-        (c as any).salesInvoices?.[0]?.currency ||
-        'UZS';
-
-      if (custDebt > 0) {
-        totalReceivable += custDebt;
-        debtors.push({ id: c.id, name: c.name, amount: custDebt, currency });
-      } else if (custDebt < 0) {
-        totalPayable += Math.abs(custDebt);
-        creditors.push({ id: c.id, name: c.name, amount: Math.abs(custDebt), currency });
-      }
-
-      if (suppDebt > 0) {
-        totalPayable += suppDebt;
-        creditors.push({ id: c.id, name: c.name, amount: suppDebt, currency });
-      } else if (suppDebt < 0) {
-        totalReceivable += Math.abs(suppDebt);
-        debtors.push({ id: c.id, name: c.name, amount: Math.abs(suppDebt), currency });
-      }
-
-      // Fallback for counterparties with only debtBalance
-      if (custDebt === 0 && suppDebt === 0 && rawBalance !== 0) {
-        if (c.type === 'SUPPLIER') {
-          totalPayable += Math.abs(rawBalance);
-          creditors.push({ id: c.id, name: c.name, amount: Math.abs(rawBalance), currency });
-        } else {
-          if (rawBalance > 0) {
-            totalReceivable += rawBalance;
-            debtors.push({ id: c.id, name: c.name, amount: rawBalance, currency });
-          } else {
-            totalPayable += Math.abs(rawBalance);
-            creditors.push({ id: c.id, name: c.name, amount: Math.abs(rawBalance), currency });
-          }
-        }
-      }
-    });
+    const debtorsByCounterpartyCurrency = new Map<string, typeof debtors[number]>();
+    const creditorsByCounterpartyCurrency = new Map<string, typeof creditors[number]>();
+    for (const invoice of invoices) {
+      const amount = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+      if (amount <= 0) continue;
+      const key = `${invoice.counterpartyId}:${invoice.currency}`;
+      const existing = debtorsByCounterpartyCurrency.get(key);
+      debtorsByCounterpartyCurrency.set(key, {
+        id: invoice.counterpartyId,
+        name: invoice.counterparty.name,
+        currency: invoice.currency,
+        amount: (existing?.amount ?? 0) + amount,
+      });
+    }
+    for (const receipt of receipts) {
+      const amount = Number(receipt.totalAmount) - Number(receipt.paidAmount);
+      if (amount <= 0) continue;
+      const key = `${receipt.counterpartyId}:${receipt.currency}`;
+      const existing = creditorsByCounterpartyCurrency.get(key);
+      creditorsByCounterpartyCurrency.set(key, {
+        id: receipt.counterpartyId,
+        name: receipt.counterparty.name,
+        currency: receipt.currency,
+        amount: (existing?.amount ?? 0) + amount,
+      });
+    }
+    debtors.push(...debtorsByCounterpartyCurrency.values());
+    creditors.push(...creditorsByCounterpartyCurrency.values());
 
     debtors.sort((a, b) => b.amount - a.amount);
     creditors.sort((a, b) => b.amount - a.amount);
@@ -263,13 +246,13 @@ export class DashboardService {
 
     return {
       receivable: {
-        total: totalReceivable,
+        total: 0,
         count: debtors.length,
         byCurrency: receivableByCurrency,
         topDebtors: debtors.slice(0, 5),
       },
       payable: {
-        total: totalPayable,
+        total: 0,
         count: creditors.length,
         byCurrency: payableByCurrency,
         topCreditors: creditors.slice(0, 5),
@@ -424,4 +407,3 @@ export class DashboardService {
     };
   }
 }
-

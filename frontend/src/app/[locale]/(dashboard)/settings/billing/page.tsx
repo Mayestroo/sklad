@@ -167,7 +167,7 @@ export default function BillingSettingsPage() {
 
                     <div style={{ margin: 'var(--space-3) 0' }}>
                       <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                        {formatCurrency(plan.priceMonthly, locale)}
+                        {formatCurrency(plan.priceMonthly, locale, 'UZS')}
                       </span>
                       <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}> / oyiga</span>
                     </div>
@@ -223,7 +223,7 @@ export default function BillingSettingsPage() {
                         <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{formatDate(p.paidAt, locale)}</td>
                         <td style={{ padding: '12px', fontWeight: 'bold' }}>{p.method}</td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }} className="tabular-nums">
-                          {formatCurrency(Number(p.amount), locale)}
+                          {formatCurrency(Number(p.amount), locale, 'UZS')}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'center' }}>
                           <Badge variant={p.status === 'PAID' ? 'success' : 'neutral'}>{p.status}</Badge>
@@ -243,7 +243,7 @@ export default function BillingSettingsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
             <div>Tanlangan Tarif: <strong style={{ color: 'var(--color-primary-600)' }}>{selectedPlanId}</strong></div>
-            <div style={{ marginTop: '4px' }}>To&apos;lov Summasi: <strong>{formatCurrency(plans.find((p) => p.id === selectedPlanId)?.priceMonthly || 0, locale)}</strong></div>
+            <div style={{ marginTop: '4px' }}>To&apos;lov Summasi: <strong>{formatCurrency(plans.find((p) => p.id === selectedPlanId)?.priceMonthly || 0, locale, 'UZS')}</strong></div>
           </div>
 
           <div>

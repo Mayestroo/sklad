@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class CreateIncomeDto {
   @IsString()
@@ -18,8 +19,7 @@ export class CreateIncomeDto {
   @IsPositive()
   amount: number;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsValidCurrency()
   currency: string;
 
   @IsOptional()

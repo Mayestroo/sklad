@@ -60,7 +60,7 @@ interface OrderItemSummary {
   paymentStatus: string;
   paymentCondition?: string | null;
   requiredPaymentPercent?: number | null;
-  currency?: string;
+  currency: string;
   totalAmount: number;
   paidAmount: number;
   debtAmount: number;

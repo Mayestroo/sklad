@@ -420,6 +420,11 @@ export class SalesInvoicesService {
           debtBalance: { increment: invoice.totalAmount },
         },
       });
+      await tx.counterpartyBalance.upsert({
+        where: { counterpartyId_currency: { counterpartyId: invoice.counterpartyId, currency: invoice.currency } },
+        create: { tenantId, counterpartyId: invoice.counterpartyId, currency: invoice.currency, customerDebt: invoice.totalAmount },
+        update: { customerDebt: { increment: invoice.totalAmount } },
+      });
 
       // 4. NAS / BHMS Accounting Journal Entries
       const entryCount = await tx.journalEntry.count({ where: { tenantId } });
@@ -442,9 +447,16 @@ export class SalesInvoicesService {
       });
 
       if (revenueAcc && receivableAcc) {
+        const exchangeRate = Number(invoice.exchangeRate);
+        const ledgerRate = invoice.currency === 'USD' ? exchangeRate : 1;
+        if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
+          throw new BadRequestException(
+            `Sotuv hujjati uchun valyuta kursi noto'g'ri: ${invoice.currency}`,
+          );
+        }
         const netRevenue =
-          Number(invoice.totalAmount) - Number(invoice.vatAmount);
-        const vatSum = Number(invoice.vatAmount);
+          (Number(invoice.totalAmount) - Number(invoice.vatAmount)) * ledgerRate;
+        const vatSum = Number(invoice.vatAmount) * ledgerRate;
         const journalLines: Array<{
           debitAccountId: string;
           creditAccountId: string;
@@ -602,6 +614,11 @@ export class SalesInvoicesService {
           debtBalance: { decrement: invoice.totalAmount },
         },
       });
+      await tx.counterpartyBalance.upsert({
+        where: { counterpartyId_currency: { counterpartyId: invoice.counterpartyId, currency: invoice.currency } },
+        create: { tenantId, counterpartyId: invoice.counterpartyId, currency: invoice.currency, customerDebt: -Number(invoice.totalAmount) },
+        update: { customerDebt: { decrement: invoice.totalAmount } },
+      });
 
       // Remove journal entries
       await tx.journalEntry.deleteMany({
@@ -736,10 +753,12 @@ export class SalesInvoicesService {
     let originalInvoice: any = null;
     const returnedQtyMap = new Map<string, number>();
 
-    if (dto.invoiceId) {
-      originalInvoice =
-        (await this.prisma.salesInvoice.findFirst({
-          where: { id: dto.invoiceId, tenantId },
+    if (!dto.invoiceId) {
+      throw new BadRequestException("Qaytarish faqat asl sotuv fakturasiga biriktirilishi mumkin");
+    }
+
+    originalInvoice = await this.prisma.salesInvoice.findFirst({
+          where: { id: dto.invoiceId, tenantId, status: SalesDocStatus.POSTED },
           include: {
             items: true,
             returns: {
@@ -747,18 +766,8 @@ export class SalesInvoicesService {
               include: { items: true },
             },
           },
-        })) ||
-        (await this.prisma.salesInvoice.findUnique({
-          where: { id: dto.invoiceId },
-          include: {
-            items: true,
-            returns: {
-              where: { status: SalesReturnDocStatus.POSTED },
-              include: { items: true },
-            },
-          },
-        }));
-      if (!originalInvoice) {
+        });
+      if (!originalInvoice || originalInvoice.counterpartyId !== dto.counterpartyId || originalInvoice.currency !== dto.currency || originalInvoice.warehouseId !== dto.warehouseId) {
         throw new NotFoundException('Tanlangan sotuv fakturasi topilmadi');
       }
 
@@ -768,7 +777,6 @@ export class SalesInvoicesService {
           returnedQtyMap.set(retItem.productId, current + Number(retItem.quantity));
         }
       }
-    }
 
     const preparedItems: Array<{
       productId: string;
@@ -780,6 +788,10 @@ export class SalesInvoicesService {
       isDefective: boolean;
     }> = [];
 
+    const requestedQtyByProduct = new Map<string, number>();
+    for (const item of dto.items) {
+      requestedQtyByProduct.set(item.productId, (requestedQtyByProduct.get(item.productId) ?? 0) + Number(item.quantity));
+    }
     for (const i of dto.items) {
       const qty = Number(i.quantity);
       if (i.quantity == null || isNaN(qty) || qty <= 0) {
@@ -787,18 +799,7 @@ export class SalesInvoicesService {
           "Qaytarish qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
         );
       }
-      const unitPrice = Number(i.unitPrice);
-      if (i.unitPrice == null || isNaN(unitPrice) || unitPrice < 0) {
-        throw new BadRequestException(
-          "Qaytarish qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
-        );
-      }
-
-      const lineTotal = qty * unitPrice;
-      totalAmount += lineTotal;
-
       let unitCogs = 0;
-      if (originalInvoice) {
         const origItem = originalInvoice.items.find(
           (oi: any) => oi.productId === i.productId,
         );
@@ -812,14 +813,16 @@ export class SalesInvoicesService {
         const previouslyReturned = returnedQtyMap.get(i.productId) || 0;
         const remainingReturnable = Math.max(0, soldQty - previouslyReturned);
 
-        if (i.quantity > remainingReturnable + 0.0001) {
+        if ((requestedQtyByProduct.get(i.productId) ?? 0) > remainingReturnable + 0.0001) {
           throw new BadRequestException(
             `"${origItem.productId}" bo'yicha qaytarish miqdori (${i.quantity}) asl sotuvdagi qoldiqdan (${remainingReturnable}) oshib ketdi (Over-return invariant)`,
           );
         }
 
         unitCogs = Number(origItem.unitCogs || 0);
-      }
+        const unitPrice = Number(origItem.totalPrice) / soldQty;
+        const lineTotal = qty * unitPrice;
+        totalAmount += lineTotal;
 
       if (unitCogs <= 0) {
         const prod = await this.prisma.product.findUnique({
@@ -834,7 +837,7 @@ export class SalesInvoicesService {
       preparedItems.push({
         productId: i.productId,
         quantity: i.quantity,
-        unitPrice: i.unitPrice,
+        unitPrice,
         totalPrice: lineTotal,
         unitCogs,
         lineCogs,
@@ -1018,6 +1021,11 @@ export class SalesInvoicesService {
           debtBalance: { decrement: params.totalAmount },
         },
       });
+      await tx.counterpartyBalance.upsert({
+        where: { counterpartyId_currency: { counterpartyId: params.counterpartyId, currency: params.currency } },
+        create: { tenantId, counterpartyId: params.counterpartyId, currency: params.currency, customerDebt: -params.totalAmount },
+        update: { customerDebt: { decrement: params.totalAmount } },
+      });
 
       // Update originating invoice returnStatus
       if (params.invoiceId) {
@@ -1045,12 +1053,29 @@ export class SalesInvoicesService {
       }
 
       // Double-entry accounting reversal for Sales Return (BHMS)
+      const originalInvoice = await tx.salesInvoice.findUnique({
+        where: { id: params.invoiceId! },
+        include: { items: true },
+      });
+      if (!originalInvoice) {
+        throw new NotFoundException('Asl sotuv fakturasi topilmadi');
+      }
+      const ledgerRate = originalInvoice.currency === 'USD' ? Number(originalInvoice.exchangeRate) : 1;
+      if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
+        throw new BadRequestException("Asl sotuv fakturasining valyuta kursi noto'g'ri");
+      }
+      const returnedVat = params.preparedItems.reduce((sum, item) => {
+        const invoiceItem = originalInvoice.items.find((candidate) => candidate.productId === item.productId);
+        return sum + (invoiceItem ? (Number(invoiceItem.vatAmount) / Number(invoiceItem.quantity)) * item.quantity : 0);
+      }, 0);
+      const returnedNetRevenue = params.totalAmount - returnedVat;
       const revenueAcc = await tx.account.findFirst({
         where: { tenantId, code: '9010' },
       });
       const receivableAcc = await tx.account.findFirst({
         where: { tenantId, code: '4010' },
       });
+      const vatAcc = await tx.account.findFirst({ where: { tenantId, code: '6410' } });
       const cogsAcc = await tx.account.findFirst({
         where: { tenantId, code: '9110' },
       });
@@ -1065,12 +1090,20 @@ export class SalesInvoicesService {
         description: string;
       }> = [];
 
-      if (revenueAcc && receivableAcc && params.totalAmount > 0) {
+      if (revenueAcc && receivableAcc && returnedNetRevenue > 0) {
         journalLines.push({
           debitAccountId: revenueAcc.id,
           creditAccountId: receivableAcc.id,
-          amount: params.totalAmount,
+          amount: returnedNetRevenue * ledgerRate,
           description: `Sotuv qaytarilishi № ${params.returnNumber}`,
+        });
+      }
+      if (vatAcc && receivableAcc && returnedVat > 0) {
+        journalLines.push({
+          debitAccountId: vatAcc.id,
+          creditAccountId: receivableAcc.id,
+          amount: returnedVat * ledgerRate,
+          description: `Chiquvchi QQS qaytarilishi № ${params.returnNumber}`,
         });
       }
       if (cogsAcc && inventoryAcc && params.totalCogs > 0) {
@@ -1279,6 +1312,11 @@ export class SalesInvoicesService {
           customerDebt: { increment: Number(existing.totalAmount) },
           debtBalance: { increment: Number(existing.totalAmount) },
         },
+      });
+      await tx.counterpartyBalance.upsert({
+        where: { counterpartyId_currency: { counterpartyId: existing.counterpartyId, currency: existing.currency } },
+        create: { tenantId, counterpartyId: existing.counterpartyId, currency: existing.currency, customerDebt: existing.totalAmount },
+        update: { customerDebt: { increment: existing.totalAmount } },
       });
 
       // Update invoice return status

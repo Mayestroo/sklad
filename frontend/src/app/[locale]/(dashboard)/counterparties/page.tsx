@@ -13,6 +13,7 @@ import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { toast } from '@/context/ToastContext';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { QuickPaymentModal } from '@/components/counterparties/QuickPaymentModal';
@@ -64,6 +65,12 @@ interface Counterparty {
   discountPercent?: number;
   debtBalance: number;
   netBalance?: number;
+  balancesByCurrency?: Array<{
+    currency: string;
+    customerDebt: number;
+    supplierDebt: number;
+    netBalance: number;
+  }>;
   createdAt: string;
 }
 
@@ -73,10 +80,12 @@ interface CounterpartySummary {
   receivables: {
     count: number;
     total_amount: number;
+    byCurrency?: Array<{ currency: string; amount: number }>;
   };
   payables: {
     count: number;
     total_amount: number;
+    byCurrency?: Array<{ currency: string; amount: number }>;
   };
 }
 
@@ -743,7 +752,13 @@ export default function CounterpartiesPage() {
               </div>
               <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: 2 }}>+ HAQDORLIK</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#059669', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                {formatCurrency(summary?.receivables.total_amount ?? 0, locale, (summary as any)?.currency || defaultCurrency)}
+                <MultiCurrencyValue
+                  items={summary?.receivables.byCurrency}
+                  fallbackAmount={summary?.receivables.total_amount ?? 0}
+                  fallbackCurrency={defaultCurrency}
+                  locale={locale}
+                  color="#059669"
+                />
               </div>
             </div>
 
@@ -780,7 +795,13 @@ export default function CounterpartiesPage() {
               </div>
               <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600, marginBottom: 2 }}>− QARZDORLIK</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                {formatCurrency(summary?.payables.total_amount ?? 0, locale, (summary as any)?.currency || defaultCurrency)}
+                <MultiCurrencyValue
+                  items={summary?.payables.byCurrency}
+                  fallbackAmount={summary?.payables.total_amount ?? 0}
+                  fallbackCurrency={defaultCurrency}
+                  locale={locale}
+                  color="#dc2626"
+                />
               </div>
             </div>
           </div>
@@ -985,6 +1006,22 @@ export default function CounterpartiesPage() {
                         <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{item.phone || '—'}</td>
                         <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           {(() => {
+                            const balances = item.balancesByCurrency || [];
+                            if (balances.length > 0) {
+                              return (
+                                <div
+                                  onClick={() => setStatementCounterpartyId(item.id)}
+                                  title={isRu ? 'Нажмите для просмотра акта сверки' : 'Akt sverkani ko‘rish uchun bosing'}
+                                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, cursor: 'pointer' }}
+                                >
+                                  {balances.map((balance) => (
+                                    <span key={balance.currency} style={{ fontWeight: 700, color: balance.netBalance >= 0 ? '#10b981' : '#ef4444' }}>
+                                      {balance.netBalance >= 0 ? '+' : '-'} {formatCurrency(Math.abs(balance.netBalance), locale, balance.currency)}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            }
                             const custDebt = Number((item as any).customerDebt || 0);
                             const suppDebt = Number((item as any).supplierDebt || 0);
                             const raw = Number(item.debtBalance || 0);

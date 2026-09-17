@@ -474,6 +474,11 @@ export class OpeningBalancesService {
               debtBalance: { increment: amt },
             },
           });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: line.counterpartyId, currency: line.currency } },
+            create: { tenantId, counterpartyId: line.counterpartyId, currency: line.currency, customerDebt: amt },
+            update: { customerDebt: { increment: amt } },
+          });
         }
       }
 
@@ -490,6 +495,11 @@ export class OpeningBalancesService {
               supplierDebt: { increment: amt },
               debtBalance: { decrement: amt },
             },
+          });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: line.counterpartyId, currency: line.currency } },
+            create: { tenantId, counterpartyId: line.counterpartyId, currency: line.currency, supplierDebt: amt },
+            update: { supplierDebt: { increment: amt } },
           });
         }
       }

@@ -71,7 +71,7 @@ export default function DesignSystemPage() {
             Lotin: <strong>O&apos;, G&apos;, Sh, Ch</strong> | Кирилл: <strong>Ў, Қ, Ғ, Ҳ</strong>
           </div>
           <div className="tabular-nums" style={{ fontSize: 'var(--text-sm)', fontWeight: 'bold', color: 'var(--color-primary-600)' }}>
-            Financial Tabular Nums: {formatCurrency(12500000.5, locale)}
+            Financial Tabular Nums: {formatCurrency(12500000.5, locale, 'UZS')}
           </div>
         </Card>
 
@@ -195,13 +195,13 @@ export default function DesignSystemPage() {
                 <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                   <td style={{ fontWeight: 'bold' }}>Samarkand Wheat Flour</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>SKU-001</td>
-                  <td className="tabular-nums">{formatCurrency(125000, locale)}</td>
+                  <td className="tabular-nums">{formatCurrency(125000, locale, 'UZS')}</td>
                   <td><Badge variant="success">Stokda bor</Badge></td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                   <td style={{ fontWeight: 'bold' }}>Tashkent Sunflower Oil</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>SKU-002</td>
-                  <td className="tabular-nums">{formatCurrency(98000, locale)}</td>
+                  <td className="tabular-nums">{formatCurrency(98000, locale, 'UZS')}</td>
                   <td><Badge variant="warning">Kam qoldiq</Badge></td>
                 </tr>
               </tbody>

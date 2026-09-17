@@ -428,6 +428,11 @@ export class ServicesService {
               debtBalance: { increment: act.totalAmount },
             },
           });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
+            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, customerDebt: act.totalAmount },
+            update: { customerDebt: { increment: act.totalAmount } },
+          });
         } else {
           await tx.counterparty.update({
             where: { id: act.counterpartyId },
@@ -435,6 +440,11 @@ export class ServicesService {
               supplierDebt: { increment: act.totalAmount },
               debtBalance: { decrement: act.totalAmount },
             },
+          });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
+            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, supplierDebt: act.totalAmount },
+            update: { supplierDebt: { increment: act.totalAmount } },
           });
         }
       }
@@ -496,6 +506,11 @@ export class ServicesService {
               debtBalance: { decrement: act.totalAmount },
             },
           });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
+            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, customerDebt: -act.totalAmount },
+            update: { customerDebt: { decrement: act.totalAmount } },
+          });
         } else {
           await tx.counterparty.update({
             where: { id: act.counterpartyId },
@@ -503,6 +518,11 @@ export class ServicesService {
               supplierDebt: { decrement: act.totalAmount },
               debtBalance: { increment: act.totalAmount },
             },
+          });
+          await tx.counterpartyBalance.upsert({
+            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
+            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, supplierDebt: -act.totalAmount },
+            update: { supplierDebt: { decrement: act.totalAmount } },
           });
         }
 

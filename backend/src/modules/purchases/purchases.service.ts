@@ -532,6 +532,11 @@ export class PurchasesService {
           debtBalance: { increment: Number(receipt.totalAmount) },
         },
       });
+      await tx.counterpartyBalance.upsert({
+        where: { counterpartyId_currency: { counterpartyId: receipt.counterpartyId, currency: receipt.currency } },
+        create: { tenantId, counterpartyId: receipt.counterpartyId, currency: receipt.currency, supplierDebt: receipt.totalAmount },
+        update: { supplierDebt: { increment: receipt.totalAmount } },
+      });
 
       // 3. Accounting journal entries according to BHMS / NAS Standard
       // Debit 2910 (Finished Goods / Tovarlar): Net product cost + allocated expenses
@@ -729,6 +734,16 @@ export class PurchasesService {
       );
     }
 
+    const postedExpense = await this.prisma.additionalExpense.findFirst({
+      where: { tenantId, receiptId: id, status: PurchaseDocStatus.POSTED },
+      select: { id: true, docNumber: true },
+    });
+    if (postedExpense) {
+      throw new BadRequestException(
+        `Ushbu xarid hujjatiga ${postedExpense.docNumber} qo'shimcha xarajati kapitalizatsiya qilingan. Avval xarajat hujjatini bekor qiling.`,
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // 1. Decrement stock levels & delete batches
       for (const item of receipt.items) {
@@ -748,16 +763,18 @@ export class PurchasesService {
           },
         });
 
-        if (stockLevel) {
-          const newQty = Math.max(
-            0,
-            Number(stockLevel.quantity) - Number(item.quantity),
+        if (!stockLevel || Number(stockLevel.quantity) < Number(item.quantity)) {
+          throw new BadRequestException(
+            `Xaridni bekor qilish imkonsiz: ${item.productId} bo'yicha omborda yetarli qoldiq mavjud emas`,
           );
-          await tx.stockLevel.update({
-            where: { id: stockLevel.id },
-            data: { quantity: newQty },
-          });
         }
+
+        await tx.stockLevel.update({
+          where: { id: stockLevel.id },
+          data: {
+            quantity: Number(stockLevel.quantity) - Number(item.quantity),
+          },
+        });
       }
 
       await tx.productBatch.deleteMany({
@@ -1224,8 +1241,8 @@ export class PurchasesService {
     // Validate receipt & items if receiptId is linked
     let receipt: any = null;
     if (dto.receiptId) {
-      receipt = await this.prisma.purchaseReceipt.findUnique({
-        where: { id: dto.receiptId },
+      receipt = await this.prisma.purchaseReceipt.findFirst({
+        where: { id: dto.receiptId, tenantId },
         include: {
           items: { include: { product: true } },
           batches: true,
@@ -1242,6 +1259,14 @@ export class PurchasesService {
           "Faqat tasdiqlangan (POSTED) xaridlar bo'yicha qaytarish yaratish mumkin",
         );
       }
+      if (receipt.counterpartyId !== dto.counterpartyId || receipt.warehouseId !== dto.warehouseId || receipt.currency !== dto.currency) {
+        throw new BadRequestException("Qaytarishdagi kontragent, ombor va valyuta asl xarid hujjatiga mos bo'lishi shart");
+      }
+
+      const requestedQtyByProduct = new Map<string, number>();
+      for (const item of dto.items) {
+        requestedQtyByProduct.set(item.productId, (requestedQtyByProduct.get(item.productId) ?? 0) + Number(item.quantity));
+      }
 
       for (const item of dto.items) {
         const receiptItem = receipt.items.find(
@@ -1255,7 +1280,7 @@ export class PurchasesService {
 
         const unreturnedQty =
           Number(receiptItem.quantity) - Number(receiptItem.returnedQuantity || 0);
-        if (item.quantity > unreturnedQty) {
+        if ((requestedQtyByProduct.get(item.productId) ?? 0) > unreturnedQty) {
           throw new BadRequestException(
             `Qaytariladigan miqdor (${item.quantity}) ushbu xariddan qolgan qaytarilmagan miqdordan (${unreturnedQty}) oshishi mumkin emas`,
           );
@@ -1264,7 +1289,7 @@ export class PurchasesService {
         const batch = receipt.batches.find(
           (b: any) => b.productId === item.productId,
         );
-        if (batch && item.quantity > Number(batch.remainingQty)) {
+        if (batch && (requestedQtyByProduct.get(item.productId) ?? 0) > Number(batch.remainingQty)) {
           throw new BadRequestException(
             `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
           );
@@ -1441,8 +1466,7 @@ export class PurchasesService {
           Number(receiptItem.quantity) > 0 &&
           Number(receiptItem.landedCost) > 0
         ) {
-          unitLandedCost =
-            Number(receiptItem.landedCost) / Number(receiptItem.quantity);
+          unitLandedCost = Number(receiptItem.landedCost);
         }
 
         if (receiptItem) {
@@ -1515,6 +1539,11 @@ export class PurchasesService {
         supplierDebt: { decrement: basePurchaseTotalReduction },
         debtBalance: { decrement: basePurchaseTotalReduction },
       },
+    });
+    await tx.counterpartyBalance.upsert({
+      where: { counterpartyId_currency: { counterpartyId, currency: pReturn.currency } },
+      create: { tenantId, counterpartyId, currency: pReturn.currency, supplierDebt: -basePurchaseTotalReduction },
+      update: { supplierDebt: { decrement: basePurchaseTotalReduction } },
     });
 
     // 4. Update main receipt returnStatus if linked
@@ -1801,6 +1830,11 @@ export class PurchasesService {
             supplierDebt: { increment: basePurchaseTotal },
             debtBalance: { increment: basePurchaseTotal },
           },
+        });
+        await tx.counterpartyBalance.upsert({
+          where: { counterpartyId_currency: { counterpartyId: pReturn.counterpartyId, currency: pReturn.currency } },
+          create: { tenantId, counterpartyId: pReturn.counterpartyId, currency: pReturn.currency, supplierDebt: basePurchaseTotal },
+          update: { supplierDebt: { increment: basePurchaseTotal } },
         });
 
         // 4. Update receipt returnStatus

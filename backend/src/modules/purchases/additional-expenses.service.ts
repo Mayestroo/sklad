@@ -588,6 +588,12 @@ export class AdditionalExpensesService {
     }
 
     const totalAmount = Number(expense.amount);
+    // Inventory, COGS, and the general ledger are maintained in UZS base currency.
+    const capitalizationRate = expense.currency === 'UZS' ? 1 : Number(expense.exchangeRate);
+    if (!Number.isFinite(capitalizationRate) || capitalizationRate <= 0) {
+      throw new BadRequestException("Xorijiy xarajat uchun valyuta kursi 0 dan katta bo'lishi shart");
+    }
+    const capitalizedTotal = totalAmount * capitalizationRate;
 
     return this.prisma.$transaction(async (tx) => {
       let totalStockAdjustment = 0;
@@ -595,7 +601,7 @@ export class AdditionalExpensesService {
 
       // 1. Update ProductBatch landed cost & Retroactive COGS
       for (const item of expense.items) {
-        const allocatedAmount = Number(item.allocatedAmount);
+        const allocatedAmount = Number(item.allocatedAmount) * capitalizationRate;
         const itemQty =
           Number(item.soldQuantity) + Number(item.remainingQuantity) || 1;
         const allocatedPerUnit = allocatedAmount / itemQty;
@@ -625,6 +631,21 @@ export class AdditionalExpensesService {
             where: { id: batch.id },
             data: { landedCost: newBatchLandedCost },
           });
+
+          // Receipt-linked returns use the receipt line as their historical source.
+          // Keep it synchronized with the revalued batch cost.
+          const receiptItem = await tx.purchaseReceiptItem.findFirst({
+            where: {
+              receiptId: expense.receiptId,
+              productId: item.productId,
+            },
+          });
+          if (receiptItem) {
+            await tx.purchaseReceiptItem.update({
+              where: { id: receiptItem.id },
+              data: { landedCost: newBatchLandedCost },
+            });
+          }
 
           // Sync Product catalog costPrice (ADR 0007)
           await tx.product.update({
@@ -710,7 +731,7 @@ export class AdditionalExpensesService {
       await tx.purchaseReceipt.update({
         where: { id: expense.receiptId },
         data: {
-          additionalExpensesTotal: { increment: totalAmount },
+          additionalExpensesTotal: { increment: capitalizedTotal },
         },
       });
 
@@ -722,6 +743,11 @@ export class AdditionalExpensesService {
 
         if (!cashAcc) {
           throw new NotFoundException('Kassa hisobi topilmadi');
+        }
+        if (cashAcc.currency !== expense.currency) {
+          throw new BadRequestException(
+            `Kassa valyutasi (${cashAcc.currency}) va xarajat valyutasi (${expense.currency}) bir xil bo'lishi shart`,
+          );
         }
 
         if (Number(cashAcc.balance) < totalAmount) {
@@ -793,7 +819,7 @@ export class AdditionalExpensesService {
         const journalLines: any[] = [];
         const netStock = Math.max(
           0,
-          totalAmount - totalCogsAdjustment - Number(expense.vatAmount || 0),
+          capitalizedTotal - totalCogsAdjustment - Number(expense.vatAmount || 0) * capitalizationRate,
         );
 
         if (inventoryAcc && netStock > 0) {
@@ -819,7 +845,7 @@ export class AdditionalExpensesService {
           journalLines.push({
             debitAccountId: vatAcc.id,
             creditAccountId: creditAcc.id,
-            amount: Number(expense.vatAmount),
+            amount: Number(expense.vatAmount) * capitalizationRate,
             description: 'Qo‘shimcha xizmat bo‘yicha kiruvchi QQS',
           });
         }
