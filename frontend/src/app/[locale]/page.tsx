@@ -377,11 +377,6 @@ export default function DashboardPage() {
   const uzsSummary = data?.finance?.summaryByCurrency?.find((s) => s.currency === 'UZS');
   const usdSummary = data?.finance?.summaryByCurrency?.find((s) => s.currency === 'USD');
 
-  // Cash accounts
-  const uzsAccount = data?.finance?.accounts?.find((a) => a.accountType === 'UZS_CASH');
-  const usdAccount = data?.finance?.accounts?.find((a) => a.accountType === 'USD_CASH');
-  const bankAccount = data?.finance?.accounts?.find((a) => a.accountType === 'BANK');
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }} className="animate-fade-in">
 
@@ -431,34 +426,66 @@ export default function DashboardPage() {
 
       {/* Core KPI Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-        {/* Cash Balances */}
-        <div style={{
-          background: 'linear-gradient(135deg, var(--color-primary-600), #7c3aed)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-5)',
-          color: '#fff',
-          gridColumn: 'span 1',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-            <Wallet size={20} style={{ opacity: 0.9 }} />
-            <span style={{ fontSize: 'var(--text-sm)', opacity: 0.85 }}>{isRu ? 'Всего наличных' : 'Jami naqd pul'}</span>
-          </div>
-          {uzsAccount && (
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', fontVariantNumeric: 'tabular-nums', marginBottom: '4px' }}>
-              {fmt(Number(uzsAccount.balance))} <span style={{ fontSize: 'var(--text-sm)', opacity: 0.8 }}>UZS</span>
+        {/* Bank and cash balances */}
+        {data?.finance?.accounts.map((account) => {
+          const isBank = account.accountType === 'BANK';
+          const Icon = isBank ? Building2 : Wallet;
+          const accent = account.accountType === 'UZS_CASH'
+            ? 'var(--color-success-600)'
+            : account.accountType === 'USD_CASH'
+              ? 'var(--color-info-600)'
+              : 'var(--color-primary-600)';
+          const iconBackground = account.accountType === 'UZS_CASH'
+            ? 'var(--color-success-50)'
+            : account.accountType === 'USD_CASH'
+              ? 'var(--color-info-50)'
+              : 'var(--color-primary-50)';
+
+          return (
+            <div key={account.id} style={{
+              minWidth: 0,
+              padding: 'var(--space-4)',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--color-bg-secondary)',
+              border: '1px solid var(--color-border-light)',
+              borderTop: `3px solid ${accent}`,
+              boxShadow: 'var(--shadow-sm)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                <div style={{
+                  width: 40,
+                  height: 40,
+                  flexShrink: 0,
+                  borderRadius: 'var(--radius-md)',
+                  background: iconBackground,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Icon size={20} style={{ color: accent }} />
+                </div>
+                <span style={{
+                  minWidth: 0,
+                  fontSize: 'var(--text-sm)',
+                  color: 'var(--color-text-secondary)',
+                  overflowWrap: 'anywhere',
+                }}>
+                  {account.name[locale]}
+                </span>
+              </div>
+              <div style={{
+                fontSize: 'var(--text-xl)',
+                fontWeight: 'var(--font-bold)',
+                color: 'var(--color-text-primary)',
+                fontVariantNumeric: 'tabular-nums',
+                lineHeight: 1.25,
+                overflowWrap: 'anywhere',
+              }}>
+                {formatCurrency(account.balance, locale, account.currency)}
+              </div>
             </div>
-          )}
-          {usdAccount && (
-            <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', fontVariantNumeric: 'tabular-nums', opacity: 0.85 }}>
-              {fmt(Number(usdAccount.balance))} <span style={{ fontSize: 'var(--text-xs)', opacity: 0.8 }}>USD</span>
-            </div>
-          )}
-          {bankAccount && (
-            <div style={{ fontSize: 'var(--text-sm)', marginTop: '8px', opacity: 0.7 }}>
-              Bank: {fmt(Number(bankAccount.balance))} UZS
-            </div>
-          )}
-        </div>
+          );
+        })}
 
         {/* Sales */}
         <KpiCard
@@ -755,36 +782,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Bank & Cash Balances */}
-      {data?.finance?.accounts && data.finance.accounts.length > 0 && (
-        <Card title={isRu ? 'Балансы банков и касс' : 'Bank va naqd pul balanslari'}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-            {data.finance.accounts.map((acc) => {
-              const colors: Record<string, { text: string; bg: string }> = {
-                UZS_CASH: { text: 'var(--color-success-600)', bg: 'var(--color-success-50)' },
-                USD_CASH: { text: 'var(--color-info-600)', bg: 'var(--color-info-50)' },
-                BANK: { text: 'var(--color-primary-600)', bg: 'var(--color-primary-50)' },
-              };
-              const c = colors[acc.accountType] ?? { text: 'var(--color-text-primary)', bg: 'var(--color-bg-tertiary)' };
-              return (
-                <div key={acc.id} style={{
-                  padding: 'var(--space-4)',
-                  borderRadius: 'var(--radius-md)',
-                  background: c.bg,
-                  border: `1px solid ${c.bg}`,
-                }}>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>
-                    {(acc.name as any)[locale] || (acc.name as any).ru || (acc.name as any).uz}
-                  </div>
-                  <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: c.text, fontVariantNumeric: 'tabular-nums' }}>
-                    {fmt(Number(acc.balance))} {acc.currency}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

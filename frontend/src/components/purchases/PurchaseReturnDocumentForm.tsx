@@ -480,8 +480,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         ? 'Вы действительно хотите отменить этот возврат?'
         : 'Ushbu qaytarish hujjatini bekor qilishni tasdiqlaysizmi?',
       variant: 'warning',
-      confirmText: isRu ? 'Отменить возврат' : 'Bekor qilish',
-      cancelText: isRu ? 'Закрыть' : 'Yopish',
+      confirmText: isRu ? 'Да' : 'Ha',
+      cancelText: isRu ? 'Нет' : 'Yo‘q',
     });
     if (!confirmed) return;
 
