@@ -64,6 +64,15 @@ export class FinanceController {
 
   // ─── Journal ─────────────────────────────────────────────────
 
+  @Get('transactions/deleted')
+  @RequirePermissions('finance:view')
+  async getDeletedTransactions(
+    @CurrentTenant() tenantId: string,
+    @Query() filters: FilterTransactionsDto,
+  ) {
+    return this.financeService.getDeletedTransactions(tenantId, filters);
+  }
+
   @Get('transactions')
   @RequirePermissions('finance:view')
   async getTransactions(
@@ -151,7 +160,18 @@ export class FinanceController {
   async deleteTransaction(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
+    @CurrentUser() user: any,
   ) {
-    return this.financeService.deleteTransaction(tenantId, id);
+    return this.financeService.deleteTransaction(tenantId, id, user?.id);
+  }
+
+  @Post('transactions/:id/restore')
+  @RequirePermissions('finance:delete')
+  @HttpCode(HttpStatus.OK)
+  async restoreTransaction(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.financeService.restoreTransaction(tenantId, id);
   }
 }

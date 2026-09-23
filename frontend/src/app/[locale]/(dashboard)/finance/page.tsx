@@ -43,6 +43,8 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownLeft,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
@@ -82,9 +84,9 @@ export default function FinancePage() {
   const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
-  // Active Tab: dashboard | journal | income | expense | transfers | debts
+  // Active Tab: dashboard | journal | income | expense | transfers | debts | deleted
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'journal' | 'income' | 'expense' | 'transfers' | 'debts'
+    'dashboard' | 'journal' | 'income' | 'expense' | 'transfers' | 'debts' | 'deleted'
   >('dashboard');
 
   // Debts sub-tab: receivables | payables
@@ -124,6 +126,10 @@ export default function FinancePage() {
   const [stornoReason, setStornoReason] = useState('');
   const [stornoLoading, setStornoLoading] = useState(false);
 
+  const [deletingTx, setDeletingTx] = useState<FinanceTransaction | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [restoringTxId, setRestoringTxId] = useState<string | null>(null);
+
   const handlePeriodChange = (preset: string) => {
     setPeriodPreset(preset);
     if (preset === 'custom') return;
@@ -158,7 +164,10 @@ export default function FinancePage() {
     try {
       const [metrics, jour, accs, types, cps] = await Promise.all([
         apiFetch<FinanceDashboardMetrics>('/finance/dashboard', opts),
-        apiFetch<TransactionJournal>(`/finance/transactions?${params}`, opts),
+        apiFetch<TransactionJournal>(
+          `${activeTab === 'deleted' ? '/finance/transactions/deleted' : '/finance/transactions'}?${params}`,
+          opts,
+        ),
         apiFetch<CashAccount[]>('/finance/accounts', opts),
         apiFetch<TransactionType[]>('/finance/transaction-types', opts),
         apiFetch<any[]>('/sales/counterparties', opts),
@@ -237,6 +246,61 @@ export default function FinancePage() {
       toast.error(err?.message || (isRu ? 'Ошибка при аннулировании' : 'Bekor qilishda xatolik'));
     } finally {
       setStornoLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingTx || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/finance/transactions/${deletingTx.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingTx(null);
+      await fetchData();
+      toast.success(isRu ? 'Операция перемещена в корзину' : 'Operatsiya savatga ko‘chirildi');
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : isRu
+            ? 'Ошибка при удалении операции'
+            : 'Operatsiyani o‘chirishda xatolik',
+      );
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleRestore = async (tx: FinanceTransaction) => {
+    if (!token || !company) return;
+    setRestoringTxId(tx.id);
+    try {
+      await apiFetch(`/finance/transactions/${tx.id}/restore`, {
+        method: 'POST',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      await fetchData();
+      toast.success(
+        isRu
+          ? 'Операция возвращена в журнал со статусом «Аннулирован»'
+          : 'Operatsiya jurnalga bekor qilingan holatda qaytarildi',
+      );
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : isRu
+            ? 'Ошибка при восстановлении'
+            : 'Qaytarishda xatolik',
+      );
+    } finally {
+      setRestoringTxId(null);
     }
   };
 
@@ -489,6 +553,7 @@ export default function FinancePage() {
           { id: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
           { id: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
           { id: 'debts', label: isRu ? 'Взаиморасчеты (Долги)' : 'Qarzdorlik nazorati' },
+          { id: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -712,6 +777,10 @@ export default function FinancePage() {
                 setStornoTx(tx);
                 setStornoReason('');
               }}
+              onDelete={setDeletingTx}
+              onRestore={handleRestore}
+              isDeletedView={false}
+              restoringTxId={restoringTxId}
             />
           </Card>
         </div>
@@ -721,7 +790,8 @@ export default function FinancePage() {
       {(activeTab === 'journal' ||
         activeTab === 'income' ||
         activeTab === 'expense' ||
-        activeTab === 'transfers') && (
+        activeTab === 'transfers' ||
+        activeTab === 'deleted') && (
         <Card style={{ padding: 'var(--space-5)' }}>
           {/* Filters Bar */}
           <div
@@ -805,6 +875,10 @@ export default function FinancePage() {
               setStornoTx(tx);
               setStornoReason('');
             }}
+            onDelete={setDeletingTx}
+            onRestore={handleRestore}
+            isDeletedView={activeTab === 'deleted'}
+            restoringTxId={restoringTxId}
           />
 
           {/* Pagination */}
@@ -1149,6 +1223,63 @@ export default function FinancePage() {
           </div>
         </Modal>
       )}
+
+      {/* ─── Move Transaction to Trash Confirmation Modal ───────────── */}
+      {deletingTx && (
+        <Modal
+          isOpen={true}
+          title={isRu ? 'Переместить операцию в корзину?' : 'Operatsiyani savatga ko‘chirish?'}
+          onClose={() => {
+            if (!deleteLoading) setDeletingTx(null);
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div
+              style={{
+                padding: '12px 14px',
+                background: 'var(--color-error-50)',
+                border: '1px solid var(--color-error-100)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--color-error-600)',
+                fontSize: 'var(--text-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <AlertCircle size={20} style={{ flexShrink: 0 }} />
+              <p style={{ margin: 0 }}>
+                {deletingTx.status === 'POSTED'
+                  ? isRu
+                    ? 'Финансовый эффект будет отменён, а операция перемещена в корзину.'
+                    : 'Moliyaviy ta’siri qaytariladi va operatsiya savatga ko‘chiriladi.'
+                  : isRu
+                    ? 'Операция будет только перемещена в корзину; финансовые проводки не изменятся.'
+                    : 'Operatsiya faqat savatga ko‘chiriladi; moliyaviy harakatlar o‘zgarmaydi.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingTx(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger" onClick={handleDelete} disabled={deleteLoading}>
+                {deleteLoading
+                  ? isRu
+                    ? 'Перемещение...'
+                    : 'Ko‘chirilmoqda...'
+                  : isRu
+                    ? 'Переместить в корзину'
+                    : 'Savatga ko‘chirish'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1160,12 +1291,20 @@ function TransactionsTable({
   isRu,
   onEdit,
   onStorno,
+  onDelete,
+  onRestore,
+  isDeletedView = false,
+  restoringTxId,
 }: {
   transactions: FinanceTransaction[];
   locale: string;
   isRu: boolean;
   onEdit: (tx: FinanceTransaction) => void;
   onStorno: (tx: FinanceTransaction) => void;
+  onDelete: (tx: FinanceTransaction) => void;
+  onRestore: (tx: FinanceTransaction) => void;
+  isDeletedView?: boolean;
+  restoringTxId: string | null;
 }) {
   if (transactions.length === 0) {
     return (
@@ -1177,7 +1316,13 @@ function TransactionsTable({
           fontSize: 'var(--text-sm)',
         }}
       >
-        {isRu ? 'Операций не найдено' : 'Operatsiyalar mavjud emas'}
+        {isDeletedView
+          ? isRu
+            ? 'Корзина пуста'
+            : 'Savat bo‘sh'
+          : isRu
+            ? 'Операций не найдено'
+            : 'Operatsiyalar mavjud emas'}
       </div>
     );
   }
@@ -1295,21 +1440,67 @@ function TransactionsTable({
                 </td>
 
                 <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {!isCancelled && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-                      <Button size="sm" variant="secondary" onClick={() => onEdit(tx)}>
-                        <Edit2 size={14} />
-                      </Button>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                    {isDeletedView ? (
                       <Button
                         size="sm"
                         variant="secondary"
-                        onClick={() => onStorno(tx)}
-                        style={{ color: '#ef4444' }}
+                        onClick={() => onRestore(tx)}
+                        disabled={restoringTxId === tx.id}
+                        aria-label={
+                          restoringTxId === tx.id
+                            ? isRu
+                              ? 'Восстановление...'
+                              : 'Qaytarilmoqda...'
+                            : isRu
+                              ? 'Вернуть в журнал'
+                              : 'Jurnalga qaytarish'
+                        }
                       >
-                        <XCircle size={14} />
+                        <RotateCcw size={14} />
+                        {restoringTxId === tx.id
+                          ? isRu
+                            ? 'Восстановление...'
+                            : 'Qaytarilmoqda...'
+                          : isRu
+                            ? 'Вернуть в журнал'
+                            : 'Jurnalga qaytarish'}
                       </Button>
-                    </div>
-                  )}
+                    ) : (
+                      <>
+                        {tx.status === 'POSTED' && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => onEdit(tx)}
+                              aria-label={isRu ? 'Редактировать операцию' : 'Operatsiyani tahrirlash'}
+                            >
+                              <Edit2 size={14} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => onStorno(tx)}
+                              style={{ color: '#ef4444' }}
+                              aria-label={isRu ? 'Аннулировать операцию' : 'Operatsiyani bekor qilish'}
+                            >
+                              <XCircle size={14} />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onDelete(tx)}
+                          style={{ color: '#ef4444' }}
+                          aria-label={isRu ? 'Переместить в корзину' : 'Savatga ko‘chirish'}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
