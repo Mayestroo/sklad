@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { formatCurrency } from './utils.ts';
+import { formatCurrency, formatCurrencyIfAvailable } from './utils.ts';
 
 describe('formatCurrency - Zero-Tolerance Invariants', () => {
   test('should format valid amount, locale, and currency correctly', () => {
@@ -82,5 +82,19 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
     assert.throws(() => {
       formatCurrency('not-a-number', 'uz', 'UZS');
     }, TypeError);
+  });
+});
+
+describe('formatCurrencyIfAvailable - Optional Display Currency', () => {
+  test('should skip formatting when all currency candidates are blank or missing', () => {
+    assert.strictEqual(formatCurrencyIfAvailable(100, 'uz', '', '   ', undefined, null), undefined);
+  });
+
+  test('should use the first non-blank currency candidate after trimming it', () => {
+    assert.strictEqual(formatCurrencyIfAvailable(100, 'uz', '  ', ' USD '), '100.000 USD');
+  });
+
+  test('should preserve strict amount validation when a currency is available', () => {
+    assert.throws(() => formatCurrencyIfAvailable(NaN, 'uz', 'UZS'), /amount must be a valid finite number/);
   });
 });

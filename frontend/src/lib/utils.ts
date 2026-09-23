@@ -41,6 +41,24 @@ export function formatCurrency(amount: number | string, locale: string = 'uz', c
 }
 
 /**
+ * Formats an optional display amount using the first available currency.
+ * Required transaction data should use `formatCurrency` directly so missing
+ * currencies continue to fail explicitly.
+ */
+export function formatCurrencyIfAvailable(
+  amount: number | string,
+  locale: string = 'uz',
+  ...currencies: unknown[]
+): string | undefined {
+  const currency = currencies.find(
+    (candidate): candidate is string =>
+      typeof candidate === 'string' && candidate.trim() !== '',
+  );
+
+  return currency ? formatCurrency(amount, locale, currency.trim()) : undefined;
+}
+
+/**
  * Valyuta select opsiyalari — butun loyihada SHU konstantani ishlating.
  *
  * ⚠️ Yangi sahifada o'z options yozмang — har doim import qiling:
