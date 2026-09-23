@@ -689,27 +689,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               {isRu ? 'Причина возврата' : 'Qaytarish sababi'}
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <select
+              <Select
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                onChange={setReason}
                 disabled={isReadOnly}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border-light)',
-                  backgroundColor: 'var(--color-bg-primary)',
-                  color: 'var(--color-text-primary)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
-                <option value="">{isRu ? '— Выберите причину —' : '— Sababni tanlang —'}</option>
-                {REASON_PRESETS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
+                style={{ width: '100%' }}
+                options={[
+                  { value: '', label: isRu ? '— Выберите причину —' : '— Sababni tanlang —' },
+                  ...REASON_PRESETS.map((preset) => ({ value: preset, label: preset })),
+                ]}
+              />
             </div>
           </div>
 
@@ -762,30 +751,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
           {!isReadOnly && !receiptId && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '300px' }}>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    handleAddItem(e.target.value);
-                    e.target.value = '';
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border-light)',
-                  backgroundColor: 'var(--color-bg-primary)',
-                  color: 'var(--color-text-primary)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
-                <option value="">{isRu ? '+ Добавить позицию...' : '+ Tovar yoki xomashyo qo‘shish...'}</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    [{p.type === 'RAW_MATERIAL' ? (isRu ? 'Сырье' : 'Xomashyo') : (isRu ? 'Tovar' : 'Tovar')}] {getProductName(p.name)} {p.sku ? `(${p.sku})` : ''}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value=""
+                onChange={handleAddItem}
+                placeholder={isRu ? '+ Добавить позицию...' : '+ Tovar yoki xomashyo qo‘shish...'}
+                style={{ flex: 1 }}
+                options={products.map((product) => ({
+                  value: product.id,
+                  label: `[${product.type === 'RAW_MATERIAL' ? (isRu ? 'Сырье' : 'Xomashyo') : (isRu ? 'Tovar' : 'Tovar')}] ${getProductName(product.name)} ${product.sku ? `(${product.sku})` : ''}`,
+                }))}
+              />
             </div>
           )}
         </div>
@@ -898,21 +873,15 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                       {isReadOnly ? (
                         `${row.vatRate}%`
                       ) : (
-                        <select
-                          value={row.vatRate}
-                          onChange={(e) => handleUpdateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)}
-                          style={{
-                            padding: '6px 4px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--color-border-light)',
-                            backgroundColor: 'var(--color-bg-primary)',
-                            color: 'var(--color-text-primary)',
-                            fontSize: 'var(--text-xs)',
-                          }}
-                        >
-                          <option value="0">0%</option>
-                          <option value="12">12%</option>
-                        </select>
+                        <Select
+                          value={String(row.vatRate)}
+                          onChange={(value) => handleUpdateItem(idx, 'vatRate', parseFloat(value) || 0)}
+                          options={[
+                            { value: '0', label: '0%' },
+                            { value: '12', label: '12%' },
+                          ]}
+                          size="md"
+                        />
                       )}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }} className="tabular-nums">

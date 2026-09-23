@@ -1439,35 +1439,26 @@ function CashTable({
             >
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
-                <select
+                <Select
                   value={line.accountId || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => {
-                    const acc = accounts.find((a: any) => a.id === e.target.value);
-                    onUpdate(index, 'accountId', e.target.value);
-                    if (acc) {
-                      onUpdate(index, 'currency', acc.currency || 'USD');
-                      onUpdate(index, 'category', acc.accountType === 'BANK' ? 'BANK' : 'CASH');
+                  onChange={(value) => {
+                    const account = accounts.find((item: any) => item.id === value);
+                    onUpdate(index, 'accountId', value);
+                    if (account) {
+                      onUpdate(index, 'currency', account.currency || 'USD');
+                      onUpdate(index, 'category', account.accountType === 'BANK' ? 'BANK' : 'CASH');
                     }
                   }}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    maxWidth: '300px',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="">{isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang'}</option>
-                  {accounts.map((acc: any) => (
-                    <option key={acc.id} value={acc.id}>
-                      {getAccountName(acc)} ({acc.currency})
-                    </option>
-                  ))}
-                </select>
+                  style={{ width: '100%', maxWidth: '300px' }}
+                  options={[
+                    { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
+                    ...accounts.map((account: any) => ({
+                      value: account.id,
+                      label: `${getAccountName(account)} (${account.currency})`,
+                    })),
+                  ]}
+                />
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <Badge variant="neutral">
@@ -1595,50 +1586,34 @@ function InventoryTable({
             >
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
-                <select
+                <Select
                   value={line.productId || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'productId', e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="">{isRu ? 'Выберите товар' : 'Tovarni tanlang'}</option>
-                  {products.map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {p.sku ? `[${p.sku}] ` : ''}{getProductName(p)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => onUpdate(index, 'productId', value)}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: '', label: isRu ? 'Выберите товар' : 'Tovarni tanlang' },
+                    ...products.map((product: any) => ({
+                      value: product.id,
+                      label: `${product.sku ? `[${product.sku}] ` : ''}${getProductName(product)}`,
+                    })),
+                  ]}
+                />
               </td>
               <td style={{ padding: '12px 16px' }}>
-                <select
+                <Select
                   value={line.warehouseId || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'warehouseId', e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="">{isRu ? 'Выберите склад' : 'Omborni tanlang'}</option>
-                  {warehouses.map((w: any) => (
-                    <option key={w.id} value={w.id}>
-                      {getWarehouseName(w)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => onUpdate(index, 'warehouseId', value)}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: '', label: isRu ? 'Выберите склад' : 'Omborni tanlang' },
+                    ...warehouses.map((warehouse: any) => ({
+                      value: warehouse.id,
+                      label: getWarehouseName(warehouse),
+                    })),
+                  ]}
+                />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                 <input
@@ -1776,28 +1751,19 @@ function CounterpartyTable({
             >
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
-                <select
+                <Select
                   value={line.counterpartyId || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'counterpartyId', e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    maxWidth: '300px',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="">{isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}</option>
-                  {counterparties.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.inn ? `(STIR: ${c.inn})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => onUpdate(index, 'counterpartyId', value)}
+                  style={{ width: '100%', maxWidth: '300px' }}
+                  options={[
+                    { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
+                    ...counterparties.map((counterparty: any) => ({
+                      value: counterparty.id,
+                      label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
+                    })),
+                  ]}
+                />
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <input
@@ -1924,47 +1890,31 @@ function AdvancesTable({
             >
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
-                <select
+                <Select
                   value={line.category}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'category', e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="CUSTOMER_ADVANCE">{isRu ? 'Получен от клиента (Пассив)' : 'Mijozdan olingan (Majburiyat)'}</option>
-                  <option value="SUPPLIER_ADVANCE">{isRu ? 'Выдан поставщику (Актив)' : 'Yetkazib beruvchiga berilgan (Aktiv)'}</option>
-                </select>
+                  onChange={(value) => onUpdate(index, 'category', value)}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: 'CUSTOMER_ADVANCE', label: isRu ? 'Получен от клиента (Пассив)' : 'Mijozdan olingan (Majburiyat)' },
+                    { value: 'SUPPLIER_ADVANCE', label: isRu ? 'Выдан поставщику (Актив)' : 'Yetkazib beruvchiga berilgan (Aktiv)' },
+                  ]}
+                />
               </td>
               <td style={{ padding: '12px 16px' }}>
-                <select
+                <Select
                   value={line.counterpartyId || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'counterpartyId', e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    maxWidth: '300px',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="">{isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}</option>
-                  {counterparties.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.inn ? `(STIR: ${c.inn})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => onUpdate(index, 'counterpartyId', value)}
+                  style={{ width: '100%', maxWidth: '300px' }}
+                  options={[
+                    { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
+                    ...counterparties.map((counterparty: any) => ({
+                      value: counterparty.id,
+                      label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
+                    })),
+                  ]}
+                />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                 <input
@@ -2229,24 +2179,17 @@ function OtherTable({
             >
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
-                <select
+                <Select
                   value={line.category}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'category', e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="EQUITY">{isRu ? 'Собственный капитал (8330)' : 'Ustav kapitali / Taqsimlanmagan foyda'}</option>
-                  <option value="OTHER_ASSET">{isRu ? 'Прочие активы' : 'Boshqa aktivlar'}</option>
-                  <option value="OTHER_LIABILITY">{isRu ? 'Прочие обязательства' : 'Boshqa majburiyatlar'}</option>
-                </select>
+                  onChange={(value) => onUpdate(index, 'category', value)}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: 'EQUITY', label: isRu ? 'Собственный капитал (8330)' : 'Ustav kapitali / Taqsimlanmagan foyda' },
+                    { value: 'OTHER_ASSET', label: isRu ? 'Прочие активы' : 'Boshqa aktivlar' },
+                    { value: 'OTHER_LIABILITY', label: isRu ? 'Прочие обязательства' : 'Boshqa majburiyatlar' },
+                  ]}
+                />
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <input

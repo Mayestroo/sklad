@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types src/lib/utils.spec.ts"
+    "test": "node --test --experimental-strip-types src/lib/utils.spec.ts src/components/ui/select-keyboard.spec.ts"
   },
   "dependencies": {
     "lucide-react": "^1.30.0",
