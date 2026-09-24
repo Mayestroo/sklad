@@ -93,7 +93,7 @@ export class CounterpartiesService {
   // ============================================
 
   async create(tenantId: string, dto: CreateCounterpartyDto) {
-    return this.prisma.counterparty.create({
+    const created = await this.prisma.counterparty.create({
       data: {
         tenantId,
         type: dto.type,
@@ -108,7 +108,6 @@ export class CounterpartiesService {
         folderId: dto.folderId || null,
         priceListId: dto.priceListId || null,
         discountPercent: dto.discountPercent ? Number(dto.discountPercent) : 0,
-        debtBalance: 0,
       },
       include: {
         folder: true,
@@ -119,6 +118,16 @@ export class CounterpartiesService {
         },
       },
     });
+    const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterparty } = created;
+    return {
+      ...counterparty,
+      balancesByCurrency: balances.map((balance) => ({
+        currency: balance.currency,
+        customerDebt: Number(balance.customerDebt),
+        supplierDebt: Number(balance.supplierDebt),
+        netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+      })),
+    };
   }
 
   async getSummary(tenantId: string) {
@@ -151,6 +160,8 @@ export class CounterpartiesService {
     const payableCounterparties = new Set<string>();
     const receivablesByCurrency: Record<string, number> = {};
     const payablesByCurrency: Record<string, number> = {};
+    const customerAdvancesByCurrency: Record<string, number> = {};
+    const supplierAdvancesByCurrency: Record<string, number> = {};
     for (const balance of balances) {
       const customerDebt = Number(balance.customerDebt);
       const supplierDebt = Number(balance.supplierDebt);
@@ -162,21 +173,34 @@ export class CounterpartiesService {
         payableCounterparties.add(balance.counterpartyId);
         payablesByCurrency[balance.currency] = (payablesByCurrency[balance.currency] ?? 0) + supplierDebt;
       }
+      if (customerDebt < 0) {
+        customerAdvancesByCurrency[balance.currency] = (customerAdvancesByCurrency[balance.currency] ?? 0) + Math.abs(customerDebt);
+      }
+      if (supplierDebt < 0) {
+        supplierAdvancesByCurrency[balance.currency] = (supplierAdvancesByCurrency[balance.currency] ?? 0) + Math.abs(supplierDebt);
+      }
     }
+
+    const amountInOnlyCurrency = (amounts: Record<string, number>) => {
+      const entries = Object.values(amounts);
+      return entries.length === 1 ? entries[0] : 0;
+    };
 
     return {
       total_customers: customersCount,
       total_suppliers: suppliersCount,
       receivables: {
         count: receivableCounterparties.size,
-        total_amount: 0,
+        total_amount: amountInOnlyCurrency(receivablesByCurrency),
         byCurrency: Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount })),
       },
       payables: {
         count: payableCounterparties.size,
-        total_amount: 0,
+        total_amount: amountInOnlyCurrency(payablesByCurrency),
         byCurrency: Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount })),
       },
+      customerAdvancesByCurrency: Object.entries(customerAdvancesByCurrency).map(([currency, amount]) => ({ currency, amount })),
+      supplierAdvancesByCurrency: Object.entries(supplierAdvancesByCurrency).map(([currency, amount]) => ({ currency, amount })),
     };
   }
 
@@ -201,51 +225,19 @@ export class CounterpartiesService {
     }
 
     if (balanceFilter === 'receivables') {
-      where.OR = [
-        { customerDebt: { gt: 0 } },
-        { supplierDebt: { lt: 0 } },
-        {
-          AND: [
-            { customerDebt: 0 },
-            { supplierDebt: 0 },
-            {
-              OR: [
-                { type: { in: [CounterpartyType.CUSTOMER, CounterpartyType.BOTH] }, debtBalance: { gt: 0 } },
-                { type: CounterpartyType.SUPPLIER, debtBalance: { lt: 0 } },
-              ],
-            },
-          ],
-        },
-      ];
+      where.balances = {
+        some: { OR: [{ customerDebt: { gt: 0 } }, { supplierDebt: { lt: 0 } }] },
+      };
     } else if (balanceFilter === 'payables') {
-      where.OR = [
-        { supplierDebt: { gt: 0 } },
-        { customerDebt: { lt: 0 } },
-        {
-          AND: [
-            { customerDebt: 0 },
-            { supplierDebt: 0 },
-            {
-              OR: [
-                { type: CounterpartyType.SUPPLIER, debtBalance: { gt: 0 } },
-                { type: { in: [CounterpartyType.CUSTOMER, CounterpartyType.BOTH] }, debtBalance: { lt: 0 } },
-              ],
-            },
-          ],
-        },
-      ];
+      where.balances = {
+        some: { OR: [{ supplierDebt: { gt: 0 } }, { customerDebt: { lt: 0 } }] },
+      };
     } else if (balanceFilter === 'settled') {
-      where.AND = [
-        { customerDebt: 0 },
-        { supplierDebt: 0 },
-        { debtBalance: 0 },
-      ];
+      where.balances = { none: { OR: [{ customerDebt: { not: 0 } }, { supplierDebt: { not: 0 } }] } };
     } else if (hasDebt) {
-      where.OR = [
-        { customerDebt: { gt: 0 } },
-        { supplierDebt: { gt: 0 } },
-        { debtBalance: { not: 0 } },
-      ];
+      where.balances = {
+        some: { OR: [{ customerDebt: { not: 0 } }, { supplierDebt: { not: 0 } }] },
+      };
     }
 
     if (search && search.trim()) {
@@ -274,16 +266,6 @@ export class CounterpartiesService {
           select: { currency: true, customerDebt: true, supplierDebt: true },
           orderBy: { currency: 'asc' },
         },
-        purchaseReceipts: {
-          select: { currency: true },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-        salesInvoices: {
-          select: { currency: true },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
         _count: {
           select: { salesInvoices: true, deals: true, payments: true },
         },
@@ -292,14 +274,15 @@ export class CounterpartiesService {
     });
 
     return counterparties.map((cp) => {
-      const balancesByCurrency = cp.balances.map((balance) => ({
+      const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterparty } = cp;
+      const balancesByCurrency = balances.map((balance) => ({
         currency: balance.currency,
         customerDebt: Number(balance.customerDebt),
         supplierDebt: Number(balance.supplierDebt),
         netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
       }));
       return {
-        ...cp,
+        ...counterparty,
         balancesByCurrency,
       };
     });
@@ -327,7 +310,8 @@ export class CounterpartiesService {
       throw new NotFoundException('Counterparty not found');
     }
 
-    const balancesByCurrency = counterparty.balances.map((balance) => ({
+    const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterpartyData } = counterparty;
+    const balancesByCurrency = balances.map((balance) => ({
       currency: balance.currency,
       customerDebt: Number(balance.customerDebt),
       supplierDebt: Number(balance.supplierDebt),
@@ -335,7 +319,7 @@ export class CounterpartiesService {
     }));
 
     return {
-      ...counterparty,
+      ...counterpartyData,
       balancesByCurrency,
     };
   }
@@ -348,7 +332,7 @@ export class CounterpartiesService {
       throw new NotFoundException('Counterparty not found');
     }
 
-    return this.prisma.counterparty.update({
+    const updated = await this.prisma.counterparty.update({
       where: { id },
       data: {
         type: dto.type ?? counterparty.type,
@@ -376,8 +360,22 @@ export class CounterpartiesService {
       include: {
         folder: true,
         priceList: true,
+        balances: {
+          select: { currency: true, customerDebt: true, supplierDebt: true },
+          orderBy: { currency: 'asc' },
+        },
       },
     });
+    const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterpartyData } = updated;
+    return {
+      ...counterpartyData,
+      balancesByCurrency: balances.map((balance) => ({
+        currency: balance.currency,
+        customerDebt: Number(balance.customerDebt),
+        supplierDebt: Number(balance.supplierDebt),
+        netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+      })),
+    };
   }
 
   async delete(tenantId: string, id: string) {
@@ -389,10 +387,18 @@ export class CounterpartiesService {
       throw new NotFoundException('Counterparty not found');
     }
 
-    const custDebt = Math.abs(Number((counterparty as any).customerDebt || 0));
-    const suppDebt = Math.abs(Number((counterparty as any).supplierDebt || 0));
-    const debt = Math.abs(Number(counterparty.debtBalance || 0));
-    if (debt > 0.001 || custDebt > 0.001 || suppDebt > 0.001) {
+    const balances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId, counterpartyId: id },
+      select: { customerDebt: true, supplierDebt: true },
+    });
+    const hasOutstandingBalance = balances.some(
+      (balance) => Math.abs(Number(balance.customerDebt)) > 0.001 || Math.abs(Number(balance.supplierDebt)) > 0.001,
+    );
+    const hasLegacyScalarBalance =
+      Math.abs(Number(counterparty.debtBalance)) > 0.001 ||
+      Math.abs(Number(counterparty.customerDebt)) > 0.001 ||
+      Math.abs(Number(counterparty.supplierDebt)) > 0.001;
+    if (hasOutstandingBalance || hasLegacyScalarBalance) {
       throw new BadRequestException(
         "Qarz balansi mavjud bo'lgan kontragentni o'chirib bo'lmaydi",
       );
@@ -433,74 +439,9 @@ export class CounterpartiesService {
       include: {
         folder: true,
         priceList: true,
-        salesInvoices: {
-          where: { status: 'POSTED' },
-          orderBy: { invoiceDate: 'desc' },
-          take: 50,
-          select: {
-            id: true,
-            invoiceNumber: true,
-            invoiceDate: true,
-            totalAmount: true,
-            paidAmount: true,
-            currency: true,
-            paymentStatus: true,
-            status: true,
-          },
-        },
-        purchaseReceipts: {
-          where: { status: 'POSTED' },
-          orderBy: { docDate: 'desc' },
-          take: 50,
-          select: {
-            id: true,
-            docNumber: true,
-            docDate: true,
-            totalAmount: true,
-            paidAmount: true,
-            currency: true,
-            paymentStatus: true,
-            status: true,
-          },
-        },
-        financeTransactions: {
-          where: { status: 'POSTED' },
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-          select: {
-            id: true,
-            docNumber: true,
-            direction: true,
-            amount: true,
-            currency: true,
-            createdAt: true,
-            comment: true,
-            account: { select: { id: true, name: true, accountType: true } },
-          },
-        },
-        salesReturns: {
-          where: { status: 'POSTED' },
-          orderBy: { returnDate: 'desc' },
-          take: 50,
-          select: {
-            id: true,
-            returnNumber: true,
-            returnDate: true,
-            totalAmount: true,
-            currency: true,
-          },
-        },
-        purchaseReturns: {
-          where: { status: 'POSTED' },
-          orderBy: { returnDate: 'desc' },
-          take: 50,
-          select: {
-            id: true,
-            returnNumber: true,
-            returnDate: true,
-            totalAmount: true,
-            currency: true,
-          },
+        balances: {
+          select: { currency: true, customerDebt: true, supplierDebt: true },
+          orderBy: { currency: 'asc' },
         },
       },
     });
@@ -509,100 +450,72 @@ export class CounterpartiesService {
       throw new NotFoundException('Counterparty not found');
     }
 
-    const custDebt = Number((counterparty as any).customerDebt || 0);
-    const suppDebt = Number((counterparty as any).supplierDebt || 0);
-    const raw = Number(counterparty.debtBalance || 0);
-    const net = (custDebt !== 0 || suppDebt !== 0)
-      ? custDebt - suppDebt
-      : counterparty.type === CounterpartyType.SUPPLIER ? -raw : raw;
-
-    // Build unified chronological statement transactions
-    type StatementTx = {
-      id: string;
-      date: string;
-      docNumber: string;
-      type: 'SALES_INVOICE' | 'PURCHASE_RECEIPT' | 'PAYMENT_INCOME' | 'PAYMENT_EXPENSE' | 'SALES_RETURN' | 'PURCHASE_RETURN';
-      description: string;
-      debit: number;
-      credit: number;
-      amount: number;
-      currency: string;
-    };
-
-    const transactions: StatementTx[] = [];
-
-    for (const inv of counterparty.salesInvoices) {
-      transactions.push({
-        id: inv.id,
-        date: inv.invoiceDate.toISOString(),
-        docNumber: inv.invoiceNumber,
-        type: 'SALES_INVOICE',
-        description: `Sotuv invoysi #${inv.invoiceNumber}`,
-        debit: Number(inv.totalAmount),
-        credit: 0,
-        amount: Number(inv.totalAmount),
-        currency: inv.currency,
-      });
+    const entries = await this.prisma.counterpartySettlementEntry.findMany({
+      where: { tenantId, counterpartyId: id },
+      orderBy: { effectiveAt: 'desc' },
+      take: 500,
+    });
+    const financeIds = [...new Set(
+      entries.filter((entry) => entry.sourceDocType === 'FinanceTransaction').map((entry) => entry.sourceDocId),
+    )];
+    const financeTransactions = financeIds.length > 0
+      ? await this.prisma.financeTransaction.findMany({
+          where: { tenantId, id: { in: financeIds } },
+          select: { id: true, direction: true, docNumber: true, comment: true },
+        })
+      : [];
+    const financeById = new Map(financeTransactions.map((transaction) => [transaction.id, transaction]));
+    const balancesByCurrency = counterparty.balances.map((balance) => ({
+      currency: balance.currency,
+      customerDebt: Number(balance.customerDebt),
+      supplierDebt: Number(balance.supplierDebt),
+      netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+    }));
+    const groupedTransactions = new Map<string, number>();
+    for (const entry of entries) {
+      if (entry.sourceDocType !== 'SalesInvoice' && entry.sourceDocType !== 'PurchaseReceipt') continue;
+      const key = `${entry.sourceDocType}\u0000${entry.currency}`;
+      groupedTransactions.set(key, (groupedTransactions.get(key) ?? 0) + Number(entry.amount));
     }
+    const salesInvoicedByCurrency = Array.from(groupedTransactions)
+      .filter(([key]) => key.startsWith('SalesInvoice\u0000'))
+      .map(([key, amount]) => ({ currency: key.split('\u0000')[1], amount }));
+    const purchasesInvoicedByCurrency = Array.from(groupedTransactions)
+      .filter(([key]) => key.startsWith('PurchaseReceipt\u0000'))
+      .map(([key, amount]) => ({ currency: key.split('\u0000')[1], amount }));
+    const totalForOnlyCurrency = (items: Array<{ currency: string; amount: number }>) => items.length === 1 ? items[0].amount : 0;
 
-    for (const rec of counterparty.purchaseReceipts) {
-      transactions.push({
-        id: rec.id,
-        date: rec.docDate.toISOString(),
-        docNumber: rec.docNumber,
-        type: 'PURCHASE_RECEIPT',
-        description: `Xarid hujjati #${rec.docNumber}`,
-        debit: 0,
-        credit: Number(rec.totalAmount),
-        amount: Number(rec.totalAmount),
-        currency: rec.currency,
-      });
-    }
-
-    for (const tx of counterparty.financeTransactions) {
-      const isIncome = tx.direction === 'INCOME';
-      transactions.push({
-        id: tx.id,
-        date: tx.createdAt.toISOString(),
-        docNumber: tx.docNumber || '—',
-        type: isIncome ? 'PAYMENT_INCOME' : 'PAYMENT_EXPENSE',
-        description: tx.comment || (isIncome ? `Mijozdan to'lov qabul qilindi` : `Yetkazib beruvchiga to'lov berildi`),
-        debit: isIncome ? 0 : Number(tx.amount),
-        credit: isIncome ? Number(tx.amount) : 0,
-        amount: Number(tx.amount),
-        currency: tx.currency,
-      });
-    }
-
-    for (const sr of counterparty.salesReturns) {
-      transactions.push({
-        id: sr.id,
-        date: sr.returnDate.toISOString(),
-        docNumber: sr.returnNumber,
-        type: 'SALES_RETURN',
-        description: `Mijozdan qaytarish #${sr.returnNumber}`,
-        debit: 0,
-        credit: Number(sr.totalAmount),
-        amount: Number(sr.totalAmount),
-        currency: sr.currency,
-      });
-    }
-
-    for (const pr of counterparty.purchaseReturns) {
-      transactions.push({
-        id: pr.id,
-        date: pr.returnDate.toISOString(),
-        docNumber: pr.returnNumber,
-        type: 'PURCHASE_RETURN',
-        description: `Yetkazib beruvchiga qaytarish #${pr.returnNumber}`,
-        debit: Number(pr.totalAmount),
-        credit: 0,
-        amount: Number(pr.totalAmount),
-        currency: pr.currency,
-      });
-    }
-
-    transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const transactions = entries.map((entry) => {
+      const signedAmount = Number(entry.amount);
+      const isCustomerSide = entry.side === 'CUSTOMER';
+      const finance = entry.sourceDocType === 'FinanceTransaction' ? financeById.get(entry.sourceDocId) : undefined;
+      const type = entry.sourceDocType === 'SalesInvoice'
+        ? 'SALES_INVOICE'
+        : entry.sourceDocType === 'PurchaseReceipt'
+          ? 'PURCHASE_RECEIPT'
+          : entry.sourceDocType === 'SalesReturn'
+            ? 'SALES_RETURN'
+            : entry.sourceDocType === 'PurchaseReturn'
+              ? 'PURCHASE_RETURN'
+              : entry.sourceDocType === 'FinanceTransaction'
+                ? finance?.direction === 'INCOME' ? 'PAYMENT_INCOME' : 'PAYMENT_EXPENSE'
+                : entry.sourceDocType === 'OpeningBalanceLine'
+                  ? 'OPENING_BALANCE'
+                  : entry.entryType;
+      return {
+        id: entry.id,
+        date: entry.effectiveAt.toISOString(),
+        docNumber: finance?.docNumber || `${entry.sourceDocType} ${entry.sourceDocId}`,
+        type,
+        entryType: entry.entryType,
+        side: entry.side,
+        description: finance?.comment || `${entry.entryType} (${entry.sourceDocType})`,
+        debit: isCustomerSide ? Math.max(0, signedAmount) : Math.max(0, -signedAmount),
+        credit: isCustomerSide ? Math.max(0, -signedAmount) : Math.max(0, signedAmount),
+        amount: signedAmount,
+        currency: entry.currency,
+      };
+    });
 
     return {
       counterparty: {
@@ -613,18 +526,16 @@ export class CounterpartiesService {
         phone: counterparty.phone,
         email: counterparty.email,
         address: counterparty.address,
-        customerDebt: custDebt,
-        supplierDebt: suppDebt,
-        netBalance: net,
+        balancesByCurrency,
         folder: counterparty.folder,
         priceList: counterparty.priceList,
       },
       summary: {
-        customerDebt: custDebt,
-        supplierDebt: suppDebt,
-        netBalance: net,
-        totalSalesInvoiced: counterparty.salesInvoices.reduce((sum, i) => sum + Number(i.totalAmount), 0),
-        totalPurchasesInvoiced: counterparty.purchaseReceipts.reduce((sum, r) => sum + Number(r.totalAmount), 0),
+        balancesByCurrency,
+        salesInvoicedByCurrency,
+        purchasesInvoicedByCurrency,
+        totalSalesInvoiced: totalForOnlyCurrency(salesInvoicedByCurrency),
+        totalPurchasesInvoiced: totalForOnlyCurrency(purchasesInvoicedByCurrency),
         totalTransactionsCount: transactions.length,
       },
       transactions,

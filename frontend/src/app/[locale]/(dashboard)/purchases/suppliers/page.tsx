@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Building2, Eye, Pencil, Plus, Trash2 } from 'lucide-react';
 import { SupplierProfileDrawer } from '@/components/purchases/SupplierProfileDrawer';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
@@ -24,7 +25,7 @@ interface Counterparty {
   phone?: string;
   email?: string;
   address?: string;
-  debtBalance: number;
+  balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
 }
 
 export default function SuppliersPage() {
@@ -89,7 +90,12 @@ export default function SuppliersPage() {
       (s.phone && s.phone.includes(search))
   );
 
-  const totalDebt = suppliers.reduce((sum, s) => sum + Number(s.debtBalance || 0), 0);
+  const payablesByCurrency = suppliers.reduce<Record<string, number>>((totals, supplier) => {
+    for (const balance of supplier.balancesByCurrency || []) {
+      if (balance.supplierDebt > 0) totals[balance.currency] = (totals[balance.currency] || 0) + balance.supplierDebt;
+    }
+    return totals;
+  }, {});
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -129,7 +135,12 @@ export default function SuppliersPage() {
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Наш общий долг' : 'Umumiy Bizning Qarzimiz'}</div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-600)' }} className="tabular-nums">
-              {formatCurrency(totalDebt, locale, defaultCurrency)}
+              <MultiCurrencyValue
+                items={Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
+                fallbackCurrency={defaultCurrency}
+                locale={locale}
+                color="var(--color-danger-600)"
+              />
             </div>
           </div>
         </Card>
@@ -168,7 +179,7 @@ export default function SuppliersPage() {
               </thead>
               <tbody>
                 {filteredSuppliers.map((s) => {
-                  const debt = Number(s.debtBalance || 0);
+                  const balances = (s.balancesByCurrency || []).filter((balance) => balance.supplierDebt !== 0);
                   return (
                     <tr key={s.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                       <td style={{ padding: '12px', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
@@ -188,11 +199,17 @@ export default function SuppliersPage() {
                           padding: '12px',
                           textAlign: 'right',
                           fontWeight: 'var(--font-bold)',
-                          color: debt > 0 ? 'var(--color-danger-600)' : 'var(--color-text-primary)',
+                          color: 'var(--color-text-primary)',
                         }}
                         className="tabular-nums"
                       >
-                        {formatCurrency(debt, locale, (s as any).currency || defaultCurrency)}
+                        {balances.length > 0
+                          ? balances.map((balance) => (
+                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : '#2563eb' }}>
+                                {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
+                              </div>
+                            ))
+                          : '—'}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>

@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
-import { ArrowDownLeft, ArrowUpRight, DollarSign, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 
 interface CashAccount {
   id: string;
@@ -24,15 +24,19 @@ interface Counterparty {
   id: string;
   name: string;
   type: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
-  netBalance?: number;
-  debtBalance: number;
-  customerDebt?: number;
-  supplierDebt?: number;
+  balancesByCurrency?: Array<{
+    currency: string;
+    customerDebt: number;
+    supplierDebt: number;
+    netBalance: number;
+  }>;
 }
 
 interface QuickPaymentModalProps {
   isOpen: boolean;
   counterparty: Counterparty | null;
+  initialSide?: 'CUSTOMER' | 'SUPPLIER';
+  initialCurrency?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -40,65 +44,95 @@ interface QuickPaymentModalProps {
 export function QuickPaymentModal({
   isOpen,
   counterparty,
+  initialSide,
+  initialCurrency,
   onClose,
   onSuccess,
 }: QuickPaymentModalProps) {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const initialBalance = counterparty?.balancesByCurrency?.find((balance) => balance.currency === initialCurrency);
+  const initialSideBalance = initialSide === 'CUSTOMER'
+    ? Number(initialBalance?.customerDebt ?? 0)
+    : initialSide === 'SUPPLIER'
+      ? Number(initialBalance?.supplierDebt ?? 0)
+      : 0;
 
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
-  const [amount, setAmount] = useState('');
+  const [settlementSide, setSettlementSide] = useState<'CUSTOMER' | 'SUPPLIER' | ''>(initialSide ?? '');
+  const [currency, setCurrency] = useState(initialCurrency ?? '');
+  const [amount, setAmount] = useState(initialSideBalance === 0 ? '' : String(Math.abs(initialSideBalance)));
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fetchingAccounts, setFetchingAccounts] = useState(false);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
 
-  const net =
-    counterparty?.netBalance !== undefined
-      ? Number(counterparty.netBalance)
-      : counterparty?.type === 'SUPPLIER'
-      ? -Number(counterparty?.debtBalance || 0)
-      : Number(counterparty?.debtBalance || 0);
-
-  // If net > 0: customer owes us money => INCOME
-  // If net < 0: we owe supplier/customer => EXPENSE
-  const isIncome = net >= 0;
+  const availableSides = ['CUSTOMER', 'SUPPLIER'] as const;
+  const currencyBalance = counterparty?.balancesByCurrency?.find((balance) => balance.currency === currency);
+  const selectedBalance = settlementSide === 'CUSTOMER'
+    ? Number(currencyBalance?.customerDebt ?? 0)
+    : settlementSide === 'SUPPLIER'
+      ? Number(currencyBalance?.supplierDebt ?? 0)
+      : 0;
+  const isIncome = settlementSide === 'SUPPLIER'
+    ? selectedBalance < 0
+    : selectedBalance >= 0;
+  const matchingAccounts = accounts.filter((account) => account.currency === currency);
+  const selectedAccount = matchingAccounts.find((account) => account.id === selectedAccountId)
+    ?? matchingAccounts[0];
 
   useEffect(() => {
     if (!isOpen || !token || !company) return;
 
-    setFetchingAccounts(true);
     apiFetch<CashAccount[]>('/finance/accounts', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((res) => {
-        if (Array.isArray(res) && res.length > 0) {
-          setAccounts(res);
-          setSelectedAccountId(res[0].id);
-        }
+        setAccounts(Array.isArray(res) ? res : []);
       })
       .catch((err) => {
         console.error('Failed to load cash accounts:', err);
       })
-      .finally(() => setFetchingAccounts(false));
+      .finally(() => setAccountsLoaded(true));
 
-    if (counterparty) {
-      const defaultAmt = Math.abs(net);
-      setAmount(defaultAmt > 0 ? String(defaultAmt) : '');
-      setComment(
-        isIncome
-          ? isRu
-            ? `Погашение задолженности от ${counterparty.name}`
-            : `${counterparty.name} dan qarz so'ndirish to'lovi`
-          : isRu
-            ? `Оплата задолженности перед ${counterparty.name}`
-            : `${counterparty.name} oldidagi qarzni so'ndirish to'lovi`,
-      );
+  }, [isOpen, token, company, locale]);
+
+  const updateSuggestedPayment = (side: 'CUSTOMER' | 'SUPPLIER' | '', selectedCurrency: string) => {
+    if (!counterparty || !side || !selectedCurrency) {
+      setAmount('');
+      setComment('');
+      return;
     }
-  }, [isOpen, counterparty, token, company, locale, isIncome, net]);
+
+    const balance = counterparty.balancesByCurrency?.find((item) => item.currency === selectedCurrency);
+    const amountForSide = Number(side === 'CUSTOMER' ? balance?.customerDebt ?? 0 : balance?.supplierDebt ?? 0);
+    const isSelectedSideIncome = side === 'SUPPLIER' ? amountForSide < 0 : amountForSide >= 0;
+    setAmount(amountForSide === 0 ? '' : String(Math.abs(amountForSide)));
+    setComment(
+      isSelectedSideIncome
+        ? isRu
+          ? `Погашение задолженности от ${counterparty.name}`
+          : `${counterparty.name} dan qarz so'ndirish to'lovi`
+        : isRu
+          ? `Оплата задолженности перед ${counterparty.name}`
+          : `${counterparty.name} oldidagi qarzni so'ndirish to'lovi`,
+    );
+  };
+
+  const handleSettlementSideChange = (value: string) => {
+    const nextSide = value as 'CUSTOMER' | 'SUPPLIER' | '';
+    setSettlementSide(nextSide);
+    updateSuggestedPayment(nextSide, currency);
+  };
+
+  const handleCurrencyChange = (value: string) => {
+    setCurrency(value);
+    setSelectedAccountId('');
+    updateSuggestedPayment(settlementSide, value);
+  };
 
   if (!isOpen || !counterparty) return null;
 
@@ -112,23 +146,33 @@ export function QuickPaymentModal({
       return;
     }
 
-    if (!selectedAccountId) {
+    if (!settlementSide || !currency) {
+      toast.error(
+        isRu
+          ? 'Выберите сторону взаиморасчёта и валюту'
+          : 'Hisob-kitob tomonini va valyutani tanlang',
+      );
+      return;
+    }
+
+    if (!selectedAccount?.id) {
       toast.error(isRu ? 'Выберите кассу или счет' : 'Kassa yoki hisob raqamni tanlang');
       return;
     }
 
     setLoading(true);
     try {
-      await apiFetch('/finance/transactions', {
+      await apiFetch(isIncome ? '/finance/income' : '/finance/expense', {
         method: 'POST',
         token: token || undefined,
         tenantId: company.id,
         locale,
         body: JSON.stringify({
-          accountId: selectedAccountId,
-          direction: isIncome ? 'INCOME' : 'EXPENSE',
+          accountId: selectedAccount.id,
           amount: numAmount,
+          currency,
           counterpartyId: counterparty.id,
+          settlementSide,
           comment: comment.trim() || undefined,
         }),
       });
@@ -143,14 +187,18 @@ export function QuickPaymentModal({
             : "To'lov muvaffaqiyatli amalga oshirildi!",
       );
       onSuccess();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка проведения оплаты' : "To'lovni amalga oshirishda xatolik yuz berdi"));
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : isRu
+            ? 'Ошибка проведения оплаты'
+            : "To'lovni amalga oshirishda xatolik yuz berdi",
+      );
     } finally {
       setLoading(false);
     }
   };
-
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
   return (
     <Modal
@@ -168,7 +216,26 @@ export function QuickPaymentModal({
       size="md"
     >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        {/* Counterparty & Net Position Card */}
+        <Select
+          label={isRu ? 'Сторона взаиморасчёта *' : 'Hisob-kitob tomoni *'}
+          value={settlementSide}
+          onChange={handleSettlementSideChange}
+          options={availableSides.map((side) => ({
+            value: side,
+            label: side === 'CUSTOMER'
+              ? isRu ? 'Клиентская задолженность' : 'Mijoz qarzdorligi'
+              : isRu ? 'Задолженность поставщику' : 'Ta’minotchi qarzdorligi',
+          }))}
+        />
+
+        <Select
+          label={isRu ? 'Валюта *' : 'Valyuta *'}
+          value={currency}
+          onChange={handleCurrencyChange}
+          options={CURRENCY_OPTIONS}
+        />
+
+        {/* Counterparty & selected currency/side balance */}
         <div
           style={{
             display: 'flex',
@@ -176,8 +243,10 @@ export function QuickPaymentModal({
             justifyContent: 'space-between',
             padding: 'var(--space-3) var(--space-4)',
             borderRadius: 'var(--radius-md)',
-            backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-            border: `1px solid ${isIncome ? '#10b98140' : '#ef444440'}`,
+            backgroundColor: !settlementSide || !currency
+              ? 'var(--color-bg-subtle)'
+              : isIncome ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+            border: `1px solid ${!settlementSide || !currency ? 'var(--color-border)' : isIncome ? '#10b98140' : '#ef444440'}`,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -186,7 +255,7 @@ export function QuickPaymentModal({
                 width: 36,
                 height: 36,
                 borderRadius: '50%',
-                backgroundColor: isIncome ? '#10b981' : '#ef4444',
+                backgroundColor: !settlementSide || !currency ? 'var(--color-text-tertiary)' : isIncome ? '#10b981' : '#ef4444',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -198,13 +267,11 @@ export function QuickPaymentModal({
             <div>
               <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{counterparty.name}</div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                {isIncome
-                  ? isRu
-                    ? 'Дебитор (Нам должны)'
-                    : 'Debitor (Bizga qarzdor)'
-                  : isRu
-                    ? 'Кредитор (Наш долг)'
-                    : 'Kreditor (Bizning qarzimiz)'}
+                  {!settlementSide
+                    ? isRu ? 'Выберите сторону взаиморасчёта' : 'Hisob-kitob tomonini tanlang'
+                    : settlementSide === 'CUSTOMER'
+                      ? isRu ? 'Клиентский баланс' : 'Mijoz balansi'
+                      : isRu ? 'Баланс поставщика' : 'Ta’minotchi balansi'}
               </div>
             </div>
           </div>
@@ -217,10 +284,10 @@ export function QuickPaymentModal({
               style={{
                 fontSize: 'var(--text-base)',
                 fontWeight: 700,
-                color: isIncome ? '#10b981' : '#ef4444',
+                color: !settlementSide || !currency ? 'var(--color-text-primary)' : isIncome ? '#10b981' : '#ef4444',
               }}
             >
-              {isIncome ? '+' : '-'} {formatCurrency(Math.abs(net), locale, selectedAccount?.currency || company?.settings?.sales?.defaultCurrency || 'UZS')}
+              {settlementSide && currency ? formatCurrency(selectedBalance, locale, currency) : '—'}
             </div>
           </div>
         </div>
@@ -243,14 +310,21 @@ export function QuickPaymentModal({
         <div>
           <Select
             label={isRu ? 'Касса / Расчетный счет *' : 'Kassa / Hisob raqam *'}
-            value={selectedAccountId}
+            value={selectedAccount?.id || ''}
             onChange={(val) => setSelectedAccountId(val)}
-            disabled={fetchingAccounts || accounts.length === 0}
-            options={accounts.map((acc) => ({
+            disabled={!accountsLoaded || !currency || matchingAccounts.length === 0}
+            options={matchingAccounts.map((acc) => ({
               value: acc.id,
               label: `${acc.name} (${acc.currency}) — ${formatCurrency(acc.balance, locale, acc.currency)}`,
             }))}
           />
+          {currency && accountsLoaded && matchingAccounts.length === 0 && (
+            <div style={{ fontSize: 'var(--text-xs)', color: '#ef4444', marginTop: 4 }}>
+              {isRu
+                ? `Нет кассы или счёта в валюте ${currency}`
+                : `${currency} valyutasida kassa yoki hisob mavjud emas`}
+            </div>
+          )}
           {selectedAccount && !isIncome && Number(selectedAccount.balance) < Number(amount || 0) && (
             <div style={{ fontSize: '11px', color: '#ef4444', marginTop: 4 }}>
               {isRu
@@ -277,7 +351,7 @@ export function QuickPaymentModal({
           </Button>
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || !settlementSide || !currency || !selectedAccount?.id}
             style={{
               backgroundColor: isIncome ? '#10b981' : '#ef4444',
               borderColor: isIncome ? '#10b981' : '#ef4444',

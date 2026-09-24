@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SalesOrdersService } from './sales-orders.service';
 import { PrismaService } from '../../../common/prisma';
 import { StockReservationService } from '../../inventory/stock-reservation/stock-reservation.service';
+import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import {
   SalesOrderStatus,
   PaymentCondition,
@@ -15,8 +17,15 @@ describe('SalesOrdersService', () => {
   let service: SalesOrdersService;
   let prisma: any;
   let stockReservationService: any;
+  let settlementService: { recordMovement: jest.Mock };
+  let settlementAllocationService: { recordAllocation: jest.Mock; reverseAllocation: jest.Mock };
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementAllocationService = {
+      recordAllocation: jest.fn().mockResolvedValue({ created: true }),
+      reverseAllocation: jest.fn().mockResolvedValue({ created: true }),
+    };
     stockReservationService = {
       reserveStockForOrder: jest.fn().mockResolvedValue([
         { orderItemId: 'item-1', productId: 'prod-1', requestedQty: 5, reservedQty: 0, remainingGap: 5 },
@@ -57,6 +66,7 @@ describe('SalesOrdersService', () => {
       payment: {
         aggregate: jest.fn(),
         updateMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       salesInvoice: {
         count: jest.fn(),
@@ -84,6 +94,12 @@ describe('SalesOrdersService', () => {
       counterpartyBalance: {
         upsert: jest.fn(),
       },
+      financeTransaction: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      settlementAllocation: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       account: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
@@ -106,6 +122,8 @@ describe('SalesOrdersService', () => {
         SalesOrdersService,
         { provide: PrismaService, useValue: prisma },
         { provide: StockReservationService, useValue: stockReservationService },
+        { provide: CounterpartySettlementService, useValue: settlementService },
+        { provide: SettlementAllocationService, useValue: settlementAllocationService },
       ],
     }).compile();
 
@@ -464,6 +482,7 @@ describe('SalesOrdersService', () => {
       prisma.salesInvoice.create.mockResolvedValue({
         id: 'inv-1',
         tenantId: 'tenant-1',
+        invoiceDate: new Date('2026-09-24T00:00:00.000Z'),
         totalAmount: 1000000,
         items: [
           {
@@ -509,10 +528,18 @@ describe('SalesOrdersService', () => {
         data: { quantity: { decrement: 5 } },
       });
 
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'cust-1' },
-        data: { debtBalance: { increment: 1000000 } },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: 'CUSTOMER',
+          amount: 1000000,
+          sourceDocType: 'SalesInvoice',
+          sourceDocId: 'inv-1',
+        }),
+      );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
         where: { id: 'order-1' },
@@ -544,6 +571,12 @@ describe('SalesOrdersService', () => {
           },
         ],
       });
+      prisma.payment.findMany.mockResolvedValue([
+        { id: 'payment-1', amount: 1000000, paymentDate: new Date('2026-09-20T00:00:00.000Z') },
+      ]);
+      prisma.financeTransaction.findMany.mockResolvedValue([
+        { id: 'finance-1', sourceDocId: 'payment-1', amount: 1000000, currency: 'UZS', settlementSide: 'CUSTOMER' },
+      ]);
 
       prisma.salesOrderItem.findMany.mockResolvedValue([
         { id: 'item-1', quantity: 5, shippedQty: 5 },
@@ -553,9 +586,10 @@ describe('SalesOrdersService', () => {
       prisma.salesInvoice.create.mockResolvedValue({
         id: 'inv-prepaid-1',
         tenantId: 'tenant-1',
+        invoiceDate: new Date('2026-09-24T00:00:00.000Z'),
         totalAmount: 1000000,
-        paidAmount: 1000000,
-        paymentStatus: SalesPaymentStatus.PAID,
+        paidAmount: 0,
+        paymentStatus: SalesPaymentStatus.UNPAID,
         items: [
           {
             id: 'inv-item-1',
@@ -592,16 +626,30 @@ describe('SalesOrdersService', () => {
       expect(prisma.salesInvoice.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            paidAmount: 1000000,
-            paymentStatus: SalesPaymentStatus.PAID,
+            paidAmount: 0,
+            paymentStatus: SalesPaymentStatus.UNPAID,
           }),
         }),
       );
+      expect(prisma.salesInvoice.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'inv-prepaid-1' },
+        data: expect.objectContaining({
+          paidAmount: 1000000,
+          paymentStatus: SalesPaymentStatus.PAID,
+        }),
+      }));
 
-      expect(prisma.payment.updateMany).toHaveBeenCalledWith({
-        where: { tenantId: 'tenant-1', orderId: 'order-prepaid-1', invoiceId: null },
-        data: { invoiceId: 'inv-prepaid-1' },
-      });
+      expect(settlementAllocationService.recordAllocation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          financeTransactionId: 'finance-1',
+          targetType: 'SALES_INVOICE',
+          targetId: 'inv-prepaid-1',
+          amount: 1000000,
+        }),
+      );
     });
   });
 
@@ -724,6 +772,7 @@ describe('SalesOrdersService', () => {
       prisma.salesInvoice.create.mockResolvedValue({
         id: 'inv-1',
         tenantId: 'tenant-1',
+        invoiceDate: new Date('2026-09-24T00:00:00.000Z'),
         totalAmount: 300000,
         items: [
           {
@@ -760,10 +809,18 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesInvoice.create).toHaveBeenCalled();
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'cust-1' },
-        data: { debtBalance: { increment: 300000 } },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: 'CUSTOMER',
+          amount: 300000,
+          sourceDocType: 'SalesInvoice',
+          sourceDocId: 'inv-1',
+        }),
+      );
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
         where: { id: 'order-1' },
         data: { status: SalesOrderStatus.SHIPPED, warehouseId: 'wh-1' },

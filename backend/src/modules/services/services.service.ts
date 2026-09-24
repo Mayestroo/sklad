@@ -10,6 +10,7 @@ import {
   ServicePaymentStatus,
   ServiceActType,
   OpeningBalanceStatus,
+  CounterpartySettlementSide,
   Prisma,
 } from '@prisma/client';
 import {
@@ -19,12 +20,14 @@ import {
 import { UpdateServiceActDto } from './dto/update-service-act.dto';
 import { FilterServiceActsDto } from './dto/filter-service-acts.dto';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 
 @Injectable()
 export class ServicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly journalService: JournalService,
+    private readonly settlementService: CounterpartySettlementService,
   ) {}
 
   /**
@@ -416,37 +419,22 @@ export class ServicesService {
         include: { counterparty: true, items: true },
       });
 
-      // Update counterparty debt balance
-      // PROVIDED (customer owes us): increment customerDebt, increment debtBalance
-      // RECEIVED (we owe supplier): increment supplierDebt, decrement debtBalance
+      // Accrue the service obligation in the document's native currency.
       if (Number(act.totalAmount) > 0) {
-        if (act.type === ServiceActType.PROVIDED) {
-          await tx.counterparty.update({
-            where: { id: act.counterpartyId },
-            data: {
-              customerDebt: { increment: act.totalAmount },
-              debtBalance: { increment: act.totalAmount },
-            },
-          });
-          await tx.counterpartyBalance.upsert({
-            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
-            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, customerDebt: act.totalAmount },
-            update: { customerDebt: { increment: act.totalAmount } },
-          });
-        } else {
-          await tx.counterparty.update({
-            where: { id: act.counterpartyId },
-            data: {
-              supplierDebt: { increment: act.totalAmount },
-              debtBalance: { decrement: act.totalAmount },
-            },
-          });
-          await tx.counterpartyBalance.upsert({
-            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
-            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, supplierDebt: act.totalAmount },
-            update: { supplierDebt: { increment: act.totalAmount } },
-          });
-        }
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: act.counterpartyId,
+          currency: act.currency,
+          side: act.type === ServiceActType.PROVIDED
+            ? CounterpartySettlementSide.CUSTOMER
+            : CounterpartySettlementSide.SUPPLIER,
+          amount: Number(act.totalAmount),
+          entryType: 'SERVICE_ACT_POSTED',
+          effectiveAt: act.actDate,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: act.id,
+          idempotencyKey: `ServiceAct:${act.id}:POSTED:${act.updatedAt.toISOString()}`,
+        });
       }
 
       // Create automated BHMS double-entry journal postings
@@ -498,33 +486,20 @@ export class ServicesService {
     return this.prisma.$transaction(async (tx) => {
       // If was POSTED, reverse counterparty debt and remove journal entry
       if (act.status === ServiceActStatus.POSTED && Number(act.totalAmount) > 0) {
-        if (act.type === ServiceActType.PROVIDED) {
-          await tx.counterparty.update({
-            where: { id: act.counterpartyId },
-            data: {
-              customerDebt: { decrement: act.totalAmount },
-              debtBalance: { decrement: act.totalAmount },
-            },
-          });
-          await tx.counterpartyBalance.upsert({
-            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
-            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, customerDebt: -act.totalAmount },
-            update: { customerDebt: { decrement: act.totalAmount } },
-          });
-        } else {
-          await tx.counterparty.update({
-            where: { id: act.counterpartyId },
-            data: {
-              supplierDebt: { decrement: act.totalAmount },
-              debtBalance: { increment: act.totalAmount },
-            },
-          });
-          await tx.counterpartyBalance.upsert({
-            where: { counterpartyId_currency: { counterpartyId: act.counterpartyId, currency: act.currency } },
-            create: { tenantId, counterpartyId: act.counterpartyId, currency: act.currency, supplierDebt: -act.totalAmount },
-            update: { supplierDebt: { decrement: act.totalAmount } },
-          });
-        }
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: act.counterpartyId,
+          currency: act.currency,
+          side: act.type === ServiceActType.PROVIDED
+            ? CounterpartySettlementSide.CUSTOMER
+            : CounterpartySettlementSide.SUPPLIER,
+          amount: -Number(act.totalAmount),
+          entryType: 'SERVICE_ACT_CANCELLED',
+          effectiveAt: act.actDate,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: act.id,
+          idempotencyKey: `ServiceAct:${act.id}:CANCELLED`,
+        });
 
         await tx.journalEntry.deleteMany({
           where: {
@@ -586,23 +561,20 @@ export class ServicesService {
     return this.prisma.$transaction(async (tx) => {
       // Reverse counterparty debt
       if (Number(act.totalAmount) > 0) {
-        if (act.type === ServiceActType.PROVIDED) {
-          await tx.counterparty.update({
-            where: { id: act.counterpartyId },
-            data: {
-              customerDebt: { decrement: act.totalAmount },
-              debtBalance: { decrement: act.totalAmount },
-            },
-          });
-        } else {
-          await tx.counterparty.update({
-            where: { id: act.counterpartyId },
-            data: {
-              supplierDebt: { decrement: act.totalAmount },
-              debtBalance: { increment: act.totalAmount },
-            },
-          });
-        }
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: act.counterpartyId,
+          currency: act.currency,
+          side: act.type === ServiceActType.PROVIDED
+            ? CounterpartySettlementSide.CUSTOMER
+            : CounterpartySettlementSide.SUPPLIER,
+          amount: -Number(act.totalAmount),
+          entryType: 'SERVICE_ACT_UNPOSTED',
+          effectiveAt: act.actDate,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: act.id,
+          idempotencyKey: `ServiceAct:${act.id}:UNPOSTED:${act.updatedAt.toISOString()}`,
+        });
       }
 
       // Delete linked BHMS journal entry

@@ -7,13 +7,17 @@ import {
   OpeningBalanceCategory,
   TransactionDirection,
   TransactionStatus,
+  CounterpartySettlementSide,
 } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 
 describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
   let service: OpeningBalancesService;
   let prisma: any;
+  let settlementService: { recordMovement: jest.Mock };
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       openingBalanceDocument: {
         findFirst: jest.fn(),
@@ -70,6 +74,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       providers: [
         OpeningBalancesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: settlementService },
       ],
     }).compile();
 
@@ -178,6 +183,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         tenantId: 'tenant-1',
         docNumber: 'OB-BALANCED',
         openingDate: new Date('2026-10-01'),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         status: OpeningBalanceStatus.DRAFT,
         lines: [
           {
@@ -196,13 +202,17 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             batchNumber: 'INIT-B1',
           },
           {
+            id: 'line-customer',
             category: OpeningBalanceCategory.CUSTOMER_DEBT,
             counterpartyId: 'cust-1',
+            currency: 'USD',
             amount: 10000000,
           },
           {
+            id: 'line-supplier',
             category: OpeningBalanceCategory.SUPPLIER_DEBT,
             counterpartyId: 'supp-1',
+            currency: 'USD',
             amount: 10000000,
           },
           {
@@ -257,15 +267,24 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         }),
       });
 
-      // 5. Counterparty debts updated
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'cust-1' },
-        data: { customerDebt: { increment: 10000000 }, debtBalance: { increment: 10000000 } },
-      });
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'supp-1' },
-        data: { supplierDebt: { increment: 10000000 }, debtBalance: { decrement: 10000000 } },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        currency: 'USD',
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: 10000000,
+        sourceDocType: 'OpeningBalanceLine',
+        sourceDocId: 'line-customer',
+      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId: 'tenant-1',
+        counterpartyId: 'supp-1',
+        currency: 'USD',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 10000000,
+        sourceDocType: 'OpeningBalanceLine',
+        sourceDocId: 'line-supplier',
+      }));
     });
   });
 
@@ -334,6 +353,8 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         id: 'doc-intact',
         tenantId: 'tenant-1',
         docNumber: 'OB-INTACT',
+        openingDate: new Date('2026-10-01'),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         status: OpeningBalanceStatus.POSTED,
         lines: [
           {
@@ -349,8 +370,10 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             batchNumber: 'INIT-INTACT-1',
           },
           {
+            id: 'line-customer',
             category: OpeningBalanceCategory.CUSTOMER_DEBT,
             counterpartyId: 'cust-1',
+            currency: 'USD',
             amount: 10000000,
           },
         ],
@@ -392,11 +415,16 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       });
       // Batch deleted
       expect(prisma.productBatch.deleteMany).toHaveBeenCalled();
-      // Customer debt decremented
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'cust-1' },
-        data: { customerDebt: { decrement: 10000000 }, debtBalance: { decrement: 10000000 } },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        currency: 'USD',
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -10000000,
+        entryType: 'OPENING_BALANCE_UNPOSTED',
+        sourceDocType: 'OpeningBalanceLine',
+        sourceDocId: 'line-customer',
+      }));
     });
   });
 

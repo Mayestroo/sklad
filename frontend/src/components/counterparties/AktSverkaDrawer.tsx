@@ -10,23 +10,15 @@ import { Badge } from '@/components/ui/Badge';
 import {
   X,
   Printer,
-  Calendar,
-  FileText,
-  DollarSign,
-  ArrowDownLeft,
-  ArrowUpRight,
-  TrendingUp,
-  RotateCcw,
-  Building2,
-  Phone,
-  CreditCard,
 } from 'lucide-react';
 
 interface StatementTx {
   id: string;
   date: string;
   docNumber: string;
-  type: 'SALES_INVOICE' | 'PURCHASE_RECEIPT' | 'PAYMENT_INCOME' | 'PAYMENT_EXPENSE' | 'SALES_RETURN' | 'PURCHASE_RETURN';
+  type: string;
+  entryType: string;
+  side: 'CUSTOMER' | 'SUPPLIER';
   description: string;
   debit: number;
   credit: number;
@@ -43,16 +35,19 @@ interface StatementData {
     phone?: string;
     email?: string;
     address?: string;
-    customerDebt: number;
-    supplierDebt: number;
-    netBalance: number;
+    balancesByCurrency: Array<{
+      currency: string;
+      customerDebt: number;
+      supplierDebt: number;
+      netBalance: number;
+    }>;
     folder?: { name: string; color?: string } | null;
     priceList?: { name: any } | null;
   };
   summary: {
-    customerDebt: number;
-    supplierDebt: number;
-    netBalance: number;
+    balancesByCurrency: StatementData['counterparty']['balancesByCurrency'];
+    salesInvoicedByCurrency: Array<{ currency: string; amount: number }>;
+    purchasesInvoicedByCurrency: Array<{ currency: string; amount: number }>;
     totalSalesInvoiced: number;
     totalPurchasesInvoiced: number;
     totalTransactionsCount: number;
@@ -64,7 +59,7 @@ interface AktSverkaDrawerProps {
   isOpen: boolean;
   counterpartyId: string | null;
   onClose: () => void;
-  onOpenPayment?: (counterparty: any) => void;
+  onOpenPayment?: (counterparty: any, side: 'CUSTOMER' | 'SUPPLIER', currency: string) => void;
 }
 
 export function AktSverkaDrawer({
@@ -100,7 +95,6 @@ export function AktSverkaDrawer({
   if (!isOpen) return null;
 
   const cp = data?.counterparty;
-  const net = cp?.netBalance ?? 0;
 
   const filteredTxs = (data?.transactions || []).filter((tx) => {
     if (filterType === 'all') return true;
@@ -224,54 +218,56 @@ export function AktSverkaDrawer({
           ) : (
             <>
               {(() => {
-                const aktCurrency = data.transactions?.[0]?.currency || company?.settings?.sales?.defaultCurrency || 'UZS';
                 return (
                   <>
                     {/* Financial Balance Overview Cards */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
-                      {/* Net Balance Card */}
                       <div
                         style={{
                           padding: 'var(--space-4)',
                           borderRadius: 'var(--radius-lg)',
-                          border: `1px solid ${net > 0 ? '#10b981' : net < 0 ? '#ef4444' : 'var(--color-border)'}`,
-                          backgroundColor: net > 0 ? 'rgba(16, 185, 129, 0.06)' : net < 0 ? 'rgba(239, 68, 68, 0.06)' : 'var(--color-bg-subtle)',
+                          border: '1px solid var(--color-border)',
+                          backgroundColor: 'var(--color-bg-subtle)',
                         }}
                       >
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                          {net > 0
-                            ? isRu ? 'Сальдо в нашу пользу (Дебитор)' : "Bizning foydamizga qoldiq (Haqdorlik)"
-                            : net < 0
-                            ? isRu ? 'Сальдо в пользу контрагента (Кредитор)' : "Kontragent foydasiga qoldiq (Qarzdorlik)"
-                            : isRu ? 'Расчет окончен (Сальдо 0)' : "To'liq hisob-kitob qilingan (Balans 0)"}
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600, marginBottom: 8 }}>
+                          {isRu ? 'Позиции по валютам и сторонам' : 'Valyuta va tomonlar bo‘yicha qoldiqlar'}
                         </div>
-                        <div
-                          style={{
-                            fontSize: 'var(--text-2xl)',
-                            fontWeight: 800,
-                            marginTop: 6,
-                            color: net > 0 ? '#059669' : net < 0 ? '#dc2626' : 'var(--color-text-primary)',
-                          }}
-                        >
-                          {net > 0 ? '+ ' : net < 0 ? '- ' : ''}
-                          {formatCurrency(Math.abs(net), locale, aktCurrency)}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {cp?.balancesByCurrency.map((balance) => (
+                            <div key={balance.currency} style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 8 }}>
+                              <strong>{balance.currency}</strong>
+                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 4, color: '#059669' }}>
+                                {isRu ? 'Баланс клиента' : 'Mijoz balansi'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}
+                              </div>
+                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, color: '#dc2626' }}>
+                                {isRu ? 'Баланс поставщика' : 'Ta’minotchi balansi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
+                              </div>
+                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, fontWeight: 700 }}>
+                                {isRu ? 'Нетто' : 'Net'}: {formatCurrency(balance.netBalance, locale, balance.currency)}
+                              </div>
+                              {onOpenPayment && (balance.customerDebt !== 0 || balance.supplierDebt !== 0) && (
+                                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                                  {balance.customerDebt !== 0 && (
+                                    <Button size="sm" onClick={() => onOpenPayment(cp, 'CUSTOMER', balance.currency)}>
+                                      {balance.customerDebt > 0
+                                        ? isRu ? 'Клиент: принять' : 'Mijoz: qabul'
+                                        : isRu ? 'Клиент: вернуть' : 'Mijoz: qaytarish'}
+                                    </Button>
+                                  )}
+                                  {balance.supplierDebt !== 0 && (
+                                    <Button size="sm" variant="secondary" onClick={() => onOpenPayment(cp, 'SUPPLIER', balance.currency)}>
+                                      {balance.supplierDebt > 0
+                                        ? isRu ? 'Поставщик: оплатить' : 'Ta’minotchi: to‘lash'
+                                        : isRu ? 'Поставщик: получить' : 'Ta’minotchi: qabul'}
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {cp?.balancesByCurrency.length === 0 && <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>}
                         </div>
-                        {onOpenPayment && net !== 0 && (
-                          <Button
-                            size="sm"
-                            onClick={() => onOpenPayment(cp)}
-                            style={{
-                              marginTop: 10,
-                              backgroundColor: net > 0 ? '#10b981' : '#ef4444',
-                              color: '#fff',
-                              width: '100%',
-                            }}
-                          >
-                            {net > 0
-                              ? isRu ? 'Принять оплату' : "To'lov qabul qilish"
-                              : isRu ? 'Выплатить долг' : "Qarzni to'lash"}
-                          </Button>
-                        )}
                       </div>
 
                       {/* Sales Turnover Card */}
@@ -280,7 +276,11 @@ export function AktSverkaDrawer({
                           {isRu ? 'Всего отгружено (Продажи)' : "Jami sotilgan mahsulotlar"}
                         </div>
                         <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
-                          {formatCurrency(data.summary.totalSalesInvoiced, locale, aktCurrency)}
+                          {data.summary.salesInvoicedByCurrency.length > 0
+                            ? data.summary.salesInvoicedByCurrency.map((item) => (
+                                <div key={item.currency}>{formatCurrency(item.amount, locale, item.currency)}</div>
+                              ))
+                            : '—'}
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
                           {data.transactions.filter((t) => t.type === 'SALES_INVOICE').length} {isRu ? 'счетов-фактур' : 'ta invoys'}
@@ -293,7 +293,11 @@ export function AktSverkaDrawer({
                           {isRu ? 'Всего получено (Закупки)' : "Jami qabul qilingan tovarlar"}
                         </div>
                         <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
-                          {formatCurrency(data.summary.totalPurchasesInvoiced, locale, aktCurrency)}
+                          {data.summary.purchasesInvoicedByCurrency.length > 0
+                            ? data.summary.purchasesInvoicedByCurrency.map((item) => (
+                                <div key={item.currency}>{formatCurrency(item.amount, locale, item.currency)}</div>
+                              ))
+                            : '—'}
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
                           {data.transactions.filter((t) => t.type === 'PURCHASE_RECEIPT').length} {isRu ? 'приходных документов' : 'ta kirim hujjati'}

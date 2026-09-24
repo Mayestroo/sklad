@@ -63,8 +63,6 @@ interface Counterparty {
   priceListId?: string | null;
   priceList?: { id: string; name: string | Record<string, string>; currency?: string } | null;
   discountPercent?: number;
-  debtBalance: number;
-  netBalance?: number;
   balancesByCurrency?: Array<{
     currency: string;
     customerDebt: number;
@@ -87,6 +85,8 @@ interface CounterpartySummary {
     total_amount: number;
     byCurrency?: Array<{ currency: string; amount: number }>;
   };
+  customerAdvancesByCurrency?: Array<{ currency: string; amount: number }>;
+  supplierAdvancesByCurrency?: Array<{ currency: string; amount: number }>;
 }
 
 interface FoldersResponse {
@@ -130,6 +130,8 @@ export default function CounterpartiesPage() {
 
   // Quick Payment & Akt Sverka Drawer states
   const [paymentCounterparty, setPaymentCounterparty] = useState<Counterparty | null>(null);
+  const [paymentSide, setPaymentSide] = useState<'CUSTOMER' | 'SUPPLIER' | undefined>();
+  const [paymentCurrency, setPaymentCurrency] = useState<string | undefined>();
   const [statementCounterpartyId, setStatementCounterpartyId] = useState<string | null>(null);
 
   // Create Counterparty Modal state
@@ -473,7 +475,21 @@ export default function CounterpartiesPage() {
 
   const totalCustomers = items.filter((i) => i.type === 'CUSTOMER' || i.type === 'BOTH').length;
   const totalSuppliers = items.filter((i) => i.type === 'SUPPLIER' || i.type === 'BOTH').length;
-  const totalDebtors = items.filter((i) => Number(i.debtBalance) > 0).length;
+  const openQuickPayment = (
+    counterparty: Counterparty,
+    side?: 'CUSTOMER' | 'SUPPLIER',
+    currency?: string,
+  ) => {
+    setPaymentSide(side);
+    setPaymentCurrency(currency);
+    setPaymentCounterparty(counterparty);
+  };
+
+  const closeQuickPayment = () => {
+    setPaymentCounterparty(null);
+    setPaymentSide(undefined);
+    setPaymentCurrency(undefined);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -1007,99 +1023,47 @@ export default function CounterpartiesPage() {
                         <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           {(() => {
                             const balances = item.balancesByCurrency || [];
-                            if (balances.length > 0) {
-                              return (
-                                <div
-                                  onClick={() => setStatementCounterpartyId(item.id)}
-                                  title={isRu ? 'Нажмите для просмотра акта сверки' : 'Akt sverkani ko‘rish uchun bosing'}
-                                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, cursor: 'pointer' }}
-                                >
-                                  {balances.map((balance) => (
-                                    <span key={balance.currency} style={{ fontWeight: 700, color: balance.netBalance >= 0 ? '#10b981' : '#ef4444' }}>
-                                      {balance.netBalance >= 0 ? '+' : '-'} {formatCurrency(Math.abs(balance.netBalance), locale, balance.currency)}
-                                    </span>
-                                  ))}
-                                </div>
-                              );
-                            }
-                            const custDebt = Number((item as any).customerDebt || 0);
-                            const suppDebt = Number((item as any).supplierDebt || 0);
-                            const raw = Number(item.debtBalance || 0);
-                            const net =
-                              item.netBalance !== undefined
-                                ? Number(item.netBalance)
-                                : custDebt !== 0 || suppDebt !== 0
-                                ? custDebt - suppDebt
-                                : item.type === 'SUPPLIER'
-                                ? -raw
-                                : raw;
-
-                            const isCustomerAdvance = net < 0 && (custDebt < 0 || item.type === 'CUSTOMER');
-
+                            if (balances.length === 0) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
                             return (
                               <div
                                 onClick={() => setStatementCounterpartyId(item.id)}
                                 title={isRu ? 'Нажмите для просмотра акта сверки' : 'Akt sverkani ko‘rish uchun bosing'}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'flex-end',
-                                  gap: 6,
-                                  cursor: 'pointer',
-                                  padding: '4px 8px',
-                                  borderRadius: 'var(--radius-sm, 4px)',
-                                  transition: 'background 0.15s ease',
-                                }}
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, cursor: 'pointer' }}
                                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
                                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                               >
-                                {net > 0 ? (
-                                  <span style={{ fontWeight: 700, color: '#10b981' }}>
-                                    + {formatCurrency(net, locale, (item as any)?.currency || (summary as any)?.currency || defaultCurrency)}
-                                  </span>
-                                ) : net < 0 ? (
-                                  <span style={{ fontWeight: 700, color: '#ef4444' }}>
-                                    - {formatCurrency(Math.abs(net), locale, (item as any)?.currency || (summary as any)?.currency || defaultCurrency)}
-                                  </span>
-                                ) : (
-                                  <span style={{ color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                                    {formatCurrency(0, locale, (item as any)?.currency || (summary as any)?.currency || defaultCurrency)}
-                                  </span>
-                                )}
-                                {isCustomerAdvance && (
-                                  <span
-                                    style={{
-                                      fontSize: '10px',
-                                      padding: '1px 5px',
-                                      borderRadius: 4,
-                                      backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                                      color: '#2563eb',
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    {isRu ? 'Аванс' : 'Avans'}
-                                  </span>
-                                )}
+                                {balances.map((balance) => (
+                                  <div key={balance.currency} style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto', gap: 8, fontSize: 'var(--text-xs)' }}>
+                                    <strong>{balance.currency}</strong>
+                                    <span title={isRu ? 'Клиентская сторона' : 'Mijoz tomoni'} style={{ color: balance.customerDebt >= 0 ? '#059669' : '#2563eb' }}>
+                                      {isRu ? 'Кл.' : 'M.'} {formatCurrency(balance.customerDebt, locale, balance.currency)}
+                                    </span>
+                                    <span title={isRu ? 'Сторона поставщика' : 'Ta’minotchi tomoni'} style={{ color: balance.supplierDebt >= 0 ? '#dc2626' : '#2563eb' }}>
+                                      {isRu ? 'Пост.' : 'T.'} {formatCurrency(balance.supplierDebt, locale, balance.currency)}
+                                    </span>
+                                    <strong style={{ color: balance.netBalance >= 0 ? '#059669' : '#dc2626' }}>
+                                      {isRu ? 'Нетто' : 'Net'} {formatCurrency(balance.netBalance, locale, balance.currency)}
+                                    </strong>
+                                  </div>
+                                ))}
                               </div>
                             );
                           })()}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                            {/* 1-Click Quick Payment Button */}
-                            {(() => {
-                              const net = item.netBalance !== undefined ? Number(item.netBalance) : Number(item.debtBalance || 0);
-                              if (net !== 0) {
-                                const isIncome = net > 0;
-                                return (
+                            {(item.balancesByCurrency || []).flatMap((balance) => {
+                              const actions: React.ReactNode[] = [];
+                              if (balance.customerDebt !== 0) {
+                                const isIncome = balance.customerDebt > 0;
+                                actions.push(
                                   <Button
+                                    key={`${balance.currency}-CUSTOMER`}
                                     size="sm"
-                                    onClick={() => setPaymentCounterparty(item)}
-                                    title={
-                                      isIncome
-                                        ? isRu ? 'Принять оплату (Приход)' : "To'lov qabul qilish (Kirim)"
-                                        : isRu ? 'Выплатить долг (Расход)' : "Qarzni to'lash (Chiqim)"
-                                    }
+                                    onClick={() => openQuickPayment(item, 'CUSTOMER', balance.currency)}
+                                    title={isIncome
+                                      ? isRu ? 'Принять оплату по клиентскому балансу' : 'Mijoz balansidan to‘lov qabul qilish'
+                                      : isRu ? 'Вернуть клиентский аванс' : 'Mijoz avansini qaytarish'}
                                     style={{
                                       backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
                                       color: isIncome ? '#059669' : '#dc2626',
@@ -1108,14 +1072,34 @@ export default function CounterpartiesPage() {
                                     }}
                                   >
                                     {isIncome ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                                    <span style={{ fontSize: '11px', fontWeight: 600, marginLeft: 4 }}>
-                                      {isRu ? 'Оплата' : "To'lov"}
-                                    </span>
-                                  </Button>
+                                    <span style={{ fontSize: '11px', fontWeight: 600, marginLeft: 4 }}>{balance.currency} · {isRu ? 'Клиент' : 'Mijoz'}</span>
+                                  </Button>,
                                 );
                               }
-                              return null;
-                            })()}
+                              if (balance.supplierDebt !== 0) {
+                                const isIncome = balance.supplierDebt < 0;
+                                actions.push(
+                                  <Button
+                                    key={`${balance.currency}-SUPPLIER`}
+                                    size="sm"
+                                    onClick={() => openQuickPayment(item, 'SUPPLIER', balance.currency)}
+                                    title={isIncome
+                                      ? isRu ? 'Принять возврат поставщика' : 'Ta’minotchidan qaytarim qabul qilish'
+                                      : isRu ? 'Оплатить поставщику' : 'Ta’minotchiga to‘lash'}
+                                    style={{
+                                      backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                      color: isIncome ? '#059669' : '#dc2626',
+                                      borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                                      padding: '0 8px',
+                                    }}
+                                  >
+                                    {isIncome ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+                                    <span style={{ fontSize: '11px', fontWeight: 600, marginLeft: 4 }}>{balance.currency} · {isRu ? 'Поставщик' : 'Ta’minotchi'}</span>
+                                  </Button>,
+                                );
+                              }
+                              return actions;
+                            })}
 
                             {/* Akt Sverka Button */}
                             <Button
@@ -1384,36 +1368,17 @@ export default function CounterpartiesPage() {
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Баланс долга' : 'Qarz Balansi'}</div>
-                <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', marginTop: 4 }}>
-                  {(() => {
-                    const net =
-                      detailItem.netBalance !== undefined
-                        ? Number(detailItem.netBalance)
-                        : detailItem.type === 'SUPPLIER'
-                        ? -Number(detailItem.debtBalance || 0)
-                        : Number(detailItem.debtBalance || 0);
-
-                    if (net > 0) {
-                      return (
-                        <span style={{ color: '#10b981' }}>
-                          + {formatCurrency(net, locale, (detailItem as any)?.currency || (summary as any)?.currency || defaultCurrency)}
-                        </span>
-                      );
-                    } else if (net < 0) {
-                      return (
-                        <span style={{ color: '#ef4444' }}>
-                          - {formatCurrency(Math.abs(net), locale, (detailItem as any)?.currency || (summary as any)?.currency || defaultCurrency)}
-                        </span>
-                      );
-                    } else {
-                      return (
-                        <span style={{ color: 'var(--color-text-secondary)' }}>
-                          {formatCurrency(0, locale, (detailItem as any)?.currency || (summary as any)?.currency || defaultCurrency)}
-                        </span>
-                      );
-                    }
-                  })()}
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Баланс по валютам и сторонам' : 'Valyuta va tomonlar bo‘yicha balans'}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                  {(detailItem.balancesByCurrency || []).length > 0
+                    ? detailItem.balancesByCurrency?.map((balance) => (
+                        <div key={balance.currency} style={{ fontSize: 'var(--text-xs)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <strong>{balance.currency} · {isRu ? 'Нетто' : 'Net'} {formatCurrency(balance.netBalance, locale, balance.currency)}</strong>
+                          <span style={{ color: '#059669' }}>{isRu ? 'Клиент' : 'Mijoz'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}</span>
+                          <span style={{ color: '#dc2626' }}>{isRu ? 'Поставщик' : 'Ta’minotchi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}</span>
+                        </div>
+                      ))
+                    : <span style={{ color: 'var(--color-text-secondary)' }}>—</span>}
                 </div>
               </div>
             </div>
@@ -1491,9 +1456,11 @@ export default function CounterpartiesPage() {
         <QuickPaymentModal
           isOpen={true}
           counterparty={paymentCounterparty}
-          onClose={() => setPaymentCounterparty(null)}
+          initialSide={paymentSide}
+          initialCurrency={paymentCurrency}
+          onClose={closeQuickPayment}
           onSuccess={() => {
-            setPaymentCounterparty(null);
+            closeQuickPayment();
             fetchSummary();
             fetchCounterparties();
           }}
@@ -1506,9 +1473,9 @@ export default function CounterpartiesPage() {
           isOpen={true}
           counterpartyId={statementCounterpartyId}
           onClose={() => setStatementCounterpartyId(null)}
-          onOpenPayment={(cp) => {
+          onOpenPayment={(cp, side, currency) => {
             setStatementCounterpartyId(null);
-            setPaymentCounterparty(cp);
+            openQuickPayment(cp, side, currency);
           }}
         />
       )}

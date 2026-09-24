@@ -17,6 +17,8 @@ import {
   SalesDocStatus,
   SalesPaymentStatus,
   SalesReturnStatus,
+  CounterpartySettlementSide,
+  SettlementAllocationTarget,
 } from '@prisma/client';
 import {
   isAdmin,
@@ -25,6 +27,8 @@ import {
 } from '../../../common/utils/roles.util';
 import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
+import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -71,6 +75,8 @@ export class SalesOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stockReservationService: StockReservationService,
+    private readonly settlementService: CounterpartySettlementService,
+    private readonly settlementAllocationService: SettlementAllocationService,
   ) {}
 
   // ─── NUMBER GENERATOR ──────────────────────────────────────────
@@ -1403,16 +1409,10 @@ export class SalesOrdersService {
         (sum, priorInvoice) => sum + Number(priorInvoice.paidAmount),
         0,
       );
-      const allocatedPaid = Math.min(
+      const orderPaymentAllocation = Math.min(
         Math.max(0, orderPaid - previouslyAllocated),
         invoiceTotal,
       );
-      const invoicePaymentStatus =
-        allocatedPaid >= invoiceTotal && invoiceTotal > 0
-          ? SalesPaymentStatus.PAID
-          : allocatedPaid > 0
-            ? SalesPaymentStatus.PARTIALLY_PAID
-            : SalesPaymentStatus.UNPAID;
 
       // 4. Create the SalesInvoice
       const invoice = await tx.salesInvoice.create({
@@ -1426,13 +1426,13 @@ export class SalesOrdersService {
           exchangeRate: order.exchangeRate,
           comment: `Buyurtma ${order.orderNumber} bo'yicha chiqim`,
           status: SalesDocStatus.DRAFT,
-          paymentStatus: invoicePaymentStatus,
+          paymentStatus: SalesPaymentStatus.UNPAID,
           returnStatus: SalesReturnStatus.NONE,
           subtotalAmount: subtotal,
           discountAmount: discountAmt,
           vatAmount: 0,
           totalAmount: invoiceTotal,
-          paidAmount: allocatedPaid,
+          paidAmount: 0,
           totalCogs: 0,
           grossProfit: 0,
           createdById: userId,
@@ -1443,6 +1443,69 @@ export class SalesOrdersService {
           counterparty: true,
         },
       });
+
+      // Order prepayments remain linked to the order. Reallocate only the amount
+      // assigned to this shipment onto the new invoice; the cash movement is not repeated.
+      let remainingOrderPayment = orderPaymentAllocation;
+      if (remainingOrderPayment > 0) {
+        const orderPayments = await tx.payment.findMany({
+          where: { tenantId, orderId: id },
+          orderBy: { paymentDate: 'asc' },
+          select: { id: true },
+        });
+        const paymentIds = orderPayments.map((payment) => payment.id);
+        const paymentTransactions = paymentIds.length > 0
+          ? await tx.financeTransaction.findMany({
+              where: {
+                tenantId,
+                sourceDocType: 'PAYMENT',
+                sourceDocId: { in: paymentIds },
+                counterpartyId: order.counterpartyId,
+                currency: order.currency,
+                settlementSide: CounterpartySettlementSide.CUSTOMER,
+                status: 'POSTED',
+                isDeleted: false,
+              },
+              orderBy: { transactionDate: 'asc' },
+              select: { id: true, sourceDocId: true, amount: true },
+            })
+          : [];
+        const transactionByPaymentId = new Map(
+          paymentTransactions.map((transaction) => [transaction.sourceDocId, transaction]),
+        );
+
+        for (const payment of orderPayments) {
+          if (remainingOrderPayment <= 0) break;
+          const transaction = transactionByPaymentId.get(payment.id);
+          if (!transaction) continue;
+          const priorAllocations = await tx.settlementAllocation.findMany({
+            where: { financeTransactionId: transaction.id },
+            select: { amount: true },
+          });
+          const remainingOnPayment = Number(transaction.amount) - priorAllocations.reduce(
+            (sum, allocation) => sum + Number(allocation.amount),
+            0,
+          );
+          const allocate = Math.min(remainingOrderPayment, remainingOnPayment);
+          if (allocate <= 0) continue;
+          await this.settlementAllocationService.recordAllocation(tx, {
+            tenantId,
+            counterpartyId: order.counterpartyId,
+            financeTransactionId: transaction.id,
+            targetType: SettlementAllocationTarget.SALES_INVOICE,
+            targetId: invoice.id,
+            amount: allocate,
+            idempotencyKey: `FinanceTransaction:${transaction.id}:SalesInvoice:${invoice.id}:${allocate}`,
+          });
+          remainingOrderPayment -= allocate;
+        }
+
+        if (remainingOrderPayment > 0.01) {
+          throw new BadRequestException(
+            'Buyurtma to‘lovining bir qismi Finance tranzaksiyasiga bog‘lanmagan; jo‘natishdan oldin reconciliation kerak',
+          );
+        }
+      }
 
       // 5. Deduct FIFO stock batches & consume reservations
       let totalCogs = 0;
@@ -1555,18 +1618,25 @@ export class SalesOrdersService {
       const grossProfit = Number(invoice.totalAmount) * ledgerRate - totalCogs;
 
       // 6. Post Invoice & increase customer debt
-      await tx.counterparty.update({
-        where: { id: order.counterpartyId },
-        data: {
-          customerDebt: { increment: invoice.totalAmount },
-          debtBalance: { increment: invoice.totalAmount },
-        },
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: order.counterpartyId,
+        currency: order.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: Number(invoice.totalAmount),
+        entryType: 'SALES_INVOICE_POSTED',
+        effectiveAt: invoice.invoiceDate,
+        sourceDocType: 'SalesInvoice',
+        sourceDocId: invoice.id,
+        idempotencyKey: `SalesInvoice:${invoice.id}:POSTED`,
       });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: order.counterpartyId, currency: order.currency } },
-        create: { tenantId, counterpartyId: order.counterpartyId, currency: order.currency, customerDebt: invoice.totalAmount },
-        update: { customerDebt: { increment: invoice.totalAmount } },
-      });
+
+      const invoicePaymentStatus =
+        orderPaymentAllocation >= invoiceTotal && invoiceTotal > 0
+          ? SalesPaymentStatus.PAID
+          : orderPaymentAllocation > 0
+            ? SalesPaymentStatus.PARTIALLY_PAID
+            : SalesPaymentStatus.UNPAID;
 
       const [revenueAcc, receivableAcc, cogsAcc, inventoryAcc] = await Promise.all([
         tx.account.findFirst({ where: { tenantId, code: '9010' } }),
@@ -1608,6 +1678,8 @@ export class SalesOrdersService {
           status: SalesDocStatus.POSTED,
           totalCogs,
           grossProfit,
+          paidAmount: orderPaymentAllocation,
+          paymentStatus: invoicePaymentStatus,
           postedById: userId,
           postedAt: new Date(),
         },

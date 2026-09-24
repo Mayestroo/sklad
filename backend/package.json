@@ -23,7 +23,8 @@
     "db:reset": "npx prisma migrate reset",
     "db:studio": "npx prisma studio",
     "db:generate": "npx prisma generate",
-    "create:superadmin": "ts-node scripts/create-superadmin.ts"
+    "create:superadmin": "ts-node scripts/create-superadmin.ts",
+    "settlement:reconcile": "node --env-file=.env -r ts-node/register -r tsconfig-paths/register scripts/reconcile-counterparty-settlement.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

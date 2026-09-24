@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Users, Search, DollarSign, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { toast } from '@/context/ToastContext';
 
@@ -20,7 +21,7 @@ interface Customer {
   phone?: string;
   email?: string;
   type: string;
-  debtBalance: number;
+  balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
 }
 
 interface CustomerProfile {
@@ -29,7 +30,8 @@ interface CustomerProfile {
     totalSales: number;
     totalPaid: number;
     totalReturned: number;
-    debtBalance: number;
+    balancesByCurrency: NonNullable<Customer['balancesByCurrency']>;
+    customerAdvancesByCurrency: Array<{ currency: string; amount: number }>;
     totalCogs: number;
     grossProfit: number;
   };
@@ -118,8 +120,15 @@ export default function CustomersPage() {
     );
   });
 
-  const totalDebt = customers.reduce((sum, c) => sum + Number(c.debtBalance || 0), 0);
-  const customersWithDebt = customers.filter((c) => Number(c.debtBalance || 0) > 0).length;
+  const receivablesByCurrency = customers.reduce<Record<string, number>>((totals, customer) => {
+    for (const balance of customer.balancesByCurrency || []) {
+      if (balance.customerDebt > 0) totals[balance.currency] = (totals[balance.currency] || 0) + balance.customerDebt;
+    }
+    return totals;
+  }, {});
+  const customersWithDebt = customers.filter((customer) =>
+    customer.balancesByCurrency?.some((balance) => balance.customerDebt > 0),
+  ).length;
 
   const tableHeaders = [
     isRu ? 'Имя клиента' : 'Mijoz nomi',
@@ -165,7 +174,12 @@ export default function CustomersPage() {
             </div>
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Общий долг' : 'Umumiy qarz'}</span>
           </div>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(totalDebt, locale, defaultCurrency)}</div>
+          <MultiCurrencyValue
+            items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
+            fallbackCurrency={defaultCurrency}
+            locale={locale}
+            color="#f59e0b"
+          />
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{customersWithDebt} {isRu ? 'клиентов' : 'ta mijozda'}</div>
         </Card>
       </div>
@@ -209,14 +223,20 @@ export default function CustomersPage() {
                 </tr>
               ) : (
                 filtered.map((c) => {
-                  const debt = Number(c.debtBalance || 0);
+                  const balances = (c.balancesByCurrency || []).filter((balance) => balance.customerDebt !== 0);
                   return (
                     <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{c.name}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.phone || '—'}</td>
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: debt > 0 ? 600 : 400, color: debt > 0 ? '#f59e0b' : 'var(--color-text-secondary)' }}>
-                        {debt > 0 ? formatCurrency(debt, locale, (c as any).currency || defaultCurrency) : '—'}
+                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                        {balances.length > 0
+                          ? balances.map((balance) => (
+                              <div key={balance.currency} style={{ color: balance.customerDebt > 0 ? '#f59e0b' : '#2563eb', fontWeight: 600 }}>
+                                {balance.currency}: {formatCurrency(balance.customerDebt, locale, balance.currency)}
+                              </div>
+                            ))
+                          : '—'}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <Badge variant={c.type === 'BOTH' ? 'warning' : 'neutral'}>
@@ -273,7 +293,10 @@ export default function CustomersPage() {
                   {[
                     { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatCurrency(profile.metrics.totalSales, locale, custCurrency), color: undefined },
                     { label: isRu ? 'Оплачено' : 'To\'langan', value: formatCurrency(profile.metrics.totalPaid, locale, custCurrency), color: '#10b981' },
-                    { label: isRu ? 'Долг' : 'Qarz', value: formatCurrency(profile.metrics.debtBalance, locale, custCurrency), color: '#f59e0b' },
+                    { label: isRu ? 'Долг по валютам' : 'Valyuta bo‘yicha qarz', value: profile.metrics.balancesByCurrency
+                      .filter((balance) => balance.customerDebt !== 0)
+                      .map((balance) => `${balance.currency}: ${formatCurrency(balance.customerDebt, locale, balance.currency)}`)
+                      .join(' · ') || '—', color: '#f59e0b' },
                     { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatCurrency(profile.metrics.totalReturned, locale, custCurrency), color: '#ef4444' },
                     { label: isRu ? 'Валовая прибыль' : 'Yalpi foyda', value: formatCurrency(profile.metrics.grossProfit, locale, custCurrency), color: profile.metrics.grossProfit >= 0 ? '#10b981' : '#ef4444' },
                   ].map((m) => (

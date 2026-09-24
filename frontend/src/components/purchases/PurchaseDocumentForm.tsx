@@ -49,7 +49,7 @@ interface CounterpartyOption {
   id: string;
   name: string;
   type: string;
-  debtBalance?: number;
+  balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
   inn?: string;
 }
 
@@ -165,7 +165,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     if (!isDirty) setIsDirty(true);
   };
 
-  const handleSupplierAdded = (newSupplier: { id: string; name: string; type: string; debtBalance?: number }) => {
+  const handleSupplierAdded = (newSupplier: { id: string; name: string; type: string; balancesByCurrency?: CounterpartyOption['balancesByCurrency'] }) => {
     markDirty();
     setCounterparties((prev) => [newSupplier, ...prev]);
     setCounterpartyId(newSupplier.id);
@@ -1006,7 +1006,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             {(() => {
               const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);
               if (!selectedSupplier) return null;
-              const debt = Number(selectedSupplier.debtBalance || 0);
+              const debt = Number(selectedSupplier.balancesByCurrency?.find((balance) => balance.currency === currency)?.supplierDebt || 0);
               return (
                 <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)' }}>
                   <span style={{ color: 'var(--color-text-tertiary)' }}>

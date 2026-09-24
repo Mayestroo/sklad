@@ -105,6 +105,21 @@ enum CounterpartyType {
   BOTH
 }
 
+enum CounterpartySettlementSide {
+  CUSTOMER
+  SUPPLIER
+}
+
+enum SettlementAllocationTarget {
+  SALES_INVOICE
+  SALES_ORDER
+  SALES_RETURN
+  PURCHASE_RECEIPT
+  PURCHASE_RETURN
+  ADDITIONAL_EXPENSE
+  SERVICE_ACT
+}
+
 enum InvoiceStatus {
   DRAFT
   SENT
@@ -302,6 +317,8 @@ model Company {
   productionOrders     ProductionOrder[]
   stockReservations    StockReservation[]
   serviceActs          ServiceAct[]
+  settlementEntries    CounterpartySettlementEntry[]
+  settlementAllocations SettlementAllocation[]
 
     openingBalanceDocs     OpeningBalanceDocument[]
   openingBalanceLines    OpeningBalanceLine[]
@@ -839,6 +856,8 @@ model Counterparty {
   salesReturns        SalesReturn[]
   additionalExpenses  AdditionalExpense[]
   serviceActs         ServiceAct[]
+  settlementEntries  CounterpartySettlementEntry[]
+  settlementAllocations SettlementAllocation[]
   balances            CounterpartyBalance[]
 
   @@index([tenantId])
@@ -865,6 +884,59 @@ model CounterpartyBalance {
   @@unique([counterpartyId, currency])
   @@index([tenantId, currency])
   @@map("counterparty_balances")
+}
+
+/// Immutable, signed native-currency changes to one side of a counterparty position.
+model CounterpartySettlementEntry {
+  id             String                     @id @default(uuid())
+  tenantId       String                     @map("tenant_id")
+  counterpartyId String                     @map("counterparty_id")
+  currency       String
+  side           CounterpartySettlementSide
+  amount         Decimal                    @db.Decimal(15, 2)
+  entryType      String                     @map("entry_type")
+  effectiveAt    DateTime                   @default(now()) @map("effective_at")
+  sourceDocType  String                     @map("source_doc_type")
+  sourceDocId    String                     @map("source_doc_id")
+  sourceLineId   String?                    @map("source_line_id")
+  idempotencyKey String                     @unique @map("idempotency_key")
+  reversesEntryId String?                   @unique @map("reverses_entry_id")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+
+  company       Company                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty  Counterparty               @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  reversesEntry CounterpartySettlementEntry? @relation("CounterpartySettlementReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
+  reversal      CounterpartySettlementEntry? @relation("CounterpartySettlementReversal")
+
+  @@index([tenantId, counterpartyId, currency, createdAt])
+  @@index([tenantId, sourceDocType, sourceDocId])
+  @@map("counterparty_settlement_entries")
+}
+
+/// Append-only applications of real finance movements to a receivable/payable document.
+model SettlementAllocation {
+  id                    String                       @id @default(uuid())
+  tenantId              String                       @map("tenant_id")
+  counterpartyId        String                       @map("counterparty_id")
+  financeTransactionId  String                       @map("finance_transaction_id")
+  side                  CounterpartySettlementSide
+  currency              String
+  targetType            SettlementAllocationTarget   @map("target_type")
+  targetId              String                       @map("target_id")
+  amount                Decimal                      @db.Decimal(15, 2)
+  idempotencyKey        String                       @unique @map("idempotency_key")
+  reversesAllocationId  String?                      @unique @map("reverses_allocation_id")
+  createdAt             DateTime                     @default(now()) @map("created_at")
+
+  company              Company                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty         Counterparty            @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  financeTransaction   FinanceTransaction      @relation(fields: [financeTransactionId], references: [id], onDelete: Restrict)
+  reversesAllocation   SettlementAllocation?   @relation("SettlementAllocationReversal", fields: [reversesAllocationId], references: [id], onDelete: Restrict)
+  reversal             SettlementAllocation?   @relation("SettlementAllocationReversal")
+
+  @@index([tenantId, counterpartyId, currency, side, targetType, targetId])
+  @@index([financeTransactionId])
+  @@map("settlement_allocations")
 }
 
 model CounterpartyFolder {
@@ -1331,6 +1403,7 @@ model FinanceTransaction {
   /// For TRANSFER only: the destination account
   transferToId      String?             @map("transfer_to_id")
   counterpartyId    String?             @map("counterparty_id")
+  settlementSide    CounterpartySettlementSide? @map("settlement_side")
   transactionTypeId String?             @map("transaction_type_id")
   amount            Decimal             @db.Decimal(15, 2)
   /// For TRANSFER only: exact amount credited to the destination account.
@@ -1356,6 +1429,7 @@ model FinanceTransaction {
   transferToAccount CashAccount?     @relation("TxTransferTo", fields: [transferToId], references: [id], onDelete: SetNull)
   counterparty      Counterparty?    @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
   transactionType   TransactionType? @relation(fields: [transactionTypeId], references: [id], onDelete: SetNull)
+  settlementAllocations SettlementAllocation[]
 
   @@index([tenantId])
   @@index([tenantId, direction])

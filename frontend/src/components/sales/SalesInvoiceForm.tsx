@@ -43,7 +43,7 @@ interface CounterpartyOption {
   id: string;
   name: string;
   type?: string;
-  debtBalance?: number;
+  balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
   phone?: string;
   inn?: string;
   priceListId?: string | null;
@@ -270,7 +270,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   }, [token, company, warehouseId, locale]);
 
   // Quick addition handlers
-  const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; debtBalance?: number }) => {
+  const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; balancesByCurrency?: CounterpartyOption['balancesByCurrency'] }) => {
     markDirty();
     setCounterparties((prev) => [newCustomer, ...prev]);
     setCounterpartyId(newCustomer.id);
@@ -1102,7 +1102,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             {(() => {
               const selectedCustomer = counterparties.find((c) => c.id === counterpartyId);
               if (!selectedCustomer) return null;
-              const debt = Number(selectedCustomer.debtBalance || 0);
+              const debt = Number(selectedCustomer.balancesByCurrency?.find((balance) => balance.currency === currency)?.customerDebt || 0);
               return (
                 <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)' }}>
                   <span style={{ color: 'var(--color-text-tertiary)' }}>

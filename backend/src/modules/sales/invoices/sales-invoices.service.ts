@@ -9,6 +9,8 @@ import { FilterSalesInvoicesDto } from '../dto/filter-sales-invoices.dto';
 import { CreateSalesReturnDto } from '../dto/create-sales-return.dto';
 import {
   Prisma,
+  CounterpartySettlementSide,
+  SettlementAllocationTarget,
   SalesDocStatus,
   SalesPaymentStatus,
   SalesReturnStatus,
@@ -16,10 +18,14 @@ import {
 } from '@prisma/client';
 import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
+import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 
 @Injectable()
 export class SalesInvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settlementService: CounterpartySettlementService,
+  ) {}
 
   // ─── NUMBER GENERATORS ─────────────────────────────────────────
 
@@ -412,18 +418,18 @@ export class SalesInvoicesService {
       const netRevenue = Number(invoice.totalAmount) - Number(invoice.vatAmount);
       const grossProfit = netRevenue - totalCogs;
 
-      // 3. Increase customer (debitor) debt
-      await tx.counterparty.update({
-        where: { id: invoice.counterpartyId },
-        data: {
-          customerDebt: { increment: invoice.totalAmount },
-          debtBalance: { increment: invoice.totalAmount },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: invoice.counterpartyId, currency: invoice.currency } },
-        create: { tenantId, counterpartyId: invoice.counterpartyId, currency: invoice.currency, customerDebt: invoice.totalAmount },
-        update: { customerDebt: { increment: invoice.totalAmount } },
+      // 3. Accrue the receivable in the shared native-currency settlement ledger.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: invoice.counterpartyId,
+        currency: invoice.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: Number(invoice.totalAmount),
+        entryType: 'SALES_INVOICE_POSTED',
+        effectiveAt: invoice.invoiceDate,
+        sourceDocType: 'SalesInvoice',
+        sourceDocId: invoice.id,
+        idempotencyKey: `SalesInvoice:${invoice.id}:POSTED:${invoice.updatedAt.toISOString()}`,
       });
 
       // 4. NAS / BHMS Accounting Journal Entries
@@ -606,18 +612,18 @@ export class SalesInvoicesService {
         },
       });
 
-      // Reduce customer debt
-      await tx.counterparty.update({
-        where: { id: invoice.counterpartyId },
-        data: {
-          customerDebt: { decrement: invoice.totalAmount },
-          debtBalance: { decrement: invoice.totalAmount },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: invoice.counterpartyId, currency: invoice.currency } },
-        create: { tenantId, counterpartyId: invoice.counterpartyId, currency: invoice.currency, customerDebt: -Number(invoice.totalAmount) },
-        update: { customerDebt: { decrement: invoice.totalAmount } },
+      // Reverse the receivable without deleting its original ledger movement.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: invoice.counterpartyId,
+        currency: invoice.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -Number(invoice.totalAmount),
+        entryType: 'SALES_INVOICE_UNPOSTED',
+        effectiveAt: invoice.invoiceDate,
+        sourceDocType: 'SalesInvoice',
+        sourceDocId: invoice.id,
+        idempotencyKey: `SalesInvoice:${invoice.id}:UNPOSTED:${invoice.updatedAt.toISOString()}`,
       });
 
       // Remove journal entries
@@ -1013,18 +1019,18 @@ export class SalesInvoicesService {
         });
       }
 
-      // Reduce customer debt
-      await tx.counterparty.update({
-        where: { id: params.counterpartyId },
-        data: {
-          customerDebt: { decrement: params.totalAmount },
-          debtBalance: { decrement: params.totalAmount },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: params.counterpartyId, currency: params.currency } },
-        create: { tenantId, counterpartyId: params.counterpartyId, currency: params.currency, customerDebt: -params.totalAmount },
-        update: { customerDebt: { decrement: params.totalAmount } },
+      // A posted customer return reverses the original receivable, including VAT.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: params.counterpartyId,
+        currency: params.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -params.totalAmount,
+        entryType: 'SALES_RETURN_POSTED',
+        effectiveAt: salesReturn.returnDate,
+        sourceDocType: 'SalesReturn',
+        sourceDocId: salesReturn.id,
+        idempotencyKey: `SalesReturn:${salesReturn.id}:POSTED`,
       });
 
       // Update originating invoice returnStatus
@@ -1254,6 +1260,24 @@ export class SalesInvoicesService {
       });
     }
 
+    const returnAllocations = await this.prisma.settlementAllocation.findMany({
+      where: {
+        tenantId,
+        targetType: SettlementAllocationTarget.SALES_RETURN,
+        targetId: existing.id,
+      },
+      select: { amount: true },
+    });
+    const activeRefundAmount = returnAllocations.reduce(
+      (sum, allocation) => sum + Number(allocation.amount),
+      0,
+    );
+    if (activeRefundAmount > 0) {
+      throw new BadRequestException(
+        'Moliya settlement allocation exists for this sales return; reverse it before cancelling the return',
+      );
+    }
+
     // If POSTED, execute rollback guardrail and reversals
     return this.prisma.$transaction(async (tx) => {
       // Check stock availability in target warehouses
@@ -1305,18 +1329,18 @@ export class SalesInvoicesService {
         }
       }
 
-      // Reverse customer debt
-      await tx.counterparty.update({
-        where: { id: existing.counterpartyId },
-        data: {
-          customerDebt: { increment: Number(existing.totalAmount) },
-          debtBalance: { increment: Number(existing.totalAmount) },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: existing.counterpartyId, currency: existing.currency } },
-        create: { tenantId, counterpartyId: existing.counterpartyId, currency: existing.currency, customerDebt: existing.totalAmount },
-        update: { customerDebt: { increment: existing.totalAmount } },
+      // Cancelling a return reverses its balance movement as a new ledger entry.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: existing.counterpartyId,
+        currency: existing.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: Number(existing.totalAmount),
+        entryType: 'SALES_RETURN_CANCELLED',
+        effectiveAt: existing.returnDate,
+        sourceDocType: 'SalesReturn',
+        sourceDocId: existing.id,
+        idempotencyKey: `SalesReturn:${existing.id}:CANCELLED`,
       });
 
       // Update invoice return status
@@ -1906,48 +1930,26 @@ export class SalesInvoicesService {
       amount,
     }));
 
-    const customerDebt = await this.prisma.counterparty.aggregate({
-      where: {
-        tenantId,
-        type: { in: ['CUSTOMER', 'BOTH'] },
-        debtBalance: { gt: 0 },
-      },
-      _sum: { debtBalance: true },
-      _count: { id: true },
+    const counterpartyBalances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId },
+      select: { counterpartyId: true, currency: true, customerDebt: true },
     });
-
-    // Unpaid invoices to break down debt by currency
-    const unpaidInvoices = await this.prisma.salesInvoice.findMany({
-      where: {
-        tenantId,
-        status: SalesDocStatus.POSTED,
-        paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
-      },
-      select: {
-        totalAmount: true,
-        paidAmount: true,
-        currency: true,
-      },
-    });
-
     const debtByCurrMap: Record<string, number> = {};
-    for (const inv of unpaidInvoices) {
-      const remaining = Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0);
-      if (remaining > 0) {
-        const curr = inv.currency || reportCurrency;
-        debtByCurrMap[curr] = (debtByCurrMap[curr] || 0) + remaining;
+    const advancesByCurrMap: Record<string, number> = {};
+    const customersWithReceivables = new Set<string>();
+    for (const balance of counterpartyBalances) {
+      const customerDebt = Number(balance.customerDebt);
+      if (customerDebt > 0) {
+        debtByCurrMap[balance.currency] = (debtByCurrMap[balance.currency] || 0) + customerDebt;
+        customersWithReceivables.add(balance.counterpartyId);
+      } else if (customerDebt < 0) {
+        advancesByCurrMap[balance.currency] = (advancesByCurrMap[balance.currency] || 0) + Math.abs(customerDebt);
       }
     }
 
-    let totalCustomerDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
-
-    const rawTotalDebt = Number(customerDebt._sum.debtBalance || 0);
-    if (totalCustomerDebtByCurrency.length === 0 && rawTotalDebt > 0) {
-      totalCustomerDebtByCurrency = [{ currency: reportCurrency, amount: rawTotalDebt }];
-    }
+    const totalCustomerDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({ currency, amount }));
+    const customerAdvancesByCurrency = Object.entries(advancesByCurrMap).map(([currency, amount]) => ({ currency, amount }));
+    const rawTotalDebt = totalCustomerDebtByCurrency.length === 1 ? totalCustomerDebtByCurrency[0].amount : 0;
 
     const margin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
 
@@ -1958,11 +1960,12 @@ export class SalesInvoicesService {
       monthlyGrossProfit: grossProfit,
       monthlyGrossProfitMargin: Math.round(margin * 100) / 100,
       totalCustomerDebt: rawTotalDebt,
-      customersWithDebtCount: customerDebt._count.id,
+      customersWithDebtCount: customersWithReceivables.size,
       monthlyReturnsTotal,
       currency: monthlySalesByCurrency.length === 1 ? monthlySalesByCurrency[0].currency : reportCurrency,
       monthlySalesByCurrency,
       totalCustomerDebtByCurrency,
+      customerAdvancesByCurrency,
       monthlyReturnsByCurrency,
       monthlyGrossProfitByCurrency,
     };
@@ -2001,14 +2004,31 @@ export class SalesInvoicesService {
     );
     const totalCogs = invoices.reduce((s, i) => s + Number(i.totalCogs), 0);
     const grossProfit = invoices.reduce((s, i) => s + Number(i.grossProfit), 0);
+    const balances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId, counterpartyId: customerId },
+      select: { currency: true, customerDebt: true, supplierDebt: true },
+      orderBy: { currency: 'asc' },
+    });
+    const balancesByCurrency = balances.map((balance) => ({
+      currency: balance.currency,
+      customerDebt: Number(balance.customerDebt),
+      supplierDebt: Number(balance.supplierDebt),
+      netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+    }));
+    const receivableCurrencies = balancesByCurrency.filter((balance) => balance.customerDebt > 0);
+    const customerAdvancesByCurrency = balancesByCurrency
+      .filter((balance) => balance.customerDebt < 0)
+      .map((balance) => ({ currency: balance.currency, amount: Math.abs(balance.customerDebt) }));
+    const { debtBalance: _legacyDebtBalance, customerDebt: _legacyCustomerDebt, supplierDebt: _legacySupplierDebt, ...customerData } = customer;
 
     return {
-      customer,
+      customer: { ...customerData, balancesByCurrency },
       metrics: {
         totalSales,
         totalPaid,
         totalReturned,
-        debtBalance: Number(customer.debtBalance),
+        balancesByCurrency,
+        customerAdvancesByCurrency,
         totalCogs,
         grossProfit,
       },

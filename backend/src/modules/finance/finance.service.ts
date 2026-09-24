@@ -13,16 +13,41 @@ import {
   PurchaseDocStatus,
   PurchasePaymentStatus,
   ServicePaymentStatus,
+  ServiceActType,
+  CounterpartySettlementSide,
+  SettlementAllocationTarget,
 } from '@prisma/client';
 import { CreateIncomeDto } from './dto/create-income.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
 import { CancelTransactionDto } from './dto/cancel-transaction.dto';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+
+interface FinanceSettlementContext {
+  side: CounterpartySettlementSide | null;
+  targetType?: SettlementAllocationTarget;
+  targetId?: string;
+}
+
+interface FifoSettlementTarget {
+  targetType: SettlementAllocationTarget;
+  targetId: string;
+  side: CounterpartySettlementSide;
+  effectiveAt: Date;
+  openAmount: number;
+}
+
+type SettlementDirection = Exclude<TransactionDirection, 'TRANSFER'>;
 
 @Injectable()
 export class FinanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settlementService: CounterpartySettlementService,
+    private readonly settlementAllocationService: SettlementAllocationService,
+  ) {}
 
   // ─── Accounts ────────────────────────────────────────────────
 
@@ -186,27 +211,13 @@ export class FinanceService {
     }
 
     // Counterparty Debts
-    const [counterparties, recentReceipt, recentInvoice, company] = await Promise.all([
-      this.prisma.counterparty.findMany({
+    const [settlementBalances, recentReceipt, recentInvoice, company] = await Promise.all([
+      this.prisma.counterpartyBalance.findMany({
         where: { tenantId },
         select: {
-          id: true,
+          currency: true,
           customerDebt: true,
           supplierDebt: true,
-          debtBalance: true,
-          type: true,
-          salesInvoices: {
-            where: { status: 'POSTED' },
-            select: { currency: true },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-          purchaseReceipts: {
-            where: { status: 'POSTED' },
-            select: { currency: true },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
         },
       }),
       this.prisma.purchaseReceipt.findFirst({
@@ -235,55 +246,30 @@ export class FinanceService {
     let totalSupplierDebt = 0; // Payables (To'lanishi kerak bo'lgan qarzlar)
     const receivablesByCurr: Record<string, number> = {};
     const payablesByCurr: Record<string, number> = {};
+    const customerAdvancesByCurr: Record<string, number> = {};
+    const supplierAdvancesByCurr: Record<string, number> = {};
 
-    for (const cp of counterparties) {
-      const cDebt = Number((cp as any).customerDebt || 0);
-      const sDebt = Number((cp as any).supplierDebt || 0);
-      const currency =
-        (cp as any).purchaseReceipts?.[0]?.currency ||
-        (cp as any).salesInvoices?.[0]?.currency ||
-        reportCurrency;
-
-      if (cDebt !== 0 || sDebt !== 0) {
-        if (cDebt > 0) {
-          totalCustomerDebt += cDebt;
-          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + cDebt;
-        } else if (cDebt < 0) {
-          totalSupplierDebt += Math.abs(cDebt);
-          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(cDebt);
-        }
-
-        if (sDebt > 0) {
-          totalSupplierDebt += sDebt;
-          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + sDebt;
-        } else if (sDebt < 0) {
-          totalCustomerDebt += Math.abs(sDebt);
-          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(sDebt);
-        }
-      } else {
-        const raw = Number(cp.debtBalance || 0);
-        if (cp.type === 'SUPPLIER') {
-          if (raw > 0) {
-            totalSupplierDebt += raw;
-            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + raw;
-          } else if (raw < 0) {
-            totalCustomerDebt += Math.abs(raw);
-            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(raw);
-          }
-        } else {
-          if (raw > 0) {
-            totalCustomerDebt += raw;
-            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + raw;
-          } else if (raw < 0) {
-            totalSupplierDebt += Math.abs(raw);
-            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(raw);
-          }
-        }
+    for (const balance of settlementBalances) {
+      const customerDebt = Number(balance.customerDebt);
+      const supplierDebt = Number(balance.supplierDebt);
+      if (customerDebt > 0) {
+        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + customerDebt;
+      } else if (customerDebt < 0) {
+        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
+      }
+      if (supplierDebt > 0) {
+        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + supplierDebt;
+      } else if (supplierDebt < 0) {
+        supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     }
 
     const receivablesByCurrency = Object.entries(receivablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
     const payablesByCurrency = Object.entries(payablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    const customerAdvancesByCurrency = Object.entries(customerAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    const supplierAdvancesByCurrency = Object.entries(supplierAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    if (receivablesByCurrency.length === 1) totalCustomerDebt = receivablesByCurrency[0].amount;
+    if (payablesByCurrency.length === 1) totalSupplierDebt = payablesByCurrency[0].amount;
 
     return {
       currency: reportCurrency,
@@ -308,6 +294,8 @@ export class FinanceService {
         payables: totalSupplierDebt,
         receivablesByCurrency,
         payablesByCurrency,
+        customerAdvancesByCurrency,
+        supplierAdvancesByCurrency,
       },
       accounts: accounts.map((a) => ({
         id: a.id,
@@ -403,7 +391,13 @@ export class FinanceService {
       );
     }
 
-    const tx = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
+      const settlement = await this.resolveSettlementContext(
+        tx,
+        tenantId,
+        dto,
+        TransactionDirection.INCOME,
+      );
       const transaction = await tx.financeTransaction.create({
         data: {
           tenantId,
@@ -412,10 +406,9 @@ export class FinanceService {
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
-          transactionDate: dto.transactionDate
-            ? new Date(dto.transactionDate)
-            : new Date(),
+          transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
           counterpartyId: dto.counterpartyId,
+          settlementSide: settlement?.side ?? null,
           transactionTypeId: dto.transactionTypeId,
           comment: dto.comment,
           sourceDocType: dto.sourceDocType,
@@ -426,137 +419,43 @@ export class FinanceService {
         include: { account: true, counterparty: true, transactionType: true },
       });
 
-      // 1. Update cash account balance
       await tx.cashAccount.update({
         where: { id: dto.accountId },
         data: { balance: { increment: dto.amount } },
       });
 
-      // 2. Update counterparty customer debt
-      if (dto.counterpartyId) {
-        await tx.counterparty.update({
-          where: { id: dto.counterpartyId },
-          data: {
-            customerDebt: { decrement: dto.amount },
-            debtBalance: { decrement: dto.amount },
-          },
+      if (settlement?.side) {
+        if (settlement.targetType && settlement.targetId) {
+          await this.allocateAndUpdateTarget(
+            tx,
+            transaction,
+            settlement,
+            tenantId,
+            dto.counterpartyId!,
+            dto.amount,
+          );
+        } else if (!dto.sourceDocId && settlement.side === CounterpartySettlementSide.CUSTOMER) {
+          await this.allocateIncomeFifo(tx, tenantId, transaction, dto.counterpartyId!, dto.amount, dto.currency);
+        } else if (this.settlementMovementAmount(TransactionDirection.INCOME, settlement.side, dto.amount) > 0) {
+          await this.assertCreditAvailable(tx, dto.counterpartyId!, dto.currency, settlement.side, dto.amount);
+        }
+
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: dto.counterpartyId!,
+          currency: dto.currency,
+          side: settlement.side,
+          amount: this.settlementMovementAmount(TransactionDirection.INCOME, settlement.side, dto.amount),
+          entryType: 'FINANCE_SETTLEMENT',
+          effectiveAt: transaction.transactionDate,
+          sourceDocType: 'FinanceTransaction',
+          sourceDocId: transaction.id,
+          idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT`,
         });
-        await tx.counterpartyBalance.upsert({
-          where: { counterpartyId_currency: { counterpartyId: dto.counterpartyId, currency: dto.currency } },
-          create: { tenantId, counterpartyId: dto.counterpartyId, currency: dto.currency, customerDebt: -dto.amount },
-          update: { customerDebt: { decrement: dto.amount } },
-        });
-
-        // 3. Direct Sales Invoice Settlement
-        if (dto.sourceDocType === 'SalesInvoice' && dto.sourceDocId) {
-          const invoice = await tx.salesInvoice.findFirst({
-            where: { id: dto.sourceDocId, tenantId },
-          });
-          if (invoice) {
-            const newPaid = Number(invoice.paidAmount) + Number(dto.amount);
-            const total = Number(invoice.totalAmount);
-            const paymentStatus =
-              newPaid >= total
-                ? SalesPaymentStatus.PAID
-                : newPaid > 0
-                ? SalesPaymentStatus.PARTIALLY_PAID
-                : SalesPaymentStatus.UNPAID;
-
-            await tx.salesInvoice.update({
-              where: { id: invoice.id },
-              data: { paidAmount: newPaid, paymentStatus },
-            });
-          }
-        }
-        // 4. Direct Sales Order Pre-Payment Settlement
-        else if (dto.sourceDocType === 'SalesOrder' && dto.sourceDocId) {
-          const order = await tx.salesOrder.findFirst({
-            where: { id: dto.sourceDocId, tenantId },
-          });
-          if (order) {
-            const newPaid = Number(order.paidAmount) + Number(dto.amount);
-            const total = Number(order.totalAmount);
-            let newStatus = order.status;
-
-            if (order.status === 'AWAITING_PAYMENT') {
-              if (order.paymentCondition === 'PREPAID_100' && newPaid >= total) {
-                newStatus = 'PAYMENT_CONFIRMED';
-              } else if (order.paymentCondition === 'PARTIAL') {
-                const reqPercent = Number(order.requiredPaymentPercent || 50);
-                const reqAmount = (total * reqPercent) / 100;
-                if (newPaid >= reqAmount) {
-                  newStatus = 'PAYMENT_CONFIRMED';
-                }
-              }
-            }
-
-            await tx.salesOrder.update({
-              where: { id: order.id },
-              data: { paidAmount: newPaid, status: newStatus },
-            });
-          }
-        }
-        // 5. Direct ServiceAct Settlement
-        else if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
-          const act = await tx.serviceAct.findFirst({
-            where: { id: dto.sourceDocId, tenantId },
-          });
-          if (act) {
-            const newPaid = Number(act.paidAmount) + Number(dto.amount);
-            const total = Number(act.totalAmount);
-            const paymentStatus =
-              newPaid >= total
-                ? ServicePaymentStatus.PAID
-                : newPaid > 0
-                ? ServicePaymentStatus.PARTIALLY_PAID
-                : ServicePaymentStatus.UNPAID;
-
-            await tx.serviceAct.update({
-              where: { id: act.id },
-              data: { paidAmount: newPaid, paymentStatus },
-            });
-          }
-        }
-        // 6. FIFO Auto-Allocation across open unpaid/partially-paid sales invoices
-        else if (!dto.sourceDocId) {
-          const openInvoices = await tx.salesInvoice.findMany({
-            where: {
-              tenantId,
-              counterpartyId: dto.counterpartyId,
-              currency: dto.currency,
-              status: SalesDocStatus.POSTED,
-              paymentStatus: {
-                in: [SalesPaymentStatus.UNPAID, SalesPaymentStatus.PARTIALLY_PAID],
-              },
-            },
-            orderBy: { invoiceDate: 'asc' },
-          });
-
-          let remainingPayment = Number(dto.amount);
-          for (const invoice of openInvoices) {
-            if (remainingPayment <= 0) break;
-            const remainingDebt =
-              Number(invoice.totalAmount) - Number(invoice.paidAmount);
-            const allocate = Math.min(remainingDebt, remainingPayment);
-            const newPaid = Number(invoice.paidAmount) + allocate;
-            const paymentStatus =
-              newPaid >= Number(invoice.totalAmount)
-                ? SalesPaymentStatus.PAID
-                : SalesPaymentStatus.PARTIALLY_PAID;
-
-            await tx.salesInvoice.update({
-              where: { id: invoice.id },
-              data: { paidAmount: newPaid, paymentStatus },
-            });
-            remainingPayment -= allocate;
-          }
-        }
       }
 
       return transaction;
     });
-
-    return tx;
   }
 
   // ─── Create Expense ───────────────────────────────────────────
@@ -583,7 +482,13 @@ export class FinanceService {
       );
     }
 
-    const tx = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
+      const settlement = await this.resolveSettlementContext(
+        tx,
+        tenantId,
+        dto,
+        TransactionDirection.EXPENSE,
+      );
       const transaction = await tx.financeTransaction.create({
         data: {
           tenantId,
@@ -592,10 +497,9 @@ export class FinanceService {
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
-          transactionDate: dto.transactionDate
-            ? new Date(dto.transactionDate)
-            : new Date(),
+          transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
           counterpartyId: dto.counterpartyId,
+          settlementSide: settlement?.side ?? null,
           transactionTypeId: dto.transactionTypeId,
           comment: dto.comment,
           sourceDocType: dto.sourceDocType,
@@ -606,115 +510,418 @@ export class FinanceService {
         include: { account: true, counterparty: true, transactionType: true },
       });
 
-      // 1. Update account balance (decrease)
       await tx.cashAccount.update({
         where: { id: dto.accountId },
         data: { balance: { decrement: dto.amount } },
       });
 
-      // 2. Update counterparty supplier debt
-      if (dto.counterpartyId) {
-        await tx.counterparty.update({
-          where: { id: dto.counterpartyId },
-          data: {
-            supplierDebt: { decrement: dto.amount },
-            debtBalance: { decrement: dto.amount },
-          },
+      if (settlement?.side) {
+        if (settlement.targetType && settlement.targetId) {
+          await this.allocateAndUpdateTarget(
+            tx,
+            transaction,
+            settlement,
+            tenantId,
+            dto.counterpartyId!,
+            dto.amount,
+          );
+        } else if (!dto.sourceDocId && settlement.side === CounterpartySettlementSide.SUPPLIER) {
+          await this.allocateExpenseFifo(tx, tenantId, transaction, dto.counterpartyId!, dto.amount, dto.currency);
+        } else if (this.settlementMovementAmount(TransactionDirection.EXPENSE, settlement.side, dto.amount) > 0) {
+          await this.assertCreditAvailable(tx, dto.counterpartyId!, dto.currency, settlement.side, dto.amount);
+        }
+
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: dto.counterpartyId!,
+          currency: dto.currency,
+          side: settlement.side,
+          amount: this.settlementMovementAmount(TransactionDirection.EXPENSE, settlement.side, dto.amount),
+          entryType: 'FINANCE_SETTLEMENT',
+          effectiveAt: transaction.transactionDate,
+          sourceDocType: 'FinanceTransaction',
+          sourceDocId: transaction.id,
+          idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT`,
         });
-        await tx.counterpartyBalance.upsert({
-          where: { counterpartyId_currency: { counterpartyId: dto.counterpartyId, currency: dto.currency } },
-          create: { tenantId, counterpartyId: dto.counterpartyId, currency: dto.currency, supplierDebt: -dto.amount },
-          update: { supplierDebt: { decrement: dto.amount } },
-        });
-
-        // 3. Direct Purchase Receipt Settlement
-        if (dto.sourceDocType === 'PurchaseReceipt' && dto.sourceDocId) {
-          const receipt = await tx.purchaseReceipt.findFirst({
-            where: { id: dto.sourceDocId, tenantId },
-          });
-          if (!receipt || receipt.counterpartyId !== dto.counterpartyId || receipt.currency !== dto.currency) {
-            throw new BadRequestException("To'lov xarid hujjatining kontragent va valyutasiga mos bo'lishi shart");
-          }
-          if (Number(receipt.paidAmount) + Number(dto.amount) > Number(receipt.totalAmount)) {
-            throw new BadRequestException("To'lov xarid hujjatining qolgan qarzidan oshishi mumkin emas");
-          }
-          {
-            const newPaid = Number(receipt.paidAmount) + Number(dto.amount);
-            const total = Number(receipt.totalAmount);
-            const paymentStatus =
-              newPaid >= total
-                ? PurchasePaymentStatus.PAID
-                : newPaid > 0
-                ? PurchasePaymentStatus.PARTIALLY_PAID
-                : PurchasePaymentStatus.UNPAID;
-
-            await tx.purchaseReceipt.update({
-              where: { id: receipt.id },
-              data: { paidAmount: newPaid, paymentStatus },
-            });
-          }
-        }
-        // 4. Direct ServiceAct Settlement (for RECEIVED services)
-        else if (dto.sourceDocType === 'ServiceAct' && dto.sourceDocId) {
-          const act = await tx.serviceAct.findFirst({
-            where: { id: dto.sourceDocId, tenantId },
-          });
-          if (act) {
-            const newPaid = Number(act.paidAmount) + Number(dto.amount);
-            const total = Number(act.totalAmount);
-            const paymentStatus =
-              newPaid >= total
-                ? ServicePaymentStatus.PAID
-                : newPaid > 0
-                ? ServicePaymentStatus.PARTIALLY_PAID
-                : ServicePaymentStatus.UNPAID;
-
-            await tx.serviceAct.update({
-              where: { id: act.id },
-              data: { paidAmount: newPaid, paymentStatus },
-            });
-          }
-        }
-        // 5. FIFO Auto-Allocation across open purchase receipts
-        else if (!dto.sourceDocId) {
-          const openReceipts = await tx.purchaseReceipt.findMany({
-            where: {
-              tenantId,
-              counterpartyId: dto.counterpartyId,
-              currency: dto.currency,
-              status: PurchaseDocStatus.POSTED,
-              paymentStatus: {
-                in: [PurchasePaymentStatus.UNPAID, PurchasePaymentStatus.PARTIALLY_PAID],
-              },
-            },
-            orderBy: { docDate: 'asc' },
-          });
-
-          let remainingPayment = Number(dto.amount);
-          for (const receipt of openReceipts) {
-            if (remainingPayment <= 0) break;
-            const remainingDebt =
-              Number(receipt.totalAmount) - Number(receipt.paidAmount);
-            const allocate = Math.min(remainingDebt, remainingPayment);
-            const newPaid = Number(receipt.paidAmount) + allocate;
-            const paymentStatus =
-              newPaid >= Number(receipt.totalAmount)
-                ? PurchasePaymentStatus.PAID
-                : PurchasePaymentStatus.PARTIALLY_PAID;
-
-            await tx.purchaseReceipt.update({
-              where: { id: receipt.id },
-              data: { paidAmount: newPaid, paymentStatus },
-            });
-            remainingPayment -= allocate;
-          }
-        }
       }
 
       return transaction;
     });
+  }
 
-    return tx;
+  private async updateSettlementTargetPaidAmount(
+    tx: Prisma.TransactionClient,
+    targetType: SettlementAllocationTarget,
+    targetId: string,
+    amount: number,
+    tenantId: string,
+  ) {
+    if (targetType === SettlementAllocationTarget.SALES_INVOICE) {
+      const invoice = await tx.salesInvoice.findFirst({ where: { id: targetId, tenantId } });
+      if (!invoice) throw new NotFoundException('Sales invoice settlement target not found');
+      const paidAmount = Math.max(0, Number(invoice.paidAmount) + amount);
+      const paymentStatus = paidAmount >= Number(invoice.totalAmount)
+        ? SalesPaymentStatus.PAID
+        : paidAmount > 0 ? SalesPaymentStatus.PARTIALLY_PAID : SalesPaymentStatus.UNPAID;
+      await tx.salesInvoice.update({ where: { id: targetId }, data: { paidAmount, paymentStatus } });
+      return;
+    }
+
+    if (targetType === SettlementAllocationTarget.SALES_ORDER) {
+      const order = await tx.salesOrder.findFirst({ where: { id: targetId, tenantId } });
+      if (!order) throw new NotFoundException('Sales order settlement target not found');
+      const paidAmount = Number(order.paidAmount) + amount;
+      let status = order.status;
+      if (status === 'AWAITING_PAYMENT') {
+        if (order.paymentCondition === 'PREPAID_100' && paidAmount >= Number(order.totalAmount)) {
+          status = 'PAYMENT_CONFIRMED';
+        } else if (order.paymentCondition === 'PARTIAL') {
+          const required = Number(order.requiredPaymentPercent) || 0;
+          if (paidAmount >= Number(order.totalAmount) * required / 100) status = 'PAYMENT_CONFIRMED';
+        }
+      }
+      await tx.salesOrder.update({ where: { id: targetId }, data: { paidAmount, status } });
+      return;
+    }
+
+    if (targetType === SettlementAllocationTarget.PURCHASE_RECEIPT) {
+      const receipt = await tx.purchaseReceipt.findFirst({ where: { id: targetId, tenantId } });
+      if (!receipt) throw new NotFoundException('Purchase receipt settlement target not found');
+      const paidAmount = Number(receipt.paidAmount) + amount;
+      const paymentStatus = paidAmount >= Number(receipt.totalAmount)
+        ? PurchasePaymentStatus.PAID
+        : paidAmount > 0 ? PurchasePaymentStatus.PARTIALLY_PAID : PurchasePaymentStatus.UNPAID;
+      await tx.purchaseReceipt.update({ where: { id: targetId }, data: { paidAmount, paymentStatus } });
+      return;
+    }
+
+    if (targetType === SettlementAllocationTarget.SERVICE_ACT) {
+      const act = await tx.serviceAct.findFirst({ where: { id: targetId, tenantId } });
+      if (!act) throw new NotFoundException('Service act settlement target not found');
+      const paidAmount = Number(act.paidAmount) + amount;
+      const paymentStatus = paidAmount >= Number(act.totalAmount)
+        ? ServicePaymentStatus.PAID
+        : paidAmount > 0 ? ServicePaymentStatus.PARTIALLY_PAID : ServicePaymentStatus.UNPAID;
+      await tx.serviceAct.update({ where: { id: targetId }, data: { paidAmount, paymentStatus } });
+      return;
+    }
+
+    if (targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE) {
+      const expense = await tx.additionalExpense.findFirst({ where: { id: targetId, tenantId } });
+      if (!expense) throw new NotFoundException('Additional expense settlement target not found');
+      const allocations = await tx.settlementAllocation.findMany({
+        where: { targetType, targetId },
+        select: { amount: true },
+      });
+      const allocatedAmount = allocations.reduce((sum, item) => sum + Number(item.amount), 0);
+      const isPaid = allocatedAmount >= Number(expense.amount) + Number(expense.vatAmount);
+      if (expense.isPaid !== isPaid) {
+        await tx.additionalExpense.update({ where: { id: targetId }, data: { isPaid } });
+      }
+    }
+  }
+
+  private settlementMovementAmount(
+    direction: SettlementDirection,
+    side: CounterpartySettlementSide,
+    amount: number,
+  ) {
+    const reducesObligation =
+      (direction === TransactionDirection.INCOME && side === CounterpartySettlementSide.CUSTOMER) ||
+      (direction === TransactionDirection.EXPENSE && side === CounterpartySettlementSide.SUPPLIER);
+    return reducesObligation ? -Number(amount) : Number(amount);
+  }
+
+  private async resolveSettlementContext(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    dto: CreateIncomeDto | CreateExpenseDto,
+    direction: SettlementDirection,
+  ): Promise<FinanceSettlementContext | null> {
+    if (!dto.counterpartyId) {
+      if (dto.settlementSide) throw new BadRequestException('Settlement side requires a counterparty');
+      return null;
+    }
+    const counterparty = await tx.counterparty.findFirst({
+      where: { id: dto.counterpartyId, tenantId },
+      select: { id: true },
+    });
+    if (!counterparty) throw new NotFoundException('Counterparty not found');
+
+    const sourceId = dto.sourceDocId;
+    const sourceType = dto.sourceDocType;
+    let side: CounterpartySettlementSide | undefined;
+    let targetType: SettlementAllocationTarget | undefined;
+    const ensureSource = (source: { counterpartyId: string; currency: string; status: string } | null, label: string) => {
+      if (!source || source.counterpartyId !== dto.counterpartyId || source.currency !== dto.currency) {
+        throw new BadRequestException(`${label} settlement source counterparty or currency does not match`);
+      }
+      if (source.status !== 'POSTED') throw new BadRequestException(`${label} must be posted before settlement`);
+    };
+
+    if (sourceType === 'SalesInvoice' && sourceId) {
+      const source = await tx.salesInvoice.findFirst({ where: { id: sourceId, tenantId } });
+      ensureSource(source, 'Sales invoice');
+      if (direction !== TransactionDirection.INCOME) throw new BadRequestException('Sales invoice requires customer income');
+      side = CounterpartySettlementSide.CUSTOMER;
+      targetType = SettlementAllocationTarget.SALES_INVOICE;
+    } else if (sourceType === 'SalesOrder' && sourceId) {
+      const source = await tx.salesOrder.findFirst({ where: { id: sourceId, tenantId } });
+      if (!source || source.counterpartyId !== dto.counterpartyId || source.currency !== dto.currency || source.status === 'CANCELLED') {
+        throw new BadRequestException('Sales order settlement source counterparty or currency does not match');
+      }
+      if (direction !== TransactionDirection.INCOME) throw new BadRequestException('Sales order requires customer income');
+      side = CounterpartySettlementSide.CUSTOMER;
+      targetType = SettlementAllocationTarget.SALES_ORDER;
+    } else if (sourceType === 'SalesReturn' && sourceId) {
+      const source = await tx.salesReturn.findFirst({ where: { id: sourceId, tenantId } });
+      ensureSource(source, 'Sales return');
+      if (direction !== TransactionDirection.EXPENSE) throw new BadRequestException('Sales return refund requires customer expense');
+      side = CounterpartySettlementSide.CUSTOMER;
+      targetType = SettlementAllocationTarget.SALES_RETURN;
+    } else if (sourceType === 'PurchaseReceipt' && sourceId) {
+      const source = await tx.purchaseReceipt.findFirst({ where: { id: sourceId, tenantId } });
+      ensureSource(source, 'Purchase receipt');
+      if (direction !== TransactionDirection.EXPENSE) throw new BadRequestException('Purchase receipt requires supplier expense');
+      side = CounterpartySettlementSide.SUPPLIER;
+      targetType = SettlementAllocationTarget.PURCHASE_RECEIPT;
+    } else if (sourceType === 'PurchaseReturn' && sourceId) {
+      const source = await tx.purchaseReturn.findFirst({ where: { id: sourceId, tenantId } });
+      ensureSource(source, 'Purchase return');
+      if (direction !== TransactionDirection.INCOME) throw new BadRequestException('Purchase return refund requires supplier income');
+      side = CounterpartySettlementSide.SUPPLIER;
+      targetType = SettlementAllocationTarget.PURCHASE_RETURN;
+    } else if (sourceType === 'ServiceAct' && sourceId) {
+      const source = await tx.serviceAct.findFirst({ where: { id: sourceId, tenantId } });
+      if (!source) throw new NotFoundException('Service act settlement source not found');
+      ensureSource(source, 'Service act');
+      side = source.type === 'PROVIDED'
+        ? CounterpartySettlementSide.CUSTOMER
+        : CounterpartySettlementSide.SUPPLIER;
+      const expectedDirection = source.type === 'PROVIDED'
+        ? TransactionDirection.INCOME
+        : TransactionDirection.EXPENSE;
+      if (direction !== expectedDirection) throw new BadRequestException('Service act settlement direction does not match its type');
+      targetType = SettlementAllocationTarget.SERVICE_ACT;
+    } else if (sourceType === 'AdditionalExpense' && sourceId) {
+      const source = await tx.additionalExpense.findFirst({ where: { id: sourceId, tenantId } });
+      if (!source) throw new NotFoundException('Additional expense settlement source not found');
+      ensureSource(source, 'Additional expense');
+      if (source.isPaid || direction !== TransactionDirection.EXPENSE) {
+        throw new BadRequestException('Additional expense is already paid or transaction direction is invalid');
+      }
+      side = CounterpartySettlementSide.SUPPLIER;
+      targetType = SettlementAllocationTarget.ADDITIONAL_EXPENSE;
+    }
+
+    if (side && dto.settlementSide && dto.settlementSide !== side) {
+      throw new BadRequestException('Settlement side conflicts with the linked source document');
+    }
+    side ??= dto.settlementSide;
+    if (!side || !Object.values(CounterpartySettlementSide).includes(side)) {
+      throw new BadRequestException('Choose whether this transaction settles a customer or supplier balance');
+    }
+    return { side, targetType, targetId: targetType ? sourceId : undefined };
+  }
+
+  private async assertCreditAvailable(
+    tx: Prisma.TransactionClient,
+    counterpartyId: string,
+    currency: string,
+    side: CounterpartySettlementSide,
+    amount: number,
+  ) {
+    const balance = await tx.counterpartyBalance.findUnique({
+      where: { counterpartyId_currency: { counterpartyId, currency } },
+      select: { customerDebt: true, supplierDebt: true },
+    });
+    const current = Number(side === CounterpartySettlementSide.CUSTOMER
+      ? balance?.customerDebt ?? 0
+      : balance?.supplierDebt ?? 0);
+    if (current > -Number(amount) + 0.000001) {
+      throw new BadRequestException('Refund exceeds the available counterparty advance in this currency');
+    }
+  }
+
+  private async allocateAndUpdateTarget(
+    tx: Prisma.TransactionClient,
+    transaction: { id: string },
+    settlement: FinanceSettlementContext,
+    tenantId: string,
+    counterpartyId: string,
+    amount: number,
+  ) {
+    if (!settlement.side || !settlement.targetType || !settlement.targetId) return;
+    await this.settlementAllocationService.recordAllocation(tx, {
+      tenantId,
+      counterpartyId,
+      financeTransactionId: transaction.id,
+      targetType: settlement.targetType,
+      targetId: settlement.targetId,
+      amount,
+      idempotencyKey: `FinanceTransaction:${transaction.id}:${settlement.targetType}:${settlement.targetId}`,
+    });
+
+    if (settlement.targetType === SettlementAllocationTarget.SALES_INVOICE) {
+      const invoice = await tx.salesInvoice.findFirst({ where: { id: settlement.targetId, tenantId } });
+      if (!invoice) throw new NotFoundException('Sales invoice settlement target not found');
+      const paidAmount = Number(invoice.paidAmount) + amount;
+      const paymentStatus = paidAmount >= Number(invoice.totalAmount)
+        ? SalesPaymentStatus.PAID
+        : paidAmount > 0 ? SalesPaymentStatus.PARTIALLY_PAID : SalesPaymentStatus.UNPAID;
+      await tx.salesInvoice.update({ where: { id: invoice.id }, data: { paidAmount, paymentStatus } });
+    } else if (settlement.targetType === SettlementAllocationTarget.SALES_ORDER) {
+      const order = await tx.salesOrder.findFirst({ where: { id: settlement.targetId, tenantId } });
+      if (!order) throw new NotFoundException('Sales order settlement target not found');
+      const paidAmount = Math.max(0, Number(order.paidAmount) + amount);
+      let status = order.status;
+      const total = Number(order.totalAmount);
+      const requiredAmount = order.paymentCondition === 'PREPAID_100'
+        ? total
+        : order.paymentCondition === 'PARTIAL'
+          ? total * Number(order.requiredPaymentPercent ?? 0) / 100
+          : 0;
+      if (status === 'AWAITING_PAYMENT' && paidAmount >= requiredAmount) {
+        status = 'PAYMENT_CONFIRMED';
+      } else if (status === 'PAYMENT_CONFIRMED' && paidAmount < requiredAmount) {
+        status = 'AWAITING_PAYMENT';
+      }
+      await tx.salesOrder.update({ where: { id: order.id }, data: { paidAmount, status } });
+    } else if (settlement.targetType === SettlementAllocationTarget.PURCHASE_RECEIPT) {
+      const receipt = await tx.purchaseReceipt.findFirst({ where: { id: settlement.targetId, tenantId } });
+      if (!receipt) throw new NotFoundException('Purchase receipt settlement target not found');
+      const paidAmount = Math.max(0, Number(receipt.paidAmount) + amount);
+      const paymentStatus = paidAmount >= Number(receipt.totalAmount)
+        ? PurchasePaymentStatus.PAID
+        : paidAmount > 0 ? PurchasePaymentStatus.PARTIALLY_PAID : PurchasePaymentStatus.UNPAID;
+      await tx.purchaseReceipt.update({ where: { id: receipt.id }, data: { paidAmount, paymentStatus } });
+    } else if (settlement.targetType === SettlementAllocationTarget.SERVICE_ACT) {
+      const act = await tx.serviceAct.findFirst({ where: { id: settlement.targetId, tenantId } });
+      if (!act) throw new NotFoundException('Service act settlement target not found');
+      const paidAmount = Math.max(0, Number(act.paidAmount) + amount);
+      const paymentStatus = paidAmount >= Number(act.totalAmount)
+        ? ServicePaymentStatus.PAID
+        : paidAmount > 0 ? ServicePaymentStatus.PARTIALLY_PAID : ServicePaymentStatus.UNPAID;
+      await tx.serviceAct.update({ where: { id: act.id }, data: { paidAmount, paymentStatus } });
+    } else if (settlement.targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE) {
+      const expense = await tx.additionalExpense.findFirst({ where: { id: settlement.targetId, tenantId } });
+      if (!expense) throw new NotFoundException('Additional expense settlement target not found');
+      const allocations = await tx.settlementAllocation.findMany({
+        where: { targetType: settlement.targetType, targetId: settlement.targetId },
+        select: { amount: true },
+      });
+      const paidAmount = allocations.reduce((sum, item) => sum + Number(item.amount), 0);
+      if (paidAmount >= Number(expense.amount) + Number(expense.vatAmount)) {
+        await tx.additionalExpense.update({ where: { id: expense.id }, data: { isPaid: true } });
+      }
+    }
+  }
+
+  private async allocateIncomeFifo(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    transaction: { id: string },
+    counterpartyId: string,
+    amount: number,
+    currency: string,
+  ) {
+    const [invoices, acts] = await Promise.all([
+      tx.salesInvoice.findMany({
+        where: { tenantId, counterpartyId, currency, status: SalesDocStatus.POSTED, paymentStatus: { in: [SalesPaymentStatus.UNPAID, SalesPaymentStatus.PARTIALLY_PAID] } },
+        orderBy: { invoiceDate: 'asc' },
+      }),
+      tx.serviceAct.findMany({
+        where: { tenantId, counterpartyId, currency, status: 'POSTED', type: ServiceActType.PROVIDED, paymentStatus: { in: [ServicePaymentStatus.UNPAID, ServicePaymentStatus.PARTIALLY_PAID] } },
+        orderBy: { actDate: 'asc' },
+      }),
+    ]);
+    const targets: FifoSettlementTarget[] = [
+      ...invoices.map((invoice) => ({
+        targetType: SettlementAllocationTarget.SALES_INVOICE,
+        targetId: invoice.id,
+        side: CounterpartySettlementSide.CUSTOMER,
+        effectiveAt: invoice.invoiceDate,
+        openAmount: Math.max(0, Number(invoice.totalAmount) - Number(invoice.paidAmount)),
+      })),
+      ...acts.map((act) => ({
+        targetType: SettlementAllocationTarget.SERVICE_ACT,
+        targetId: act.id,
+        side: CounterpartySettlementSide.CUSTOMER,
+        effectiveAt: act.actDate,
+        openAmount: Math.max(0, Number(act.totalAmount) - Number(act.paidAmount)),
+      })),
+    ].sort((left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime());
+    await this.allocateFifoTargets(tx, tenantId, transaction, counterpartyId, amount, targets);
+  }
+
+  private async allocateExpenseFifo(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    transaction: { id: string },
+    counterpartyId: string,
+    amount: number,
+    currency: string,
+  ) {
+    const [receipts, acts, expenses] = await Promise.all([
+      tx.purchaseReceipt.findMany({
+        where: { tenantId, counterpartyId, currency, status: PurchaseDocStatus.POSTED, paymentStatus: { in: [PurchasePaymentStatus.UNPAID, PurchasePaymentStatus.PARTIALLY_PAID] } },
+        orderBy: { docDate: 'asc' },
+      }),
+      tx.serviceAct.findMany({
+        where: { tenantId, counterpartyId, currency, status: 'POSTED', type: ServiceActType.RECEIVED, paymentStatus: { in: [ServicePaymentStatus.UNPAID, ServicePaymentStatus.PARTIALLY_PAID] } },
+        orderBy: { actDate: 'asc' },
+      }),
+      tx.additionalExpense.findMany({
+        where: { tenantId, counterpartyId, currency, status: PurchaseDocStatus.POSTED, isPaid: false },
+        orderBy: { docDate: 'asc' },
+      }),
+    ]);
+    const targets: FifoSettlementTarget[] = [
+      ...receipts.map((receipt) => ({
+        targetType: SettlementAllocationTarget.PURCHASE_RECEIPT,
+        targetId: receipt.id,
+        side: CounterpartySettlementSide.SUPPLIER,
+        effectiveAt: receipt.docDate,
+        openAmount: Math.max(0, Number(receipt.totalAmount) - Number(receipt.paidAmount)),
+      })),
+      ...acts.map((act) => ({
+        targetType: SettlementAllocationTarget.SERVICE_ACT,
+        targetId: act.id,
+        side: CounterpartySettlementSide.SUPPLIER,
+        effectiveAt: act.actDate,
+        openAmount: Math.max(0, Number(act.totalAmount) - Number(act.paidAmount)),
+      })),
+      ...expenses.map((expense) => ({
+        targetType: SettlementAllocationTarget.ADDITIONAL_EXPENSE,
+        targetId: expense.id,
+        side: CounterpartySettlementSide.SUPPLIER,
+        effectiveAt: expense.docDate,
+        openAmount: Math.max(0, Number(expense.amount) + Number(expense.vatAmount)),
+      })),
+    ].sort((left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime());
+    await this.allocateFifoTargets(tx, tenantId, transaction, counterpartyId, amount, targets);
+  }
+
+  private async allocateFifoTargets(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    transaction: { id: string },
+    counterpartyId: string,
+    amount: number,
+    targets: FifoSettlementTarget[],
+  ) {
+    let remaining = Number(amount);
+    for (const target of targets) {
+      if (remaining <= 0) break;
+      const allocate = Math.min(target.openAmount, remaining);
+      if (allocate <= 0) continue;
+      await this.allocateAndUpdateTarget(tx, transaction, {
+        side: target.side,
+        targetType: target.targetType,
+        targetId: target.targetId,
+      }, tenantId, counterpartyId, allocate);
+      remaining -= allocate;
+    }
   }
 
   // ─── Create Transfer ──────────────────────────────────────────
@@ -843,6 +1050,148 @@ export class FinanceService {
     );
   }
 
+  private async reverseCounterpartySettlement(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    transaction: Prisma.FinanceTransactionGetPayload<{
+      include: { account: true; transferToAccount: true };
+    }>,
+    amount: number,
+    isDeleted: boolean,
+  ) {
+    if (!transaction.counterpartyId) return;
+    if (!transaction.settlementSide) {
+      if (transaction.sourceDocType === 'AdditionalExpense') return;
+      throw new BadRequestException('Finance transaction settlement side is missing; reconcile it before reversal');
+    }
+
+    const originalEntry = await tx.counterpartySettlementEntry.findUnique({
+      where: { idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT` },
+    });
+    if (!originalEntry) {
+      throw new BadRequestException('Finance transaction has no settlement ledger entry; reconcile it before reversal');
+    }
+    const eventName = isDeleted ? 'DELETED' : 'CANCELLED';
+    const inverseAmount = -this.settlementMovementAmount(
+      transaction.direction as SettlementDirection,
+      transaction.settlementSide,
+      amount,
+    );
+    await this.settlementService.recordMovement(tx, {
+      tenantId,
+      counterpartyId: transaction.counterpartyId,
+      currency: transaction.currency,
+      side: transaction.settlementSide,
+      amount: inverseAmount,
+      entryType: `FINANCE_TRANSACTION_${eventName}`,
+      effectiveAt: new Date(),
+      sourceDocType: 'FinanceTransaction',
+      sourceDocId: transaction.id,
+      idempotencyKey: `FinanceTransaction:${transaction.id}:${eventName}`,
+      reversesEntryId: originalEntry.id,
+    });
+
+    const allocations = await tx.settlementAllocation.findMany({
+      where: { financeTransactionId: transaction.id },
+      select: {
+        id: true,
+        amount: true,
+        targetType: true,
+        targetId: true,
+        reversesAllocationId: true,
+      },
+    });
+    const reversedAllocationIds = new Set(
+      allocations
+        .map((allocation) => allocation.reversesAllocationId)
+        .filter((allocationId): allocationId is string => allocationId !== null),
+    );
+    const activeAllocations = allocations.filter(
+      (allocation) => Number(allocation.amount) > 0 && !allocation.reversesAllocationId && !reversedAllocationIds.has(allocation.id),
+    );
+
+    for (const allocation of activeAllocations) {
+      await this.settlementAllocationService.reverseAllocation(tx, {
+        tenantId,
+        allocationId: allocation.id,
+        idempotencyKey: `FinanceTransaction:${transaction.id}:${eventName}:ALLOCATION:${allocation.id}`,
+      });
+      await this.updateSettlementTargetPaidAmount(
+        tx,
+        allocation.targetType,
+        allocation.targetId,
+        -Number(allocation.amount),
+        tenantId,
+      );
+    }
+
+    if (activeAllocations.length === 0) {
+      await this.reverseLegacyDocumentAllocation(tx, tenantId, transaction, amount);
+    }
+
+    // Pre-dispatch payments remain linked to their SalesOrder even after the
+    // resulting invoice is allocated. Keep that order's collected amount in sync.
+    if (transaction.sourceDocType === 'PAYMENT' && transaction.sourceDocId) {
+      const payment = await tx.payment.findFirst({
+        where: { id: transaction.sourceDocId, tenantId },
+        select: { orderId: true },
+      });
+      if (payment?.orderId) {
+        await this.updateSettlementTargetPaidAmount(
+          tx,
+          SettlementAllocationTarget.SALES_ORDER,
+          payment.orderId,
+          -amount,
+          tenantId,
+        );
+      }
+    }
+  }
+
+  private async reverseLegacyDocumentAllocation(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    transaction: Prisma.FinanceTransactionGetPayload<{
+      include: { account: true; transferToAccount: true };
+    }>,
+    amount: number,
+  ) {
+    if (!transaction.sourceDocType || !transaction.sourceDocId) return;
+    const targetTypeBySource: Partial<Record<string, SettlementAllocationTarget>> = {
+      SalesInvoice: SettlementAllocationTarget.SALES_INVOICE,
+      SalesOrder: SettlementAllocationTarget.SALES_ORDER,
+      PurchaseReceipt: SettlementAllocationTarget.PURCHASE_RECEIPT,
+      ServiceAct: SettlementAllocationTarget.SERVICE_ACT,
+      AdditionalExpense: SettlementAllocationTarget.ADDITIONAL_EXPENSE,
+    };
+    const targetType = targetTypeBySource[transaction.sourceDocType];
+    if (targetType) {
+      await this.updateSettlementTargetPaidAmount(
+        tx,
+        targetType,
+        transaction.sourceDocId,
+        -amount,
+        tenantId,
+      );
+      return;
+    }
+    if (transaction.sourceDocType !== 'PAYMENT') return;
+
+    const payment = await tx.payment.findFirst({
+      where: { id: transaction.sourceDocId, tenantId },
+      select: { invoiceId: true, orderId: true },
+    });
+    if (payment?.invoiceId) {
+      await this.updateSettlementTargetPaidAmount(
+        tx,
+        SettlementAllocationTarget.SALES_INVOICE,
+        payment.invoiceId,
+        -amount,
+        tenantId,
+      );
+    }
+  }
+
   private async reversePostedTransaction(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -872,97 +1221,7 @@ export class FinanceService {
         });
       }
 
-      // Restore counterparty customer debt
-      if (existing.counterpartyId) {
-        await tx.counterparty.update({
-          where: { id: existing.counterpartyId },
-          data: {
-            customerDebt: { increment: amount },
-            debtBalance: { increment: amount },
-          },
-        });
-        await tx.counterpartyBalance.upsert({
-          where: {
-            counterpartyId_currency: {
-              counterpartyId: existing.counterpartyId,
-              currency: existing.currency,
-            },
-          },
-          create: {
-            tenantId,
-            counterpartyId: existing.counterpartyId,
-            currency: existing.currency,
-            customerDebt: amount,
-          },
-          update: { customerDebt: { increment: amount } },
-        });
-      }
-
-      // Revert SalesInvoice paidAmount
-      if (existing.sourceDocType === 'SalesInvoice' && existing.sourceDocId) {
-        const invoice = await tx.salesInvoice.findFirst({
-          where: { id: existing.sourceDocId, tenantId },
-        });
-        if (invoice) {
-          const newPaid = Math.max(0, Number(invoice.paidAmount) - amount);
-          const total = Number(invoice.totalAmount);
-          const paymentStatus =
-            newPaid <= 0
-              ? SalesPaymentStatus.UNPAID
-              : newPaid >= total
-                ? SalesPaymentStatus.PAID
-                : SalesPaymentStatus.PARTIALLY_PAID;
-          await tx.salesInvoice.update({
-            where: { id: invoice.id },
-            data: { paidAmount: newPaid, paymentStatus },
-          });
-        }
-      }
-      // Revert SalesOrder paidAmount
-      else if (existing.sourceDocType === 'SalesOrder' && existing.sourceDocId) {
-        const order = await tx.salesOrder.findFirst({
-          where: { id: existing.sourceDocId, tenantId },
-        });
-        if (order) {
-          const newPaid = Math.max(0, Number(order.paidAmount) - amount);
-          let newStatus = order.status;
-          if (order.status === 'PAYMENT_CONFIRMED') {
-            const total = Number(order.totalAmount);
-            if (order.paymentCondition === 'PREPAID_100' && newPaid < total) {
-              newStatus = 'AWAITING_PAYMENT';
-            } else if (order.paymentCondition === 'PARTIAL') {
-              const reqPercent = Number(order.requiredPaymentPercent || 50);
-              if (newPaid < (total * reqPercent) / 100) {
-                newStatus = 'AWAITING_PAYMENT';
-              }
-            }
-          }
-          await tx.salesOrder.update({
-            where: { id: order.id },
-            data: { paidAmount: newPaid, status: newStatus },
-          });
-        }
-      }
-      // Revert ServiceAct paidAmount
-      else if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
-        const act = await tx.serviceAct.findFirst({
-          where: { id: existing.sourceDocId, tenantId },
-        });
-        if (act) {
-          const newPaid = Math.max(0, Number(act.paidAmount) - amount);
-          const total = Number(act.totalAmount);
-          const paymentStatus =
-            newPaid <= 0
-              ? ServicePaymentStatus.UNPAID
-              : newPaid >= total
-                ? ServicePaymentStatus.PAID
-                : ServicePaymentStatus.PARTIALLY_PAID;
-          await tx.serviceAct.update({
-            where: { id: act.id },
-            data: { paidAmount: newPaid, paymentStatus },
-          });
-        }
-      }
+      await this.reverseCounterpartySettlement(tx, tenantId, existing, amount, isDeleted);
     } else if (existing.direction === TransactionDirection.EXPENSE) {
       // Return money to account
       if (existing.accountId) {
@@ -972,72 +1231,7 @@ export class FinanceService {
         });
       }
 
-      // Restore counterparty supplier debt
-      if (existing.counterpartyId) {
-        await tx.counterparty.update({
-          where: { id: existing.counterpartyId },
-          data: {
-            supplierDebt: { increment: amount },
-            debtBalance: { increment: amount },
-          },
-        });
-        await tx.counterpartyBalance.upsert({
-          where: {
-            counterpartyId_currency: {
-              counterpartyId: existing.counterpartyId,
-              currency: existing.currency,
-            },
-          },
-          create: {
-            tenantId,
-            counterpartyId: existing.counterpartyId,
-            currency: existing.currency,
-            supplierDebt: amount,
-          },
-          update: { supplierDebt: { increment: amount } },
-        });
-      }
-
-      // Revert PurchaseReceipt paidAmount
-      if (existing.sourceDocType === 'PurchaseReceipt' && existing.sourceDocId) {
-        const receipt = await tx.purchaseReceipt.findFirst({
-          where: { id: existing.sourceDocId, tenantId },
-        });
-        if (receipt) {
-          const newPaid = Math.max(0, Number(receipt.paidAmount) - amount);
-          const total = Number(receipt.totalAmount);
-          const paymentStatus =
-            newPaid <= 0
-              ? PurchasePaymentStatus.UNPAID
-              : newPaid >= total
-                ? PurchasePaymentStatus.PAID
-                : PurchasePaymentStatus.PARTIALLY_PAID;
-          await tx.purchaseReceipt.update({
-            where: { id: receipt.id },
-            data: { paidAmount: newPaid, paymentStatus },
-          });
-        }
-      }
-      // Revert ServiceAct paidAmount
-      else if (existing.sourceDocType === 'ServiceAct' && existing.sourceDocId) {
-        const act = await tx.serviceAct.findFirst({
-          where: { id: existing.sourceDocId, tenantId },
-        });
-        if (act) {
-          const newPaid = Math.max(0, Number(act.paidAmount) - amount);
-          const total = Number(act.totalAmount);
-          const paymentStatus =
-            newPaid <= 0
-              ? ServicePaymentStatus.UNPAID
-              : newPaid >= total
-                ? ServicePaymentStatus.PAID
-                : ServicePaymentStatus.PARTIALLY_PAID;
-          await tx.serviceAct.update({
-            where: { id: act.id },
-            data: { paidAmount: newPaid, paymentStatus },
-          });
-        }
-      }
+      await this.reverseCounterpartySettlement(tx, tenantId, existing, amount, isDeleted);
     } else if (existing.direction === TransactionDirection.TRANSFER) {
       const destinationAmount = Number(existing.transferToAmount ?? amount);
       if (existing.transferToId) {

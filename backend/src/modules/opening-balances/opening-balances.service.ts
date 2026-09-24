@@ -10,16 +10,39 @@ import {
   TransactionDirection,
   TransactionStatus,
   AccountType,
+  CounterpartySettlementSide,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateOpeningBalanceDto } from './dto/create-opening-balance.dto';
 import { UpdateOpeningBalanceLinesDto } from './dto/update-opening-balance.dto';
 import { OpeningBalanceLineDto } from './dto/opening-balance-line.dto';
 import { UnpostOpeningBalanceDto } from './dto/unpost-opening-balance.dto';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 
 @Injectable()
 export class OpeningBalancesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settlementService: CounterpartySettlementService,
+  ) {}
+
+  private getCounterpartyOpeningMovement(
+    category: OpeningBalanceCategory,
+    amount: number,
+  ): { side: CounterpartySettlementSide; amount: number } | null {
+    switch (category) {
+      case OpeningBalanceCategory.CUSTOMER_DEBT:
+        return { side: CounterpartySettlementSide.CUSTOMER, amount };
+      case OpeningBalanceCategory.CUSTOMER_ADVANCE:
+        return { side: CounterpartySettlementSide.CUSTOMER, amount: -amount };
+      case OpeningBalanceCategory.SUPPLIER_DEBT:
+        return { side: CounterpartySettlementSide.SUPPLIER, amount };
+      case OpeningBalanceCategory.SUPPLIER_ADVANCE:
+        return { side: CounterpartySettlementSide.SUPPLIER, amount: -amount };
+      default:
+        return null;
+    }
+  }
 
   // ─── Calculation Helper ──────────────────────────────────────────
 
@@ -460,48 +483,25 @@ export class OpeningBalancesService {
         }
       }
 
-      // 3. Process Customer Debt lines
+      // 3. Process opening receivables, payables, and advances by native currency.
       for (const line of doc.lines) {
-        if (
-          line.category === OpeningBalanceCategory.CUSTOMER_DEBT &&
-          line.counterpartyId
-        ) {
-          const amt = Number(line.amount);
-          await tx.counterparty.update({
-            where: { id: line.counterpartyId },
-            data: {
-              customerDebt: { increment: amt },
-              debtBalance: { increment: amt },
-            },
-          });
-          await tx.counterpartyBalance.upsert({
-            where: { counterpartyId_currency: { counterpartyId: line.counterpartyId, currency: line.currency } },
-            create: { tenantId, counterpartyId: line.counterpartyId, currency: line.currency, customerDebt: amt },
-            update: { customerDebt: { increment: amt } },
-          });
-        }
-      }
+        if (!line.counterpartyId) continue;
 
-      // 4. Process Supplier Debt lines
-      for (const line of doc.lines) {
-        if (
-          line.category === OpeningBalanceCategory.SUPPLIER_DEBT &&
-          line.counterpartyId
-        ) {
-          const amt = Number(line.amount);
-          await tx.counterparty.update({
-            where: { id: line.counterpartyId },
-            data: {
-              supplierDebt: { increment: amt },
-              debtBalance: { decrement: amt },
-            },
-          });
-          await tx.counterpartyBalance.upsert({
-            where: { counterpartyId_currency: { counterpartyId: line.counterpartyId, currency: line.currency } },
-            create: { tenantId, counterpartyId: line.counterpartyId, currency: line.currency, supplierDebt: amt },
-            update: { supplierDebt: { increment: amt } },
-          });
-        }
+        const settlement = this.getCounterpartyOpeningMovement(line.category, Number(line.amount));
+        if (!settlement) continue;
+
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: line.counterpartyId,
+          currency: line.currency,
+          side: settlement.side,
+          amount: settlement.amount,
+          entryType: 'OPENING_BALANCE_POSTED',
+          effectiveAt: doc.openingDate,
+          sourceDocType: 'OpeningBalanceLine',
+          sourceDocId: line.id,
+          idempotencyKey: `OpeningBalanceLine:${line.id}:POSTED:${doc.updatedAt.toISOString()}`,
+        });
       }
 
       // 5. Process Fixed Assets lines
@@ -765,41 +765,28 @@ export class OpeningBalancesService {
         }
       }
 
-      // 3. Revert Customer Debts
+      // 3. Reverse opening receivables, payables, and advances in the same currency.
       for (const line of doc.lines) {
-        if (
-          line.category === OpeningBalanceCategory.CUSTOMER_DEBT &&
-          line.counterpartyId
-        ) {
-          const amt = Number(line.amount);
-          await tx.counterparty.update({
-            where: { id: line.counterpartyId },
-            data: {
-              customerDebt: { decrement: amt },
-              debtBalance: { decrement: amt },
-            },
-          });
-        }
+        if (!line.counterpartyId) continue;
+
+        const settlement = this.getCounterpartyOpeningMovement(line.category, Number(line.amount));
+        if (!settlement) continue;
+
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: line.counterpartyId,
+          currency: line.currency,
+          side: settlement.side,
+          amount: -settlement.amount,
+          entryType: 'OPENING_BALANCE_UNPOSTED',
+          effectiveAt: doc.openingDate,
+          sourceDocType: 'OpeningBalanceLine',
+          sourceDocId: line.id,
+          idempotencyKey: `OpeningBalanceLine:${line.id}:UNPOSTED:${doc.updatedAt.toISOString()}`,
+        });
       }
 
-      // 4. Revert Supplier Debts
-      for (const line of doc.lines) {
-        if (
-          line.category === OpeningBalanceCategory.SUPPLIER_DEBT &&
-          line.counterpartyId
-        ) {
-          const amt = Number(line.amount);
-          await tx.counterparty.update({
-            where: { id: line.counterpartyId },
-            data: {
-              supplierDebt: { decrement: amt },
-              debtBalance: { increment: amt },
-            },
-          });
-        }
-      }
-
-      // 5. Delete Journal Entries
+      // 4. Delete Journal Entries
       const je = await tx.journalEntry.findFirst({
         where: {
           tenantId,

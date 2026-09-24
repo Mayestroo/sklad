@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ServicesService } from './services.service';
 import { PrismaService } from '../../common/prisma';
 import { JournalService } from '../accounting/journal/journal.service';
+import { CounterpartySettlementSide } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import {
   ServiceActStatus,
   ServicePaymentStatus,
@@ -13,11 +15,13 @@ describe('ServicesService Unit Tests', () => {
   let service: ServicesService;
   let prisma: any;
   let journalService: any;
+  let settlementService: { recordMovement: jest.Mock };
 
   const tenantId = 'test-tenant-uuid';
   const counterpartyId = 'test-cp-uuid';
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       serviceAct: {
         count: jest.fn(),
@@ -57,6 +61,7 @@ describe('ServicesService Unit Tests', () => {
         ServicesService,
         { provide: PrismaService, useValue: prisma },
         { provide: JournalService, useValue: journalService },
+        { provide: CounterpartySettlementService, useValue: settlementService },
       ],
     }).compile();
 
@@ -183,6 +188,8 @@ describe('ServicesService Unit Tests', () => {
         status: ServiceActStatus.DRAFT,
         totalAmount: 1000000,
         actDate: new Date('2026-10-15'),
+        currency: 'UZS',
+        updatedAt: new Date('2026-10-14T12:00:00.000Z'),
       });
       prisma.serviceAct.update.mockResolvedValue({
         id: 'act-1',
@@ -200,14 +207,15 @@ describe('ServicesService Unit Tests', () => {
         }),
       );
 
-      // Verify customer debt and positive debt balance were incremented
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          customerDebt: { increment: 1000000 },
-          debtBalance: { increment: 1000000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: 1000000,
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-1',
+      }));
 
       // Verify double-entry journal posting was called
       expect(journalService.autoPostServiceAct).toHaveBeenCalled();
@@ -222,6 +230,8 @@ describe('ServicesService Unit Tests', () => {
         status: ServiceActStatus.DRAFT,
         totalAmount: 500000,
         actDate: new Date('2026-10-15'),
+        currency: 'USD',
+        updatedAt: new Date('2026-10-14T12:00:00.000Z'),
       });
       prisma.serviceAct.update.mockResolvedValue({
         id: 'act-2',
@@ -232,14 +242,15 @@ describe('ServicesService Unit Tests', () => {
 
       await service.post(tenantId, 'act-2');
 
-      // Verify supplier debt incremented and debtBalance decremented
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { increment: 500000 },
-          debtBalance: { decrement: 500000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'USD',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 500000,
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-2',
+      }));
     });
 
     it('should throw BadRequestException if posting an already posted act', async () => {
@@ -312,6 +323,8 @@ describe('ServicesService Unit Tests', () => {
         status: ServiceActStatus.POSTED,
         paidAmount: 0,
         totalAmount: 1000000,
+        actDate: new Date('2026-10-15'),
+        currency: 'UZS',
       });
       prisma.financeTransaction.count.mockResolvedValue(0);
       prisma.serviceAct.update.mockResolvedValue({
@@ -321,13 +334,16 @@ describe('ServicesService Unit Tests', () => {
 
       await service.cancel(tenantId, 'act-1');
 
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          customerDebt: { decrement: 1000000 },
-          debtBalance: { decrement: 1000000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -1000000,
+        entryType: 'SERVICE_ACT_CANCELLED',
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-1',
+      }));
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
         where: {
@@ -352,6 +368,8 @@ describe('ServicesService Unit Tests', () => {
         status: ServiceActStatus.POSTED,
         paidAmount: 0,
         totalAmount: 500000,
+        actDate: new Date('2026-10-15'),
+        currency: 'USD',
       });
       prisma.financeTransaction.count.mockResolvedValue(0);
       prisma.serviceAct.update.mockResolvedValue({
@@ -361,13 +379,16 @@ describe('ServicesService Unit Tests', () => {
 
       await service.cancel(tenantId, 'act-2');
 
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { decrement: 500000 },
-          debtBalance: { increment: 500000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'USD',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -500000,
+        entryType: 'SERVICE_ACT_CANCELLED',
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-2',
+      }));
     });
   });
 
@@ -430,6 +451,9 @@ describe('ServicesService Unit Tests', () => {
         status: ServiceActStatus.POSTED,
         paidAmount: 0,
         totalAmount: 1000000,
+        actDate: new Date('2026-10-15'),
+        updatedAt: new Date('2026-10-14T12:00:00.000Z'),
+        currency: 'UZS',
         counterpartyId,
       });
       prisma.financeTransaction.count.mockResolvedValue(0);
@@ -440,13 +464,16 @@ describe('ServicesService Unit Tests', () => {
 
       const res = await service.unpost(tenantId, 'act-1');
 
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          customerDebt: { decrement: 1000000 },
-          debtBalance: { decrement: 1000000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -1000000,
+        entryType: 'SERVICE_ACT_UNPOSTED',
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-1',
+      }));
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
         where: {
@@ -471,6 +498,9 @@ describe('ServicesService Unit Tests', () => {
         status: ServiceActStatus.POSTED,
         paidAmount: 0,
         totalAmount: 500000,
+        actDate: new Date('2026-10-15'),
+        updatedAt: new Date('2026-10-14T12:00:00.000Z'),
+        currency: 'USD',
         counterpartyId,
       });
       prisma.financeTransaction.count.mockResolvedValue(0);
@@ -481,13 +511,16 @@ describe('ServicesService Unit Tests', () => {
 
       await service.unpost(tenantId, 'act-2');
 
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { decrement: 500000 },
-          debtBalance: { increment: 500000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'USD',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -500000,
+        entryType: 'SERVICE_ACT_UNPOSTED',
+        sourceDocType: 'ServiceAct',
+        sourceDocId: 'act-2',
+      }));
     });
   });
 });

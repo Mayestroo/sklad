@@ -156,7 +156,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   }, [counterpartyId, counterparties, mode]);
 
   // Drawer handlers
-  const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; debtBalance?: number }) => {
+  const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; balancesByCurrency?: CounterpartyDropdownItem['balancesByCurrency'] }) => {
     markDirty();
     setCounterparties((prev) => [newCustomer, ...prev]);
     setCounterpartyId(newCustomer.id);
@@ -612,11 +612,15 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const customerOptions: SelectOption[] = counterparties.map((c) => ({
     value: c.id,
     label: c.name,
-    description: c.phone
-      ? `${c.phone}${Number(c.debtBalance) > 0 ? ` · ${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, (c as any).currency || currency)}` : ''}`
-      : Number(c.debtBalance) > 0
-      ? `${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(Number(c.debtBalance), locale, (c as any).currency || currency)}`
-      : undefined,
+    description: (() => {
+      const balance = c.balancesByCurrency?.find((item) => item.currency === currency)?.customerDebt ?? 0;
+      const position = balance > 0
+        ? `${isRu ? 'Долг' : 'Qarz'}: ${formatCurrency(balance, locale, currency)}`
+        : balance < 0
+          ? `${isRu ? 'Аванс' : 'Avans'}: ${formatCurrency(Math.abs(balance), locale, currency)}`
+          : '';
+      return [c.phone, position].filter(Boolean).join(' · ') || undefined;
+    })(),
   }));
 
   const productOptions: SelectOption[] = products.map((p) => ({

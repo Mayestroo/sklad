@@ -20,9 +20,16 @@ export interface Counterparty {
   phone: string | null;
   email: string | null;
   address: string | null;
-  debtBalance: number;
+  balancesByCurrency?: CounterpartyBalanceByCurrency[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CounterpartyBalanceByCurrency {
+  currency: string;
+  customerDebt: number;
+  supplierDebt: number;
+  netBalance: number;
 }
 
 export interface SalesInvoiceItem {

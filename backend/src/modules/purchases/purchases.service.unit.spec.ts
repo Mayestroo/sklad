@@ -7,7 +7,10 @@ import {
   PurchasePaymentStatus,
   PurchaseReturnStatus,
   ReturnDocStatus,
+  CounterpartySettlementSide,
 } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import {
   ExpenseTypeDto,
   ExpenseAllocationMethodDto,
@@ -16,8 +19,12 @@ import {
 describe('PurchasesService Full Unit & Invariant Test Suite', () => {
   let service: PurchasesService;
   let prisma: any;
+  let settlementService: { recordMovement: jest.Mock };
+  let settlementAllocationService: { recordAllocation: jest.Mock };
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementAllocationService = { recordAllocation: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       purchaseReceipt: {
         count: jest.fn(),
@@ -36,6 +43,9 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       purchaseExpense: {
         create: jest.fn(),
         findMany: jest.fn(),
+      },
+      additionalExpense: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       purchaseReturn: {
         count: jest.fn(),
@@ -62,6 +72,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         count: jest.fn(),
         update: jest.fn(),
       },
+      counterpartyBalance: { findMany: jest.fn() },
       account: {
         findFirst: jest.fn(),
       },
@@ -76,6 +87,11 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       },
       financeTransaction: {
         findFirst: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+        create: jest.fn().mockResolvedValue({ id: 'finance-1' }),
+      },
+      settlementAllocation: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       auditLog: {
         create: jest.fn(),
@@ -87,6 +103,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       providers: [
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: settlementService },
+        { provide: SettlementAllocationService, useValue: settlementAllocationService },
       ],
     }).compile();
 
@@ -375,8 +393,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         tenantId: 'tenant-123',
         docNumber: 'PUR-2026-0005',
         docDate: new Date(),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         warehouseId: 'wh-1',
         counterpartyId: 'supp-1',
+        currency: 'UZS',
         status: PurchaseDocStatus.DRAFT,
         subtotalAmount: 1000000,
         discountAmount: 0,
@@ -432,14 +452,15 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         }),
       });
 
-      // 3. Supplier debt increased
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'supp-1' },
-        data: {
-          supplierDebt: { increment: 1170000 },
-          debtBalance: { increment: 1170000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId: 'tenant-123',
+        counterpartyId: 'supp-1',
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 1170000,
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: 'rec-post',
+      }));
 
       // 4. Double-entry BHMS journal entry created
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -453,8 +474,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         tenantId: 'tenant-123',
         docNumber: 'PUR-2026-0008',
         docDate: new Date(),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         warehouseId: 'wh-1',
         counterpartyId: 'supp-1',
+        currency: 'UZS',
         status: PurchaseDocStatus.DRAFT,
         subtotalAmount: 350000,
         discountAmount: 0,
@@ -545,6 +568,9 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         id: 'rec-unpost-mixed',
         tenantId: 'tenant-123',
         status: PurchaseDocStatus.POSTED,
+        docDate: new Date('2026-09-14'),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
+        currency: 'UZS',
         paidAmount: 0,
         paymentStatus: PurchasePaymentStatus.UNPAID,
         returnStatus: PurchaseReturnStatus.NONE,
@@ -613,14 +639,16 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         where: { receiptId: 'rec-unpost-mixed' },
       });
 
-      // Supplier debt reversed
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'supp-1' },
-        data: {
-          supplierDebt: { decrement: 392000 },
-          debtBalance: { decrement: 392000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId: 'tenant-123',
+        counterpartyId: 'supp-1',
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -392000,
+        entryType: 'PURCHASE_RECEIPT_UNPOSTED',
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: 'rec-unpost-mixed',
+      }));
 
       // Journal entries removed
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
@@ -645,9 +673,12 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 10 });
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
-      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-1',
+        counterpartyId: 'supp-1',
+        warehouseId: 'wh-1',
         status: PurchaseDocStatus.POSTED,
+        currency: 'UZS',
         totalAmount: 1000000,
         returns: [],
         items: [
@@ -682,10 +713,11 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.auditLog.create.mockResolvedValue({});
 
       await service.createReturn('tenant-123', 'user-1', {
-        receiptId: 'rec-1',
-        counterpartyId: 'supp-1',
-        warehouseId: 'wh-1',
-        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 100000 }],
+          receiptId: 'rec-1',
+          counterpartyId: 'supp-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [{ productId: 'prod-1', quantity: 2, unitPrice: 100000 }],
       });
 
       // Decremented stock by 2 (10 -> 8)
@@ -694,14 +726,16 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         data: { quantity: { decrement: 2 } },
       });
 
-      // Reduced supplier debt by 200,000
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'supp-1' },
-        data: {
-          supplierDebt: { decrement: 200000 },
-          debtBalance: { decrement: 200000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId: 'tenant-123',
+        counterpartyId: 'supp-1',
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -200000,
+        entryType: 'PURCHASE_RETURN_POSTED',
+        sourceDocType: 'PurchaseReturn',
+        sourceDocId: 'ret-1',
+      }));
 
       // Updated return status on receipt to PARTIALLY_RETURNED
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
@@ -786,8 +820,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.financeTransaction.findFirst.mockResolvedValue(null);
       prisma.purchaseReturn.findFirst.mockResolvedValue({
         id: 'ret-1',
+        returnDate: new Date('2026-09-14'),
         status: ReturnDocStatus.POSTED,
         counterpartyId: 'supp-1',
+        currency: 'UZS',
         warehouseId: 'wh-1',
         receiptId: 'rec-1',
         totalAmount: 200000,
@@ -811,13 +847,16 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       const result = await service.cancelReturn('tenant-123', 'user-1', 'ret-1');
       expect(result.status).toBe(ReturnDocStatus.CANCELLED);
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'supp-1' },
-        data: {
-          supplierDebt: { increment: 200000 },
-          debtBalance: { increment: 200000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId: 'tenant-123',
+        counterpartyId: 'supp-1',
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 200000,
+        entryType: 'PURCHASE_RETURN_CANCELLED',
+        sourceDocType: 'PurchaseReturn',
+        sourceDocId: 'ret-1',
+      }));
     });
 
     it('should create standalone return and consume FIFO batches', async () => {
@@ -934,10 +973,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         { totalAmount: 200, currency: 'USD' },
       ]);
 
-      // Mock suppliers with debt
-      (prisma.counterparty.findMany as jest.Mock).mockResolvedValue([
-        { id: 'supp-1', supplierDebt: 2000000, debtBalance: 2000000 },
-        { id: 'supp-2', supplierDebt: 500, debtBalance: 500 },
+      // Debt totals are based on the currency-specific settlement projection.
+      (prisma.counterpartyBalance.findMany as jest.Mock).mockResolvedValue([
+        { counterpartyId: 'supp-1', currency: 'UZS', supplierDebt: 2000000 },
+        { counterpartyId: 'supp-2', currency: 'USD', supplierDebt: 500 },
       ]);
       (prisma.counterparty.count as jest.Mock).mockResolvedValue(2);
 
@@ -960,6 +999,3 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
     });
   });
 });
-
-
-

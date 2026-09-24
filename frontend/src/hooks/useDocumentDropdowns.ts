@@ -8,7 +8,12 @@ export interface CounterpartyDropdownItem {
   id: string;
   name: string;
   phone?: string;
-  debtBalance?: number;
+  balancesByCurrency?: Array<{
+    currency: string;
+    customerDebt: number;
+    supplierDebt: number;
+    netBalance: number;
+  }>;
   type?: string;
   priceListId?: string | null;
   discountPercent?: number;

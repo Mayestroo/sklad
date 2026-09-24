@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { PrismaService } from '../../../common/prisma';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import {
   SalesDocStatus,
   SalesPaymentStatus,
@@ -12,8 +13,10 @@ import {
 describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
   let service: SalesInvoicesService;
   let prisma: any;
+  let settlementService: { recordMovement: jest.Mock };
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       salesInvoice: {
         count: jest.fn(),
@@ -76,6 +79,9 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       financeTransaction: {
         findMany: jest.fn(),
       },
+      settlementAllocation: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       priceList: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -98,6 +104,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       providers: [
         SalesInvoicesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: settlementService },
       ],
     }).compile();
 
@@ -308,8 +315,10 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         tenantId: 'tenant-1',
         invoiceNumber: 'INV-2026-0001',
         invoiceDate: new Date(),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         warehouseId: 'wh-1',
         counterpartyId: 'cust-1',
+        currency: 'UZS',
         status: SalesDocStatus.DRAFT,
         vatAmount: 0,
         totalAmount: 5000000, // 10 units @ 500,000 UZS
@@ -381,13 +390,19 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         data: { quantity: { decrement: 10 } },
       });
 
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'cust-1' },
-        data: {
-          customerDebt: { increment: 5000000 },
-          debtBalance: { increment: 5000000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: 'CUSTOMER',
+          amount: 5000000,
+          entryType: 'SALES_INVOICE_POSTED',
+          sourceDocType: 'SalesInvoice',
+          sourceDocId: 'inv-1',
+        }),
+      );
 
       expect(prisma.journalEntry.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -454,10 +469,13 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         id: 'inv-1',
         tenantId: 'tenant-1',
         status: SalesDocStatus.POSTED,
+        invoiceDate: new Date('2026-09-22T12:00:00.000Z'),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         paidAmount: 0,
         paymentStatus: SalesPaymentStatus.UNPAID,
         returnStatus: SalesReturnStatus.NONE,
         counterpartyId: 'cust-1',
+        currency: 'UZS',
         totalAmount: 5000000,
         warehouseId: 'wh-1',
         items: [{ productId: 'prod-1', quantity: 10 }],
@@ -500,13 +518,19 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           sourceDocId: 'inv-1',
         },
       });
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'cust-1' },
-        data: {
-          customerDebt: { decrement: 5000000 },
-          debtBalance: { decrement: 5000000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: 'CUSTOMER',
+          amount: -5000000,
+          entryType: 'SALES_INVOICE_UNPOSTED',
+          sourceDocType: 'SalesInvoice',
+          sourceDocId: 'inv-1',
+        }),
+      );
       expect(res.status).toBe(SalesDocStatus.DRAFT);
     });
   });
@@ -514,18 +538,29 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
   describe('4. Sales Returns (Qaytarishlar) at Historical Landed Cost', () => {
     it('should restore stock, create new batch with historical unitCogs, reduce debt, and generate reversal journal entries', async () => {
       prisma.salesReturn.count.mockResolvedValue(0);
-      prisma.salesInvoice.findUnique.mockResolvedValue({
+      const originalInvoice = {
         id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesDocStatus.POSTED,
         totalAmount: 5000000,
+        invoiceDate: new Date('2026-09-22T12:00:00.000Z'),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         items: [
           {
             productId: 'prod-1',
             quantity: 10,
+            totalPrice: 5000000,
+            vatAmount: 0,
             unitCogs: 340000, // Historical landed cost from sale
           },
         ],
         returns: [],
-      });
+      };
+      prisma.salesInvoice.findFirst.mockResolvedValue(originalInvoice);
+      prisma.salesInvoice.findUnique.mockResolvedValue(originalInvoice);
 
       prisma.account.findFirst.mockImplementation(({ where }: any) => ({
         id: `acc-${where.code}`,
@@ -581,13 +616,18 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       );
 
       // Counterparty debt reduced
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'cust-1' },
-        data: {
-          customerDebt: { decrement: 1000000 },
-          debtBalance: { decrement: 1000000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: 'CUSTOMER',
+          amount: -1000000,
+          entryType: 'SALES_RETURN_POSTED',
+          sourceDocType: 'SalesReturn',
+        }),
+      );
 
       // Parent invoice updated to PARTIALLY_RETURNED
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
@@ -639,6 +679,11 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
     it('should reject return if item quantity exceeds returnable quantity (Over-Return Invariant)', async () => {
       prisma.salesInvoice.findFirst.mockResolvedValue({
         id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesDocStatus.POSTED,
         totalAmount: 500000,
         items: [
           {
@@ -677,6 +722,11 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
     it('should create return in DRAFT status without altering stock or balances', async () => {
       prisma.salesInvoice.findFirst.mockResolvedValue({
         id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesDocStatus.POSTED,
         items: [{ productId: 'prod-1', quantity: 10, unitCogs: 50000 }],
         returns: [],
       });
@@ -743,10 +793,26 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       prisma.salesInvoice.findFirst.mockResolvedValue({
         id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-main',
+        currency: 'UZS',
+        exchangeRate: 1,
+        status: SalesDocStatus.POSTED,
         totalAmount: 500000,
         items: [
-          { productId: 'prod-1', quantity: 5 },
-          { productId: 'prod-2', quantity: 5 },
+          { productId: 'prod-1', quantity: 5, totalPrice: 250000, vatAmount: 0, unitCogs: 70000 },
+          { productId: 'prod-2', quantity: 5, totalPrice: 250000, vatAmount: 0, unitCogs: 70000 },
+        ],
+        returns: [],
+      });
+      prisma.salesInvoice.findUnique.mockResolvedValue({
+        id: 'inv-1',
+        currency: 'UZS',
+        exchangeRate: 1,
+        items: [
+          { productId: 'prod-1', quantity: 5, totalPrice: 250000, vatAmount: 0 },
+          { productId: 'prod-2', quantity: 5, totalPrice: 250000, vatAmount: 0 },
         ],
         returns: [],
       });
@@ -796,6 +862,24 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       await expect(
         service.cancelReturn('tenant-1', 'user-1', 'sret-posted-1'),
       ).rejects.toThrow('Rollback Guardrail');
+    });
+
+    it('should reject cancellation of a return with an active refund allocation', async () => {
+      prisma.salesReturn.findFirst.mockResolvedValue({
+        id: 'sret-posted-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        currency: 'USD',
+        status: SalesReturnDocStatus.POSTED,
+        totalAmount: 100,
+        items: [],
+      });
+      prisma.settlementAllocation.findMany.mockResolvedValue([{ amount: 100 }]);
+
+      await expect(
+        service.cancelReturn('tenant-1', 'user-1', 'sret-posted-1'),
+      ).rejects.toThrow('settlement allocation');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

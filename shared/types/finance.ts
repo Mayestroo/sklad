@@ -32,6 +32,7 @@ export interface FinanceTransaction {
   accountId?: string | null;
   transferToId?: string | null;
   counterpartyId?: string | null;
+  settlementSide?: 'CUSTOMER' | 'SUPPLIER' | null;
   transactionTypeId?: string | null;
   amount: number;
   currency: string;
@@ -87,6 +88,10 @@ export interface FinanceDashboardMetrics {
   debts: {
     receivables: number;
     payables: number;
+    receivablesByCurrency: Array<{ currency: string; amount: number }>;
+    payablesByCurrency: Array<{ currency: string; amount: number }>;
+    customerAdvancesByCurrency: Array<{ currency: string; amount: number }>;
+    supplierAdvancesByCurrency: Array<{ currency: string; amount: number }>;
   };
   accounts: CashAccount[];
 }
@@ -97,4 +102,3 @@ export interface TransactionJournal {
   limit: number;
   data: FinanceTransaction[];
 }
-

@@ -3,11 +3,12 @@ import { PurchasesController } from './purchases.controller';
 import { PurchasesService } from './purchases.service';
 import { AdditionalExpensesController } from './additional-expenses.controller';
 import { AdditionalExpensesService } from './additional-expenses.service';
+import { SettlementsModule } from '../settlements/settlements.module';
 
 @Module({
+  imports: [SettlementsModule],
   controllers: [PurchasesController, AdditionalExpensesController],
   providers: [PurchasesService, AdditionalExpensesService],
   exports: [PurchasesService, AdditionalExpensesService],
 })
 export class PurchasesModule {}
-

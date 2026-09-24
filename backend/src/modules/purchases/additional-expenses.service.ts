@@ -15,15 +15,20 @@ import {
   PurchaseDocStatus,
   ExpenseAllocationMethod,
   TransactionDirection,
+  CounterpartySettlementSide,
 } from '@prisma/client';
 
 import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 
 @Injectable()
 export class AdditionalExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settlementService: CounterpartySettlementService,
+  ) {}
 
   // ─── DOCUMENT NUMBER GENERATOR ──────────────────────────────
 
@@ -787,10 +792,18 @@ export class AdditionalExpensesService {
           },
         });
       } else {
-        // Increment supplier debt balance
-        await tx.counterparty.update({
-          where: { id: expense.counterpartyId },
-          data: { debtBalance: { increment: totalAmount } },
+        // Unpaid additional expenses accrue a supplier payable in their own currency.
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: expense.counterpartyId,
+          currency: expense.currency,
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: totalAmount,
+          entryType: 'ADDITIONAL_EXPENSE_POSTED',
+          effectiveAt: expense.docDate,
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: expense.id,
+          idempotencyKey: `AdditionalExpense:${expense.id}:POSTED`,
         });
       }
 
@@ -1049,9 +1062,17 @@ export class AdditionalExpensesService {
 
       // 2. Revert Supplier Debt if unpaid
       if (!expense.isPaid) {
-        await tx.counterparty.update({
-          where: { id: expense.counterpartyId },
-          data: { debtBalance: { decrement: totalAmount } },
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: expense.counterpartyId,
+          currency: expense.currency,
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -totalAmount,
+          entryType: 'ADDITIONAL_EXPENSE_CANCELLED',
+          effectiveAt: expense.docDate,
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: expense.id,
+          idempotencyKey: `AdditionalExpense:${expense.id}:CANCELLED`,
         });
       }
 

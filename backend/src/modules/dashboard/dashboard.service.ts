@@ -174,87 +174,72 @@ export class DashboardService {
   // ─── /api/dashboard/debts ────────────────────────────────────────
 
   async getDebts(tenantId: string) {
-    const [invoices, receipts] = await Promise.all([
-      this.prisma.salesInvoice.findMany({
-        where: { tenantId, status: 'POSTED' },
-        select: {
-          counterpartyId: true,
-          currency: true,
-          totalAmount: true,
-          paidAmount: true,
-          counterparty: { select: { name: true } },
-        },
-      }),
-      this.prisma.purchaseReceipt.findMany({
-        where: { tenantId, status: 'POSTED' },
-        select: {
-          counterpartyId: true,
-          currency: true,
-          totalAmount: true,
-          paidAmount: true,
-          counterparty: { select: { name: true } },
-        },
-      }),
-    ]);
+    const balances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId },
+      include: { counterparty: { select: { name: true } } },
+    });
 
     const debtors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
     const creditors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
-    const debtorsByCounterpartyCurrency = new Map<string, typeof debtors[number]>();
-    const creditorsByCounterpartyCurrency = new Map<string, typeof creditors[number]>();
-    for (const invoice of invoices) {
-      const amount = Number(invoice.totalAmount) - Number(invoice.paidAmount);
-      if (amount <= 0) continue;
-      const key = `${invoice.counterpartyId}:${invoice.currency}`;
-      const existing = debtorsByCounterpartyCurrency.get(key);
-      debtorsByCounterpartyCurrency.set(key, {
-        id: invoice.counterpartyId,
-        name: invoice.counterparty.name,
-        currency: invoice.currency,
-        amount: (existing?.amount ?? 0) + amount,
-      });
+    const debtorMap = new Map<string, typeof debtors[number]>();
+    const creditorMap = new Map<string, typeof creditors[number]>();
+    const receivableByCurr: Record<string, number> = {};
+    const payableByCurr: Record<string, number> = {};
+    const customerAdvancesByCurr: Record<string, number> = {};
+    const supplierAdvancesByCurr: Record<string, number> = {};
+    for (const balance of balances) {
+      const customerDebt = Number(balance.customerDebt);
+      const supplierDebt = Number(balance.supplierDebt);
+      const key = `${balance.counterpartyId}:${balance.currency}`;
+      if (customerDebt > 0) {
+        debtorMap.set(key, {
+          id: balance.counterpartyId,
+          name: balance.counterparty.name,
+          currency: balance.currency,
+          amount: customerDebt,
+        });
+        receivableByCurr[balance.currency] = (receivableByCurr[balance.currency] || 0) + customerDebt;
+      } else if (customerDebt < 0) {
+        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
+      }
+      if (supplierDebt > 0) {
+        creditorMap.set(key, {
+          id: balance.counterpartyId,
+          name: balance.counterparty.name,
+          currency: balance.currency,
+          amount: supplierDebt,
+        });
+        payableByCurr[balance.currency] = (payableByCurr[balance.currency] || 0) + supplierDebt;
+      } else if (supplierDebt < 0) {
+        supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
+      }
     }
-    for (const receipt of receipts) {
-      const amount = Number(receipt.totalAmount) - Number(receipt.paidAmount);
-      if (amount <= 0) continue;
-      const key = `${receipt.counterpartyId}:${receipt.currency}`;
-      const existing = creditorsByCounterpartyCurrency.get(key);
-      creditorsByCounterpartyCurrency.set(key, {
-        id: receipt.counterpartyId,
-        name: receipt.counterparty.name,
-        currency: receipt.currency,
-        amount: (existing?.amount ?? 0) + amount,
-      });
-    }
-    debtors.push(...debtorsByCounterpartyCurrency.values());
-    creditors.push(...creditorsByCounterpartyCurrency.values());
+    debtors.push(...debtorMap.values());
+    creditors.push(...creditorMap.values());
 
     debtors.sort((a, b) => b.amount - a.amount);
     creditors.sort((a, b) => b.amount - a.amount);
 
-    const receivableByCurr: Record<string, number> = {};
-    debtors.forEach((d) => {
-      receivableByCurr[d.currency] = (receivableByCurr[d.currency] || 0) + d.amount;
-    });
-
-    const payableByCurr: Record<string, number> = {};
-    creditors.forEach((c) => {
-      payableByCurr[c.currency] = (payableByCurr[c.currency] || 0) + c.amount;
-    });
-
     const receivableByCurrency = Object.entries(receivableByCurr).map(([currency, amount]) => ({ currency, amount }));
     const payableByCurrency = Object.entries(payableByCurr).map(([currency, amount]) => ({ currency, amount }));
+    const customerAdvancesByCurrency = Object.entries(customerAdvancesByCurr).map(([currency, amount]) => ({ currency, amount }));
+    const supplierAdvancesByCurrency = Object.entries(supplierAdvancesByCurr).map(([currency, amount]) => ({ currency, amount }));
+    const receivableTotal = receivableByCurrency.length === 1 ? receivableByCurrency[0].amount : 0;
+    const payableTotal = payableByCurrency.length === 1 ? payableByCurrency[0].amount : 0;
 
     return {
       receivable: {
-        total: 0,
+        total: receivableTotal,
         count: debtors.length,
         byCurrency: receivableByCurrency,
+        advancesByCurrency: customerAdvancesByCurrency,
         topDebtors: debtors.slice(0, 5),
       },
       payable: {
-        total: 0,
+        total: payableTotal,
         count: creditors.length,
         byCurrency: payableByCurrency,
+        advancesByCurrency: supplierAdvancesByCurrency,
         topCreditors: creditors.slice(0, 5),
       },
     };

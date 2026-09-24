@@ -20,13 +20,14 @@ interface SupplierProfileData {
     phone?: string;
     email?: string;
     address?: string;
-    debtBalance: number;
+    balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
   };
   metrics: {
     totalPurchased: number;
     totalPaid: number;
     totalReturned: number;
-    debtBalance: number;
+    balancesByCurrency: NonNullable<SupplierProfileData['supplier']['balancesByCurrency']>;
+    supplierAdvancesByCurrency: Array<{ currency: string; amount: number }>;
   };
   receipts: PurchaseReceipt[];
   returns: PurchaseReturn[];
@@ -140,16 +141,15 @@ export function SupplierProfileDrawer({
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
                       {isRu ? 'Наш долг' : 'Bizning Qarzimiz'}
                     </div>
-                    <div
-                      style={{
-                        fontSize: 'var(--text-xl)',
-                        fontWeight: 'var(--font-bold)',
-                        color: data.metrics.debtBalance > 0 ? 'var(--color-danger-600)' : 'var(--color-text-primary)',
-                      }}
-                      className="tabular-nums"
-                    >
-                      {formatCurrency(data.metrics.debtBalance, locale, supplierCurrency)}
-                    </div>
+                    {data.metrics.balancesByCurrency.filter((balance) => balance.supplierDebt !== 0).length > 0
+                      ? data.metrics.balancesByCurrency
+                          .filter((balance) => balance.supplierDebt !== 0)
+                          .map((balance) => (
+                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : '#2563eb' }} className="tabular-nums">
+                              {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
+                            </div>
+                          ))
+                      : <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>—</div>}
                   </div>
                 </div>
               );

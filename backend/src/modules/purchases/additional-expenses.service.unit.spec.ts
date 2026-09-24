@@ -6,11 +6,14 @@ import {
   ExpenseType,
   ExpenseAllocationMethod,
   PurchaseDocStatus,
+  CounterpartySettlementSide,
 } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 
 describe('AdditionalExpensesService Unit Tests', () => {
   let service: AdditionalExpensesService;
   let prisma: any;
+  let settlementService: { recordMovement: jest.Mock };
 
   const tenantId = 'tenant-123';
   const userId = 'user-123';
@@ -85,6 +88,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
   };
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       additionalExpense: {
         count: jest.fn().mockResolvedValue(0),
@@ -101,6 +105,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
       },
       purchaseReceipt: {
         findFirst: jest.fn().mockResolvedValue(mockReceipt),
+        update: jest.fn(),
+      },
+      purchaseReceiptItem: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
         update: jest.fn(),
       },
       productBatch: {
@@ -155,6 +163,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       providers: [
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: settlementService },
       ],
     }).compile();
 
@@ -306,6 +315,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         docDate: new Date(),
         status: PurchaseDocStatus.DRAFT,
         amount: 1000000,
+        currency: 'UZS',
         receiptId,
         isPaid: false,
         counterpartyId: 'carrier-1',
@@ -348,10 +358,16 @@ describe('AdditionalExpensesService Unit Tests', () => {
         where: { id: 'prod-iphone' },
         data: { costPrice: 1100000 },
       });
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'carrier-1' },
-        data: { debtBalance: { increment: 1000000 } },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId: 'carrier-1',
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 1000000,
+        entryType: 'ADDITIONAL_EXPENSE_POSTED',
+        sourceDocType: 'AdditionalExpense',
+        sourceDocId: 'exp-1',
+      }));
       expect(prisma.journalEntry.create).toHaveBeenCalled();
     });
 
@@ -363,6 +379,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         docDate: new Date(),
         status: PurchaseDocStatus.DRAFT,
         amount: 1000000,
+        currency: 'UZS',
         receiptId,
         isPaid: false,
         counterpartyId: 'carrier-1',

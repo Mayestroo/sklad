@@ -20,14 +20,22 @@ import {
   ExpenseAllocationMethod,
   ExpenseType,
   TransactionDirection,
+  CounterpartySettlementSide,
+  SettlementAllocationTarget,
 } from '@prisma/client';
 
 import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 
 @Injectable()
 export class PurchasesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settlementService: CounterpartySettlementService,
+    private readonly settlementAllocationService: SettlementAllocationService,
+  ) {}
 
   // ─── RECEIPT NUMBER GENERATOR ─────────────────────────────────
 
@@ -524,18 +532,18 @@ export class PurchasesService {
         }
       }
 
-      // 2. Increase supplier debt (in document currency)
-      await tx.counterparty.update({
-        where: { id: receipt.counterpartyId },
-        data: {
-          supplierDebt: { increment: Number(receipt.totalAmount) },
-          debtBalance: { increment: Number(receipt.totalAmount) },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: receipt.counterpartyId, currency: receipt.currency } },
-        create: { tenantId, counterpartyId: receipt.counterpartyId, currency: receipt.currency, supplierDebt: receipt.totalAmount },
-        update: { supplierDebt: { increment: receipt.totalAmount } },
+      // 2. Accrue supplier payable in the receipt's native currency.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: receipt.counterpartyId,
+        currency: receipt.currency,
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: Number(receipt.totalAmount),
+        entryType: 'PURCHASE_RECEIPT_POSTED',
+        effectiveAt: receipt.docDate,
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: receipt.id,
+        idempotencyKey: `PurchaseReceipt:${receipt.id}:POSTED:${receipt.updatedAt.toISOString()}`,
       });
 
       // 3. Accounting journal entries according to BHMS / NAS Standard
@@ -781,13 +789,18 @@ export class PurchasesService {
         where: { receiptId: id },
       });
 
-      // 2. Reduce supplier debt (in document currency)
-      await tx.counterparty.update({
-        where: { id: receipt.counterpartyId },
-        data: {
-          supplierDebt: { decrement: Number(receipt.totalAmount) },
-          debtBalance: { decrement: Number(receipt.totalAmount) },
-        },
+      // 2. Reverse the supplier payable without deleting its history.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: receipt.counterpartyId,
+        currency: receipt.currency,
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -Number(receipt.totalAmount),
+        entryType: 'PURCHASE_RECEIPT_UNPOSTED',
+        effectiveAt: receipt.docDate,
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: receipt.id,
+        idempotencyKey: `PurchaseReceipt:${receipt.id}:UNPOSTED:${receipt.updatedAt.toISOString()}`,
       });
 
       // 3. Remove journal entries
@@ -895,38 +908,19 @@ export class PurchasesService {
           ? PurchasePaymentStatus.PAID
           : PurchasePaymentStatus.PARTIALLY_PAID;
 
-      // 1. Update receipt paidAmount and paymentStatus
-      const updatedReceipt = await tx.purchaseReceipt.update({
-        where: { id },
-        data: {
-          paidAmount: newPaidAmount,
-          paymentStatus: newPaymentStatus,
-        },
-        include: { counterparty: true, warehouse: true },
-      });
-
-      // 2. Decrement CashAccount balance
+      // 1. Decrement CashAccount balance
       await tx.cashAccount.update({
         where: { id: dto.cashAccountId },
         data: { balance: { decrement: payAmount } },
       });
 
-      // 3. Decrease counterparty debt
-      await tx.counterparty.update({
-        where: { id: receipt.counterpartyId },
-        data: {
-          supplierDebt: { decrement: payAmount },
-          debtBalance: { decrement: payAmount },
-        },
-      });
-
-      // 4. Create Finance Transaction (EXPENSE)
+      // 2. Create Finance Transaction (EXPENSE)
       const txCount = await tx.financeTransaction.count({
         where: { tenantId },
       });
       const txNumber = `FT-${new Date().getFullYear()}-${(txCount + 1).toString().padStart(5, '0')}`;
 
-      await tx.financeTransaction.create({
+      const financeTransaction = await tx.financeTransaction.create({
         data: {
           tenantId,
           docNumber: txNumber,
@@ -934,6 +928,7 @@ export class PurchasesService {
           amount: payAmount,
           currency: cashAccount.currency,
           transactionDate: paymentDate,
+          settlementSide: CounterpartySettlementSide.SUPPLIER,
           comment:
             dto.note ||
             `Yetkazib beruvchiga to'lov: ${receipt.counterparty.name} (${receipt.docNumber})`,
@@ -943,6 +938,38 @@ export class PurchasesService {
           sourceDocId: receipt.id,
           createdById: userId,
         },
+      });
+
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: receipt.counterpartyId,
+        currency: receipt.currency,
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -payAmount,
+        entryType: 'FINANCE_SETTLEMENT',
+        effectiveAt: paymentDate,
+        sourceDocType: 'FinanceTransaction',
+        sourceDocId: financeTransaction.id,
+        idempotencyKey: `FinanceTransaction:${financeTransaction.id}:SETTLEMENT`,
+      });
+      await this.settlementAllocationService.recordAllocation(tx, {
+        tenantId,
+        counterpartyId: receipt.counterpartyId,
+        financeTransactionId: financeTransaction.id,
+        targetType: SettlementAllocationTarget.PURCHASE_RECEIPT,
+        targetId: receipt.id,
+        amount: payAmount,
+        idempotencyKey: `FinanceTransaction:${financeTransaction.id}:PurchaseReceipt:${receipt.id}`,
+      });
+
+      // 3. Update receipt paidAmount and paymentStatus after validating the allocation.
+      const updatedReceipt = await tx.purchaseReceipt.update({
+        where: { id },
+        data: {
+          paidAmount: newPaidAmount,
+          paymentStatus: newPaymentStatus,
+        },
+        include: { counterparty: true, warehouse: true },
       });
 
       // 5. Accounting Journal: Debit 6010 (Yetkazib beruvchiga qarz) / Credit 5010 (Kassa)
@@ -1532,18 +1559,18 @@ export class PurchasesService {
       }
     }
 
-    // 3. Reduce supplier debt by base purchase total + VAT
-    await tx.counterparty.update({
-      where: { id: counterpartyId },
-      data: {
-        supplierDebt: { decrement: basePurchaseTotalReduction },
-        debtBalance: { decrement: basePurchaseTotalReduction },
-      },
-    });
-    await tx.counterpartyBalance.upsert({
-      where: { counterpartyId_currency: { counterpartyId, currency: pReturn.currency } },
-      create: { tenantId, counterpartyId, currency: pReturn.currency, supplierDebt: -basePurchaseTotalReduction },
-      update: { supplierDebt: { decrement: basePurchaseTotalReduction } },
+    // 3. Reduce supplier payable in the purchase-return currency.
+    await this.settlementService.recordMovement(tx, {
+      tenantId,
+      counterpartyId,
+      currency: pReturn.currency,
+      side: CounterpartySettlementSide.SUPPLIER,
+      amount: -basePurchaseTotalReduction,
+      entryType: 'PURCHASE_RETURN_POSTED',
+      effectiveAt: pReturn.returnDate,
+      sourceDocType: 'PurchaseReturn',
+      sourceDocId: pReturn.id,
+      idempotencyKey: `PurchaseReturn:${pReturn.id}:POSTED`,
     });
 
     // 4. Update main receipt returnStatus if linked
@@ -1823,18 +1850,18 @@ export class PurchasesService {
           }
         }
 
-        // 3. Re-increase supplier debt (undo debt decrement)
-        await tx.counterparty.update({
-          where: { id: pReturn.counterpartyId },
-          data: {
-            supplierDebt: { increment: basePurchaseTotal },
-            debtBalance: { increment: basePurchaseTotal },
-          },
-        });
-        await tx.counterpartyBalance.upsert({
-          where: { counterpartyId_currency: { counterpartyId: pReturn.counterpartyId, currency: pReturn.currency } },
-          create: { tenantId, counterpartyId: pReturn.counterpartyId, currency: pReturn.currency, supplierDebt: basePurchaseTotal },
-          update: { supplierDebt: { increment: basePurchaseTotal } },
+        // 3. Reverse the supplier-balance effect without deleting history.
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: pReturn.counterpartyId,
+          currency: pReturn.currency,
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: basePurchaseTotal,
+          entryType: 'PURCHASE_RETURN_CANCELLED',
+          effectiveAt: pReturn.returnDate,
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: pReturn.id,
+          idempotencyKey: `PurchaseReturn:${pReturn.id}:CANCELLED`,
         });
 
         // 4. Update receipt returnStatus
@@ -2027,14 +2054,30 @@ export class PurchasesService {
       (sum, ret) => sum + Number(ret.totalAmount),
       0,
     );
+    const balances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId, counterpartyId: supplierId },
+      select: { currency: true, customerDebt: true, supplierDebt: true },
+      orderBy: { currency: 'asc' },
+    });
+    const balancesByCurrency = balances.map((balance) => ({
+      currency: balance.currency,
+      customerDebt: Number(balance.customerDebt),
+      supplierDebt: Number(balance.supplierDebt),
+      netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+    }));
+    const supplierAdvancesByCurrency = balancesByCurrency
+      .filter((balance) => balance.supplierDebt < 0)
+      .map((balance) => ({ currency: balance.currency, amount: Math.abs(balance.supplierDebt) }));
+    const { debtBalance: _legacyDebtBalance, customerDebt: _legacyCustomerDebt, supplierDebt: _legacySupplierDebt, ...supplierData } = supplier;
 
     return {
-      supplier,
+      supplier: { ...supplierData, balancesByCurrency },
       metrics: {
         totalPurchased,
         totalPaid,
         totalReturned,
-        debtBalance: Number(supplier.debtBalance),
+        balancesByCurrency,
+        supplierAdvancesByCurrency,
       },
       receipts,
       returns,
@@ -2068,64 +2111,30 @@ export class PurchasesService {
       amount,
     }));
 
-    const suppliers = await this.prisma.counterparty.findMany({
-      where: {
-        tenantId,
-        type: { in: ['SUPPLIER', 'BOTH'] },
-        OR: [
-          { supplierDebt: { gt: 0 } },
-          { debtBalance: { not: 0 } },
-        ],
-      },
-      select: {
-        supplierDebt: true,
-        debtBalance: true,
-      },
+    const settlementBalances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId },
+      select: { counterpartyId: true, currency: true, supplierDebt: true },
     });
-
-    let totalSupplierDebt = 0;
-    let suppliersWithDebtCount = 0;
-    for (const s of suppliers) {
-      const suppDebt = Number((s as any).supplierDebt || 0);
-      const rawDebt = Number(s.debtBalance || 0);
-      const debt = suppDebt > 0 ? suppDebt : Math.abs(rawDebt);
-      if (debt > 0) {
-        suppliersWithDebtCount++;
-        totalSupplierDebt += debt;
-      }
-    }
-
-    // Determine debt by currency from unpaid posted receipts
-    const unpaidReceipts = await this.prisma.purchaseReceipt.findMany({
-      where: {
-        tenantId,
-        status: PurchaseDocStatus.POSTED,
-        paymentStatus: { in: [PurchasePaymentStatus.UNPAID, PurchasePaymentStatus.PARTIALLY_PAID] },
-      },
-      select: {
-        totalAmount: true,
-        paidAmount: true,
-        currency: true,
-      },
-    });
-
     const debtByCurrMap: Record<string, number> = {};
-    for (const r of unpaidReceipts) {
-      const remaining = Number(r.totalAmount || 0) - Number(r.paidAmount || 0);
-      if (remaining > 0) {
-        const curr = r.currency || 'UZS';
-        debtByCurrMap[curr] = (debtByCurrMap[curr] || 0) + remaining;
+    const advancesByCurrMap: Record<string, number> = {};
+    const suppliersWithDebt = new Set<string>();
+    for (const balance of settlementBalances) {
+      const supplierDebt = Number(balance.supplierDebt);
+      if (supplierDebt > 0) {
+        debtByCurrMap[balance.currency] = (debtByCurrMap[balance.currency] || 0) + supplierDebt;
+        suppliersWithDebt.add(balance.counterpartyId);
+      } else if (supplierDebt < 0) {
+        advancesByCurrMap[balance.currency] = (advancesByCurrMap[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     }
 
-    let totalSupplierDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
+    const totalSupplierDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
       currency,
       amount,
     }));
-
-    if (totalSupplierDebtByCurrency.length === 0 && totalSupplierDebt > 0) {
-      totalSupplierDebtByCurrency = [{ currency: 'UZS', amount: totalSupplierDebt }];
-    }
+    const supplierAdvancesByCurrency = Object.entries(advancesByCurrMap).map(([currency, amount]) => ({ currency, amount }));
+    const totalSupplierDebt = totalSupplierDebtByCurrency.length === 1 ? totalSupplierDebtByCurrency[0].amount : 0;
+    const suppliersWithDebtCount = suppliersWithDebt.size;
 
     const monthlyReturns = await this.prisma.purchaseReturn.findMany({
       where: {
@@ -2166,6 +2175,7 @@ export class PurchasesService {
       currency: monthlyPurchasesByCurrency.length === 1 ? monthlyPurchasesByCurrency[0].currency : 'UZS',
       monthlyPurchasesByCurrency,
       totalSupplierDebtByCurrency,
+      supplierAdvancesByCurrency,
       monthlyReturnsByCurrency,
     };
   }

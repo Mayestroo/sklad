@@ -38,8 +38,8 @@ interface CounterpartyOption {
   id: string;
   name: string;
   type: string;
-  debtBalance?: number;
   currency?: string;
+  balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
 }
 
 interface WarehouseOption {
@@ -371,7 +371,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   );
 
   const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);
-  const currentSupplierDebt = Number(selectedSupplier?.debtBalance || 0);
+  const currentSupplierDebt = Number(selectedSupplier?.balancesByCurrency?.find((balance) => balance.currency === currency)?.supplierDebt || 0);
   const projectedSupplierDebt = currentSupplierDebt - totalAmount;
 
   // Submit Handler
@@ -507,9 +507,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   };
 
   const supplierSelectOptions: SelectOption[] = counterparties.map((c) => {
-    const debt = Number(c.debtBalance || 0);
-    const formattedDebt =
-      debt !== 0 ? formatCurrencyIfAvailable(debt, locale, currency, c.currency) : undefined;
+    const debt = Number(c.balancesByCurrency?.find((balance) => balance.currency === currency)?.supplierDebt || 0);
+    const formattedDebt = debt !== 0 ? formatCurrencyIfAvailable(debt, locale, currency) : undefined;
     return {
       value: c.id,
       label: `${c.name}${formattedDebt ? ` (${formattedDebt})` : ''}`,

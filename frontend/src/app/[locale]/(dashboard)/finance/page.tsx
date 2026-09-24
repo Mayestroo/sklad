@@ -115,6 +115,10 @@ export default function FinancePage() {
     'income' | 'expense' | 'transfer' | 'exchange' | null
   >(null);
   const [prefilledCounterpartyId, setPrefilledCounterpartyId] = useState<string | null>(null);
+  const [prefilledSettlement, setPrefilledSettlement] = useState<{
+    side: 'CUSTOMER' | 'SUPPLIER';
+    currency: string;
+  } | null>(null);
 
   // Edit / Storno Modal
   const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
@@ -189,9 +193,15 @@ export default function FinancePage() {
   }, [fetchData]);
 
   // Open transaction creation
-  const handleOpenDrawer = (mode: 'income' | 'expense' | 'transfer' | 'exchange', cpId?: string) => {
+  const handleOpenDrawer = (
+    mode: 'income' | 'expense' | 'transfer' | 'exchange',
+    cpId?: string,
+    side?: 'CUSTOMER' | 'SUPPLIER',
+    currency?: string,
+  ) => {
     setDrawerMode(mode);
     setPrefilledCounterpartyId(cpId || null);
+    setPrefilledSettlement(side && currency ? { side, currency } : null);
   };
 
   // Handle Edit Transaction
@@ -708,7 +718,7 @@ export default function FinancePage() {
                     {isRu ? 'Ожидаемые поступления (Дебиторка)' : 'Kutilayotgan tushumlar (Debitorlik)'}
                   </div>
                   <MultiCurrencyValue
-                    items={(dashboardMetrics?.debts as any)?.receivablesByCurrency}
+                    items={dashboardMetrics?.debts.receivablesByCurrency}
                     fallbackAmount={dashboardMetrics?.debts.receivables || 0}
                     fallbackCurrency={reportCurrency}
                     locale={locale}
@@ -717,6 +727,12 @@ export default function FinancePage() {
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Клиенты должны нам' : 'Mijozlar bizga to‘lashi kerak'}
                   </div>
+                  {(dashboardMetrics?.debts.customerAdvancesByCurrency.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 8, borderTop: '1px solid rgba(16, 185, 129, 0.18)', paddingTop: 6 }}>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы клиентов' : 'Mijozlar avansi'}</div>
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} color="#2563eb" />
+                    </div>
+                  )}
                 </div>
 
                 {/* To'lanishi kerak bo'lgan qarzlar */}
@@ -732,7 +748,7 @@ export default function FinancePage() {
                     {isRu ? 'К оплате поставщикам (Кредиторка)' : 'Bizning qarzlarimiz (Kreditorlik)'}
                   </div>
                   <MultiCurrencyValue
-                    items={(dashboardMetrics?.debts as any)?.payablesByCurrency}
+                    items={dashboardMetrics?.debts.payablesByCurrency}
                     fallbackAmount={dashboardMetrics?.debts.payables || 0}
                     fallbackCurrency={reportCurrency}
                     locale={locale}
@@ -741,6 +757,12 @@ export default function FinancePage() {
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Мы должны поставщикам' : 'Ta’minotchilarga to‘lashimiz kerak'}
                   </div>
+                  {(dashboardMetrics?.debts.supplierAdvancesByCurrency.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 8, borderTop: '1px solid rgba(239, 68, 68, 0.18)', paddingTop: 6 }}>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы поставщикам' : 'Ta’minotchilarga avanslar'}</div>
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} color="#2563eb" />
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
@@ -994,86 +1016,43 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {counterparties
-                  .filter((cp) => {
-                    const cDebt = Number(cp.customerDebt || 0);
-                    const sDebt = Number(cp.supplierDebt || 0);
-                    const raw = Number(cp.debtBalance || 0);
-                    if (debtsSubTab === 'receivables') {
-                      return cDebt > 0 || (cDebt === 0 && sDebt === 0 && raw > 0 && cp.type !== 'SUPPLIER');
-                    } else {
-                      return sDebt > 0 || (cDebt === 0 && sDebt === 0 && raw > 0 && cp.type === 'SUPPLIER');
-                    }
-                  })
-                  .map((cp) => {
-                    const cDebt = Number(cp.customerDebt || 0);
-                    const sDebt = Number(cp.supplierDebt || 0);
-                    const raw = Number(cp.debtBalance || 0);
-                    const displayDebt =
-                      debtsSubTab === 'receivables'
-                        ? cDebt > 0
-                          ? cDebt
-                          : raw
-                        : sDebt > 0
-                        ? sDebt
-                        : raw;
-
-                    return (
-                      <tr
-                        key={cp.id}
-                        style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
-                      >
-                        <td style={{ padding: '12px' }}>
-                          <span style={{ fontWeight: 600 }}>{cp.name}</span>
-                          {cp.inn && (
-                            <span
-                              style={{
-                                display: 'block',
-                                fontSize: 'var(--text-xs)',
-                                color: 'var(--color-text-tertiary)',
-                              }}
-                            >
-                              STIR: {cp.inn}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                          {cp.phone || '—'}
-                        </td>
-                        <td
-                          style={{
-                            padding: '12px',
-                            textAlign: 'right',
-                            fontWeight: 700,
-                            color: debtsSubTab === 'receivables' ? '#059669' : '#dc2626',
-                          }}
-                        >
-                          {formatCurrency(displayDebt, locale, cp.currency || (cp as any).purchaseReceipts?.[0]?.currency || (cp as any).salesInvoices?.[0]?.currency || reportCurrency)}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          {debtsSubTab === 'receivables' ? (
+                {counterparties.flatMap((cp) =>
+                  (cp.balancesByCurrency || [])
+                    .filter((balance: { customerDebt: number; supplierDebt: number }) =>
+                      debtsSubTab === 'receivables' ? balance.customerDebt > 0 : balance.supplierDebt > 0,
+                    )
+                    .map((balance: { currency: string; customerDebt: number; supplierDebt: number }) => {
+                      const settlementSide = debtsSubTab === 'receivables' ? 'CUSTOMER' : 'SUPPLIER';
+                      const amount = settlementSide === 'CUSTOMER' ? balance.customerDebt : balance.supplierDebt;
+                      return (
+                        <tr key={`${cp.id}:${balance.currency}`} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                          <td style={{ padding: '12px' }}>
+                            <span style={{ fontWeight: 600 }}>{cp.name}</span>
+                            {cp.inn && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>STIR: {cp.inn}</span>}
+                          </td>
+                          <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{cp.phone || '—'}</td>
+                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? '#059669' : '#dc2626' }}>
+                            {formatCurrency(amount, locale, balance.currency)}
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'center' }}>
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => handleOpenDrawer('income', cp.id)}
+                              onClick={() => handleOpenDrawer(
+                                debtsSubTab === 'receivables' ? 'income' : 'expense',
+                                cp.id,
+                                settlementSide,
+                                balance.currency,
+                              )}
                             >
-                              <Plus size={14} />
-                              <span>{isRu ? 'Приход' : 'Kirim'}</span>
+                              {debtsSubTab === 'receivables' ? <Plus size={14} /> : <Minus size={14} />}
+                              <span>{debtsSubTab === 'receivables' ? isRu ? 'Приход' : 'Kirim' : isRu ? 'Оплатить' : 'To‘lov'}</span>
                             </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleOpenDrawer('expense', cp.id)}
-                            >
-                              <Minus size={14} />
-                              <span>{isRu ? 'Оплатить' : 'To‘lov'}</span>
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                        </tr>
+                      );
+                    }),
+                )}
               </tbody>
             </table>
           </div>
@@ -1085,6 +1064,7 @@ export default function FinancePage() {
         <FinanceTransactionDrawer
           mode={drawerMode}
           prefilledCounterpartyId={prefilledCounterpartyId}
+          prefilledSettlement={prefilledSettlement}
           accounts={accounts}
           txTypes={txTypes}
           counterparties={counterparties}
@@ -1095,6 +1075,7 @@ export default function FinancePage() {
           onClose={() => {
             setDrawerMode(null);
             setPrefilledCounterpartyId(null);
+            setPrefilledSettlement(null);
           }}
           onSuccess={() => {
             fetchData();
@@ -1515,6 +1496,7 @@ function TransactionsTable({
 function FinanceTransactionDrawer({
   mode,
   prefilledCounterpartyId,
+  prefilledSettlement,
   accounts,
   txTypes,
   counterparties,
@@ -1527,6 +1509,7 @@ function FinanceTransactionDrawer({
 }: {
   mode: 'income' | 'expense' | 'transfer' | 'exchange';
   prefilledCounterpartyId?: string | null;
+  prefilledSettlement?: { side: 'CUSTOMER' | 'SUPPLIER'; currency: string } | null;
   accounts: CashAccount[];
   txTypes: TransactionType[];
   counterparties: any[];
@@ -1538,13 +1521,15 @@ function FinanceTransactionDrawer({
   onSuccess: () => void;
 }) {
   const isTransferOrExchange = mode === 'transfer' || mode === 'exchange';
+  const defaultCurrency = useDefaultCurrency();
+  const preferredAccount = accounts.find((account) => account.currency === prefilledSettlement?.currency);
 
-  const [accountId, setAccountId] = useState(accounts[0]?.id || '');
+  const [accountId, setAccountId] = useState(preferredAccount?.id || accounts[0]?.id || '');
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id || '');
   const [amount, setAmount] = useState('');
-  const defaultCurrency = useDefaultCurrency();
-  const [currency, setCurrency] = useState(defaultCurrency);
+  const [currency, setCurrency] = useState(prefilledSettlement?.currency || defaultCurrency);
   const [counterpartyId, setCounterpartyId] = useState(prefilledCounterpartyId || '');
+  const [settlementSide, setSettlementSide] = useState<'CUSTOMER' | 'SUPPLIER' | ''>(prefilledSettlement?.side || '');
   const [typeId, setTypeId] = useState('');
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1555,13 +1540,14 @@ function FinanceTransactionDrawer({
   const [targetAmount, setTargetAmount] = useState('');
 
   // Document linking fields
-  const [sourceDocType, setSourceDocType] = useState<string>('');
   const [sourceDocId, setSourceDocId] = useState<string>('');
   const [openDocuments, setOpenDocuments] = useState<any[]>([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const fromAccount = accounts.find((a) => a.id === accountId);
   const toAccount = accounts.find((a) => a.id === toAccountId);
+  const availableAccounts = isTransferOrExchange ? accounts : accounts.filter((account) => account.currency === currency);
+  const compatibleOpenDocuments = openDocuments.filter((document) => !fromAccount || document.currency === fromAccount.currency);
+  const settlementSideOptions: Array<'CUSTOMER' | 'SUPPLIER'> = ['CUSTOMER', 'SUPPLIER'];
   const isMultiCurrency = fromAccount && toAccount && fromAccount.currency !== toAccount.currency;
 
   // Sync currency with chosen account
@@ -1580,7 +1566,6 @@ function FinanceTransactionDrawer({
     }
 
     const fetchDocs = async () => {
-      setLoadingDocs(true);
       try {
         if (mode === 'income') {
           // Fetch open sales invoices
@@ -1607,8 +1592,6 @@ function FinanceTransactionDrawer({
         }
       } catch (e) {
         console.error('Failed to load open documents:', e);
-      } finally {
-        setLoadingDocs(false);
       }
     };
 
@@ -1620,6 +1603,15 @@ function FinanceTransactionDrawer({
     if (e) e.preventDefault();
     if (!amount || Number(amount) <= 0) {
       setError(isRu ? 'Введите корректную сумму' : 'Iltimos, to‘g‘ri summa kiriting');
+      return;
+    }
+
+    if (counterpartyId && !sourceDocId && !settlementSide) {
+      setError(
+        isRu
+          ? 'Выберите сторону взаиморасчёта: клиент или поставщик'
+          : 'Hisob-kitob tomonini tanlang: mijoz yoki ta’minotchi',
+      );
       return;
     }
 
@@ -1663,6 +1655,8 @@ function FinanceTransactionDrawer({
         if (sourceDocId) {
           body.sourceDocType = mode === 'income' ? 'SalesInvoice' : 'PurchaseReceipt';
           body.sourceDocId = sourceDocId;
+        } else if (counterpartyId) {
+          body.settlementSide = settlementSide;
         }
       }
 
@@ -1765,12 +1759,15 @@ function FinanceTransactionDrawer({
               ? 'Касса / Счёт'
               : 'Kassa / Hisob'
           }
-          options={accounts.map((a) => ({
+          options={availableAccounts.map((a) => ({
             value: a.id,
             label: `${(a.name as any)[locale] || a.name} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
           }))}
           value={accountId}
-          onChange={(val) => setAccountId(val)}
+           onChange={(val) => {
+             setAccountId(val);
+             setSourceDocId('');
+           }}
         />
 
         {/* Qayerga (Transfer uchun) */}
@@ -1865,31 +1862,35 @@ function FinanceTransactionDrawer({
         {!isTransferOrExchange && (
           <>
             <Select
-              label={
-                mode === 'income'
-                  ? isRu
-                    ? 'Клиент (Контрагент)'
-                    : 'Mijoz (Kontragent)'
-                  : isRu
-                  ? 'Поставщик (Контрагент)'
-                  : 'Ta’minotchi (Kontragent)'
-              }
+              label={isRu ? 'Контрагент' : 'Kontragent'}
               options={[
                 { value: '', label: isRu ? '— Не выбран (Прямой доход/расход) —' : '— Tanlanmagan —' },
-                ...counterparties
-                  .filter((cp) =>
-                    mode === 'income'
-                      ? cp.type === 'CUSTOMER' || cp.type === 'BOTH'
-                      : cp.type === 'SUPPLIER' || cp.type === 'BOTH',
-                  )
-                  .map((cp) => ({
-                    value: cp.id,
-                    label: cp.name,
-                  })),
+                ...counterparties.map((cp) => ({
+                  value: cp.id,
+                  label: cp.name,
+                })),
               ]}
               value={counterpartyId}
-              onChange={(val) => setCounterpartyId(val)}
+              onChange={(val) => {
+                setCounterpartyId(val);
+                setSettlementSide('');
+                setSourceDocId('');
+              }}
             />
+
+            {counterpartyId && !sourceDocId && (
+              <Select
+                label={isRu ? 'Сторона взаиморасчёта *' : 'Hisob-kitob tomoni *'}
+                options={settlementSideOptions.map((side) => ({
+                  value: side,
+                  label: side === 'CUSTOMER'
+                    ? isRu ? 'Клиентская задолженность' : 'Mijoz qarzdorligi'
+                    : isRu ? 'Задолженность поставщику' : 'Ta’minotchi qarzdorligi',
+                }))}
+                value={settlementSide}
+                onChange={(val) => setSettlementSide(val as 'CUSTOMER' | 'SUPPLIER' | '')}
+              />
+            )}
 
             {/* Bog'langan Hujjat */}
             {counterpartyId && (
@@ -1910,7 +1911,7 @@ function FinanceTransactionDrawer({
                       ? '— Авто-закрытие по FIFO (или Аванс) —'
                       : '— FIFO bo‘yicha avtomatik yopish (yoki Avans) —',
                   },
-                  ...openDocuments.map((doc) => {
+                  ...compatibleOpenDocuments.map((doc) => {
                     const remaining = Number(doc.totalAmount) - Number(doc.paidAmount);
                     return {
                       value: doc.id,
@@ -1919,7 +1920,10 @@ function FinanceTransactionDrawer({
                   }),
                 ]}
                 value={sourceDocId}
-                onChange={(val) => setSourceDocId(val)}
+                onChange={(val) => {
+                  setSourceDocId(val);
+                  if (val) setSettlementSide('');
+                }}
               />
             )}
 

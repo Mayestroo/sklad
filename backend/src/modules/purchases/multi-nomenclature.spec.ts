@@ -7,11 +7,16 @@ import {
   PurchasePaymentStatus,
   PurchaseReturnStatus,
   ProductType,
+  CounterpartySettlementSide,
 } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 
 describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Suite', () => {
   let service: PurchasesService;
   let prisma: any;
+  let settlementService: { recordMovement: jest.Mock };
+  let settlementAllocationService: { recordAllocation: jest.Mock };
 
   const tenantId = 'tenant-xyz';
   const userId = 'user-abc';
@@ -19,6 +24,8 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
   const counterpartyId = 'supplier-main';
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementAllocationService = { recordAllocation: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       purchaseReceipt: {
         count: jest.fn().mockResolvedValue(0),
@@ -37,6 +44,9 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       purchaseExpense: {
         create: jest.fn(),
         findMany: jest.fn(),
+      },
+      additionalExpense: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       purchaseReturn: {
         count: jest.fn().mockResolvedValue(0),
@@ -87,6 +97,8 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       providers: [
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: settlementService },
+        { provide: SettlementAllocationService, useValue: settlementAllocationService },
       ],
     }).compile();
 
@@ -154,8 +166,10 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         tenantId,
         docNumber: 'PUR-2026-0001',
         docDate: new Date('2026-09-14'),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         warehouseId,
         counterpartyId,
+        currency: 'UZS',
         status: PurchaseDocStatus.DRAFT,
         subtotalAmount: 7300000,
         discountAmount: 0,
@@ -256,14 +270,16 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         }),
       });
 
-      // 3. Supplier Debt invariant: consolidated debt increased by 8,140,000
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { increment: 8140000 },
-          debtBalance: { increment: 8140000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 8140000,
+        entryType: 'PURCHASE_RECEIPT_POSTED',
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: 'rec-hetero-1',
+      }));
 
       // 4. Double-Entry Accounting Invariant (BHMS NAS Standard)
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -286,6 +302,9 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         id: 'rec-hetero-1',
         tenantId,
         docNumber: 'PUR-2026-0001',
+        docDate: new Date('2026-09-14'),
+        updatedAt: new Date('2026-09-23T12:00:00.000Z'),
+        currency: 'UZS',
         status: PurchaseDocStatus.POSTED,
         paidAmount: 0,
         paymentStatus: PurchasePaymentStatus.UNPAID,
@@ -356,14 +375,16 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         where: { receiptId: 'rec-hetero-1' },
       });
 
-      // Supplier debt reversed
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { decrement: 8140000 },
-          debtBalance: { decrement: 8140000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -8140000,
+        entryType: 'PURCHASE_RECEIPT_UNPOSTED',
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: 'rec-hetero-1',
+      }));
 
       // Journal entries removed
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
@@ -412,8 +433,11 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       });
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
-      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-hetero-1',
+        counterpartyId,
+        warehouseId,
+        currency: 'UZS',
         status: PurchaseDocStatus.POSTED,
         totalAmount: 8140000,
         returns: [],
@@ -453,6 +477,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         receiptId: 'rec-hetero-1',
         counterpartyId,
         warehouseId,
+        currency: 'UZS',
         items: [{ productId: 'raw-alu', quantity: 10, unitPrice: 40000 }],
       });
 
@@ -462,14 +487,16 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         where: { id: 'stock-raw' },
         data: { quantity: { decrement: 10 } },
       });
-      // Supplier debt reduced by 400,000
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { decrement: 400000 },
-          debtBalance: { decrement: 400000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -400000,
+        entryType: 'PURCHASE_RETURN_POSTED',
+        sourceDocType: 'PurchaseReturn',
+        sourceDocId: 'ret-raw-1',
+      }));
     });
   });
 });
