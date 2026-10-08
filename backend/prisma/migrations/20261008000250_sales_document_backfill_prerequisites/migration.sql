@@ -1,0 +1,54 @@
+ALTER TABLE "sales_orders"
+ADD COLUMN IF NOT EXISTS "subtotal_amount" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "discount_amount" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "paid_amount" DECIMAL(15,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE "sales_order_items"
+ADD COLUMN IF NOT EXISTS "discount" DECIMAL(15,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE "sales_invoices"
+ADD COLUMN IF NOT EXISTS "exchange_rate" DECIMAL(15,4) NOT NULL DEFAULT 1,
+ADD COLUMN IF NOT EXISTS "discount_amount" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "total_cogs" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "gross_profit" DECIMAL(15,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE "sales_invoice_items"
+ADD COLUMN IF NOT EXISTS "discount" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "vat_rate" DECIMAL(5,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "unit_cogs" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "line_cogs" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "line_gross_profit" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "is_below_cost" BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS "sales_returns" (
+  "id" TEXT NOT NULL,
+  "tenant_id" TEXT NOT NULL,
+  "return_number" TEXT NOT NULL,
+  "return_date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "invoice_id" TEXT,
+  "counterparty_id" TEXT NOT NULL,
+  "warehouse_id" TEXT NOT NULL,
+  "defect_warehouse_id" TEXT,
+  "currency" TEXT NOT NULL DEFAULT 'UZS',
+  "reason" TEXT,
+  "status" "InvoiceStatus" NOT NULL DEFAULT 'DRAFT',
+  "total_amount" DECIMAL(15,2) NOT NULL DEFAULT 0,
+  "total_cogs" DECIMAL(15,2) NOT NULL DEFAULT 0,
+  "created_by_id" TEXT,
+  "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "sales_returns_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "sales_return_items" (
+  "id" TEXT NOT NULL,
+  "return_id" TEXT NOT NULL,
+  "product_id" TEXT NOT NULL,
+  "quantity" DECIMAL(15,3) NOT NULL,
+  "unit_price" DECIMAL(15,2) NOT NULL,
+  "total_price" DECIMAL(15,2) NOT NULL,
+  "unit_cogs" DECIMAL(15,2) NOT NULL DEFAULT 0,
+  "line_cogs" DECIMAL(15,2) NOT NULL DEFAULT 0,
+  "is_defective" BOOLEAN NOT NULL DEFAULT false,
+  CONSTRAINT "sales_return_items_pkey" PRIMARY KEY ("id")
+);
