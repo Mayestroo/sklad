@@ -4,8 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -32,7 +31,6 @@ import {
   Truck,
   DollarSign,
   Layers,
-  Clock,
   Sparkles,
   TrendingUp,
   TrendingDown,
@@ -48,6 +46,7 @@ import type {
 } from '@shared/types/opening-balances';
 
 type TabKey = 'cash' | 'inventory' | 'customers' | 'suppliers' | 'advances' | 'fixed-assets' | 'other';
+type OpeningBalanceDraftLine = Omit<Partial<OpeningBalanceLine>, 'exchangeRate'> & { exchangeRate?: number | string };
 
 export default function OpeningBalancesPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -59,8 +58,7 @@ export default function OpeningBalancesPage() {
   const [documents, setDocuments] = useState<OpeningBalanceDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [currentDoc, setCurrentDoc] = useState<OpeningBalanceDocument | null>(null);
-  const defaultCurrency = useDefaultCurrency();
-  const docCurrency = (currentDoc as any)?.currency || defaultCurrency;
+  const docCurrency = 'UZS';
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('cash');
@@ -73,7 +71,7 @@ export default function OpeningBalancesPage() {
   const [fixedAssets, setFixedAssets] = useState<any[]>([]);
 
   // Working Document Lines & State
-  const [lines, setLines] = useState<Array<Partial<OpeningBalanceLine>>>([]);
+  const [lines, setLines] = useState<OpeningBalanceDraftLine[]>([]);
   const [openingDate, setOpeningDate] = useState<string>('2026-10-01');
   const [notes, setNotes] = useState<string>('');
 
@@ -187,6 +185,7 @@ export default function OpeningBalancesPage() {
   // ─── Real-Time Client-Side Balance Metrics ──────────────────────
 
   const metrics: OpeningBalanceMetrics = useMemo(() => {
+    let hasValidCurrencyRates = true;
     let totalAssets = 0;
     let totalLiabilities = 0;
     let totalEquity = 0;
@@ -205,7 +204,12 @@ export default function OpeningBalancesPage() {
     };
 
     for (const line of lines) {
-      const amt = Number(line.amount || 0);
+      const rawAmount = Number(line.amount || 0);
+      const rate = line.currency === 'UZS' ? 1 : Number(line.exchangeRate);
+      const validRate = line.currency === 'UZS' || (line.currency === 'USD' && Number.isFinite(rate) && rate > 0);
+      if (!validRate) hasValidCurrencyRates = false;
+      const multiplier = validRate ? rate : 0;
+      const amt = rawAmount * multiplier;
       const cat = (line.category || 'CASH') as OpeningBalanceCategory;
       if (breakdown[cat] !== undefined) {
         breakdown[cat] += amt;
@@ -221,8 +225,10 @@ export default function OpeningBalancesPage() {
           totalAssets += amt;
           break;
         case 'FIXED_ASSET': {
-          const accDep = Number(line.accumulatedDepreciation || 0);
-          const net = Math.max(0, amt - accDep);
+          const accDep = Number(line.accumulatedDepreciation || 0) * multiplier;
+          const net = line.netAmount != null
+            ? Number(line.netAmount) * multiplier
+            : Math.max(0, amt - accDep);
           totalAssets += net;
           break;
         }
@@ -239,7 +245,7 @@ export default function OpeningBalancesPage() {
 
     const suggestedEquity = Math.max(0, totalAssets - totalLiabilities);
     const balanceDifference = Math.round((totalAssets - (totalLiabilities + totalEquity)) * 100) / 100;
-    const isBalanced = Math.abs(balanceDifference) < 0.01;
+    const isBalanced = hasValidCurrencyRates && Math.abs(balanceDifference) < 0.01;
 
     return {
       totalAssets: Math.round(totalAssets * 100) / 100,
@@ -248,11 +254,12 @@ export default function OpeningBalancesPage() {
       suggestedEquity: Math.round(suggestedEquity * 100) / 100,
       balanceDifference,
       isBalanced,
+      hasValidCurrencyRates,
       categoryBreakdown: breakdown,
     };
   }, [lines]);
 
-  const isReadOnly = currentDoc?.status === 'POSTED';
+  const isReadOnly = currentDoc?.status === 'POSTED' || currentDoc?.status === 'CANCELLED';
 
   // ─── Actions & Handlers ────────────────────────────────────────
 
@@ -280,28 +287,12 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  const handleSubmitForReview = async () => {
-    if (!token || !companyId || !selectedDocId) return;
-    setActionLoading(true);
-    try {
-      await apiFetch(`/opening-balances/${selectedDocId}/submit`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
-      toast.success(isRu ? 'Документ отправлен на проверку' : 'Hujjat tekshirishga muvaffaqiyatli yuborildi');
-      loadDocuments();
-      loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка отправки' : 'Tekshirishga yuborishda xatolik'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handlePost = async () => {
     if (!token || !companyId || !selectedDocId) return;
+    if (!metrics.hasValidCurrencyRates) {
+      toast.error(isRu ? 'Введите положительный курс для каждой USD-строки' : 'Har bir USD qatori uchun 0 dan katta kursni kiriting');
+      return;
+    }
     if (!metrics.isBalanced) {
       toast.error(
         isRu
@@ -503,7 +494,11 @@ export default function OpeningBalancesPage() {
     if (isReadOnly) return;
     setLines((prev) => {
       const updated = [...prev];
-      const target = { ...updated[index], [field]: value };
+      const target: OpeningBalanceDraftLine = { ...updated[index], [field]: value };
+
+      if (field === 'currency') {
+        target.exchangeRate = value === 'UZS' ? 1 : '';
+      }
 
       if (target.category === 'INVENTORY' && (field === 'quantity' || field === 'unitCost')) {
         const q = Number(field === 'quantity' ? value : target.quantity || 0);
@@ -896,19 +891,6 @@ export default function OpeningBalancesPage() {
                   <Save size={14} />
                   <span>{actionLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}</span>
                 </Button>
-
-                {currentDoc.status === 'DRAFT' && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleSubmitForReview}
-                    disabled={actionLoading}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Clock size={14} />
-                    <span>{isRu ? 'На проверку' : 'Tekshirishga'}</span>
-                  </Button>
-                )}
 
                 <Button
                   variant="primary"
@@ -1417,6 +1399,7 @@ function CashTable({
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>{isRu ? 'КАССА / РАСЧЕТНЫЙ СЧЕТ' : 'KASSA / HISOBRAQAM'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '90px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '130px' }}>{isRu ? 'КУРС К UZS' : 'UZS KURSI'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'НАЧАЛЬНЫЙ ОСТАТОК' : 'BOSHLANG‘ICH QOLDIQ'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
           {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
@@ -1425,7 +1408,7 @@ function CashTable({
       <tbody>
         {filtered.length === 0 ? (
           <tr>
-            <td colSpan={6} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <td colSpan={isReadOnly ? 6 : 7} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Нет добавленных счетов или касс' : 'Kassa yoki hisoblar qo‘shilmagan'}
             </td>
           </tr>
@@ -1464,6 +1447,23 @@ function CashTable({
                 <Badge variant="neutral">
                   {line.currency || 'USD'}
                 </Badge>
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                {line.currency === 'UZS' ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                ) : (
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="any"
+                    value={line.exchangeRate ?? ''}
+                    disabled={isReadOnly}
+                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
+                    placeholder="UZS/USD"
+                    aria-label={isRu ? 'Курс USD к UZS' : 'USD ning UZS kursi'}
+                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
+                  />
+                )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                 <input
@@ -1727,6 +1727,8 @@ function CounterpartyTable({
             {isCustomer ? (isRu ? 'КЛИЕНТ / ПОКУПАТЕЛЬ' : 'MIJOZ / XARIDOR') : isRu ? 'ПОСТАВЩИК' : 'YETKAZIB BERUVCHI'}
           </th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '160px' }}>{isRu ? 'ДОГОВОР №' : 'SHARTNOMA №'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '100px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '130px' }}>{isRu ? 'КУРС К UZS' : 'UZS KURSI'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>
             {isCustomer ? (isRu ? 'СУММА ДОЛГА (ДЕБИТОР)' : 'QARZ SUMMASI (DEBITOR)') : isRu ? 'НАШ ДОЛГ (КРЕДИТОР)' : 'QARZIMIZ (KREDITOR)'}
           </th>
@@ -1737,7 +1739,7 @@ function CounterpartyTable({
       <tbody>
         {filtered.length === 0 ? (
           <tr>
-            <td colSpan={6} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <td colSpan={isReadOnly ? 7 : 8} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Нет добавленных контрагентов' : 'Kontragentlar qo‘shilmagan'}
             </td>
           </tr>
@@ -1782,6 +1784,33 @@ function CounterpartyTable({
                     fontSize: 'var(--text-sm)',
                   }}
                 />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <Select
+                  options={CURRENCY_OPTIONS}
+                  value={line.currency || 'UZS'}
+                  disabled={isReadOnly}
+                  onChange={(currency) => {
+                    onUpdate(index, 'currency', currency);
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                {line.currency === 'UZS' || !line.currency ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                ) : (
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="any"
+                    value={line.exchangeRate ?? ''}
+                    disabled={isReadOnly}
+                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
+                    placeholder="UZS/USD"
+                    aria-label={isRu ? 'Курс валюты к UZS' : 'Valyutaning UZS kursi'}
+                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
+                  />
+                )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                 <input
@@ -1868,6 +1897,8 @@ function AdvancesTable({
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '220px' }}>{isRu ? 'ТИП АВАНСА' : 'AVANS TURI'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>{isRu ? 'КОНТРАГЕНТ' : 'KONTRAGENT'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '100px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '130px' }}>{isRu ? 'КУРС К UZS' : 'UZS KURSI'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'СУММА АВАНСА' : 'AVANS SUMMASI'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
           {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
@@ -1876,7 +1907,7 @@ function AdvancesTable({
       <tbody>
         {filtered.length === 0 ? (
           <tr>
-            <td colSpan={6} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <td colSpan={isReadOnly ? 7 : 8} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Нет добавленных авансов' : 'Avanslar qo‘shilmagan'}
             </td>
           </tr>
@@ -1915,6 +1946,33 @@ function AdvancesTable({
                     })),
                   ]}
                 />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                <Select
+                  options={CURRENCY_OPTIONS}
+                  value={line.currency || 'UZS'}
+                  disabled={isReadOnly}
+                  onChange={(currency) => {
+                    onUpdate(index, 'currency', currency);
+                  }}
+                />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                {line.currency === 'UZS' || !line.currency ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                ) : (
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="any"
+                    value={line.exchangeRate ?? ''}
+                    disabled={isReadOnly}
+                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
+                    placeholder="UZS/USD"
+                    aria-label={isRu ? 'Курс валюты к UZS' : 'Valyutaning UZS kursi'}
+                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
+                  />
+                )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                 <input

@@ -12,6 +12,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { convertCostPriceToDocumentCurrency } from '@/lib/inventory-cost';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -64,6 +65,8 @@ interface ProductOption {
   sku: string;
   barcode?: string;
   costPrice: number;
+  costPriceCurrency?: 'USD' | 'UZS';
+  costPriceExchangeRate?: number;
   unitOfMeasure?: string;
   type?: string;
 }
@@ -184,6 +187,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       sku: string;
       barcode?: string;
       costPrice: number;
+      costPriceCurrency?: 'USD' | 'UZS';
+      costPriceExchangeRate?: number;
       salePrice?: number;
       unitOfMeasure?: string;
     },
@@ -193,7 +198,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     setProducts((prev) => [newProduct, ...prev]);
 
     const qty = Number(initialQuantity) || 1;
-    const price = Number(newProduct.costPrice) || 0;
+    const price = convertCostPriceToDocumentCurrency(
+      Number(newProduct.costPrice) || 0,
+      newProduct.costPriceCurrency || 'UZS',
+      Number(newProduct.costPriceExchangeRate || 1),
+      currency || 'UZS',
+      Number(exchangeRate),
+    ) ?? 0;
 
     if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
       const targetIdx = activeRowIndexForNewProduct;
@@ -286,7 +297,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       if (field === 'productId') {
         const p = products.find((prod) => prod.id === value);
         if (p) {
-          next[index].unitPrice = Number(p.costPrice) || 0;
+          next[index].unitPrice = convertCostPriceToDocumentCurrency(
+            Number(p.costPrice) || 0,
+            p.costPriceCurrency || 'UZS',
+            Number(p.costPriceExchangeRate || 1),
+            currency || 'UZS',
+            Number(exchangeRate),
+          ) ?? 0;
         }
       }
       return next;
@@ -319,7 +336,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         } else {
           setItems((prev) => [
             ...prev,
-            { productId: matched.id, quantity: 1, unitPrice: Number(matched.costPrice) || 0, discount: 0, vatRate: 12 },
+            {
+              productId: matched.id,
+              quantity: 1,
+              unitPrice: convertCostPriceToDocumentCurrency(
+                Number(matched.costPrice) || 0,
+                matched.costPriceCurrency || 'UZS',
+                Number(matched.costPriceExchangeRate || 1),
+                currency || 'UZS',
+                Number(exchangeRate),
+              ) ?? 0,
+              discount: 0,
+              vatRate: 12,
+            },
           ]);
         }
       }

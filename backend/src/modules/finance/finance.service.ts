@@ -167,13 +167,30 @@ export class FinanceService {
     let dollarKassa = 0;
     let naqdKassa = 0;
     let hisobRaqam = 0;
+    const accountCurrencies = {
+      dollarKassa: 'USD',
+      naqdKassa: 'UZS',
+      hisobRaqam: 'UZS',
+    };
+    const liquidByCurrency = new Map<string, number>();
 
     for (const acc of accounts) {
       const bal = Number(acc.balance || 0);
-      if (acc.accountType === 'USD_CASH') dollarKassa += bal;
-      else if (acc.accountType === 'UZS_CASH') naqdKassa += bal;
-      else if (acc.accountType === 'BANK') hisobRaqam += bal;
+      if (acc.accountType === 'USD_CASH') {
+        dollarKassa += bal;
+        accountCurrencies.dollarKassa = acc.currency;
+      } else if (acc.accountType === 'UZS_CASH') {
+        naqdKassa += bal;
+        accountCurrencies.naqdKassa = acc.currency;
+      } else if (acc.accountType === 'BANK') {
+        hisobRaqam += bal;
+        accountCurrencies.hisobRaqam = acc.currency;
+      }
+      liquidByCurrency.set(acc.currency, (liquidByCurrency.get(acc.currency) ?? 0) + bal);
     }
+    const totalLiquidByCurrency = Array.from(liquidByCurrency)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([currency, amount]) => ({ currency, amount }));
 
     // Today's and Monthly transactions
     const txs = await this.prisma.financeTransaction.findMany({
@@ -191,27 +208,46 @@ export class FinanceService {
       },
     });
 
-    let todayIncomeUZS = 0;
-    let todayExpenseUZS = 0;
-    let monthIncomeUZS = 0;
-    let monthExpenseUZS = 0;
+    const todayTotals = new Map<string, { income: number; expense: number }>();
+    const monthTotals = new Map<string, { income: number; expense: number }>();
 
     for (const tx of txs) {
       if (tx.direction === TransactionDirection.TRANSFER) continue;
       const amt = Number(tx.amount || 0);
       const isToday = new Date(tx.transactionDate) >= startOfToday;
-
+      const month = monthTotals.get(tx.currency) ?? { income: 0, expense: 0 };
+      const today = todayTotals.get(tx.currency) ?? { income: 0, expense: 0 };
       if (tx.direction === TransactionDirection.INCOME) {
-        monthIncomeUZS += amt;
-        if (isToday) todayIncomeUZS += amt;
+        month.income += amt;
+        if (isToday) today.income += amt;
       } else if (tx.direction === TransactionDirection.EXPENSE) {
-        monthExpenseUZS += amt;
-        if (isToday) todayExpenseUZS += amt;
+        month.expense += amt;
+        if (isToday) today.expense += amt;
       }
+      monthTotals.set(tx.currency, month);
+      if (isToday) todayTotals.set(tx.currency, today);
     }
 
+    const formatFlowTotals = (totals: Map<string, { income: number; expense: number }>) =>
+      Array.from(totals)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([currency, values]) => ({
+          currency,
+          income: values.income,
+          expense: values.expense,
+          netCashFlow: values.income - values.expense,
+        }));
+    const todayByCurrency = formatFlowTotals(todayTotals);
+    const monthByCurrency = formatFlowTotals(monthTotals);
+    const todayOnly = todayByCurrency.length === 1
+      ? todayByCurrency[0]
+      : { income: 0, expense: 0, netCashFlow: 0 };
+    const monthOnly = monthByCurrency.length === 1
+      ? monthByCurrency[0]
+      : { income: 0, expense: 0, netCashFlow: 0 };
+
     // Counterparty Debts
-    const [settlementBalances, recentReceipt, recentInvoice, company] = await Promise.all([
+    const [settlementBalances, company] = await Promise.all([
       this.prisma.counterpartyBalance.findMany({
         where: { tenantId },
         select: {
@@ -220,27 +256,15 @@ export class FinanceService {
           supplierDebt: true,
         },
       }),
-      this.prisma.purchaseReceipt.findFirst({
-        where: { tenantId, status: 'POSTED' },
-        select: { currency: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.salesInvoice.findFirst({
-        where: { tenantId, status: 'POSTED' },
-        select: { currency: true },
-        orderBy: { createdAt: 'desc' },
-      }),
       this.prisma.company.findUnique({
         where: { id: tenantId },
         select: { settings: true },
       }),
     ]);
 
-    const reportCurrency =
-      recentReceipt?.currency ||
-      recentInvoice?.currency ||
-      (company?.settings as any)?.sales?.defaultCurrency ||
-      'USD';
+    const reportCurrency = monthByCurrency.length === 1
+      ? monthByCurrency[0].currency
+      : (company?.settings as any)?.sales?.defaultCurrency || 'UZS';
 
     let totalCustomerDebt = 0; // Receivables (Kutilayotgan tushumlar)
     let totalSupplierDebt = 0; // Payables (To'lanishi kerak bo'lgan qarzlar)
@@ -252,14 +276,16 @@ export class FinanceService {
     for (const balance of settlementBalances) {
       const customerDebt = Number(balance.customerDebt);
       const supplierDebt = Number(balance.supplierDebt);
-      if (customerDebt > 0) {
-        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + customerDebt;
-      } else if (customerDebt < 0) {
+      const netBalance = customerDebt - supplierDebt;
+      if (netBalance > 0) {
+        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + netBalance;
+      } else if (netBalance < 0) {
+        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + Math.abs(netBalance);
+      }
+      if (customerDebt < 0) {
         customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
       }
-      if (supplierDebt > 0) {
-        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + supplierDebt;
-      } else if (supplierDebt < 0) {
+      if (supplierDebt < 0) {
         supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     }
@@ -277,17 +303,17 @@ export class FinanceService {
         dollarKassa,
         naqdKassa,
         hisobRaqam,
-        totalLiquidUZSEquivalent: naqdKassa + hisobRaqam, // primary UZS
+        accountCurrencies,
+        totalLiquidByCurrency,
+        totalLiquidUZSEquivalent: totalLiquidByCurrency.find((item) => item.currency === 'UZS')?.amount ?? 0,
       },
       today: {
-        income: todayIncomeUZS,
-        expense: todayExpenseUZS,
-        netCashFlow: todayIncomeUZS - todayExpenseUZS,
+        ...todayOnly,
+        byCurrency: todayByCurrency,
       },
       month: {
-        income: monthIncomeUZS,
-        expense: monthExpenseUZS,
-        netCashFlow: monthIncomeUZS - monthExpenseUZS,
+        ...monthOnly,
+        byCurrency: monthByCurrency,
       },
       debts: {
         receivables: totalCustomerDebt,

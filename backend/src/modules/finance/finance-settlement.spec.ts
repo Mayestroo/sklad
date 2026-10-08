@@ -97,6 +97,39 @@ describe('FinanceService Settlement Unit Test Suite', () => {
   });
 
   describe('Dashboard settlement projections', () => {
+    it('keeps cash-flow dashboard totals separate by native currency', async () => {
+      prisma.cashAccount.findMany.mockResolvedValue([
+        { id: 'usd-cash', accountType: 'USD_CASH', currency: 'USD', balance: 250 },
+        { id: 'uzs-cash', accountType: 'UZS_CASH', currency: 'UZS', balance: 800000 },
+        { id: 'bank', accountType: 'BANK', currency: 'UZS', balance: 1200000 },
+      ]);
+      const now = new Date();
+      prisma.financeTransaction.findMany.mockResolvedValue([
+        { direction: TransactionDirection.INCOME, amount: 100, currency: 'USD', transactionDate: now },
+        { direction: TransactionDirection.EXPENSE, amount: 20, currency: 'USD', transactionDate: now },
+        { direction: TransactionDirection.INCOME, amount: 500000, currency: 'UZS', transactionDate: now },
+      ]);
+      prisma.counterpartyBalance = { findMany: jest.fn() };
+      prisma.counterpartyBalance.findMany.mockResolvedValue([]);
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(null);
+      prisma.salesInvoice.findFirst.mockResolvedValue(null);
+      prisma.company = { findUnique: jest.fn().mockResolvedValue(null) };
+
+      const metrics = await service.getDashboardMetrics('tenant-1');
+
+      expect(metrics.today.byCurrency).toEqual([
+        { currency: 'USD', income: 100, expense: 20, netCashFlow: 80 },
+        { currency: 'UZS', income: 500000, expense: 0, netCashFlow: 500000 },
+      ]);
+      expect(metrics.today.income).toBe(0);
+      expect(metrics.balances.accountCurrencies).toEqual({
+        dollarKassa: 'USD',
+        naqdKassa: 'UZS',
+        hisobRaqam: 'UZS',
+      });
+      expect(metrics.balances.totalLiquidUZSEquivalent).toBe(2000000);
+    });
+
     it('returns receivables, payables, and advances by native currency', async () => {
       prisma.cashAccount.findMany.mockResolvedValue([]);
       prisma.financeTransaction.findMany.mockResolvedValue([]);
@@ -111,14 +144,16 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       const metrics = await service.getDashboardMetrics('tenant-1');
 
       expect(metrics.debts).toEqual({
-        receivables: 100,
-        payables: 20,
-        receivablesByCurrency: [{ currency: 'USD', amount: 100 }],
-        payablesByCurrency: [{ currency: 'USD', amount: 20 }],
+        receivables: 0,
+        payables: 0,
+        receivablesByCurrency: [
+          { currency: 'USD', amount: 80 },
+          { currency: 'UZS', amount: 10 },
+        ],
+        payablesByCurrency: [],
         customerAdvancesByCurrency: [{ currency: 'UZS', amount: 30 }],
         supplierAdvancesByCurrency: [{ currency: 'UZS', amount: 40 }],
       });
-      expect(metrics.debts.receivablesByCurrency).not.toContainEqual(expect.objectContaining({ currency: 'UZS' }));
     });
   });
 

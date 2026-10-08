@@ -25,7 +25,11 @@ export interface ProductDropdownItem {
   sku: string;
   barcode?: string;
   salePrice: number;
+  salePriceCurrency?: 'USD' | 'UZS' | null;
   costPrice: number;
+  costPriceCurrency?: 'USD' | 'UZS';
+  costPriceExchangeRate?: number;
+  vatRate?: number;
   unitOfMeasure?: string;
   currency?: string;
   stockQty?: number;

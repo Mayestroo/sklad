@@ -13,6 +13,7 @@ export interface OrderItemRow {
   quantity: number;
   unitPrice: number;
   discount: number;
+  vatRate: number | string;
   readyQty?: number;
 }
 
@@ -84,6 +85,9 @@ export function OrderItemsTable({
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px' }}>
                 {isRu ? 'Скидка %' : 'Skidka %'}
               </th>
+              <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '110px' }}>
+                {isRu ? 'НДС %' : 'QQS %'}
+              </th>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
                 {isRu ? 'Итого' : 'Jami Summa'}
               </th>
@@ -98,7 +102,9 @@ export function OrderItemsTable({
             {items.map((item, idx) => {
               const lineRaw = item.quantity * item.unitPrice;
               const discountVal = (lineRaw * item.discount) / 100;
-              const lineTotal = lineRaw - discountVal;
+              const net = lineRaw - discountVal;
+              const vat = (net * Number(item.vatRate || 0)) / 100;
+              const lineTotal = net + vat;
 
               return (
                 <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
@@ -124,6 +130,19 @@ export function OrderItemsTable({
                       min={0}
                       decimals={3}
                       aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
+                    />
+                  </td>
+
+                  {/* VAT Rate */}
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={item.vatRate}
+                      onChange={(event) => onItemChange(idx, 'vatRate', event.target.value)}
+                      disabled={isLocked}
+                      aria-label={`${isRu ? 'Ставка НДС' : 'QQS stavkasi'} ${idx + 1}`}
+                      style={{ width: 78, height: 36, padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', textAlign: 'right' }}
                     />
                   </td>
 

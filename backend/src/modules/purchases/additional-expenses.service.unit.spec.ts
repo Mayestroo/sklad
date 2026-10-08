@@ -356,7 +356,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       });
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { id: 'prod-iphone' },
-        data: { costPrice: 1100000 },
+        data: { costPrice: 1100000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 },
       });
       expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
         tenantId,

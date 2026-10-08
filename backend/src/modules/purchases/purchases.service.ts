@@ -527,7 +527,11 @@ export class PurchasesService {
         if (tx.product?.update) {
           await tx.product.update({
             where: { id: item.productId },
-            data: { costPrice: landedCostInBase },
+            data: {
+              costPrice: landedCostInBase,
+              costPriceCurrency: 'UZS',
+              costPriceExchangeRate: 1,
+            },
           });
         }
       }

@@ -655,7 +655,11 @@ export class AdditionalExpensesService {
           // Sync Product catalog costPrice (ADR 0007)
           await tx.product.update({
             where: { id: item.productId },
-            data: { costPrice: newBatchLandedCost },
+            data: {
+              costPrice: newBatchLandedCost,
+              costPriceCurrency: 'UZS',
+              costPriceExchangeRate: 1,
+            },
           });
 
           // Retroactive COGS Recalibration for all downstream consumptions (ADR 0008)
@@ -987,7 +991,11 @@ export class AdditionalExpensesService {
           // Sync catalog cost price
           await tx.product.update({
             where: { id: item.productId },
-            data: { costPrice: restoredBatchLandedCost },
+            data: {
+              costPrice: restoredBatchLandedCost,
+              costPriceCurrency: 'UZS',
+              costPriceExchangeRate: 1,
+            },
           });
 
           // Revert retroactive COGS on downstream sales invoices

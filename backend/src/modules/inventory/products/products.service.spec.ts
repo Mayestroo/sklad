@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { PrismaService } from '../../../common/prisma';
-import { NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 
 describe('ProductsService', () => {
   let service: ProductsService;
@@ -14,6 +14,7 @@ describe('ProductsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    company: { findUnique: jest.fn() },
     stockLevel: {
       findMany: jest.fn(),
       deleteMany: jest.fn(),
@@ -48,12 +49,131 @@ describe('ProductsService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('sale price currency', () => {
+    it('persists an explicit supported currency instead of using the company default', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      mockPrisma.company.findUnique.mockResolvedValue({ settings: { sales: { defaultCurrency: 'USD' } } });
+      mockPrisma.product.create.mockResolvedValue({ id: 'p-1', salePriceCurrency: 'UZS' });
+
+      await service.create('t-1', {
+        name: { uz: 'Mahsulot', ru: 'Товар' },
+        sku: 'SKU-1',
+        salePrice: 125000,
+        salePriceCurrency: 'UZS',
+      });
+
+      expect(mockPrisma.product.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ salePrice: 125000, salePriceCurrency: 'UZS' }),
+      }));
+    });
+
+    it('uses the tenant sales default for a new product when currency is omitted', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      mockPrisma.company.findUnique.mockResolvedValue({ settings: { sales: { defaultCurrency: 'USD' } } });
+      mockPrisma.product.create.mockResolvedValue({ id: 'p-1', salePriceCurrency: 'USD' });
+
+      await service.create('t-1', {
+        name: { uz: 'Mahsulot', ru: 'Товар' },
+        sku: 'SKU-2',
+        salePrice: 10,
+      });
+
+      expect(mockPrisma.product.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ salePriceCurrency: 'USD' }),
+      }));
+    });
+
+    it('rejects a nonzero new sale price when no supported currency can be resolved', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      mockPrisma.company.findUnique.mockResolvedValue({ settings: { sales: { defaultCurrency: 'EUR' } } });
+
+      await expect(service.create('t-1', {
+        name: { uz: 'Mahsulot', ru: 'Товар' },
+        sku: 'SKU-3',
+        salePrice: 10,
+      })).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.product.create).not.toHaveBeenCalled();
+    });
+
+    it('preserves a saved currency when editing only the sale price', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue({
+        id: 'p-1', tenantId: 't-1', sku: 'SKU-1', salePrice: 100, salePriceCurrency: 'USD',
+      });
+      mockPrisma.product.update.mockResolvedValue({ id: 'p-1', salePriceCurrency: 'USD' });
+
+      await service.update('t-1', 'p-1', { salePrice: 125 });
+
+      expect(mockPrisma.product.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ salePrice: 125, salePriceCurrency: 'USD' }),
+      }));
+    });
+
+    it('requires a currency before changing the price of an unresolved legacy product', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue({
+        id: 'p-legacy', tenantId: 't-1', sku: 'SKU-OLD', salePrice: 100, salePriceCurrency: null,
+      });
+
+      await expect(service.update('t-1', 'p-legacy', { salePrice: 125 })).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.product.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cost price currency', () => {
+    it('stores the manually selected currency and its UZS exchange rate', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      mockPrisma.company.findUnique.mockResolvedValue({ settings: { sales: { defaultCurrency: 'UZS' } } });
+      mockPrisma.product.create.mockResolvedValue({ id: 'p-cost' });
+
+      await service.create('t-1', {
+        name: { uz: 'Xomashyo', ru: 'Сырье' },
+        sku: 'COST-1',
+        costPrice: 10,
+        costPriceCurrency: 'USD',
+        costPriceExchangeRate: 12500,
+      });
+
+      expect(mockPrisma.product.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          costPrice: 10,
+          costPriceCurrency: 'USD',
+          costPriceExchangeRate: 12500,
+        }),
+      }));
+    });
+
+    it('requires a positive exchange rate for a nonzero USD cost price', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      mockPrisma.product.create.mockResolvedValue({ id: 'p-cost' });
+
+      await expect(service.create('t-1', {
+        name: { uz: 'Xomashyo', ru: 'Сырье' },
+        sku: 'COST-USD',
+        costPrice: 10,
+        costPriceCurrency: 'USD',
+      })).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.product.create).not.toHaveBeenCalled();
+    });
+
+    it('generates a SKU when the optional SKU field is omitted', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      mockPrisma.product.create.mockResolvedValue({ id: 'p-auto' });
+
+      await service.create('t-1', {
+        name: { uz: 'Mahsulot', ru: 'Товар' },
+      });
+
+      expect(mockPrisma.product.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ sku: expect.stringMatching(/^PRD-[A-F0-9]{8}$/) }),
+      }));
+    });
+  });
+
   describe('update', () => {
     it('should update product details successfully', async () => {
       const tenantId = 't-1';
       const id = 'p-1';
       mockPrisma.product.findFirst
-        .mockResolvedValueOnce({ id, tenantId, sku: 'OLD-SKU' })
+        .mockResolvedValueOnce({ id, tenantId, sku: 'OLD-SKU', salePrice: 0, salePriceCurrency: 'UZS' })
         .mockResolvedValueOnce(null);
       mockPrisma.product.update.mockResolvedValue({ id, tenantId, sku: 'NEW-SKU' });
 
@@ -70,7 +190,7 @@ describe('ProductsService', () => {
       const tenantId = 't-1';
       const id = 'p-1';
       mockPrisma.product.findFirst
-        .mockResolvedValueOnce({ id, tenantId, sku: 'OLD-SKU' }) // first call for product lookup
+        .mockResolvedValueOnce({ id, tenantId, sku: 'OLD-SKU', salePrice: 0, salePriceCurrency: 'UZS' }) // first call for product lookup
         .mockResolvedValueOnce({ id: 'p-2', tenantId, sku: 'EXISTING-SKU' }); // second call for sku collision check
 
       await expect(

@@ -68,6 +68,9 @@ export interface SalesInvoice {
   subtotalAmount: number;
   discountAmount: number;
   vatAmount: number;
+  additionalChargeAmount: number;
+  additionalChargeVatRate: number;
+  additionalChargeVatAmount: number;
   totalAmount: number;
   paidAmount: number;
   totalCogs: number;
@@ -98,6 +101,8 @@ export interface SalesReturnItem {
   productId: string;
   quantity: number;
   unitPrice: number;
+  vatRate: number;
+  vatAmount: number;
   totalPrice: number;
   unitCogs: number;
   lineCogs: number;

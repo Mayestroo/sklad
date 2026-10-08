@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
+import { CURRENCY_OPTIONS } from '@/lib/utils';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { toast } from '@/context/ToastContext';
 import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 
@@ -32,6 +34,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
   const isEdit = Boolean(productToEdit);
 
   const [itemType, setItemType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>(initialType);
@@ -43,13 +46,16 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const [unitOfMeasure, setUnitOfMeasure] = useState('piece');
   const [quantity, setQuantity] = useState<number | string>(1);
   const [costPrice, setCostPrice] = useState<number | string>('');
+  const [costPriceCurrency, setCostPriceCurrency] = useState('UZS');
+  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('1');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
+  const [salePriceCurrency, setSalePriceCurrency] = useState('');
 
   const [categories, setCategories] = useState<any[]>([]);
-  const isMultiTier = Boolean(company?.settings?.sales?.enableMultiTierPriceLists);
-  const [priceLists, setPriceLists] = useState<any[]>([]);
-  const [tierPrices, setTierPrices] = useState<Record<string, number | string>>({});
-
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryNameUz, setNewCategoryNameUz] = useState('');
+  const [newCategoryNameRu, setNewCategoryNameRu] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,13 +73,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       }
     } catch {}
   }, []);
-
-  useEffect(() => {
-    if (!token || !company?.id || !isOpen || !isMultiTier) return;
-    apiFetch<any[]>('/sales/price-lists', { token, tenantId: company.id, locale })
-      .then((pls) => setPriceLists(pls || []))
-      .catch(console.error);
-  }, [token, company, locale, isOpen, isMultiTier]);
 
   useEffect(() => {
     if (!token || !company?.id || !isOpen) return;
@@ -97,39 +96,18 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setItemType(productToEdit.type || 'PRODUCT');
         setUnitOfMeasure(productToEdit.unitOfMeasure || 'piece');
         setCostPrice(productToEdit.costPrice !== undefined ? String(productToEdit.costPrice) : '');
+        setCostPriceCurrency(productToEdit.costPriceCurrency || 'UZS');
+        setCostPriceExchangeRate(String(productToEdit.costPriceExchangeRate || 1));
         setSellingPrice(productToEdit.salePrice !== undefined ? String(productToEdit.salePrice) : '');
+        setSalePriceCurrency(productToEdit.salePriceCurrency || '');
         setMinStockAlert(productToEdit.minStockAlert !== undefined ? String(productToEdit.minStockAlert) : '0');
         setError(null);
 
-        // Pre-populate tier prices
-        const initialTiers: Record<string, number | string> = {};
-        if (Array.isArray(productToEdit.productPrices)) {
-          productToEdit.productPrices.forEach((pp: any) => {
-            if (pp.priceListId && pp.price !== undefined) {
-              initialTiers[pp.priceListId] = Number(pp.price);
-            }
-          });
-          setTierPrices(initialTiers);
-        } else if (productToEdit.id && isMultiTier && token && company?.id) {
-          apiFetch<any>(`/inventory/products/${productToEdit.id}`, { token, tenantId: company.id, locale })
-            .then((fullProd) => {
-              if (Array.isArray(fullProd?.productPrices)) {
-                const loadedTiers: Record<string, number | string> = {};
-                fullProd.productPrices.forEach((pp: any) => {
-                  if (pp.priceListId && pp.price !== undefined) {
-                    loadedTiers[pp.priceListId] = Number(pp.price);
-                  }
-                });
-                setTierPrices(loadedTiers);
-              }
-            })
-            .catch(console.error);
-        } else {
-          setTierPrices({});
-        }
       } else {
         setItemType(initialType || 'PRODUCT');
-        setTierPrices({});
+        setCostPriceCurrency('UZS');
+        setCostPriceExchangeRate('1');
+        setSalePriceCurrency(defaultCurrency);
         if (initialSkuOrBarcode) {
           if (!/^\d{8,14}$/.test(initialSkuOrBarcode)) {
             setName(initialSkuOrBarcode);
@@ -139,7 +117,37 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         }
       }
     }
-  }, [isOpen, productToEdit, initialType, initialSkuOrBarcode, locale, isMultiTier, token, company]);
+  }, [isOpen, productToEdit, initialType, initialSkuOrBarcode, locale, token, company, defaultCurrency]);
+
+  const handleCreateCategory = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token || !company?.id || !newCategoryNameUz.trim()) return;
+    setCreatingCategory(true);
+    try {
+      const created = await apiFetch<any>('/inventory/categories', {
+        method: 'POST',
+        token,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({
+          name: {
+            uz: newCategoryNameUz.trim(),
+            ru: newCategoryNameRu.trim() || newCategoryNameUz.trim(),
+          },
+        }),
+      });
+      setCategories((current) => [created, ...current]);
+      setCategoryId(created.id);
+      setShowNewCategoryModal(false);
+      setNewCategoryNameUz('');
+      setNewCategoryNameRu('');
+      toast.success(isRu ? 'Категория успешно создана' : 'Kategoriya yaratildi');
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Kategoriya yaratilmadi');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -147,6 +155,18 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     const finalName = name.trim();
     if (!finalName) {
       setError(isRu ? 'Наименование обязательно' : 'Nom kiritilishi shart');
+      return;
+    }
+    if (Number(sellingPrice) > 0 && !salePriceCurrency) {
+      setError(isRu ? 'Укажите валюту цены продажи' : 'Sotish narxi valyutasini tanlang');
+      return;
+    }
+    if (
+      costPriceCurrency !== 'UZS' &&
+      Number(costPrice) > 0 &&
+      (!Number.isFinite(Number(costPriceExchangeRate)) || Number(costPriceExchangeRate) <= 0)
+    ) {
+      setError(isRu ? 'Укажите положительный курс себестоимости' : 'Xarid tannarxi uchun 0 dan katta kursni kiriting');
       return;
     }
 
@@ -173,7 +193,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           type: itemType,
           unitOfMeasure: validDbUnit,
           costPrice: Number(costPrice) || 0,
+          costPriceCurrency,
+          costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate),
           salePrice: Number(sellingPrice) || 0,
+          salePriceCurrency: salePriceCurrency || undefined,
           minStockAlert: Number(minStockAlert) || 0,
         };
         res = await apiFetch(`/inventory/products/${productToEdit.id}`, {
@@ -184,20 +207,21 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           body: JSON.stringify(payload),
         });
       } else {
-        const randomCode = Date.now().toString().slice(-6);
-        const prefix = itemType === 'RAW_MATERIAL' ? 'RAW' : itemType === 'SERVICE' ? 'SRV' : 'PRD';
         const payload = {
           name: {
             uz: finalName,
             ru: finalName,
           },
-          sku: sku.trim() || `${prefix}-${randomCode}`,
+          sku: sku.trim() || undefined,
           barcode: barcode.trim() || null,
           categoryId: categoryId || null,
           type: itemType,
           unitOfMeasure: validDbUnit,
           costPrice: Number(costPrice) || 0,
+          costPriceCurrency,
+          costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate),
           salePrice: Number(sellingPrice) || 0,
+          salePriceCurrency: salePriceCurrency || undefined,
           minStockAlert: Number(minStockAlert) || 0,
         };
 
@@ -208,25 +232,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           locale,
           body: JSON.stringify(payload),
         });
-      }
-
-      const targetProductId = productToEdit?.id || res?.id;
-      if (isMultiTier && targetProductId) {
-        const priceEntries = Object.entries(tierPrices).filter(
-          ([_, val]) => val !== '' && !isNaN(Number(val)) && Number(val) >= 0,
-        );
-        for (const [plId, val] of priceEntries) {
-          await apiFetch(`/sales/price-lists/${plId}/items`, {
-            method: 'POST',
-            token: token || undefined,
-            tenantId: company?.id,
-            locale,
-            body: JSON.stringify({
-              productId: targetProductId,
-              price: Number(val),
-            }),
-          }).catch(console.error);
-        }
       }
 
       const savedQuantity = numQty;
@@ -249,8 +254,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setUnitOfMeasure('piece');
     setQuantity(1);
     setCostPrice('');
+    setCostPriceCurrency('UZS');
+    setCostPriceExchangeRate('1');
     setSellingPrice('');
-    setTierPrices({});
+    setSalePriceCurrency(defaultCurrency);
     setError(null);
   };
 
@@ -504,7 +511,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Артикул (SKU)' : 'Artikul (SKU)'}
+              {isRu ? 'Артикул (SKU) (необязательно)' : 'Artikul (SKU) (ixtiyoriy)'}
             </label>
             <Input
               value={sku}
@@ -540,6 +547,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               ]}
               value={categoryId}
               onChange={(val) => setCategoryId(val)}
+              onCreateNew={() => setShowNewCategoryModal(true)}
+              createNewLabel={isRu ? 'Добавить категорию' : 'Kategoriya qo‘shish'}
             />
           </div>
           <div>
@@ -603,6 +612,29 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               onChange={(e) => setCostPrice(e.target.value)}
               placeholder="0"
             />
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <Select
+                label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'}
+                options={CURRENCY_OPTIONS}
+                value={costPriceCurrency}
+                onChange={(value) => {
+                  setCostPriceCurrency(value);
+                  if (value === 'UZS') setCostPriceExchangeRate('1');
+                  else if (costPriceCurrency === 'UZS') setCostPriceExchangeRate('');
+                }}
+              />
+            </div>
+            {costPriceCurrency !== 'UZS' && (
+              <Input
+                label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
+                type="number"
+                min="0.0001"
+                step="any"
+                value={costPriceExchangeRate}
+                onChange={(event) => setCostPriceExchangeRate(event.target.value)}
+                placeholder="1"
+              />
+            )}
           </div>
 
           <div>
@@ -617,60 +649,49 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               onChange={(e) => setSellingPrice(e.target.value)}
               placeholder="0"
             />
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <Select
+                label={isRu ? 'Валюта цены продажи' : 'Sotish narxi valyutasi'}
+                options={CURRENCY_OPTIONS}
+                value={salePriceCurrency}
+                onChange={setSalePriceCurrency}
+                placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Multi-tier Price Lists Section */}
-        {isMultiTier && priceLists.length > 0 && itemType === 'PRODUCT' && (
-          <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '8px' }}>
-              {isRu ? 'Цены по категориям (Прайс-листы)' : 'Narx toifalari bo‘yicha narxlar (Pricelists)'}
-            </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              {priceLists.map((pl) => {
-                const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
-                return (
-                  <div
-                    key={pl.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 140px',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: '6px 10px',
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      borderRadius: 'var(--radius-sm)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                        {plName}
-                      </span>
-                      <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: 'var(--radius-xs)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-700)', fontWeight: 600 }}>
-                        {pl.currency}
-                      </span>
-                      {pl.isDefault && (
-                        <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                          ({isRu ? 'Осн.' : 'Asosiy'})
-                        </span>
-                      )}
-                    </div>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={tierPrices[pl.id] || ''}
-                      onChange={(e) => setTierPrices((prev) => ({ ...prev, [pl.id]: e.target.value }))}
-                      placeholder={isRu ? 'Цена' : 'Narx'}
-                      style={{ fontSize: 'var(--text-xs)', padding: '4px 8px' }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+        </form>
+
+      <Modal
+        isOpen={showNewCategoryModal}
+        onClose={() => setShowNewCategoryModal(false)}
+        title={isRu ? 'Новая категория' : 'Yangi kategoriya'}
+        size="sm"
+      >
+        <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <Input
+            label={isRu ? 'Название на узбекском *' : 'O‘zbekcha nomi *'}
+            value={newCategoryNameUz}
+            onChange={(event) => setNewCategoryNameUz(event.target.value)}
+            required
+            autoFocus
+          />
+          <Input
+            label={isRu ? 'Название на русском' : 'Ruscha nomi'}
+            value={newCategoryNameRu}
+            onChange={(event) => setNewCategoryNameRu(event.target.value)}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+            <Button type="button" variant="secondary" onClick={() => setShowNewCategoryModal(false)}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button type="submit" disabled={creatingCategory}>
+              {isRu ? 'Создать' : 'Yaratish'}
+            </Button>
           </div>
-        )}
-      </form>
+        </form>
+      </Modal>
 
       <Modal
         isOpen={showNewUnitModal}

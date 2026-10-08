@@ -30,7 +30,15 @@ export class SalesOrderItemDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(100)
   discount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  vatRate?: number;
 }
 
 export class CreateSalesOrderDto {
@@ -70,6 +78,19 @@ export class CreateSalesOrderDto {
   @IsOptional()
   @IsString()
   comment?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  additionalChargeAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  additionalChargeVatRate?: number;
 
   @IsOptional()
   @IsString()

@@ -17,7 +17,9 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
   let settlementService: { recordMovement: jest.Mock };
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       openingBalanceDocument: {
         findFirst: jest.fn(),
@@ -33,6 +35,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       },
       cashAccount: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
       },
       financeTransaction: {
@@ -96,16 +99,22 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
           {
             category: OpeningBalanceCategory.CASH,
             amount: 25000000,
+            currency: 'UZS',
+            exchangeRate: 1,
             accountId: 'acc-cash',
           },
           {
             category: OpeningBalanceCategory.BANK,
             amount: 100000000,
+            currency: 'UZS',
+            exchangeRate: 1,
             accountId: 'acc-bank',
           },
           {
             category: OpeningBalanceCategory.INVENTORY,
             amount: 50000000,
+            currency: 'UZS',
+            exchangeRate: 1,
             productId: 'prod-1',
             warehouseId: 'wh-1',
             quantity: 500,
@@ -114,11 +123,15 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
           {
             category: OpeningBalanceCategory.SUPPLIER_DEBT,
             amount: 30000000,
+            currency: 'UZS',
+            exchangeRate: 1,
             counterpartyId: 'supp-1',
           },
           {
             category: OpeningBalanceCategory.EQUITY,
             amount: 145000000,
+            currency: 'UZS',
+            exchangeRate: 1,
           },
         ],
       };
@@ -127,7 +140,8 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
 
       expect(result).toBeDefined();
       expect(prisma.openingBalanceDocument.create).toHaveBeenCalled();
-      const callData = prisma.openingBalanceDocument.create.mock.calls[0][0].data;
+      const callData =
+        prisma.openingBalanceDocument.create.mock.calls[0][0].data;
 
       // Total Assets: 25M + 100M + 50M = 175,000,000
       expect(callData.totalAssets).toBe(175000000);
@@ -139,8 +153,73 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       expect(callData.balanceDifference).toBe(0);
     });
 
+    it('rebalances a draft by replacing its equity line with the UZS base-currency difference', async () => {
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue({
+        id: 'doc-1',
+        tenantId: 'tenant-1',
+        status: OpeningBalanceStatus.DRAFT,
+        lines: [
+          {
+            id: 'cash',
+            category: OpeningBalanceCategory.CASH,
+            amount: 10,
+            currency: 'USD',
+            exchangeRate: 12500,
+          },
+          {
+            id: 'payable',
+            category: OpeningBalanceCategory.SUPPLIER_DEBT,
+            amount: 25000,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'old-equity',
+            category: OpeningBalanceCategory.EQUITY,
+            amount: 15000,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+        ],
+      });
+      prisma.openingBalanceDocument.update.mockResolvedValue({ id: 'doc-1' });
+
+      await service.balanceEquity('tenant-1', 'doc-1');
+
+      expect(prisma.openingBalanceLine.deleteMany).toHaveBeenCalledWith({
+        where: {
+          documentId: 'doc-1',
+          tenantId: 'tenant-1',
+          category: OpeningBalanceCategory.EQUITY,
+        },
+      });
+      expect(prisma.openingBalanceLine.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            documentId: 'doc-1',
+            category: OpeningBalanceCategory.EQUITY,
+            amount: 100000,
+            currency: 'UZS',
+            exchangeRate: 1,
+          }),
+        ],
+      });
+      expect(prisma.openingBalanceDocument.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            totalAssets: 125000,
+            totalLiabilities: 25000,
+            totalEquity: 100000,
+            balanceDifference: 0,
+          }),
+        }),
+      );
+    });
+
     it('should reject creation if document number already exists', async () => {
-      prisma.openingBalanceDocument.findFirst.mockResolvedValue({ id: 'existing' });
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue({
+        id: 'existing',
+      });
 
       await expect(
         service.create('tenant-1', 'user-1', {
@@ -152,6 +231,77 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
   });
 
   describe('Post / Tasdiqlash Invariant Checks', () => {
+    it('compares opening balances in UZS but posts cash in the account currency', async () => {
+      const doc = {
+        id: 'doc-mixed-currency',
+        tenantId: 'tenant-1',
+        docNumber: 'OB-MIXED-001',
+        openingDate: new Date('2026-10-01'),
+        updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+        status: OpeningBalanceStatus.DRAFT,
+        lines: [
+          {
+            id: 'line-usd-cash',
+            category: OpeningBalanceCategory.CASH,
+            accountId: 'cash-usd',
+            amount: 10,
+            currency: 'USD',
+            exchangeRate: 12500,
+          },
+          {
+            id: 'line-equity',
+            category: OpeningBalanceCategory.EQUITY,
+            amount: 125000,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+        ],
+      };
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(doc);
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'cash-usd',
+        accountType: 'USD_CASH',
+        currency: 'USD',
+      });
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `account-${where.code}`,
+        code: where.code,
+      }));
+      prisma.journalEntry.create.mockResolvedValue({ id: 'journal-1' });
+      prisma.openingBalanceDocument.update.mockResolvedValue({
+        ...doc,
+        status: OpeningBalanceStatus.POSTED,
+      });
+
+      await service.post('tenant-1', 'user-1', doc.id);
+
+      expect(prisma.cashAccount.update).toHaveBeenCalledWith({
+        where: { id: 'cash-usd' },
+        data: { balance: { increment: 10 } },
+      });
+      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: 10, currency: 'USD' }),
+        }),
+      );
+      expect(prisma.journalLine.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            debitAccountId: 'account-5010',
+            amount: 125000,
+          }),
+        }),
+      );
+      expect(prisma.journalLine.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            creditAccountId: 'account-8330',
+            amount: 125000,
+          }),
+        }),
+      );
+    });
+
     it('should reject posting if Assets != Liabilities + Equity (unbalanced equation)', async () => {
       prisma.openingBalanceDocument.findFirst.mockResolvedValue({
         id: 'doc-unbalanced',
@@ -171,9 +321,9 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         ],
       });
 
-      await expect(service.post('tenant-1', 'user-1', 'doc-unbalanced')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.post('tenant-1', 'user-1', 'doc-unbalanced'),
+      ).rejects.toThrow(BadRequestException);
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -199,6 +349,8 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             quantity: 100,
             unitCost: 50000,
             amount: 5000000,
+            currency: 'UZS',
+            exchangeRate: 1,
             batchNumber: 'INIT-B1',
           },
           {
@@ -206,6 +358,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             category: OpeningBalanceCategory.CUSTOMER_DEBT,
             counterpartyId: 'cust-1',
             currency: 'USD',
+            exchangeRate: 12500,
             amount: 10000000,
           },
           {
@@ -213,16 +366,24 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             category: OpeningBalanceCategory.SUPPLIER_DEBT,
             counterpartyId: 'supp-1',
             currency: 'USD',
+            exchangeRate: 12500,
             amount: 10000000,
           },
           {
             category: OpeningBalanceCategory.EQUITY,
             amount: 30000000, // Assets (25M + 5M + 10M = 40M) - Liab (10M) = 30M
+            currency: 'UZS',
+            exchangeRate: 1,
           },
         ],
       };
 
       prisma.openingBalanceDocument.findFirst.mockResolvedValue(doc);
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-cash',
+        accountType: 'UZS_CASH',
+        currency: 'UZS',
+      });
       prisma.account.findFirst.mockResolvedValue({ id: 'acc-00', code: '00' });
       prisma.journalEntry.create.mockResolvedValue({ id: 'je-1' });
       prisma.openingBalanceDocument.update.mockResolvedValue({
@@ -267,24 +428,30 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         }),
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-1',
-        counterpartyId: 'cust-1',
-        currency: 'USD',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: 10000000,
-        sourceDocType: 'OpeningBalanceLine',
-        sourceDocId: 'line-customer',
-      }));
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-1',
-        counterpartyId: 'supp-1',
-        currency: 'USD',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 10000000,
-        sourceDocType: 'OpeningBalanceLine',
-        sourceDocId: 'line-supplier',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'USD',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: 10000000,
+          sourceDocType: 'OpeningBalanceLine',
+          sourceDocId: 'line-customer',
+        }),
+      );
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'supp-1',
+          currency: 'USD',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 10000000,
+          sourceDocType: 'OpeningBalanceLine',
+          sourceDocId: 'line-supplier',
+        }),
+      );
     });
   });
 
@@ -317,9 +484,9 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         },
       ]);
 
-      await expect(service.unpost('tenant-1', 'user-1', 'doc-posted')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.unpost('tenant-1', 'user-1', 'doc-posted'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should block reopening if cash account balance has dropped below opening deposit', async () => {
@@ -343,9 +510,9 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         balance: 10000000,
       });
 
-      await expect(service.unpost('tenant-1', 'user-1', 'doc-posted-cash')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.unpost('tenant-1', 'user-1', 'doc-posted-cash'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should safely execute unposting reversal when all balances and batches are intact', async () => {
@@ -415,16 +582,19 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       });
       // Batch deleted
       expect(prisma.productBatch.deleteMany).toHaveBeenCalled();
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-1',
-        counterpartyId: 'cust-1',
-        currency: 'USD',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: -10000000,
-        entryType: 'OPENING_BALANCE_UNPOSTED',
-        sourceDocType: 'OpeningBalanceLine',
-        sourceDocId: 'line-customer',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'USD',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: -10000000,
+          entryType: 'OPENING_BALANCE_UNPOSTED',
+          sourceDocType: 'OpeningBalanceLine',
+          sourceDocId: 'line-customer',
+        }),
+      );
     });
   });
 
@@ -442,7 +612,10 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       ).rejects.toThrow(BadRequestException);
 
       // Transaction dated Oct 5, 2026 (valid)
-      const valid = await service.checkCutoffDate('tenant-1', new Date('2026-10-05'));
+      const valid = await service.checkCutoffDate(
+        'tenant-1',
+        new Date('2026-10-05'),
+      );
       expect(valid).toBe(true);
     });
   });

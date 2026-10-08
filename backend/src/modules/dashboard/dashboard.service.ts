@@ -190,27 +190,29 @@ export class DashboardService {
     for (const balance of balances) {
       const customerDebt = Number(balance.customerDebt);
       const supplierDebt = Number(balance.supplierDebt);
+      const netBalance = customerDebt - supplierDebt;
       const key = `${balance.counterpartyId}:${balance.currency}`;
-      if (customerDebt > 0) {
+      if (netBalance > 0) {
         debtorMap.set(key, {
           id: balance.counterpartyId,
           name: balance.counterparty.name,
           currency: balance.currency,
-          amount: customerDebt,
+          amount: netBalance,
         });
-        receivableByCurr[balance.currency] = (receivableByCurr[balance.currency] || 0) + customerDebt;
-      } else if (customerDebt < 0) {
-        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
-      }
-      if (supplierDebt > 0) {
+        receivableByCurr[balance.currency] = (receivableByCurr[balance.currency] || 0) + netBalance;
+      } else if (netBalance < 0) {
         creditorMap.set(key, {
           id: balance.counterpartyId,
           name: balance.counterparty.name,
           currency: balance.currency,
-          amount: supplierDebt,
+          amount: Math.abs(netBalance),
         });
-        payableByCurr[balance.currency] = (payableByCurr[balance.currency] || 0) + supplierDebt;
-      } else if (supplierDebt < 0) {
+        payableByCurr[balance.currency] = (payableByCurr[balance.currency] || 0) + Math.abs(netBalance);
+      }
+      if (customerDebt < 0) {
+        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
+      }
+      if (supplierDebt < 0) {
         supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     }

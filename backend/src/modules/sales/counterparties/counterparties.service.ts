@@ -165,13 +165,14 @@ export class CounterpartiesService {
     for (const balance of balances) {
       const customerDebt = Number(balance.customerDebt);
       const supplierDebt = Number(balance.supplierDebt);
-      if (customerDebt > 0) {
+      const netBalance = customerDebt - supplierDebt;
+      if (netBalance > 0) {
         receivableCounterparties.add(balance.counterpartyId);
-        receivablesByCurrency[balance.currency] = (receivablesByCurrency[balance.currency] ?? 0) + customerDebt;
+        receivablesByCurrency[balance.currency] = (receivablesByCurrency[balance.currency] ?? 0) + netBalance;
       }
-      if (supplierDebt > 0) {
+      if (netBalance < 0) {
         payableCounterparties.add(balance.counterpartyId);
-        payablesByCurrency[balance.currency] = (payablesByCurrency[balance.currency] ?? 0) + supplierDebt;
+        payablesByCurrency[balance.currency] = (payablesByCurrency[balance.currency] ?? 0) + Math.abs(netBalance);
       }
       if (customerDebt < 0) {
         customerAdvancesByCurrency[balance.currency] = (customerAdvancesByCurrency[balance.currency] ?? 0) + Math.abs(customerDebt);
@@ -233,7 +234,7 @@ export class CounterpartiesService {
         some: { OR: [{ supplierDebt: { gt: 0 } }, { customerDebt: { lt: 0 } }] },
       };
     } else if (balanceFilter === 'settled') {
-      where.balances = { none: { OR: [{ customerDebt: { not: 0 } }, { supplierDebt: { not: 0 } }] } };
+      // Net-settled counterparties can still have offsets on both sides, so filter after loading balances.
     } else if (hasDebt) {
       where.balances = {
         some: { OR: [{ customerDebt: { not: 0 } }, { supplierDebt: { not: 0 } }] },
@@ -273,7 +274,7 @@ export class CounterpartiesService {
       orderBy: { name: 'asc' },
     });
 
-    return counterparties.map((cp) => {
+    const result = counterparties.map((cp) => {
       const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterparty } = cp;
       const balancesByCurrency = balances.map((balance) => ({
         currency: balance.currency,
@@ -286,6 +287,16 @@ export class CounterpartiesService {
         balancesByCurrency,
       };
     });
+    if (balanceFilter === 'receivables') {
+      return result.filter((counterparty) => counterparty.balancesByCurrency.some((balance) => balance.netBalance > 0));
+    }
+    if (balanceFilter === 'payables') {
+      return result.filter((counterparty) => counterparty.balancesByCurrency.some((balance) => balance.netBalance < 0));
+    }
+    if (balanceFilter === 'settled') {
+      return result.filter((counterparty) => counterparty.balancesByCurrency.every((balance) => balance.netBalance === 0));
+    }
+    return result;
   }
 
 

@@ -177,6 +177,22 @@ describe('CounterpartiesService', () => {
   });
 
   describe('getSummary', () => {
+    it('nets customer and supplier positions before classifying a BOTH counterparty', async () => {
+      mockPrisma.counterparty.count.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      mockPrisma.counterpartyBalance.findMany.mockResolvedValueOnce([
+        { counterpartyId: 'both-1', currency: 'USD', customerDebt: 800, supplierDebt: 500 },
+      ]);
+
+      const result = await service.getSummary('tenant-1');
+
+      expect(result.receivables).toEqual({
+        count: 1,
+        total_amount: 300,
+        byCurrency: [{ currency: 'USD', amount: 300 }],
+      });
+      expect(result.payables).toEqual({ count: 0, total_amount: 0, byCurrency: [] });
+    });
+
     it('aggregates receivables and payables per currency without combining currencies', async () => {
       const tenantId = 'tenant-1';
       mockPrisma.counterparty.count
@@ -227,8 +243,8 @@ describe('CounterpartiesService', () => {
 
       expect(result.total_customers).toBe(5);
       expect(result.total_suppliers).toBe(3);
-      expect(result.receivables).toMatchObject({ count: 1, total_amount: 8000000 });
-      expect(result.payables).toMatchObject({ count: 1, total_amount: 5000000 });
+      expect(result.receivables).toMatchObject({ count: 2, total_amount: 4000000 });
+      expect(result.payables).toMatchObject({ count: 1, total_amount: 2000000 });
       expect(result.customerAdvancesByCurrency).toEqual([{ currency: 'USD', amount: 2000000 }]);
       expect(result.supplierAdvancesByCurrency).toEqual([{ currency: 'USD', amount: 1000000 }]);
     });
@@ -275,12 +291,21 @@ describe('CounterpartiesService', () => {
 
       expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            tenantId,
-            balances: { none: { OR: [{ customerDebt: { not: 0 } }, { supplierDebt: { not: 0 } }] } },
-          }),
+          where: expect.objectContaining({ tenantId }),
         }),
       );
+    });
+
+    it('filters settled counterparties by net balance, including offsetting sides', async () => {
+      mockPrisma.counterparty.findMany.mockResolvedValue([
+        { id: 'offset', type: 'BOTH', balances: [{ currency: 'UZS', customerDebt: 1000, supplierDebt: 1000 }] },
+        { id: 'zero', type: 'CUSTOMER', balances: [] },
+        { id: 'open', type: 'BOTH', balances: [{ currency: 'USD', customerDebt: 1000, supplierDebt: 0 }] },
+      ]);
+
+      const result = await service.findAll('tenant-1', undefined, undefined, undefined, undefined, 'settled');
+
+      expect(result.map((counterparty) => counterparty.id)).toEqual(['offset', 'zero']);
     });
 
     it('returns gross side positions and net balance for each currency', async () => {

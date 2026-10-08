@@ -7,6 +7,11 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { FileText } from 'lucide-react';
 
 export interface OrderCalculations {
+  subtotal: number;
+  totalDiscount: number;
+  totalVat: number;
+  additionalCharge: number;
+  additionalChargeVat: number;
   grandTotal: number;
   paid: number;
   remaining: number;
@@ -45,6 +50,30 @@ export function OrderTotalsSummary({
         </h3>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+          <span>{isRu ? 'Подытог:' : 'Tovarlar summasi:'}</span>
+          <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.subtotal, locale, currency) : '—'}</span>
+        </div>
+
+        {calculations.totalDiscount > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            <span>{isRu ? 'Скидка:' : 'Chegirma:'}</span>
+            <span className="tabular-nums font-medium">− {currency ? formatCurrency(calculations.totalDiscount, locale, currency) : '—'}</span>
+          </div>
+        )}
+
+        {calculations.additionalCharge > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            <span>{isRu ? 'Дополнительная сумма:' : 'Qo‘shimcha summa:'}</span>
+            <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.additionalCharge, locale, currency) : '—'}</span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+          <span>{isRu ? 'НДС:' : 'QQS:'}</span>
+          <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.totalVat, locale, currency) : '—'}</span>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
           <span>{isRu ? 'Сумма заказа:' : 'Buyurtma summasi:'}</span>
           <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.grandTotal, locale, currency) : '—'}</span>
         </div>

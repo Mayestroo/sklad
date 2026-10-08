@@ -34,10 +34,13 @@ describe('DashboardService debt projection', () => {
     const result = await service.getDebts('tenant-1');
 
     expect(result.receivable).toMatchObject({
-      total: 100,
-      byCurrency: [{ currency: 'USD', amount: 100 }],
+      total: 110,
+      byCurrency: [{ currency: 'USD', amount: 110 }],
       advancesByCurrency: [{ currency: 'USD', amount: 30 }],
-      topDebtors: [{ id: 'cp-1', name: 'Customer One', amount: 100, currency: 'USD' }],
+      topDebtors: [
+        { id: 'cp-1', name: 'Customer One', amount: 100, currency: 'USD' },
+        { id: 'cp-3', name: 'Partner Three', amount: 10, currency: 'USD' },
+      ],
     });
     expect(result.payable).toMatchObject({
       total: 200000,

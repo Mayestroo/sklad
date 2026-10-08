@@ -111,8 +111,8 @@ export function ServiceActDetailsModal({
         ? 'Вы уверены, что хотите отменить этот акт? Контрагентский долг и проводки будут отменены.'
         : 'Ushbu aktni bekor qilmoqchimisiz? Kontragent qarzi va provodkalar bekor qilinadi.',
       variant: 'warning',
-      confirmText: isRu ? 'Отменить акт' : 'Bekor qilish',
-      cancelText: isRu ? 'Закрыть' : 'Yopish',
+      confirmText: isRu ? 'Да' : 'Ha',
+      cancelText: isRu ? 'Нет' : 'Yo‘q',
     });
     if (!confirmed) return;
 

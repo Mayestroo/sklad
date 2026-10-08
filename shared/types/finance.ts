@@ -73,17 +73,25 @@ export interface FinanceDashboardMetrics {
     dollarKassa: number;
     naqdKassa: number;
     hisobRaqam: number;
+    accountCurrencies: {
+      dollarKassa: string;
+      naqdKassa: string;
+      hisobRaqam: string;
+    };
+    totalLiquidByCurrency: Array<{ currency: string; amount: number }>;
     totalLiquidUZSEquivalent: number;
   };
   today: {
     income: number;
     expense: number;
     netCashFlow: number;
+    byCurrency: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
   };
   month: {
     income: number;
     expense: number;
     netCashFlow: number;
+    byCurrency: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
   };
   debts: {
     receivables: number;

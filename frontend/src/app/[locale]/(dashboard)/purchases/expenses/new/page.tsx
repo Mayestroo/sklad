@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Checkbox } from '@/components/ui/Checkbox';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { Badge } from '@/components/ui/Badge';
 import {
   ArrowLeft,
@@ -47,7 +48,7 @@ import {
 
 interface Counterparty {
   id: string;
-  name: string;
+  name: string | Record<string, string>;
   phone?: string;
   inn?: string;
 }
@@ -75,6 +76,7 @@ export default function NewExpensePage() {
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
   const [expenseType, setExpenseType] = useState<ExpenseType>('TRANSPORT');
   const [counterpartyId, setCounterpartyId] = useState('');
+  const [quickSupplierOpen, setQuickSupplierOpen] = useState(false);
   const [receiptId, setReceiptId] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
   const [currency, setCurrency] = useState('');
@@ -183,6 +185,15 @@ export default function NewExpensePage() {
       setSelectedItemIds([]);
     }
   };
+
+  const handleSupplierAdded = (supplier: Counterparty) => {
+    setCounterparties((current) => [supplier, ...current.filter((item) => item.id !== supplier.id)]);
+    setCounterpartyId(supplier.id);
+    setQuickSupplierOpen(false);
+  };
+
+  const getCounterpartyName = (name: Counterparty['name']) =>
+    typeof name === 'string' ? name : name?.[locale] || name?.uz || name?.ru || '';
 
   const handleSubmit = async (postImmediately: boolean) => {
     setErrorMsg(null);
@@ -426,8 +437,10 @@ export default function NewExpensePage() {
               placeholder={isRu ? 'Выберите или найдите поставщика...' : 'Kontragentni qidiring yoki tanlang...'}
               options={counterparties.map((c) => ({
                 value: c.id,
-                label: `${c.name || '—'}${c.phone ? ` (${c.phone})` : ''}`,
+                label: `${getCounterpartyName(c.name) || '—'}${c.phone ? ` (${c.phone})` : ''}`,
               }))}
+              onCreateNew={() => setQuickSupplierOpen(true)}
+              createNewLabel={isRu ? 'Добавить поставщика' : 'Kontragent qo‘shish'}
             />
           </div>
 
@@ -1133,6 +1146,12 @@ export default function NewExpensePage() {
           </div>
         )}
       </Card>
+      <CreateCounterpartyDrawer
+        isOpen={quickSupplierOpen}
+        onClose={() => setQuickSupplierOpen(false)}
+        onSuccess={handleSupplierAdded}
+        defaultType="SUPPLIER"
+      />
     </div>
   );
 }

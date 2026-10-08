@@ -77,6 +77,60 @@ function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
   }
 }
 
+function CurrencyFlowRows({
+  title,
+  items,
+  locale,
+  fallbackCurrency,
+}: {
+  title: string;
+  items: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
+  locale: 'uz' | 'ru';
+  fallbackCurrency: string;
+}) {
+  const rows = items.length > 0
+    ? items
+    : [{ currency: fallbackCurrency, income: 0, expense: 0, netCashFlow: 0 }];
+
+  return (
+    <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-bg-subtle)' }}>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {rows.map((row) => (
+          <div key={row.currency} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)' }}>
+            <span style={{ color: '#10b981' }}>+{formatCurrency(row.income, locale, row.currency)}</span>
+            <span style={{ color: '#ef4444' }}>−{formatCurrency(row.expense, locale, row.currency)}</span>
+            <Badge variant={row.netCashFlow >= 0 ? 'success' : 'error'}>{formatCurrency(row.netCashFlow, locale, row.currency)}</Badge>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CurrencyNetRows({
+  items,
+  locale,
+  fallbackCurrency,
+}: {
+  items: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
+  locale: 'uz' | 'ru';
+  fallbackCurrency: string;
+}) {
+  const rows = items.length > 0
+    ? items
+    : [{ currency: fallbackCurrency, income: 0, expense: 0, netCashFlow: 0 }];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 'var(--text-base)', fontWeight: 700 }}>
+      {rows.map((row) => (
+        <span key={row.currency} style={{ color: row.netCashFlow >= 0 ? '#10b981' : '#ef4444' }}>
+          {formatCurrency(row.netCashFlow, locale, row.currency)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Finance Component ─────────────────────────────────────
 export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -94,7 +148,6 @@ export default function FinancePage() {
 
   // Data States
   const [dashboardMetrics, setDashboardMetrics] = useState<FinanceDashboardMetrics | null>(null);
-  const reportCurrency = (dashboardMetrics as any)?.currency || defaultCurrency || 'USD';
   const [journal, setJournal] = useState<TransactionJournal | null>(null);
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [txTypes, setTxTypes] = useState<TransactionType[]>([]);
@@ -419,10 +472,16 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Долларовая касса (USD)' : 'Dollar kassa (USD)'}
+              {isRu
+                ? `Долларовая касса (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`
+                : `Dollar kassa (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#10b981' }}>
-              {formatCurrency(dashboardMetrics?.balances.dollarKassa || 0, locale, 'USD')}
+              {formatCurrency(
+                dashboardMetrics?.balances.dollarKassa || 0,
+                locale,
+                dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD',
+              )}
             </div>
           </div>
         </Card>
@@ -454,10 +513,16 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? `Наличная касса (${reportCurrency})` : `Naqd kassa (${reportCurrency})`}
+              {isRu
+                ? `Наличная касса (${dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS'})`
+                : `Naqd kassa (${dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS'})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(dashboardMetrics?.balances.naqdKassa || 0, locale, reportCurrency)}
+              {formatCurrency(
+                dashboardMetrics?.balances.naqdKassa || 0,
+                locale,
+                dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS',
+              )}
             </div>
           </div>
         </Card>
@@ -489,10 +554,16 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? `Расчетный счет (${reportCurrency})` : `Hisobraqam (${reportCurrency})`}
+              {isRu
+                ? `Расчетный счет (${dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS'})`
+                : `Hisobraqam (${dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS'})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(dashboardMetrics?.balances.hisobRaqam || 0, locale, reportCurrency)}
+              {formatCurrency(
+                dashboardMetrics?.balances.hisobRaqam || 0,
+                locale,
+                dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS',
+              )}
             </div>
           </div>
         </Card>
@@ -504,7 +575,7 @@ export default function FinancePage() {
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--space-3)',
-            borderLeft: `4px solid ${(dashboardMetrics?.month.netCashFlow || 0) >= 0 ? '#10b981' : '#ef4444'}`,
+            borderLeft: '4px solid var(--color-primary-500)',
           }}
         >
           <div
@@ -512,36 +583,25 @@ export default function FinancePage() {
               width: 40,
               height: 40,
               borderRadius: 'var(--radius-md)',
-              backgroundColor:
-                (dashboardMetrics?.month.netCashFlow || 0) >= 0
-                  ? 'rgba(16, 185, 129, 0.1)'
-                  : 'rgba(239, 68, 68, 0.1)',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: (dashboardMetrics?.month.netCashFlow || 0) >= 0 ? '#10b981' : '#ef4444',
+              color: 'var(--color-primary-600)',
               flexShrink: 0,
             }}
           >
-            {(dashboardMetrics?.month.netCashFlow || 0) >= 0 ? (
-              <TrendingUp size={20} />
-            ) : (
-              <TrendingDown size={20} />
-            )}
+            <TrendingUp size={20} />
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Чистый денежный поток (Месяц)' : 'Sof pul oqimi (Shu oy)'}
             </div>
-            <div
-              style={{
-                fontSize: 'var(--text-lg)',
-                fontWeight: 700,
-                color: (dashboardMetrics?.month.netCashFlow || 0) >= 0 ? '#10b981' : '#ef4444',
-              }}
-            >
-              {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, reportCurrency)}
-            </div>
+            <CurrencyNetRows
+              items={dashboardMetrics?.month.byCurrency ?? []}
+              locale={locale}
+              fallbackCurrency={defaultCurrency}
+            />
           </div>
         </Card>
       </div>
@@ -623,65 +683,18 @@ export default function FinancePage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {/* Today */}
-                <div
-                  style={{
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'var(--color-bg-subtle)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'Сегодня' : 'Bugun'}:
-                    </span>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                      <span style={{ color: '#10b981' }}>
-                        +{formatCurrency(dashboardMetrics?.today.income || 0, locale, reportCurrency)}
-                      </span>
-                      <span style={{ margin: '0 6px', color: 'var(--color-text-tertiary)' }}>/</span>
-                      <span style={{ color: '#ef4444' }}>
-                        -{formatCurrency(dashboardMetrics?.today.expense || 0, locale, reportCurrency)}
-                      </span>
-                    </div>
-                  </div>
-                  <Badge variant={(dashboardMetrics?.today.netCashFlow || 0) >= 0 ? 'success' : 'error'}>
-                    {formatCurrency(dashboardMetrics?.today.netCashFlow || 0, locale, reportCurrency)}
-                  </Badge>
-                </div>
-
-                {/* This Month */}
-                <div
-                  style={{
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'var(--color-bg-subtle)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'В этом месяце' : 'Shu oyda'}:
-                    </span>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                      <span style={{ color: '#10b981' }}>
-                        +{formatCurrency(dashboardMetrics?.month.income || 0, locale, reportCurrency)}
-                      </span>
-                      <span style={{ margin: '0 6px', color: 'var(--color-text-tertiary)' }}>/</span>
-                      <span style={{ color: '#ef4444' }}>
-                        -{formatCurrency(dashboardMetrics?.month.expense || 0, locale, reportCurrency)}
-                      </span>
-                    </div>
-                  </div>
-                  <Badge variant={(dashboardMetrics?.month.netCashFlow || 0) >= 0 ? 'success' : 'error'}>
-                    {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, reportCurrency)}
-                  </Badge>
-                </div>
+                <CurrencyFlowRows
+                  title={isRu ? 'Сегодня' : 'Bugun'}
+                  items={dashboardMetrics?.today.byCurrency ?? []}
+                  locale={locale}
+                  fallbackCurrency={defaultCurrency}
+                />
+                <CurrencyFlowRows
+                  title={isRu ? 'В этом месяце' : 'Shu oyda'}
+                  items={dashboardMetrics?.month.byCurrency ?? []}
+                  locale={locale}
+                  fallbackCurrency={defaultCurrency}
+                />
               </div>
             </Card>
 
@@ -720,7 +733,7 @@ export default function FinancePage() {
                   <MultiCurrencyValue
                     items={dashboardMetrics?.debts.receivablesByCurrency}
                     fallbackAmount={dashboardMetrics?.debts.receivables || 0}
-                    fallbackCurrency={reportCurrency}
+                    fallbackCurrency={defaultCurrency}
                     locale={locale}
                     color="#059669"
                   />
@@ -750,7 +763,7 @@ export default function FinancePage() {
                   <MultiCurrencyValue
                     items={dashboardMetrics?.debts.payablesByCurrency}
                     fallbackAmount={dashboardMetrics?.debts.payables || 0}
-                    fallbackCurrency={reportCurrency}
+                    fallbackCurrency={defaultCurrency}
                     locale={locale}
                     color="#dc2626"
                   />

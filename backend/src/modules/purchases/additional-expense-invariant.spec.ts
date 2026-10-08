@@ -150,7 +150,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     });
     expect(prisma.product.update).toHaveBeenCalledWith({
       where: { id: 'prod-iphone' },
-      data: { costPrice: 1200000 },
+      data: { costPrice: 1200000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 },
     });
     expect(prisma.journalEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -31,6 +31,8 @@ interface ReturnableItemState {
   returnableQty: number;
   returnQty: number;
   unitPrice: number;
+  unitVatAmount: number;
+  vatRate: number;
   isDefective: boolean;
 }
 
@@ -115,6 +117,8 @@ export function CreateSalesReturnModal({
               returnableQty: Number(i.returnableQuantity),
               returnQty: 0,
               unitPrice: Number(i.unitPrice),
+              unitVatAmount: Number(i.unitVatAmount || 0),
+              vatRate: Number(i.vatRate || 0),
               isDefective: false,
             }))
           );
@@ -130,7 +134,9 @@ export function CreateSalesReturnModal({
               returnedQty: 0,
               returnableQty: Number(i.quantity),
               returnQty: 0,
-              unitPrice: Number(i.unitPrice),
+              unitPrice: Number(i.totalPrice ?? i.unitPrice * i.quantity) / Number(i.quantity) - Number(i.vatAmount || 0) / Number(i.quantity),
+              unitVatAmount: Number(i.vatAmount || 0) / Number(i.quantity),
+              vatRate: Number(i.vatRate || 0),
               isDefective: false,
             }))
           );
@@ -149,7 +155,9 @@ export function CreateSalesReturnModal({
               returnedQty: 0,
               returnableQty: Number(i.quantity),
               returnQty: 0,
-              unitPrice: Number(i.unitPrice),
+              unitPrice: Number(i.totalPrice ?? i.unitPrice * i.quantity) / Number(i.quantity) - Number(i.vatAmount || 0) / Number(i.quantity),
+              unitVatAmount: Number(i.vatAmount || 0) / Number(i.quantity),
+              vatRate: Number(i.vatRate || 0),
               isDefective: false,
             }))
           );
@@ -208,8 +216,9 @@ export function CreateSalesReturnModal({
   };
 
   const calculateReturnTotal = () => {
-    return returnItems.reduce((sum, item) => sum + item.returnQty * item.unitPrice, 0);
+    return returnItems.reduce((sum, item) => sum + item.returnQty * (item.unitPrice + item.unitVatAmount), 0);
   };
+  const returnVatTotal = returnItems.reduce((sum, item) => sum + item.returnQty * item.unitVatAmount, 0);
 
   const hasDefectiveItems = returnItems.some((i) => i.isDefective && i.returnQty > 0);
 
@@ -221,7 +230,7 @@ export function CreateSalesReturnModal({
       .map((i) => ({
         productId: i.productId,
         quantity: i.returnQty,
-        unitPrice: i.unitPrice,
+        unitPrice: i.unitPrice + i.unitVatAmount,
         isDefective: i.isDefective,
       }));
 
@@ -403,6 +412,9 @@ export function CreateSalesReturnModal({
                   {isRu ? 'ЦЕНА' : 'NARX'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'НДС' : 'QQS'}
+                </th>
+                <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                   {isRu ? 'СУММА' : 'SUMMA'}
                 </th>
               </tr>
@@ -410,19 +422,20 @@ export function CreateSalesReturnModal({
             <tbody>
               {fetchLoading ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--color-text-secondary)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 30, color: 'var(--color-text-secondary)' }}>
                     {isRu ? 'Загрузка остатков продаж...' : 'Sotuv qoldiqlari yuklanmoqda...'}
                   </td>
                 </tr>
               ) : returnItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--color-text-secondary)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 30, color: 'var(--color-text-secondary)' }}>
                     {isRu ? 'В данной накладной нет товаров' : 'Ushbu fakturada tovarlar mavjud emas'}
                   </td>
                 </tr>
               ) : (
                 returnItems.map((item, index) => {
-                  const lineTotal = item.returnQty * item.unitPrice;
+                  const lineVat = item.returnQty * item.unitVatAmount;
+                  const lineTotal = item.returnQty * (item.unitPrice + item.unitVatAmount);
                   const isExhausted = item.returnableQty <= 0;
 
                   return (
@@ -475,6 +488,10 @@ export function CreateSalesReturnModal({
                       <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(item.unitPrice, locale, invoice.currency)}
                       </td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
+                        <div>{formatCurrency(lineVat, locale, invoice.currency)}</div>
+                        <small style={{ color: 'var(--color-text-tertiary)' }}>{item.vatRate}%</small>
+                      </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
                         {formatCurrency(lineTotal, locale, invoice.currency)}
                       </td>
@@ -502,6 +519,11 @@ export function CreateSalesReturnModal({
             <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
               {isRu ? 'Итоговая сумма возврата:' : 'Jami qaytariladigan summa:'}
             </div>
+            {returnVatTotal > 0 && (
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 3 }}>
+                {isRu ? 'В том числе НДС:' : 'Shundan QQS:'} {formatCurrency(returnVatTotal, locale, invoice.currency)}
+              </div>
+            )}
             {hasDefectiveItems && (
               <div style={{ fontSize: '12px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <AlertCircle size={13} />

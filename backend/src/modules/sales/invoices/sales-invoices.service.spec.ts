@@ -16,7 +16,9 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
   let settlementService: { recordMovement: jest.Mock };
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       salesInvoice: {
         count: jest.fn(),
@@ -128,7 +130,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
             productId: 'prod-1',
             quantity: 10,
             unitPrice: 500000,
-            discount: 50000, // 50,000 UZS line discount
+            discount: 1, // 1% = 50,000 UZS line discount
             vatRate: 12, // 12% VAT
           },
         ],
@@ -149,6 +151,56 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           }),
         }),
       );
+    });
+
+    it('updates a draft through the edit endpoint with percent discount and VAT totals', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-draft',
+        tenantId: 'tenant-1',
+        status: SalesDocStatus.DRAFT,
+        invoiceDate: new Date('2026-10-01'),
+        totalAmount: 0,
+        items: [],
+      });
+      prisma.salesInvoice.update.mockImplementation(({ data }: any) => ({
+        id: 'inv-draft',
+        status: SalesDocStatus.DRAFT,
+        ...data,
+        items: data.items.create,
+      }));
+
+      const result = await service.updateInvoice(
+        'tenant-1',
+        'user-1',
+        'inv-draft',
+        {
+          counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
+          currency: 'UZS',
+          items: [
+            {
+              productId: 'prod-1',
+              quantity: 2,
+              unitPrice: 100000,
+              discount: 10,
+              vatRate: 12,
+            },
+          ],
+        },
+      );
+
+      expect(result.totalAmount).toBe(201600);
+      expect(prisma.salesInvoice.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'inv-draft' },
+          data: expect.objectContaining({
+            subtotalAmount: 200000,
+            discountAmount: 20000,
+            vatAmount: 21600,
+          }),
+        }),
+      );
+      expect(prisma.auditLog.create).toHaveBeenCalled();
     });
 
     it('should throw BadRequestException if items array is empty', async () => {
@@ -274,12 +326,13 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           counterpartyId: 'cust-1',
           warehouseId: 'wh-1',
           currency: 'UZS',
-          items: [{ productId: 'p1', quantity: 1, unitPrice: 'invalid' as any }],
+          items: [
+            { productId: 'p1', quantity: 1, unitPrice: 'invalid' as any },
+          ],
         }),
       ).rejects.toThrow(BadRequestException);
     });
   });
-
 
   describe('2. Post Invoice, Stock Validation & FIFO Landed Cost (COGS)', () => {
     it('should reject posting if available stock in warehouse is insufficient (Stock Invariant)', async () => {
@@ -430,6 +483,92 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(res.status).toBe(SalesDocStatus.POSTED);
       expect(res.totalCogs).toBe(3400000);
       expect(res.grossProfit).toBe(1600000);
+    });
+
+    it('calculates USD invoice gross profit and below-cost comparison in base UZS', async () => {
+      const invoice = {
+        id: 'inv-usd',
+        tenantId: 'tenant-1',
+        invoiceNumber: 'INV-2026-USD',
+        invoiceDate: new Date('2026-10-01'),
+        updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+        warehouseId: 'wh-1',
+        counterpartyId: 'cust-1',
+        currency: 'USD',
+        exchangeRate: 12500,
+        status: SalesDocStatus.DRAFT,
+        vatAmount: 12,
+        totalAmount: 112,
+        counterparty: { id: 'cust-1', name: 'USD Customer' },
+        items: [
+          {
+            id: 'item-usd',
+            productId: 'prod-usd',
+            quantity: 1,
+            unitPrice: 100,
+            discount: 0,
+            vatAmount: 12,
+            totalPrice: 112,
+            product: { name: { uz: 'USD product' } },
+          },
+        ],
+      };
+      prisma.salesInvoice.findFirst.mockResolvedValue(invoice);
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-usd',
+        quantity: 5,
+        reservedQuantity: 0,
+      });
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-usd-cost',
+          remainingQty: 1,
+          landedCost: 1_000_000,
+          purchasePrice: 1_000_000,
+        },
+      ]);
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `acc-${where.code}`,
+        code: where.code,
+      }));
+      prisma.journalEntry.count.mockResolvedValue(0);
+      prisma.salesInvoice.update.mockImplementation(({ data }: any) => ({
+        ...invoice,
+        ...data,
+      }));
+
+      const result = await service.postInvoice('tenant-1', 'user-1', 'inv-usd');
+
+      expect(result.totalCogs).toBe(1_000_000);
+      expect(result.grossProfit).toBe(250_000);
+      expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            lineGrossProfit: 250_000,
+            isBelowCost: false,
+          }),
+        }),
+      );
+      expect(prisma.journalEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            lines: {
+              create: expect.arrayContaining([
+                expect.objectContaining({
+                  debitAccountId: 'acc-4010',
+                  creditAccountId: 'acc-9010',
+                  amount: 1_250_000,
+                }),
+                expect.objectContaining({
+                  debitAccountId: 'acc-4010',
+                  creditAccountId: 'acc-6410',
+                  amount: 150_000,
+                }),
+              ]),
+            },
+          }),
+        }),
+      );
     });
   });
 
@@ -644,32 +783,50 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
             productId: 'prod-1',
             quantity: 10,
             unitPrice: 50000,
+            vatRate: 12,
+            vatAmount: 60000,
+            totalPrice: 560000,
             unitCogs: 30000,
-            product: { name: { uz: 'Mahsulot 1' }, sku: 'SKU-1', unitOfMeasure: 'piece' },
+            product: {
+              name: { uz: 'Mahsulot 1' },
+              sku: 'SKU-1',
+              unitOfMeasure: 'piece',
+            },
           },
           {
             productId: 'prod-2',
             quantity: 5,
             unitPrice: 80000,
+            vatRate: 0,
+            vatAmount: 0,
+            totalPrice: 400000,
             unitCogs: 60000,
-            product: { name: { uz: 'Mahsulot 2' }, sku: 'SKU-2', unitOfMeasure: 'piece' },
+            product: {
+              name: { uz: 'Mahsulot 2' },
+              sku: 'SKU-2',
+              unitOfMeasure: 'piece',
+            },
           },
         ],
         returns: [
           {
             status: SalesReturnDocStatus.POSTED,
-            items: [
-              { productId: 'prod-1', quantity: 3 },
-            ],
+            items: [{ productId: 'prod-1', quantity: 3 }],
           },
         ],
       });
 
-      const items = await service.getInvoiceReturnableItems('tenant-1', 'inv-1');
+      const items = await service.getInvoiceReturnableItems(
+        'tenant-1',
+        'inv-1',
+      );
       expect(items).toHaveLength(2);
       expect(items[0].soldQuantity).toBe(10);
       expect(items[0].returnedQuantity).toBe(3);
       expect(items[0].returnableQuantity).toBe(7);
+      expect(items[0].unitPrice).toBe(50000);
+      expect(items[0].unitVatAmount).toBe(6000);
+      expect(items[0].vatRate).toBe(12);
 
       expect(items[1].soldQuantity).toBe(5);
       expect(items[1].returnedQuantity).toBe(0);
@@ -801,8 +958,20 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         status: SalesDocStatus.POSTED,
         totalAmount: 500000,
         items: [
-          { productId: 'prod-1', quantity: 5, totalPrice: 250000, vatAmount: 0, unitCogs: 70000 },
-          { productId: 'prod-2', quantity: 5, totalPrice: 250000, vatAmount: 0, unitCogs: 70000 },
+          {
+            productId: 'prod-1',
+            quantity: 5,
+            totalPrice: 250000,
+            vatAmount: 0,
+            unitCogs: 70000,
+          },
+          {
+            productId: 'prod-2',
+            quantity: 5,
+            totalPrice: 250000,
+            vatAmount: 0,
+            unitCogs: 70000,
+          },
         ],
         returns: [],
       });
@@ -811,8 +980,18 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         currency: 'UZS',
         exchangeRate: 1,
         items: [
-          { productId: 'prod-1', quantity: 5, totalPrice: 250000, vatAmount: 0 },
-          { productId: 'prod-2', quantity: 5, totalPrice: 250000, vatAmount: 0 },
+          {
+            productId: 'prod-1',
+            quantity: 5,
+            totalPrice: 250000,
+            vatAmount: 0,
+          },
+          {
+            productId: 'prod-2',
+            quantity: 5,
+            totalPrice: 250000,
+            vatAmount: 0,
+          },
         ],
         returns: [],
       });
@@ -883,11 +1062,54 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
     });
   });
 
+  describe('Sales summary currency correctness', () => {
+    it('reports profit in UZS and reverses the base-currency profit for returned goods', async () => {
+      prisma.salesInvoice.findMany.mockResolvedValue([
+        {
+          totalAmount: 112000,
+          vatAmount: 12000,
+          totalCogs: 200000000,
+          grossProfit: 1000000000,
+          currency: 'USD',
+          exchangeRate: 12000,
+        },
+      ]);
+      prisma.salesReturn.findMany.mockResolvedValue([
+        {
+          totalAmount: 11200,
+          totalCogs: 20000000,
+          currency: 'USD',
+          invoice: { currency: 'USD', exchangeRate: 12000 },
+          items: [{ vatAmount: 1200 }],
+        },
+      ]);
+      prisma.counterpartyBalance = { findMany: jest.fn() };
+      prisma.counterpartyBalance.findMany.mockResolvedValue([]);
+
+      const summary = await service.getSummaryStats('tenant-1');
+
+      expect(summary.monthlyGrossProfit).toBe(900000000);
+      expect(summary.monthlyGrossProfitByCurrency).toEqual([
+        { currency: 'UZS', amount: 900000000 },
+      ]);
+      expect(summary.monthlyGrossProfitMargin).toBe(83.33);
+      expect(summary.monthlySalesByCurrency).toEqual([
+        { currency: 'USD', amount: 112000 },
+      ]);
+    });
+  });
+
   describe('Price Lists & Dynamic Pricing Engine', () => {
     describe('bulkSetPrices', () => {
       it('should bulk upsert prices for a valid price list', async () => {
-        prisma.priceList.findFirst.mockResolvedValue({ id: 'pl-1', tenantId: 'tenant-1' });
-        prisma.productPrice.upsert.mockResolvedValue({ id: 'pp-1', price: 150000 });
+        prisma.priceList.findFirst.mockResolvedValue({
+          id: 'pl-1',
+          tenantId: 'tenant-1',
+        });
+        prisma.productPrice.upsert.mockResolvedValue({
+          id: 'pp-1',
+          price: 150000,
+        });
 
         const res = await service.bulkSetPrices('tenant-1', 'pl-1', [
           { productId: 'prod-1', price: 150000 },
@@ -901,9 +1123,15 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
     describe('updatePriceList', () => {
       it('should unset previous default when setting a new default price list', async () => {
-        prisma.priceList.findFirst.mockResolvedValue({ id: 'pl-2', tenantId: 'tenant-1' });
+        prisma.priceList.findFirst.mockResolvedValue({
+          id: 'pl-2',
+          tenantId: 'tenant-1',
+        });
         prisma.priceList.updateMany.mockResolvedValue({ count: 1 });
-        prisma.priceList.update.mockResolvedValue({ id: 'pl-2', isDefault: true });
+        prisma.priceList.update.mockResolvedValue({
+          id: 'pl-2',
+          isDefault: true,
+        });
 
         await service.updatePriceList('tenant-1', 'pl-2', { isDefault: true });
 
@@ -925,7 +1153,10 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           tenantId: 'tenant-1',
           _count: { salesOrders: 2, salesInvoices: 0, counterparties: 1 },
         });
-        prisma.priceList.update.mockResolvedValue({ id: 'pl-1', isActive: false });
+        prisma.priceList.update.mockResolvedValue({
+          id: 'pl-1',
+          isActive: false,
+        });
 
         await service.deletePriceList('tenant-1', 'pl-1');
 
@@ -960,6 +1191,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         prisma.product.findFirst.mockResolvedValue({
           id: 'prod-1',
           salePrice: 200000,
+          salePriceCurrency: 'UZS',
         });
 
         const res = await service.resolveProductPrice('tenant-1', 'prod-1', {
@@ -979,6 +1211,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         prisma.product.findFirst.mockResolvedValue({
           id: 'prod-1',
           salePrice: 200000,
+          salePriceCurrency: 'UZS',
         });
         prisma.counterparty.findFirst.mockResolvedValue({
           id: 'cp-1',
@@ -1013,6 +1246,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         prisma.product.findFirst.mockResolvedValue({
           id: 'prod-1',
           salePrice: 200000,
+          salePriceCurrency: 'UZS',
         });
         prisma.priceList.findFirst.mockResolvedValue({
           id: 'pl-nasiya',
@@ -1043,6 +1277,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         prisma.product.findFirst.mockResolvedValue({
           id: 'prod-1',
           salePrice: 130000,
+          salePriceCurrency: 'UZS',
         });
         prisma.priceList.findFirst.mockResolvedValue({
           id: 'pl-usd',
@@ -1065,6 +1300,50 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         expect(res.resolvedPrice).toBe(128000);
         expect(res.currency).toBe('UZS');
         expect(res.isTierPrice).toBe(true);
+      });
+
+      it('converts the base sale price from its saved currency into document currency', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          settings: { sales: { enableMultiTierPriceLists: false } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-usd',
+          salePrice: 10,
+          salePriceCurrency: 'USD',
+        });
+
+        const result = await service.resolveProductPrice(
+          'tenant-1',
+          'prod-usd',
+          {
+            currency: 'UZS',
+            exchangeRate: 12800,
+          },
+        );
+
+        expect(result).toMatchObject({
+          resolvedPrice: 128000,
+          basePrice: 10,
+          baseCurrency: 'USD',
+          currency: 'UZS',
+        });
+      });
+
+      it('does not silently label a nonzero base price when its currency is unresolved', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          settings: { sales: { enableMultiTierPriceLists: false } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-legacy',
+          salePrice: 10,
+          salePriceCurrency: null,
+        });
+
+        await expect(
+          service.resolveProductPrice('tenant-1', 'prod-legacy', {
+            currency: 'USD',
+          }),
+        ).rejects.toThrow(BadRequestException);
       });
     });
   });

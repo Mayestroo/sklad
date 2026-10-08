@@ -171,7 +171,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       .catch((err) => console.error(err));
 
     // Warehouses
-    apiFetch<WarehouseOption[]>('/inventory/warehouses', { token, tenantId: company.id, locale })
+    apiFetch<WarehouseOption[]>('/tenants/warehouses', { token, tenantId: company.id, locale })
       .then((res) => setWarehouses(res || []))
       .catch((err) => console.error(err));
 

@@ -162,6 +162,20 @@ enum ProductionOrderStatus {
   CANCELLED
 }
 
+enum ManufacturingStatus {
+  DRAFT
+  PLANNED
+  IN_PROGRESS
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum ProductionMaterialMovementType {
+  ISSUE
+  RETURN
+}
+
 enum PaymentMethod {
   CASH
   BANK_TRANSFER
@@ -315,6 +329,9 @@ model Company {
   additionalExpenses   AdditionalExpense[]
   batchConsumptions    BatchConsumption[]
   productionOrders     ProductionOrder[]
+  productionRecipes    ProductionRecipe[]
+  productionDocuments  ProductionDocument[]
+  productionMaterialMovements ProductionMaterialMovement[]
   stockReservations    StockReservation[]
   serviceActs          ServiceAct[]
   settlementEntries    CounterpartySettlementEntry[]
@@ -454,6 +471,10 @@ model User {
   assignedSalesOrders       SalesOrder[]        @relation("AssignedSalesOrders")
   createdSalesOrders        SalesOrder[]        @relation("CreatedSalesOrders")
   assignedProductionOrders  ProductionOrder[]   @relation("AssignedProductionOrders")
+  createdProductionRecipes  ProductionRecipe[]   @relation("CreatedProductionRecipes")
+  createdProductionDocuments ProductionDocument[] @relation("CreatedProductionDocuments")
+  responsibleProductionDocuments ProductionDocument[] @relation("ResponsibleProductionDocuments")
+  productionMaterialMovements ProductionMaterialMovement[] @relation("ProductionMaterialMovementUser")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -564,6 +585,7 @@ model Warehouse {
   salesReturns      SalesReturn[]      @relation("SalesReturnWarehouse")
   defectSalesReturns SalesReturn[]     @relation("SalesReturnDefectWarehouse")
   productBatches    ProductBatch[]
+  productionDocuments ProductionDocument[]
   salesOrders       SalesOrder[]
   stockReservations StockReservation[]
   isDefect          Boolean            @default(false) @map("is_defect")
@@ -659,7 +681,10 @@ model Product {
   barcode        String?
   unitOfMeasure  UnitOfMeasure @default(piece) @map("unit_of_measure")
   costPrice      Decimal       @default(0) @db.Decimal(15, 2) @map("cost_price")
+  costPriceCurrency String      @default("UZS") @map("cost_price_currency")
+  costPriceExchangeRate Decimal @default(1) @db.Decimal(15, 4) @map("cost_price_exchange_rate")
   salePrice      Decimal       @default(0) @db.Decimal(15, 2) @map("sale_price")
+  salePriceCurrency String?    @map("sale_price_currency")
   vatRate        Decimal       @default(12) @db.Decimal(5, 2) @map("vat_rate")
   minStockAlert  Decimal       @default(0) @db.Decimal(15, 2) @map("min_stock_alert")
   weight         Decimal       @default(0) @db.Decimal(15, 3)
@@ -685,6 +710,10 @@ model Product {
   productPrices        ProductPrice[]
   additionalExpenseItems AdditionalExpenseItem[]
   productionOrders       ProductionOrder[]
+  productionRecipes      ProductionRecipe[] @relation("ProductionRecipeProduct")
+  recipeMaterialLines    ProductionRecipeItem[] @relation("ProductionRecipeMaterial")
+  productionDocuments   ProductionDocument[] @relation("ProductionDocumentProduct")
+  productionMaterialLines ProductionMaterialLine[]
   stockReservations      StockReservation[]
   serviceActItems        ServiceActItem[]
 
@@ -969,6 +998,10 @@ model SalesOrder {
   exchangeRate            Decimal            @default(1) @db.Decimal(15, 4) @map("exchange_rate")
   subtotalAmount          Decimal            @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
   discountAmount          Decimal            @default(0) @db.Decimal(15, 2) @map("discount_amount")
+  vatAmount               Decimal            @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  additionalChargeAmount  Decimal            @default(0) @db.Decimal(15, 2) @map("additional_charge_amount")
+  additionalChargeVatRate Decimal            @default(12) @db.Decimal(5, 2) @map("additional_charge_vat_rate")
+  additionalChargeVatAmount Decimal          @default(0) @db.Decimal(15, 2) @map("additional_charge_vat_amount")
   totalAmount             Decimal            @default(0) @db.Decimal(15, 2) @map("total_amount")
   paidAmount              Decimal            @default(0) @db.Decimal(15, 2) @map("paid_amount")
   comment                 String?
@@ -1006,6 +1039,8 @@ model SalesOrderItem {
   unitPrice   Decimal    @db.Decimal(15, 2) @map("unit_price")
   discount    Decimal    @default(0) @db.Decimal(15, 2)
   totalPrice  Decimal    @db.Decimal(15, 2) @map("total_price")
+  vatRate     Decimal    @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount   Decimal    @default(0) @db.Decimal(15, 2) @map("vat_amount")
   reservedQty Decimal    @default(0) @db.Decimal(15, 3) @map("reserved_qty")
   readyQty    Decimal    @default(0) @db.Decimal(15, 3) @map("ready_qty")
   shippedQty  Decimal    @default(0) @db.Decimal(15, 3) @map("shipped_qty")
@@ -1062,6 +1097,135 @@ model ProductionOrder {
   @@map("production_orders")
 }
 
+model ProductionRecipe {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  productId        String   @map("product_id")
+  outputQuantity   Decimal  @db.Decimal(15, 3) @map("output_quantity")
+  note             String?
+  isActive         Boolean  @default(true) @map("is_active")
+  createdById      String?  @map("created_by_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  company          Company  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product          Product  @relation("ProductionRecipeProduct", fields: [productId], references: [id], onDelete: Restrict)
+  createdBy        User?    @relation("CreatedProductionRecipes", fields: [createdById], references: [id], onDelete: SetNull)
+  items            ProductionRecipeItem[]
+  documents        ProductionDocument[]
+
+  @@index([tenantId, productId, isActive])
+  @@map("production_recipes")
+}
+
+model ProductionRecipeItem {
+  id                String   @id @default(uuid())
+  recipeId          String   @map("recipe_id")
+  productId         String   @map("product_id")
+  quantity          Decimal  @db.Decimal(15, 3)
+
+  recipe            ProductionRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product           Product @relation("ProductionRecipeMaterial", fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([recipeId, productId])
+  @@map("production_recipe_items")
+}
+
+model ProductionDocument {
+  id                  String             @id @default(uuid())
+  tenantId            String             @map("tenant_id")
+  docNumber           String             @map("doc_number")
+  docDate             DateTime           @default(now()) @map("doc_date")
+  productId           String             @map("product_id")
+  recipeId            String             @map("recipe_id")
+  warehouseId         String             @map("warehouse_id")
+  responsibleId       String?            @map("responsible_id")
+  plannedQuantity     Decimal            @db.Decimal(15, 3) @map("planned_quantity")
+  producedQuantity    Decimal?           @db.Decimal(15, 3) @map("produced_quantity")
+  status              ManufacturingStatus @default(DRAFT)
+  note                String?
+  plannedMaterialCost Decimal            @default(0) @db.Decimal(15, 2) @map("planned_material_cost")
+  actualMaterialCost  Decimal            @default(0) @db.Decimal(15, 2) @map("actual_material_cost")
+  unitCost            Decimal            @default(0) @db.Decimal(15, 2) @map("unit_cost")
+  createdById         String?            @map("created_by_id")
+  startedAt           DateTime?          @map("started_at")
+  completedAt         DateTime?          @map("completed_at")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  company             Company             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product             Product             @relation("ProductionDocumentProduct", fields: [productId], references: [id], onDelete: Restrict)
+  recipe              ProductionRecipe    @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  warehouse           Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  responsible         User?               @relation("ResponsibleProductionDocuments", fields: [responsibleId], references: [id], onDelete: SetNull)
+  createdBy           User?               @relation("CreatedProductionDocuments", fields: [createdById], references: [id], onDelete: SetNull)
+  materials           ProductionMaterialLine[]
+  outputBatch         ProductBatch?       @relation("ProductionOutputBatch")
+  materialMovements   ProductionMaterialMovement[]
+
+  @@unique([tenantId, docNumber])
+  @@index([tenantId, status, docDate])
+  @@index([tenantId, productId])
+  @@map("production_documents")
+}
+
+model ProductionMaterialLine {
+  id                   String   @id @default(uuid())
+  productionDocumentId String   @map("production_document_id")
+  productId            String   @map("product_id")
+  plannedQuantity      Decimal  @db.Decimal(15, 3) @map("planned_quantity")
+  actualQuantity       Decimal? @db.Decimal(15, 3) @map("actual_quantity")
+  unitCost             Decimal  @default(0) @db.Decimal(15, 2) @map("unit_cost")
+  totalCost            Decimal  @default(0) @db.Decimal(15, 2) @map("total_cost")
+
+  productionDocument   ProductionDocument @relation(fields: [productionDocumentId], references: [id], onDelete: Cascade)
+  product              Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batchConsumptions    ProductionMaterialBatch[]
+  movements            ProductionMaterialMovement[]
+
+  @@unique([productionDocumentId, productId])
+  @@map("production_material_lines")
+}
+
+model ProductionMaterialBatch {
+  id         String   @id @default(uuid())
+  lineId     String   @map("line_id")
+  batchId    String   @map("batch_id")
+  quantity   Decimal  @db.Decimal(15, 3)
+  unitCost   Decimal  @db.Decimal(15, 2) @map("unit_cost")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  line       ProductionMaterialLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  batch      ProductBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@unique([lineId, batchId])
+  @@index([batchId])
+  @@map("production_material_batches")
+}
+
+model ProductionMaterialMovement {
+  id                   String                          @id @default(uuid())
+  tenantId             String                          @map("tenant_id")
+  productionDocumentId String                          @map("production_document_id")
+  lineId               String                          @map("line_id")
+  batchId              String                          @map("batch_id")
+  movementType         ProductionMaterialMovementType  @map("movement_type")
+  quantity             Decimal                         @db.Decimal(15, 3)
+  unitCost             Decimal                         @db.Decimal(15, 2) @map("unit_cost")
+  createdById          String?                         @map("created_by_id")
+  createdAt            DateTime                        @default(now()) @map("created_at")
+
+  company              Company                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productionDocument   ProductionDocument              @relation(fields: [productionDocumentId], references: [id], onDelete: Cascade)
+  line                 ProductionMaterialLine          @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  batch                ProductBatch                    @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  createdBy            User?                           @relation("ProductionMaterialMovementUser", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, productionDocumentId, createdAt])
+  @@index([batchId])
+  @@map("production_material_movements")
+}
+
 model SalesInvoice {
   id             String             @id @default(uuid())
   tenantId       String             @map("tenant_id")
@@ -1083,6 +1247,9 @@ model SalesInvoice {
   subtotalAmount Decimal            @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
   discountAmount Decimal            @default(0) @db.Decimal(15, 2) @map("discount_amount")
   vatAmount      Decimal            @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  additionalChargeAmount Decimal    @default(0) @db.Decimal(15, 2) @map("additional_charge_amount")
+  additionalChargeVatRate Decimal   @default(12) @db.Decimal(5, 2) @map("additional_charge_vat_rate")
+  additionalChargeVatAmount Decimal @default(0) @db.Decimal(15, 2) @map("additional_charge_vat_amount")
   totalAmount    Decimal            @default(0) @db.Decimal(15, 2) @map("total_amount")
   paidAmount     Decimal            @default(0) @db.Decimal(15, 2) @map("paid_amount")
   totalCogs      Decimal            @default(0) @db.Decimal(15, 2) @map("total_cogs")
@@ -1170,6 +1337,8 @@ model SalesReturnItem {
   productId   String      @map("product_id")
   quantity    Decimal     @db.Decimal(15, 3)
   unitPrice   Decimal     @db.Decimal(15, 2) @map("unit_price")
+  vatRate     Decimal     @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount   Decimal     @default(0) @db.Decimal(15, 2) @map("vat_amount")
   totalPrice  Decimal     @db.Decimal(15, 2) @map("total_price")
   unitCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("unit_cogs")
   lineCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("line_cogs")
@@ -1586,6 +1755,7 @@ model ProductBatch {
   productId     String           @map("product_id")
   warehouseId   String           @map("warehouse_id")
   receiptId     String?          @map("receipt_id")
+  productionDocumentId String?    @unique @map("production_document_id")
   batchNumber   String           @map("batch_number")
   initialQty    Decimal          @db.Decimal(15, 3) @map("initial_qty")
   remainingQty  Decimal          @db.Decimal(15, 3) @map("remaining_qty")
@@ -1597,7 +1767,10 @@ model ProductBatch {
   product       Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   warehouse     Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   receipt       PurchaseReceipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  productionDocument ProductionDocument? @relation("ProductionOutputBatch", fields: [productionDocumentId], references: [id], onDelete: SetNull)
   consumptions  BatchConsumption[]
+  productionConsumptions ProductionMaterialBatch[]
+  productionMovements ProductionMaterialMovement[]
 
   @@index([tenantId])
   @@index([tenantId, warehouseId, productId])

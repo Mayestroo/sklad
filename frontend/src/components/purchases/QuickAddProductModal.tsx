@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { CURRENCY_OPTIONS } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -18,6 +19,8 @@ interface QuickAddProductModalProps {
     sku: string;
     barcode?: string;
     costPrice: number;
+    costPriceCurrency?: 'USD' | 'UZS';
+    costPriceExchangeRate?: number;
     salePrice?: number;
     unitOfMeasure?: string;
     type?: string;
@@ -44,6 +47,8 @@ export function QuickAddProductModal({
   const [barcode, setBarcode] = useState(initialSkuOrBarcode || '');
   const [unitOfMeasure, setUnitOfMeasure] = useState<string>('piece');
   const [costPrice, setCostPrice] = useState<number>(0);
+  const [costPriceCurrency, setCostPriceCurrency] = useState<'USD' | 'UZS'>('UZS');
+  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('1');
   const [salePrice, setSalePrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +88,11 @@ export function QuickAddProductModal({
       setError(isRu ? 'Введите наименование' : 'Nomini kiriting');
       return;
     }
-    if (!sku.trim()) {
-      setError(isRu ? 'Укажите артикул (SKU)' : 'Artikul (SKU) kiritilishi shart');
+    if (costPrice > 0 && costPriceCurrency === 'USD' && Number(costPriceExchangeRate) <= 0) {
+      setError(isRu ? 'Укажите положительный курс себестоимости' : 'Xarid tannarxi uchun 0 dan katta kursni kiriting');
       return;
     }
+    const resolvedSku = sku.trim() || undefined;
 
     setLoading(true);
     setError(null);
@@ -103,10 +109,12 @@ export function QuickAddProductModal({
             ru: resolvedNameRu,
           },
           type: itemType,
-          sku: sku.trim(),
+          sku: resolvedSku,
           barcode: itemType !== 'SERVICE' && barcode.trim() ? barcode.trim() : undefined,
           unitOfMeasure,
           costPrice: Number(costPrice) || 0,
+          costPriceCurrency,
+          costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : (Number(costPriceExchangeRate) || 1),
           salePrice: Number(salePrice) || 0,
         }),
       });
@@ -344,6 +352,28 @@ export function QuickAddProductModal({
                 onChange={(e) => setCostPrice(Number(e.target.value) || 0)}
                 placeholder="0"
               />
+              <div className="mt-2">
+                <Select
+                  label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'}
+                  options={CURRENCY_OPTIONS}
+                  value={costPriceCurrency}
+                  onChange={(value) => {
+                    setCostPriceCurrency(value as 'USD' | 'UZS');
+                    setCostPriceExchangeRate(value === 'UZS' ? '1' : '');
+                  }}
+                />
+              </div>
+              {costPriceCurrency === 'USD' && (
+                <Input
+                  className="mt-2"
+                  label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
+                  type="number"
+                  min="0.0001"
+                  step="any"
+                  value={costPriceExchangeRate}
+                  onChange={(event) => setCostPriceExchangeRate(event.target.value)}
+                />
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">

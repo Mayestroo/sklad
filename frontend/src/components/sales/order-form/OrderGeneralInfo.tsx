@@ -7,9 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { CURRENCY_OPTIONS } from '@/lib/utils';
 import {
-  CounterpartyDropdownItem,
   UserDropdownItem,
-  PriceListDropdownItem,
 } from '@/hooks/useDocumentDropdowns';
 
 export interface OrderGeneralInfoProps {
@@ -19,9 +17,6 @@ export interface OrderGeneralInfoProps {
   onCounterpartyChange: (id: string) => void;
   customerOptions: SelectOption[];
   onQuickCustomerOpen?: () => void;
-  priceListId: string;
-  onPriceListChange: (id: string) => void;
-  priceLists: PriceListDropdownItem[];
   paymentCondition: 'PREPAID_100' | 'PARTIAL' | 'CREDIT';
   onPaymentConditionChange: (cond: 'PREPAID_100' | 'PARTIAL' | 'CREDIT') => void;
   requiredPaymentPercent: number;
@@ -33,8 +28,8 @@ export interface OrderGeneralInfoProps {
   onDeliveryDateChange: (date: string) => void;
   currency: string;
   onCurrencyChange: (curr: string) => void;
-  exchangeRate?: number;
-  onExchangeRateChange?: (rate: number) => void;
+  exchangeRate?: number | string;
+  onExchangeRateChange?: (rate: number | string) => void;
   deliveryAddress: string;
   onDeliveryAddressChange: (addr: string) => void;
   comment: string;
@@ -48,9 +43,6 @@ export function OrderGeneralInfo({
   onCounterpartyChange,
   customerOptions,
   onQuickCustomerOpen,
-  priceListId,
-  onPriceListChange,
-  priceLists,
   paymentCondition,
   onPaymentConditionChange,
   requiredPaymentPercent,
@@ -89,23 +81,6 @@ export function OrderGeneralInfo({
             disabled={isLocked}
             onCreateNew={!isLocked ? onQuickCustomerOpen : undefined}
             createNewLabel={isRu ? 'Добавить клиента' : 'Yangi mijoz qo‘shish'}
-          />
-        </div>
-
-        {/* Price List */}
-        <div style={{ minWidth: '180px', flex: '1.5 1 200px' }}>
-          <Select
-            label={isRu ? 'Прайс-лист цен' : 'Narx jadvali'}
-            options={[
-              { value: '', label: isRu ? '— Базовый (Основной) —' : '— Asosiy (Bazaviy) —' },
-              ...priceLists.map((pl) => {
-                const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
-                return { value: pl.id, label: `${plName} (${pl.currency || 'UZS'})` };
-              }),
-            ]}
-            value={priceListId}
-            onChange={onPriceListChange}
-            disabled={isLocked}
           />
         </div>
 
@@ -180,11 +155,11 @@ export function OrderGeneralInfo({
           <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
             <Input
               label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
-              type="number"
+              type="text"
+              inputMode="decimal"
               min={0.0001}
-              step="any"
               value={exchangeRate}
-              onChange={(e) => onExchangeRateChange?.(parseFloat(e.target.value) || 1)}
+              onChange={(e) => onExchangeRateChange?.(e.target.value)}
               disabled={isLocked}
             />
           </div>

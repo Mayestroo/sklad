@@ -9,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class TranslatableTextDto {
   @IsString()
@@ -41,8 +42,8 @@ export class CreateProductDto {
   type?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE' | 'BUNDLE';
 
   @IsString()
-  @IsNotEmpty()
-  sku: string;
+  @IsOptional()
+  sku?: string;
 
   @IsString()
   @IsOptional()
@@ -57,10 +58,23 @@ export class CreateProductDto {
   @IsOptional()
   costPrice?: number;
 
+  @IsValidCurrency()
+  @IsOptional()
+  costPriceCurrency?: string;
+
+  @IsNumber()
+  @Min(0.0001)
+  @IsOptional()
+  costPriceExchangeRate?: number;
+
   @IsNumber()
   @Min(0)
   @IsOptional()
   salePrice?: number;
+
+  @IsValidCurrency()
+  @IsOptional()
+  salePriceCurrency?: string;
 
   @IsNumber()
   @Min(0)

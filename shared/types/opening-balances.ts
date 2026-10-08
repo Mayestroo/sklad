@@ -108,6 +108,7 @@ export interface OpeningBalanceMetrics {
   enteredEquity: number;
   balanceDifference: number;
   isBalanced: boolean;
+  hasValidCurrencyRates: boolean;
   categoryBreakdown: Record<OpeningBalanceCategory, number>;
 }
 

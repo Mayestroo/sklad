@@ -29,6 +29,11 @@ import { generateDocumentSequence } from '../../../common/utils/document-sequenc
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
+import {
+  calculateSalesDocumentTotals,
+  calculateSalesLineAmounts,
+  grossProfitInUzs,
+} from '../sales-calculations';
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -405,18 +410,19 @@ export class SalesOrdersService {
       }
       if (
         item.discount != null &&
-        (isNaN(Number(item.discount)) || Number(item.discount) < 0)
+        (isNaN(Number(item.discount)) || Number(item.discount) < 0 || Number(item.discount) > 100)
       ) {
         throw new BadRequestException(
-          "Chegirma (discount) 0 yoki undan katta bo'lishi shart",
+          'Chegirma foizi 0 va 100 orasida bo‘lishi shart',
         );
+      }
+      if (item.vatRate != null && (!Number.isFinite(Number(item.vatRate)) || Number(item.vatRate) < 0 || Number(item.vatRate) > 100)) {
+        throw new BadRequestException('QQS stavkasi 0 va 100 orasida bo‘lishi shart');
       }
     }
 
     const orderNumber = await this.generateOrderNumber(tenantId);
 
-    let subtotalAmount = 0;
-    let discountAmount = 0;
     let isAnyBelowCost = false;
 
     // Fetch products to verify pricing vs cost
@@ -426,18 +432,36 @@ export class SalesOrdersService {
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
 
-    const preparedItems = dto.items.map((item) => {
+    const lineInputs = dto.items.map((item) => {
+      const product = productMap.get(item.productId);
+      const vatRate = item.vatRate !== undefined ? Number(item.vatRate) : Number(product?.vatRate ?? 0);
+      return {
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discountPercent: Number(item.discount ?? 0),
+        vatRate,
+      };
+    });
+    const additionalChargeAmount = Number(dto.additionalChargeAmount ?? 0);
+    const additionalChargeVatRate = Number(dto.additionalChargeVatRate ?? 12);
+    let totals: ReturnType<typeof calculateSalesDocumentTotals>;
+    try {
+      totals = calculateSalesDocumentTotals(lineInputs, additionalChargeAmount, additionalChargeVatRate);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Buyurtma summalarini hisoblab bo‘lmadi');
+    }
+
+    const preparedItems = dto.items.map((item, index) => {
       const qty = Number(item.quantity);
       const unitPrice = Number(item.unitPrice);
-      const disc = item.discount ? Number(item.discount) : 0;
-      const lineSubtotal = qty * unitPrice;
-      subtotalAmount += lineSubtotal;
-      discountAmount += disc;
-
+      const disc = Number(item.discount ?? 0);
+      const vatRate = lineInputs[index].vatRate;
+      const amounts = calculateSalesLineAmounts(lineInputs[index]);
       const prd = productMap.get(item.productId);
-      const cost = Number(prd?.costPrice || 0);
-      const effectivePrice = unitPrice * (1 - disc / 100);
-      if (cost > 0 && effectivePrice < cost) {
+      const costInUzs = Number(prd?.costPrice || 0) * Number(prd?.costPriceExchangeRate || 1);
+      const orderToUzsRate = dto.currency === 'USD' ? exchangeRate : 1;
+      const effectivePriceInUzs = amounts.netAmount * orderToUzsRate / qty;
+      if (costInUzs > 0 && effectivePriceInUzs < costInUzs) {
         isAnyBelowCost = true;
       }
 
@@ -446,14 +470,16 @@ export class SalesOrdersService {
         quantity: qty,
         unitPrice: unitPrice,
         discount: disc,
-        totalPrice: Math.max(0, lineSubtotal - disc),
+        vatRate,
+        vatAmount: amounts.vatAmount,
+        totalPrice: amounts.totalAmount,
         reservedQty: 0,
         readyQty: 0,
         shippedQty: 0,
       };
     });
 
-    const totalAmount = Math.max(0, subtotalAmount - discountAmount);
+    const { subtotalAmount, discountAmount, vatAmount, totalAmount } = totals;
 
     // If below cost and not manager, enforce PENDING_APPROVAL
     const initialStatus =
@@ -481,6 +507,10 @@ export class SalesOrdersService {
         status: initialStatus,
         subtotalAmount,
         discountAmount,
+        vatAmount,
+        additionalChargeAmount: totals.additionalChargeAmount,
+        additionalChargeVatRate,
+        additionalChargeVatAmount: totals.additionalChargeVatAmount,
         totalAmount,
         paidAmount: 0,
         items: { create: preparedItems },
@@ -539,20 +569,31 @@ export class SalesOrdersService {
     id: string,
     dto: Partial<CreateSalesOrderDto>,
   ) {
-    const order = await this.prisma.salesOrder.findFirst({ where: { id, tenantId } });
+    const order = await this.prisma.salesOrder.findFirst({
+      where: { id, tenantId },
+      include: { items: true },
+    });
     if (!order) throw new NotFoundException('Buyurtma topilmadi');
     if (order.status !== SalesOrderStatus.NEW && order.status !== SalesOrderStatus.PENDING_APPROVAL) {
       throw new BadRequestException(
         "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tahrirlash mumkin",
       );
     }
+    const currency = dto.currency ?? order.currency;
+    const exchangeRate = dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : Number(order.exchangeRate);
+    if (!SUPPORTED_CURRENCIES.includes(currency as (typeof SUPPORTED_CURRENCIES)[number])) {
+      throw new BadRequestException('Sotuv buyurtmasi valyutasi USD yoki UZS bo‘lishi kerak');
+    }
+    if (currency !== 'UZS' && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
+      throw new BadRequestException('Xorijiy valyuta uchun 0 dan katta kursni kiriting');
+    }
 
     const updateData: Prisma.SalesOrderUncheckedUpdateInput = {
-      currency: dto.currency,
-      exchangeRate: dto.exchangeRate,
-      paymentCondition: dto.paymentCondition as PaymentCondition,
+      currency: dto.currency ?? undefined,
+      exchangeRate: dto.exchangeRate !== undefined ? dto.exchangeRate : undefined,
+      paymentCondition: dto.paymentCondition ? dto.paymentCondition as PaymentCondition : undefined,
       requiredPaymentPercent:
-        dto.paymentCondition === 'PARTIAL' ? dto.requiredPaymentPercent : null,
+        dto.paymentCondition === 'PARTIAL' ? dto.requiredPaymentPercent : dto.paymentCondition ? null : undefined,
       deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
       deliveryAddress: dto.deliveryAddress,
       comment: dto.comment,
@@ -561,20 +602,44 @@ export class SalesOrdersService {
       assignedSellerId: dto.assignedSellerId,
     };
 
+    const sourceItems = dto.items?.length ? dto.items : order.items;
+    const products = await this.prisma.product.findMany({
+      where: { tenantId, id: { in: sourceItems.map((item) => item.productId) } },
+    });
+    const productMap = new Map(products.map((product) => [product.id, product]));
+    const lineInputs = sourceItems.map((item) => ({
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+      discountPercent: Number(item.discount ?? 0),
+      vatRate: item.vatRate !== undefined ? Number(item.vatRate) : Number(productMap.get(item.productId)?.vatRate ?? 0),
+    }));
+    const additionalChargeAmount = Number(dto.additionalChargeAmount ?? order.additionalChargeAmount ?? 0);
+    const additionalChargeVatRate = Number(dto.additionalChargeVatRate ?? order.additionalChargeVatRate ?? 12);
+    let totals: ReturnType<typeof calculateSalesDocumentTotals>;
+    try {
+      totals = calculateSalesDocumentTotals(lineInputs, additionalChargeAmount, additionalChargeVatRate);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Buyurtma summalarini hisoblab bo‘lmadi');
+    }
+    updateData.subtotalAmount = totals.subtotalAmount;
+    updateData.discountAmount = totals.discountAmount;
+    updateData.vatAmount = totals.vatAmount;
+    updateData.additionalChargeAmount = totals.additionalChargeAmount;
+    updateData.additionalChargeVatRate = additionalChargeVatRate;
+    updateData.additionalChargeVatAmount = totals.additionalChargeVatAmount;
+    updateData.totalAmount = totals.totalAmount;
+
     if (dto.items?.length) {
-      let subtotalAmount = 0;
-      let discountAmount = 0;
-      const preparedItems = dto.items.map((item) => {
-        const lineSubtotal = item.quantity * item.unitPrice;
-        const disc = item.discount || 0;
-        subtotalAmount += lineSubtotal;
-        discountAmount += disc;
+      const preparedItems = dto.items.map((item, index) => {
+        const amounts = calculateSalesLineAmounts(lineInputs[index]);
         return {
           productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discount: disc,
-          totalPrice: Math.max(0, lineSubtotal - disc),
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          discount: Number(item.discount ?? 0),
+          vatRate: lineInputs[index].vatRate,
+          vatAmount: amounts.vatAmount,
+          totalPrice: amounts.totalAmount,
           reservedQty: 0,
           readyQty: 0,
           shippedQty: 0,
@@ -584,9 +649,6 @@ export class SalesOrdersService {
       // Existing reservations reference the old order items and must not survive an edit.
       await this.stockReservationService.releaseOrderReservations(tenantId, id);
       await this.prisma.salesOrderItem.deleteMany({ where: { orderId: id } });
-      updateData.subtotalAmount = subtotalAmount;
-      updateData.discountAmount = discountAmount;
-      updateData.totalAmount = Math.max(0, subtotalAmount - discountAmount);
       updateData.items = { create: preparedItems };
     }
 
@@ -1320,6 +1382,7 @@ export class SalesOrdersService {
         dispatchQty: number;
         unitPrice: number;
         discount: number;
+        vatRate: number;
       }[] = [];
 
       if (dto.items && dto.items.length > 0) {
@@ -1344,6 +1407,7 @@ export class SalesOrdersService {
               dispatchQty: reqItem.quantity,
               unitPrice: Number(matchingItem.unitPrice),
               discount: Number(matchingItem.discount || 0),
+              vatRate: Number(matchingItem.vatRate || 0),
             });
           }
         }
@@ -1359,6 +1423,7 @@ export class SalesOrdersService {
               dispatchQty: unShippedQty,
               unitPrice: Number(item.unitPrice),
               discount: Number(item.discount || 0),
+              vatRate: Number(item.vatRate || 0),
             });
           }
         }
@@ -1377,34 +1442,63 @@ export class SalesOrdersService {
       const invoiceNumber = `${invPrefix}${(invCount + 1).toString().padStart(4, '0')}`;
 
       // 3. Prepare invoice items
-      let subtotal = 0;
-      let discountAmt = 0;
-      const invoiceItems = dispatchPlan.map((dp) => {
-        const lineSubtotal = dp.dispatchQty * dp.unitPrice;
-        const disc = (lineSubtotal * dp.discount) / 100;
-        const lineTotal = Math.max(0, lineSubtotal - disc);
-        subtotal += lineSubtotal;
-        discountAmt += disc;
+      const lineInputs = dispatchPlan.map((dp) => ({
+        quantity: dp.dispatchQty,
+        unitPrice: dp.unitPrice,
+        discountPercent: dp.discount,
+        vatRate: dp.vatRate,
+      }));
+      const priorInvoices = await tx.salesInvoice.findMany({
+        where: { tenantId, salesOrderId: id, status: SalesDocStatus.POSTED },
+        select: { paidAmount: true, additionalChargeAmount: true },
+      });
+      const previousCharges = priorInvoices.reduce(
+        (sum, priorInvoice) => sum + Number(priorInvoice.additionalChargeAmount || 0),
+        0,
+      );
+      const remainingCharge = Math.max(0, Number(order.additionalChargeAmount || 0) - previousCharges);
+      const remainingUnshippedNet = order.items.reduce((sum, item) => {
+        const unshipped = Math.max(0, Number(item.quantity) - Number(item.shippedQty || 0));
+        return sum + unshipped * Number(item.unitPrice) * (1 - Number(item.discount || 0) / 100);
+      }, 0);
+      const dispatchNet = lineInputs.reduce((sum, item) => {
+        return sum + item.quantity * item.unitPrice * (1 - item.discountPercent / 100);
+      }, 0);
+      const isFinalDispatch = order.items.every((item) => {
+        const dispatched = dispatchPlan
+          .filter((line) => line.orderItem.id === item.id)
+          .reduce((sum, line) => sum + line.dispatchQty, 0);
+        return Number(item.shippedQty || 0) + dispatched >= Number(item.quantity) - 0.0005;
+      });
+      const invoiceAdditionalCharge = remainingCharge <= 0
+        ? 0
+        : isFinalDispatch || remainingUnshippedNet <= 0
+          ? remainingCharge
+          : Math.round((remainingCharge * dispatchNet / remainingUnshippedNet + Number.EPSILON) * 100) / 100;
+      const additionalChargeVatRate = Number(order.additionalChargeVatRate ?? 12);
+      const totals = calculateSalesDocumentTotals(
+        lineInputs,
+        invoiceAdditionalCharge,
+        additionalChargeVatRate,
+      );
+      const invoiceItems = dispatchPlan.map((dp, index) => {
+        const amounts = calculateSalesLineAmounts(lineInputs[index]);
         return {
           productId: dp.orderItem.productId,
           quantity: dp.dispatchQty,
           unitPrice: dp.unitPrice,
           discount: dp.discount,
-          vatRate: 0,
-          vatAmount: 0,
-          totalPrice: lineTotal,
+          vatRate: dp.vatRate,
+          vatAmount: amounts.vatAmount,
+          totalPrice: amounts.totalAmount,
           unitCogs: 0,
           lineCogs: 0,
           lineGrossProfit: 0,
           isBelowCost: false,
         };
       });
-      const invoiceTotal = subtotal - discountAmt;
+      const invoiceTotal = totals.totalAmount;
       const orderPaid = Number(order.paidAmount || 0);
-      const priorInvoices = await tx.salesInvoice.findMany({
-        where: { tenantId, salesOrderId: id, status: SalesDocStatus.POSTED },
-        select: { paidAmount: true },
-      });
       const previouslyAllocated = priorInvoices.reduce(
         (sum, priorInvoice) => sum + Number(priorInvoice.paidAmount),
         0,
@@ -1428,9 +1522,12 @@ export class SalesOrdersService {
           status: SalesDocStatus.DRAFT,
           paymentStatus: SalesPaymentStatus.UNPAID,
           returnStatus: SalesReturnStatus.NONE,
-          subtotalAmount: subtotal,
-          discountAmount: discountAmt,
-          vatAmount: 0,
+          subtotalAmount: totals.subtotalAmount,
+          discountAmount: totals.discountAmount,
+          vatAmount: totals.vatAmount,
+          additionalChargeAmount: totals.additionalChargeAmount,
+          additionalChargeVatRate,
+          additionalChargeVatAmount: totals.additionalChargeVatAmount,
           totalAmount: invoiceTotal,
           paidAmount: 0,
           totalCogs: 0,
@@ -1509,6 +1606,10 @@ export class SalesOrdersService {
 
       // 5. Deduct FIFO stock batches & consume reservations
       let totalCogs = 0;
+      const ledgerRate = order.currency === 'UZS' ? 1 : Number(order.exchangeRate);
+      if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
+        throw new BadRequestException(`Buyurtma uchun valyuta kursi noto'g'ri: ${order.currency}`);
+      }
       for (let idx = 0; idx < dispatchPlan.length; idx++) {
         const dp = dispatchPlan[idx];
         const invItem = invoice.items[idx];
@@ -1568,17 +1669,24 @@ export class SalesOrdersService {
 
         if (remaining > 0) {
           const product = await tx.product.findUnique({ where: { id: dp.orderItem.productId } });
-          itemCogs += remaining * Number(product?.costPrice || 0);
+          itemCogs += remaining * Number(product?.costPrice || 0) * Number(product?.costPriceExchangeRate || 1);
         }
 
         const unitCogs = qty > 0 ? itemCogs / qty : 0;
         const lineTotal = Number(invItem.totalPrice);
-        const lineGrossProfit = lineTotal - itemCogs;
+        const lineVat = Number(invItem.vatAmount || 0);
+        const lineGrossProfit = grossProfitInUzs(lineTotal - lineVat, order.currency, ledgerRate, itemCogs);
+        const discountedUnitPrice = dp.unitPrice * (1 - dp.discount / 100);
         totalCogs += itemCogs;
 
         await tx.salesInvoiceItem.update({
           where: { id: invItem.id },
-          data: { unitCogs, lineCogs: itemCogs, lineGrossProfit, isBelowCost: dp.unitPrice < unitCogs },
+          data: {
+            unitCogs,
+            lineCogs: itemCogs,
+            lineGrossProfit,
+            isBelowCost: discountedUnitPrice * ledgerRate < unitCogs,
+          },
         });
 
         await tx.stockLevel.update({
@@ -1609,13 +1717,12 @@ export class SalesOrdersService {
         );
       }
 
-      const ledgerRate = order.currency === 'UZS' ? 1 : Number(order.exchangeRate);
-      if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
-        throw new BadRequestException(
-          `Buyurtma uchun valyuta kursi noto'g'ri: ${order.currency}`,
-        );
-      }
-      const grossProfit = Number(invoice.totalAmount) * ledgerRate - totalCogs;
+      const grossProfit = grossProfitInUzs(
+        Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
+        order.currency,
+        ledgerRate,
+        totalCogs,
+      );
 
       // 6. Post Invoice & increase customer debt
       await this.settlementService.recordMovement(tx, {
@@ -1638,20 +1745,32 @@ export class SalesOrdersService {
             ? SalesPaymentStatus.PARTIALLY_PAID
             : SalesPaymentStatus.UNPAID;
 
-      const [revenueAcc, receivableAcc, cogsAcc, inventoryAcc] = await Promise.all([
+      const [revenueAcc, receivableAcc, vatAcc, cogsAcc, inventoryAcc] = await Promise.all([
         tx.account.findFirst({ where: { tenantId, code: '9010' } }),
         tx.account.findFirst({ where: { tenantId, code: '4010' } }),
+        tx.account.findFirst({ where: { tenantId, code: '6410' } }),
         tx.account.findFirst({ where: { tenantId, code: '9110' } }),
         tx.account.findFirst({ where: { tenantId, code: '2910' } }),
       ]);
       if (revenueAcc && receivableAcc) {
         const entryCount = await tx.journalEntry.count({ where: { tenantId } });
+        const netRevenueUzs = (Number(invoice.totalAmount) - Number(invoice.vatAmount || 0)) * ledgerRate;
+        const vatAmountUzs = Number(invoice.vatAmount || 0) * ledgerRate;
         const lines = [{
           debitAccountId: receivableAcc.id,
           creditAccountId: revenueAcc.id,
-          amount: invoiceTotal * ledgerRate,
+          amount: netRevenueUzs,
           description: `Sotuv tushumi № ${invoiceNumber}`,
         }];
+        if (vatAmountUzs > 0) {
+          if (!vatAcc) throw new BadRequestException('QQS hisob raqami (6410) topilmadi');
+          lines.push({
+            debitAccountId: receivableAcc.id,
+            creditAccountId: vatAcc.id,
+            amount: vatAmountUzs,
+            description: `Chiquvchi QQS № ${invoiceNumber}`,
+          });
+        }
         if (totalCogs > 0 && cogsAcc && inventoryAcc) {
           lines.push({
             debitAccountId: cogsAcc.id,

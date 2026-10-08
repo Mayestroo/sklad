@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
 
 @Injectable()
@@ -6,10 +6,24 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getKpiSummary(tenantId: string) {
-    const [invoices, balances, stockLevels, recentReceipt, recentInvoice, company] = await Promise.all([
+    const [invoices, returns, balances, stockLevels] = await Promise.all([
       this.prisma.salesInvoice.findMany({
-        where: { tenantId },
-        include: { items: { include: { product: true } } },
+        where: { tenantId, status: 'POSTED' },
+        select: {
+          totalAmount: true,
+          vatAmount: true,
+          totalCogs: true,
+          grossProfit: true,
+          currency: true,
+          exchangeRate: true,
+        },
+      }),
+      this.prisma.salesReturn.findMany({
+        where: { tenantId, status: 'POSTED' },
+        include: {
+          invoice: { select: { currency: true, exchangeRate: true } },
+          items: { select: { vatAmount: true } },
+        },
       }),
       this.prisma.counterpartyBalance.findMany({
         where: { tenantId },
@@ -24,44 +38,48 @@ export class AnalyticsService {
         where: { tenantId },
         include: { product: true },
       }),
-      this.prisma.purchaseReceipt.findFirst({
-        where: { tenantId, status: 'POSTED' },
-        select: { currency: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.salesInvoice.findFirst({
-        where: { tenantId, status: 'POSTED' },
-        select: { currency: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.company.findUnique({
-        where: { id: tenantId },
-        select: { settings: true },
-      }),
     ]);
 
-    const reportCurrency =
-      recentReceipt?.currency ||
-      recentInvoice?.currency ||
-      (company?.settings as any)?.sales?.defaultCurrency ||
-      'USD';
-
-    const totalRevenue = invoices.reduce(
-      (sum, inv) => sum + Number(inv.totalAmount),
-      0,
-    );
-
+    const revenueByCurrencyMap: Record<string, number> = {};
+    let totalNetRevenueUzs = 0;
     let totalCogs = 0;
-    invoices.forEach((inv) => {
-      inv.items.forEach((item) => {
-        totalCogs +=
-          Number(item.quantity) * (Number(item.product?.costPrice) || 0);
-      });
-    });
-
-    const grossProfit = totalRevenue - totalCogs;
-    const netProfitMargin =
-      totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    let grossProfit = 0;
+    for (const invoice of invoices) {
+      const invoiceCurrency = invoice.currency;
+      const rate = invoiceCurrency === 'UZS' ? 1 : Number(invoice.exchangeRate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new BadRequestException(`Posted sales invoice has an invalid ${invoiceCurrency} exchange rate`);
+      }
+      const amount = Number(invoice.totalAmount);
+      const netRevenue = amount - Number(invoice.vatAmount || 0);
+      revenueByCurrencyMap[invoiceCurrency] = (revenueByCurrencyMap[invoiceCurrency] || 0) + amount;
+      totalNetRevenueUzs += netRevenue * rate;
+      totalCogs += Number(invoice.totalCogs || 0);
+      grossProfit += Number(invoice.grossProfit || 0);
+    }
+    for (const salesReturn of returns) {
+      const currency = salesReturn.currency;
+      const rate = currency === 'UZS' ? 1 : Number(salesReturn.invoice?.exchangeRate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new BadRequestException(`Posted sales return has an invalid ${currency} exchange rate`);
+      }
+      const amount = Number(salesReturn.totalAmount);
+      const vat = salesReturn.items.reduce((sum, item) => sum + Number(item.vatAmount || 0), 0);
+      const netRevenue = amount - vat;
+      const cogs = Number(salesReturn.totalCogs || 0);
+      revenueByCurrencyMap[currency] = (revenueByCurrencyMap[currency] || 0) - amount;
+      totalNetRevenueUzs -= netRevenue * rate;
+      totalCogs -= cogs;
+      grossProfit -= netRevenue * rate - cogs;
+    }
+    const totalRevenueByCurrency = Object.entries(revenueByCurrencyMap)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([currency, amount]) => ({ currency, amount }));
+    const totalRevenue = totalRevenueByCurrency.length === 1 ? totalRevenueByCurrency[0].amount : 0;
+    const grossProfitByCurrency = invoices.length > 0 || returns.length > 0
+      ? [{ currency: 'UZS', amount: Math.round(grossProfit * 100) / 100 }]
+      : [];
+    const netProfitMargin = totalNetRevenueUzs > 0 ? (grossProfit / totalNetRevenueUzs) * 100 : 0;
 
     let totalAccountsReceivable = 0;
     let totalAccountsPayable = 0;
@@ -73,14 +91,16 @@ export class AnalyticsService {
     balances.forEach((balance) => {
       const customerDebt = Number(balance.customerDebt);
       const supplierDebt = Number(balance.supplierDebt);
-      if (customerDebt > 0) {
-        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + customerDebt;
-      } else if (customerDebt < 0) {
+      const netBalance = customerDebt - supplierDebt;
+      if (netBalance > 0) {
+        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + netBalance;
+      } else if (netBalance < 0) {
+        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + Math.abs(netBalance);
+      }
+      if (customerDebt < 0) {
         customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
       }
-      if (supplierDebt > 0) {
-        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + supplierDebt;
-      } else if (supplierDebt < 0) {
+      if (supplierDebt < 0) {
         supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     });
@@ -92,20 +112,22 @@ export class AnalyticsService {
     if (receivablesByCurrency.length === 1) totalAccountsReceivable = receivablesByCurrency[0].amount;
     if (payablesByCurrency.length === 1) totalAccountsPayable = payablesByCurrency[0].amount;
 
-    const inventoryValuation = stockLevels.reduce(
-      (sum, stock) =>
-        sum + Number(stock.quantity) * (Number(stock.product?.costPrice) || 0),
-      0,
-    );
+    const inventoryValuation = stockLevels.reduce((sum, stock) =>
+      sum + Number(stock.quantity) * Number(stock.product?.costPrice || 0) * Number(stock.product?.costPriceExchangeRate || 1),
+    0);
+    const reportCurrency = totalRevenueByCurrency.length === 1 ? totalRevenueByCurrency[0].currency : 'UZS';
 
     return {
       currency: reportCurrency,
       totalRevenue,
-      grossProfit,
+      totalRevenueByCurrency,
+      grossProfit: Math.round(grossProfit * 100) / 100,
+      grossProfitByCurrency,
       netProfitMargin: Math.round(netProfitMargin * 10) / 10,
       totalAccountsReceivable,
       totalAccountsPayable,
       inventoryValuation,
+      inventoryCurrency: 'UZS' as const,
       receivablesByCurrency,
       payablesByCurrency,
       customerAdvancesByCurrency,

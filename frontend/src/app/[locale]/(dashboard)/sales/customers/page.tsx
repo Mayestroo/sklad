@@ -30,6 +30,9 @@ interface CustomerProfile {
     totalSales: number;
     totalPaid: number;
     totalReturned: number;
+    totalSalesByCurrency: Array<{ currency: string; amount: number }>;
+    totalPaidByCurrency: Array<{ currency: string; amount: number }>;
+    totalReturnedByCurrency: Array<{ currency: string; amount: number }>;
     balancesByCurrency: NonNullable<Customer['balancesByCurrency']>;
     customerAdvancesByCurrency: Array<{ currency: string; amount: number }>;
     totalCogs: number;
@@ -283,6 +286,10 @@ export default function CustomersPage() {
       {/* Customer Profile Modal */}
       {selectedCustomer && (() => {
         const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || defaultCurrency;
+        const formatByCurrency = (items: Array<{ currency: string; amount: number }>) =>
+          items.length > 0
+            ? items.map((item) => formatCurrency(item.amount, locale, item.currency)).join(' · ')
+            : formatCurrency(0, locale, defaultCurrency);
         return (
           <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`${isRu ? 'Профиль клиента' : 'Mijoz'}: ${selectedCustomer.name}`} size="xl">
             {profileLoading ? (
@@ -291,14 +298,14 @@ export default function CustomersPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
                   {[
-                    { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatCurrency(profile.metrics.totalSales, locale, custCurrency), color: undefined },
-                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatCurrency(profile.metrics.totalPaid, locale, custCurrency), color: '#10b981' },
+                    { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatByCurrency(profile.metrics.totalSalesByCurrency), color: undefined },
+                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatByCurrency(profile.metrics.totalPaidByCurrency), color: '#10b981' },
                     { label: isRu ? 'Долг по валютам' : 'Valyuta bo‘yicha qarz', value: profile.metrics.balancesByCurrency
                       .filter((balance) => balance.customerDebt !== 0)
                       .map((balance) => `${balance.currency}: ${formatCurrency(balance.customerDebt, locale, balance.currency)}`)
                       .join(' · ') || '—', color: '#f59e0b' },
-                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatCurrency(profile.metrics.totalReturned, locale, custCurrency), color: '#ef4444' },
-                    { label: isRu ? 'Валовая прибыль' : 'Yalpi foyda', value: formatCurrency(profile.metrics.grossProfit, locale, custCurrency), color: profile.metrics.grossProfit >= 0 ? '#10b981' : '#ef4444' },
+                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency), color: '#ef4444' },
+                    { label: isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)', value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'), color: profile.metrics.grossProfit >= 0 ? '#10b981' : '#ef4444' },
                   ].map((m) => (
                     <div key={m.label} style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</div>

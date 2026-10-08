@@ -64,6 +64,17 @@ export class SalesInvoicesController {
     return this.service.createInvoice(tenantId, userId, dto);
   }
 
+  @Patch('invoices/:id')
+  @RequirePermissions('sales:edit')
+  update(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: CreateSalesInvoiceDto,
+  ) {
+    return this.service.updateInvoice(tenantId, userId, id, dto);
+  }
+
   @Post('invoices/:id/post')
   @RequirePermissions('sales:post')
   postInvoice(

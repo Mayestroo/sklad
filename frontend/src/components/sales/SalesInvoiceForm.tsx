@@ -38,6 +38,8 @@ import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCoun
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
 
 interface CounterpartyOption {
   id: string;
@@ -46,7 +48,6 @@ interface CounterpartyOption {
   balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
   phone?: string;
   inn?: string;
-  priceListId?: string | null;
   discountPercent?: number;
 }
 
@@ -61,7 +62,11 @@ interface ProductOption {
   sku: string;
   barcode?: string;
   salePrice: number;
+  salePriceCurrency?: 'USD' | 'UZS' | null;
   costPrice: number;
+  costPriceCurrency?: 'USD' | 'UZS';
+  costPriceExchangeRate?: number;
+  vatRate?: number;
   unitOfMeasure?: string;
   stockQty?: number;
   currency?: string;
@@ -72,7 +77,7 @@ interface ItemRow {
   quantity: number;
   unitPrice: number;
   discount: number;
-  vatRate: number;
+  vatRate: number | string;
 }
 
 interface SalesInvoiceFormProps {
@@ -84,6 +89,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
+  const defaultCurrency = useDefaultCurrency();
   const router = useRouter();
   const confirm = useConfirm();
   const searchParams = useSearchParams();
@@ -97,7 +103,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [counterparties, setCounterparties] = useState<CounterpartyOption[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
-  const [priceLists, setPriceLists] = useState<any[]>([]);
 
   // Document Form State
   const [invoiceId, setInvoiceId] = useState<string | null>(initialData?.id || null);
@@ -106,13 +111,18 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [paymentStatus, setPaymentStatus] = useState<string>(initialData?.paymentStatus || 'UNPAID');
 
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
-  const [priceListId, setPriceListId] = useState<string>((initialData as any)?.priceListId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [docDate, setDocDate] = useState(
     initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))
   );
-  const [currency, setCurrency] = useState(initialData?.currency || '');
-  const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);
+  const [currency, setCurrency] = useState(initialData?.currency || defaultCurrency);
+  const [exchangeRate, setExchangeRate] = useState<number | string>(
+    initialData?.exchangeRate !== undefined
+      ? Number(initialData.exchangeRate)
+      : (initialData?.currency || defaultCurrency) === 'UZS' ? 1 : '',
+  );
+  const [additionalChargeAmount, setAdditionalChargeAmount] = useState<number | string>(Number(initialData?.additionalChargeAmount || 0));
+  const [additionalChargeVatRate, setAdditionalChargeVatRate] = useState<number | string>(Number(initialData?.additionalChargeVatRate ?? 12));
   const [contractNumber, setContractNumber] = useState(initialData?.contractNumber || '');
   const [contractDate, setContractDate] = useState(
     initialData?.contractDate ? initialData.contractDate.slice(0, 10) : ''
@@ -140,6 +150,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (mode === 'create' && !isDirty) {
+      setCurrency(defaultCurrency);
+      setExchangeRate(defaultCurrency === 'UZS' ? 1 : '');
+    }
+  }, [defaultCurrency, mode, isDirty]);
 
   // Quick Add Drawers
   const [isQuickCustomerOpen, setIsQuickCustomerOpen] = useState(false);
@@ -169,7 +186,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     if (!token || !company) return;
 
     try {
-      const [cpRes, whRes, prdRes, plRes] = await Promise.all([
+      const [cpRes, whRes, prdRes] = await Promise.all([
         apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
           console.error('Failed to load counterparties:', err);
           return null;
@@ -182,10 +199,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           console.error('Failed to load products:', err);
           return null;
         }),
-        apiFetch<any>('/sales/price-lists', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
-          console.error('Failed to load price lists:', err);
-          return null;
-        }),
       ]);
 
       const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
@@ -193,7 +206,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       if (!counterpartyId && cpList.length > 0 && mode === 'create') {
         const defaultCp = cpList[0];
         setCounterpartyId(defaultCp.id);
-        if (defaultCp.priceListId) setPriceListId(defaultCp.priceListId);
       }
 
       const whList = whRes?.data || (Array.isArray(whRes) ? whRes : []);
@@ -209,14 +221,15 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         sku: p.sku,
         barcode: p.barcode,
         salePrice: Number(p.salePrice) || 0,
-        costPrice: Number(p.costPrice) || 0,
-        unitOfMeasure: p.unitOfMeasure || 'dona',
+          salePriceCurrency: p.salePriceCurrency || null,
+          costPrice: Number(p.costPrice) || 0,
+          costPriceCurrency: p.costPriceCurrency || 'UZS',
+          costPriceExchangeRate: Number(p.costPriceExchangeRate) || 1,
+          vatRate: Number(p.vatRate ?? 0),
+          unitOfMeasure: p.unitOfMeasure || 'dona',
         stockQty: Number(p.totalStock ?? p.stockQuantity ?? p.quantity ?? 0),
       }));
       setProducts(prdList);
-
-      const pls = plRes?.data || (Array.isArray(plRes) ? plRes : []);
-      setPriceLists(pls);
 
       // Pre-populate stock map if stockLevels exist on product objects
       const initialStockMap: Record<string, { physical: number; reserved: number; free: number }> = {};
@@ -294,18 +307,19 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     items.forEach((item) => {
       if (!item.productId) return;
       const prd = products.find((p) => p.id === item.productId);
-      const cost = prd ? prd.costPrice : 0;
+      const cost = prd ? Number(prd.costPrice) * Number(prd.costPriceExchangeRate || 1) : 0;
       const lineRaw = item.quantity * item.unitPrice;
       const discountVal = (lineRaw * item.discount) / 100;
       const afterDiscount = lineRaw - discountVal;
-      const vatVal = (afterDiscount * item.vatRate) / 100;
+      const vatVal = (afterDiscount * Number(item.vatRate || 0)) / 100;
 
       subtotal += lineRaw;
       totalDiscount += discountVal;
       totalVat += vatVal;
       totalCost += item.quantity * cost;
 
-      if (prd && item.unitPrice > 0 && item.unitPrice < cost) {
+      const itemNetUnitPriceUzs = item.unitPrice * (1 - item.discount / 100) * (currency === 'USD' ? Number(exchangeRate) : 1);
+      if (prd && item.unitPrice > 0 && itemNetUnitPriceUzs < cost) {
         belowCostCount++;
       }
 
@@ -316,16 +330,24 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       }
     });
 
-    const grandTotal = subtotal - totalDiscount + totalVat;
+    const additionalCharge = Number(additionalChargeAmount || 0);
+    const additionalChargeVat = (additionalCharge * Number(additionalChargeVatRate || 0)) / 100;
+    totalVat += additionalChargeVat;
+    const netRevenueAmount = subtotal - totalDiscount + additionalCharge;
+    const revenueUzs = netRevenueAmount * (currency === 'USD' ? Number(exchangeRate) : 1);
+    const grandTotal = netRevenueAmount + totalVat;
     const paidAmount = Number(currentInvoiceData?.paidAmount || 0);
     const remainingDebt = Math.max(0, grandTotal - paidAmount);
-    const estimatedProfit = grandTotal - totalCost;
-    const marginPercent = grandTotal > 0 ? (estimatedProfit / grandTotal) * 100 : 0;
+    const estimatedProfit = revenueUzs - totalCost;
+    const marginPercent = revenueUzs > 0 ? (estimatedProfit / revenueUzs) * 100 : 0;
 
     return {
       subtotal,
       totalDiscount,
       totalVat,
+      additionalCharge,
+      additionalChargeVat,
+      netRevenueUzs: revenueUzs,
       grandTotal,
       paidAmount,
       remainingDebt,
@@ -334,65 +356,47 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       belowCostCount,
       insufficientStockCount,
     };
-  }, [items, products, currentInvoiceData, warehouseStockMap, isReadOnly]);
+  }, [items, products, currentInvoiceData, warehouseStockMap, isReadOnly, additionalChargeAmount, additionalChargeVatRate, currency, exchangeRate]);
 
-  const getProductPriceForList = (
+  const getProductPriceInDocumentCurrency = (
     pId: string,
-    pListId?: string,
-    overrideRate?: number,
+    overrideRate?: number | string,
     overrideCurrency?: string,
-  ) => {
+  ): number | null => {
     const prd = products.find((p) => p.id === pId);
-    if (!prd) return 0;
-    const activeListId = pListId !== undefined ? pListId : priceListId;
-    let price = Number(prd.salePrice) || 0;
-    let itemCurrency = (prd as any).currency || 'USD';
-
-    if (activeListId) {
-      const pl = priceLists.find((l) => l.id === activeListId);
-      const custom = pl?.prices?.find((item: any) => item.productId === pId);
-      if (custom && Number(custom.price) > 0) {
-        price = Number(custom.price);
-        itemCurrency = pl.currency || 'USD';
-      }
-    }
-
+    if (!prd) return null;
     const docCurrency = overrideCurrency || currency;
-    const rate = overrideRate !== undefined ? overrideRate : (Number(exchangeRate) || 1);
-
-    if (itemCurrency !== docCurrency) {
-      if (docCurrency === 'UZS' && itemCurrency === 'USD') {
-        price = Math.round(price * rate);
-      } else if (docCurrency === 'USD' && itemCurrency === 'UZS' && rate > 0) {
-        price = Number((price / rate).toFixed(2));
-      }
-    }
-
-    return price;
+    const rate = Number(overrideRate !== undefined ? overrideRate : exchangeRate);
+    return convertSalePriceToDocumentCurrency(
+      Number(prd.salePrice) || 0,
+      prd.salePriceCurrency,
+      docCurrency,
+      rate,
+    );
   };
 
   const handleCurrencyChange = (newCurr: string) => {
     markDirty();
     setCurrency(newCurr);
-    const newRate = newCurr === 'UZS' ? 1 : exchangeRate;
-    if (newCurr === 'UZS') setExchangeRate(1);
+    const newRate = newCurr === 'UZS' ? 1 : currency === 'UZS' ? '' : exchangeRate;
+    setExchangeRate(newRate);
     setItems((prev) =>
       prev.map((row) => {
         if (!row.productId) return row;
-        const unitPrice = getProductPriceForList(row.productId, priceListId, newRate, newCurr);
-        return { ...row, unitPrice };
+        const unitPrice = getProductPriceInDocumentCurrency(row.productId, newRate, newCurr);
+        return { ...row, unitPrice: unitPrice ?? 0 };
       })
     );
   };
 
-  const handleExchangeRateChange = (newRate: number) => {
+  const handleExchangeRateChange = (newRate: number | string) => {
     markDirty();
     setExchangeRate(newRate);
     setItems((prev) =>
       prev.map((row) => {
         if (!row.productId) return row;
-        const unitPrice = getProductPriceForList(row.productId, priceListId, newRate, currency);
-        return { ...row, unitPrice };
+        const unitPrice = getProductPriceInDocumentCurrency(row.productId, newRate, currency);
+        return { ...row, unitPrice: unitPrice ?? 0 };
       })
     );
   };
@@ -402,18 +406,16 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     setCounterpartyId(cpId);
     const cp: any = counterparties.find((c: any) => c.id === cpId);
     if (cp) {
-      const targetPriceListId = cp.priceListId || '';
-      setPriceListId(targetPriceListId);
       const custDiscount = Number(cp.discountPercent || 0);
 
       // Recalculate existing rows
       setItems((prev) =>
         prev.map((row) => {
           if (!row.productId) return row;
-          const unitPrice = getProductPriceForList(row.productId, targetPriceListId);
+          const unitPrice = getProductPriceInDocumentCurrency(row.productId);
           return {
             ...row,
-            unitPrice,
+            unitPrice: unitPrice ?? 0,
             discount: custDiscount > 0 ? custDiscount : row.discount,
           };
         })
@@ -421,29 +423,26 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
   };
 
-  const handlePriceListChange = (newListId: string) => {
-    markDirty();
-    setPriceListId(newListId);
-    // Recalculate existing rows with new price list
-    setItems((prev) =>
-      prev.map((row) => {
-        if (!row.productId) return row;
-        const unitPrice = getProductPriceForList(row.productId, newListId);
-        return { ...row, unitPrice };
-      })
-    );
-  };
-
   const handleItemChange = (index: number, field: keyof ItemRow, val: any) => {
     markDirty();
+    if (field === 'productId') {
+      const selected = products.find((product) => product.id === val);
+      setError(selected && Number(selected.salePrice) > 0 && !selected.salePriceCurrency
+        ? (isRu ? 'У выбранного товара не указана валюта цены продажи. Укажите цену вручную или исправьте карточку товара.' : 'Tanlangan tovar sotuv narxi valyutasi belgilanmagan. Narxni qo‘lda kiriting yoki tovar kartasini tuzating.')
+        : null);
+    } else if (field === 'unitPrice') {
+      setError(null);
+    }
     setItems((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: val };
       if (field === 'productId') {
-        const unitPrice = getProductPriceForList(val);
+        const selectedProduct = products.find((product) => product.id === val);
+        const unitPrice = getProductPriceInDocumentCurrency(val);
         const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
         const custDiscount = Number(cp?.discountPercent || 0);
-        updated[index].unitPrice = unitPrice;
+        updated[index].unitPrice = unitPrice ?? 0;
+        updated[index].vatRate = Number(selectedProduct?.vatRate ?? 0);
         if (custDiscount > 0 && (!updated[index].discount || updated[index].discount === 0)) {
           updated[index].discount = custDiscount;
         }
@@ -454,7 +453,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
   const addItemRow = (productId = '') => {
     markDirty();
-    const unitPrice = productId ? getProductPriceForList(productId) : 0;
+    const unitPrice = productId ? getProductPriceInDocumentCurrency(productId) ?? 0 : 0;
     const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
     const custDiscount = Number(cp?.discountPercent || 0);
     setItems((prev) => [
@@ -464,7 +463,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         quantity: 1,
         unitPrice,
         discount: custDiscount > 0 ? custDiscount : 0,
-        vatRate: 0,
+        vatRate: Number(products.find((product) => product.id === productId)?.vatRate ?? 0),
       },
     ]);
   };
@@ -524,7 +523,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
     if (currency !== 'UZS') {
       const rateNum = Number(exchangeRate);
-      if (!exchangeRate || isNaN(rateNum) || rateNum <= 0) {
+      if (exchangeRate === '' || !Number.isFinite(rateNum) || rateNum <= 0) {
         setError(isRu ? 'Курс валюты должен быть больше 0' : 'Valyuta kursi 0 dan katta bo‘lishi shart');
         return null;
       }
@@ -533,6 +532,17 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     const validItems = items.filter((i) => i.productId && Number(i.quantity) > 0);
     if (validItems.length === 0) {
       setError(isRu ? 'Добавьте хотя бы один товар с количеством > 0' : 'Kamida bitta tovar va miqdorni kiriting');
+      return null;
+    }
+
+    const unresolvedPrice = validItems.find((item) => {
+      const product = products.find((candidate) => candidate.id === item.productId);
+      return product && Number(product.salePrice) > 0 && !product.salePriceCurrency && Number(item.unitPrice) === 0;
+    });
+    if (unresolvedPrice) {
+      setError(isRu
+        ? 'У выбранного товара не указана валюта цены продажи. Введите цену вручную или исправьте карточку товара.'
+        : 'Tanlangan tovar sotuv narxi valyutasi belgilanmagan. Narxni qo‘lda kiriting yoki tovar kartasini tuzating.');
       return null;
     }
 
@@ -545,6 +555,15 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setError(isRu ? 'Цена товара не может быть отрицательной' : 'Tovar narxi manfiy bo‘lishi mumkin emas');
         return null;
       }
+      if (Number(i.vatRate || 0) < 0 || Number(i.vatRate || 0) > 100) {
+        setError(isRu ? 'Ставка НДС должна быть от 0 до 100' : 'QQS stavkasi 0 dan 100 gacha bo‘lishi kerak');
+        return null;
+      }
+    }
+
+    if (Number(additionalChargeAmount || 0) < 0 || Number(additionalChargeVatRate || 0) < 0 || Number(additionalChargeVatRate || 0) > 100) {
+      setError(isRu ? 'Проверьте сумму и ставку НДС дополнительной оплаты' : 'Qo‘shimcha summa va QQS stavkasini tekshiring');
+      return null;
     }
 
     setLoading(true);
@@ -556,18 +575,19 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         invoiceDate: docDate,
         currency,
         exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
-        priceListId: priceListId || undefined,
         contractNumber: contractNumber.trim() || undefined,
         contractDate: contractDate || undefined,
         paymentTerms: paymentTerms.trim() || undefined,
         comment: comment.trim() || undefined,
+        additionalChargeAmount: Number(additionalChargeAmount || 0),
+        additionalChargeVatRate: Number(additionalChargeVatRate || 0),
         postImmediately,
         items: validItems.map((i) => ({
           productId: i.productId,
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
           discount: Number(i.discount) || 0,
-          vatRate: Number(i.vatRate) || 0,
+          vatRate: Number(i.vatRate || 0),
         })),
       };
 
@@ -617,7 +637,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
   };
 
-  const handlePost = async (andClose: boolean) => {
+  const handlePost = async () => {
     const saved = await saveDocument(false);
     if (!saved) return;
 
@@ -635,11 +655,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       if (posted) setCurrentInvoiceData(posted);
       setIsDirty(false);
 
-      if (andClose) {
-        router.push('/sales');
-      } else {
-        router.push(`/sales/${saved.id}`);
-      }
+      router.push('/sales');
     } catch (err: any) {
       console.error(err);
       setError(err.message || (isRu ? 'Ошибка проведения документа' : 'Hujjatni tasdiqlashda xatolik yuz berdi'));
@@ -918,15 +934,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 <Save size={16} /> {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
               </Button>
               <Button
-                variant="secondary"
-                onClick={() => handlePost(false)}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <CheckCircle2 size={16} /> {isRu ? 'Провести' : 'Tasdiqlash'}
-              </Button>
-              <Button
-                onClick={() => handlePost(true)}
+                onClick={handlePost}
                 disabled={loading}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
               >
@@ -1121,23 +1129,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             })()}
           </div>
 
-          {/* Price List */}
-          <div style={{ minWidth: '180px', flex: '1.5 1 200px' }}>
-            <Select
-              label={isRu ? 'Прайс-лист цен' : 'Narx jadvali'}
-              options={[
-                { value: '', label: isRu ? '— Базовый (Основной) —' : '— Asosiy (Bazaviy) —' },
-                ...priceLists.map((pl) => {
-                  const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
-                  return { value: pl.id, label: `${plName} (${pl.currency})` };
-                }),
-              ]}
-              value={priceListId}
-              onChange={handlePriceListChange}
-              disabled={isReadOnly}
-            />
-          </div>
-
           {/* Warehouse */}
           <div style={{ minWidth: '150px', flex: '1.5 1 170px' }}>
             <Select
@@ -1200,10 +1191,10 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
               <Input
                 label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
-                type="number"
-                step="any"
                 value={exchangeRate}
-                onChange={(e) => handleExchangeRateChange(parseFloat(e.target.value) || 1)}
+                type="text"
+                inputMode="decimal"
+                onChange={(e) => handleExchangeRateChange(e.target.value)}
                 disabled={isReadOnly}
               />
             </div>
@@ -1299,7 +1290,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 const lineAfterDiscount = Math.max(0, lineSubtotal - (lineSubtotal * disc) / 100);
                 const lineVat = (lineAfterDiscount * vatR) / 100;
                 const lineTotal = lineAfterDiscount + lineVat;
-                const isBelowCost = prd && price > 0 && price < prd.costPrice;
+                const costInUzs = prd ? Number(prd.costPrice) * Number(prd.costPriceExchangeRate || 1) : 0;
+                const salePriceInUzs = price * (1 - Number(item.discount || 0) / 100) * (currency === 'USD' ? Number(exchangeRate) : 1);
+                const isBelowCost = prd && price > 0 && salePriceInUzs < costInUzs;
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: isBelowCost ? 'rgba(239, 68, 68, 0.04)' : 'transparent' }}>
@@ -1316,7 +1309,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       />
                       {prd && (
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          <span>Tannarx: {currency ? formatCurrency(prd.costPrice, locale, currency) : '—'}</span>
+                          <span>Tannarx: {currency ? formatCurrency(convertSalePriceToDocumentCurrency(costInUzs, 'UZS', currency, Number(exchangeRate)) ?? 0, locale, currency) : '—'}</span>
                           <span>•</span>
                           <span>Birlik: {prd.unitOfMeasure || 'dona'}</span>
                           {warehouseStockMap[item.productId] !== undefined && (
@@ -1399,12 +1392,10 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                     {/* VAT Rate */}
                     <td style={{ padding: '10px 12px' }}>
                       <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="any"
+                        type="text"
+                        inputMode="decimal"
                         value={item.vatRate}
-                        onChange={(e) => handleItemChange(idx, 'vatRate', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleItemChange(idx, 'vatRate', e.target.value)}
                         disabled={isReadOnly}
                         aria-label={`${isRu ? 'НДС для строки' : 'QQS %'} ${idx + 1}`}
                         style={{ textAlign: 'right' }}
@@ -1455,6 +1446,34 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         )}
       </Card>
 
+      {!isReadOnly && (
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
+            <Input
+              label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Mijozga qo‘shimcha summa (${currency})`}
+              type="number"
+              min="0"
+              step="any"
+              value={additionalChargeAmount}
+              onChange={(event) => {
+                markDirty();
+                setAdditionalChargeAmount(event.target.value === '' ? '' : Number(event.target.value));
+              }}
+            />
+            <Input
+              label={isRu ? 'НДС на доплату, %' : 'Qo‘shimcha QQS, %'}
+              type="text"
+              inputMode="decimal"
+              value={additionalChargeVatRate}
+              onChange={(event) => {
+                markDirty();
+                setAdditionalChargeVatRate(event.target.value);
+              }}
+            />
+          </div>
+        </Card>
+      )}
+
       {/* Summary Footer Panel with Required notice */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, padding: 'var(--space-2) 0' }}>
@@ -1475,6 +1494,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#10b981' }}>
               <span>{isRu ? 'Сумма скидки:' : 'Chegirma summasi:'}</span>
               <span className="tabular-nums font-medium">- {currency ? formatCurrency(calculations.totalDiscount, locale, currency) : '—'}</span>
+            </div>
+          )}
+
+          {calculations.additionalCharge > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              <span>{isRu ? 'Дополнительная сумма:' : 'Qo‘shimcha summa:'}</span>
+              <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.additionalCharge, locale, currency) : '—'}</span>
             </div>
           )}
 
@@ -1501,7 +1527,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Валовая прибыль:' : 'Yalpi foyda:'}</span>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? '#10b981' : '#ef4444' }} className="tabular-nums">
-                {currency ? formatCurrency(calculations.estimatedProfit, locale, currency) : '—'}
+                 {formatCurrency(calculations.estimatedProfit, locale, 'UZS')}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
