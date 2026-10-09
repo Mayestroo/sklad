@@ -15,15 +15,27 @@ import {
   PurchaseDocStatus,
   ExpenseAllocationMethod,
   TransactionDirection,
+  CounterpartySettlementSide,
 } from '@prisma/client';
 
 import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
+import {
+  isCashAccountCurrencyValid,
+  ledgerAccountCodeForCashAccount,
+} from '../../../../shared/types/cash-account-policy';
+import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
 
 @Injectable()
 export class AdditionalExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settlementService: CounterpartySettlementService,
+    private readonly accountsService: AccountsService,
+  ) {}
 
   // ─── DOCUMENT NUMBER GENERATOR ──────────────────────────────
 
@@ -586,13 +598,19 @@ export class AdditionalExpensesService {
         'Faqat qoralama holatidagi xarajatlarni tasdiqlash mumkin',
       );
     }
+    const paidCashAccountId = expense.cashAccountId;
+    if (expense.isPaid && !paidCashAccountId) {
+      throw new BadRequestException('To‘langan qo‘shimcha xarajat uchun kassa yoki bank hisobini tanlang');
+    }
+
+    await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const totalAmount = Number(expense.amount);
     // Inventory, COGS, and the general ledger are maintained in UZS base currency.
-    const capitalizationRate = expense.currency === 'UZS' ? 1 : Number(expense.exchangeRate);
-    if (!Number.isFinite(capitalizationRate) || capitalizationRate <= 0) {
-      throw new BadRequestException("Xorijiy xarajat uchun valyuta kursi 0 dan katta bo'lishi shart");
-    }
+    const capitalizationRate = requireExchangeRateForCurrency(
+      expense.currency,
+      expense.currency === 'UZS' ? undefined : Number(expense.exchangeRate),
+    );
     const capitalizedTotal = totalAmount * capitalizationRate;
 
     return this.prisma.$transaction(async (tx) => {
@@ -650,7 +668,11 @@ export class AdditionalExpensesService {
           // Sync Product catalog costPrice (ADR 0007)
           await tx.product.update({
             where: { id: item.productId },
-            data: { costPrice: newBatchLandedCost },
+            data: {
+              costPrice: newBatchLandedCost,
+              costPriceCurrency: 'UZS',
+              costPriceExchangeRate: 1,
+            },
           });
 
           // Retroactive COGS Recalibration for all downstream consumptions (ADR 0008)
@@ -736,19 +758,21 @@ export class AdditionalExpensesService {
       });
 
       // 2. Financial Settlements
-      if (expense.isPaid && expense.cashAccountId) {
+      let paidCashAccount: { accountType: string; currency: string } | null = null;
+      if (expense.isPaid && paidCashAccountId) {
         const cashAcc = await tx.cashAccount.findFirst({
-          where: { id: expense.cashAccountId, tenantId, isActive: true },
+          where: { id: paidCashAccountId, tenantId, isActive: true },
         });
 
         if (!cashAcc) {
           throw new NotFoundException('Kassa hisobi topilmadi');
         }
-        if (cashAcc.currency !== expense.currency) {
+        if (!isCashAccountCurrencyValid(cashAcc) || cashAcc.currency !== expense.currency) {
           throw new BadRequestException(
-            `Kassa valyutasi (${cashAcc.currency}) va xarajat valyutasi (${expense.currency}) bir xil bo'lishi shart`,
+            `Tanlangan kassa turi/valyutasi xarajat valyutasiga (${expense.currency}) mos kelmaydi`,
           );
         }
+        paidCashAccount = cashAcc;
 
         if (Number(cashAcc.balance) < totalAmount) {
           throw new BadRequestException(
@@ -758,7 +782,7 @@ export class AdditionalExpensesService {
 
         // Decrement cash balance
         await tx.cashAccount.update({
-          where: { id: expense.cashAccountId },
+          where: { id: paidCashAccountId },
           data: { balance: { decrement: totalAmount } },
         });
 
@@ -775,11 +799,12 @@ export class AdditionalExpensesService {
             direction: TransactionDirection.EXPENSE,
             amount: totalAmount,
             currency: cashAcc.currency,
+            exchangeRate: capitalizationRate,
             transactionDate: expense.docDate,
             comment:
               expense.comment ||
               `Qo‘shimcha xarajat to‘lovi: ${expense.docNumber} (${expense.counterparty.name})`,
-            accountId: expense.cashAccountId,
+            accountId: paidCashAccountId,
             counterpartyId: expense.counterpartyId,
             sourceDocType: 'AdditionalExpense',
             sourceDocId: expense.id,
@@ -787,10 +812,18 @@ export class AdditionalExpensesService {
           },
         });
       } else {
-        // Increment supplier debt balance
-        await tx.counterparty.update({
-          where: { id: expense.counterpartyId },
-          data: { debtBalance: { increment: totalAmount } },
+        // Unpaid additional expenses accrue a supplier payable in their own currency.
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: expense.counterpartyId,
+          currency: expense.currency,
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: totalAmount,
+          entryType: 'ADDITIONAL_EXPENSE_POSTED',
+          effectiveAt: expense.docDate,
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: expense.id,
+          idempotencyKey: `AdditionalExpense:${expense.id}:POSTED`,
         });
       }
 
@@ -808,8 +841,11 @@ export class AdditionalExpensesService {
       const vatAcc = await tx.account.findFirst({
         where: { tenantId, code: '4410' },
       });
+      const cashLedgerAccountCode = paidCashAccount
+        ? ledgerAccountCodeForCashAccount(paidCashAccount)
+        : null;
       const creditAcc = expense.isPaid
-        ? await tx.account.findFirst({ where: { tenantId, code: '5010' } })
+        ? await tx.account.findFirst({ where: { tenantId, code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__' } })
         : await tx.account.findFirst({ where: { tenantId, code: '6010' } });
 
       if (creditAcc) {
@@ -974,7 +1010,11 @@ export class AdditionalExpensesService {
           // Sync catalog cost price
           await tx.product.update({
             where: { id: item.productId },
-            data: { costPrice: restoredBatchLandedCost },
+            data: {
+              costPrice: restoredBatchLandedCost,
+              costPriceCurrency: 'UZS',
+              costPriceExchangeRate: 1,
+            },
           });
 
           // Revert retroactive COGS on downstream sales invoices
@@ -1049,9 +1089,17 @@ export class AdditionalExpensesService {
 
       // 2. Revert Supplier Debt if unpaid
       if (!expense.isPaid) {
-        await tx.counterparty.update({
-          where: { id: expense.counterpartyId },
-          data: { debtBalance: { decrement: totalAmount } },
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: expense.counterpartyId,
+          currency: expense.currency,
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -totalAmount,
+          entryType: 'ADDITIONAL_EXPENSE_CANCELLED',
+          effectiveAt: expense.docDate,
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: expense.id,
+          idempotencyKey: `AdditionalExpense:${expense.id}:CANCELLED`,
         });
       }
 

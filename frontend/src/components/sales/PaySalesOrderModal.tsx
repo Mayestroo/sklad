@@ -9,12 +9,38 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { formatCurrency } from '@/lib/utils';
+import {
+  CashAccount,
+} from '@shared/types';
+import {
+  isCashAccountCompatibleWithSalesPayment,
+  isCashAccountCurrencyValid,
+} from '@/lib/cash-account-policy';
 import { CreditCard, AlertCircle, Percent } from 'lucide-react';
+
+type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME';
+type CashAccountListResponse = CashAccount[] | { data?: CashAccount[] };
+
+interface SalesOrderPaymentData {
+  id: string;
+  counterpartyId: string;
+  orderNumber: string;
+  currency: string;
+  totalAmount: number;
+  paidAmount: number;
+  paymentCondition?: 'PREPAID_100' | 'PARTIAL' | 'CREDIT' | null;
+  requiredPaymentPercent?: number | string | null;
+}
+
+interface AmountOverride {
+  version: string;
+  value: number;
+}
 
 interface PaySalesOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  order: any | null;
+  order: SalesOrderPaymentData | null;
   onSuccess: () => void;
 }
 
@@ -29,15 +55,16 @@ export function PaySalesOrderModal({
   const isRu = locale === 'ru';
 
   const [cashAccountId, setCashAccountId] = useState<string>('');
-  const [cashAccounts, setCashAccounts] = useState<any[]>([]);
-  const [method, setMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME'>('CASH');
-  const [amount, setAmount] = useState<number>(0);
+  const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
+  const [method, setMethod] = useState<PaymentMethod>('CASH');
+  const [exchangeRate, setExchangeRate] = useState('');
+  const [amountOverride, setAmountOverride] = useState<AmountOverride | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const total = Number(order?.totalAmount || 0);
-  const paid = Number(order?.paidAmount || 0);
+  const total = Number(order?.totalAmount ?? 0);
+  const paid = Number(order?.paidAmount ?? 0);
   const remaining = Math.max(0, total - paid);
 
   // Required min amount for partial
@@ -48,51 +75,58 @@ export function PaySalesOrderModal({
     : 0;
 
   const minNeededForDispatch = Math.max(0, minRequired - paid);
+  const orderId = order?.id;
+  const orderCurrency = order?.currency;
+  const amountVersion = `${orderId ?? ''}:${order?.paidAmount ?? ''}`;
+  const defaultAmount = minNeededForDispatch > 0 ? minNeededForDispatch : remaining;
+  const amount = amountOverride?.version === amountVersion ? amountOverride.value : defaultAmount;
+
+  const setPaymentAmount = (value: number) => {
+    setAmountOverride({ version: amountVersion, value });
+  };
+
+  const handleClose = () => {
+    setAmountOverride(null);
+    setCashAccountId('');
+    setExchangeRate('');
+    setNote('');
+    setError('');
+    onClose();
+  };
 
   useEffect(() => {
-    if (!isOpen || !token || !company) return;
+    if (!isOpen || !token || !company || !orderId || !orderCurrency) return;
 
-    apiFetch<any>('/finance/accounts', {
+    let isActive = true;
+    apiFetch<CashAccountListResponse>('/finance/accounts', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data || [];
-        setCashAccounts(list);
-        if (list.length > 0) {
-          setCashAccountId(list[0].id);
-        }
+        const list = Array.isArray(res) ? res : res.data || [];
+        const compatibleAccounts = list.filter(isCashAccountCurrencyValid);
+        if (!isActive) return;
+        setCashAccounts(compatibleAccounts);
+        setCashAccountId('');
       })
       .catch((err) => console.error('Failed to load cash accounts:', err));
-  }, [isOpen, token, company, locale]);
-
-  useEffect(() => {
-    if (!isOpen || !token || !company || !order) return;
-
-    // Default to minNeededForDispatch or remaining
-    setAmount(minNeededForDispatch > 0 ? minNeededForDispatch : remaining);
-    setNote('');
-    setError('');
-  }, [isOpen, order, token, company, minNeededForDispatch, remaining]);
+    return () => {
+      isActive = false;
+    };
+  }, [isOpen, token, company, locale, orderId, orderCurrency]);
 
   if (!order) return null;
 
-  const cashAccountOptions: SelectOption[] = cashAccounts.length > 0
-    ? cashAccounts.map((ca) => {
-        const name = typeof ca.name === 'object' ? ca.name[locale] || ca.name.uz || ca.name.ru : ca.name;
-        const cur = ca.currency || 'UZS';
-        const bal = formatCurrency(Number(ca.balance || 0), locale, cur);
-        return {
-          value: ca.id,
-          label: `${name} (${bal})`,
-        };
-      })
-    : [
-        { value: 'CASH_UZS', label: isRu ? 'Наличная касса (UZS)' : 'Naqd kassa (UZS)' },
-        { value: 'CASH_USD', label: isRu ? 'Долларовая касса (USD)' : 'Dollar kassa (USD)' },
-        { value: 'BANK_ACCOUNT', label: isRu ? 'Расчетный счет (Банк)' : 'Hisobraqam (Bank)' },
-      ];
+  const cashAccountOptions: SelectOption[] = cashAccounts
+    .filter((account) => isCashAccountCompatibleWithSalesPayment(account, method, order.currency))
+    .map((account) => ({
+      value: account.id,
+      label: `${account.name[locale] || account.name.uz || account.name.ru} (${formatCurrency(Number(account.balance), locale, account.currency)})`,
+    }));
+  const selectedCashAccountId = cashAccountOptions.some((account) => account.value === cashAccountId)
+    ? cashAccountId
+    : cashAccountOptions[0]?.value || '';
 
   const methodOptions: SelectOption[] = [
     { value: 'CASH', label: isRu ? 'Наличные (Касса)' : 'Naqd pul (Kassa)' },
@@ -108,6 +142,14 @@ export function PaySalesOrderModal({
       setError(isRu ? 'Укажите сумму оплаты' : 'To‘lov summasini kiriting');
       return;
     }
+    if (!selectedCashAccountId) {
+      setError(isRu ? 'Выберите счет в валюте заказа' : 'Buyurtma valyutasidagi hisobni tanlang');
+      return;
+    }
+    if (order.currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+      setError(isRu ? 'Укажите курс оплаты: UZS за 1 USD' : 'To‘lov kursini kiriting: 1 USD uchun UZS');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -121,7 +163,9 @@ export function PaySalesOrderModal({
         body: JSON.stringify({
           counterpartyId: order.counterpartyId,
           orderId: order.id,
-          cashAccountId: cashAccountId || undefined,
+          currency: order.currency,
+          ...(order.currency === 'USD' ? { exchangeRate: Number(exchangeRate) } : {}),
+          cashAccountId: selectedCashAccountId,
           method,
           amount: Number(amount),
           comment: note.trim() || undefined,
@@ -130,9 +174,11 @@ export function PaySalesOrderModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка при проведении оплаты' : 'To‘lovni amalga oshirishda xatolik yuz berdi'));
+      setError(err instanceof Error && err.message
+        ? err.message
+        : isRu ? 'Ошибка при проведении оплаты' : 'To‘lovni amalga oshirishda xatolik yuz berdi');
     } finally {
       setLoading(false);
     }
@@ -141,7 +187,7 @@ export function PaySalesOrderModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       title={isRu ? `Оплата заказа — ${order.orderNumber}` : `Buyurtma to‘lovi — ${order.orderNumber}`}
     >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -212,15 +258,40 @@ export function PaySalesOrderModal({
         {/* Cash Desk Selector (1C Kassa) */}
         <div>
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-            {isRu ? 'Касса / Счет зачисления' : 'Kassa / Hisob (Kirim joyi)'}
+            {method === 'CASH'
+              ? isRu ? 'Касса зачисления' : 'Kirim kassasi'
+              : isRu ? 'Банковский счёт зачисления' : 'Kirim bank hisobi'}
           </label>
           <Select
             options={cashAccountOptions}
-            value={cashAccountId}
+            value={selectedCashAccountId}
             onChange={(val) => setCashAccountId(val)}
             placeholder={isRu ? 'Выберите кассу' : 'Kassani tanlang'}
           />
+          {cashAccountOptions.length === 0 && (
+            <div style={{ marginTop: 4, color: 'var(--color-error-600)', fontSize: 'var(--text-xs)' }}>
+              {isRu
+                ? 'Нет подходящей кассы или банковского счёта в валюте заказа'
+                : 'Buyurtma valyutasida mos kassa yoki bank hisobi topilmadi'}
+            </div>
+          )}
         </div>
+
+        {order.currency === 'USD' && (
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              {isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
+            </label>
+            <Input
+              type="number"
+              min="0.0001"
+              value={exchangeRate}
+              onChange={(event) => setExchangeRate(event.target.value)}
+              placeholder="12800"
+              required
+            />
+          </div>
+        )}
 
         {/* Payment Method */}
         <div>
@@ -230,7 +301,7 @@ export function PaySalesOrderModal({
           <Select
             options={methodOptions}
             value={method}
-            onChange={(val) => setMethod(val as any)}
+            onChange={(val) => setMethod(val as PaymentMethod)}
           />
         </div>
 
@@ -244,7 +315,7 @@ export function PaySalesOrderModal({
               {minNeededForDispatch > 0 && minNeededForDispatch !== remaining && (
                 <button
                   type="button"
-                  onClick={() => setAmount(minNeededForDispatch)}
+                  onClick={() => setPaymentAmount(minNeededForDispatch)}
                   style={{
                     fontSize: 'var(--text-xs)',
                     color: 'var(--color-primary-600)',
@@ -260,7 +331,7 @@ export function PaySalesOrderModal({
               {remaining > 0 && (
                 <button
                   type="button"
-                  onClick={() => setAmount(remaining)}
+                  onClick={() => setPaymentAmount(remaining)}
                   style={{
                     fontSize: 'var(--text-xs)',
                     color: 'var(--color-primary-600)',
@@ -280,7 +351,7 @@ export function PaySalesOrderModal({
             min={0.01}
             step="any"
             value={amount || ''}
-            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+            onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
             required
             autoFocus
           />

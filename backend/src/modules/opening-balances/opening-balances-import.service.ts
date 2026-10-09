@@ -3,6 +3,7 @@ import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OpeningBalanceCategory } from '@prisma/client';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
 export interface ImportErrorItem {
   sheetName: string;
   rowNumber: number;
@@ -23,6 +24,26 @@ export interface ImportValidationResult {
 @Injectable()
 export class OpeningBalancesImportService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private parseExchangeRate(
+    sheetName: string,
+    rowNumber: number,
+    currency: string,
+    rawRate: unknown,
+    errors: ImportErrorItem[],
+  ): number | null {
+    if (currency === 'UZS') return 1;
+    const rate = Number(rawRate);
+    if (Number.isFinite(rate) && rate > 0) return rate;
+    errors.push({
+      sheetName,
+      rowNumber,
+      fieldName: 'UZS kursi',
+      invalidValue: String(rawRate ?? ''),
+      errorMessage: 'USD qoldig‘i uchun UZS kursi 0 dan katta bo‘lishi shart',
+    });
+    return null;
+  }
 
   // ─── Generate Standardized Excel Template ───────────────────────
 
@@ -47,6 +68,7 @@ export class OpeningBalancesImportService {
       { header: 'Kassa / Hisobraqam nomi', key: 'account', width: 30 },
       { header: 'Valyuta (UZS/USD)', key: 'currency', width: 18 },
       { header: 'Qoldiq summasi', key: 'amount', width: 22 },
+      { header: 'UZS kursi (USD uchun)', key: 'exchangeRate', width: 24 },
       { header: 'Izoh', key: 'notes', width: 35 },
     ];
     sheetPul.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
@@ -54,18 +76,21 @@ export class OpeningBalancesImportService {
       account: 'Naqd kassa',
       currency: 'UZS',
       amount: 25000000,
+      exchangeRate: 1,
       notes: 'Boshlang‘ich naqd so‘m qoldig‘i',
     });
     sheetPul.addRow({
       account: 'Dollar kassa',
       currency: 'USD',
       amount: 3500,
+      exchangeRate: 12500,
       notes: 'Boshlang‘ich naqd dollar qoldig‘i',
     });
     sheetPul.addRow({
       account: 'Asosiy hisobraqam',
       currency: 'UZS',
       amount: 100000000,
+      exchangeRate: 1,
       notes: 'Bankdagi so‘m hisobvarag‘i',
     });
 
@@ -98,6 +123,7 @@ export class OpeningBalancesImportService {
       { header: 'Shartnoma raqami', key: 'contract', width: 22 },
       { header: 'Qarzdorlik summasi', key: 'amount', width: 24 },
       { header: 'Valyuta', key: 'currency', width: 16 },
+      { header: 'UZS kursi (USD uchun)', key: 'exchangeRate', width: 24 },
       { header: 'Izoh', key: 'notes', width: 30 },
     ];
     sheetMijoz.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
@@ -106,6 +132,7 @@ export class OpeningBalancesImportService {
       contract: 'SH-2026-01',
       amount: 35000000,
       currency: 'UZS',
+      exchangeRate: 1,
       notes: 'O‘tgan davrdan qolgan qarz',
     });
 
@@ -116,6 +143,7 @@ export class OpeningBalancesImportService {
       { header: 'Shartnoma raqami', key: 'contract', width: 22 },
       { header: 'Qarzdorlik summasi', key: 'amount', width: 24 },
       { header: 'Valyuta', key: 'currency', width: 16 },
+      { header: 'UZS kursi (USD uchun)', key: 'exchangeRate', width: 24 },
       { header: 'Izoh', key: 'notes', width: 30 },
     ];
     sheetTaminot.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
@@ -124,6 +152,7 @@ export class OpeningBalancesImportService {
       contract: 'T-2026-05',
       amount: 90000000,
       currency: 'UZS',
+      exchangeRate: 1,
       notes: 'Yetkazib beruvchiga qarzimiz',
     });
 
@@ -134,6 +163,7 @@ export class OpeningBalancesImportService {
       { header: 'Avans turi (MIJOZ_AVANSI / TAMINOTCHI_AVANSI)', key: 'type', width: 38 },
       { header: 'Avans summasi', key: 'amount', width: 22 },
       { header: 'Valyuta', key: 'currency', width: 16 },
+      { header: 'UZS kursi (USD uchun)', key: 'exchangeRate', width: 24 },
       { header: 'Izoh', key: 'notes', width: 30 },
     ];
     sheetAvans.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
@@ -142,6 +172,7 @@ export class OpeningBalancesImportService {
       type: 'MIJOZ_AVANSI',
       amount: 20000000,
       currency: 'UZS',
+      exchangeRate: 1,
       notes: 'Mijozdan oldindan olingan avans',
     });
 
@@ -174,6 +205,7 @@ export class OpeningBalancesImportService {
       { header: 'Nomlanishi / Shaxs / Hisob', key: 'title', width: 32 },
       { header: 'Summa', key: 'amount', width: 22 },
       { header: 'Valyuta', key: 'currency', width: 16 },
+      { header: 'UZS kursi (USD uchun)', key: 'exchangeRate', width: 24 },
       { header: 'Izoh', key: 'notes', width: 30 },
     ];
     sheetBoshqa.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
@@ -182,6 +214,7 @@ export class OpeningBalancesImportService {
       title: 'Ustav kapitali',
       amount: 500000000,
       currency: 'UZS',
+      exchangeRate: 1,
       notes: 'Boshlang‘ich ta’sis kapitali',
     });
 
@@ -224,7 +257,8 @@ export class OpeningBalancesImportService {
         const accountName = String(row.getCell(1).value || '').trim();
         const currency = String(row.getCell(2).value || 'UZS').trim().toUpperCase();
         const rawAmount = row.getCell(3).value;
-        const notes = String(row.getCell(4).value || '').trim();
+        const exchangeRate = this.parseExchangeRate('1_Pul', rowNumber, currency, row.getCell(4).value, errors);
+        const notes = String(row.getCell(5).value || '').trim();
 
         if (!accountName && !rawAmount) return; // Skip empty row
         totalRows++;
@@ -239,6 +273,7 @@ export class OpeningBalancesImportService {
           });
           return;
         }
+        if (exchangeRate == null) return;
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -253,14 +288,18 @@ export class OpeningBalancesImportService {
         }
 
         // Match account by name or currency
-        const matchedAccount = accounts.find((a) => {
+        const compatibleAccounts = accounts.filter((account) =>
+          isCashAccountCurrencyValid(account) && account.currency === currency,
+        );
+        const nameMatchedAccount = compatibleAccounts.find((a) => {
           const nameObj = typeof a.name === 'object' && a.name !== null ? a.name as any : {};
           return (
             nameObj.uz?.toLowerCase() === accountName.toLowerCase() ||
-            nameObj.ru?.toLowerCase() === accountName.toLowerCase() ||
-            a.currency === currency
+            nameObj.ru?.toLowerCase() === accountName.toLowerCase()
           );
-        }) || accounts[0];
+        });
+        const sameCurrencyAccounts = compatibleAccounts;
+        const matchedAccount = nameMatchedAccount ?? (sameCurrencyAccounts.length === 1 ? sameCurrencyAccounts[0] : undefined);
 
         if (!matchedAccount) {
           errors.push({
@@ -272,13 +311,24 @@ export class OpeningBalancesImportService {
           });
           return;
         }
+        if (matchedAccount.currency !== currency) {
+          errors.push({
+            sheetName: '1_Pul',
+            rowNumber,
+            fieldName: 'Valyuta',
+            invalidValue: currency,
+            errorMessage: `Tanlangan hisob valyutasi ${matchedAccount.currency}. Shu valyutadagi hisobni tanlang.`,
+          });
+          return;
+        }
 
         validRows++;
         previewLines.push({
           category: matchedAccount.accountType === 'BANK' ? OpeningBalanceCategory.BANK : OpeningBalanceCategory.CASH,
           accountId: matchedAccount.id,
           amount,
-          currency: matchedAccount.currency || currency,
+          currency,
+          exchangeRate,
           notes,
         });
       });
@@ -369,6 +419,8 @@ export class OpeningBalancesImportService {
           quantity: qty,
           unitCost: cost,
           amount: Math.round(qty * cost * 100) / 100,
+          currency: 'UZS',
+          exchangeRate: 1,
           batchNumber: batchNumber || null,
           notes,
         });
@@ -384,7 +436,8 @@ export class OpeningBalancesImportService {
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
         const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const notes = String(row.getCell(5).value || '').trim();
+        const exchangeRate = this.parseExchangeRate('3_Mijozlar', rowNumber, currency, row.getCell(5).value, errors);
+        const notes = String(row.getCell(6).value || '').trim();
 
         if (!customerIdent && !rawAmount) return;
         totalRows++;
@@ -399,6 +452,7 @@ export class OpeningBalancesImportService {
           });
           return;
         }
+        if (exchangeRate == null) return;
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -435,6 +489,7 @@ export class OpeningBalancesImportService {
           contractNumber: contract || null,
           amount,
           currency,
+          exchangeRate,
           notes,
         });
       });
@@ -449,7 +504,8 @@ export class OpeningBalancesImportService {
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
         const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const notes = String(row.getCell(5).value || '').trim();
+        const exchangeRate = this.parseExchangeRate('4_Yetkazib_beruvchilar', rowNumber, currency, row.getCell(5).value, errors);
+        const notes = String(row.getCell(6).value || '').trim();
 
         if (!suppIdent && !rawAmount) return;
         totalRows++;
@@ -464,6 +520,7 @@ export class OpeningBalancesImportService {
           });
           return;
         }
+        if (exchangeRate == null) return;
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -500,6 +557,7 @@ export class OpeningBalancesImportService {
           contractNumber: contract || null,
           amount,
           currency,
+          exchangeRate,
           notes,
         });
       });
@@ -514,7 +572,8 @@ export class OpeningBalancesImportService {
         const typeStr = String(row.getCell(2).value || 'MIJOZ_AVANSI').trim().toUpperCase();
         const rawAmount = row.getCell(3).value;
         const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const notes = String(row.getCell(5).value || '').trim();
+        const exchangeRate = this.parseExchangeRate('5_Avanslar', rowNumber, currency, row.getCell(5).value, errors);
+        const notes = String(row.getCell(6).value || '').trim();
 
         if (!cpIdent && !rawAmount) return;
         totalRows++;
@@ -529,6 +588,7 @@ export class OpeningBalancesImportService {
           });
           return;
         }
+        if (exchangeRate == null) return;
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -567,6 +627,7 @@ export class OpeningBalancesImportService {
           counterpartyId: cp.id,
           amount,
           currency,
+          exchangeRate,
           notes,
         });
       });
@@ -616,6 +677,8 @@ export class OpeningBalancesImportService {
         previewLines.push({
           category: OpeningBalanceCategory.FIXED_ASSET,
           amount: cost,
+          currency: 'UZS',
+          exchangeRate: 1,
           accumulatedDepreciation: dep,
           netAmount: Math.max(0, cost - dep),
           contractNumber: invNumber || null,
@@ -633,7 +696,8 @@ export class OpeningBalancesImportService {
         const title = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
         const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const notes = String(row.getCell(5).value || '').trim();
+        const exchangeRate = this.parseExchangeRate('7_Boshqa_qoldiqlar', rowNumber, currency, row.getCell(5).value, errors);
+        const notes = String(row.getCell(6).value || '').trim();
 
         if (!rawAmount) return;
         totalRows++;
@@ -648,6 +712,7 @@ export class OpeningBalancesImportService {
           });
           return;
         }
+        if (exchangeRate == null) return;
 
         const amount = Number(rawAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -673,6 +738,7 @@ export class OpeningBalancesImportService {
           category,
           amount,
           currency,
+          exchangeRate,
           notes: title ? `${title}: ${notes}`.trim() : notes,
         });
       });

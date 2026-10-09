@@ -12,6 +12,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { convertCostPriceToDocumentCurrency } from '@/lib/inventory-cost';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -49,7 +50,7 @@ interface CounterpartyOption {
   id: string;
   name: string;
   type: string;
-  debtBalance?: number;
+  balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
   inn?: string;
 }
 
@@ -64,6 +65,8 @@ interface ProductOption {
   sku: string;
   barcode?: string;
   costPrice: number;
+  costPriceCurrency?: 'USD' | 'UZS';
+  costPriceExchangeRate?: number;
   unitOfMeasure?: string;
   type?: string;
 }
@@ -165,7 +168,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     if (!isDirty) setIsDirty(true);
   };
 
-  const handleSupplierAdded = (newSupplier: { id: string; name: string; type: string; debtBalance?: number }) => {
+  const handleSupplierAdded = (newSupplier: { id: string; name: string; type: string; balancesByCurrency?: CounterpartyOption['balancesByCurrency'] }) => {
     markDirty();
     setCounterparties((prev) => [newSupplier, ...prev]);
     setCounterpartyId(newSupplier.id);
@@ -184,6 +187,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       sku: string;
       barcode?: string;
       costPrice: number;
+      costPriceCurrency?: 'USD' | 'UZS';
+      costPriceExchangeRate?: number;
       salePrice?: number;
       unitOfMeasure?: string;
     },
@@ -193,7 +198,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     setProducts((prev) => [newProduct, ...prev]);
 
     const qty = Number(initialQuantity) || 1;
-    const price = Number(newProduct.costPrice) || 0;
+    const price = convertCostPriceToDocumentCurrency(
+      Number(newProduct.costPrice) || 0,
+      newProduct.costPriceCurrency || 'UZS',
+      Number(newProduct.costPriceExchangeRate || 1),
+      currency || 'UZS',
+      Number(exchangeRate),
+    ) ?? 0;
 
     if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
       const targetIdx = activeRowIndexForNewProduct;
@@ -286,7 +297,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       if (field === 'productId') {
         const p = products.find((prod) => prod.id === value);
         if (p) {
-          next[index].unitPrice = Number(p.costPrice) || 0;
+          next[index].unitPrice = convertCostPriceToDocumentCurrency(
+            Number(p.costPrice) || 0,
+            p.costPriceCurrency || 'UZS',
+            Number(p.costPriceExchangeRate || 1),
+            currency || 'UZS',
+            Number(exchangeRate),
+          ) ?? 0;
         }
       }
       return next;
@@ -319,7 +336,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         } else {
           setItems((prev) => [
             ...prev,
-            { productId: matched.id, quantity: 1, unitPrice: Number(matched.costPrice) || 0, discount: 0, vatRate: 12 },
+            {
+              productId: matched.id,
+              quantity: 1,
+              unitPrice: convertCostPriceToDocumentCurrency(
+                Number(matched.costPrice) || 0,
+                matched.costPriceCurrency || 'UZS',
+                Number(matched.costPriceExchangeRate || 1),
+                currency || 'UZS',
+                Number(exchangeRate),
+              ) ?? 0,
+              discount: 0,
+              vatRate: 12,
+            },
           ]);
         }
       }
@@ -1006,7 +1035,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             {(() => {
               const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);
               if (!selectedSupplier) return null;
-              const debt = Number(selectedSupplier.debtBalance || 0);
+              const debt = Number(selectedSupplier.balancesByCurrency?.find((balance) => balance.currency === currency)?.supplierDebt || 0);
               return (
                 <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)' }}>
                   <span style={{ color: 'var(--color-text-tertiary)' }}>

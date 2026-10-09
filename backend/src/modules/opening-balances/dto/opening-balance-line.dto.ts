@@ -8,6 +8,7 @@ import {
   Min,
 } from 'class-validator';
 import { OpeningBalanceCategory } from '@prisma/client';
+import { Type } from 'class-transformer';
 import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class OpeningBalanceLineDto {
@@ -69,6 +70,7 @@ export class OpeningBalanceLineDto {
   @IsOptional()
   @IsNumber()
   @IsPositive()
+  @Type(() => Number)
   exchangeRate?: number;
 
   @IsOptional()

@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class CreateTransferDto {
   @IsString()
@@ -44,8 +45,7 @@ export class CreateTransferDto {
   @IsPositive()
   exchangeRate?: number;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsValidCurrency()
   currency: string;
 
   @IsDateString()

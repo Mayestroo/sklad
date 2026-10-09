@@ -58,7 +58,7 @@ interface OrderItemSummary {
   counterparty?: { id: string; name: string; phone?: string } | null;
   status: string;
   paymentStatus: string;
-  paymentCondition?: string | null;
+  paymentCondition?: 'PREPAID_100' | 'PARTIAL' | 'CREDIT' | null;
   requiredPaymentPercent?: number | null;
   currency: string;
   totalAmount: number;

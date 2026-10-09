@@ -2,11 +2,17 @@ import { TranslatableField } from './i18n';
 
 export interface KpiSummary {
   totalRevenue: number;
+  totalRevenueByCurrency: Array<{ currency: string; amount: number }>;
   grossProfit: number;
+  grossProfitByCurrency: Array<{ currency: string; amount: number }>;
   netProfitMargin: number;
   totalAccountsReceivable: number; // Debitorlik
   totalAccountsPayable: number;    // Kreditorlik
+  receivablesByCurrency: Array<{ currency: string; amount: number }>;
+  payablesByCurrency: Array<{ currency: string; amount: number }>;
   inventoryValuation: number;      // Ombor qiymati
+  inventoryCurrency: 'UZS';
+  currency: string;
 }
 
 export interface SalesTrendDataPoint {

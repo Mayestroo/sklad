@@ -6,10 +6,12 @@ import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { formatCurrency } from '@/lib/utils';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
+import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
 import { CreditCard, DollarSign, Calendar, FileText } from 'lucide-react';
 
 interface PayPurchaseModalProps {
@@ -32,6 +34,7 @@ export function PayPurchaseModal({
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [cashAccountId, setCashAccountId] = useState('');
   const [amount, setAmount] = useState<number>(0);
+  const [exchangeRate, setExchangeRate] = useState('');
   const [paymentDate, setPaymentDate] = useState<string>(
     new Date().toISOString().slice(0, 10)
   );
@@ -49,6 +52,7 @@ export function PayPurchaseModal({
     // Reset fields
     if (receipt) {
       setAmount(remaining);
+      setExchangeRate('');
       setNote('');
       setPaymentDate(new Date().toISOString().slice(0, 10));
       setError('');
@@ -63,13 +67,10 @@ export function PayPurchaseModal({
       .then((res) => {
         const list = res || [];
         setAccounts(list);
-        if (list.length > 0) {
-          // Prefer account matching receipt currency
-          const matching = list.find(
-            (a) => a.currency === receipt?.currency && a.isActive
-          );
-          setCashAccountId(matching ? matching.id : list[0].id);
-        }
+        const matching = list.find(
+          (account) => account.isActive && account.currency === receipt?.currency && isCashAccountCurrencyValid(account),
+        );
+        setCashAccountId(matching?.id || '');
       })
       .catch((err) => console.error(err));
   }, [isOpen, receipt, token, company, locale]);
@@ -82,17 +83,12 @@ export function PayPurchaseModal({
         ? acc.name
         : acc.name[locale] || acc.name.ru || acc.name.uz || '';
     const formattedBal = formatCurrency(Number(acc.balance), locale, acc.currency);
-    const isMismatch = acc.currency !== receipt.currency;
-    return `${nameStr} (${formattedBal})${isMismatch ? ` — [${isRu ? 'валюта не совпадает' : 'valyuta mos emas'}]` : ''}`;
+    return `${nameStr} (${acc.accountType}) — ${formattedBal}`;
   };
 
-  const sortedAccounts = [...accounts].sort((a, b) => {
-    const aMatch = a.currency === receipt.currency;
-    const bMatch = b.currency === receipt.currency;
-    if (aMatch && !bMatch) return -1;
-    if (!aMatch && bMatch) return 1;
-    return 0;
-  });
+  const sortedAccounts = accounts.filter(
+    (account) => account.isActive && account.currency === receipt.currency && isCashAccountCurrencyValid(account),
+  );
 
   const accountOptions: SelectOption[] = sortedAccounts.map((a) => ({
     value: a.id,
@@ -100,7 +96,8 @@ export function PayPurchaseModal({
   }));
 
   const selectedAccount = accounts.find((a) => a.id === cashAccountId);
-  const isCurrencyMismatch = !!selectedAccount && selectedAccount.currency !== receipt.currency;
+  const isCurrencyMismatch = !!selectedAccount &&
+    (selectedAccount.currency !== receipt.currency || !isCashAccountCurrencyValid(selectedAccount));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +116,11 @@ export function PayPurchaseModal({
           ? `Валюта кассы (${selectedAccount?.currency}) не совпадает с валютой документа (${receipt.currency})`
           : `Kassa valyutasi (${selectedAccount?.currency}) hujjat valyutasiga (${receipt.currency}) mos kelmaydi`
       );
+      return;
+    }
+
+    if (receipt.currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+      setError(isRu ? 'Укажите курс оплаты: UZS за 1 USD' : 'To‘lov kursini kiriting: 1 USD uchun UZS');
       return;
     }
 
@@ -150,6 +152,7 @@ export function PayPurchaseModal({
         body: JSON.stringify({
           amount,
           cashAccountId,
+          ...(receipt.currency === 'USD' ? { exchangeRate: Number(exchangeRate) } : {}),
           note: note.trim() || undefined,
           paymentDate,
         }),
@@ -269,6 +272,18 @@ export function PayPurchaseModal({
             onChange={(val) => setCashAccountId(val)}
           />
         </div>
+
+        {receipt.currency === 'USD' && (
+          <Input
+            label={isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
+            type="number"
+            min="0.0001"
+            value={exchangeRate}
+            onChange={(event) => setExchangeRate(event.target.value)}
+            placeholder="12800"
+            required
+          />
+        )}
 
         {/* Amount input */}
         <div>

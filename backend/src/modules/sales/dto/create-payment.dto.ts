@@ -31,9 +31,14 @@ export class CreatePaymentDto {
   @IsValidCurrency()
   currency: string;
 
-  @IsString()
+  @IsNumber()
+  @Min(0.0001)
   @IsOptional()
-  cashAccountId?: string;
+  exchangeRate?: number;
+
+  @IsString()
+  @IsNotEmpty()
+  cashAccountId: string;
 
   @IsString()
   @IsOptional()

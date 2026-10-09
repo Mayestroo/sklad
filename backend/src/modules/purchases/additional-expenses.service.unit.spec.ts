@@ -6,11 +6,15 @@ import {
   ExpenseType,
   ExpenseAllocationMethod,
   PurchaseDocStatus,
+  CounterpartySettlementSide,
 } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 
 describe('AdditionalExpensesService Unit Tests', () => {
   let service: AdditionalExpensesService;
   let prisma: any;
+  let settlementService: { recordMovement: jest.Mock };
 
   const tenantId = 'tenant-123';
   const userId = 'user-123';
@@ -85,6 +89,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
   };
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       additionalExpense: {
         count: jest.fn().mockResolvedValue(0),
@@ -101,6 +106,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
       },
       purchaseReceipt: {
         findFirst: jest.fn().mockResolvedValue(mockReceipt),
+        update: jest.fn(),
+      },
+      purchaseReceiptItem: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
         update: jest.fn(),
       },
       productBatch: {
@@ -137,6 +146,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
           if (where.code === '4410') return Promise.resolve({ id: 'acc-4410', code: '4410' });
           if (where.code === '6010') return Promise.resolve({ id: 'acc-6010', code: '6010' });
           if (where.code === '5010') return Promise.resolve({ id: 'acc-5010', code: '5010' });
+          if (where.code === '5210') return Promise.resolve({ id: 'acc-5210', code: '5210' });
           return Promise.resolve(null);
         }),
       },
@@ -155,6 +165,8 @@ describe('AdditionalExpensesService Unit Tests', () => {
       providers: [
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: settlementService },
+        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
       ],
     }).compile();
 
@@ -298,6 +310,74 @@ describe('AdditionalExpensesService Unit Tests', () => {
   });
 
   describe('postExpense & Retroactive COGS Recalibration', () => {
+    it('rejects a paid expense that has no cash or bank account attached', async () => {
+      prisma.additionalExpense.findFirst.mockResolvedValue({
+        id: 'exp-missing-account',
+        tenantId,
+        status: PurchaseDocStatus.DRAFT,
+        isPaid: true,
+        cashAccountId: null,
+        amount: 100,
+        currency: 'UZS',
+        receiptId,
+        counterparty: { id: 'carrier-1', name: 'Carrier' },
+        items: [],
+      });
+
+      await expect(service.postExpense(tenantId, userId, 'exp-missing-account'))
+        .rejects.toThrow(BadRequestException);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('posts a paid USD expense through the USD bank ledger account', async () => {
+      const expense = {
+        id: 'exp-usd-paid',
+        tenantId,
+        docNumber: 'EXP-USD-0001',
+        docDate: new Date(),
+        status: PurchaseDocStatus.DRAFT,
+        amount: 100,
+        currency: 'USD',
+        exchangeRate: 12800,
+        receiptId,
+        isPaid: true,
+        cashAccountId: 'bank-usd',
+        cashAccount: {
+          id: 'bank-usd',
+          accountType: 'BANK',
+          currency: 'USD',
+        },
+        counterpartyId: 'carrier-1',
+        counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
+        vatAmount: 0,
+        items: [],
+      };
+      prisma.additionalExpense.findFirst.mockResolvedValue(expense);
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        ...expense.cashAccount,
+        tenantId,
+        balance: 500,
+        isActive: true,
+      });
+      prisma.additionalExpense.update.mockResolvedValue({ ...expense, status: PurchaseDocStatus.POSTED });
+
+      await service.postExpense(tenantId, userId, expense.id);
+
+      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ accountId: 'bank-usd', currency: 'USD', amount: 100 }),
+      }));
+      expect(prisma.journalEntry.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          lines: expect.objectContaining({
+            create: expect.arrayContaining([
+              expect.objectContaining({ creditAccountId: 'acc-5210', amount: 1280000 }),
+            ]),
+          }),
+        }),
+      }));
+    });
+
     it('posts expense on unsold inventory, updating ProductBatch and Product.costPrice', async () => {
       const mockExpense = {
         id: 'exp-1',
@@ -306,6 +386,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         docDate: new Date(),
         status: PurchaseDocStatus.DRAFT,
         amount: 1000000,
+        currency: 'UZS',
         receiptId,
         isPaid: false,
         counterpartyId: 'carrier-1',
@@ -346,12 +427,18 @@ describe('AdditionalExpensesService Unit Tests', () => {
       });
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { id: 'prod-iphone' },
-        data: { costPrice: 1100000 },
+        data: { costPrice: 1100000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 },
       });
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: 'carrier-1' },
-        data: { debtBalance: { increment: 1000000 } },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId: 'carrier-1',
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 1000000,
+        entryType: 'ADDITIONAL_EXPENSE_POSTED',
+        sourceDocType: 'AdditionalExpense',
+        sourceDocId: 'exp-1',
+      }));
       expect(prisma.journalEntry.create).toHaveBeenCalled();
     });
 
@@ -363,6 +450,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         docDate: new Date(),
         status: PurchaseDocStatus.DRAFT,
         amount: 1000000,
+        currency: 'UZS',
         receiptId,
         isPaid: false,
         counterpartyId: 'carrier-1',

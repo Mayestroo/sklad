@@ -77,12 +77,12 @@ export class OpeningBalancesController {
     return this.service.updateLines(tenantId, id, dto);
   }
 
-  @Post(':id/review')
-  async submitForReview(
+  @Post(':id/balance-equity')
+  async balanceEquity(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
   ) {
-    return this.service.submitForReview(tenantId, id);
+    return this.service.balanceEquity(tenantId, id);
   }
 
   @Post(':id/post')

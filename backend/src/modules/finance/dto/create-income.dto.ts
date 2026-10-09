@@ -5,8 +5,10 @@ import {
   IsDateString,
   IsPositive,
   IsNotEmpty,
+  IsEnum,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { CounterpartySettlementSide } from '@prisma/client';
 import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class CreateIncomeDto {
@@ -23,6 +25,13 @@ export class CreateIncomeDto {
   currency: string;
 
   @IsOptional()
+  @Transform(({ value }) => value === '' || value === null ? undefined : Number(value))
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  exchangeRate?: number;
+
+  @IsOptional()
   @Transform(({ value }) =>
     value === '' || value === null ? undefined : value,
   )
@@ -35,6 +44,10 @@ export class CreateIncomeDto {
   )
   @IsString()
   counterpartyId?: string;
+
+  @IsOptional()
+  @IsEnum(CounterpartySettlementSide)
+  settlementSide?: CounterpartySettlementSide;
 
   @IsOptional()
   @Transform(({ value }) =>

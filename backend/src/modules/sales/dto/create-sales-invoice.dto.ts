@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
   IsBoolean,
@@ -27,11 +28,13 @@ export class SalesInvoiceItemDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(100)
   discount?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(100)
   vatRate?: number;
 }
 
@@ -71,6 +74,17 @@ export class CreateSalesInvoiceDto {
   @IsOptional()
   @IsString()
   comment?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  additionalChargeAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  additionalChargeVatRate?: number;
 
   @IsOptional()
   @IsString()

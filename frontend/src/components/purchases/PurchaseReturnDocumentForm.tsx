@@ -11,7 +11,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -38,8 +38,8 @@ interface CounterpartyOption {
   id: string;
   name: string;
   type: string;
-  debtBalance?: number;
   currency?: string;
+  balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
 }
 
 interface WarehouseOption {
@@ -92,7 +92,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [receiptId, setReceiptId] = useState<string>(initialData?.receiptId || '');
-  const [currency, setCurrency] = useState(initialData?.currency || '');
+  const [currency, setCurrency] = useState(initialData?.currency?.trim() || '');
   const [actNumber, setActNumber] = useState(initialData?.actNumber || '');
   const [reason, setReason] = useState(initialData?.reason || '');
   const [comment, setComment] = useState(initialData?.comment || '');
@@ -171,7 +171,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       .catch((err) => console.error(err));
 
     // Warehouses
-    apiFetch<WarehouseOption[]>('/inventory/warehouses', { token, tenantId: company.id, locale })
+    apiFetch<WarehouseOption[]>('/tenants/warehouses', { token, tenantId: company.id, locale })
       .then((res) => setWarehouses(res || []))
       .catch((err) => console.error(err));
 
@@ -219,8 +219,9 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     if (!chosenId) return;
 
     const supp = counterparties.find((c) => c.id === chosenId);
-    if (!currency && supp?.currency) {
-      setCurrency(supp.currency);
+    const supplierCurrency = supp?.currency?.trim();
+    if (!currency.trim() && supplierCurrency) {
+      setCurrency(supplierCurrency);
     }
   };
 
@@ -236,7 +237,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     if (found) {
       setSelectedReceipt(found);
       if (found.warehouseId) setWarehouseId(found.warehouseId);
-      if (found.currency) setCurrency(found.currency);
+      setCurrency(found.currency?.trim() || '');
 
       // Pre-fill items from receipt
       if (found.items && found.items.length > 0) {
@@ -370,7 +371,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   );
 
   const selectedSupplier = counterparties.find((c) => c.id === counterpartyId);
-  const currentSupplierDebt = Number(selectedSupplier?.debtBalance || 0);
+  const currentSupplierDebt = Number(selectedSupplier?.balancesByCurrency?.find((balance) => balance.currency === currency)?.supplierDebt || 0);
   const projectedSupplierDebt = currentSupplierDebt - totalAmount;
 
   // Submit Handler
@@ -385,7 +386,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       setError(isRu ? 'Выберите склад' : 'Omborni tanlang');
       return;
     }
-    if (!currency) {
+    if (!currency.trim()) {
       setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
       return;
     }
@@ -419,7 +420,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         counterpartyId,
         warehouseId,
         returnDate,
-        currency,
+        currency: currency.trim(),
         actNumber: actNumber || undefined,
         reason: reason || undefined,
         comment: comment || undefined,
@@ -479,8 +480,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         ? 'Вы действительно хотите отменить этот возврат?'
         : 'Ushbu qaytarish hujjatini bekor qilishni tasdiqlaysizmi?',
       variant: 'warning',
-      confirmText: isRu ? 'Отменить возврат' : 'Bekor qilish',
-      cancelText: isRu ? 'Закрыть' : 'Yopish',
+      confirmText: isRu ? 'Да' : 'Ha',
+      cancelText: isRu ? 'Нет' : 'Yo‘q',
     });
     if (!confirmed) return;
 
@@ -506,11 +507,11 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   };
 
   const supplierSelectOptions: SelectOption[] = counterparties.map((c) => {
-    const debt = Number(c.debtBalance || 0);
-    const curr = currency || c.currency || 'UZS';
+    const debt = Number(c.balancesByCurrency?.find((balance) => balance.currency === currency)?.supplierDebt || 0);
+    const formattedDebt = debt !== 0 ? formatCurrencyIfAvailable(debt, locale, currency) : undefined;
     return {
       value: c.id,
-      label: `${c.name}${debt !== 0 ? ` (${formatCurrency(debt, locale, curr)})` : ''}`,
+      label: `${c.name}${formattedDebt ? ` (${formattedDebt})` : ''}`,
     };
   });
 
@@ -523,7 +524,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     { value: '', label: isRu ? '— Без накладной (С нуля) —' : '— Xaridsiz (Noldan mustaqil) —' },
     ...availableReceipts.map((r) => ({
       value: r.id,
-      label: `№ ${r.docNumber} (${formatDate(r.docDate, locale)}) — ${formatCurrency(Number(r.totalAmount) || 0, locale, r.currency || currency || 'UZS')}`,
+      label: `№ ${r.docNumber} (${formatDate(r.docDate, locale)}) — ${formatCurrencyIfAvailable(Number(r.totalAmount) || 0, locale, r.currency) || '—'}`,
     })),
   ];
 
@@ -623,11 +624,12 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px', color: currentSupplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-success-600)' }}>
                 {isRu ? 'Текущий долг: ' : 'Joriy qarzdorlik: '}
                 <strong>
-                  {formatCurrency(
+                  {formatCurrencyIfAvailable(
                     currentSupplierDebt,
                     locale,
-                    currency || selectedSupplier.currency || 'UZS',
-                  )}
+                    currency,
+                    selectedSupplier.currency,
+                  ) || '—'}
                 </strong>
               </div>
             )}
@@ -686,27 +688,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               {isRu ? 'Причина возврата' : 'Qaytarish sababi'}
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <select
+              <Select
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                onChange={setReason}
                 disabled={isReadOnly}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border-light)',
-                  backgroundColor: 'var(--color-bg-primary)',
-                  color: 'var(--color-text-primary)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
-                <option value="">{isRu ? '— Выберите причину —' : '— Sababni tanlang —'}</option>
-                {REASON_PRESETS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
+                style={{ width: '100%' }}
+                options={[
+                  { value: '', label: isRu ? '— Выберите причину —' : '— Sababni tanlang —' },
+                  ...REASON_PRESETS.map((preset) => ({ value: preset, label: preset })),
+                ]}
+              />
             </div>
           </div>
 
@@ -759,30 +750,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
           {!isReadOnly && !receiptId && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '300px' }}>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    handleAddItem(e.target.value);
-                    e.target.value = '';
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border-light)',
-                  backgroundColor: 'var(--color-bg-primary)',
-                  color: 'var(--color-text-primary)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
-                <option value="">{isRu ? '+ Добавить позицию...' : '+ Tovar yoki xomashyo qo‘shish...'}</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    [{p.type === 'RAW_MATERIAL' ? (isRu ? 'Сырье' : 'Xomashyo') : (isRu ? 'Tovar' : 'Tovar')}] {getProductName(p.name)} {p.sku ? `(${p.sku})` : ''}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value=""
+                onChange={handleAddItem}
+                placeholder={isRu ? '+ Добавить позицию...' : '+ Tovar yoki xomashyo qo‘shish...'}
+                style={{ flex: 1 }}
+                options={products.map((product) => ({
+                  value: product.id,
+                  label: `[${product.type === 'RAW_MATERIAL' ? (isRu ? 'Сырье' : 'Xomashyo') : (isRu ? 'Tovar' : 'Tovar')}] ${getProductName(product.name)} ${product.sku ? `(${product.sku})` : ''}`,
+                }))}
+              />
             </div>
           )}
         </div>
@@ -883,7 +860,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       {isReadOnly ? (
-                        currency ? formatCurrency(row.unitPrice, locale, currency) : '—'
+                        formatCurrencyIfAvailable(row.unitPrice, locale, currency) || '—'
                       ) : (
                         <CurrencyInput
                           value={row.unitPrice}
@@ -895,28 +872,22 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                       {isReadOnly ? (
                         `${row.vatRate}%`
                       ) : (
-                        <select
-                          value={row.vatRate}
-                          onChange={(e) => handleUpdateItem(idx, 'vatRate', parseFloat(e.target.value) || 0)}
-                          style={{
-                            padding: '6px 4px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--color-border-light)',
-                            backgroundColor: 'var(--color-bg-primary)',
-                            color: 'var(--color-text-primary)',
-                            fontSize: 'var(--text-xs)',
-                          }}
-                        >
-                          <option value="0">0%</option>
-                          <option value="12">12%</option>
-                        </select>
+                        <Select
+                          value={String(row.vatRate)}
+                          onChange={(value) => handleUpdateItem(idx, 'vatRate', parseFloat(value) || 0)}
+                          options={[
+                            { value: '0', label: '0%' },
+                            { value: '12', label: '12%' },
+                          ]}
+                          size="md"
+                        />
                       )}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }} className="tabular-nums">
-                      {currency ? formatCurrency(row.vatAmount, locale, currency) : '—'}
+                      {formatCurrencyIfAvailable(row.vatAmount, locale, currency) || '—'}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }} className="tabular-nums">
-                      {currency ? formatCurrency(row.totalPrice, locale, currency) : '—'}
+                      {formatCurrencyIfAvailable(row.totalPrice, locale, currency) || '—'}
                     </td>
                     {!isReadOnly && (
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
@@ -947,17 +918,17 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
           </h4>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span>{isRu ? 'Текущий долг перед поставщиком:' : 'Yetkazib beruvchiga joriy qarz:'}</span>
-            <span style={{ fontWeight: 600 }}>{currency ? formatCurrency(currentSupplierDebt, locale, currency) : '—'}</span>
+            <span style={{ fontWeight: 600 }}>{formatCurrencyIfAvailable(currentSupplierDebt, locale, currency) || '—'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-danger-600)' }}>
             <span>{isRu ? 'Сумма возврата (уменьшение долга):' : 'Qaytarish summasi (qarz kamayishi):'}</span>
-            <span style={{ fontWeight: 600 }}>- {currency ? formatCurrency(totalAmount, locale, currency) : '—'}</span>
+            <span style={{ fontWeight: 600 }}>- {formatCurrencyIfAvailable(totalAmount, locale, currency) || '—'}</span>
           </div>
           <div style={{ height: '1px', backgroundColor: 'var(--color-border-light)', margin: '4px 0' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
             <span>{isRu ? 'Остаток долга после проведения:' : 'Tasdiqlangandan so‘ng qarz:'}</span>
             <span style={{ color: projectedSupplierDebt >= 0 ? 'var(--color-text-primary)' : 'var(--color-success-600)' }}>
-              {currency ? formatCurrency(projectedSupplierDebt, locale, currency) : '—'}
+              {formatCurrencyIfAvailable(projectedSupplierDebt, locale, currency) || '—'}
               {projectedSupplierDebt < 0 && (
                 <span style={{ fontSize: '11px', display: 'block', color: 'var(--color-success-600)', fontWeight: 500 }}>
                   ({isRu ? 'Аванс поставщику' : 'Yetkazib beruvchiga avans'})
@@ -971,16 +942,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Сумма без НДС:' : 'QQSsiz summa:'}</span>
-            <span style={{ fontWeight: 600 }}>{currency ? formatCurrency(subtotal, locale, currency) : '—'}</span>
+            <span style={{ fontWeight: 600 }}>{formatCurrencyIfAvailable(subtotal, locale, currency) || '—'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
             <span style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Сумма НДС:' : 'QQS summasi:'}</span>
-            <span style={{ fontWeight: 600 }}>{currency ? formatCurrency(totalVat, locale, currency) : '—'}</span>
+            <span style={{ fontWeight: 600 }}>{formatCurrencyIfAvailable(totalVat, locale, currency) || '—'}</span>
           </div>
           <div style={{ height: '1px', backgroundColor: 'var(--color-border-light)', margin: '4px 0' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-primary-600)' }}>
             <span>{isRu ? 'ИТОГО К ВОЗВРАТУ:' : 'JAMI QAYTARISH:'}</span>
-            <span>{currency ? formatCurrency(totalAmount, locale, currency) : '—'}</span>
+            <span>{formatCurrencyIfAvailable(totalAmount, locale, currency) || '—'}</span>
           </div>
 
           {!isReadOnly && (

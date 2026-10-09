@@ -428,7 +428,8 @@ export default function ProductsPage() {
                 {filteredProducts.map((p, idx) => {
                   const cost = Number(p.costPrice || 0);
                   const sale = Number(p.salePrice || 0);
-                  const marginPct = cost > 0 ? (((sale - cost) / cost) * 100).toFixed(1) : '—';
+                  const samePriceCurrency = (p.costPriceCurrency || 'UZS') === (p.salePriceCurrency || defaultCurrency);
+                  const marginPct = cost > 0 && samePriceCurrency ? (((sale - cost) / cost) * 100).toFixed(1) : '—';
                   const isLastRow = idx === filteredProducts.length - 1;
 
                   return (
@@ -494,12 +495,12 @@ export default function ProductsPage() {
 
                       {/* Cost price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
-                        {formatCurrency(cost, locale, (p as any).currency || defaultCurrency)}
+                        {formatCurrency(cost, locale, p.costPriceCurrency || 'UZS')}
                       </td>
 
                       {/* Sale price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                        {formatCurrency(sale, locale, (p as any).currency || defaultCurrency)}
+                        {formatCurrency(sale, locale, p.salePriceCurrency || defaultCurrency)}
                       </td>
 
                       {/* Margin % */}
@@ -597,13 +598,13 @@ export default function ProductsPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Себестоимость' : 'Tannarxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>
-                  {formatCurrency(selectedProduct.costPrice, locale, (selectedProduct as any).currency || defaultCurrency)}
+                  {formatCurrency(selectedProduct.costPrice, locale, selectedProduct.costPriceCurrency || 'UZS')}
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Цена продажи' : 'Sotish narxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary-600)' }}>
-                  {formatCurrency(selectedProduct.salePrice, locale, (selectedProduct as any).currency || defaultCurrency)}
+                  {formatCurrency(selectedProduct.salePrice, locale, selectedProduct.salePriceCurrency || defaultCurrency)}
                 </div>
               </div>
               <div>
@@ -857,4 +858,3 @@ export default function ProductsPage() {
 
   );
 }
-

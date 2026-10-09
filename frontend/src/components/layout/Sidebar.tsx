@@ -68,18 +68,11 @@ export function Sidebar() {
   ];
 
   // Sub-items for Sales
-  const enableMultiTierPriceLists = Boolean(
-    company?.settings?.sales?.enableMultiTierPriceLists,
-  );
-
   const salesSubItems = [
     { href: '/sales/orders', label: t('salesOrders'), icon: ClipboardList },
     { href: '/sales', label: t('salesOverview'), icon: ShoppingCart },
     { href: '/sales/returns', label: t('salesReturns'), icon: RotateCcw },
     { href: '/sales/customers', label: t('customers'), icon: UserCheck },
-    ...(enableMultiTierPriceLists
-      ? [{ href: '/sales/prices', label: t('prices'), icon: Receipt }]
-      : []),
   ];
 
   // Sub-items for Settings

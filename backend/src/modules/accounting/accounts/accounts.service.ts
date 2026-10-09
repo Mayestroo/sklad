@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { CreateAccountDto } from '../dto';
 
@@ -55,8 +55,26 @@ export const DEFAULT_NAS_ACCOUNTS = [
     isSystem: true,
   },
   {
+    code: '5020',
+    name: {
+      uz: 'Chet el valyutasidagi kassa',
+      ru: 'Касса в иностранной валюте',
+    },
+    type: 'ASSET' as const,
+    isSystem: true,
+  },
+  {
     code: '5110',
     name: { uz: 'Hisob-kitob raqami (Bank)', ru: 'Расчётный счёт (Банк)' },
+    type: 'ASSET' as const,
+    isSystem: true,
+  },
+  {
+    code: '5210',
+    name: {
+      uz: 'Chet el valyutasidagi bank hisobi',
+      ru: 'Валютный банковский счёт',
+    },
     type: 'ASSET' as const,
     isSystem: true,
   },
@@ -114,6 +132,24 @@ export const DEFAULT_NAS_ACCOUNTS = [
     type: 'EXPENSE' as const,
     isSystem: true,
   },
+  {
+    code: '9540',
+    name: {
+      uz: 'Valyuta kursi farqidan daromad',
+      ru: 'Доход от курсовой разницы',
+    },
+    type: 'REVENUE' as const,
+    isSystem: true,
+  },
+  {
+    code: '9620',
+    name: {
+      uz: 'Valyuta kursi farqidan zarar',
+      ru: 'Расход от курсовой разницы',
+    },
+    type: 'EXPENSE' as const,
+    isSystem: true,
+  },
 ];
 
 @Injectable()
@@ -124,11 +160,14 @@ export class AccountsService {
    * Seed default Uzbekistan NAS Chart of Accounts for a tenant if not present
    */
   async ensureDefaultAccounts(tenantId: string) {
-    const existingCount = await this.prisma.account.count({
-      where: { tenantId },
+    const existingDefaultCount = await this.prisma.account.count({
+      where: {
+        tenantId,
+        code: { in: DEFAULT_NAS_ACCOUNTS.map((account) => account.code) },
+      },
     });
 
-    if (existingCount < DEFAULT_NAS_ACCOUNTS.length) {
+    if (existingDefaultCount < DEFAULT_NAS_ACCOUNTS.length) {
       for (const acc of DEFAULT_NAS_ACCOUNTS) {
         const existing = await this.prisma.account.findFirst({
           where: { tenantId, code: acc.code },

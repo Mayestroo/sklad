@@ -25,7 +25,7 @@ export function MultiCurrencyValue({
   color,
   className = 'tabular-nums',
 }: MultiCurrencyValueProps) {
-  const activeItems = (items || []).filter((i) => i.amount > 0);
+  const activeItems = (items || []).filter((i) => i.amount !== 0);
 
   if (activeItems.length === 0) {
     return (

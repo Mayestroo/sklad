@@ -7,11 +7,17 @@ import {
   PurchaseReturnStatus,
   ReturnDocStatus,
   ProductType,
+  CounterpartySettlementSide,
 } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 
 describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invariant Test Suite (#108)', () => {
   let service: PurchasesService;
   let prisma: any;
+  let settlementService: { recordMovement: jest.Mock };
+  let settlementAllocationService: { recordAllocation: jest.Mock };
 
   const tenantId = 'tenant-ret-test';
   const userId = 'user-ret-test';
@@ -19,6 +25,8 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
   const counterpartyId = 'supp-main';
 
   beforeEach(async () => {
+    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementAllocationService = { recordAllocation: jest.fn().mockResolvedValue({ created: true }) };
     prisma = {
       purchaseReceipt: {
         count: jest.fn().mockResolvedValue(0),
@@ -91,6 +99,9 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       providers: [
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: settlementService },
+        { provide: SettlementAllocationService, useValue: settlementAllocationService },
+        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
       ],
     }).compile();
 
@@ -103,6 +114,9 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       const receipt = {
         id: 'rec-100',
         tenantId,
+        counterpartyId,
+        warehouseId,
+        currency: 'UZS',
         status: PurchaseDocStatus.POSTED,
         totalAmount: 1120000,
         returns: [],
@@ -139,7 +153,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         id: 'stock-iphone',
         quantity: 10,
       });
-      prisma.purchaseReceipt.findUnique.mockResolvedValue(receipt);
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
       prisma.purchaseReturn.create.mockImplementation(({ data }: { data: any }) => ({
         id: 'ret-100',
         ...data,
@@ -163,6 +177,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         receiptId: 'rec-100',
         counterpartyId,
         warehouseId,
+        currency: 'UZS',
         reason: 'DEFECT',
         actNumber: 'AKT-001',
         items: [{ productId: 'prod-iphone', quantity: 3, unitPrice: 100000, vatRate: 12 }],
@@ -188,14 +203,16 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         data: { returnedQuantity: { increment: 3 } },
       });
 
-      // Invariant Check 4: Supplier debt reduced by base price + VAT: 3 * 100,000 + 12% = 336,000
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { decrement: 336000 },
-          debtBalance: { decrement: 336000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -336000,
+        entryType: 'PURCHASE_RETURN_POSTED',
+        sourceDocType: 'PurchaseReturn',
+        sourceDocId: 'ret-100',
+      }));
 
       // Invariant Check 5: Receipt returnStatus updated to PARTIALLY_RETURNED
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
@@ -214,8 +231,11 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         id: 'stock-iphone',
         quantity: 10,
       });
-      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-100',
+        counterpartyId,
+        warehouseId,
+        currency: 'UZS',
         status: PurchaseDocStatus.POSTED,
         items: [
           {
@@ -233,6 +253,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
           receiptId: 'rec-100',
           counterpartyId,
           warehouseId,
+          currency: 'UZS',
           items: [{ productId: 'prod-iphone', quantity: 5, unitPrice: 100000 }],
         }),
       ).rejects.toThrow(BadRequestException);
@@ -248,8 +269,11 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         id: 'stock-iphone',
         quantity: 10,
       });
-      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-100',
+        counterpartyId,
+        warehouseId,
+        currency: 'UZS',
         status: PurchaseDocStatus.POSTED,
         items: [
           {
@@ -273,6 +297,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
           receiptId: 'rec-100',
           counterpartyId,
           warehouseId,
+          currency: 'UZS',
           items: [{ productId: 'prod-iphone', quantity: 5, unitPrice: 100000 }],
         }),
       ).rejects.toThrow(BadRequestException);
@@ -335,6 +360,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         counterpartyId,
         warehouseId,
         reason: 'EXCESS_STOCK',
+        currency: 'UZS',
         items: [{ productId: 'raw-alu', quantity: 15, unitPrice: 40000, vatRate: 0 }],
       });
 
@@ -356,14 +382,16 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         data: { remainingQty: { decrement: 5 } },
       });
 
-      // Supplier debt reduced by 15 * 40,000 = 600,000
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { decrement: 600000 },
-          debtBalance: { decrement: 600000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -600000,
+        entryType: 'PURCHASE_RETURN_POSTED',
+        sourceDocType: 'PurchaseReturn',
+        sourceDocId: 'ret-standalone-1',
+      }));
     });
   });
 
@@ -374,6 +402,9 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       const receipt = {
         id: 'rec-freight',
         tenantId,
+        counterpartyId,
+        warehouseId,
+        currency: 'UZS',
         status: PurchaseDocStatus.POSTED,
         totalAmount: 1120000,
         returns: [],
@@ -384,7 +415,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
             quantity: 10,
             returnedQuantity: 0,
             unitPrice: 100000,
-            landedCost: 1200000, // unit landed cost = 120,000
+            landedCost: 120000, // unit landed cost = 120,000
             vatRate: 0,
             product: { id: 'prod-item', type: ProductType.PRODUCT },
           },
@@ -396,7 +427,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
             remainingQty: 10,
             initialQty: 10,
             purchasePrice: 100000,
-            landedCost: 1200000,
+            landedCost: 120000,
           },
         ],
       };
@@ -410,7 +441,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         id: 'stock-item',
         quantity: 10,
       });
-      prisma.purchaseReceipt.findUnique.mockResolvedValue(receipt);
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
       prisma.purchaseReturn.create.mockImplementation(({ data }: { data: any }) => ({
         id: 'ret-variance',
         ...data,
@@ -434,18 +465,21 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         receiptId: 'rec-freight',
         counterpartyId,
         warehouseId,
+        currency: 'UZS',
         reason: 'DEFECT',
         items: [{ productId: 'prod-item', quantity: 5, unitPrice: 100000, vatRate: 0 }],
       });
 
-      // Supplier debt decreases strictly by base purchase price: 5 * 100,000 = 500,000
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { decrement: 500000 },
-          debtBalance: { decrement: 500000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -500000,
+        entryType: 'PURCHASE_RETURN_POSTED',
+        sourceDocType: 'PurchaseReturn',
+        sourceDocId: 'ret-variance',
+      }));
 
       // Check Journal Entry for Landed Cost Return Variance (Account 9430)
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -466,9 +500,11 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         id: 'ret-cancel-test',
         tenantId,
         returnNumber: 'RET-2026-0005',
+        returnDate: new Date('2026-09-20'),
         status: ReturnDocStatus.POSTED,
         warehouseId,
         counterpartyId,
+        currency: 'UZS',
         receiptId: 'rec-100',
         items: [
           {
@@ -526,13 +562,16 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       });
 
       // 4. Supplier debt restored
-      expect(prisma.counterparty.update).toHaveBeenCalledWith({
-        where: { id: counterpartyId },
-        data: {
-          supplierDebt: { increment: 500000 },
-          debtBalance: { increment: 500000 },
-        },
-      });
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        tenantId,
+        counterpartyId,
+        currency: 'UZS',
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: 500000,
+        entryType: 'PURCHASE_RETURN_CANCELLED',
+        sourceDocType: 'PurchaseReturn',
+        sourceDocId: 'ret-cancel-test',
+      }));
 
       // 5. Receipt returnStatus restored to NONE
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({

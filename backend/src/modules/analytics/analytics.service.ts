@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
 
 @Injectable()
@@ -6,147 +6,132 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getKpiSummary(tenantId: string) {
-    const [invoices, counterparties, stockLevels, recentReceipt, recentInvoice, company] = await Promise.all([
+    const [invoices, returns, balances, stockLevels] = await Promise.all([
       this.prisma.salesInvoice.findMany({
-        where: { tenantId },
-        include: { items: { include: { product: true } } },
+        where: { tenantId, status: 'POSTED' },
+        select: {
+          totalAmount: true,
+          vatAmount: true,
+          totalCogs: true,
+          grossProfit: true,
+          currency: true,
+          exchangeRate: true,
+        },
       }),
-      this.prisma.counterparty.findMany({
+      this.prisma.salesReturn.findMany({
+        where: { tenantId, status: 'POSTED' },
+        include: {
+          invoice: { select: { currency: true, exchangeRate: true } },
+          items: { select: { vatAmount: true } },
+        },
+      }),
+      this.prisma.counterpartyBalance.findMany({
         where: { tenantId },
         select: {
-          id: true,
-          name: true,
-          type: true,
+          counterpartyId: true,
+          currency: true,
           customerDebt: true,
           supplierDebt: true,
-          debtBalance: true,
-          purchaseReceipts: {
-            where: { status: 'POSTED' },
-            select: { currency: true },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-          salesInvoices: {
-            where: { status: 'POSTED' },
-            select: { currency: true },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
         },
       }),
       this.prisma.stockLevel.findMany({
         where: { tenantId },
         include: { product: true },
       }),
-      this.prisma.purchaseReceipt.findFirst({
-        where: { tenantId, status: 'POSTED' },
-        select: { currency: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.salesInvoice.findFirst({
-        where: { tenantId, status: 'POSTED' },
-        select: { currency: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.company.findUnique({
-        where: { id: tenantId },
-        select: { settings: true },
-      }),
     ]);
 
-    const reportCurrency =
-      recentReceipt?.currency ||
-      recentInvoice?.currency ||
-      (company?.settings as any)?.sales?.defaultCurrency ||
-      'USD';
-
-    const totalRevenue = invoices.reduce(
-      (sum, inv) => sum + Number(inv.totalAmount),
-      0,
-    );
-
+    const revenueByCurrencyMap: Record<string, number> = {};
+    let totalNetRevenueUzs = 0;
     let totalCogs = 0;
-    invoices.forEach((inv) => {
-      inv.items.forEach((item) => {
-        totalCogs +=
-          Number(item.quantity) * (Number(item.product?.costPrice) || 0);
-      });
-    });
-
-    const grossProfit = totalRevenue - totalCogs;
-    const netProfitMargin =
-      totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    let grossProfit = 0;
+    for (const invoice of invoices) {
+      const invoiceCurrency = invoice.currency;
+      const rate = invoiceCurrency === 'UZS' ? 1 : Number(invoice.exchangeRate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new BadRequestException(`Posted sales invoice has an invalid ${invoiceCurrency} exchange rate`);
+      }
+      const amount = Number(invoice.totalAmount);
+      const netRevenue = amount - Number(invoice.vatAmount || 0);
+      revenueByCurrencyMap[invoiceCurrency] = (revenueByCurrencyMap[invoiceCurrency] || 0) + amount;
+      totalNetRevenueUzs += netRevenue * rate;
+      totalCogs += Number(invoice.totalCogs || 0);
+      grossProfit += Number(invoice.grossProfit || 0);
+    }
+    for (const salesReturn of returns) {
+      const currency = salesReturn.currency;
+      const rate = currency === 'UZS' ? 1 : Number(salesReturn.invoice?.exchangeRate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new BadRequestException(`Posted sales return has an invalid ${currency} exchange rate`);
+      }
+      const amount = Number(salesReturn.totalAmount);
+      const vat = salesReturn.items.reduce((sum, item) => sum + Number(item.vatAmount || 0), 0);
+      const netRevenue = amount - vat;
+      const cogs = Number(salesReturn.totalCogs || 0);
+      revenueByCurrencyMap[currency] = (revenueByCurrencyMap[currency] || 0) - amount;
+      totalNetRevenueUzs -= netRevenue * rate;
+      totalCogs -= cogs;
+      grossProfit -= netRevenue * rate - cogs;
+    }
+    const totalRevenueByCurrency = Object.entries(revenueByCurrencyMap)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([currency, amount]) => ({ currency, amount }));
+    const totalRevenue = totalRevenueByCurrency.length === 1 ? totalRevenueByCurrency[0].amount : 0;
+    const grossProfitByCurrency = invoices.length > 0 || returns.length > 0
+      ? [{ currency: 'UZS', amount: Math.round(grossProfit * 100) / 100 }]
+      : [];
+    const netProfitMargin = totalNetRevenueUzs > 0 ? (grossProfit / totalNetRevenueUzs) * 100 : 0;
 
     let totalAccountsReceivable = 0;
     let totalAccountsPayable = 0;
     const receivablesByCurr: Record<string, number> = {};
     const payablesByCurr: Record<string, number> = {};
+    const customerAdvancesByCurr: Record<string, number> = {};
+    const supplierAdvancesByCurr: Record<string, number> = {};
 
-    counterparties.forEach((c) => {
-      const custDebt = Number((c as any).customerDebt || 0);
-      const suppDebt = Number((c as any).supplierDebt || 0);
-      const raw = Number(c.debtBalance || 0);
-      const currency =
-        (c as any).purchaseReceipts?.[0]?.currency ||
-        (c as any).salesInvoices?.[0]?.currency ||
-        reportCurrency;
-
-      if (custDebt !== 0 || suppDebt !== 0) {
-        if (custDebt > 0) {
-          totalAccountsReceivable += custDebt;
-          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + custDebt;
-        } else if (custDebt < 0) {
-          totalAccountsPayable += Math.abs(custDebt);
-          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(custDebt);
-        }
-
-        if (suppDebt > 0) {
-          totalAccountsPayable += suppDebt;
-          payablesByCurr[currency] = (payablesByCurr[currency] || 0) + suppDebt;
-        } else if (suppDebt < 0) {
-          totalAccountsReceivable += Math.abs(suppDebt);
-          receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(suppDebt);
-        }
-      } else {
-        if (c.type === 'SUPPLIER') {
-          if (raw > 0) {
-            totalAccountsPayable += raw;
-            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + raw;
-          } else if (raw < 0) {
-            totalAccountsReceivable += Math.abs(raw);
-            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + Math.abs(raw);
-          }
-        } else {
-          if (raw > 0) {
-            totalAccountsReceivable += raw;
-            receivablesByCurr[currency] = (receivablesByCurr[currency] || 0) + raw;
-          } else if (raw < 0) {
-            totalAccountsPayable += Math.abs(raw);
-            payablesByCurr[currency] = (payablesByCurr[currency] || 0) + Math.abs(raw);
-          }
-        }
+    balances.forEach((balance) => {
+      const customerDebt = Number(balance.customerDebt);
+      const supplierDebt = Number(balance.supplierDebt);
+      const netBalance = customerDebt - supplierDebt;
+      if (netBalance > 0) {
+        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + netBalance;
+      } else if (netBalance < 0) {
+        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + Math.abs(netBalance);
+      }
+      if (customerDebt < 0) {
+        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
+      }
+      if (supplierDebt < 0) {
+        supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     });
 
     const receivablesByCurrency = Object.entries(receivablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
     const payablesByCurrency = Object.entries(payablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    const customerAdvancesByCurrency = Object.entries(customerAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    const supplierAdvancesByCurrency = Object.entries(supplierAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
+    if (receivablesByCurrency.length === 1) totalAccountsReceivable = receivablesByCurrency[0].amount;
+    if (payablesByCurrency.length === 1) totalAccountsPayable = payablesByCurrency[0].amount;
 
-    const inventoryValuation = stockLevels.reduce(
-      (sum, stock) =>
-        sum + Number(stock.quantity) * (Number(stock.product?.costPrice) || 0),
-      0,
-    );
+    const inventoryValuation = stockLevels.reduce((sum, stock) =>
+      sum + Number(stock.quantity) * Number(stock.product?.costPrice || 0) * Number(stock.product?.costPriceExchangeRate || 1),
+    0);
+    const reportCurrency = totalRevenueByCurrency.length === 1 ? totalRevenueByCurrency[0].currency : 'UZS';
 
     return {
       currency: reportCurrency,
       totalRevenue,
-      grossProfit,
+      totalRevenueByCurrency,
+      grossProfit: Math.round(grossProfit * 100) / 100,
+      grossProfitByCurrency,
       netProfitMargin: Math.round(netProfitMargin * 10) / 10,
       totalAccountsReceivable,
       totalAccountsPayable,
       inventoryValuation,
+      inventoryCurrency: 'UZS' as const,
       receivablesByCurrency,
       payablesByCurrency,
+      customerAdvancesByCurrency,
+      supplierAdvancesByCurrency,
     };
   }
 

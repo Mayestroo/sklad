@@ -2,6 +2,24 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
 import { CreateJournalEntryDto } from '../dto';
+import { ledgerAccountCodeForCashAccount } from '../../../../../shared/types/cash-account-policy';
+import { CashAccountType, PaymentMethod, Prisma } from '@prisma/client';
+import {
+  convertAmountToUzs,
+  requireExchangeRateForCurrency,
+} from '../../../common/utils/transaction-exchange-rate';
+
+interface CashPaymentForJournal {
+  id: string;
+  paymentNumber: string;
+  method: PaymentMethod;
+  amount: number | string | Prisma.Decimal;
+  currency: string;
+  exchangeRate: number;
+  cashAccount: { accountType: CashAccountType; currency: string } | null;
+  invoice?: { currency: string; exchangeRate: number | string | Prisma.Decimal } | null;
+  salesOrder?: { currency: string; exchangeRate: number | string | Prisma.Decimal } | null;
+}
 
 @Injectable()
 export class JournalService {
@@ -58,6 +76,11 @@ export class JournalService {
   async autoPostSalesInvoice(tenantId: string, invoice: any) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
+    const invoiceExchangeRate = requireExchangeRateForCurrency(
+      invoice.currency,
+      Number(invoice.exchangeRate),
+    );
+
     const acc4010 = await this.accountsService.findByCode(tenantId, '4010');
     const acc9010 = await this.accountsService.findByCode(tenantId, '9010');
     const acc6410 = await this.accountsService.findByCode(tenantId, '6410');
@@ -71,7 +94,11 @@ export class JournalService {
     const lines: any[] = [];
 
     // 1. Revenue Posting (Subtotal)
-    const subtotal = Number(invoice.subtotalAmount);
+    const subtotal = convertAmountToUzs(
+      Number(invoice.subtotalAmount),
+      invoice.currency,
+      invoiceExchangeRate,
+    );
     if (subtotal > 0) {
       lines.push({
         debitAccountId: acc4010.id,
@@ -82,7 +109,11 @@ export class JournalService {
     }
 
     // 2. VAT 12% Posting
-    const vat = Number(invoice.vatAmount);
+    const vat = convertAmountToUzs(
+      Number(invoice.vatAmount),
+      invoice.currency,
+      invoiceExchangeRate,
+    );
     if (vat > 0) {
       lines.push({
         debitAccountId: acc4010.id,
@@ -124,30 +155,83 @@ export class JournalService {
    * Auto-post Journal Entries when a Payment is received
    * Dt 5110 (Bank) or Dt 5010 (Cash) / Kt 4010 (Customer)
    */
-  async autoPostPayment(tenantId: string, payment: any) {
+  async autoPostPayment(tenantId: string, payment: CashPaymentForJournal) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
+    const exchangeRate = requireExchangeRateForCurrency(
+      payment.currency,
+      payment.exchangeRate,
+    );
 
-    const bankAccountCode = payment.method === 'CASH' ? '5010' : '5110';
+    const cashLedgerAccountCode = payment.cashAccount
+      ? ledgerAccountCodeForCashAccount(payment.cashAccount)
+      : null;
+    if (!cashLedgerAccountCode) {
+      throw new BadRequestException(
+        'Payment must reference a valid, currency-specific cash or bank account',
+      );
+    }
     const accBank = await this.accountsService.findByCode(
       tenantId,
-      bankAccountCode,
+      cashLedgerAccountCode,
     );
     const acc4010 = await this.accountsService.findByCode(tenantId, '4010');
 
     if (!accBank || !acc4010) return;
 
+    const linkedDocument = payment.invoice ?? payment.salesOrder;
+    if (!linkedDocument || linkedDocument.currency !== payment.currency) {
+      throw new BadRequestException('Payment must link to a sales document in the same currency');
+    }
+    const documentExchangeRate = requireExchangeRateForCurrency(
+      linkedDocument.currency,
+      Number(linkedDocument.exchangeRate),
+    );
+    const cashAmountInUzs = convertAmountToUzs(
+      Number(payment.amount),
+      payment.currency,
+      exchangeRate,
+    );
+    const receivableReductionInUzs = convertAmountToUzs(
+      Number(payment.amount),
+      linkedDocument.currency,
+      documentExchangeRate,
+    );
+    const exchangeDifference = Math.round((cashAmountInUzs - receivableReductionInUzs) * 100) / 100;
+    const exchangeNote = payment.currency === 'USD'
+      ? ` (to'lov kursi: 1 USD = ${exchangeRate} UZS, hujjat kursi: 1 USD = ${documentExchangeRate} UZS)`
+      : '';
+    const journalLines = [{
+      debitAccountId: accBank.id,
+      creditAccountId: acc4010.id,
+      amount: Math.min(cashAmountInUzs, receivableReductionInUzs),
+      description: `Mijozdan to'lov (${payment.method})`,
+    }];
+
+    if (exchangeDifference > 0) {
+      const exchangeGainAccount = await this.accountsService.findByCode(tenantId, '9540');
+      if (!exchangeGainAccount) throw new BadRequestException('Valyuta kursi daromad hisobi (9540) topilmadi');
+      journalLines.push({
+        debitAccountId: accBank.id,
+        creditAccountId: exchangeGainAccount.id,
+        amount: exchangeDifference,
+        description: `To'lov bo'yicha valyuta kursi daromadi${exchangeNote}`,
+      });
+    } else if (exchangeDifference < 0) {
+      const exchangeLossAccount = await this.accountsService.findByCode(tenantId, '9620');
+      if (!exchangeLossAccount) throw new BadRequestException('Valyuta kursi zarar hisobi (9620) topilmadi');
+      journalLines.push({
+        debitAccountId: exchangeLossAccount.id,
+        creditAccountId: acc4010.id,
+        amount: Math.abs(exchangeDifference),
+        description: `To'lov bo'yicha valyuta kursi zarari${exchangeNote}`,
+      });
+    }
+
     await this.createJournalEntry(tenantId, {
-      description: `Avtomatik provodka: To'lov kelib tushishi № ${payment.paymentNumber}`,
+      description: `Avtomatik provodka: To'lov kelib tushishi № ${payment.paymentNumber}${exchangeNote}`,
       sourceDocType: 'Payment',
       sourceDocId: payment.id,
-      lines: [
-        {
-          debitAccountId: accBank.id,
-          creditAccountId: acc4010.id,
-          amount: Number(payment.amount),
-          description: `Mijozdan to'lov (${payment.method})`,
-        },
-      ],
+      lines: journalLines,
     });
   }
 
@@ -271,8 +355,12 @@ export class JournalService {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const lines: any[] = [];
-    const subtotal = Number(act.subtotal) || 0;
-    const vat = Number(act.vatAmount) || 0;
+    const exchangeRate = requireExchangeRateForCurrency(
+      act.currency,
+      Number(act.exchangeRate),
+    );
+    const subtotal = convertAmountToUzs(Number(act.subtotal), act.currency, exchangeRate);
+    const vat = convertAmountToUzs(Number(act.vatAmount), act.currency, exchangeRate);
 
     if (act.type === 'PROVIDED') {
       const acc4010 = await this.accountsService.findByCode(tenantId, '4010');

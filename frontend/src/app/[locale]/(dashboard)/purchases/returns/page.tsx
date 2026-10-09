@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import {
   RotateCcw,
   Building2,
@@ -142,8 +143,8 @@ export default function ReturnsPage() {
         ? 'Вы действительно хотите отменить этот возврат?'
         : 'Ushbu qaytarish hujjatini bekor qilishni tasdiqlaysizmi?',
       variant: 'warning',
-      confirmText: isRu ? 'Отменить возврат' : 'Bekor qilish',
-      cancelText: isRu ? 'Закрыть' : 'Yopish',
+      confirmText: isRu ? 'Да' : 'Ha',
+      cancelText: isRu ? 'Нет' : 'Yo‘q',
     });
     if (!confirmed) return;
 
@@ -348,24 +349,17 @@ export default function ReturnsPage() {
               </div>
 
               <div style={{ width: '160px' }}>
-                <select
+                <Select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border-light)',
-                    backgroundColor: 'var(--color-bg-primary)',
-                    color: 'var(--color-text-primary)',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  <option value="ALL">{isRu ? 'Все статусы' : 'Barcha statuslar'}</option>
-                  <option value="DRAFT">{isRu ? 'Черновик' : 'Qoralama'}</option>
-                  <option value="POSTED">{isRu ? 'Проведено' : 'Tasdiqlangan'}</option>
-                  <option value="CANCELLED">{isRu ? 'Отменено' : 'Bekor qilingan'}</option>
-                </select>
+                  onChange={setStatusFilter}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: 'ALL', label: isRu ? 'Все статусы' : 'Barcha statuslar' },
+                    { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+                    { value: 'POSTED', label: isRu ? 'Проведено' : 'Tasdiqlangan' },
+                    { value: 'CANCELLED', label: isRu ? 'Отменено' : 'Bekor qilingan' },
+                  ]}
+                />
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>

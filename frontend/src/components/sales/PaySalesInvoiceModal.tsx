@@ -9,8 +9,22 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { formatCurrency } from '@/lib/utils';
-import { SalesInvoice, CashAccount } from '@shared/types';
-import { CreditCard, DollarSign, Calendar, FileText, AlertCircle } from 'lucide-react';
+import {
+  SalesInvoice,
+  CashAccount,
+} from '@shared/types';
+import {
+  isCashAccountCompatibleWithSalesPayment,
+  isCashAccountCurrencyValid,
+} from '@/lib/cash-account-policy';
+import { CreditCard, AlertCircle } from 'lucide-react';
+
+type CashAccountListResponse = CashAccount[] | { data?: CashAccount[] };
+
+interface AmountOverride {
+  version: string;
+  value: number;
+}
 
 interface PaySalesInvoiceModalProps {
   isOpen: boolean;
@@ -30,60 +44,68 @@ export function PaySalesInvoiceModal({
   const isRu = locale === 'ru';
 
   const [cashAccountId, setCashAccountId] = useState<string>('');
-  const [cashAccounts, setCashAccounts] = useState<any[]>([]);
+  const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
   const [method, setMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME'>('CASH');
-  const [amount, setAmount] = useState<number>(0);
+  const [exchangeRate, setExchangeRate] = useState('');
+  const [amountOverride, setAmountOverride] = useState<AmountOverride | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const invoiceId = invoice?.id;
+  const invoiceCurrency = invoice?.currency;
+  const amountVersion = `${invoiceId ?? ''}:${invoice?.paidAmount ?? ''}`;
   const remaining = invoice
     ? Math.max(0, Number(invoice.totalAmount || 0) - Number(invoice.paidAmount || 0))
     : 0;
+  const amount = amountOverride?.version === amountVersion ? amountOverride.value : remaining;
+
+  const setPaymentAmount = (value: number) => {
+    setAmountOverride({ version: amountVersion, value });
+  };
+
+  const handleClose = () => {
+    setAmountOverride(null);
+    setCashAccountId('');
+    setExchangeRate('');
+    setNote('');
+    setError('');
+    onClose();
+  };
 
   useEffect(() => {
-    if (!isOpen || !token || !company) return;
+    if (!isOpen || !token || !company || !invoiceId || !invoiceCurrency) return;
 
-    apiFetch<any>('/finance/accounts', {
+    let isActive = true;
+    apiFetch<CashAccountListResponse>('/finance/accounts', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data || [];
-        setCashAccounts(list);
-        if (list.length > 0) {
-          setCashAccountId(list[0].id);
-        }
+        const list = Array.isArray(res) ? res : res.data || [];
+        const compatibleAccounts = list.filter(isCashAccountCurrencyValid);
+        if (!isActive) return;
+        setCashAccounts(compatibleAccounts);
+        setCashAccountId('');
       })
       .catch((err) => console.error('Failed to load cash accounts:', err));
-  }, [isOpen, token, company, locale]);
-
-  useEffect(() => {
-    if (!isOpen || !token || !company || !invoice) return;
-
-    setAmount(remaining);
-    setNote('');
-    setError('');
-  }, [isOpen, invoice, token, company]);
+    return () => {
+      isActive = false;
+    };
+  }, [isOpen, token, company, locale, invoiceId, invoiceCurrency]);
 
   if (!invoice) return null;
 
-  const cashAccountOptions: SelectOption[] = cashAccounts.length > 0
-    ? cashAccounts.map((ca) => {
-        const name = typeof ca.name === 'object' ? ca.name[locale] || ca.name.uz || ca.name.ru : ca.name;
-        const cur = ca.currency || 'UZS';
-        const bal = formatCurrency(Number(ca.balance || 0), locale, cur);
-        return {
-          value: ca.id,
-          label: `${name} (${bal})`,
-        };
-      })
-    : [
-        { value: 'CASH_UZS', label: isRu ? 'Наличная касса (UZS)' : 'Naqd kassa (UZS)' },
-        { value: 'CASH_USD', label: isRu ? 'Долларовая касса (USD)' : 'Dollar kassa (USD)' },
-        { value: 'BANK_ACCOUNT', label: isRu ? 'Расчетный счет (Банк)' : 'Hisobraqam (Bank)' },
-      ];
+  const cashAccountOptions: SelectOption[] = cashAccounts
+    .filter((account) => isCashAccountCompatibleWithSalesPayment(account, method, invoice.currency))
+    .map((ca) => ({
+    value: ca.id,
+      label: `${ca.name[locale] || ca.name.uz || ca.name.ru} (${formatCurrency(Number(ca.balance), locale, ca.currency)})`,
+    }));
+  const selectedCashAccountId = cashAccountOptions.some((account) => account.value === cashAccountId)
+    ? cashAccountId
+    : cashAccountOptions[0]?.value || '';
 
   const methodOptions: SelectOption[] = [
     { value: 'CASH', label: isRu ? 'Наличные (Касса)' : 'Naqd pul (Kassa)' },
@@ -99,6 +121,14 @@ export function PaySalesInvoiceModal({
       setError(isRu ? 'Укажите сумму оплаты' : 'To‘lov summasini kiriting');
       return;
     }
+    if (!selectedCashAccountId) {
+      setError(isRu ? 'Выберите счет в валюте накладной' : 'Faktura valyutasidagi hisobni tanlang');
+      return;
+    }
+    if (invoice.currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+      setError(isRu ? 'Укажите курс оплаты: UZS за 1 USD' : 'To‘lov kursini kiriting: 1 USD uchun UZS');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -112,7 +142,9 @@ export function PaySalesInvoiceModal({
         body: JSON.stringify({
           counterpartyId: invoice.counterpartyId,
           invoiceId: invoice.id,
-          cashAccountId: cashAccountId || undefined,
+          currency: invoice.currency,
+          ...(invoice.currency === 'USD' ? { exchangeRate: Number(exchangeRate) } : {}),
+          cashAccountId: selectedCashAccountId,
           method,
           amount: Number(amount),
           comment: note.trim() || undefined,
@@ -120,10 +152,12 @@ export function PaySalesInvoiceModal({
       });
 
       onSuccess();
-      onClose();
-    } catch (err: any) {
+      handleClose();
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка при проведении оплаты' : 'To‘lovni amalga oshirishda xatolik yuz berdi'));
+      setError(err instanceof Error && err.message
+        ? err.message
+        : isRu ? 'Ошибка при проведении оплаты' : 'To‘lovni amalga oshirishda xatolik yuz berdi');
     } finally {
       setLoading(false);
     }
@@ -132,8 +166,8 @@ export function PaySalesInvoiceModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
-      title={isRu ? `Принять оплату — ${invoice.invoiceNumber || (invoice as any).docNumber || ''}` : `To‘lov qabul qilish — ${invoice.invoiceNumber || (invoice as any).docNumber || ''}`}
+      onClose={handleClose}
+      title={isRu ? `Принять оплату — ${invoice.invoiceNumber}` : `To‘lov qabul qilish — ${invoice.invoiceNumber}`}
     >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {error && (
@@ -191,15 +225,40 @@ export function PaySalesInvoiceModal({
         {/* Cash Desk Selector (1C Kassa) */}
         <div>
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-            {isRu ? 'Касса / Счет зачисления' : 'Kassa / Hisob (Kirim joyi)'}
+            {method === 'CASH'
+              ? isRu ? 'Касса зачисления' : 'Kirim kassasi'
+              : isRu ? 'Банковский счёт зачисления' : 'Kirim bank hisobi'}
           </label>
           <Select
             options={cashAccountOptions}
-            value={cashAccountId}
+            value={selectedCashAccountId}
             onChange={(val) => setCashAccountId(val)}
             placeholder={isRu ? 'Выберите кассу' : 'Kassani tanlang'}
           />
+          {cashAccountOptions.length === 0 && (
+            <div style={{ marginTop: 4, color: 'var(--color-error-600)', fontSize: 'var(--text-xs)' }}>
+              {isRu
+                ? 'Нет подходящей кассы или банковского счёта в валюте накладной'
+                : 'Faktura valyutasida mos kassa yoki bank hisobi topilmadi'}
+            </div>
+          )}
         </div>
+
+        {invoice.currency === 'USD' && (
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              {isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
+            </label>
+            <Input
+              type="number"
+              min="0.0001"
+              value={exchangeRate}
+              onChange={(event) => setExchangeRate(event.target.value)}
+              placeholder="12800"
+              required
+            />
+          </div>
+        )}
 
         {/* Payment Method */}
         <div>
@@ -209,7 +268,7 @@ export function PaySalesInvoiceModal({
           <Select
             options={methodOptions}
             value={method}
-            onChange={(val) => setMethod(val as any)}
+            onChange={(val) => setMethod(val as typeof method)}
           />
         </div>
 
@@ -222,7 +281,7 @@ export function PaySalesInvoiceModal({
             {remaining > 0 && (
               <button
                 type="button"
-                onClick={() => setAmount(remaining)}
+                  onClick={() => setPaymentAmount(remaining)}
                 style={{
                   fontSize: 'var(--text-xs)',
                   color: 'var(--color-primary-600)',
@@ -241,7 +300,7 @@ export function PaySalesInvoiceModal({
             min={0.01}
             step="any"
             value={amount || ''}
-            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+            onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
             required
             autoFocus
           />
@@ -265,7 +324,7 @@ export function PaySalesInvoiceModal({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            <Button type="button" variant="secondary" onClick={handleClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

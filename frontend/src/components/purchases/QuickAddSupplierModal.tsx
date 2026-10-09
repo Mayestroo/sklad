@@ -11,7 +11,7 @@ import { X, Building2, Phone, Mail, FileText, MapPin } from 'lucide-react';
 interface QuickAddSupplierModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (newSupplier: { id: string; name: string; type: string; debtBalance?: number }) => void;
+  onSuccess: (newSupplier: { id: string; name: string; type: string }) => void;
 }
 
 export function QuickAddSupplierModal({ isOpen, onClose, onSuccess }: QuickAddSupplierModalProps) {
@@ -40,7 +40,7 @@ export function QuickAddSupplierModal({ isOpen, onClose, onSuccess }: QuickAddSu
     setError(null);
 
     try {
-      const created = await apiFetch<{ id: string; name: string; type: string; debtBalance: number }>(
+      const created = await apiFetch<{ id: string; name: string; type: string }>(
         '/sales/counterparties',
         {
           method: 'POST',

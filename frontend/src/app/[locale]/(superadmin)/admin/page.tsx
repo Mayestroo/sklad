@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
 import {
   Building2,
@@ -460,21 +461,18 @@ export default function SuperAdminTenantsPage() {
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>
               {isRu ? 'Статус:' : 'Status:'}
             </span>
-            <select
+            <Select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                ...inputStyle,
-                width: 'auto',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="ALL">{isRu ? 'Все статусы' : 'Barcha statuslar'}</option>
-              <option value="ACTIVE">{isRu ? 'Активные' : 'Faol'}</option>
-              <option value="TRIAL">{isRu ? 'Пробный (Trial)' : 'Sinov (Trial)'}</option>
-              <option value="SUSPENDED">{isRu ? 'Приостановленные' : 'To‘xtatilgan'}</option>
-              <option value="BLOCKED">{isRu ? 'Заблокированные' : 'Bloklangan'}</option>
-            </select>
+              onChange={setStatusFilter}
+              style={{ width: 'max-content' }}
+              options={[
+                { value: 'ALL', label: isRu ? 'Все статусы' : 'Barcha statuslar' },
+                { value: 'ACTIVE', label: isRu ? 'Активные' : 'Faol' },
+                { value: 'TRIAL', label: isRu ? 'Пробный (Trial)' : 'Sinov (Trial)' },
+                { value: 'SUSPENDED', label: isRu ? 'Приостановленные' : 'To‘xtatilgan' },
+                { value: 'BLOCKED', label: isRu ? 'Заблокированные' : 'Bloklangan' },
+              ]}
+            />
           </div>
 
           {/* Plan Filter */}
@@ -482,20 +480,17 @@ export default function SuperAdminTenantsPage() {
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-medium)' }}>
               {isRu ? 'Тариф:' : 'Tarif:'}
             </span>
-            <select
+            <Select
               value={planFilter}
-              onChange={(e) => setPlanFilter(e.target.value)}
-              style={{
-                ...inputStyle,
-                width: 'auto',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="ALL">{isRu ? 'Все тарифы' : 'Barcha tariflar'}</option>
-              <option value="STARTER">STARTER</option>
-              <option value="PROFESSIONAL">PROFESSIONAL</option>
-              <option value="ENTERPRISE">ENTERPRISE</option>
-            </select>
+              onChange={setPlanFilter}
+              style={{ width: 'max-content' }}
+              options={[
+                { value: 'ALL', label: isRu ? 'Все тарифы' : 'Barcha tariflar' },
+                { value: 'STARTER', label: 'STARTER' },
+                { value: 'PROFESSIONAL', label: 'PROFESSIONAL' },
+                { value: 'ENTERPRISE', label: 'ENTERPRISE' },
+              ]}
+            />
           </div>
         </div>
       </Card>
@@ -683,15 +678,16 @@ export default function SuperAdminTenantsPage() {
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
                 {isRu ? 'Тарифный план' : 'Tarif rejasi'}
               </label>
-              <select
+              <Select
                 value={companyPlan}
-                onChange={(e) => setCompanyPlan(e.target.value as any)}
-                style={inputStyle}
-              >
-                <option value="STARTER">STARTER (490 000 soʻm/oy)</option>
-                <option value="PROFESSIONAL">PROFESSIONAL (990 000 soʻm/oy)</option>
-                <option value="ENTERPRISE">ENTERPRISE (1 990 000 soʻm/oy)</option>
-              </select>
+                onChange={(value) => setCompanyPlan(value as typeof companyPlan)}
+                style={{ width: '100%' }}
+                options={[
+                  { value: 'STARTER', label: 'STARTER (490 000 soʻm/oy)' },
+                  { value: 'PROFESSIONAL', label: 'PROFESSIONAL (990 000 soʻm/oy)' },
+                  { value: 'ENTERPRISE', label: 'ENTERPRISE (1 990 000 soʻm/oy)' },
+                ]}
+              />
             </div>
           </div>
 
@@ -783,31 +779,33 @@ export default function SuperAdminTenantsPage() {
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Статус аккаунта' : 'Akkaunt holati'}
             </label>
-            <select
+            <Select
               value={editStatus}
-              onChange={(e) => setEditStatus(e.target.value as any)}
-              style={inputStyle}
-            >
-              <option value="ACTIVE">{isRu ? 'ACTIVE (Активен)' : 'ACTIVE (Faol)'}</option>
-              <option value="TRIAL">{isRu ? 'TRIAL (Пробный доступ)' : 'TRIAL (Sinov davri)'}</option>
-              <option value="SUSPENDED">{isRu ? 'SUSPENDED (Приостановлен)' : 'SUSPENDED (To‘xtatilgan)'}</option>
-              <option value="BLOCKED">{isRu ? 'BLOCKED (Заблокирован)' : 'BLOCKED (Bloklangan)'}</option>
-            </select>
+              onChange={(value) => setEditStatus(value as typeof editStatus)}
+              style={{ width: '100%' }}
+              options={[
+                { value: 'ACTIVE', label: isRu ? 'ACTIVE (Активен)' : 'ACTIVE (Faol)' },
+                { value: 'TRIAL', label: isRu ? 'TRIAL (Пробный доступ)' : 'TRIAL (Sinov davri)' },
+                { value: 'SUSPENDED', label: isRu ? 'SUSPENDED (Приостановлен)' : 'SUSPENDED (To‘xtatilgan)' },
+                { value: 'BLOCKED', label: isRu ? 'BLOCKED (Заблокирован)' : 'BLOCKED (Bloklangan)' },
+              ]}
+            />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Тарифный план' : 'Tarif rejasi'}
             </label>
-            <select
+            <Select
               value={editPlan}
-              onChange={(e) => setEditPlan(e.target.value as any)}
-              style={inputStyle}
-            >
-              <option value="STARTER">STARTER</option>
-              <option value="PROFESSIONAL">PROFESSIONAL</option>
-              <option value="ENTERPRISE">ENTERPRISE</option>
-            </select>
+              onChange={(value) => setEditPlan(value as typeof editPlan)}
+              style={{ width: '100%' }}
+              options={[
+                { value: 'STARTER', label: 'STARTER' },
+                { value: 'PROFESSIONAL', label: 'PROFESSIONAL' },
+                { value: 'ENTERPRISE', label: 'ENTERPRISE' },
+              ]}
+            />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>

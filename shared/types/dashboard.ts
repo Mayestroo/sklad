@@ -1,9 +1,15 @@
 // Dashboard Module Types
 
-import type { CashAccount, FinanceSummaryByCurrency, FinanceTransaction } from './finance';
+import type {
+  CashAccount,
+  FinanceSummaryByAccount,
+  FinanceSummaryByCurrency,
+  FinanceTransaction,
+} from './finance';
 
 export interface DashboardFinanceKPIs {
   summaryByCurrency: FinanceSummaryByCurrency[];
+  summaryByAccount: FinanceSummaryByAccount[];
   accounts: CashAccount[];
   profit: {
     grossProfit: number;
@@ -19,8 +25,12 @@ export interface SalesDynamic {
 }
 
 export interface DashboardSalesKPIs {
+  /** Total posted sales converted to UZS using each invoice's exchange rate. */
   totalSales: number;
   invoiceCount: number;
+  /** Native-currency invoice totals, grouped without cross-currency addition. */
+  byCurrency: Array<{ currency: string; amount: number }>;
+  /** Sales dynamics converted to UZS. */
   dynamics: SalesDynamic[];
 }
 

@@ -7,6 +7,8 @@ import { AccountingReportsService } from '../accounting/reports/accounting-repor
 import { AccountsService } from '../accounting/accounts/accounts.service';
 import { PrismaService } from '../../common/prisma';
 import { PurchaseDocStatus, PurchasePaymentStatus } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 
 describe('Purchase Document End-to-End Invariant Test', () => {
   let purchasesService: PurchasesService;
@@ -26,6 +28,8 @@ describe('Purchase Document End-to-End Invariant Test', () => {
       providers: [
         PrismaService,
         PurchasesService,
+        CounterpartySettlementService,
+        SettlementAllocationService,
         AccountingReportsService,
         AccountsService,
       ],

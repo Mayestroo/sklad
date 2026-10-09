@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { Select } from '@/components/ui/Select';
 import { PurchaseReceipt } from '@shared/types';
 import { formatCurrency } from '@/lib/utils';
 
@@ -187,25 +188,15 @@ export function CreateReturnModal({
             <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
               {isRu ? 'Причина возврата' : 'Qaytarish Sababi'}
             </label>
-            <select
+            <Select
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-bg-surface)',
-                fontSize: 'var(--text-sm)',
-              }}
-            >
-              <option value="">{isRu ? '-- Выберите причину --' : '-- Sababni tanlang --'}</option>
-              {REASON_PRESETS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+              onChange={setReason}
+              style={{ width: '100%' }}
+              options={[
+                { value: '', label: isRu ? '-- Выберите причину --' : '-- Sababni tanlang --' },
+                ...REASON_PRESETS.map((preset) => ({ value: preset, label: preset })),
+              ]}
+            />
           </div>
         </div>
 

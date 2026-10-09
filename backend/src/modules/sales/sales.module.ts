@@ -13,9 +13,10 @@ import { AccountingModule } from '../accounting/accounting.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { SalesOrdersController } from './orders/sales-orders.controller';
 import { SalesOrdersService } from './orders/sales-orders.service';
+import { SettlementsModule } from '../settlements/settlements.module';
 
 @Module({
-  imports: [AccountingModule, InventoryModule],
+  imports: [AccountingModule, InventoryModule, SettlementsModule],
   controllers: [
     CounterpartiesController,
     SalesInvoicesController,

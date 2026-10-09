@@ -29,12 +29,16 @@ export interface FinanceTransaction {
   tenantId: string;
   direction: TransactionDirection;
   status: TransactionStatus;
-  accountId?: string | null;
+  accountId: string;
   transferToId?: string | null;
   counterpartyId?: string | null;
+  settlementSide?: 'CUSTOMER' | 'SUPPLIER' | null;
   transactionTypeId?: string | null;
   amount: number;
   currency: string;
+  exchangeRate: number;
+  transferToAmount?: number | null;
+  transferExchangeRate?: number | null;
   transactionDate: string;
   comment?: string | null;
   docNumber?: string | null;
@@ -62,9 +66,33 @@ export interface FinanceSummaryByCurrency {
   netCashFlow: number;
 }
 
+export interface FinanceAccountIdentity {
+  accountId: string;
+  accountType: CashAccountType;
+  name: { uz: string; ru: string };
+  currency: string;
+}
+
+export interface FinanceSummaryByAccount extends FinanceAccountIdentity {
+  totalIncome: number;
+  totalExpense: number;
+  transferIn: number;
+  transferOut: number;
+  netCashFlow: number;
+}
+
 export interface FinanceSummary {
   summaryByCurrency: FinanceSummaryByCurrency[];
+  summaryByAccount: FinanceSummaryByAccount[];
   accounts: CashAccount[];
+}
+
+export interface FinanceAccountFlow extends FinanceAccountIdentity {
+  income: number;
+  expense: number;
+  transferIn: number;
+  transferOut: number;
+  netCashFlow: number;
 }
 
 export interface FinanceDashboardMetrics {
@@ -72,21 +100,35 @@ export interface FinanceDashboardMetrics {
     dollarKassa: number;
     naqdKassa: number;
     hisobRaqam: number;
+    accountCurrencies: {
+      dollarKassa: string;
+      naqdKassa: string;
+      hisobRaqam: string;
+    };
+    totalLiquidByCurrency: Array<{ currency: string; amount: number }>;
     totalLiquidUZSEquivalent: number;
   };
   today: {
     income: number;
     expense: number;
     netCashFlow: number;
+    byCurrency: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
+    byAccount: FinanceAccountFlow[];
   };
   month: {
     income: number;
     expense: number;
     netCashFlow: number;
+    byCurrency: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
+    byAccount: FinanceAccountFlow[];
   };
   debts: {
     receivables: number;
     payables: number;
+    receivablesByCurrency: Array<{ currency: string; amount: number }>;
+    payablesByCurrency: Array<{ currency: string; amount: number }>;
+    customerAdvancesByCurrency: Array<{ currency: string; amount: number }>;
+    supplierAdvancesByCurrency: Array<{ currency: string; amount: number }>;
   };
   accounts: CashAccount[];
 }
@@ -97,4 +139,3 @@ export interface TransactionJournal {
   limit: number;
   data: FinanceTransaction[];
 }
-

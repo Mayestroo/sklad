@@ -7,6 +7,8 @@ import {
   ExpenseAllocationMethod,
   PurchaseDocStatus,
 } from '@prisma/client';
+import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 
 describe('Additional Expenses & Landed Cost Invariant Tests', () => {
   let service: AdditionalExpensesService;
@@ -33,6 +35,10 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       },
       purchaseReceipt: {
         findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      purchaseReceiptItem: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
         update: jest.fn(),
       },
       productBatch: {
@@ -88,6 +94,8 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       providers: [
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CounterpartySettlementService, useValue: { recordMovement: jest.fn().mockResolvedValue({ created: true }) } },
+        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
       ],
     }).compile();
 
@@ -103,6 +111,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       docDate: new Date(),
       status: PurchaseDocStatus.DRAFT,
       amount: 2000000,
+      currency: 'UZS',
       receiptId,
       isPaid: false,
       counterpartyId: 'carrier-1',
@@ -143,7 +152,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     });
     expect(prisma.product.update).toHaveBeenCalledWith({
       where: { id: 'prod-iphone' },
-      data: { costPrice: 1200000 },
+      data: { costPrice: 1200000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 },
     });
     expect(prisma.journalEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -171,6 +180,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       docDate: new Date(),
       status: PurchaseDocStatus.DRAFT,
       amount: 2000000,
+      currency: 'UZS',
       receiptId,
       isPaid: false,
       counterpartyId: 'carrier-1',

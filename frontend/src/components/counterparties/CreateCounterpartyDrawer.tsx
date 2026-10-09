@@ -42,7 +42,6 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const [name, setName] = useState('');
   const [type, setType] = useState<'CUSTOMER' | 'SUPPLIER' | 'BOTH'>(defaultType);
   const [folderId, setFolderId] = useState<string>(defaultFolderId);
-  const [priceListId, setPriceListId] = useState<string>('');
   const [discountPercent, setDiscountPercent] = useState<string>('0');
   const [inn, setInn] = useState('');
   const [phone, setPhone] = useState('');
@@ -52,25 +51,8 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const [bankAccount, setBankAccount] = useState('');
   const [mfo, setMfo] = useState('');
 
-  const [priceLists, setPriceLists] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const isMultiTier = Boolean(company?.settings?.sales?.enableMultiTierPriceLists);
-
-  React.useEffect(() => {
-    if (!token || !company?.id || !isOpen) return;
-    apiFetch<any[]>('/sales/price-lists', { token, tenantId: company.id, locale })
-      .then((res) => {
-        const list = res || [];
-        setPriceLists(list);
-        if (isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') && !priceListId && !isEdit) {
-          const def = list.find((p) => p.isDefault) || list[0];
-          if (def) setPriceListId(def.id);
-        }
-      })
-      .catch(console.error);
-  }, [token, company, locale, isOpen, isMultiTier, type, isEdit, priceListId]);
 
   React.useEffect(() => {
     if (isOpen) {
@@ -78,7 +60,6 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
         setName(counterpartyToEdit.name || '');
         setType(counterpartyToEdit.type || defaultType);
         setFolderId(counterpartyToEdit.folderId || '');
-        setPriceListId(counterpartyToEdit.priceListId || '');
         setDiscountPercent(String(counterpartyToEdit.discountPercent ?? 0));
         setInn(counterpartyToEdit.inn || '');
         setPhone(counterpartyToEdit.phone || '');
@@ -92,7 +73,6 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
         setName('');
         setType(defaultType);
         setFolderId(defaultFolderId);
-        setPriceListId('');
         setDiscountPercent('0');
         setInn('');
         setPhone('');
@@ -114,15 +94,6 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
       return;
     }
 
-    if (isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') && !priceListId) {
-      setError(
-        isRu
-          ? 'Для клиентов выбор прайс-листа обязателен'
-          : 'Mijozlar uchun narx jadvalini tanlash majburiy',
-      );
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
@@ -131,7 +102,6 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
         name: name.trim(),
         type,
         folderId: folderId || null,
-        priceListId: priceListId || null,
         discountPercent: Number(discountPercent) || 0,
         inn: inn.trim() || undefined,
         phone: phone.trim() || undefined,
@@ -175,7 +145,6 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
     setName('');
     setType(defaultType);
     setFolderId(defaultFolderId);
-    setPriceListId('');
     setDiscountPercent('0');
     setInn('');
     setPhone('');
@@ -196,14 +165,6 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
   const folderOptions = [
     { value: '', label: isRu ? 'Без папки (Общие)' : 'Papkasiz (Umumiy)' },
     ...folders.map((f) => ({ value: f.id, label: f.name })),
-  ];
-
-  const priceListOptions = [
-    { value: '', label: isRu ? '— Основной (По умолчанию) —' : '— Asosiy (Standart narx) —' },
-    ...priceLists.map((pl) => {
-      const plName = typeof pl.name === 'object' ? (pl.name[locale] || pl.name.ru || pl.name.uz) : pl.name;
-      return { value: pl.id, label: `${plName} (${pl.currency})` };
-    }),
   ];
 
   return (
@@ -388,18 +349,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
             {isRu ? 'Цены и скидки' : 'Narxlar va chegirmalar'}
           </h4>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-3)' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                {isRu ? 'Индивидуальный прайс-лист' : 'Biriktirilgan narx jadvali'} {isMultiTier && (type === 'CUSTOMER' || type === 'BOTH') ? '*' : ''}
-              </label>
-              <Select
-                options={priceListOptions}
-                value={priceListId}
-                onChange={(val) => setPriceListId(val)}
-              />
-            </div>
-
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
                 {isRu ? 'Постоянная скидка (%)' : 'Doimiy chegirma (%)'}

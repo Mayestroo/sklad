@@ -158,7 +158,12 @@ export default function AnalyticsPage() {
                 <TrendingUp size={18} style={{ color: 'var(--color-primary-600)' }} />
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.totalRevenue || 0, locale, reportCurrency)}
+                <MultiCurrencyValue
+                  items={kpi?.totalRevenueByCurrency}
+                  fallbackAmount={kpi?.totalRevenue || 0}
+                  fallbackCurrency={reportCurrency}
+                  locale={locale}
+                />
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <ArrowUpRight size={14} /> <span>{isRu ? 'Сумма по документам реализации' : 'Shartnomalar bo\'yicha yig\'indi'}</span>
@@ -173,7 +178,13 @@ export default function AnalyticsPage() {
                 <Badge variant="success">+{kpi?.netProfitMargin || 0}% Margin</Badge>
               </div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '8px' }} className="tabular-nums">
-                {formatCurrency(kpi?.grossProfit || 0, locale, reportCurrency)}
+                <MultiCurrencyValue
+                  items={kpi?.grossProfitByCurrency}
+                  fallbackAmount={kpi?.grossProfit || 0}
+                  fallbackCurrency="UZS"
+                  locale={locale}
+                  color="var(--color-success-600)"
+                />
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Выручка минус себестоимость (COGS)' : 'Sotuv tushumi minus tovarlar tannarxi (COGS)'}
@@ -185,7 +196,7 @@ export default function AnalyticsPage() {
                 {isRu ? 'ДЕБИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'DEBITORLIK (MIJOZLAR QARZI)'}
               </div>
               <MultiCurrencyValue
-                items={(kpi as any)?.receivablesByCurrency}
+                items={kpi?.receivablesByCurrency}
                 fallbackAmount={kpi?.totalAccountsReceivable || 0}
                 fallbackCurrency={reportCurrency}
                 locale={locale}
@@ -201,7 +212,7 @@ export default function AnalyticsPage() {
                 {isRu ? 'КРЕДИТОРСКАЯ ЗАДОЛЖЕННОСТЬ' : 'KREDITORLIK (POSTAVSHIKLAR QARZI)'}
               </div>
               <MultiCurrencyValue
-                items={(kpi as any)?.payablesByCurrency}
+                items={kpi?.payablesByCurrency}
                 fallbackAmount={kpi?.totalAccountsPayable || 0}
                 fallbackCurrency={reportCurrency}
                 locale={locale}

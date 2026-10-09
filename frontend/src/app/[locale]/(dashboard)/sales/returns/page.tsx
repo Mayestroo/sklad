@@ -406,8 +406,8 @@ export default function SalesReturnsPage() {
         ? (isRu ? 'Вы уверены, что хотите отменить проведенный возврат? Остатки на складе и долг клиента будут восстановлены.' : 'Haqiqatan ham tasdiqlangan qaytarishni bekor qilmoqchimisiz? Ombor qoldig\'i va mijoz qarzi qayta tiklanadi.')
         : (isRu ? 'Вы уверены, что хотите аннулировать этот черновик?' : 'Haqiqatan ham ushbu qoralamani bekor qilmoqchimisiz?'),
       variant: 'warning',
-      confirmText: isRu ? 'Да, отменить' : 'Ha, bekor qilish',
-      cancelText: isRu ? 'Закрыть' : 'Yopish',
+      confirmText: isRu ? 'Да' : 'Ha',
+      cancelText: isRu ? 'Нет' : 'Yo‘q',
     });
 
     if (!confirmed) return;

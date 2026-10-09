@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useLayoutEffect, useId, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocale } from 'next-intl';
 import { ChevronDown, Check, Search, X, Plus } from 'lucide-react';
+import { getInitialActiveOptionIndex, getNextActiveOptionIndex } from './select-keyboard';
 
 export interface SelectOption {
   value: string;
@@ -53,7 +54,7 @@ export function Select({
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     locale = useLocale();
-  } catch (e) {
+  } catch {
     // fallback
   }
   const isRu = locale === 'ru';
@@ -63,8 +64,8 @@ export function Select({
   const effectiveNoOptionsText = noOptionsText ?? (isRu ? 'Результаты не найдены' : 'Natija topilmadi');
 
   const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [coords, setCoords] = useState<{
     top?: number;
     bottom?: number;
@@ -76,17 +77,15 @@ export function Select({
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxId = useId();
 
   const selectedOption = options.find((opt) => opt.value === value);
 
   // Enable search if searchable is true OR option count > 6
   const showSearch = searchable ?? options.length > 6;
 
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
@@ -100,13 +99,13 @@ export function Select({
       bottom: shouldOpenUpward ? window.innerHeight - rect.top + 4 : undefined,
       openUpward: shouldOpenUpward,
     });
-  };
+  }, []);
 
   useLayoutEffect(() => {
     if (isOpen) {
       updatePosition();
     }
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -122,7 +121,7 @@ export function Select({
       window.removeEventListener('scroll', handleScrollOrResize, true);
       window.removeEventListener('resize', handleScrollOrResize);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   const filteredOptions = useMemo(() => {
     if (!searchQuery.trim()) return options;
@@ -134,6 +133,27 @@ export function Select({
     );
   }, [options, searchQuery]);
 
+  const selectedIndex = filteredOptions.findIndex((option) => option.value === value);
+  const initialActiveIndex = getInitialActiveOptionIndex(selectedIndex, filteredOptions.length);
+  const activeOptionIndex =
+    activeIndex !== null && activeIndex >= 0 && activeIndex < filteredOptions.length
+      ? activeIndex
+      : initialActiveIndex;
+
+  const closeDropdown = useCallback((restoreFocus = false) => {
+    setIsOpen(false);
+    setSearchQuery('');
+    setActiveIndex(null);
+    if (restoreFocus) triggerRef.current?.focus();
+  }, []);
+
+  const openDropdown = useCallback(() => {
+    updatePosition();
+    setSearchQuery('');
+    setActiveIndex(null);
+    setIsOpen(true);
+  }, [updatePosition]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -143,12 +163,12 @@ export function Select({
         menuRef.current &&
         !menuRef.current.contains(target)
       ) {
-        setIsOpen(false);
+        closeDropdown();
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isOpen) {
-        setIsOpen(false);
+        closeDropdown(true);
       }
     };
 
@@ -158,15 +178,46 @@ export function Select({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [closeDropdown, isOpen]);
 
   useEffect(() => {
     if (isOpen && showSearch) {
-      setTimeout(() => searchInputRef.current?.focus(), 50);
-    } else {
-      setSearchQuery('');
+      const timeoutId = window.setTimeout(() => searchInputRef.current?.focus(), 50);
+      return () => window.clearTimeout(timeoutId);
     }
   }, [isOpen, showSearch]);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (
+      !isOpen &&
+      (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ')
+    ) {
+      event.preventDefault();
+      openDropdown();
+      return;
+    }
+
+    if (isOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      setActiveIndex(
+        getNextActiveOptionIndex(
+          activeOptionIndex,
+          event.key === 'ArrowDown' ? 1 : -1,
+          filteredOptions.length,
+        ),
+      );
+      return;
+    }
+
+    if (isOpen && event.key === 'Enter') {
+      event.preventDefault();
+      const activeOption = filteredOptions[activeOptionIndex];
+      if (!activeOption) return;
+
+      onChange(activeOption.value);
+      closeDropdown(true);
+    }
+  };
 
   const sizeStyles = {
     sm: { height: '32px', padding: '4px 10px', fontSize: 'var(--text-xs)' },
@@ -201,25 +252,26 @@ export function Select({
 
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         role="combobox"
         aria-expanded={isOpen}
+        aria-controls={listboxId}
         aria-haspopup="listbox"
         aria-label={label || placeholder || effectivePlaceholder}
         disabled={disabled}
         onClick={() => {
           if (!disabled) {
-            if (!isOpen) updatePosition();
-            setIsOpen(!isOpen);
+            if (isOpen) {
+              closeDropdown();
+            } else {
+              openDropdown();
+            }
           }
         }}
         onKeyDown={(e) => {
-          if (!disabled && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            if (!isOpen) updatePosition();
-            setIsOpen(true);
-          }
+          if (!disabled) handleKeyDown(e);
         }}
         style={{
           width: '100%',
@@ -275,9 +327,10 @@ export function Select({
       </button>
 
       {/* Portal Dropdown Menu */}
-      {isOpen && mounted && typeof document !== 'undefined' && createPortal(
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
+          onKeyDown={handleKeyDown}
           style={{
             position: 'fixed',
             top: coords.top !== undefined ? `${coords.top}px` : 'auto',
@@ -321,7 +374,10 @@ export function Select({
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setActiveIndex(null);
+                }}
                 placeholder={effectiveSearchPlaceholder}
                 style={{
                   width: '100%',
@@ -337,7 +393,10 @@ export function Select({
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveIndex(null);
+                  }}
                   style={{
                     position: 'absolute',
                     right: '8px',
@@ -357,6 +416,7 @@ export function Select({
 
           {/* Options List */}
           <div
+            id={listboxId}
             role="listbox"
             tabIndex={-1}
             style={{
@@ -379,7 +439,7 @@ export function Select({
                 {effectiveNoOptionsText}
               </div>
             ) : (
-              filteredOptions.map((option) => {
+              filteredOptions.map((option, optionIndex) => {
                 const isSelected = option.value === value;
                 return (
                   <button
@@ -387,9 +447,10 @@ export function Select({
                     type="button"
                     role="option"
                     aria-selected={isSelected}
+                    tabIndex={activeOptionIndex === optionIndex ? 0 : -1}
                     onClick={() => {
                       onChange(option.value);
-                      setIsOpen(false);
+                      closeDropdown(true);
                     }}
                     style={{
                       display: 'flex',
@@ -402,22 +463,17 @@ export function Select({
                       fontSize: 'var(--text-sm)',
                       fontWeight: isSelected ? 'var(--font-semibold)' : 'var(--font-regular)',
                       color: isSelected ? 'var(--color-primary-600)' : 'var(--color-text-primary)',
-                      backgroundColor: isSelected ? 'var(--color-primary-50)' : 'transparent',
+                      backgroundColor: isSelected
+                        ? 'var(--color-primary-50)'
+                        : activeOptionIndex === optionIndex
+                        ? 'var(--color-bg-hover)'
+                        : 'transparent',
                       border: 'none',
                       cursor: 'pointer',
                       textAlign: 'left',
                       transition: 'background-color var(--transition-fast)',
                     }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }
-                    }}
+                    onMouseEnter={() => setActiveIndex(optionIndex)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
                       {option.icon}
@@ -456,7 +512,7 @@ export function Select({
               <button
                 type="button"
                 onClick={() => {
-                  setIsOpen(false);
+                  closeDropdown();
                   onCreateNew(searchQuery);
                 }}
                 style={{

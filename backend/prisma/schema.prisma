@@ -105,6 +105,21 @@ enum CounterpartyType {
   BOTH
 }
 
+enum CounterpartySettlementSide {
+  CUSTOMER
+  SUPPLIER
+}
+
+enum SettlementAllocationTarget {
+  SALES_INVOICE
+  SALES_ORDER
+  SALES_RETURN
+  PURCHASE_RECEIPT
+  PURCHASE_RETURN
+  ADDITIONAL_EXPENSE
+  SERVICE_ACT
+}
+
 enum InvoiceStatus {
   DRAFT
   SENT
@@ -145,6 +160,20 @@ enum ProductionOrderStatus {
   IN_PROGRESS
   DONE
   CANCELLED
+}
+
+enum ManufacturingStatus {
+  DRAFT
+  PLANNED
+  IN_PROGRESS
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum ProductionMaterialMovementType {
+  ISSUE
+  RETURN
 }
 
 enum PaymentMethod {
@@ -300,8 +329,13 @@ model Company {
   additionalExpenses   AdditionalExpense[]
   batchConsumptions    BatchConsumption[]
   productionOrders     ProductionOrder[]
+  productionRecipes    ProductionRecipe[]
+  productionDocuments  ProductionDocument[]
+  productionMaterialMovements ProductionMaterialMovement[]
   stockReservations    StockReservation[]
   serviceActs          ServiceAct[]
+  settlementEntries    CounterpartySettlementEntry[]
+  settlementAllocations SettlementAllocation[]
 
     openingBalanceDocs     OpeningBalanceDocument[]
   openingBalanceLines    OpeningBalanceLine[]
@@ -437,6 +471,10 @@ model User {
   assignedSalesOrders       SalesOrder[]        @relation("AssignedSalesOrders")
   createdSalesOrders        SalesOrder[]        @relation("CreatedSalesOrders")
   assignedProductionOrders  ProductionOrder[]   @relation("AssignedProductionOrders")
+  createdProductionRecipes  ProductionRecipe[]   @relation("CreatedProductionRecipes")
+  createdProductionDocuments ProductionDocument[] @relation("CreatedProductionDocuments")
+  responsibleProductionDocuments ProductionDocument[] @relation("ResponsibleProductionDocuments")
+  productionMaterialMovements ProductionMaterialMovement[] @relation("ProductionMaterialMovementUser")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -547,6 +585,7 @@ model Warehouse {
   salesReturns      SalesReturn[]      @relation("SalesReturnWarehouse")
   defectSalesReturns SalesReturn[]     @relation("SalesReturnDefectWarehouse")
   productBatches    ProductBatch[]
+  productionDocuments ProductionDocument[]
   salesOrders       SalesOrder[]
   stockReservations StockReservation[]
   isDefect          Boolean            @default(false) @map("is_defect")
@@ -642,7 +681,10 @@ model Product {
   barcode        String?
   unitOfMeasure  UnitOfMeasure @default(piece) @map("unit_of_measure")
   costPrice      Decimal       @default(0) @db.Decimal(15, 2) @map("cost_price")
+  costPriceCurrency String      @default("UZS") @map("cost_price_currency")
+  costPriceExchangeRate Decimal @default(1) @db.Decimal(15, 4) @map("cost_price_exchange_rate")
   salePrice      Decimal       @default(0) @db.Decimal(15, 2) @map("sale_price")
+  salePriceCurrency String?    @map("sale_price_currency")
   vatRate        Decimal       @default(12) @db.Decimal(5, 2) @map("vat_rate")
   minStockAlert  Decimal       @default(0) @db.Decimal(15, 2) @map("min_stock_alert")
   weight         Decimal       @default(0) @db.Decimal(15, 3)
@@ -668,6 +710,10 @@ model Product {
   productPrices        ProductPrice[]
   additionalExpenseItems AdditionalExpenseItem[]
   productionOrders       ProductionOrder[]
+  productionRecipes      ProductionRecipe[] @relation("ProductionRecipeProduct")
+  recipeMaterialLines    ProductionRecipeItem[] @relation("ProductionRecipeMaterial")
+  productionDocuments   ProductionDocument[] @relation("ProductionDocumentProduct")
+  productionMaterialLines ProductionMaterialLine[]
   stockReservations      StockReservation[]
   serviceActItems        ServiceActItem[]
 
@@ -839,6 +885,8 @@ model Counterparty {
   salesReturns        SalesReturn[]
   additionalExpenses  AdditionalExpense[]
   serviceActs         ServiceAct[]
+  settlementEntries  CounterpartySettlementEntry[]
+  settlementAllocations SettlementAllocation[]
   balances            CounterpartyBalance[]
 
   @@index([tenantId])
@@ -865,6 +913,59 @@ model CounterpartyBalance {
   @@unique([counterpartyId, currency])
   @@index([tenantId, currency])
   @@map("counterparty_balances")
+}
+
+/// Immutable, signed native-currency changes to one side of a counterparty position.
+model CounterpartySettlementEntry {
+  id             String                     @id @default(uuid())
+  tenantId       String                     @map("tenant_id")
+  counterpartyId String                     @map("counterparty_id")
+  currency       String
+  side           CounterpartySettlementSide
+  amount         Decimal                    @db.Decimal(15, 2)
+  entryType      String                     @map("entry_type")
+  effectiveAt    DateTime                   @default(now()) @map("effective_at")
+  sourceDocType  String                     @map("source_doc_type")
+  sourceDocId    String                     @map("source_doc_id")
+  sourceLineId   String?                    @map("source_line_id")
+  idempotencyKey String                     @unique @map("idempotency_key")
+  reversesEntryId String?                   @unique @map("reverses_entry_id")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+
+  company       Company                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty  Counterparty               @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  reversesEntry CounterpartySettlementEntry? @relation("CounterpartySettlementReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
+  reversal      CounterpartySettlementEntry? @relation("CounterpartySettlementReversal")
+
+  @@index([tenantId, counterpartyId, currency, createdAt])
+  @@index([tenantId, sourceDocType, sourceDocId])
+  @@map("counterparty_settlement_entries")
+}
+
+/// Append-only applications of real finance movements to a receivable/payable document.
+model SettlementAllocation {
+  id                    String                       @id @default(uuid())
+  tenantId              String                       @map("tenant_id")
+  counterpartyId        String                       @map("counterparty_id")
+  financeTransactionId  String                       @map("finance_transaction_id")
+  side                  CounterpartySettlementSide
+  currency              String
+  targetType            SettlementAllocationTarget   @map("target_type")
+  targetId              String                       @map("target_id")
+  amount                Decimal                      @db.Decimal(15, 2)
+  idempotencyKey        String                       @unique @map("idempotency_key")
+  reversesAllocationId  String?                      @unique @map("reverses_allocation_id")
+  createdAt             DateTime                     @default(now()) @map("created_at")
+
+  company              Company                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  counterparty         Counterparty            @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  financeTransaction   FinanceTransaction      @relation(fields: [financeTransactionId], references: [id], onDelete: Restrict)
+  reversesAllocation   SettlementAllocation?   @relation("SettlementAllocationReversal", fields: [reversesAllocationId], references: [id], onDelete: Restrict)
+  reversal             SettlementAllocation?   @relation("SettlementAllocationReversal")
+
+  @@index([tenantId, counterpartyId, currency, side, targetType, targetId])
+  @@index([financeTransactionId])
+  @@map("settlement_allocations")
 }
 
 model CounterpartyFolder {
@@ -897,6 +998,10 @@ model SalesOrder {
   exchangeRate            Decimal            @default(1) @db.Decimal(15, 4) @map("exchange_rate")
   subtotalAmount          Decimal            @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
   discountAmount          Decimal            @default(0) @db.Decimal(15, 2) @map("discount_amount")
+  vatAmount               Decimal            @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  additionalChargeAmount  Decimal            @default(0) @db.Decimal(15, 2) @map("additional_charge_amount")
+  additionalChargeVatRate Decimal            @default(12) @db.Decimal(5, 2) @map("additional_charge_vat_rate")
+  additionalChargeVatAmount Decimal          @default(0) @db.Decimal(15, 2) @map("additional_charge_vat_amount")
   totalAmount             Decimal            @default(0) @db.Decimal(15, 2) @map("total_amount")
   paidAmount              Decimal            @default(0) @db.Decimal(15, 2) @map("paid_amount")
   comment                 String?
@@ -934,6 +1039,8 @@ model SalesOrderItem {
   unitPrice   Decimal    @db.Decimal(15, 2) @map("unit_price")
   discount    Decimal    @default(0) @db.Decimal(15, 2)
   totalPrice  Decimal    @db.Decimal(15, 2) @map("total_price")
+  vatRate     Decimal    @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount   Decimal    @default(0) @db.Decimal(15, 2) @map("vat_amount")
   reservedQty Decimal    @default(0) @db.Decimal(15, 3) @map("reserved_qty")
   readyQty    Decimal    @default(0) @db.Decimal(15, 3) @map("ready_qty")
   shippedQty  Decimal    @default(0) @db.Decimal(15, 3) @map("shipped_qty")
@@ -990,6 +1097,135 @@ model ProductionOrder {
   @@map("production_orders")
 }
 
+model ProductionRecipe {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  productId        String   @map("product_id")
+  outputQuantity   Decimal  @db.Decimal(15, 3) @map("output_quantity")
+  note             String?
+  isActive         Boolean  @default(true) @map("is_active")
+  createdById      String?  @map("created_by_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  company          Company  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product          Product  @relation("ProductionRecipeProduct", fields: [productId], references: [id], onDelete: Restrict)
+  createdBy        User?    @relation("CreatedProductionRecipes", fields: [createdById], references: [id], onDelete: SetNull)
+  items            ProductionRecipeItem[]
+  documents        ProductionDocument[]
+
+  @@index([tenantId, productId, isActive])
+  @@map("production_recipes")
+}
+
+model ProductionRecipeItem {
+  id                String   @id @default(uuid())
+  recipeId          String   @map("recipe_id")
+  productId         String   @map("product_id")
+  quantity          Decimal  @db.Decimal(15, 3)
+
+  recipe            ProductionRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product           Product @relation("ProductionRecipeMaterial", fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([recipeId, productId])
+  @@map("production_recipe_items")
+}
+
+model ProductionDocument {
+  id                  String             @id @default(uuid())
+  tenantId            String             @map("tenant_id")
+  docNumber           String             @map("doc_number")
+  docDate             DateTime           @default(now()) @map("doc_date")
+  productId           String             @map("product_id")
+  recipeId            String             @map("recipe_id")
+  warehouseId         String             @map("warehouse_id")
+  responsibleId       String?            @map("responsible_id")
+  plannedQuantity     Decimal            @db.Decimal(15, 3) @map("planned_quantity")
+  producedQuantity    Decimal?           @db.Decimal(15, 3) @map("produced_quantity")
+  status              ManufacturingStatus @default(DRAFT)
+  note                String?
+  plannedMaterialCost Decimal            @default(0) @db.Decimal(15, 2) @map("planned_material_cost")
+  actualMaterialCost  Decimal            @default(0) @db.Decimal(15, 2) @map("actual_material_cost")
+  unitCost            Decimal            @default(0) @db.Decimal(15, 2) @map("unit_cost")
+  createdById         String?            @map("created_by_id")
+  startedAt           DateTime?          @map("started_at")
+  completedAt         DateTime?          @map("completed_at")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  company             Company             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product             Product             @relation("ProductionDocumentProduct", fields: [productId], references: [id], onDelete: Restrict)
+  recipe              ProductionRecipe    @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  warehouse           Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  responsible         User?               @relation("ResponsibleProductionDocuments", fields: [responsibleId], references: [id], onDelete: SetNull)
+  createdBy           User?               @relation("CreatedProductionDocuments", fields: [createdById], references: [id], onDelete: SetNull)
+  materials           ProductionMaterialLine[]
+  outputBatch         ProductBatch?       @relation("ProductionOutputBatch")
+  materialMovements   ProductionMaterialMovement[]
+
+  @@unique([tenantId, docNumber])
+  @@index([tenantId, status, docDate])
+  @@index([tenantId, productId])
+  @@map("production_documents")
+}
+
+model ProductionMaterialLine {
+  id                   String   @id @default(uuid())
+  productionDocumentId String   @map("production_document_id")
+  productId            String   @map("product_id")
+  plannedQuantity      Decimal  @db.Decimal(15, 3) @map("planned_quantity")
+  actualQuantity       Decimal? @db.Decimal(15, 3) @map("actual_quantity")
+  unitCost             Decimal  @default(0) @db.Decimal(15, 2) @map("unit_cost")
+  totalCost            Decimal  @default(0) @db.Decimal(15, 2) @map("total_cost")
+
+  productionDocument   ProductionDocument @relation(fields: [productionDocumentId], references: [id], onDelete: Cascade)
+  product              Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batchConsumptions    ProductionMaterialBatch[]
+  movements            ProductionMaterialMovement[]
+
+  @@unique([productionDocumentId, productId])
+  @@map("production_material_lines")
+}
+
+model ProductionMaterialBatch {
+  id         String   @id @default(uuid())
+  lineId     String   @map("line_id")
+  batchId    String   @map("batch_id")
+  quantity   Decimal  @db.Decimal(15, 3)
+  unitCost   Decimal  @db.Decimal(15, 2) @map("unit_cost")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  line       ProductionMaterialLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  batch      ProductBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@unique([lineId, batchId])
+  @@index([batchId])
+  @@map("production_material_batches")
+}
+
+model ProductionMaterialMovement {
+  id                   String                          @id @default(uuid())
+  tenantId             String                          @map("tenant_id")
+  productionDocumentId String                          @map("production_document_id")
+  lineId               String                          @map("line_id")
+  batchId              String                          @map("batch_id")
+  movementType         ProductionMaterialMovementType  @map("movement_type")
+  quantity             Decimal                         @db.Decimal(15, 3)
+  unitCost             Decimal                         @db.Decimal(15, 2) @map("unit_cost")
+  createdById          String?                         @map("created_by_id")
+  createdAt            DateTime                        @default(now()) @map("created_at")
+
+  company              Company                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productionDocument   ProductionDocument              @relation(fields: [productionDocumentId], references: [id], onDelete: Cascade)
+  line                 ProductionMaterialLine          @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  batch                ProductBatch                    @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  createdBy            User?                           @relation("ProductionMaterialMovementUser", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, productionDocumentId, createdAt])
+  @@index([batchId])
+  @@map("production_material_movements")
+}
+
 model SalesInvoice {
   id             String             @id @default(uuid())
   tenantId       String             @map("tenant_id")
@@ -1011,6 +1247,9 @@ model SalesInvoice {
   subtotalAmount Decimal            @default(0) @db.Decimal(15, 2) @map("subtotal_amount")
   discountAmount Decimal            @default(0) @db.Decimal(15, 2) @map("discount_amount")
   vatAmount      Decimal            @default(0) @db.Decimal(15, 2) @map("vat_amount")
+  additionalChargeAmount Decimal    @default(0) @db.Decimal(15, 2) @map("additional_charge_amount")
+  additionalChargeVatRate Decimal   @default(12) @db.Decimal(5, 2) @map("additional_charge_vat_rate")
+  additionalChargeVatAmount Decimal @default(0) @db.Decimal(15, 2) @map("additional_charge_vat_amount")
   totalAmount    Decimal            @default(0) @db.Decimal(15, 2) @map("total_amount")
   paidAmount     Decimal            @default(0) @db.Decimal(15, 2) @map("paid_amount")
   totalCogs      Decimal            @default(0) @db.Decimal(15, 2) @map("total_cogs")
@@ -1098,6 +1337,8 @@ model SalesReturnItem {
   productId   String      @map("product_id")
   quantity    Decimal     @db.Decimal(15, 3)
   unitPrice   Decimal     @db.Decimal(15, 2) @map("unit_price")
+  vatRate     Decimal     @default(0) @db.Decimal(5, 2) @map("vat_rate")
+  vatAmount   Decimal     @default(0) @db.Decimal(15, 2) @map("vat_amount")
   totalPrice  Decimal     @db.Decimal(15, 2) @map("total_price")
   unitCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("unit_cogs")
   lineCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("line_cogs")
@@ -1202,7 +1443,7 @@ model Payment {
   counterpartyId String        @map("counterparty_id")
   invoiceId      String?       @map("invoice_id")
   orderId        String?       @map("order_id")
-  cashAccountId  String?       @map("cash_account_id")
+  cashAccountId  String        @map("cash_account_id")
   paymentNumber  String        @map("payment_number")
   method         PaymentMethod @default(BANK_TRANSFER)
   amount         Decimal       @db.Decimal(15, 2)
@@ -1214,7 +1455,7 @@ model Payment {
   counterparty Counterparty  @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
   invoice      SalesInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   salesOrder   SalesOrder?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  cashAccount  CashAccount?  @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
+  cashAccount  CashAccount   @relation(fields: [cashAccountId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId])
@@ -1287,7 +1528,8 @@ model CashAccount {
   tenantId    String          @map("tenant_id")
   accountType CashAccountType @map("account_type")
   name        Json            // { "uz": "...", "ru": "..." }
-  currency    String          @default("UZS") // "UZS" or "USD"
+  /// Every cash account is denominated in one currency. UZS_CASH is UZS, USD_CASH is USD, and BANK has one configured currency.
+  currency    String          @default("UZS")
   balance     Decimal         @default(0) @db.Decimal(15, 2)
   isActive    Boolean         @default(true) @map("is_active")
   createdAt   DateTime        @default(now()) @map("created_at")
@@ -1327,15 +1569,19 @@ model FinanceTransaction {
   /// For INCOME: the account that received the money
   /// For EXPENSE: the account that money left from
   /// For TRANSFER: the source account
-  accountId         String?             @map("account_id")
+  accountId         String              @map("account_id")
   /// For TRANSFER only: the destination account
   transferToId      String?             @map("transfer_to_id")
   counterpartyId    String?             @map("counterparty_id")
+  settlementSide    CounterpartySettlementSide? @map("settlement_side")
   transactionTypeId String?             @map("transaction_type_id")
   amount            Decimal             @db.Decimal(15, 2)
   /// For TRANSFER only: exact amount credited to the destination account.
   transferToAmount  Decimal?            @db.Decimal(15, 2) @map("transfer_to_amount")
+  /// For cross-currency TRANSFER only: UZS per USD quote used to calculate transferToAmount.
+  transferExchangeRate Decimal?         @db.Decimal(15, 6) @map("transfer_exchange_rate")
   currency          String              @default("UZS")
+  exchangeRate      Decimal             @db.Decimal(15, 4) @map("exchange_rate")
   transactionDate   DateTime            @default(now()) @map("transaction_date")
   comment           String?
   docNumber         String?             @map("doc_number")
@@ -1352,10 +1598,11 @@ model FinanceTransaction {
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
   company           Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  account           CashAccount?     @relation("TxAccount", fields: [accountId], references: [id], onDelete: SetNull)
+  account           CashAccount      @relation("TxAccount", fields: [accountId], references: [id], onDelete: Restrict)
   transferToAccount CashAccount?     @relation("TxTransferTo", fields: [transferToId], references: [id], onDelete: SetNull)
   counterparty      Counterparty?    @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
   transactionType   TransactionType? @relation(fields: [transactionTypeId], references: [id], onDelete: SetNull)
+  settlementAllocations SettlementAllocation[]
 
   @@index([tenantId])
   @@index([tenantId, direction])
@@ -1512,6 +1759,7 @@ model ProductBatch {
   productId     String           @map("product_id")
   warehouseId   String           @map("warehouse_id")
   receiptId     String?          @map("receipt_id")
+  productionDocumentId String?    @unique @map("production_document_id")
   batchNumber   String           @map("batch_number")
   initialQty    Decimal          @db.Decimal(15, 3) @map("initial_qty")
   remainingQty  Decimal          @db.Decimal(15, 3) @map("remaining_qty")
@@ -1523,7 +1771,10 @@ model ProductBatch {
   product       Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   warehouse     Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   receipt       PurchaseReceipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  productionDocument ProductionDocument? @relation("ProductionOutputBatch", fields: [productionDocumentId], references: [id], onDelete: SetNull)
   consumptions  BatchConsumption[]
+  productionConsumptions ProductionMaterialBatch[]
+  productionMovements ProductionMaterialMovement[]
 
   @@index([tenantId])
   @@index([tenantId, warehouseId, productId])

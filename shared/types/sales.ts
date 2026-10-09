@@ -20,9 +20,16 @@ export interface Counterparty {
   phone: string | null;
   email: string | null;
   address: string | null;
-  debtBalance: number;
+  balancesByCurrency?: CounterpartyBalanceByCurrency[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CounterpartyBalanceByCurrency {
+  currency: string;
+  customerDebt: number;
+  supplierDebt: number;
+  netBalance: number;
 }
 
 export interface SalesInvoiceItem {
@@ -61,6 +68,9 @@ export interface SalesInvoice {
   subtotalAmount: number;
   discountAmount: number;
   vatAmount: number;
+  additionalChargeAmount: number;
+  additionalChargeVatRate: number;
+  additionalChargeVatAmount: number;
   totalAmount: number;
   paidAmount: number;
   totalCogs: number;
@@ -91,6 +101,8 @@ export interface SalesReturnItem {
   productId: string;
   quantity: number;
   unitPrice: number;
+  vatRate: number;
+  vatAmount: number;
   totalPrice: number;
   unitCogs: number;
   lineCogs: number;

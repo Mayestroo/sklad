@@ -1,6 +1,6 @@
 import { TranslatableField } from './i18n';
 
-export type ProductType = 'PRODUCT' | 'SERVICE' | 'BUNDLE';
+export type ProductType = 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE' | 'BUNDLE';
 export type UnitOfMeasure = 'piece' | 'kg' | 'liter' | 'meter' | 'box' | 'pack';
 export type InventoryDocType = 'INBOUND' | 'OUTBOUND' | 'STOCKTAKING' | 'TRANSFER';
 export type InventoryDocStatus = 'DRAFT' | 'POSTED' | 'CANCELLED' | 'IN_TRANSIT' | 'RECEIVED';
@@ -25,7 +25,10 @@ export interface Product {
   barcode: string | null;
   unitOfMeasure: UnitOfMeasure;
   costPrice: number;
+  costPriceCurrency: 'USD' | 'UZS';
+  costPriceExchangeRate: number;
   salePrice: number;
+  salePriceCurrency: 'USD' | 'UZS' | null;
   vatRate: number;
   minStockAlert: number;
   isActive: boolean;

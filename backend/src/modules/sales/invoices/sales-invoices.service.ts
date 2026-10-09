@@ -9,6 +9,8 @@ import { FilterSalesInvoicesDto } from '../dto/filter-sales-invoices.dto';
 import { CreateSalesReturnDto } from '../dto/create-sales-return.dto';
 import {
   Prisma,
+  CounterpartySettlementSide,
+  SettlementAllocationTarget,
   SalesDocStatus,
   SalesPaymentStatus,
   SalesReturnStatus,
@@ -16,10 +18,19 @@ import {
 } from '@prisma/client';
 import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
+import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
+import {
+  calculateSalesDocumentTotals,
+  calculateSalesLineAmounts,
+  grossProfitInUzs,
+} from '../sales-calculations';
 
 @Injectable()
 export class SalesInvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settlementService: CounterpartySettlementService,
+  ) {}
 
   // ─── NUMBER GENERATORS ─────────────────────────────────────────
 
@@ -164,51 +175,55 @@ export class SalesInvoicesService {
       }
       if (
         item.discount != null &&
-        (isNaN(Number(item.discount)) || Number(item.discount) < 0)
+        (isNaN(Number(item.discount)) || Number(item.discount) < 0 || Number(item.discount) > 100)
       ) {
         throw new BadRequestException(
-          "Chegirma (discount) 0 yoki undan katta bo'lishi shart",
+          'Chegirma foizi 0 va 100 orasida bo‘lishi shart',
         );
       }
     }
 
     const invoiceNumber = await this.generateInvoiceNumber(tenantId);
 
-    let subtotalAmount = 0;
-    let discountAmount = 0;
-    let vatAmount = 0;
+    const additionalChargeAmount = Number(dto.additionalChargeAmount ?? 0);
+    const additionalChargeVatRate = Number(dto.additionalChargeVatRate ?? 12);
+    let totals: ReturnType<typeof calculateSalesDocumentTotals>;
+    try {
+      totals = calculateSalesDocumentTotals(
+        dto.items.map((item) => ({
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          discountPercent: Number(item.discount ?? 0),
+          vatRate: Number(item.vatRate ?? 0),
+        })),
+        additionalChargeAmount,
+        additionalChargeVatRate,
+      );
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Sotuv summalarini hisoblab bo‘lmadi');
+    }
 
     const preparedItems = dto.items.map((item) => {
-      const qty = Number(item.quantity);
-      const unitPrice = Number(item.unitPrice);
-      const disc = item.discount ? Number(item.discount) : 0;
-      const vatRate = item.vatRate ? Number(item.vatRate) : 0;
-
-      const lineSubtotal = qty * unitPrice;
-      const lineAfterDisc = Math.max(0, lineSubtotal - disc);
-      const lineVat = (lineAfterDisc * vatRate) / 100;
-      const lineTotal = lineAfterDisc + lineVat;
-
-      subtotalAmount += lineSubtotal;
-      discountAmount += disc;
-      vatAmount += lineVat;
-
-      return {
+      const amounts = calculateSalesLineAmounts({
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discountPercent: Number(item.discount ?? 0),
+        vatRate: Number(item.vatRate ?? 0),
+      });
+        return {
         productId: item.productId,
-        quantity: qty,
-        unitPrice,
-        discount: disc,
-        vatRate,
-        vatAmount: lineVat,
-        totalPrice: lineTotal,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount ?? 0),
+        vatRate: Number(item.vatRate ?? 0),
+        vatAmount: amounts.vatAmount,
+        totalPrice: amounts.totalAmount,
         unitCogs: 0,
         lineCogs: 0,
         lineGrossProfit: 0,
         isBelowCost: false,
       };
     });
-
-    const totalAmount = subtotalAmount - discountAmount + vatAmount;
 
     const invoice = await this.prisma.salesInvoice.create({
       data: {
@@ -227,10 +242,13 @@ export class SalesInvoicesService {
         status: SalesDocStatus.DRAFT,
         paymentStatus: SalesPaymentStatus.UNPAID,
         returnStatus: SalesReturnStatus.NONE,
-        subtotalAmount,
-        discountAmount,
-        vatAmount,
-        totalAmount,
+        subtotalAmount: totals.subtotalAmount,
+        discountAmount: totals.discountAmount,
+        vatAmount: totals.vatAmount,
+        additionalChargeAmount: totals.additionalChargeAmount,
+        additionalChargeVatRate,
+        additionalChargeVatAmount: totals.additionalChargeVatAmount,
+        totalAmount: totals.totalAmount,
         paidAmount: 0,
         totalCogs: 0,
         grossProfit: 0,
@@ -249,6 +267,134 @@ export class SalesInvoicesService {
       return this.postInvoice(tenantId, userId, invoice.id);
     }
     return invoice;
+  }
+
+  async updateInvoice(tenantId: string, userId: string, id: string, dto: CreateSalesInvoiceDto) {
+    const invoice = await this.prisma.salesInvoice.findFirst({
+      where: { id, tenantId },
+      include: { items: true },
+    });
+    if (!invoice) throw new NotFoundException('Sotuv hujjati topilmadi');
+    if (invoice.status !== SalesDocStatus.DRAFT) {
+      throw new BadRequestException('Faqat qoralama sotuv hujjatini tahrirlash mumkin');
+    }
+    if (!dto.items?.length) {
+      throw new BadRequestException('Sotuv hujjatida kamida bitta tovar bo‘lishi shart');
+    }
+    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+      throw new BadRequestException('Sotuv hujjati uchun USD yoki UZS valyutasini tanlang');
+    }
+
+    let exchangeRate = 1;
+    if (dto.currency !== 'UZS') {
+      if (dto.exchangeRate == null || !Number.isFinite(Number(dto.exchangeRate)) || Number(dto.exchangeRate) <= 0) {
+        throw new BadRequestException('Xorijiy valyuta uchun 0 dan katta kursni kiriting');
+      }
+      exchangeRate = Number(dto.exchangeRate);
+    }
+
+    for (const item of dto.items) {
+      if (item.quantity == null || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
+        throw new BadRequestException('Hujjat qatorida miqdor 0 dan katta bo‘lishi shart');
+      }
+      if (item.unitPrice == null || !Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0) {
+        throw new BadRequestException('Hujjat qatorida narx 0 yoki undan katta bo‘lishi shart');
+      }
+      if (Number(item.discount ?? 0) < 0 || Number(item.discount ?? 0) > 100) {
+        throw new BadRequestException('Chegirma foizi 0 va 100 orasida bo‘lishi shart');
+      }
+      if (Number(item.vatRate ?? 0) < 0 || Number(item.vatRate ?? 0) > 100) {
+        throw new BadRequestException('QQS stavkasi 0 va 100 orasida bo‘lishi shart');
+      }
+    }
+
+    let totals: ReturnType<typeof calculateSalesDocumentTotals>;
+    const additionalChargeAmount = Number(dto.additionalChargeAmount ?? 0);
+    const additionalChargeVatRate = Number(dto.additionalChargeVatRate ?? 12);
+    try {
+      totals = calculateSalesDocumentTotals(
+        dto.items.map((item) => ({
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          discountPercent: Number(item.discount ?? 0),
+          vatRate: Number(item.vatRate ?? 0),
+        })),
+        additionalChargeAmount,
+        additionalChargeVatRate,
+      );
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Sotuv summalarini hisoblab bo‘lmadi');
+    }
+    const preparedItems = dto.items.map((item) => {
+      const amounts = calculateSalesLineAmounts({
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discountPercent: Number(item.discount ?? 0),
+        vatRate: Number(item.vatRate ?? 0),
+      });
+      return {
+        productId: item.productId,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount ?? 0),
+        vatRate: Number(item.vatRate ?? 0),
+        vatAmount: amounts.vatAmount,
+        totalPrice: amounts.totalAmount,
+        unitCogs: 0,
+        lineCogs: 0,
+        lineGrossProfit: 0,
+        isBelowCost: false,
+      };
+    });
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.salesInvoice.update({
+        where: { id },
+        data: {
+          counterpartyId: dto.counterpartyId,
+          warehouseId: dto.warehouseId,
+          invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : invoice.invoiceDate,
+          currency: dto.currency,
+          exchangeRate,
+          contractNumber: dto.contractNumber || null,
+          contractDate: dto.contractDate ? new Date(dto.contractDate) : null,
+          paymentTerms: dto.paymentTerms || null,
+          comment: dto.comment || null,
+          priceListId: dto.priceListId || null,
+          subtotalAmount: totals.subtotalAmount,
+          discountAmount: totals.discountAmount,
+          vatAmount: totals.vatAmount,
+          additionalChargeAmount: totals.additionalChargeAmount,
+          additionalChargeVatRate,
+          additionalChargeVatAmount: totals.additionalChargeVatAmount,
+          totalAmount: totals.totalAmount,
+          items: {
+            deleteMany: {},
+            create: preparedItems,
+          },
+        },
+        include: {
+          counterparty: true,
+          warehouse: true,
+          items: { include: { product: true } },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId,
+          entityType: 'SalesInvoice',
+          entityId: id,
+          action: 'UPDATE',
+          oldValue: { status: invoice.status, totalAmount: Number(invoice.totalAmount) },
+          newValue: { status: result.status, totalAmount: totals.totalAmount },
+        },
+      });
+      return result;
+    });
+
+    if (dto.postImmediately) return this.postInvoice(tenantId, userId, id);
+    return updated;
   }
 
   // ─── POST INVOICE (FIFO COGS + STOCK DEDUCTION + ACCOUNTING) ──
@@ -271,6 +417,10 @@ export class SalesInvoicesService {
 
     return this.prisma.$transaction(async (tx) => {
       let totalCogs = 0;
+      const ledgerRate = invoice.currency === 'UZS' ? 1 : Number(invoice.exchangeRate);
+      if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
+        throw new BadRequestException(`Sotuv hujjati uchun valyuta kursi noto‘g‘ri: ${invoice.currency}`);
+      }
       const updatedItemData: Array<{
         id: string;
         unitCogs: number;
@@ -361,7 +511,7 @@ export class SalesInvoicesService {
           const product = await tx.product.findUnique({
             where: { id: item.productId },
           });
-          const fallbackCost = Number(product?.costPrice || 0);
+          const fallbackCost = Number(product?.costPrice || 0) * Number(product?.costPriceExchangeRate || 1);
           totalItemCogs += remainingToConsume * fallbackCost;
         }
 
@@ -370,8 +520,14 @@ export class SalesInvoicesService {
         const lineTotal = Number(item.totalPrice);
         const lineVat = Number(item.vatAmount || 0);
         const lineNetRevenue = lineTotal - lineVat;
-        const lineGrossProfit = lineNetRevenue - lineCogs;
-        const isBelowCost = Number(item.unitPrice) < unitCogs;
+        const lineGrossProfit = grossProfitInUzs(
+          lineNetRevenue,
+          invoice.currency,
+          ledgerRate,
+          lineCogs,
+        );
+        const discountedUnitPrice = Number(item.unitPrice) * (1 - Number(item.discount || 0) / 100);
+        const isBelowCost = discountedUnitPrice * ledgerRate < unitCogs;
 
         totalCogs += lineCogs;
 
@@ -409,21 +565,26 @@ export class SalesInvoicesService {
         });
       }
 
-      const netRevenue = Number(invoice.totalAmount) - Number(invoice.vatAmount);
-      const grossProfit = netRevenue - totalCogs;
+      const netRevenueUzs = (Number(invoice.totalAmount) - Number(invoice.vatAmount)) * ledgerRate;
+      const grossProfit = grossProfitInUzs(
+        Number(invoice.totalAmount) - Number(invoice.vatAmount),
+        invoice.currency,
+        ledgerRate,
+        totalCogs,
+      );
 
-      // 3. Increase customer (debitor) debt
-      await tx.counterparty.update({
-        where: { id: invoice.counterpartyId },
-        data: {
-          customerDebt: { increment: invoice.totalAmount },
-          debtBalance: { increment: invoice.totalAmount },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: invoice.counterpartyId, currency: invoice.currency } },
-        create: { tenantId, counterpartyId: invoice.counterpartyId, currency: invoice.currency, customerDebt: invoice.totalAmount },
-        update: { customerDebt: { increment: invoice.totalAmount } },
+      // 3. Accrue the receivable in the shared native-currency settlement ledger.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: invoice.counterpartyId,
+        currency: invoice.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: Number(invoice.totalAmount),
+        entryType: 'SALES_INVOICE_POSTED',
+        effectiveAt: invoice.invoiceDate,
+        sourceDocType: 'SalesInvoice',
+        sourceDocId: invoice.id,
+        idempotencyKey: `SalesInvoice:${invoice.id}:POSTED:${invoice.updatedAt.toISOString()}`,
       });
 
       // 4. NAS / BHMS Accounting Journal Entries
@@ -447,15 +608,7 @@ export class SalesInvoicesService {
       });
 
       if (revenueAcc && receivableAcc) {
-        const exchangeRate = Number(invoice.exchangeRate);
-        const ledgerRate = invoice.currency === 'USD' ? exchangeRate : 1;
-        if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
-          throw new BadRequestException(
-            `Sotuv hujjati uchun valyuta kursi noto'g'ri: ${invoice.currency}`,
-          );
-        }
-        const netRevenue =
-          (Number(invoice.totalAmount) - Number(invoice.vatAmount)) * ledgerRate;
+        const netRevenue = netRevenueUzs;
         const vatSum = Number(invoice.vatAmount) * ledgerRate;
         const journalLines: Array<{
           debitAccountId: string;
@@ -473,6 +626,9 @@ export class SalesInvoicesService {
         });
 
         // Debit 4010 (Mijozlar qarzi) / Credit 6410 (Chiquvchi QQS)
+        if (vatSum > 0 && !vatAcc) {
+          throw new BadRequestException('QQS hisob raqami (6410) topilmadi');
+        }
         if (vatSum > 0 && vatAcc) {
           journalLines.push({
             debitAccountId: receivableAcc.id,
@@ -606,18 +762,18 @@ export class SalesInvoicesService {
         },
       });
 
-      // Reduce customer debt
-      await tx.counterparty.update({
-        where: { id: invoice.counterpartyId },
-        data: {
-          customerDebt: { decrement: invoice.totalAmount },
-          debtBalance: { decrement: invoice.totalAmount },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: invoice.counterpartyId, currency: invoice.currency } },
-        create: { tenantId, counterpartyId: invoice.counterpartyId, currency: invoice.currency, customerDebt: -Number(invoice.totalAmount) },
-        update: { customerDebt: { decrement: invoice.totalAmount } },
+      // Reverse the receivable without deleting its original ledger movement.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: invoice.counterpartyId,
+        currency: invoice.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -Number(invoice.totalAmount),
+        entryType: 'SALES_INVOICE_UNPOSTED',
+        effectiveAt: invoice.invoiceDate,
+        sourceDocType: 'SalesInvoice',
+        sourceDocId: invoice.id,
+        idempotencyKey: `SalesInvoice:${invoice.id}:UNPOSTED:${invoice.updatedAt.toISOString()}`,
       });
 
       // Remove journal entries
@@ -723,8 +879,11 @@ export class SalesInvoicesService {
         soldQuantity,
         returnedQuantity,
         returnableQuantity,
-        unitPrice: Number(item.unitPrice),
-        unitCogs: Number(item.unitCogs || 0),
+          unitPrice: (Number(item.totalPrice) - Number(item.vatAmount || 0)) / soldQuantity,
+          unitVatAmount: Number(item.vatAmount) / soldQuantity,
+          vatRate: Number(item.vatRate),
+          unitTotalPrice: Number(item.totalPrice) / soldQuantity,
+          unitCogs: Number(item.unitCogs || 0),
       };
     });
   }
@@ -782,6 +941,8 @@ export class SalesInvoicesService {
       productId: string;
       quantity: number;
       unitPrice: number;
+      vatRate: number;
+      vatAmount: number;
       totalPrice: number;
       unitCogs: number;
       lineCogs: number;
@@ -820,15 +981,18 @@ export class SalesInvoicesService {
         }
 
         unitCogs = Number(origItem.unitCogs || 0);
-        const unitPrice = Number(origItem.totalPrice) / soldQty;
-        const lineTotal = qty * unitPrice;
+        const unitTotalPrice = Number(origItem.totalPrice) / soldQty;
+        const unitVatAmount = Number(origItem.vatAmount || 0) / soldQty;
+        const unitPrice = unitTotalPrice - unitVatAmount;
+        const lineVatAmount = roundMoney(unitVatAmount * qty);
+        const lineTotal = roundMoney(unitPrice * qty + lineVatAmount);
         totalAmount += lineTotal;
 
       if (unitCogs <= 0) {
         const prod = await this.prisma.product.findUnique({
           where: { id: i.productId },
         });
-        unitCogs = Number(prod?.costPrice || 0);
+        unitCogs = Number(prod?.costPrice || 0) * Number(prod?.costPriceExchangeRate || 1);
       }
 
       const lineCogs = i.quantity * unitCogs;
@@ -838,6 +1002,8 @@ export class SalesInvoicesService {
         productId: i.productId,
         quantity: i.quantity,
         unitPrice,
+        vatRate: Number(origItem.vatRate || 0),
+        vatAmount: lineVatAmount,
         totalPrice: lineTotal,
         unitCogs,
         lineCogs,
@@ -911,6 +1077,8 @@ export class SalesInvoicesService {
         productId: string;
         quantity: number;
         unitPrice: number;
+        vatRate: number;
+        vatAmount: number;
         totalPrice: number;
         unitCogs: number;
         lineCogs: number;
@@ -1013,18 +1181,18 @@ export class SalesInvoicesService {
         });
       }
 
-      // Reduce customer debt
-      await tx.counterparty.update({
-        where: { id: params.counterpartyId },
-        data: {
-          customerDebt: { decrement: params.totalAmount },
-          debtBalance: { decrement: params.totalAmount },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: params.counterpartyId, currency: params.currency } },
-        create: { tenantId, counterpartyId: params.counterpartyId, currency: params.currency, customerDebt: -params.totalAmount },
-        update: { customerDebt: { decrement: params.totalAmount } },
+      // A posted customer return reverses the original receivable, including VAT.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: params.counterpartyId,
+        currency: params.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -params.totalAmount,
+        entryType: 'SALES_RETURN_POSTED',
+        effectiveAt: salesReturn.returnDate,
+        sourceDocType: 'SalesReturn',
+        sourceDocId: salesReturn.id,
+        idempotencyKey: `SalesReturn:${salesReturn.id}:POSTED`,
       });
 
       // Update originating invoice returnStatus
@@ -1211,6 +1379,8 @@ export class SalesInvoicesService {
       productId: i.productId,
       quantity: Number(i.quantity),
       unitPrice: Number(i.unitPrice),
+      vatRate: Number(i.vatRate || 0),
+      vatAmount: Number(i.vatAmount || 0),
       totalPrice: Number(i.totalPrice),
       unitCogs: Number(i.unitCogs),
       lineCogs: Number(i.lineCogs),
@@ -1252,6 +1422,24 @@ export class SalesInvoicesService {
         where: { id: returnId },
         data: { status: SalesReturnDocStatus.CANCELLED },
       });
+    }
+
+    const returnAllocations = await this.prisma.settlementAllocation.findMany({
+      where: {
+        tenantId,
+        targetType: SettlementAllocationTarget.SALES_RETURN,
+        targetId: existing.id,
+      },
+      select: { amount: true },
+    });
+    const activeRefundAmount = returnAllocations.reduce(
+      (sum, allocation) => sum + Number(allocation.amount),
+      0,
+    );
+    if (activeRefundAmount > 0) {
+      throw new BadRequestException(
+        'Moliya settlement allocation exists for this sales return; reverse it before cancelling the return',
+      );
     }
 
     // If POSTED, execute rollback guardrail and reversals
@@ -1305,18 +1493,18 @@ export class SalesInvoicesService {
         }
       }
 
-      // Reverse customer debt
-      await tx.counterparty.update({
-        where: { id: existing.counterpartyId },
-        data: {
-          customerDebt: { increment: Number(existing.totalAmount) },
-          debtBalance: { increment: Number(existing.totalAmount) },
-        },
-      });
-      await tx.counterpartyBalance.upsert({
-        where: { counterpartyId_currency: { counterpartyId: existing.counterpartyId, currency: existing.currency } },
-        create: { tenantId, counterpartyId: existing.counterpartyId, currency: existing.currency, customerDebt: existing.totalAmount },
-        update: { customerDebt: { increment: existing.totalAmount } },
+      // Cancelling a return reverses its balance movement as a new ledger entry.
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: existing.counterpartyId,
+        currency: existing.currency,
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: Number(existing.totalAmount),
+        entryType: 'SALES_RETURN_CANCELLED',
+        effectiveAt: existing.returnDate,
+        sourceDocType: 'SalesReturn',
+        sourceDocId: existing.id,
+        idempotencyKey: `SalesReturn:${existing.id}:CANCELLED`,
       });
 
       // Update invoice return status
@@ -1652,6 +1840,27 @@ export class SalesInvoicesService {
     return results;
   }
 
+  private convertSalePriceCurrency(
+    amount: number,
+    sourceCurrency: string,
+    targetCurrency: string,
+    exchangeRate?: number,
+  ) {
+    if (
+      !SUPPORTED_CURRENCIES.includes(sourceCurrency as (typeof SUPPORTED_CURRENCIES)[number]) ||
+      !SUPPORTED_CURRENCIES.includes(targetCurrency as (typeof SUPPORTED_CURRENCIES)[number])
+    ) {
+      throw new BadRequestException('Product and sales document prices must use USD or UZS');
+    }
+    if (sourceCurrency === targetCurrency) return Number(amount.toFixed(2));
+    const rate = Number(exchangeRate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new BadRequestException('A positive exchange rate is required to convert the product sale price');
+    }
+    const converted = sourceCurrency === 'USD' ? amount * rate : amount / rate;
+    return Number(converted.toFixed(2));
+  }
+
   async resolveProductPrice(
     tenantId: string,
     productId: string,
@@ -1673,22 +1882,37 @@ export class SalesInvoicesService {
 
     const product = await this.prisma.product.findFirst({
       where: { id: productId, tenantId },
-      select: { id: true, salePrice: true, name: true, sku: true },
+      select: { id: true, salePrice: true, salePriceCurrency: true, name: true, sku: true },
     });
     if (!product) throw new NotFoundException('Tovar topilmadi');
 
     const basePrice = Number(product.salePrice) || 0;
+    if (basePrice > 0 && !product.salePriceCurrency) {
+      throw new BadRequestException(`Product ${product.sku} has a sale price without a recoverable currency`);
+    }
+    const baseCurrency = product.salePriceCurrency ?? options.currency ?? 'UZS';
+    const baseTargetCurrency = options.currency ?? baseCurrency;
+    if (!SUPPORTED_CURRENCIES.includes(baseTargetCurrency as (typeof SUPPORTED_CURRENCIES)[number])) {
+      throw new BadRequestException('Sales document currency must be USD or UZS');
+    }
+    const basePriceInTargetCurrency = this.convertSalePriceCurrency(
+      basePrice,
+      baseCurrency,
+      baseTargetCurrency,
+      options.exchangeRate,
+    );
 
     if (!isMultiTierEnabled) {
       return {
-        resolvedPrice: basePrice,
+        resolvedPrice: basePriceInTargetCurrency,
         basePrice,
+        baseCurrency,
         discountPercent: 0,
         markupPercent: 0,
         isTierPrice: false,
         priceListId: null,
         priceListName: null,
-        currency: options.currency || 'USD',
+        currency: baseTargetCurrency,
       };
     }
 
@@ -1716,14 +1940,15 @@ export class SalesInvoicesService {
 
     if (!targetPriceListId) {
       return {
-        resolvedPrice: basePrice,
+        resolvedPrice: basePriceInTargetCurrency,
         basePrice,
+        baseCurrency,
         discountPercent: 0,
         markupPercent: 0,
         isTierPrice: false,
         priceListId: null,
         priceListName: null,
-        currency: options.currency || 'USD',
+        currency: baseTargetCurrency,
       };
     }
 
@@ -1733,14 +1958,15 @@ export class SalesInvoicesService {
 
     if (!priceList) {
       return {
-        resolvedPrice: basePrice,
+        resolvedPrice: basePriceInTargetCurrency,
         basePrice,
+        baseCurrency,
         discountPercent: 0,
         markupPercent: 0,
         isTierPrice: false,
         priceListId: null,
         priceListName: null,
-        currency: options.currency || 'USD',
+        currency: baseTargetCurrency,
       };
     }
 
@@ -1752,44 +1978,43 @@ export class SalesInvoicesService {
 
     if (!customPrice) {
       return {
-        resolvedPrice: basePrice,
+        resolvedPrice: basePriceInTargetCurrency,
         basePrice,
+        baseCurrency,
         discountPercent: 0,
         markupPercent: 0,
         isTierPrice: false,
         priceListId: priceList.id,
         priceListName: priceList.name,
-        currency: options.currency || priceList.currency,
+        currency: baseTargetCurrency,
       };
     }
 
-    let tierPrice = Number(customPrice.price);
-
     const targetCurrency = options.currency || priceList.currency;
-    if (
-      options.currency &&
-      options.currency !== priceList.currency &&
-      options.exchangeRate &&
-      options.exchangeRate > 0
-    ) {
-      if (priceList.currency === 'USD' && targetCurrency === 'UZS') {
-        tierPrice = tierPrice * options.exchangeRate;
-      } else if (priceList.currency === 'UZS' && targetCurrency === 'USD') {
-        tierPrice = tierPrice / options.exchangeRate;
-      }
-    }
+    const tierPrice = this.convertSalePriceCurrency(
+      Number(customPrice.price),
+      priceList.currency,
+      targetCurrency,
+      options.exchangeRate,
+    );
+    const comparableBasePrice = this.convertSalePriceCurrency(
+      basePrice,
+      baseCurrency,
+      targetCurrency,
+      options.exchangeRate,
+    );
 
     let discountPercent = 0;
     let markupPercent = 0;
 
-    if (basePrice > 0) {
-      if (tierPrice < basePrice) {
+    if (comparableBasePrice > 0) {
+      if (tierPrice < comparableBasePrice) {
         discountPercent = Number(
-          (((basePrice - tierPrice) / basePrice) * 100).toFixed(2),
+          (((comparableBasePrice - tierPrice) / comparableBasePrice) * 100).toFixed(2),
         );
-      } else if (tierPrice > basePrice) {
+      } else if (tierPrice > comparableBasePrice) {
         markupPercent = Number(
-          (((tierPrice - basePrice) / basePrice) * 100).toFixed(2),
+          (((tierPrice - comparableBasePrice) / comparableBasePrice) * 100).toFixed(2),
         );
       }
     }
@@ -1797,6 +2022,7 @@ export class SalesInvoicesService {
     return {
       resolvedPrice: tierPrice,
       basePrice,
+      baseCurrency,
       discountPercent,
       markupPercent,
       isTierPrice: true,
@@ -1812,157 +2038,127 @@ export class SalesInvoicesService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [postedInvoices, company, recentReceipt, recentInvoice] = await Promise.all([
-      this.prisma.salesInvoice?.findMany
-        ? this.prisma.salesInvoice.findMany({
-            where: {
-              tenantId,
-              status: SalesDocStatus.POSTED,
-              invoiceDate: { gte: startOfMonth },
-            },
-            select: {
-              totalAmount: true,
-              totalCogs: true,
-              grossProfit: true,
-              currency: true,
-              exchangeRate: true,
-            },
-          })
-        : Promise.resolve([]),
-      this.prisma.company?.findUnique
-        ? this.prisma.company.findUnique({
-            where: { id: tenantId },
-            select: { settings: true },
-          })
-        : Promise.resolve(null),
-      this.prisma.purchaseReceipt?.findFirst
-        ? this.prisma.purchaseReceipt.findFirst({
-            where: { tenantId, status: 'POSTED' },
-            orderBy: { docDate: 'desc' },
-            select: { currency: true },
-          })
-        : Promise.resolve(null),
-      this.prisma.salesInvoice?.findFirst
-        ? this.prisma.salesInvoice.findFirst({
-            where: { tenantId, status: SalesDocStatus.POSTED },
-            orderBy: { invoiceDate: 'desc' },
-            select: { currency: true },
-          })
-        : Promise.resolve(null),
-    ]);
-
-    const reportCurrency =
-      recentReceipt?.currency ||
-      recentInvoice?.currency ||
-      (company?.settings as any)?.sales?.defaultCurrency ||
-      (company?.settings as any)?.currency ||
-      'USD';
+    const postedInvoices = await this.prisma.salesInvoice.findMany({
+      where: {
+        tenantId,
+        status: SalesDocStatus.POSTED,
+        invoiceDate: { gte: startOfMonth },
+      },
+      select: {
+        totalAmount: true,
+        vatAmount: true,
+        totalCogs: true,
+        grossProfit: true,
+        currency: true,
+        exchangeRate: true,
+      },
+    });
 
     const salesByCurrMap: Record<string, number> = {};
-    const profitByCurrMap: Record<string, number> = {};
+    let profitUzs = 0;
+    let netSalesUzs = 0;
     let totalSales = 0;
     let totalCogs = 0;
-    let grossProfit = 0;
 
     for (const inv of postedInvoices) {
       const amt = Number(inv.totalAmount || 0);
       const cogs = Number(inv.totalCogs || 0);
       const profit = Number(inv.grossProfit || 0);
-      const curr = inv.currency || reportCurrency;
+      const curr = inv.currency;
+      const exchangeRate = curr === 'UZS' ? 1 : Number(inv.exchangeRate);
+      if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+        throw new BadRequestException(`Posted sales invoice has an invalid ${curr} exchange rate`);
+      }
 
       salesByCurrMap[curr] = (salesByCurrMap[curr] || 0) + amt;
-      profitByCurrMap[curr] = (profitByCurrMap[curr] || 0) + profit;
-
       totalSales += amt;
       totalCogs += cogs;
-      grossProfit += profit;
+      netSalesUzs += (amt - Number(inv.vatAmount || 0)) * exchangeRate;
+      profitUzs += profit;
     }
 
     const monthlySalesByCurrency = Object.entries(salesByCurrMap).map(([currency, amount]) => ({
       currency,
       amount,
     }));
-    const monthlyGrossProfitByCurrency = Object.entries(profitByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
-
     const postedReturns = await this.prisma.salesReturn.findMany({
       where: { tenantId, returnDate: { gte: startOfMonth } },
-      select: { totalAmount: true, currency: true },
+      select: {
+        totalAmount: true,
+        totalCogs: true,
+        currency: true,
+        invoice: { select: { exchangeRate: true, currency: true } },
+        items: { select: { vatAmount: true } },
+      },
     });
 
     const returnsByCurrMap: Record<string, number> = {};
     let monthlyReturnsTotal = 0;
+    let returnedNetRevenueUzs = 0;
     for (const ret of postedReturns) {
       const amt = Number(ret.totalAmount || 0);
-      const curr = (ret as any).currency || reportCurrency;
+      const curr = ret.currency;
+      const exchangeRate = curr === 'UZS' ? 1 : Number(ret.invoice?.exchangeRate);
+      if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+        throw new BadRequestException(`Posted sales return has an invalid ${curr} exchange rate`);
+      }
       returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
       monthlyReturnsTotal += amt;
+      const returnedVat = ret.items.reduce((sum, item) => sum + Number(item.vatAmount || 0), 0);
+      returnedNetRevenueUzs += (amt - returnedVat) * exchangeRate;
+      const returnedCogs = Number(ret.totalCogs || 0);
+      totalCogs -= returnedCogs;
+      profitUzs -= (amt - returnedVat) * exchangeRate - returnedCogs;
     }
 
     const monthlyReturnsByCurrency = Object.entries(returnsByCurrMap).map(([currency, amount]) => ({
       currency,
       amount,
     }));
+    if (monthlyReturnsByCurrency.length !== 1) monthlyReturnsTotal = 0;
+    const monthlyGrossProfitByCurrency = profitUzs !== 0 || postedInvoices.length > 0 || postedReturns.length > 0
+      ? [{ currency: 'UZS', amount: profitUzs }]
+      : [];
 
-    const customerDebt = await this.prisma.counterparty.aggregate({
-      where: {
-        tenantId,
-        type: { in: ['CUSTOMER', 'BOTH'] },
-        debtBalance: { gt: 0 },
-      },
-      _sum: { debtBalance: true },
-      _count: { id: true },
+    const counterpartyBalances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId },
+      select: { counterpartyId: true, currency: true, customerDebt: true },
     });
-
-    // Unpaid invoices to break down debt by currency
-    const unpaidInvoices = await this.prisma.salesInvoice.findMany({
-      where: {
-        tenantId,
-        status: SalesDocStatus.POSTED,
-        paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
-      },
-      select: {
-        totalAmount: true,
-        paidAmount: true,
-        currency: true,
-      },
-    });
-
     const debtByCurrMap: Record<string, number> = {};
-    for (const inv of unpaidInvoices) {
-      const remaining = Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0);
-      if (remaining > 0) {
-        const curr = inv.currency || reportCurrency;
-        debtByCurrMap[curr] = (debtByCurrMap[curr] || 0) + remaining;
+    const advancesByCurrMap: Record<string, number> = {};
+    const customersWithReceivables = new Set<string>();
+    for (const balance of counterpartyBalances) {
+      const customerDebt = Number(balance.customerDebt);
+      if (customerDebt > 0) {
+        debtByCurrMap[balance.currency] = (debtByCurrMap[balance.currency] || 0) + customerDebt;
+        customersWithReceivables.add(balance.counterpartyId);
+      } else if (customerDebt < 0) {
+        advancesByCurrMap[balance.currency] = (advancesByCurrMap[balance.currency] || 0) + Math.abs(customerDebt);
       }
     }
 
-    let totalCustomerDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
+    const totalCustomerDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({ currency, amount }));
+    const customerAdvancesByCurrency = Object.entries(advancesByCurrMap).map(([currency, amount]) => ({ currency, amount }));
+    const rawTotalDebt = totalCustomerDebtByCurrency.length === 1 ? totalCustomerDebtByCurrency[0].amount : 0;
 
-    const rawTotalDebt = Number(customerDebt._sum.debtBalance || 0);
-    if (totalCustomerDebtByCurrency.length === 0 && rawTotalDebt > 0) {
-      totalCustomerDebtByCurrency = [{ currency: reportCurrency, amount: rawTotalDebt }];
-    }
-
-    const margin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
+    const margin = netSalesUzs > returnedNetRevenueUzs
+      ? (profitUzs / (netSalesUzs - returnedNetRevenueUzs)) * 100
+      : 0;
+    const monthlySalesTotal = monthlySalesByCurrency.length === 1 ? monthlySalesByCurrency[0].amount : 0;
 
     return {
-      monthlySalesTotal: totalSales,
+      monthlySalesTotal,
       monthlySalesCount: postedInvoices.length,
       monthlyCogsTotal: totalCogs,
-      monthlyGrossProfit: grossProfit,
+      monthlyGrossProfit: profitUzs,
       monthlyGrossProfitMargin: Math.round(margin * 100) / 100,
       totalCustomerDebt: rawTotalDebt,
-      customersWithDebtCount: customerDebt._count.id,
+      customersWithDebtCount: customersWithReceivables.size,
       monthlyReturnsTotal,
-      currency: monthlySalesByCurrency.length === 1 ? monthlySalesByCurrency[0].currency : reportCurrency,
+      currency: monthlySalesByCurrency.length === 1 ? monthlySalesByCurrency[0].currency : 'UZS',
       monthlySalesByCurrency,
       totalCustomerDebtByCurrency,
+      customerAdvancesByCurrency,
       monthlyReturnsByCurrency,
       monthlyGrossProfitByCurrency,
     };
@@ -1984,31 +2180,81 @@ export class SalesInvoicesService {
 
     const returns = await this.prisma.salesReturn.findMany({
       where: { tenantId, counterpartyId: customerId },
+      include: {
+        invoice: { select: { currency: true, exchangeRate: true } },
+        items: { select: { vatAmount: true } },
+      },
       orderBy: { returnDate: 'desc' },
     });
 
     const payments = await this.prisma.financeTransaction.findMany({
-      where: { tenantId, counterpartyId: customerId, direction: 'INCOME' },
+      where: { tenantId, counterpartyId: customerId, direction: 'INCOME', status: 'POSTED', isDeleted: false },
       include: { account: true },
       orderBy: { transactionDate: 'desc' },
     });
 
-    const totalSales = invoices.reduce((s, i) => s + Number(i.totalAmount), 0);
-    const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
-    const totalReturned = returns.reduce(
-      (s, r) => s + Number(r.totalAmount),
-      0,
-    );
-    const totalCogs = invoices.reduce((s, i) => s + Number(i.totalCogs), 0);
-    const grossProfit = invoices.reduce((s, i) => s + Number(i.grossProfit), 0);
+    const postedInvoices = invoices.filter((invoice) => invoice.status === SalesDocStatus.POSTED);
+    const postedReturns = returns.filter((salesReturn) => salesReturn.status === SalesReturnDocStatus.POSTED);
+    const aggregateByCurrency = (rows: Array<{ currency: string; amount: number }>) => {
+      const totals = new Map<string, number>();
+      for (const row of rows) totals.set(row.currency, (totals.get(row.currency) ?? 0) + row.amount);
+      return Array.from(totals).sort(([left], [right]) => left.localeCompare(right)).map(([currency, amount]) => ({ currency, amount }));
+    };
+    const totalSalesByCurrency = aggregateByCurrency(postedInvoices.map((invoice) => ({
+      currency: invoice.currency,
+      amount: Number(invoice.totalAmount),
+    })));
+    const totalPaidByCurrency = aggregateByCurrency(payments.map((payment) => ({
+      currency: payment.currency,
+      amount: Number(payment.amount),
+    })));
+    const totalReturnedByCurrency = aggregateByCurrency(postedReturns.map((salesReturn) => ({
+      currency: salesReturn.currency,
+      amount: Number(salesReturn.totalAmount),
+    })));
+    const amountForSingleCurrency = (values: Array<{ currency: string; amount: number }>) => values.length === 1 ? values[0].amount : 0;
+    let totalCogs = postedInvoices.reduce((sum, invoice) => sum + Number(invoice.totalCogs || 0), 0);
+    let grossProfit = postedInvoices.reduce((sum, invoice) => sum + Number(invoice.grossProfit || 0), 0);
+    for (const salesReturn of postedReturns) {
+      const currency = salesReturn.invoice?.currency || salesReturn.currency;
+      const exchangeRate = currency === 'UZS' ? 1 : Number(salesReturn.invoice?.exchangeRate);
+      if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+        throw new BadRequestException(`Posted sales return has an invalid ${currency} exchange rate`);
+      }
+      const returnedVat = salesReturn.items.reduce((sum, item) => sum + Number(item.vatAmount || 0), 0);
+      const returnedCogs = Number(salesReturn.totalCogs || 0);
+      totalCogs -= returnedCogs;
+      grossProfit -= (Number(salesReturn.totalAmount) - returnedVat) * exchangeRate - returnedCogs;
+    }
+    const balances = await this.prisma.counterpartyBalance.findMany({
+      where: { tenantId, counterpartyId: customerId },
+      select: { currency: true, customerDebt: true, supplierDebt: true },
+      orderBy: { currency: 'asc' },
+    });
+    const balancesByCurrency = balances.map((balance) => ({
+      currency: balance.currency,
+      customerDebt: Number(balance.customerDebt),
+      supplierDebt: Number(balance.supplierDebt),
+      netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
+    }));
+    const receivableCurrencies = balancesByCurrency.filter((balance) => balance.customerDebt > 0);
+    const customerAdvancesByCurrency = balancesByCurrency
+      .filter((balance) => balance.customerDebt < 0)
+      .map((balance) => ({ currency: balance.currency, amount: Math.abs(balance.customerDebt) }));
+    const { debtBalance: _legacyDebtBalance, customerDebt: _legacyCustomerDebt, supplierDebt: _legacySupplierDebt, ...customerData } = customer;
 
     return {
-      customer,
+      customer: { ...customerData, balancesByCurrency },
       metrics: {
-        totalSales,
-        totalPaid,
-        totalReturned,
-        debtBalance: Number(customer.debtBalance),
+        totalSales: amountForSingleCurrency(totalSalesByCurrency),
+        totalPaid: amountForSingleCurrency(totalPaidByCurrency),
+        totalReturned: amountForSingleCurrency(totalReturnedByCurrency),
+        totalSalesByCurrency,
+        totalPaidByCurrency,
+        totalReturnedByCurrency,
+        grossProfitCurrency: 'UZS',
+        balancesByCurrency,
+        customerAdvancesByCurrency,
         totalCogs,
         grossProfit,
       },
@@ -2017,4 +2263,8 @@ export class SalesInvoicesService {
       payments,
     };
   }
+}
+
+function roundMoney(amount: number): number {
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
 }

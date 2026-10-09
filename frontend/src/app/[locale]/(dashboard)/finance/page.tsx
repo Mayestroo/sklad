@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { apiFetch } from '@/lib/api';
-import { formatDate, CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -20,29 +20,29 @@ import type {
   FinanceTransaction,
   TransactionJournal,
   FinanceDashboardMetrics,
+  FinanceAccountFlow,
   TransactionType,
 } from '@shared/types';
+import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
 import {
   Plus,
   Minus,
   ArrowLeftRight,
   Wallet,
-  Calendar,
   AlertCircle,
   CheckCircle2,
   Edit2,
   XCircle,
   TrendingUp,
-  TrendingDown,
   Building,
   DollarSign,
   Users,
-  FileText,
-  Filter,
   RefreshCw,
   Clock,
   ArrowUpRight,
   ArrowDownLeft,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
@@ -75,6 +75,83 @@ function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
   }
 }
 
+function AccountNetRows({
+  items,
+  locale,
+  isRu,
+}: {
+  items: FinanceAccountFlow[];
+  locale: 'uz' | 'ru';
+  isRu: boolean;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+      {items.map((account) => (
+        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+            {account.name[locale]} · {account.currency}
+          </span>
+          <span style={{ color: account.netCashFlow >= 0 ? '#10b981' : '#ef4444' }}>
+            {formatCurrency(account.netCashFlow, locale, account.currency)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AccountFlowRows({
+  title,
+  items,
+  locale,
+  isRu,
+}: {
+  title: string;
+  items: FinanceAccountFlow[];
+  locale: 'uz' | 'ru';
+  isRu: boolean;
+}) {
+  if (items.length === 0) {
+    return (
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+        {isRu ? 'Счета пока не настроены' : 'Kassalar hali sozlanmagan'}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
+      {items.map((account) => (
+        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : '#dc2626' }}>
+            {account.name[locale]} · {account.currency}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+            {[
+              { label: isRu ? 'Поступления' : 'Kirim', amount: account.income, color: '#10b981' },
+              { label: isRu ? 'Расходы' : 'Chiqim', amount: account.expense, color: '#ef4444' },
+              { label: isRu ? 'Перевод входящий' : 'O‘tkazma kirim', amount: account.transferIn, color: '#2563eb' },
+              { label: isRu ? 'Перевод исходящий' : 'O‘tkazma chiqim', amount: account.transferOut, color: '#7c3aed' },
+            ].map((movement) => (
+              <div key={movement.label} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 'var(--text-xs)' }}>
+                <span style={{ color: 'var(--color-text-tertiary)' }}>{movement.label}</span>
+                <span style={{ color: movement.color }}>{formatCurrency(movement.amount, locale, account.currency)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-xs)' }}>
+            <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистое движение' : 'Sof harakat'}</span>
+            <Badge variant={account.netCashFlow >= 0 ? 'success' : 'error'}>
+              {formatCurrency(account.netCashFlow, locale, account.currency)}
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Finance Component ─────────────────────────────────────
 export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -82,9 +159,9 @@ export default function FinancePage() {
   const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
-  // Active Tab: dashboard | journal | income | expense | transfers | debts
+  // Active Tab: dashboard | journal | income | expense | transfers | debts | deleted
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'journal' | 'income' | 'expense' | 'transfers' | 'debts'
+    'dashboard' | 'journal' | 'income' | 'expense' | 'transfers' | 'debts' | 'deleted'
   >('dashboard');
 
   // Debts sub-tab: receivables | payables
@@ -92,7 +169,6 @@ export default function FinancePage() {
 
   // Data States
   const [dashboardMetrics, setDashboardMetrics] = useState<FinanceDashboardMetrics | null>(null);
-  const reportCurrency = (dashboardMetrics as any)?.currency || defaultCurrency || 'USD';
   const [journal, setJournal] = useState<TransactionJournal | null>(null);
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [txTypes, setTxTypes] = useState<TransactionType[]>([]);
@@ -113,6 +189,10 @@ export default function FinancePage() {
     'income' | 'expense' | 'transfer' | 'exchange' | null
   >(null);
   const [prefilledCounterpartyId, setPrefilledCounterpartyId] = useState<string | null>(null);
+  const [prefilledSettlement, setPrefilledSettlement] = useState<{
+    side: 'CUSTOMER' | 'SUPPLIER';
+    currency: string;
+  } | null>(null);
 
   // Edit / Storno Modal
   const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
@@ -123,6 +203,10 @@ export default function FinancePage() {
   const [stornoTx, setStornoTx] = useState<FinanceTransaction | null>(null);
   const [stornoReason, setStornoReason] = useState('');
   const [stornoLoading, setStornoLoading] = useState(false);
+
+  const [deletingTx, setDeletingTx] = useState<FinanceTransaction | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [restoringTxId, setRestoringTxId] = useState<string | null>(null);
 
   const handlePeriodChange = (preset: string) => {
     setPeriodPreset(preset);
@@ -158,7 +242,10 @@ export default function FinancePage() {
     try {
       const [metrics, jour, accs, types, cps] = await Promise.all([
         apiFetch<FinanceDashboardMetrics>('/finance/dashboard', opts),
-        apiFetch<TransactionJournal>(`/finance/transactions?${params}`, opts),
+        apiFetch<TransactionJournal>(
+          `${activeTab === 'deleted' ? '/finance/transactions/deleted' : '/finance/transactions'}?${params}`,
+          opts,
+        ),
         apiFetch<CashAccount[]>('/finance/accounts', opts),
         apiFetch<TransactionType[]>('/finance/transaction-types', opts),
         apiFetch<any[]>('/sales/counterparties', opts),
@@ -180,9 +267,15 @@ export default function FinancePage() {
   }, [fetchData]);
 
   // Open transaction creation
-  const handleOpenDrawer = (mode: 'income' | 'expense' | 'transfer' | 'exchange', cpId?: string) => {
+  const handleOpenDrawer = (
+    mode: 'income' | 'expense' | 'transfer' | 'exchange',
+    cpId?: string,
+    side?: 'CUSTOMER' | 'SUPPLIER',
+    currency?: string,
+  ) => {
     setDrawerMode(mode);
     setPrefilledCounterpartyId(cpId || null);
+    setPrefilledSettlement(side && currency ? { side, currency } : null);
   };
 
   // Handle Edit Transaction
@@ -237,6 +330,61 @@ export default function FinancePage() {
       toast.error(err?.message || (isRu ? 'Ошибка при аннулировании' : 'Bekor qilishda xatolik'));
     } finally {
       setStornoLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingTx || !token || !company) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/finance/transactions/${deletingTx.id}`, {
+        method: 'DELETE',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      setDeletingTx(null);
+      await fetchData();
+      toast.success(isRu ? 'Операция перемещена в корзину' : 'Operatsiya savatga ko‘chirildi');
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : isRu
+            ? 'Ошибка при удалении операции'
+            : 'Operatsiyani o‘chirishda xatolik',
+      );
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleRestore = async (tx: FinanceTransaction) => {
+    if (!token || !company) return;
+    setRestoringTxId(tx.id);
+    try {
+      await apiFetch(`/finance/transactions/${tx.id}/restore`, {
+        method: 'POST',
+        token,
+        tenantId: company.id,
+        locale,
+      });
+      await fetchData();
+      toast.success(
+        isRu
+          ? 'Операция возвращена в журнал со статусом «Аннулирован»'
+          : 'Operatsiya jurnalga bekor qilingan holatda qaytarildi',
+      );
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error && err.message
+          ? err.message
+          : isRu
+            ? 'Ошибка при восстановлении'
+            : 'Qaytarishda xatolik',
+      );
+    } finally {
+      setRestoringTxId(null);
     }
   };
 
@@ -345,10 +493,16 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Долларовая касса (USD)' : 'Dollar kassa (USD)'}
+              {isRu
+                ? `Долларовая касса (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`
+                : `Dollar kassa (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#10b981' }}>
-              {formatCurrency(dashboardMetrics?.balances.dollarKassa || 0, locale, 'USD')}
+              {formatCurrency(
+                dashboardMetrics?.balances.dollarKassa || 0,
+                locale,
+                dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD',
+              )}
             </div>
           </div>
         </Card>
@@ -380,10 +534,16 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? `Наличная касса (${reportCurrency})` : `Naqd kassa (${reportCurrency})`}
+              {isRu
+                ? `Наличная касса (${dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS'})`
+                : `Naqd kassa (${dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS'})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(dashboardMetrics?.balances.naqdKassa || 0, locale, reportCurrency)}
+              {formatCurrency(
+                dashboardMetrics?.balances.naqdKassa || 0,
+                locale,
+                dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS',
+              )}
             </div>
           </div>
         </Card>
@@ -415,10 +575,16 @@ export default function FinancePage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? `Расчетный счет (${reportCurrency})` : `Hisobraqam (${reportCurrency})`}
+              {isRu
+                ? `Расчетный счет (${dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS'})`
+                : `Hisobraqam (${dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS'})`}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(dashboardMetrics?.balances.hisobRaqam || 0, locale, reportCurrency)}
+              {formatCurrency(
+                dashboardMetrics?.balances.hisobRaqam || 0,
+                locale,
+                dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS',
+              )}
             </div>
           </div>
         </Card>
@@ -430,7 +596,7 @@ export default function FinancePage() {
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--space-3)',
-            borderLeft: `4px solid ${(dashboardMetrics?.month.netCashFlow || 0) >= 0 ? '#10b981' : '#ef4444'}`,
+            borderLeft: '4px solid var(--color-primary-500)',
           }}
         >
           <div
@@ -438,36 +604,21 @@ export default function FinancePage() {
               width: 40,
               height: 40,
               borderRadius: 'var(--radius-md)',
-              backgroundColor:
-                (dashboardMetrics?.month.netCashFlow || 0) >= 0
-                  ? 'rgba(16, 185, 129, 0.1)'
-                  : 'rgba(239, 68, 68, 0.1)',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: (dashboardMetrics?.month.netCashFlow || 0) >= 0 ? '#10b981' : '#ef4444',
+              color: 'var(--color-primary-600)',
               flexShrink: 0,
             }}
           >
-            {(dashboardMetrics?.month.netCashFlow || 0) >= 0 ? (
-              <TrendingUp size={20} />
-            ) : (
-              <TrendingDown size={20} />
-            )}
+            <TrendingUp size={20} />
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Чистый денежный поток (Месяц)' : 'Sof pul oqimi (Shu oy)'}
             </div>
-            <div
-              style={{
-                fontSize: 'var(--text-lg)',
-                fontWeight: 700,
-                color: (dashboardMetrics?.month.netCashFlow || 0) >= 0 ? '#10b981' : '#ef4444',
-              }}
-            >
-              {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, reportCurrency)}
-            </div>
+            <AccountNetRows items={dashboardMetrics?.month.byAccount ?? []} locale={locale} isRu={isRu} />
           </div>
         </Card>
       </div>
@@ -489,6 +640,7 @@ export default function FinancePage() {
           { id: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
           { id: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
           { id: 'debts', label: isRu ? 'Взаиморасчеты (Долги)' : 'Qarzdorlik nazorati' },
+          { id: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -548,65 +700,18 @@ export default function FinancePage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                {/* Today */}
-                <div
-                  style={{
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'var(--color-bg-subtle)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'Сегодня' : 'Bugun'}:
-                    </span>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                      <span style={{ color: '#10b981' }}>
-                        +{formatCurrency(dashboardMetrics?.today.income || 0, locale, reportCurrency)}
-                      </span>
-                      <span style={{ margin: '0 6px', color: 'var(--color-text-tertiary)' }}>/</span>
-                      <span style={{ color: '#ef4444' }}>
-                        -{formatCurrency(dashboardMetrics?.today.expense || 0, locale, reportCurrency)}
-                      </span>
-                    </div>
-                  </div>
-                  <Badge variant={(dashboardMetrics?.today.netCashFlow || 0) >= 0 ? 'success' : 'error'}>
-                    {formatCurrency(dashboardMetrics?.today.netCashFlow || 0, locale, reportCurrency)}
-                  </Badge>
-                </div>
-
-                {/* This Month */}
-                <div
-                  style={{
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'var(--color-bg-subtle)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'В этом месяце' : 'Shu oyda'}:
-                    </span>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-                      <span style={{ color: '#10b981' }}>
-                        +{formatCurrency(dashboardMetrics?.month.income || 0, locale, reportCurrency)}
-                      </span>
-                      <span style={{ margin: '0 6px', color: 'var(--color-text-tertiary)' }}>/</span>
-                      <span style={{ color: '#ef4444' }}>
-                        -{formatCurrency(dashboardMetrics?.month.expense || 0, locale, reportCurrency)}
-                      </span>
-                    </div>
-                  </div>
-                  <Badge variant={(dashboardMetrics?.month.netCashFlow || 0) >= 0 ? 'success' : 'error'}>
-                    {formatCurrency(dashboardMetrics?.month.netCashFlow || 0, locale, reportCurrency)}
-                  </Badge>
-                </div>
+                <AccountFlowRows
+                  title={isRu ? 'Сегодня' : 'Bugun'}
+                  items={dashboardMetrics?.today.byAccount ?? []}
+                  locale={locale}
+                  isRu={isRu}
+                />
+                <AccountFlowRows
+                  title={isRu ? 'В этом месяце' : 'Shu oyda'}
+                  items={dashboardMetrics?.month.byAccount ?? []}
+                  locale={locale}
+                  isRu={isRu}
+                />
               </div>
             </Card>
 
@@ -643,15 +748,21 @@ export default function FinancePage() {
                     {isRu ? 'Ожидаемые поступления (Дебиторка)' : 'Kutilayotgan tushumlar (Debitorlik)'}
                   </div>
                   <MultiCurrencyValue
-                    items={(dashboardMetrics?.debts as any)?.receivablesByCurrency}
+                    items={dashboardMetrics?.debts.receivablesByCurrency}
                     fallbackAmount={dashboardMetrics?.debts.receivables || 0}
-                    fallbackCurrency={reportCurrency}
+                    fallbackCurrency={defaultCurrency}
                     locale={locale}
                     color="#059669"
                   />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Клиенты должны нам' : 'Mijozlar bizga to‘lashi kerak'}
                   </div>
+                  {(dashboardMetrics?.debts.customerAdvancesByCurrency.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 8, borderTop: '1px solid rgba(16, 185, 129, 0.18)', paddingTop: 6 }}>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы клиентов' : 'Mijozlar avansi'}</div>
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} color="#2563eb" />
+                    </div>
+                  )}
                 </div>
 
                 {/* To'lanishi kerak bo'lgan qarzlar */}
@@ -667,15 +778,21 @@ export default function FinancePage() {
                     {isRu ? 'К оплате поставщикам (Кредиторка)' : 'Bizning qarzlarimiz (Kreditorlik)'}
                   </div>
                   <MultiCurrencyValue
-                    items={(dashboardMetrics?.debts as any)?.payablesByCurrency}
+                    items={dashboardMetrics?.debts.payablesByCurrency}
                     fallbackAmount={dashboardMetrics?.debts.payables || 0}
-                    fallbackCurrency={reportCurrency}
+                    fallbackCurrency={defaultCurrency}
                     locale={locale}
                     color="#dc2626"
                   />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Мы должны поставщикам' : 'Ta’minotchilarga to‘lashimiz kerak'}
                   </div>
+                  {(dashboardMetrics?.debts.supplierAdvancesByCurrency.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 8, borderTop: '1px solid rgba(239, 68, 68, 0.18)', paddingTop: 6 }}>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы поставщикам' : 'Ta’minotchilarga avanslar'}</div>
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} color="#2563eb" />
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
@@ -712,6 +829,10 @@ export default function FinancePage() {
                 setStornoTx(tx);
                 setStornoReason('');
               }}
+              onDelete={setDeletingTx}
+              onRestore={handleRestore}
+              isDeletedView={false}
+              restoringTxId={restoringTxId}
             />
           </Card>
         </div>
@@ -721,7 +842,8 @@ export default function FinancePage() {
       {(activeTab === 'journal' ||
         activeTab === 'income' ||
         activeTab === 'expense' ||
-        activeTab === 'transfers') && (
+        activeTab === 'transfers' ||
+        activeTab === 'deleted') && (
         <Card style={{ padding: 'var(--space-5)' }}>
           {/* Filters Bar */}
           <div
@@ -805,6 +927,10 @@ export default function FinancePage() {
               setStornoTx(tx);
               setStornoReason('');
             }}
+            onDelete={setDeletingTx}
+            onRestore={handleRestore}
+            isDeletedView={activeTab === 'deleted'}
+            restoringTxId={restoringTxId}
           />
 
           {/* Pagination */}
@@ -920,86 +1046,43 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {counterparties
-                  .filter((cp) => {
-                    const cDebt = Number(cp.customerDebt || 0);
-                    const sDebt = Number(cp.supplierDebt || 0);
-                    const raw = Number(cp.debtBalance || 0);
-                    if (debtsSubTab === 'receivables') {
-                      return cDebt > 0 || (cDebt === 0 && sDebt === 0 && raw > 0 && cp.type !== 'SUPPLIER');
-                    } else {
-                      return sDebt > 0 || (cDebt === 0 && sDebt === 0 && raw > 0 && cp.type === 'SUPPLIER');
-                    }
-                  })
-                  .map((cp) => {
-                    const cDebt = Number(cp.customerDebt || 0);
-                    const sDebt = Number(cp.supplierDebt || 0);
-                    const raw = Number(cp.debtBalance || 0);
-                    const displayDebt =
-                      debtsSubTab === 'receivables'
-                        ? cDebt > 0
-                          ? cDebt
-                          : raw
-                        : sDebt > 0
-                        ? sDebt
-                        : raw;
-
-                    return (
-                      <tr
-                        key={cp.id}
-                        style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
-                      >
-                        <td style={{ padding: '12px' }}>
-                          <span style={{ fontWeight: 600 }}>{cp.name}</span>
-                          {cp.inn && (
-                            <span
-                              style={{
-                                display: 'block',
-                                fontSize: 'var(--text-xs)',
-                                color: 'var(--color-text-tertiary)',
-                              }}
-                            >
-                              STIR: {cp.inn}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                          {cp.phone || '—'}
-                        </td>
-                        <td
-                          style={{
-                            padding: '12px',
-                            textAlign: 'right',
-                            fontWeight: 700,
-                            color: debtsSubTab === 'receivables' ? '#059669' : '#dc2626',
-                          }}
-                        >
-                          {formatCurrency(displayDebt, locale, cp.currency || (cp as any).purchaseReceipts?.[0]?.currency || (cp as any).salesInvoices?.[0]?.currency || reportCurrency)}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          {debtsSubTab === 'receivables' ? (
+                {counterparties.flatMap((cp) =>
+                  (cp.balancesByCurrency || [])
+                    .filter((balance: { customerDebt: number; supplierDebt: number }) =>
+                      debtsSubTab === 'receivables' ? balance.customerDebt > 0 : balance.supplierDebt > 0,
+                    )
+                    .map((balance: { currency: string; customerDebt: number; supplierDebt: number }) => {
+                      const settlementSide = debtsSubTab === 'receivables' ? 'CUSTOMER' : 'SUPPLIER';
+                      const amount = settlementSide === 'CUSTOMER' ? balance.customerDebt : balance.supplierDebt;
+                      return (
+                        <tr key={`${cp.id}:${balance.currency}`} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                          <td style={{ padding: '12px' }}>
+                            <span style={{ fontWeight: 600 }}>{cp.name}</span>
+                            {cp.inn && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>STIR: {cp.inn}</span>}
+                          </td>
+                          <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{cp.phone || '—'}</td>
+                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? '#059669' : '#dc2626' }}>
+                            {formatCurrency(amount, locale, balance.currency)}
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'center' }}>
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => handleOpenDrawer('income', cp.id)}
+                              onClick={() => handleOpenDrawer(
+                                debtsSubTab === 'receivables' ? 'income' : 'expense',
+                                cp.id,
+                                settlementSide,
+                                balance.currency,
+                              )}
                             >
-                              <Plus size={14} />
-                              <span>{isRu ? 'Приход' : 'Kirim'}</span>
+                              {debtsSubTab === 'receivables' ? <Plus size={14} /> : <Minus size={14} />}
+                              <span>{debtsSubTab === 'receivables' ? isRu ? 'Приход' : 'Kirim' : isRu ? 'Оплатить' : 'To‘lov'}</span>
                             </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleOpenDrawer('expense', cp.id)}
-                            >
-                              <Minus size={14} />
-                              <span>{isRu ? 'Оплатить' : 'To‘lov'}</span>
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                        </tr>
+                      );
+                    }),
+                )}
               </tbody>
             </table>
           </div>
@@ -1011,6 +1094,7 @@ export default function FinancePage() {
         <FinanceTransactionDrawer
           mode={drawerMode}
           prefilledCounterpartyId={prefilledCounterpartyId}
+          prefilledSettlement={prefilledSettlement}
           accounts={accounts}
           txTypes={txTypes}
           counterparties={counterparties}
@@ -1021,6 +1105,7 @@ export default function FinancePage() {
           onClose={() => {
             setDrawerMode(null);
             setPrefilledCounterpartyId(null);
+            setPrefilledSettlement(null);
           }}
           onSuccess={() => {
             fetchData();
@@ -1149,6 +1234,63 @@ export default function FinancePage() {
           </div>
         </Modal>
       )}
+
+      {/* ─── Move Transaction to Trash Confirmation Modal ───────────── */}
+      {deletingTx && (
+        <Modal
+          isOpen={true}
+          title={isRu ? 'Переместить операцию в корзину?' : 'Operatsiyani savatga ko‘chirish?'}
+          onClose={() => {
+            if (!deleteLoading) setDeletingTx(null);
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div
+              style={{
+                padding: '12px 14px',
+                background: 'var(--color-error-50)',
+                border: '1px solid var(--color-error-100)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--color-error-600)',
+                fontSize: 'var(--text-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <AlertCircle size={20} style={{ flexShrink: 0 }} />
+              <p style={{ margin: 0 }}>
+                {deletingTx.status === 'POSTED'
+                  ? isRu
+                    ? 'Финансовый эффект будет отменён, а операция перемещена в корзину.'
+                    : 'Moliyaviy ta’siri qaytariladi va operatsiya savatga ko‘chiriladi.'
+                  : isRu
+                    ? 'Операция будет только перемещена в корзину; финансовые проводки не изменятся.'
+                    : 'Operatsiya faqat savatga ko‘chiriladi; moliyaviy harakatlar o‘zgarmaydi.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingTx(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger" onClick={handleDelete} disabled={deleteLoading}>
+                {deleteLoading
+                  ? isRu
+                    ? 'Перемещение...'
+                    : 'Ko‘chirilmoqda...'
+                  : isRu
+                    ? 'Переместить в корзину'
+                    : 'Savatga ko‘chirish'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1160,12 +1302,20 @@ function TransactionsTable({
   isRu,
   onEdit,
   onStorno,
+  onDelete,
+  onRestore,
+  isDeletedView = false,
+  restoringTxId,
 }: {
   transactions: FinanceTransaction[];
   locale: string;
   isRu: boolean;
   onEdit: (tx: FinanceTransaction) => void;
   onStorno: (tx: FinanceTransaction) => void;
+  onDelete: (tx: FinanceTransaction) => void;
+  onRestore: (tx: FinanceTransaction) => void;
+  isDeletedView?: boolean;
+  restoringTxId: string | null;
 }) {
   if (transactions.length === 0) {
     return (
@@ -1177,7 +1327,13 @@ function TransactionsTable({
           fontSize: 'var(--text-sm)',
         }}
       >
-        {isRu ? 'Операций не найдено' : 'Operatsiyalar mavjud emas'}
+        {isDeletedView
+          ? isRu
+            ? 'Корзина пуста'
+            : 'Savat bo‘sh'
+          : isRu
+            ? 'Операций не найдено'
+            : 'Operatsiyalar mavjud emas'}
       </div>
     );
   }
@@ -1202,6 +1358,8 @@ function TransactionsTable({
             const isIncome = tx.direction === 'INCOME';
             const isExpense = tx.direction === 'EXPENSE';
             const isCancelled = tx.status === 'CANCELLED';
+            const displayExchangeRate = tx.transferExchangeRate
+              ?? (tx.currency === 'USD' ? tx.exchangeRate : null);
 
             return (
               <tr
@@ -1274,8 +1432,39 @@ function TransactionsTable({
                     textDecoration: isCancelled ? 'line-through' : 'none',
                   }}
                 >
-                  {isIncome ? '+' : isExpense ? '-' : ''}
-                  {formatCurrency(Number(tx.amount), locale, tx.currency)}
+                  {tx.direction === 'TRANSFER' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                      <span style={{ color: '#ef4444' }}>
+                        −{formatCurrency(Number(tx.amount), locale, tx.currency)}
+                      </span>
+                      {tx.transferToAccount && tx.transferToAmount != null ? (
+                        <span style={{ color: '#10b981' }}>
+                          +{formatCurrency(Number(tx.transferToAmount), locale, tx.transferToAccount.currency)}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#dc2626', fontSize: 'var(--text-xs)' }}>
+                          {isRu ? 'Нет суммы зачисления' : 'Kirim summasi aniqlanmagan'}
+                        </span>
+                      )}
+                      {displayExchangeRate != null && (
+                        <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                          1 USD = {Number(displayExchangeRate)} UZS
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                      <span>
+                        {isIncome ? '+' : isExpense ? '-' : ''}
+                        {formatCurrency(Number(tx.amount), locale, tx.currency)}
+                      </span>
+                      {tx.currency === 'USD' && (
+                        <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                          1 USD = {Number(tx.exchangeRate)} UZS
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </td>
 
                 <td style={{ padding: '12px' }}>
@@ -1295,21 +1484,67 @@ function TransactionsTable({
                 </td>
 
                 <td style={{ padding: '12px', textAlign: 'center' }}>
-                  {!isCancelled && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-                      <Button size="sm" variant="secondary" onClick={() => onEdit(tx)}>
-                        <Edit2 size={14} />
-                      </Button>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                    {isDeletedView ? (
                       <Button
                         size="sm"
                         variant="secondary"
-                        onClick={() => onStorno(tx)}
-                        style={{ color: '#ef4444' }}
+                        onClick={() => onRestore(tx)}
+                        disabled={restoringTxId === tx.id}
+                        aria-label={
+                          restoringTxId === tx.id
+                            ? isRu
+                              ? 'Восстановление...'
+                              : 'Qaytarilmoqda...'
+                            : isRu
+                              ? 'Вернуть в журнал'
+                              : 'Jurnalga qaytarish'
+                        }
                       >
-                        <XCircle size={14} />
+                        <RotateCcw size={14} />
+                        {restoringTxId === tx.id
+                          ? isRu
+                            ? 'Восстановление...'
+                            : 'Qaytarilmoqda...'
+                          : isRu
+                            ? 'Вернуть в журнал'
+                            : 'Jurnalga qaytarish'}
                       </Button>
-                    </div>
-                  )}
+                    ) : (
+                      <>
+                        {tx.status === 'POSTED' && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => onEdit(tx)}
+                              aria-label={isRu ? 'Редактировать операцию' : 'Operatsiyani tahrirlash'}
+                            >
+                              <Edit2 size={14} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => onStorno(tx)}
+                              style={{ color: '#ef4444' }}
+                              aria-label={isRu ? 'Аннулировать операцию' : 'Operatsiyani bekor qilish'}
+                            >
+                              <XCircle size={14} />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onDelete(tx)}
+                          style={{ color: '#ef4444' }}
+                          aria-label={isRu ? 'Переместить в корзину' : 'Savatga ko‘chirish'}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
@@ -1324,6 +1559,7 @@ function TransactionsTable({
 function FinanceTransactionDrawer({
   mode,
   prefilledCounterpartyId,
+  prefilledSettlement,
   accounts,
   txTypes,
   counterparties,
@@ -1336,6 +1572,7 @@ function FinanceTransactionDrawer({
 }: {
   mode: 'income' | 'expense' | 'transfer' | 'exchange';
   prefilledCounterpartyId?: string | null;
+  prefilledSettlement?: { side: 'CUSTOMER' | 'SUPPLIER'; currency: string } | null;
   accounts: CashAccount[];
   txTypes: TransactionType[];
   counterparties: any[];
@@ -1347,31 +1584,56 @@ function FinanceTransactionDrawer({
   onSuccess: () => void;
 }) {
   const isTransferOrExchange = mode === 'transfer' || mode === 'exchange';
-
-  const [accountId, setAccountId] = useState(accounts[0]?.id || '');
-  const [toAccountId, setToAccountId] = useState(accounts[1]?.id || '');
-  const [amount, setAmount] = useState('');
   const defaultCurrency = useDefaultCurrency();
-  const [currency, setCurrency] = useState(defaultCurrency);
+  const preferredAccount = accounts.find((account) => account.currency === prefilledSettlement?.currency);
+  const initialFromAccount = preferredAccount ?? accounts[0];
+  const initialToAccount = accounts.find((account) =>
+    account.id !== initialFromAccount?.id && account.currency === initialFromAccount?.currency,
+  ) ?? accounts.find((account) => account.id !== initialFromAccount?.id);
+
+  const [accountId, setAccountId] = useState(initialFromAccount?.id || '');
+  const [toAccountId, setToAccountId] = useState(initialToAccount?.id || '');
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState(prefilledSettlement?.currency || defaultCurrency);
   const [counterpartyId, setCounterpartyId] = useState(prefilledCounterpartyId || '');
+  const [settlementSide, setSettlementSide] = useState<'CUSTOMER' | 'SUPPLIER' | ''>(prefilledSettlement?.side || '');
   const [typeId, setTypeId] = useState('');
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Multi-currency exchange fields
-  const [exchangeRate, setExchangeRate] = useState('12800');
+  const [exchangeRate, setExchangeRate] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
 
   // Document linking fields
-  const [sourceDocType, setSourceDocType] = useState<string>('');
   const [sourceDocId, setSourceDocId] = useState<string>('');
   const [openDocuments, setOpenDocuments] = useState<any[]>([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const fromAccount = accounts.find((a) => a.id === accountId);
   const toAccount = accounts.find((a) => a.id === toAccountId);
+  const validAccounts = accounts.filter(isCashAccountCurrencyValid);
+  const availableAccounts = isTransferOrExchange
+    ? validAccounts
+    : validAccounts.filter((account) => account.currency === currency);
+  const compatibleOpenDocuments = openDocuments.filter((document) => !fromAccount || document.currency === fromAccount.currency);
+  const selectedSourceDocument = compatibleOpenDocuments.find((document) => document.id === sourceDocId);
+  const settlementSideOptions: Array<'CUSTOMER' | 'SUPPLIER'> = ['CUSTOMER', 'SUPPLIER'];
   const isMultiCurrency = fromAccount && toAccount && fromAccount.currency !== toAccount.currency;
+  const targetAmountAtRate = (
+    sourceAmount: number,
+    usdToUzsRate: number,
+    sourceCurrency = fromAccount?.currency,
+    destinationCurrency = toAccount?.currency,
+  ) => {
+    if (!sourceCurrency || !destinationCurrency || sourceCurrency === destinationCurrency
+      || !Number.isFinite(usdToUzsRate) || usdToUzsRate <= 0) return '';
+    const rate = Math.round(usdToUzsRate * 10000) / 10000;
+    const targetAmount = sourceCurrency === 'USD'
+      ? sourceAmount * rate
+      : sourceAmount / rate;
+    return String(Math.round(targetAmount * 100) / 100);
+  };
 
   // Sync currency with chosen account
   useEffect(() => {
@@ -1389,7 +1651,6 @@ function FinanceTransactionDrawer({
     }
 
     const fetchDocs = async () => {
-      setLoadingDocs(true);
       try {
         if (mode === 'income') {
           // Fetch open sales invoices
@@ -1416,8 +1677,6 @@ function FinanceTransactionDrawer({
         }
       } catch (e) {
         console.error('Failed to load open documents:', e);
-      } finally {
-        setLoadingDocs(false);
       }
     };
 
@@ -1432,12 +1691,52 @@ function FinanceTransactionDrawer({
       return;
     }
 
+    if (counterpartyId && !sourceDocId && !settlementSide) {
+      setError(
+        isRu
+          ? 'Выберите сторону взаиморасчёта: клиент или поставщик'
+          : 'Hisob-kitob tomonini tanlang: mijoz yoki ta’minotchi',
+      );
+      return;
+    }
+
     if (mode === 'expense' && fromAccount && Number(fromAccount.balance) < Number(amount)) {
       setError(
         isRu
           ? `В кассе недостаточно средств. Доступно: ${fromAccount.balance} ${fromAccount.currency}`
           : `Kassada mablag‘ yetarli emas. Mavjud: ${fromAccount.balance} ${fromAccount.currency}`,
       );
+      return;
+    }
+
+    if (!accountId || (isTransferOrExchange && !toAccountId)) {
+      setError(isRu ? 'Выберите оба счёта для операции' : 'Amaliyot uchun hisoblarni tanlang');
+      return;
+    }
+
+    if (isMultiCurrency) {
+      const hasRate = Number.isFinite(Number(exchangeRate)) && Number(exchangeRate) > 0;
+      const hasTargetAmount = Number.isFinite(Number(targetAmount)) && Number(targetAmount) > 0;
+      if (!hasRate && !hasTargetAmount) {
+        setError(isRu ? 'Укажите курс или сумму зачисления' : 'Kurs yoki qabul qilinadigan summani kiriting');
+        return;
+      }
+    }
+    if (
+      !isTransferOrExchange &&
+      fromAccount?.currency === 'USD' &&
+      (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)
+    ) {
+      setError(isRu ? 'Укажите курс UZS за 1 USD' : '1 USD uchun UZS kursini kiriting');
+      return;
+    }
+    if (
+      isTransferOrExchange &&
+      fromAccount?.currency === 'USD' &&
+      !isMultiCurrency &&
+      (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)
+    ) {
+      setError(isRu ? 'Укажите курс UZS за 1 USD' : '1 USD uchun UZS kursini kiriting');
       return;
     }
 
@@ -1462,16 +1761,23 @@ function FinanceTransactionDrawer({
         body.fromAccountId = accountId;
         body.toAccountId = toAccountId;
         if (isMultiCurrency) {
-          body.exchangeRate = parseFloat(exchangeRate) || 1;
-          body.targetAmount = parseFloat(targetAmount) || Number(amount);
+          const rate = Number(exchangeRate);
+          const receivingAmount = Number(targetAmount);
+          if (Number.isFinite(rate) && rate > 0) body.exchangeRate = rate;
+          if (Number.isFinite(receivingAmount) && receivingAmount > 0) body.targetAmount = receivingAmount;
+        } else if (fromAccount?.currency === 'USD') {
+          body.exchangeRate = Number(exchangeRate);
         }
       } else {
         body.accountId = accountId;
+        if (fromAccount?.currency === 'USD') body.exchangeRate = Number(exchangeRate);
         body.counterpartyId = counterpartyId || undefined;
         body.transactionTypeId = typeId || undefined;
         if (sourceDocId) {
           body.sourceDocType = mode === 'income' ? 'SalesInvoice' : 'PurchaseReceipt';
           body.sourceDocId = sourceDocId;
+        } else if (counterpartyId) {
+          body.settlementSide = settlementSide;
         }
       }
 
@@ -1574,26 +1880,47 @@ function FinanceTransactionDrawer({
               ? 'Касса / Счёт'
               : 'Kassa / Hisob'
           }
-          options={accounts.map((a) => ({
+          options={availableAccounts.map((a) => ({
             value: a.id,
             label: `${(a.name as any)[locale] || a.name} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
           }))}
-          value={accountId}
-          onChange={(val) => setAccountId(val)}
+           value={accountId}
+           onChange={(val) => {
+             const selectedSource = validAccounts.find((account) => account.id === val);
+             setAccountId(val);
+             setToAccountId((currentId) => {
+               const currentTarget = validAccounts.find((account) => account.id === currentId);
+               if (currentTarget && currentTarget.id !== val && currentTarget.currency === selectedSource?.currency) return currentId;
+               return (validAccounts.find((account) => account.id !== val && account.currency === selectedSource?.currency)
+                 ?? validAccounts.find((account) => account.id !== val))?.id ?? '';
+             });
+             setSourceDocId('');
+             setTargetAmount('');
+             setExchangeRate('');
+           }}
         />
 
         {/* Qayerga (Transfer uchun) */}
         {isTransferOrExchange && (
           <Select
             label={isRu ? 'Счёт пополнения (Куда)' : 'Qayerga (Tushuvchi kassa)'}
-            options={accounts
+            options={validAccounts
               .filter((a) => a.id !== accountId)
               .map((a) => ({
                 value: a.id,
                 label: `${(a.name as any)[locale] || a.name} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
               }))}
             value={toAccountId}
-            onChange={(val) => setToAccountId(val)}
+            onChange={(val) => {
+              const selectedTarget = validAccounts.find((account) => account.id === val);
+              setToAccountId(val);
+              setTargetAmount(targetAmountAtRate(
+                Number(amount) || 0,
+                Number(exchangeRate),
+                fromAccount?.currency,
+                selectedTarget?.currency,
+              ));
+            }}
           />
         )}
 
@@ -1612,17 +1939,44 @@ function FinanceTransactionDrawer({
           <Input
             type="number"
             placeholder="0"
-            value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              if (isMultiCurrency) {
-                const rate = parseFloat(exchangeRate) || 1;
-                const amt = parseFloat(e.target.value) || 0;
-                setTargetAmount(String(Math.round(amt * rate)));
-              }
+               value={amount}
+               onChange={(e) => {
+                 setAmount(e.target.value);
+                 if (isMultiCurrency) {
+                  const rate = Number(exchangeRate);
+                  const amt = parseFloat(e.target.value) || 0;
+                  setTargetAmount(targetAmountAtRate(amt, rate));
+                }
             }}
           />
         </div>
+
+        {!isTransferOrExchange && fromAccount?.currency === 'USD' && (
+          <div>
+            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+              {isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
+            </label>
+            <Input
+              type="number"
+              value={exchangeRate}
+              disabled={Boolean(sourceDocId && selectedSourceDocument?.exchangeRate)}
+              onChange={(e) => setExchangeRate(e.target.value)}
+            />
+          </div>
+        )}
+
+        {isTransferOrExchange && !isMultiCurrency && fromAccount?.currency === 'USD' && (
+          <div>
+            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+              {isRu ? 'Учётный курс (1 USD = UZS) *' : 'Hisob kursi (1 USD = UZS) *'}
+            </label>
+            <Input
+              type="number"
+              value={exchangeRate}
+              onChange={(e) => setExchangeRate(e.target.value)}
+            />
+          </div>
+        )}
 
         {/* Multi-currency Exchange Box */}
         {isMultiCurrency && (
@@ -1643,16 +1997,16 @@ function FinanceTransactionDrawer({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
                 <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
-                  {isRu ? 'Курс обмена' : 'Valyuta kursi'}
+                  {isRu ? 'Курс (1 USD = UZS)' : 'Kurs (1 USD = UZS)'}
                 </label>
                 <Input
                   type="number"
                   value={exchangeRate}
                   onChange={(e) => {
                     setExchangeRate(e.target.value);
-                    const rate = parseFloat(e.target.value) || 1;
+                    const rate = Number(e.target.value);
                     const amt = parseFloat(amount) || 0;
-                    setTargetAmount(String(Math.round(amt * rate)));
+                    setTargetAmount(targetAmountAtRate(amt, rate));
                   }}
                 />
               </div>
@@ -1663,7 +2017,17 @@ function FinanceTransactionDrawer({
                 <Input
                   type="number"
                   value={targetAmount}
-                  onChange={(e) => setTargetAmount(e.target.value)}
+                  onChange={(e) => {
+                    setTargetAmount(e.target.value);
+                    const sourceAmount = Number(amount);
+                    const receivingAmount = Number(e.target.value);
+                    if (sourceAmount > 0 && receivingAmount > 0 && fromAccount) {
+                      const impliedRate = fromAccount.currency === 'USD'
+                        ? receivingAmount / sourceAmount
+                        : sourceAmount / receivingAmount;
+                      setExchangeRate(String(Math.round(impliedRate * 10000) / 10000));
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -1674,31 +2038,36 @@ function FinanceTransactionDrawer({
         {!isTransferOrExchange && (
           <>
             <Select
-              label={
-                mode === 'income'
-                  ? isRu
-                    ? 'Клиент (Контрагент)'
-                    : 'Mijoz (Kontragent)'
-                  : isRu
-                  ? 'Поставщик (Контрагент)'
-                  : 'Ta’minotchi (Kontragent)'
-              }
+              label={isRu ? 'Контрагент' : 'Kontragent'}
               options={[
                 { value: '', label: isRu ? '— Не выбран (Прямой доход/расход) —' : '— Tanlanmagan —' },
-                ...counterparties
-                  .filter((cp) =>
-                    mode === 'income'
-                      ? cp.type === 'CUSTOMER' || cp.type === 'BOTH'
-                      : cp.type === 'SUPPLIER' || cp.type === 'BOTH',
-                  )
-                  .map((cp) => ({
-                    value: cp.id,
-                    label: cp.name,
-                  })),
+                ...counterparties.map((cp) => ({
+                  value: cp.id,
+                  label: cp.name,
+                })),
               ]}
               value={counterpartyId}
-              onChange={(val) => setCounterpartyId(val)}
+              onChange={(val) => {
+                setCounterpartyId(val);
+                setSettlementSide('');
+                setSourceDocId('');
+                setExchangeRate('');
+              }}
             />
+
+            {counterpartyId && !sourceDocId && (
+              <Select
+                label={isRu ? 'Сторона взаиморасчёта *' : 'Hisob-kitob tomoni *'}
+                options={settlementSideOptions.map((side) => ({
+                  value: side,
+                  label: side === 'CUSTOMER'
+                    ? isRu ? 'Клиентская задолженность' : 'Mijoz qarzdorligi'
+                    : isRu ? 'Задолженность поставщику' : 'Ta’minotchi qarzdorligi',
+                }))}
+                value={settlementSide}
+                onChange={(val) => setSettlementSide(val as 'CUSTOMER' | 'SUPPLIER' | '')}
+              />
+            )}
 
             {/* Bog'langan Hujjat */}
             {counterpartyId && (
@@ -1719,7 +2088,7 @@ function FinanceTransactionDrawer({
                       ? '— Авто-закрытие по FIFO (или Аванс) —'
                       : '— FIFO bo‘yicha avtomatik yopish (yoki Avans) —',
                   },
-                  ...openDocuments.map((doc) => {
+                  ...compatibleOpenDocuments.map((doc) => {
                     const remaining = Number(doc.totalAmount) - Number(doc.paidAmount);
                     return {
                       value: doc.id,
@@ -1728,7 +2097,12 @@ function FinanceTransactionDrawer({
                   }),
                 ]}
                 value={sourceDocId}
-                onChange={(val) => setSourceDocId(val)}
+                onChange={(val) => {
+                  setSourceDocId(val);
+                  const selectedDocument = compatibleOpenDocuments.find((document) => document.id === val);
+                  setExchangeRate(selectedDocument?.exchangeRate == null ? '' : String(selectedDocument.exchangeRate));
+                  if (val) setSettlementSide('');
+                }}
               />
             )}
 
