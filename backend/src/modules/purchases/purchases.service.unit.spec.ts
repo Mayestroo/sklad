@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 import {
   ExpenseTypeDto,
   ExpenseAllocationMethodDto,
@@ -73,6 +74,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         update: jest.fn(),
       },
       counterpartyBalance: { findMany: jest.fn() },
+      cashAccount: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
       account: {
         findFirst: jest.fn(),
       },
@@ -105,6 +110,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
         { provide: SettlementAllocationService, useValue: settlementAllocationService },
+        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
       ],
     }).compile();
 
@@ -945,6 +951,90 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         where: { id: 'stock-1' },
         data: { quantity: { decrement: 1 } },
       });
+    });
+  });
+
+  describe('Purchase payment exchange-rate accounting', () => {
+    it('records settlement-rate loss separately from the receipt-rate payable reduction', async () => {
+      const receipt = {
+        id: 'receipt-usd',
+        tenantId: 'tenant-123',
+        docNumber: 'PUR-USD-0001',
+        status: PurchaseDocStatus.POSTED,
+        currency: 'USD',
+        exchangeRate: 12000,
+        totalAmount: 100,
+        paidAmount: 0,
+        paymentStatus: PurchasePaymentStatus.UNPAID,
+        counterpartyId: 'supplier-1',
+        counterparty: { name: 'Supplier' },
+      };
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'usd-bank',
+        tenantId: 'tenant-123',
+        accountType: 'BANK',
+        currency: 'USD',
+        balance: 200,
+        isActive: true,
+      });
+      prisma.account.findFirst.mockImplementation(({ where }: { where: { code: string } }) =>
+        Promise.resolve({ id: `account-${where.code}`, code: where.code }),
+      );
+      prisma.purchaseReceipt.update.mockResolvedValue(receipt);
+
+      await service.payPurchaseReceipt('tenant-123', 'user-1', receipt.id, {
+        amount: 100,
+        cashAccountId: 'usd-bank',
+        exchangeRate: 13000,
+      });
+
+      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ currency: 'USD', exchangeRate: 13000, amount: 100 }),
+      }));
+      const journalArgs = prisma.journalEntry.create.mock.calls[0][0];
+      expect(journalArgs.data.lines.create).toEqual([
+        expect.objectContaining({
+          debitAccountId: 'account-6010',
+          creditAccountId: 'account-5210',
+          amount: 1200000,
+        }),
+        expect.objectContaining({
+          debitAccountId: 'account-9620',
+          creditAccountId: 'account-5210',
+          amount: 100000,
+        }),
+      ]);
+    });
+
+    it('requires a payment exchange rate when settling a USD purchase receipt', async () => {
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
+        id: 'receipt-usd',
+        tenantId: 'tenant-123',
+        status: PurchaseDocStatus.POSTED,
+        currency: 'USD',
+        exchangeRate: 12000,
+        totalAmount: 100,
+        paidAmount: 0,
+        paymentStatus: PurchasePaymentStatus.UNPAID,
+        counterpartyId: 'supplier-1',
+        counterparty: { name: 'Supplier' },
+      });
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'usd-bank',
+        tenantId: 'tenant-123',
+        accountType: 'BANK',
+        currency: 'USD',
+        balance: 200,
+        isActive: true,
+      });
+
+      await expect(service.payPurchaseReceipt('tenant-123', 'user-1', 'receipt-usd', {
+        amount: 100,
+        cashAccountId: 'usd-bank',
+      })).rejects.toThrow(BadRequestException);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

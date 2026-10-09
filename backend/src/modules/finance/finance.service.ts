@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../common/prisma';
 import {
   Prisma,
+  CashAccountType,
   TransactionDirection,
   TransactionStatus,
   SalesDocStatus,
@@ -24,6 +25,9 @@ import { FilterTransactionsDto } from './dto/filter-transactions.dto';
 import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
+import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
+import type { FinanceAccountFlow, FinanceSummaryByAccount } from '../../../../shared/types/finance';
 
 interface FinanceSettlementContext {
   side: CounterpartySettlementSide | null;
@@ -111,24 +115,98 @@ export class FinanceService {
     }
 
     if (filters.currency) {
-      where.currency = filters.currency;
+      where.OR = [
+        { currency: filters.currency },
+        {
+          direction: TransactionDirection.TRANSFER,
+          transferToAccount: { is: { currency: filters.currency } },
+        },
+      ];
     }
 
     const transactions = await this.prisma.financeTransaction.findMany({
       where,
-      select: { direction: true, amount: true, currency: true },
+      select: {
+        accountId: true,
+        account: { select: { id: true, accountType: true, name: true, currency: true } },
+        transferToId: true,
+        transferToAmount: true,
+        transferToAccount: { select: { id: true, accountType: true, name: true, currency: true } },
+        direction: true,
+        amount: true,
+        currency: true,
+      },
     });
 
     const byCurrency: Record<string, { income: number; expense: number }> = {};
+    const byAccount = new Map<string, FinanceSummaryByAccount>();
+
+    const getAccountSummary = (
+      accountId: string,
+      account: { id: string; accountType: CashAccountType; name: Prisma.JsonValue; currency: string },
+    ) => {
+      let summary = byAccount.get(accountId);
+      if (!summary) {
+        const newSummary: FinanceSummaryByAccount = {
+          accountId,
+          accountType: account.accountType,
+          name: account.name as { uz: string; ru: string },
+          currency: account.currency,
+          totalIncome: 0,
+          totalExpense: 0,
+          transferIn: 0,
+          transferOut: 0,
+          netCashFlow: 0,
+        };
+        byAccount.set(accountId, newSummary);
+        return newSummary;
+      }
+      return summary;
+    };
 
     for (const tx of transactions) {
-      if (tx.direction === TransactionDirection.TRANSFER) continue;
+      if (!tx.accountId || !tx.account) {
+        throw new BadRequestException('Finance transaction is missing its source cash/bank account');
+      }
+      if (tx.account.currency !== tx.currency) {
+        throw new BadRequestException('Finance transaction currency does not match its source cash/bank account');
+      }
+      const transactionAmount = Number(tx.amount);
+      if (!Number.isFinite(transactionAmount) || transactionAmount <= 0) {
+        throw new BadRequestException('Finance transaction amount must be a positive finite value');
+      }
+      const sourceSummary = !filters.currency || tx.account.currency === filters.currency
+        ? getAccountSummary(tx.accountId, tx.account)
+        : undefined;
+      if (tx.direction === TransactionDirection.TRANSFER) {
+        if (sourceSummary) sourceSummary.transferOut += transactionAmount;
+        const targetAccountId = tx.transferToId;
+        if (!targetAccountId) {
+          throw new BadRequestException('Finance transfer is missing its destination cash/bank account');
+        }
+        if (!tx.transferToAccount) {
+          throw new BadRequestException('Finance transfer is missing its destination cash/bank account');
+        }
+        const targetSummary = getAccountSummary(targetAccountId, tx.transferToAccount);
+        const includeTarget = !filters.currency || targetSummary.currency === filters.currency;
+        if (tx.transferToAmount == null || !Number.isFinite(Number(tx.transferToAmount)) || Number(tx.transferToAmount) <= 0) {
+          throw new BadRequestException('Finance transfer destination amount must be a positive finite value');
+        }
+        if (includeTarget) {
+          targetSummary.transferIn += Number(tx.transferToAmount);
+        }
+        continue;
+      }
+
       if (!byCurrency[tx.currency])
         byCurrency[tx.currency] = { income: 0, expense: 0 };
+      const transactionAccountSummary = sourceSummary ?? getAccountSummary(tx.accountId, tx.account);
       if (tx.direction === TransactionDirection.INCOME) {
-        byCurrency[tx.currency].income += Number(tx.amount);
+        byCurrency[tx.currency].income += transactionAmount;
+        transactionAccountSummary.totalIncome += transactionAmount;
       } else {
-        byCurrency[tx.currency].expense += Number(tx.amount);
+        byCurrency[tx.currency].expense += transactionAmount;
+        transactionAccountSummary.totalExpense += transactionAmount;
       }
     }
 
@@ -142,9 +220,37 @@ export class FinanceService {
     );
 
     const accounts = await this.getAccounts(tenantId);
+    const reportingAccounts = filters.currency
+      ? accounts.filter((account) => account.currency === filters.currency)
+      : accounts;
+    const summaryByAccount: FinanceSummaryByAccount[] = reportingAccounts.map((account) => {
+      const totals = byAccount.get(account.id);
+      const totalIncome = totals?.totalIncome ?? 0;
+      const totalExpense = totals?.totalExpense ?? 0;
+      return {
+        accountId: account.id,
+        accountType: account.accountType,
+        name: account.name as { uz: string; ru: string },
+        currency: account.currency,
+        totalIncome,
+        totalExpense,
+        transferIn: totals?.transferIn ?? 0,
+        transferOut: totals?.transferOut ?? 0,
+        netCashFlow: totalIncome + (totals?.transferIn ?? 0) - totalExpense - (totals?.transferOut ?? 0),
+      };
+    });
+    for (const [key, totals] of byAccount) {
+      if (totals.accountId && reportingAccounts.some((account) => account.id === totals.accountId)) continue;
+      if (filters.currency && totals.currency !== filters.currency) continue;
+      summaryByAccount.push({
+        ...totals,
+        netCashFlow: totals.totalIncome + totals.transferIn - totals.totalExpense - totals.transferOut,
+      });
+    }
 
     return {
       summaryByCurrency,
+      summaryByAccount,
       accounts: accounts.map((a) => ({
         id: a.id,
         accountType: a.accountType,
@@ -201,6 +307,25 @@ export class FinanceService {
         transactionDate: { gte: startOfMonth },
       },
       select: {
+        accountId: true,
+        account: {
+          select: {
+            id: true,
+            accountType: true,
+            name: true,
+            currency: true,
+          },
+        },
+        transferToId: true,
+        transferToAmount: true,
+        transferToAccount: {
+          select: {
+            id: true,
+            accountType: true,
+            name: true,
+            currency: true,
+          },
+        },
         direction: true,
         amount: true,
         currency: true,
@@ -210,22 +335,118 @@ export class FinanceService {
 
     const todayTotals = new Map<string, { income: number; expense: number }>();
     const monthTotals = new Map<string, { income: number; expense: number }>();
+    const createAccountFlows = () => new Map<string, FinanceAccountFlow>(
+      accounts.map((account) => [account.id, {
+        accountId: account.id,
+        accountType: account.accountType,
+        name: account.name as { uz: string; ru: string },
+        currency: account.currency,
+        income: 0,
+        expense: 0,
+        transferIn: 0,
+        transferOut: 0,
+        netCashFlow: 0,
+      }]),
+    );
+    const todayAccountTotals = createAccountFlows();
+    const monthAccountTotals = createAccountFlows();
+
+    const accountFlowFor = (
+      totals: Map<string, FinanceAccountFlow>,
+      accountId: string,
+      account: { accountType: CashAccountType; name: Prisma.JsonValue; currency: string },
+    ) => {
+      let flow = totals.get(accountId);
+      if (!flow) {
+        flow = {
+          accountId,
+          accountType: account.accountType,
+          name: account.name as { uz: string; ru: string },
+          currency: account.currency,
+          income: 0,
+          expense: 0,
+          transferIn: 0,
+          transferOut: 0,
+          netCashFlow: 0,
+        };
+        totals.set(accountId, flow);
+      }
+      return flow;
+    };
 
     for (const tx of txs) {
-      if (tx.direction === TransactionDirection.TRANSFER) continue;
-      const amt = Number(tx.amount || 0);
-      const isToday = new Date(tx.transactionDate) >= startOfToday;
-      const month = monthTotals.get(tx.currency) ?? { income: 0, expense: 0 };
-      const today = todayTotals.get(tx.currency) ?? { income: 0, expense: 0 };
-      if (tx.direction === TransactionDirection.INCOME) {
-        month.income += amt;
-        if (isToday) today.income += amt;
-      } else if (tx.direction === TransactionDirection.EXPENSE) {
-        month.expense += amt;
-        if (isToday) today.expense += amt;
+      if (!tx.accountId || !tx.account || tx.account.currency !== tx.currency) {
+        throw new BadRequestException('Finance transaction is missing its source cash/bank account or has a mismatched currency');
       }
-      monthTotals.set(tx.currency, month);
-      if (isToday) todayTotals.set(tx.currency, today);
+      const amt = Number(tx.amount);
+      if (!Number.isFinite(amt) || amt <= 0) {
+        throw new BadRequestException('Finance transaction amount must be a positive finite value');
+      }
+      const isToday = new Date(tx.transactionDate) >= startOfToday;
+      if (tx.direction !== TransactionDirection.TRANSFER) {
+        const month = monthTotals.get(tx.currency) ?? { income: 0, expense: 0 };
+        const today = todayTotals.get(tx.currency) ?? { income: 0, expense: 0 };
+        if (tx.direction === TransactionDirection.INCOME) {
+          month.income += amt;
+          if (isToday) today.income += amt;
+        } else if (tx.direction === TransactionDirection.EXPENSE) {
+          month.expense += amt;
+          if (isToday) today.expense += amt;
+        }
+        monthTotals.set(tx.currency, month);
+        if (isToday) todayTotals.set(tx.currency, today);
+      }
+
+      const monthlySourceFlow = accountFlowFor(monthAccountTotals, tx.accountId, tx.account);
+      const dailySourceFlow = accountFlowFor(todayAccountTotals, tx.accountId, tx.account);
+      const recalculate = (flow: FinanceAccountFlow) => {
+        flow.netCashFlow = flow.income + flow.transferIn - flow.expense - flow.transferOut;
+      };
+
+      if (tx.direction === TransactionDirection.TRANSFER) {
+        monthlySourceFlow.transferOut += amt;
+        recalculate(monthlySourceFlow);
+        if (isToday) {
+          dailySourceFlow.transferOut += amt;
+          recalculate(dailySourceFlow);
+        }
+
+        if (!tx.transferToId || !tx.transferToAccount) {
+          throw new BadRequestException('Finance transfer is missing its destination cash/bank account');
+        }
+        const targetAmount = Number(tx.transferToAmount);
+        if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
+          throw new BadRequestException('Finance transfer destination amount must be a positive finite value');
+        }
+        const monthlyTargetFlow = accountFlowFor(
+          monthAccountTotals,
+          tx.transferToId,
+          tx.transferToAccount,
+        );
+        monthlyTargetFlow.transferIn += targetAmount;
+        recalculate(monthlyTargetFlow);
+
+        if (isToday) {
+          const dailyTargetFlow = accountFlowFor(
+            todayAccountTotals,
+            tx.transferToId,
+            tx.transferToAccount,
+          );
+          dailyTargetFlow.transferIn += targetAmount;
+          recalculate(dailyTargetFlow);
+        }
+        continue;
+      }
+
+      if (tx.direction === TransactionDirection.INCOME) {
+        monthlySourceFlow.income += amt;
+        if (isToday) dailySourceFlow.income += amt;
+      } else {
+        monthlySourceFlow.expense += amt;
+        if (isToday) dailySourceFlow.expense += amt;
+      }
+      recalculate(monthlySourceFlow);
+      if (isToday) recalculate(dailySourceFlow);
     }
 
     const formatFlowTotals = (totals: Map<string, { income: number; expense: number }>) =>
@@ -239,6 +460,13 @@ export class FinanceService {
         }));
     const todayByCurrency = formatFlowTotals(todayTotals);
     const monthByCurrency = formatFlowTotals(monthTotals);
+    const formatAccountFlows = (totals: Map<string, FinanceAccountFlow>) =>
+      Array.from(totals.values()).sort((left, right) => {
+        const order: Record<string, number> = { UZS_CASH: 0, USD_CASH: 1, BANK: 2 };
+        return (order[left.accountType ?? ''] ?? 3) - (order[right.accountType ?? ''] ?? 3)
+          || left.currency.localeCompare(right.currency)
+          || (left.accountId ?? '').localeCompare(right.accountId ?? '');
+      });
     const todayOnly = todayByCurrency.length === 1
       ? todayByCurrency[0]
       : { income: 0, expense: 0, netCashFlow: 0 };
@@ -310,10 +538,12 @@ export class FinanceService {
       today: {
         ...todayOnly,
         byCurrency: todayByCurrency,
+        byAccount: formatAccountFlows(todayAccountTotals),
       },
       month: {
         ...monthOnly,
         byCurrency: monthByCurrency,
+        byAccount: formatAccountFlows(monthAccountTotals),
       },
       debts: {
         receivables: totalCustomerDebt,
@@ -364,16 +594,46 @@ export class FinanceService {
       if (filters.date_to)
         where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
     }
-    if (filters.accountId) where.accountId = filters.accountId;
+    const ledgerFilters: any[] = [];
+    if (filters.accountId) {
+      ledgerFilters.push({
+        OR: [
+          { accountId: filters.accountId },
+          { transferToId: filters.accountId },
+        ],
+      });
+    }
     if (filters.direction) where.direction = filters.direction;
-    if (filters.currency) where.currency = filters.currency;
+    if (filters.currency) {
+      ledgerFilters.push({
+        OR: [
+          { currency: filters.currency },
+          {
+            direction: TransactionDirection.TRANSFER,
+            transferToAccount: { is: { currency: filters.currency } },
+          },
+        ],
+      });
+    }
+    if (ledgerFilters.length) where.AND = ledgerFilters;
     if (filters.counterpartyId) where.counterpartyId = filters.counterpartyId;
     if (filters.transactionTypeId)
       where.transactionTypeId = filters.transactionTypeId;
     if (filters.amountMin || filters.amountMax) {
-      where.amount = {};
-      if (filters.amountMin) where.amount.gte = filters.amountMin;
-      if (filters.amountMax) where.amount.lte = filters.amountMax;
+      const amountFilter: Record<string, number> = {};
+      if (filters.amountMin) amountFilter.gte = filters.amountMin;
+      if (filters.amountMax) amountFilter.lte = filters.amountMax;
+      if (filters.accountId) {
+        ledgerFilters.push({
+          OR: [
+            { direction: { not: TransactionDirection.TRANSFER }, amount: amountFilter },
+            { direction: TransactionDirection.TRANSFER, accountId: filters.accountId, amount: amountFilter },
+            { direction: TransactionDirection.TRANSFER, transferToId: filters.accountId, transferToAmount: amountFilter },
+          ],
+        });
+      } else {
+        where.amount = amountFilter;
+      }
     }
 
     const [total, transactions] = await Promise.all([
@@ -407,11 +667,17 @@ export class FinanceService {
     dto: CreateIncomeDto,
     createdById?: string,
   ) {
+    const exchangeRate = requireExchangeRateForCurrency(dto.currency, dto.exchangeRate);
     const account = await this.prisma.cashAccount.findFirst({
-      where: { id: dto.accountId, tenantId },
+      where: { id: dto.accountId, tenantId, isActive: true },
     });
     if (!account) throw new NotFoundException('Cash account not found');
-    if (account.currency && account.currency !== dto.currency) {
+    if (!isCashAccountCurrencyValid(account)) {
+      throw new BadRequestException(
+        `Kassa turi (${account.accountType}) va valyutasi (${account.currency}) mos emas`,
+      );
+    }
+    if (account.currency !== dto.currency) {
       throw new BadRequestException(
         `Kassa valyutasi (${account.currency}) va kirim valyutasi (${dto.currency}) bir xil bo'lishi shart`,
       );
@@ -432,6 +698,7 @@ export class FinanceService {
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
+          exchangeRate,
           transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
           counterpartyId: dto.counterpartyId,
           settlementSide: settlement?.side ?? null,
@@ -491,11 +758,17 @@ export class FinanceService {
     dto: CreateExpenseDto,
     createdById?: string,
   ) {
+    const exchangeRate = requireExchangeRateForCurrency(dto.currency, dto.exchangeRate);
     const account = await this.prisma.cashAccount.findFirst({
-      where: { id: dto.accountId, tenantId },
+      where: { id: dto.accountId, tenantId, isActive: true },
     });
     if (!account) throw new NotFoundException('Cash account not found');
-    if (account.currency && account.currency !== dto.currency) {
+    if (!isCashAccountCurrencyValid(account)) {
+      throw new BadRequestException(
+        `Kassa turi (${account.accountType}) va valyutasi (${account.currency}) mos emas`,
+      );
+    }
+    if (account.currency !== dto.currency) {
       throw new BadRequestException(
         `Kassa valyutasi (${account.currency}) va chiqim valyutasi (${dto.currency}) bir xil bo'lishi shart`,
       );
@@ -523,6 +796,7 @@ export class FinanceService {
           accountId: dto.accountId,
           amount: dto.amount,
           currency: dto.currency,
+          exchangeRate,
           transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
           counterpartyId: dto.counterpartyId,
           settlementSide: settlement?.side ?? null,
@@ -965,10 +1239,10 @@ export class FinanceService {
 
     const [fromAccount, toAccount] = await Promise.all([
       this.prisma.cashAccount.findFirst({
-        where: { id: dto.fromAccountId, tenantId },
+        where: { id: dto.fromAccountId, tenantId, isActive: true },
       }),
       this.prisma.cashAccount.findFirst({
-        where: { id: dto.toAccountId, tenantId },
+        where: { id: dto.toAccountId, tenantId, isActive: true },
       }),
     ]);
 
@@ -976,8 +1250,16 @@ export class FinanceService {
       throw new NotFoundException('Chiquvchi kassa hisobi topilmadi');
     if (!toAccount)
       throw new NotFoundException('Qabul qiluvchi kassa hisobi topilmadi');
+    if (!isCashAccountCurrencyValid(fromAccount) || !isCashAccountCurrencyValid(toAccount)) {
+      throw new BadRequestException('O‘tkazmadagi har ikkala hisobning turi va valyutasi mos bo‘lishi shart');
+    }
+    if (dto.currency !== fromAccount.currency) {
+      throw new BadRequestException(
+        `O‘tkazma valyutasi (${dto.currency}) manba hisob valyutasiga (${fromAccount.currency}) mos emas`,
+      );
+    }
 
-    const fromAmount = Number(dto.amount);
+    const fromAmount = Math.round(Number(dto.amount) * 100) / 100;
     if (fromAmount <= 0) {
       throw new BadRequestException("Miqdor musbat bo'lishi kerak");
     }
@@ -992,25 +1274,56 @@ export class FinanceService {
     const toCurrency = toAccount.currency;
 
     let toAmount = fromAmount;
+    let transferExchangeRate: number | null = null;
     let autoComment = dto.comment || '';
 
     if (fromCurrency !== toCurrency) {
-      if (dto.targetAmount && dto.targetAmount > 0) {
-        toAmount = Number(dto.targetAmount);
-      } else if (dto.exchangeRate && dto.exchangeRate > 0) {
-        toAmount = fromAmount * Number(dto.exchangeRate);
-      } else {
+      const targetAmount = Number(dto.targetAmount);
+      const rawExchangeRate = Number(dto.exchangeRate);
+      const exchangeRate = Number.isFinite(rawExchangeRate) && rawExchangeRate > 0
+        ? Math.round(rawExchangeRate * 10000) / 10000
+        : rawExchangeRate;
+      const hasTargetAmount = Number.isFinite(targetAmount) && targetAmount > 0;
+      const hasExchangeRate = Number.isFinite(exchangeRate) && exchangeRate > 0;
+      if (!hasTargetAmount && !hasExchangeRate) {
         throw new BadRequestException(
           `Turli valyutadagi hisoblar uchun konvertatsiya kursi yoki yakuniy summa kiritilishi shart (${fromCurrency} -> ${toCurrency})`,
         );
       }
 
-      const calcRate = dto.exchangeRate || toAmount / fromAmount;
-      const conversionNote = `Konvertatsiya: ${fromAmount} ${fromCurrency} -> ${toAmount} ${toCurrency} (Kurs: ${calcRate})`;
+      const rateAmount = hasExchangeRate
+        ? Math.round(
+            (fromCurrency === 'USD' ? fromAmount * exchangeRate : fromAmount / exchangeRate) * 100,
+          ) / 100
+        : undefined;
+      if (hasTargetAmount && rateAmount !== undefined && Math.abs(targetAmount - rateAmount) > 0.01) {
+        throw new BadRequestException('Konvertatsiya kursi va yakuniy summa bir-biriga mos kelmaydi');
+      }
+      toAmount = Math.round((hasTargetAmount ? targetAmount : rateAmount!) * 100) / 100;
+      const usdToUzsRateRaw = fromCurrency === 'USD'
+        ? toAmount / fromAmount
+        : fromAmount / toAmount;
+      const usdToUzsRate = Math.round(usdToUzsRateRaw * 10000) / 10000;
+      transferExchangeRate = hasExchangeRate ? exchangeRate : usdToUzsRate;
+      const amountAtRecordedRate = Math.round(
+        (fromCurrency === 'USD'
+          ? fromAmount * transferExchangeRate
+          : fromAmount / transferExchangeRate) * 100,
+      ) / 100;
+      if (Math.abs(amountAtRecordedRate - toAmount) > 0.01) {
+        throw new BadRequestException('Qabul summasi qayd etilgan valyuta kursiga mos kelmaydi');
+      }
+      const conversionNote = `Konvertatsiya: ${fromAmount} ${fromCurrency} -> ${toAmount} ${toCurrency} (1 USD = ${usdToUzsRate} UZS)`;
       autoComment = autoComment
         ? `${autoComment} | ${conversionNote}`
         : conversionNote;
+    } else if (dto.targetAmount !== undefined && Number(dto.targetAmount) !== fromAmount) {
+      throw new BadRequestException('Bir xil valyutadagi o‘tkazmada manba va qabul summasi teng bo‘lishi shart');
     }
+    const transactionExchangeRate = requireExchangeRateForCurrency(
+      fromCurrency,
+      fromCurrency === 'USD' ? transferExchangeRate ?? dto.exchangeRate : undefined,
+    );
 
     const tx = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.financeTransaction.create({
@@ -1022,7 +1335,9 @@ export class FinanceService {
           transferToId: dto.toAccountId,
           amount: fromAmount,
           transferToAmount: toAmount,
+          transferExchangeRate,
           currency: fromCurrency,
+          exchangeRate: transactionExchangeRate,
           transactionDate: dto.transactionDate
             ? new Date(dto.transactionDate)
             : new Date(),

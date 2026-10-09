@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
 import {
   Printer,
   CheckCircle2,
@@ -58,6 +59,9 @@ export function ServiceActDetailsModal({
   const [paymentComment, setPaymentComment] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const matchingPaymentAccounts = accounts.filter(
+    (account) => account.currency === act?.currency && isCashAccountCurrencyValid(account),
+  );
 
   if (!act) return null;
 
@@ -237,9 +241,10 @@ export function ServiceActDetailsModal({
       });
       if (res && Array.isArray(res)) {
         setAccounts(res);
-        if (res.length > 0) {
-          setSelectedAccountId(res[0].id);
-        }
+        const matchingAccounts = res.filter(
+          (account) => account.currency === act.currency && isCashAccountCurrencyValid(account),
+        );
+        setSelectedAccountId(matchingAccounts[0]?.id || '');
       }
     } catch {
       // ignore
@@ -251,6 +256,14 @@ export function ServiceActDetailsModal({
     e.preventDefault();
     if (!selectedAccountId) {
       setPaymentError(isRu ? 'Выберите кассу/счет' : 'Iltimos, kassani tanlang');
+      return;
+    }
+    if (!act.currency) {
+      setPaymentError(isRu ? 'В документе не указана валюта' : 'Hujjat valyutasi ko‘rsatilmagan');
+      return;
+    }
+    if (act.currency === 'USD' && (!Number.isFinite(Number(act.exchangeRate)) || Number(act.exchangeRate) <= 0)) {
+      setPaymentError(isRu ? 'В акте не указан курс 1 USD к UZS' : 'Aktda 1 USD uchun UZS kursi ko‘rsatilmagan');
       return;
     }
     if (paymentAmount <= 0) {
@@ -272,7 +285,8 @@ export function ServiceActDetailsModal({
           accountId: selectedAccountId,
           counterpartyId: act.counterpartyId,
           amount: paymentAmount,
-          currency: act.currency || 'UZS',
+          currency: act.currency,
+          ...(act.currency === 'USD' ? { exchangeRate: Number(act.exchangeRate) } : {}),
           sourceDocType: 'ServiceAct',
           sourceDocId: act.id,
           comment: paymentComment,
@@ -676,14 +690,21 @@ export function ServiceActDetailsModal({
               {isRu ? 'Касса / Банковский счет *' : 'Kassa / Bank hisobi *'}
             </label>
             <Select
-              options={accounts.map((a) => ({
-                value: a.id,
-                label: `${typeof a.name === 'object' ? a.name[locale] || a.name.uz : a.name} (${formatCurrency(Number(a.balance), locale, a.currency)})`,
-              }))}
+               options={matchingPaymentAccounts.map((a) => ({
+                 value: a.id,
+                 label: `${typeof a.name === 'object' ? a.name[locale] || a.name.uz : a.name} (${a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
+               }))}
               value={selectedAccountId}
               onChange={(val) => setSelectedAccountId(val)}
             />
           </div>
+
+          {act.currency === 'USD' && (
+            <div className="text-xs text-gray-600">
+              {isRu ? 'Учётный курс: 1 USD = ' : 'Hisob kursi: 1 USD = '}
+              {Number(act.exchangeRate)} UZS
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">

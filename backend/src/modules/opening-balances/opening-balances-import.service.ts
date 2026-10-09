@@ -3,6 +3,7 @@ import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OpeningBalanceCategory } from '@prisma/client';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
 export interface ImportErrorItem {
   sheetName: string;
   rowNumber: number;
@@ -287,14 +288,17 @@ export class OpeningBalancesImportService {
         }
 
         // Match account by name or currency
-        const nameMatchedAccount = accounts.find((a) => {
+        const compatibleAccounts = accounts.filter((account) =>
+          isCashAccountCurrencyValid(account) && account.currency === currency,
+        );
+        const nameMatchedAccount = compatibleAccounts.find((a) => {
           const nameObj = typeof a.name === 'object' && a.name !== null ? a.name as any : {};
           return (
             nameObj.uz?.toLowerCase() === accountName.toLowerCase() ||
             nameObj.ru?.toLowerCase() === accountName.toLowerCase()
           );
         });
-        const sameCurrencyAccounts = accounts.filter((account) => account.currency === currency);
+        const sameCurrencyAccounts = compatibleAccounts;
         const matchedAccount = nameMatchedAccount ?? (sameCurrencyAccounts.length === 1 ? sameCurrencyAccounts[0] : undefined);
 
         if (!matchedAccount) {

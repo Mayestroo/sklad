@@ -1443,7 +1443,7 @@ model Payment {
   counterpartyId String        @map("counterparty_id")
   invoiceId      String?       @map("invoice_id")
   orderId        String?       @map("order_id")
-  cashAccountId  String?       @map("cash_account_id")
+  cashAccountId  String        @map("cash_account_id")
   paymentNumber  String        @map("payment_number")
   method         PaymentMethod @default(BANK_TRANSFER)
   amount         Decimal       @db.Decimal(15, 2)
@@ -1455,7 +1455,7 @@ model Payment {
   counterparty Counterparty  @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
   invoice      SalesInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   salesOrder   SalesOrder?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  cashAccount  CashAccount?  @relation(fields: [cashAccountId], references: [id], onDelete: SetNull)
+  cashAccount  CashAccount   @relation(fields: [cashAccountId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId])
@@ -1528,7 +1528,8 @@ model CashAccount {
   tenantId    String          @map("tenant_id")
   accountType CashAccountType @map("account_type")
   name        Json            // { "uz": "...", "ru": "..." }
-  currency    String          @default("UZS") // "UZS" or "USD"
+  /// Every cash account is denominated in one currency. UZS_CASH is UZS, USD_CASH is USD, and BANK has one configured currency.
+  currency    String          @default("UZS")
   balance     Decimal         @default(0) @db.Decimal(15, 2)
   isActive    Boolean         @default(true) @map("is_active")
   createdAt   DateTime        @default(now()) @map("created_at")
@@ -1568,7 +1569,7 @@ model FinanceTransaction {
   /// For INCOME: the account that received the money
   /// For EXPENSE: the account that money left from
   /// For TRANSFER: the source account
-  accountId         String?             @map("account_id")
+  accountId         String              @map("account_id")
   /// For TRANSFER only: the destination account
   transferToId      String?             @map("transfer_to_id")
   counterpartyId    String?             @map("counterparty_id")
@@ -1577,7 +1578,10 @@ model FinanceTransaction {
   amount            Decimal             @db.Decimal(15, 2)
   /// For TRANSFER only: exact amount credited to the destination account.
   transferToAmount  Decimal?            @db.Decimal(15, 2) @map("transfer_to_amount")
+  /// For cross-currency TRANSFER only: UZS per USD quote used to calculate transferToAmount.
+  transferExchangeRate Decimal?         @db.Decimal(15, 6) @map("transfer_exchange_rate")
   currency          String              @default("UZS")
+  exchangeRate      Decimal             @db.Decimal(15, 4) @map("exchange_rate")
   transactionDate   DateTime            @default(now()) @map("transaction_date")
   comment           String?
   docNumber         String?             @map("doc_number")
@@ -1594,7 +1598,7 @@ model FinanceTransaction {
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
   company           Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  account           CashAccount?     @relation("TxAccount", fields: [accountId], references: [id], onDelete: SetNull)
+  account           CashAccount      @relation("TxAccount", fields: [accountId], references: [id], onDelete: Restrict)
   transferToAccount CashAccount?     @relation("TxTransferTo", fields: [transferToId], references: [id], onDelete: SetNull)
   counterparty      Counterparty?    @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
   transactionType   TransactionType? @relation(fields: [transactionTypeId], references: [id], onDelete: SetNull)

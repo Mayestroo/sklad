@@ -4,9 +4,14 @@ import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreatePaymentDto } from '../dto';
 import { SalesOrdersService } from '../orders/sales-orders.service';
-import { CashAccountType, CounterpartySettlementSide, SettlementAllocationTarget } from '@prisma/client';
+import { CounterpartySettlementSide, SettlementAllocationTarget } from '@prisma/client';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
+import {
+  isCashAccountCompatibleWithSalesPayment,
+  requiredAccountTypeForSalesPayment,
+} from '../../../../../shared/types/cash-account-policy';
+import { requireExchangeRateForCurrency } from '../../../common/utils/transaction-exchange-rate';
 
 @Injectable()
 export class PaymentsService {
@@ -31,8 +36,8 @@ export class PaymentsService {
     if (!counterparty) {
       throw new NotFoundException('Mijoz topilmadi');
     }
-    if (dto.invoiceId && dto.orderId) {
-      throw new BadRequestException("To'lov faqat bitta hujjatga: invoice yoki buyurtmaga biriktirilishi mumkin");
+    if (Boolean(dto.invoiceId) === Boolean(dto.orderId)) {
+      throw new BadRequestException("To'lov aynan bitta hujjatga: invoice yoki buyurtmaga biriktirilishi kerak");
     }
 
     if (dto.invoiceId) {
@@ -58,28 +63,33 @@ export class PaymentsService {
       }
     }
 
+    const exchangeRate = requireExchangeRateForCurrency(
+      dto.currency,
+      dto.exchangeRate,
+    );
+
     const paymentNumber = await this.generatePaymentNumber(tenantId);
 
     // Resolve target CashAccount (Dollar kassa, Naqd kassa, Hisobraqam)
-    let cashAccountId = dto.cashAccountId;
-    if (!cashAccountId) {
-      let targetType: CashAccountType = CashAccountType.BANK;
-      if (dto.method === 'CASH') {
-        targetType = dto.currency === 'USD' ? CashAccountType.USD_CASH : CashAccountType.UZS_CASH;
-      }
-      const defaultAccount = await this.prisma.cashAccount.findFirst({
-        where: { tenantId, accountType: targetType, currency: dto.currency },
-      });
-      if (defaultAccount) {
-        cashAccountId = defaultAccount.id;
-      }
-    }
-    if (!cashAccountId) {
-      throw new BadRequestException("To'lov uchun mos valyutadagi kassa yoki bank hisobini tanlang");
-    }
-    const cashAccount = await this.prisma.cashAccount.findFirst({ where: { id: cashAccountId, tenantId } });
-    if (!cashAccount || cashAccount.currency !== dto.currency) {
-      throw new BadRequestException("Kassa hisobi topilmadi yoki to'lov valyutasiga mos emas");
+    const cashAccountId = dto.cashAccountId;
+    const cashAccount = await this.prisma.cashAccount.findFirst({
+      where: { id: cashAccountId, tenantId, isActive: true },
+    });
+    if (
+      !cashAccount ||
+      !isCashAccountCompatibleWithSalesPayment(
+        cashAccount,
+        dto.method,
+        dto.currency,
+      )
+    ) {
+      const requiredType = requiredAccountTypeForSalesPayment(
+        dto.method,
+        dto.currency,
+      );
+      throw new BadRequestException(
+        `To‘lov usuli (${dto.method}) uchun ${dto.currency} valyutasidagi ${requiredType} hisobini tanlang`,
+      );
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -90,7 +100,7 @@ export class PaymentsService {
           counterpartyId: dto.counterpartyId,
           invoiceId: dto.invoiceId || null,
           orderId: dto.orderId || null,
-          cashAccountId: cashAccountId || null,
+          cashAccountId,
           paymentNumber,
           method: dto.method,
           amount: dto.amount,
@@ -119,6 +129,7 @@ export class PaymentsService {
           settlementSide: CounterpartySettlementSide.CUSTOMER,
           amount: dto.amount,
           currency: dto.currency,
+          exchangeRate,
           comment: dto.comment || `To'lov ${paymentNumber} qabul qilindi`,
           docNumber: paymentNumber,
           sourceDocType: 'PAYMENT',
@@ -189,7 +200,11 @@ export class PaymentsService {
 
     // 6. Module 4 Integration: Auto-post Payment NAS double-entry journal (Dt 5110/5010 / Kt 4010)
     try {
-      await this.journalService.autoPostPayment(tenantId, result);
+      await this.journalService.autoPostPayment(tenantId, {
+        ...result,
+        currency: dto.currency,
+        exchangeRate,
+      });
     } catch (err) {
       console.error('Failed to auto-post journal entry for payment:', err);
     }

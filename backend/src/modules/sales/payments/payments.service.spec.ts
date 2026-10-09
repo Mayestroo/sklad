@@ -33,11 +33,11 @@ describe('PaymentsService settlement ledger integration', () => {
         findFirst: jest.fn()
           .mockResolvedValueOnce({
             id: 'invoice-1', tenantId: 'tenant-1', counterpartyId: 'cp-1',
-            currency: 'USD', status: 'POSTED', paidAmount: 0, totalAmount: 300,
+            currency: 'USD', exchangeRate: 12800, status: 'POSTED', paidAmount: 0, totalAmount: 300,
           })
           .mockResolvedValueOnce({
             id: 'invoice-1', tenantId: 'tenant-1', counterpartyId: 'cp-1',
-            currency: 'USD', status: 'POSTED', paidAmount: 0, totalAmount: 300,
+            currency: 'USD', exchangeRate: 12800, status: 'POSTED', paidAmount: 0, totalAmount: 300,
           }),
         update: jest.fn(),
       },
@@ -85,10 +85,14 @@ describe('PaymentsService settlement ledger integration', () => {
       method: 'CASH',
       amount: 100,
       currency: 'USD',
+      exchangeRate: 12800,
       cashAccountId: 'cash-usd',
     }, 'user-1');
 
     expect(prisma.counterparty.update).not.toHaveBeenCalled();
+    expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ exchangeRate: 12800 }),
+    }));
     expect(settlementService.recordMovement).toHaveBeenCalledWith(prisma, expect.objectContaining({
       tenantId: 'tenant-1',
       counterpartyId: 'cp-1',
@@ -119,4 +123,53 @@ describe('PaymentsService settlement ledger integration', () => {
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it('requires a sales payment to be linked to exactly one invoice or order', async () => {
+    await expect(service.registerPayment('tenant-1', {
+      counterpartyId: 'cp-1',
+      method: 'CASH',
+      amount: 100,
+      currency: 'UZS',
+    }, 'user-1')).rejects.toThrow(BadRequestException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['cash', 'CASH', CashAccountType.BANK],
+    ['bank', 'BANK_TRANSFER', CashAccountType.UZS_CASH],
+  ] as const)(
+    'does not route a %s payment through the wrong account type',
+    async (_label, method, accountType) => {
+      prisma.salesInvoice.findFirst.mockReset().mockResolvedValue({
+        id: 'invoice-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cp-1',
+        currency: 'UZS',
+        exchangeRate: 1,
+        status: 'POSTED',
+        paidAmount: 0,
+        totalAmount: 300,
+      });
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'wrong-account',
+        tenantId: 'tenant-1',
+        accountType,
+        currency: 'UZS',
+        balance: 500,
+        isActive: true,
+      });
+
+      await expect(service.registerPayment('tenant-1', {
+        counterpartyId: 'cp-1',
+        invoiceId: 'invoice-1',
+        method,
+        amount: 100,
+        currency: 'UZS',
+        cashAccountId: 'wrong-account',
+      }, 'user-1')).rejects.toThrow(BadRequestException);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
 });

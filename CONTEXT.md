@@ -218,6 +218,17 @@ _Avoid_: Raw debt balance, unsigned debt, mixed ledger total
 **Receivables & Payables Summary**:
 The real-time tenant-level financial aggregation of counterparty settlement states, reporting total customer and supplier counts alongside segregated aggregate figures for receivables (`debtBalance > 0`) and payables (`debtBalance < 0`).
 _Avoid_: Debt pile, lumped liability, generic debtor sum
+
+### Finance & Treasury
+
+**Cash Account (Kassa / Hisob)**:
+A distinct place where company money is held: the UZS cash till, USD cash till, or a bank account. Each account has one configured currency, and every receipt, payment, opening balance, and transfer is attributed to the account that actually received or paid the money.
+_Avoid_: Pooled cash, interchangeable till, generic cash total
+
+**Inter-Account Transfer**:
+A movement that decreases one cash account and increases another. If the accounts use different currencies, the record must preserve the source amount, destination amount, and conversion rate; the two amounts remain in their own account currencies.
+_Avoid_: Currency-mixed transfer, unpriced exchange, combined balance
+
 ### Services & Accruals
 
 **Service Act (Xizmatlar dalolatnomasi / akti)**:
@@ -256,6 +267,10 @@ _Avoid_: Currency guessing, unitary exchange fallback, implicit UZS assumption
 Summary KPI cards (in Purchases, Sales, Finance, etc.) must never artificially collapse, sum across distinct currencies without conversion, or silently force foreign currency amounts to UZS. Each currency with active transactions in the reporting period (e.g. UZS, USD, EUR) must be computed and displayed distinctly in its own native currency unit.
 _Avoid_: Cross-currency flat summing, hardcoded UZS summary assumption, single-currency card flattening
 
+**Cash Account Isolation Invariant**:
+The UZS cash till, USD cash till, and bank account are separate balances. `UZS_CASH` only holds UZS and `USD_CASH` only holds USD; a bank account holds only its configured currency. A receipt or payment changes only its selected account, and cash/bank activity remains reportable per account even when two accounts share the same currency. Different currencies are never added together without an explicitly recorded conversion.
+_Avoid_: Shared till balance, currency substitution, cash/bank roll-up without account detail
+
 **Line Item Quantity & Price Invariant**:
 The rule requiring all document items (sales invoices, purchase receipts, service acts, production orders) to carry explicitly verified `quantity > 0` and `unitPrice >= 0`. Missing or invalid numbers must not default to 1 or 0.
 _Avoid_: Zero-price masking, phantom unit quantity, missing price substitution
@@ -284,4 +299,3 @@ import { CURRENCY_OPTIONS } from '@/lib/utils';
 // ...
 <Select options={CURRENCY_OPTIONS} />
 ```
-

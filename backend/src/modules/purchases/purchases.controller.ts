@@ -104,6 +104,7 @@ export class PurchasesController {
     dto: {
       amount: number;
       cashAccountId: string;
+      exchangeRate?: number;
       note?: string;
       paymentDate?: string;
     },

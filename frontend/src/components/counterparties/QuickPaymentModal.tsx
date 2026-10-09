@@ -11,11 +11,12 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
 
 interface CashAccount {
   id: string;
-  name: string;
-  type: string;
+  name: { uz: string; ru: string } | string;
+  accountType: 'UZS_CASH' | 'USD_CASH' | 'BANK';
   currency: string;
   balance: number;
 }
@@ -63,6 +64,7 @@ export function QuickPaymentModal({
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [settlementSide, setSettlementSide] = useState<'CUSTOMER' | 'SUPPLIER' | ''>(initialSide ?? '');
   const [currency, setCurrency] = useState(initialCurrency ?? '');
+  const [exchangeRate, setExchangeRate] = useState('');
   const [amount, setAmount] = useState(initialSideBalance === 0 ? '' : String(Math.abs(initialSideBalance)));
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -78,7 +80,9 @@ export function QuickPaymentModal({
   const isIncome = settlementSide === 'SUPPLIER'
     ? selectedBalance < 0
     : selectedBalance >= 0;
-  const matchingAccounts = accounts.filter((account) => account.currency === currency);
+  const matchingAccounts = accounts.filter(
+    (account) => account.currency === currency && isCashAccountCurrencyValid(account),
+  );
   const selectedAccount = matchingAccounts.find((account) => account.id === selectedAccountId)
     ?? matchingAccounts[0];
 
@@ -131,6 +135,7 @@ export function QuickPaymentModal({
   const handleCurrencyChange = (value: string) => {
     setCurrency(value);
     setSelectedAccountId('');
+    setExchangeRate('');
     updateSuggestedPayment(settlementSide, value);
   };
 
@@ -155,6 +160,11 @@ export function QuickPaymentModal({
       return;
     }
 
+    if (currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+      toast.error(isRu ? 'Укажите курс UZS за 1 USD' : '1 USD uchun UZS kursini kiriting');
+      return;
+    }
+
     if (!selectedAccount?.id) {
       toast.error(isRu ? 'Выберите кассу или счет' : 'Kassa yoki hisob raqamni tanlang');
       return;
@@ -171,6 +181,7 @@ export function QuickPaymentModal({
           accountId: selectedAccount.id,
           amount: numAmount,
           currency,
+          ...(currency === 'USD' ? { exchangeRate: Number(exchangeRate) } : {}),
           counterpartyId: counterparty.id,
           settlementSide,
           comment: comment.trim() || undefined,
@@ -315,7 +326,7 @@ export function QuickPaymentModal({
             disabled={!accountsLoaded || !currency || matchingAccounts.length === 0}
             options={matchingAccounts.map((acc) => ({
               value: acc.id,
-              label: `${acc.name} (${acc.currency}) — ${formatCurrency(acc.balance, locale, acc.currency)}`,
+              label: `${typeof acc.name === 'object' ? acc.name[locale] || acc.name.uz : acc.name} (${acc.accountType}) — ${formatCurrency(acc.balance, locale, acc.currency)}`,
             }))}
           />
           {currency && accountsLoaded && matchingAccounts.length === 0 && (
@@ -333,6 +344,17 @@ export function QuickPaymentModal({
             </div>
           )}
         </div>
+
+        {currency === 'USD' && (
+          <Input
+            label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
+            type="number"
+            value={exchangeRate}
+            onChange={(e) => setExchangeRate(e.target.value)}
+            placeholder="12800"
+            required
+          />
+        )}
 
         {/* Comment Input */}
         <div>

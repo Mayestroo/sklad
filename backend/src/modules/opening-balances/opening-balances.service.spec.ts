@@ -10,6 +10,7 @@ import {
   CounterpartySettlementSide,
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 
 describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
   let service: OpeningBalancesService;
@@ -78,6 +79,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         OpeningBalancesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
+        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
       ],
     }).compile();
 
@@ -287,7 +289,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       expect(prisma.journalLine.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            debitAccountId: 'account-5010',
+            debitAccountId: 'account-5020',
             amount: 125000,
           }),
         }),

@@ -28,6 +28,15 @@ import { generateDocumentSequence } from '../../common/utils/document-sequence.u
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
+import {
+  isCashAccountCurrencyValid,
+  ledgerAccountCodeForCashAccount,
+} from '../../../../shared/types/cash-account-policy';
+import {
+  convertAmountToUzs,
+  requireExchangeRateForCurrency,
+} from '../../common/utils/transaction-exchange-rate';
 
 @Injectable()
 export class PurchasesService {
@@ -35,6 +44,7 @@ export class PurchasesService {
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly settlementAllocationService: SettlementAllocationService,
+    private readonly accountsService: AccountsService,
   ) {}
 
   // ─── RECEIPT NUMBER GENERATOR ─────────────────────────────────
@@ -504,7 +514,10 @@ export class PurchasesService {
           });
         }
 
-        const rate = Number(receipt.exchangeRate) || 1;
+        const rate = requireExchangeRateForCurrency(
+          receipt.currency,
+          receipt.exchangeRate == null ? undefined : Number(receipt.exchangeRate),
+        );
         const purchasePriceInBase = Math.round((Number(item.unitPrice) * rate) * 100) / 100;
         const landedCostInBase = Math.round((Number(item.landedCost) * rate) * 100) / 100;
 
@@ -586,7 +599,10 @@ export class PurchasesService {
         let rawMaterialSum = 0;
         let serviceSum = 0;
 
-        const rate = Number(receipt.exchangeRate) || 1;
+        const rate = requireExchangeRateForCurrency(
+          receipt.currency,
+          receipt.exchangeRate == null ? undefined : Number(receipt.exchangeRate),
+        );
         const totalNet =
           Math.round((Number(receipt.subtotalAmount || 0) -
             Number(receipt.discountAmount || 0) +
@@ -852,6 +868,7 @@ export class PurchasesService {
     dto: {
       amount: number;
       cashAccountId: string;
+      exchangeRate?: number;
       note?: string;
       paymentDate?: string;
     },
@@ -883,9 +900,9 @@ export class PurchasesService {
       throw new NotFoundException('Kassa hisobi topilmadi');
     }
 
-    if (cashAccount.currency !== receipt.currency) {
+    if (!isCashAccountCurrencyValid(cashAccount) || cashAccount.currency !== receipt.currency) {
       throw new BadRequestException(
-        `Kassa valyutasi (${cashAccount.currency}) hujjat valyutasiga (${receipt.currency}) mos kelmaydi. To'lov faqat ${receipt.currency} kassasidan amalga oshirilishi mumkin.`,
+        `Tanlangan kassa turi/valyutasi xarid hujjatiga (${receipt.currency}) mos kelmaydi.`,
       );
     }
 
@@ -898,12 +915,24 @@ export class PurchasesService {
     const paymentDate = dto.paymentDate
       ? new Date(dto.paymentDate)
       : new Date();
+    const exchangeRate = requireExchangeRateForCurrency(
+      receipt.currency,
+      dto.exchangeRate,
+    );
+    const receiptExchangeRate = requireExchangeRateForCurrency(
+      receipt.currency,
+      receipt.currency === 'UZS' ? undefined : Number(receipt.exchangeRate),
+    );
     const remaining = Number(receipt.totalAmount) - Number(receipt.paidAmount);
     const payAmount = Math.min(dto.amount, remaining);
 
     if (payAmount <= 0) {
       throw new BadRequestException("To'lov summasi noto'g'ri");
     }
+    const paymentAmountInUzs = convertAmountToUzs(payAmount, receipt.currency, exchangeRate);
+    const payableReductionInUzs = convertAmountToUzs(payAmount, receipt.currency, receiptExchangeRate);
+
+    await this.accountsService.ensureDefaultAccounts(tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       const newPaidAmount = Number(receipt.paidAmount) + payAmount;
@@ -931,6 +960,7 @@ export class PurchasesService {
           direction: TransactionDirection.EXPENSE,
           amount: payAmount,
           currency: cashAccount.currency,
+          exchangeRate,
           transactionDate: paymentDate,
           settlementSide: CounterpartySettlementSide.SUPPLIER,
           comment:
@@ -976,17 +1006,50 @@ export class PurchasesService {
         include: { counterparty: true, warehouse: true },
       });
 
-      // 5. Accounting Journal: Debit 6010 (Yetkazib beruvchiga qarz) / Credit 5010 (Kassa)
+      // 5. Credit the chart account corresponding to this exact cash/bank account.
       const supplierAcc = await tx.account.findFirst({
         where: { tenantId, code: '6010' },
       });
+      const cashLedgerAccountCode = ledgerAccountCodeForCashAccount(cashAccount);
       const cashAcc = await tx.account.findFirst({
-        where: { tenantId, code: '5010' },
+        where: { tenantId, code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__' },
       });
 
       if (supplierAcc && cashAcc) {
         const jeCount = await tx.journalEntry.count({ where: { tenantId } });
         const jeNumber = `JE-${new Date().getFullYear()}-${(jeCount + 1).toString().padStart(5, '0')}`;
+        const exchangeDifference = Math.round((paymentAmountInUzs - payableReductionInUzs) * 100) / 100;
+        const journalLines: Array<{
+          debitAccountId: string;
+          creditAccountId: string;
+          amount: number;
+          description: string;
+        }> = [{
+          debitAccountId: supplierAcc.id,
+          creditAccountId: cashAcc.id,
+          amount: Math.min(paymentAmountInUzs, payableReductionInUzs),
+          description: `Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (${payAmount} ${receipt.currency})`,
+        }];
+
+        if (exchangeDifference > 0) {
+          const exchangeLossAcc = await tx.account.findFirst({ where: { tenantId, code: '9620' } });
+          if (!exchangeLossAcc) throw new BadRequestException('Valyuta kursi zarar hisobi (9620) topilmadi');
+          journalLines.push({
+            debitAccountId: exchangeLossAcc.id,
+            creditAccountId: cashAcc.id,
+            amount: exchangeDifference,
+            description: `Xarid to‘lovi bo‘yicha valyuta kursi zarari (${payAmount} ${receipt.currency})`,
+          });
+        } else if (exchangeDifference < 0) {
+          const exchangeGainAcc = await tx.account.findFirst({ where: { tenantId, code: '9540' } });
+          if (!exchangeGainAcc) throw new BadRequestException('Valyuta kursi daromad hisobi (9540) topilmadi');
+          journalLines.push({
+            debitAccountId: supplierAcc.id,
+            creditAccountId: exchangeGainAcc.id,
+            amount: Math.abs(exchangeDifference),
+            description: `Xarid to‘lovi bo‘yicha valyuta kursi daromadi (${payAmount} ${receipt.currency})`,
+          });
+        }
 
         await tx.journalEntry.create({
           data: {
@@ -996,17 +1059,7 @@ export class PurchasesService {
             description: `To'lov: ${receipt.docNumber} — ${receipt.counterparty.name}`,
             sourceDocType: 'PurchasePayment',
             sourceDocId: receipt.id,
-            lines: {
-              create: [
-                {
-                  debitAccountId: supplierAcc.id,
-                  creditAccountId: cashAcc.id,
-                  amount: payAmount,
-                  description:
-                    'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim',
-                },
-              ],
-            },
+            lines: { create: journalLines },
           },
         });
       }

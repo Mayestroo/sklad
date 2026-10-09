@@ -9,7 +9,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { formatCurrency } from '@/lib/utils';
-import { SalesInvoice, CashAccount } from '@shared/types';
+import {
+  SalesInvoice,
+  CashAccount,
+} from '@shared/types';
+import {
+  isCashAccountCompatibleWithSalesPayment,
+  isCashAccountCurrencyValid,
+} from '@/lib/cash-account-policy';
 import { CreditCard, AlertCircle } from 'lucide-react';
 
 type CashAccountListResponse = CashAccount[] | { data?: CashAccount[] };
@@ -39,6 +46,7 @@ export function PaySalesInvoiceModal({
   const [cashAccountId, setCashAccountId] = useState<string>('');
   const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
   const [method, setMethod] = useState<'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME'>('CASH');
+  const [exchangeRate, setExchangeRate] = useState('');
   const [amountOverride, setAmountOverride] = useState<AmountOverride | null>(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,6 +67,7 @@ export function PaySalesInvoiceModal({
   const handleClose = () => {
     setAmountOverride(null);
     setCashAccountId('');
+    setExchangeRate('');
     setNote('');
     setError('');
     onClose();
@@ -75,10 +84,10 @@ export function PaySalesInvoiceModal({
     })
       .then((res) => {
         const list = Array.isArray(res) ? res : res.data || [];
-        const compatibleAccounts = list.filter((account) => account.currency === invoiceCurrency);
+        const compatibleAccounts = list.filter(isCashAccountCurrencyValid);
         if (!isActive) return;
         setCashAccounts(compatibleAccounts);
-        setCashAccountId(compatibleAccounts[0]?.id || '');
+        setCashAccountId('');
       })
       .catch((err) => console.error('Failed to load cash accounts:', err));
     return () => {
@@ -88,10 +97,15 @@ export function PaySalesInvoiceModal({
 
   if (!invoice) return null;
 
-  const cashAccountOptions: SelectOption[] = cashAccounts.map((ca) => ({
+  const cashAccountOptions: SelectOption[] = cashAccounts
+    .filter((account) => isCashAccountCompatibleWithSalesPayment(account, method, invoice.currency))
+    .map((ca) => ({
     value: ca.id,
-    label: `${ca.name[locale] || ca.name.uz || ca.name.ru} (${formatCurrency(Number(ca.balance), locale, ca.currency)})`,
-  }));
+      label: `${ca.name[locale] || ca.name.uz || ca.name.ru} (${formatCurrency(Number(ca.balance), locale, ca.currency)})`,
+    }));
+  const selectedCashAccountId = cashAccountOptions.some((account) => account.value === cashAccountId)
+    ? cashAccountId
+    : cashAccountOptions[0]?.value || '';
 
   const methodOptions: SelectOption[] = [
     { value: 'CASH', label: isRu ? 'Наличные (Касса)' : 'Naqd pul (Kassa)' },
@@ -107,8 +121,12 @@ export function PaySalesInvoiceModal({
       setError(isRu ? 'Укажите сумму оплаты' : 'To‘lov summasini kiriting');
       return;
     }
-    if (!cashAccountId) {
+    if (!selectedCashAccountId) {
       setError(isRu ? 'Выберите счет в валюте накладной' : 'Faktura valyutasidagi hisobni tanlang');
+      return;
+    }
+    if (invoice.currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+      setError(isRu ? 'Укажите курс оплаты: UZS за 1 USD' : 'To‘lov kursini kiriting: 1 USD uchun UZS');
       return;
     }
 
@@ -125,7 +143,8 @@ export function PaySalesInvoiceModal({
           counterpartyId: invoice.counterpartyId,
           invoiceId: invoice.id,
           currency: invoice.currency,
-          cashAccountId,
+          ...(invoice.currency === 'USD' ? { exchangeRate: Number(exchangeRate) } : {}),
+          cashAccountId: selectedCashAccountId,
           method,
           amount: Number(amount),
           comment: note.trim() || undefined,
@@ -206,20 +225,40 @@ export function PaySalesInvoiceModal({
         {/* Cash Desk Selector (1C Kassa) */}
         <div>
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-            {isRu ? 'Касса / Счет зачисления' : 'Kassa / Hisob (Kirim joyi)'}
+            {method === 'CASH'
+              ? isRu ? 'Касса зачисления' : 'Kirim kassasi'
+              : isRu ? 'Банковский счёт зачисления' : 'Kirim bank hisobi'}
           </label>
           <Select
             options={cashAccountOptions}
-            value={cashAccountId}
+            value={selectedCashAccountId}
             onChange={(val) => setCashAccountId(val)}
             placeholder={isRu ? 'Выберите кассу' : 'Kassani tanlang'}
           />
           {cashAccountOptions.length === 0 && (
             <div style={{ marginTop: 4, color: 'var(--color-error-600)', fontSize: 'var(--text-xs)' }}>
-              {isRu ? 'Нет кассы или счета в валюте накладной' : 'Faktura valyutasida kassa yoki hisob topilmadi'}
+              {isRu
+                ? 'Нет подходящей кассы или банковского счёта в валюте накладной'
+                : 'Faktura valyutasida mos kassa yoki bank hisobi topilmadi'}
             </div>
           )}
         </div>
+
+        {invoice.currency === 'USD' && (
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              {isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
+            </label>
+            <Input
+              type="number"
+              min="0.0001"
+              value={exchangeRate}
+              onChange={(event) => setExchangeRate(event.target.value)}
+              placeholder="12800"
+              required
+            />
+          </div>
+        )}
 
         {/* Payment Method */}
         <div>

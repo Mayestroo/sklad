@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { apiFetch } from '@/lib/api';
-import { formatDate, CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -20,25 +20,23 @@ import type {
   FinanceTransaction,
   TransactionJournal,
   FinanceDashboardMetrics,
+  FinanceAccountFlow,
   TransactionType,
 } from '@shared/types';
+import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
 import {
   Plus,
   Minus,
   ArrowLeftRight,
   Wallet,
-  Calendar,
   AlertCircle,
   CheckCircle2,
   Edit2,
   XCircle,
   TrendingUp,
-  TrendingDown,
   Building,
   DollarSign,
   Users,
-  FileText,
-  Filter,
   RefreshCw,
   Clock,
   ArrowUpRight,
@@ -77,55 +75,78 @@ function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
   }
 }
 
-function CurrencyFlowRows({
-  title,
+function AccountNetRows({
   items,
   locale,
-  fallbackCurrency,
+  isRu,
 }: {
-  title: string;
-  items: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
+  items: FinanceAccountFlow[];
   locale: 'uz' | 'ru';
-  fallbackCurrency: string;
+  isRu: boolean;
 }) {
-  const rows = items.length > 0
-    ? items
-    : [{ currency: fallbackCurrency, income: 0, expense: 0, netCashFlow: 0 }];
-
   return (
-    <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-bg-subtle)' }}>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: 6 }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {rows.map((row) => (
-          <div key={row.currency} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)' }}>
-            <span style={{ color: '#10b981' }}>+{formatCurrency(row.income, locale, row.currency)}</span>
-            <span style={{ color: '#ef4444' }}>−{formatCurrency(row.expense, locale, row.currency)}</span>
-            <Badge variant={row.netCashFlow >= 0 ? 'success' : 'error'}>{formatCurrency(row.netCashFlow, locale, row.currency)}</Badge>
-          </div>
-        ))}
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+      {items.map((account) => (
+        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+            {account.name[locale]} · {account.currency}
+          </span>
+          <span style={{ color: account.netCashFlow >= 0 ? '#10b981' : '#ef4444' }}>
+            {formatCurrency(account.netCashFlow, locale, account.currency)}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
 
-function CurrencyNetRows({
+function AccountFlowRows({
+  title,
   items,
   locale,
-  fallbackCurrency,
+  isRu,
 }: {
-  items: Array<{ currency: string; income: number; expense: number; netCashFlow: number }>;
+  title: string;
+  items: FinanceAccountFlow[];
   locale: 'uz' | 'ru';
-  fallbackCurrency: string;
+  isRu: boolean;
 }) {
-  const rows = items.length > 0
-    ? items
-    : [{ currency: fallbackCurrency, income: 0, expense: 0, netCashFlow: 0 }];
+  if (items.length === 0) {
+    return (
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+        {isRu ? 'Счета пока не настроены' : 'Kassalar hali sozlanmagan'}
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 'var(--text-base)', fontWeight: 700 }}>
-      {rows.map((row) => (
-        <span key={row.currency} style={{ color: row.netCashFlow >= 0 ? '#10b981' : '#ef4444' }}>
-          {formatCurrency(row.netCashFlow, locale, row.currency)}
-        </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
+      {items.map((account) => (
+        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : '#dc2626' }}>
+            {account.name[locale]} · {account.currency}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+            {[
+              { label: isRu ? 'Поступления' : 'Kirim', amount: account.income, color: '#10b981' },
+              { label: isRu ? 'Расходы' : 'Chiqim', amount: account.expense, color: '#ef4444' },
+              { label: isRu ? 'Перевод входящий' : 'O‘tkazma kirim', amount: account.transferIn, color: '#2563eb' },
+              { label: isRu ? 'Перевод исходящий' : 'O‘tkazma chiqim', amount: account.transferOut, color: '#7c3aed' },
+            ].map((movement) => (
+              <div key={movement.label} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 'var(--text-xs)' }}>
+                <span style={{ color: 'var(--color-text-tertiary)' }}>{movement.label}</span>
+                <span style={{ color: movement.color }}>{formatCurrency(movement.amount, locale, account.currency)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-xs)' }}>
+            <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистое движение' : 'Sof harakat'}</span>
+            <Badge variant={account.netCashFlow >= 0 ? 'success' : 'error'}>
+              {formatCurrency(account.netCashFlow, locale, account.currency)}
+            </Badge>
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -597,11 +618,7 @@ export default function FinancePage() {
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Чистый денежный поток (Месяц)' : 'Sof pul oqimi (Shu oy)'}
             </div>
-            <CurrencyNetRows
-              items={dashboardMetrics?.month.byCurrency ?? []}
-              locale={locale}
-              fallbackCurrency={defaultCurrency}
-            />
+            <AccountNetRows items={dashboardMetrics?.month.byAccount ?? []} locale={locale} isRu={isRu} />
           </div>
         </Card>
       </div>
@@ -683,17 +700,17 @@ export default function FinancePage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                <CurrencyFlowRows
+                <AccountFlowRows
                   title={isRu ? 'Сегодня' : 'Bugun'}
-                  items={dashboardMetrics?.today.byCurrency ?? []}
+                  items={dashboardMetrics?.today.byAccount ?? []}
                   locale={locale}
-                  fallbackCurrency={defaultCurrency}
+                  isRu={isRu}
                 />
-                <CurrencyFlowRows
+                <AccountFlowRows
                   title={isRu ? 'В этом месяце' : 'Shu oyda'}
-                  items={dashboardMetrics?.month.byCurrency ?? []}
+                  items={dashboardMetrics?.month.byAccount ?? []}
                   locale={locale}
-                  fallbackCurrency={defaultCurrency}
+                  isRu={isRu}
                 />
               </div>
             </Card>
@@ -1341,6 +1358,8 @@ function TransactionsTable({
             const isIncome = tx.direction === 'INCOME';
             const isExpense = tx.direction === 'EXPENSE';
             const isCancelled = tx.status === 'CANCELLED';
+            const displayExchangeRate = tx.transferExchangeRate
+              ?? (tx.currency === 'USD' ? tx.exchangeRate : null);
 
             return (
               <tr
@@ -1413,8 +1432,39 @@ function TransactionsTable({
                     textDecoration: isCancelled ? 'line-through' : 'none',
                   }}
                 >
-                  {isIncome ? '+' : isExpense ? '-' : ''}
-                  {formatCurrency(Number(tx.amount), locale, tx.currency)}
+                  {tx.direction === 'TRANSFER' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                      <span style={{ color: '#ef4444' }}>
+                        −{formatCurrency(Number(tx.amount), locale, tx.currency)}
+                      </span>
+                      {tx.transferToAccount && tx.transferToAmount != null ? (
+                        <span style={{ color: '#10b981' }}>
+                          +{formatCurrency(Number(tx.transferToAmount), locale, tx.transferToAccount.currency)}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#dc2626', fontSize: 'var(--text-xs)' }}>
+                          {isRu ? 'Нет суммы зачисления' : 'Kirim summasi aniqlanmagan'}
+                        </span>
+                      )}
+                      {displayExchangeRate != null && (
+                        <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                          1 USD = {Number(displayExchangeRate)} UZS
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                      <span>
+                        {isIncome ? '+' : isExpense ? '-' : ''}
+                        {formatCurrency(Number(tx.amount), locale, tx.currency)}
+                      </span>
+                      {tx.currency === 'USD' && (
+                        <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                          1 USD = {Number(tx.exchangeRate)} UZS
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </td>
 
                 <td style={{ padding: '12px' }}>
@@ -1536,9 +1586,13 @@ function FinanceTransactionDrawer({
   const isTransferOrExchange = mode === 'transfer' || mode === 'exchange';
   const defaultCurrency = useDefaultCurrency();
   const preferredAccount = accounts.find((account) => account.currency === prefilledSettlement?.currency);
+  const initialFromAccount = preferredAccount ?? accounts[0];
+  const initialToAccount = accounts.find((account) =>
+    account.id !== initialFromAccount?.id && account.currency === initialFromAccount?.currency,
+  ) ?? accounts.find((account) => account.id !== initialFromAccount?.id);
 
-  const [accountId, setAccountId] = useState(preferredAccount?.id || accounts[0]?.id || '');
-  const [toAccountId, setToAccountId] = useState(accounts[1]?.id || '');
+  const [accountId, setAccountId] = useState(initialFromAccount?.id || '');
+  const [toAccountId, setToAccountId] = useState(initialToAccount?.id || '');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState(prefilledSettlement?.currency || defaultCurrency);
   const [counterpartyId, setCounterpartyId] = useState(prefilledCounterpartyId || '');
@@ -1549,7 +1603,7 @@ function FinanceTransactionDrawer({
   const [error, setError] = useState('');
 
   // Multi-currency exchange fields
-  const [exchangeRate, setExchangeRate] = useState('12800');
+  const [exchangeRate, setExchangeRate] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
 
   // Document linking fields
@@ -1558,10 +1612,28 @@ function FinanceTransactionDrawer({
 
   const fromAccount = accounts.find((a) => a.id === accountId);
   const toAccount = accounts.find((a) => a.id === toAccountId);
-  const availableAccounts = isTransferOrExchange ? accounts : accounts.filter((account) => account.currency === currency);
+  const validAccounts = accounts.filter(isCashAccountCurrencyValid);
+  const availableAccounts = isTransferOrExchange
+    ? validAccounts
+    : validAccounts.filter((account) => account.currency === currency);
   const compatibleOpenDocuments = openDocuments.filter((document) => !fromAccount || document.currency === fromAccount.currency);
+  const selectedSourceDocument = compatibleOpenDocuments.find((document) => document.id === sourceDocId);
   const settlementSideOptions: Array<'CUSTOMER' | 'SUPPLIER'> = ['CUSTOMER', 'SUPPLIER'];
   const isMultiCurrency = fromAccount && toAccount && fromAccount.currency !== toAccount.currency;
+  const targetAmountAtRate = (
+    sourceAmount: number,
+    usdToUzsRate: number,
+    sourceCurrency = fromAccount?.currency,
+    destinationCurrency = toAccount?.currency,
+  ) => {
+    if (!sourceCurrency || !destinationCurrency || sourceCurrency === destinationCurrency
+      || !Number.isFinite(usdToUzsRate) || usdToUzsRate <= 0) return '';
+    const rate = Math.round(usdToUzsRate * 10000) / 10000;
+    const targetAmount = sourceCurrency === 'USD'
+      ? sourceAmount * rate
+      : sourceAmount / rate;
+    return String(Math.round(targetAmount * 100) / 100);
+  };
 
   // Sync currency with chosen account
   useEffect(() => {
@@ -1637,6 +1709,37 @@ function FinanceTransactionDrawer({
       return;
     }
 
+    if (!accountId || (isTransferOrExchange && !toAccountId)) {
+      setError(isRu ? 'Выберите оба счёта для операции' : 'Amaliyot uchun hisoblarni tanlang');
+      return;
+    }
+
+    if (isMultiCurrency) {
+      const hasRate = Number.isFinite(Number(exchangeRate)) && Number(exchangeRate) > 0;
+      const hasTargetAmount = Number.isFinite(Number(targetAmount)) && Number(targetAmount) > 0;
+      if (!hasRate && !hasTargetAmount) {
+        setError(isRu ? 'Укажите курс или сумму зачисления' : 'Kurs yoki qabul qilinadigan summani kiriting');
+        return;
+      }
+    }
+    if (
+      !isTransferOrExchange &&
+      fromAccount?.currency === 'USD' &&
+      (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)
+    ) {
+      setError(isRu ? 'Укажите курс UZS за 1 USD' : '1 USD uchun UZS kursini kiriting');
+      return;
+    }
+    if (
+      isTransferOrExchange &&
+      fromAccount?.currency === 'USD' &&
+      !isMultiCurrency &&
+      (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)
+    ) {
+      setError(isRu ? 'Укажите курс UZS за 1 USD' : '1 USD uchun UZS kursini kiriting');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -1658,11 +1761,16 @@ function FinanceTransactionDrawer({
         body.fromAccountId = accountId;
         body.toAccountId = toAccountId;
         if (isMultiCurrency) {
-          body.exchangeRate = parseFloat(exchangeRate) || 1;
-          body.targetAmount = parseFloat(targetAmount) || Number(amount);
+          const rate = Number(exchangeRate);
+          const receivingAmount = Number(targetAmount);
+          if (Number.isFinite(rate) && rate > 0) body.exchangeRate = rate;
+          if (Number.isFinite(receivingAmount) && receivingAmount > 0) body.targetAmount = receivingAmount;
+        } else if (fromAccount?.currency === 'USD') {
+          body.exchangeRate = Number(exchangeRate);
         }
       } else {
         body.accountId = accountId;
+        if (fromAccount?.currency === 'USD') body.exchangeRate = Number(exchangeRate);
         body.counterpartyId = counterpartyId || undefined;
         body.transactionTypeId = typeId || undefined;
         if (sourceDocId) {
@@ -1776,10 +1884,19 @@ function FinanceTransactionDrawer({
             value: a.id,
             label: `${(a.name as any)[locale] || a.name} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
           }))}
-          value={accountId}
+           value={accountId}
            onChange={(val) => {
+             const selectedSource = validAccounts.find((account) => account.id === val);
              setAccountId(val);
+             setToAccountId((currentId) => {
+               const currentTarget = validAccounts.find((account) => account.id === currentId);
+               if (currentTarget && currentTarget.id !== val && currentTarget.currency === selectedSource?.currency) return currentId;
+               return (validAccounts.find((account) => account.id !== val && account.currency === selectedSource?.currency)
+                 ?? validAccounts.find((account) => account.id !== val))?.id ?? '';
+             });
              setSourceDocId('');
+             setTargetAmount('');
+             setExchangeRate('');
            }}
         />
 
@@ -1787,14 +1904,23 @@ function FinanceTransactionDrawer({
         {isTransferOrExchange && (
           <Select
             label={isRu ? 'Счёт пополнения (Куда)' : 'Qayerga (Tushuvchi kassa)'}
-            options={accounts
+            options={validAccounts
               .filter((a) => a.id !== accountId)
               .map((a) => ({
                 value: a.id,
                 label: `${(a.name as any)[locale] || a.name} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
               }))}
             value={toAccountId}
-            onChange={(val) => setToAccountId(val)}
+            onChange={(val) => {
+              const selectedTarget = validAccounts.find((account) => account.id === val);
+              setToAccountId(val);
+              setTargetAmount(targetAmountAtRate(
+                Number(amount) || 0,
+                Number(exchangeRate),
+                fromAccount?.currency,
+                selectedTarget?.currency,
+              ));
+            }}
           />
         )}
 
@@ -1813,17 +1939,44 @@ function FinanceTransactionDrawer({
           <Input
             type="number"
             placeholder="0"
-            value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              if (isMultiCurrency) {
-                const rate = parseFloat(exchangeRate) || 1;
-                const amt = parseFloat(e.target.value) || 0;
-                setTargetAmount(String(Math.round(amt * rate)));
-              }
+               value={amount}
+               onChange={(e) => {
+                 setAmount(e.target.value);
+                 if (isMultiCurrency) {
+                  const rate = Number(exchangeRate);
+                  const amt = parseFloat(e.target.value) || 0;
+                  setTargetAmount(targetAmountAtRate(amt, rate));
+                }
             }}
           />
         </div>
+
+        {!isTransferOrExchange && fromAccount?.currency === 'USD' && (
+          <div>
+            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+              {isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
+            </label>
+            <Input
+              type="number"
+              value={exchangeRate}
+              disabled={Boolean(sourceDocId && selectedSourceDocument?.exchangeRate)}
+              onChange={(e) => setExchangeRate(e.target.value)}
+            />
+          </div>
+        )}
+
+        {isTransferOrExchange && !isMultiCurrency && fromAccount?.currency === 'USD' && (
+          <div>
+            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+              {isRu ? 'Учётный курс (1 USD = UZS) *' : 'Hisob kursi (1 USD = UZS) *'}
+            </label>
+            <Input
+              type="number"
+              value={exchangeRate}
+              onChange={(e) => setExchangeRate(e.target.value)}
+            />
+          </div>
+        )}
 
         {/* Multi-currency Exchange Box */}
         {isMultiCurrency && (
@@ -1844,16 +1997,16 @@ function FinanceTransactionDrawer({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
                 <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
-                  {isRu ? 'Курс обмена' : 'Valyuta kursi'}
+                  {isRu ? 'Курс (1 USD = UZS)' : 'Kurs (1 USD = UZS)'}
                 </label>
                 <Input
                   type="number"
                   value={exchangeRate}
                   onChange={(e) => {
                     setExchangeRate(e.target.value);
-                    const rate = parseFloat(e.target.value) || 1;
+                    const rate = Number(e.target.value);
                     const amt = parseFloat(amount) || 0;
-                    setTargetAmount(String(Math.round(amt * rate)));
+                    setTargetAmount(targetAmountAtRate(amt, rate));
                   }}
                 />
               </div>
@@ -1864,7 +2017,17 @@ function FinanceTransactionDrawer({
                 <Input
                   type="number"
                   value={targetAmount}
-                  onChange={(e) => setTargetAmount(e.target.value)}
+                  onChange={(e) => {
+                    setTargetAmount(e.target.value);
+                    const sourceAmount = Number(amount);
+                    const receivingAmount = Number(e.target.value);
+                    if (sourceAmount > 0 && receivingAmount > 0 && fromAccount) {
+                      const impliedRate = fromAccount.currency === 'USD'
+                        ? receivingAmount / sourceAmount
+                        : sourceAmount / receivingAmount;
+                      setExchangeRate(String(Math.round(impliedRate * 10000) / 10000));
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -1888,6 +2051,7 @@ function FinanceTransactionDrawer({
                 setCounterpartyId(val);
                 setSettlementSide('');
                 setSourceDocId('');
+                setExchangeRate('');
               }}
             />
 
@@ -1935,6 +2099,8 @@ function FinanceTransactionDrawer({
                 value={sourceDocId}
                 onChange={(val) => {
                   setSourceDocId(val);
+                  const selectedDocument = compatibleOpenDocuments.find((document) => document.id === val);
+                  setExchangeRate(selectedDocument?.exchangeRate == null ? '' : String(selectedDocument.exchangeRate));
                   if (val) setSettlementSide('');
                 }}
               />

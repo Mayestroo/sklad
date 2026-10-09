@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 
 describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invariant Test Suite (#108)', () => {
   let service: PurchasesService;
@@ -100,6 +101,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
         { provide: SettlementAllocationService, useValue: settlementAllocationService },
+        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
       ],
     }).compile();
 

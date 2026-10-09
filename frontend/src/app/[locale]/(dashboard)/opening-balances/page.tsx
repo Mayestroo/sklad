@@ -44,6 +44,7 @@ import type {
   OpeningBalanceMetrics,
   ImportErrorItem,
 } from '@shared/types/opening-balances';
+import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
 
 type TabKey = 'cash' | 'inventory' | 'customers' | 'suppliers' | 'advances' | 'fixed-assets' | 'other';
 type OpeningBalanceDraftLine = Omit<Partial<OpeningBalanceLine>, 'exchangeRate'> & { exchangeRate?: number | string };
@@ -1422,6 +1423,14 @@ function CashTable({
             >
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
+                {(() => {
+                  const compatibleAccounts = accounts.filter((account: any) =>
+                    isCashAccountCurrencyValid(account) &&
+                    (line.category === 'BANK'
+                      ? account.accountType === 'BANK'
+                      : account.accountType !== 'BANK'),
+                  );
+                  return (
                 <Select
                   value={line.accountId || ''}
                   disabled={isReadOnly}
@@ -1429,19 +1438,21 @@ function CashTable({
                     const account = accounts.find((item: any) => item.id === value);
                     onUpdate(index, 'accountId', value);
                     if (account) {
-                      onUpdate(index, 'currency', account.currency || 'USD');
+                       onUpdate(index, 'currency', account.currency);
                       onUpdate(index, 'category', account.accountType === 'BANK' ? 'BANK' : 'CASH');
                     }
                   }}
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
-                    ...accounts.map((account: any) => ({
+                    ...compatibleAccounts.map((account: any) => ({
                       value: account.id,
-                      label: `${getAccountName(account)} (${account.currency})`,
+                      label: `${getAccountName(account)} (${account.accountType}, ${account.currency})`,
                     })),
                   ]}
                 />
+                  );
+                })()}
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <Badge variant="neutral">

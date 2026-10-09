@@ -45,6 +45,7 @@ import {
   ExpenseAllocationMethod,
   AllocationPreviewResult,
 } from '@shared/types';
+import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
 
 interface Counterparty {
   id: string;
@@ -56,8 +57,10 @@ interface Counterparty {
 interface CashAccount {
   id: string;
   name: any;
+  accountType: 'UZS_CASH' | 'USD_CASH' | 'BANK';
   currency: string;
   balance: number;
+  isActive: boolean;
 }
 
 export default function NewExpensePage() {
@@ -80,10 +83,13 @@ export default function NewExpensePage() {
   const [receiptId, setReceiptId] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
   const [currency, setCurrency] = useState('');
-  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const [exchangeRate, setExchangeRate] = useState('');
   const [allocationMethod, setAllocationMethod] = useState<ExpenseAllocationMethod>('BY_AMOUNT');
   const [isPaid, setIsPaid] = useState(false);
   const [cashAccountId, setCashAccountId] = useState('');
+  const compatibleCashAccounts = cashAccounts.filter(
+    (account) => account.currency === currency && account.isActive && isCashAccountCurrencyValid(account),
+  );
   const [comment, setComment] = useState('');
 
   // Selected items from receipt
@@ -213,6 +219,10 @@ export default function NewExpensePage() {
       setErrorMsg(isRu ? 'Пожалуйста, выберите валюту' : 'Iltimos, valyutani tanlang');
       return;
     }
+    if (currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+      setErrorMsg(isRu ? 'Укажите курс UZS за 1 USD' : '1 USD uchun UZS kursini kiriting');
+      return;
+    }
     if (selectedItemIds.length === 0) {
       setErrorMsg(isRu ? 'Выберите хотя бы один товар для распределения' : 'Taqsimlash uchun kamida bitta tovar tanlang');
       return;
@@ -236,7 +246,7 @@ export default function NewExpensePage() {
           receiptId,
           amount: Number(amount),
           currency,
-          exchangeRate: Number(exchangeRate) || 1,
+          exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
           allocationMethod,
           isPaid,
           cashAccountId: isPaid ? cashAccountId : undefined,
@@ -473,11 +483,31 @@ export default function NewExpensePage() {
               <Select
                 value={currency}
                 placeholder={isRu ? 'Валюта' : 'Valyuta'}
-                onChange={(val) => setCurrency(val)}
+                  onChange={(val) => {
+                    setCurrency(val);
+                    setExchangeRate('');
+                    const compatible = cashAccounts.find(
+                      (account) => account.currency === val && account.isActive && isCashAccountCurrencyValid(account),
+                    );
+                    setCashAccountId(compatible?.id || '');
+                  }}
                 options={CURRENCY_OPTIONS}
               />
             </div>
           </div>
+
+          {currency === 'USD' && (
+            <div style={{ marginTop: 'var(--space-3)' }}>
+              <Input
+                type="number"
+                min="0.0001"
+                label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
+                value={exchangeRate}
+                onChange={(e) => setExchangeRate(e.target.value)}
+                placeholder="12800"
+              />
+            </div>
+          )}
 
           {/* Payment Mode */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-subtle)' }}>
@@ -495,14 +525,14 @@ export default function NewExpensePage() {
                 <Select
                   value={cashAccountId}
                   onChange={(val) => setCashAccountId(val)}
-                  options={cashAccounts.map((a) => {
+                   options={compatibleCashAccounts.map((a) => {
                     const accName =
                       typeof a.name === 'object' && a.name
                         ? a.name[locale] || a.name.uz || a.name.ru || 'Kassa'
                         : a.name || 'Kassa';
                     return {
                       value: a.id,
-                      label: `${accName} (${formatCurrency(Number(a.balance) || 0, locale, a.currency || 'UZS')})`,
+                       label: `${accName} (${a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
                     };
                   })}
                 />

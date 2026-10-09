@@ -8,6 +8,7 @@ import {
   PurchaseDocStatus,
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 
 describe('Additional Expenses & Landed Cost Invariant Tests', () => {
   let service: AdditionalExpensesService;
@@ -94,6 +95,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: { recordMovement: jest.fn().mockResolvedValue({ created: true }) } },
+        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
       ],
     }).compile();
 

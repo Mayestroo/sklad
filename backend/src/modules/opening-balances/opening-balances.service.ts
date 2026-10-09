@@ -20,12 +20,18 @@ import { OpeningBalanceLineDto } from './dto/opening-balance-line.dto';
 import { UnpostOpeningBalanceDto } from './dto/unpost-opening-balance.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { AccountsService } from '../accounting/accounts/accounts.service';
+import {
+  isCashAccountCurrencyValid,
+  ledgerAccountCodeForCashAccount,
+} from '../../../../shared/types/cash-account-policy';
 
 @Injectable()
 export class OpeningBalancesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
+    private readonly accountsService: AccountsService,
   ) {}
 
   private getCounterpartyOpeningMovement(
@@ -472,21 +478,24 @@ export class OpeningBalancesService {
       );
     }
 
+    await this.accountsService.ensureDefaultAccounts(tenantId);
+
     return this.prisma.$transaction(async (tx) => {
       for (const line of doc.lines) {
         if (line.category !== OpeningBalanceCategory.CASH && line.category !== OpeningBalanceCategory.BANK) {
           continue;
         }
+        if (Number(line.amount) <= 0) continue;
         if (!line.accountId) {
           throw new BadRequestException('Kassa yoki bank qoldig‘i uchun hisobni tanlang');
         }
         const account = await tx.cashAccount.findFirst({
-          where: { id: line.accountId, tenantId },
+          where: { id: line.accountId, tenantId, isActive: true },
         });
         if (!account) throw new NotFoundException('Tanlangan kassa yoki bank hisobi topilmadi');
-        if (account.currency !== line.currency) {
+        if (!isCashAccountCurrencyValid(account) || account.currency !== line.currency) {
           throw new BadRequestException(
-            `Hisob valyutasi (${account.currency}) qoldiq valyutasiga (${line.currency}) mos kelmaydi`,
+            `Tanlangan hisob turi/valyutasi qoldiq valyutasiga (${line.currency}) mos kelmaydi`,
           );
         }
         if (
@@ -505,6 +514,7 @@ export class OpeningBalancesService {
           line.accountId
         ) {
           const amt = Number(line.amount);
+          if (amt <= 0) continue;
           // Increment CashAccount balance
           await tx.cashAccount.update({
             where: { id: line.accountId },
@@ -520,6 +530,7 @@ export class OpeningBalancesService {
               status: TransactionStatus.POSTED,
               amount: amt,
               currency: line.currency,
+              exchangeRate: this.exchangeRateToUzs(line.currency, Number(line.exchangeRate)),
               comment: line.notes || `Boshlang‘ich qoldiq: ${doc.docNumber}`,
               sourceDocType: 'OpeningBalanceDocument',
               sourceDocId: doc.id,
@@ -649,8 +660,6 @@ export class OpeningBalancesService {
       });
 
       // Find or link standard asset and liability accounts
-      const acc5010 = await tx.account.findFirst({ where: { tenantId, code: '5010' } });
-      const acc5110 = await tx.account.findFirst({ where: { tenantId, code: '5110' } });
       const acc2910 = await tx.account.findFirst({ where: { tenantId, code: '2910' } });
       const acc4010 = await tx.account.findFirst({ where: { tenantId, code: '4010' } });
       const acc6010 = await tx.account.findFirst({ where: { tenantId, code: '6010' } });
@@ -658,25 +667,29 @@ export class OpeningBalancesService {
 
       let lineIdx = 0;
       // Asset journal lines (Debit Asset / Credit 00)
-      if (acc5010 && metrics.categoryBreakdown[OpeningBalanceCategory.CASH] > 0) {
-        await tx.journalLine.create({
-          data: {
-            entryId: journalEntry.id,
-            debitAccountId: acc5010.id,
-            creditAccountId: auxiliaryAccount.id,
-            amount: metrics.categoryBreakdown[OpeningBalanceCategory.CASH],
-            description: 'Kassa boshlang‘ich qoldig‘i',
-          },
+      for (const line of doc.lines) {
+        if (line.category !== OpeningBalanceCategory.CASH && line.category !== OpeningBalanceCategory.BANK) continue;
+        if (Number(line.amount) <= 0) continue;
+        if (!line.accountId) throw new BadRequestException('Kassa yoki bank qoldig‘i uchun hisobni tanlang');
+        const cashAccount = await tx.cashAccount.findFirst({
+          where: { id: line.accountId, tenantId, isActive: true },
         });
-      }
-      if (acc5110 && metrics.categoryBreakdown[OpeningBalanceCategory.BANK] > 0) {
+        if (!cashAccount || !isCashAccountCurrencyValid(cashAccount) || cashAccount.currency !== line.currency) {
+          throw new BadRequestException('Boshlang‘ich qoldiq hisobi va valyutasi o‘zaro mos emas');
+        }
+        const ledgerCode = ledgerAccountCodeForCashAccount(cashAccount);
+        if (!ledgerCode) throw new BadRequestException('Kassa/bank uchun buxgalteriya hisobi topilmadi');
+        const ledgerAccount = await tx.account.findFirst({ where: { tenantId, code: ledgerCode } });
+        if (!ledgerAccount) throw new BadRequestException(`Buxgalteriya hisobi ${ledgerCode} sozlanmagan`);
+        const amountInUzs = Number(line.amount) * this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
+        if (amountInUzs <= 0) continue;
         await tx.journalLine.create({
           data: {
             entryId: journalEntry.id,
-            debitAccountId: acc5110.id,
+            debitAccountId: ledgerAccount.id,
             creditAccountId: auxiliaryAccount.id,
-            amount: metrics.categoryBreakdown[OpeningBalanceCategory.BANK],
-            description: 'Bank hisobraqam boshlang‘ich qoldig‘i',
+            amount: Math.round(amountInUzs * 100) / 100,
+            description: `${cashAccount.accountType} (${cashAccount.currency}) boshlang‘ich qoldig‘i`,
           },
         });
       }
