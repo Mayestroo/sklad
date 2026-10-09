@@ -28,8 +28,8 @@ CHECK (
 );
 
 ALTER TABLE "finance_transactions"
-ADD COLUMN "transfer_exchange_rate" DECIMAL(15,6),
-ADD COLUMN "exchange_rate" DECIMAL(15,4);
+ADD COLUMN IF NOT EXISTS "transfer_exchange_rate" DECIMAL(15,6),
+ADD COLUMN IF NOT EXISTS "exchange_rate" DECIMAL(15,4);
 
 ALTER TABLE "payments"
 ADD COLUMN IF NOT EXISTS "cash_account_id" TEXT,
