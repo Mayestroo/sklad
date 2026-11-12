@@ -110,6 +110,49 @@ describe('PaymentsService settlement ledger integration', () => {
     service = module.get(PaymentsService);
   });
 
+  const usdInvoicePayment = {
+    counterpartyId: 'cp-1',
+    invoiceId: 'invoice-1',
+    method: 'CASH' as const,
+    amount: 100,
+    currency: 'USD',
+    exchangeRate: 12800,
+    cashAccountId: 'cash-usd',
+  };
+
+  it('does not register a payment whose journal entry cannot be posted', async () => {
+    journalService.autoPostPayment.mockRejectedValue(
+      new Error('ledger unavailable'),
+    );
+
+    await expect(
+      service.registerPayment('tenant-1', usdInvoicePayment, 'user-1'),
+    ).rejects.toThrow('ledger unavailable');
+  });
+
+  it('posts the journal entry inside the payment transaction', async () => {
+    let insideTransaction = false;
+    const postedInsideTransaction: boolean[] = [];
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => {
+        insideTransaction = true;
+        try {
+          return await callback(prisma);
+        } finally {
+          insideTransaction = false;
+        }
+      },
+    );
+    journalService.autoPostPayment.mockImplementation(() => {
+      postedInsideTransaction.push(insideTransaction);
+      return Promise.resolve();
+    });
+
+    await service.registerPayment('tenant-1', usdInvoicePayment, 'user-1');
+
+    expect(postedInsideTransaction).toEqual([true]);
+  });
+
   it('records exactly one customer-side USD movement and invoice allocation', async () => {
     await service.registerPayment(
       'tenant-1',

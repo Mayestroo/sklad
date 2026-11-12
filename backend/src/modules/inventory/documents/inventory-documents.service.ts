@@ -116,20 +116,13 @@ export class InventoryDocumentsService {
         });
       }
 
+      // 3. Inbound documents post Dt 2910 / Kt 6010 in the same transaction
+      if (dto.docType === 'INBOUND') {
+        await this.journalService.autoPostInboundDoc(tenantId, doc, tx);
+      }
+
       return doc;
     });
-
-    // 3. Auto-post NAS double-entry journal for Inbound (Dt 2910 / Kt 6010)
-    if (dto.docType === 'INBOUND') {
-      try {
-        await this.journalService.autoPostInboundDoc(tenantId, result);
-      } catch (err) {
-        console.error(
-          'Failed to auto-post journal entry for inbound document:',
-          err,
-        );
-      }
-    }
 
     // 4. Record Audit Log
     await this.auditService.logAction({

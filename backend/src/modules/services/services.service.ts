@@ -438,7 +438,7 @@ export class ServicesService {
       }
 
       // Create automated BHMS double-entry journal postings
-      await this.journalService.autoPostServiceAct(tenantId, updated);
+      await this.journalService.autoPostServiceAct(tenantId, updated, tx);
 
       return updated;
     });

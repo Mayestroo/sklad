@@ -17,9 +17,22 @@ interface CashPaymentForJournal {
   currency: string;
   exchangeRate: number;
   cashAccount: { accountType: CashAccountType; currency: string } | null;
-  invoice?: { currency: string; exchangeRate: number | string | Prisma.Decimal } | null;
-  salesOrder?: { currency: string; exchangeRate: number | string | Prisma.Decimal } | null;
+  invoice?: {
+    currency: string;
+    exchangeRate: number | string | Prisma.Decimal;
+  } | null;
+  salesOrder?: {
+    currency: string;
+    exchangeRate: number | string | Prisma.Decimal;
+  } | null;
 }
+
+/**
+ * Where journal entries are written. Callers that post as part of a business
+ * document pass their Prisma transaction client so the entry commits or rolls
+ * back together with the document (ADR 0006).
+ */
+export type JournalWriter = Pick<Prisma.TransactionClient, 'journalEntry'>;
 
 @Injectable()
 export class JournalService {
@@ -31,16 +44,20 @@ export class JournalService {
   /**
    * Post a balanced double-entry Journal Entry (Provodka)
    */
-  async createJournalEntry(tenantId: string, dto: CreateJournalEntryDto) {
+  async createJournalEntry(
+    tenantId: string,
+    dto: CreateJournalEntryDto,
+    db: JournalWriter = this.prisma,
+  ) {
     if (!dto.lines || dto.lines.length === 0) {
       throw new BadRequestException(
         'Journal entry must contain at least one line',
       );
     }
 
-    const entryNumber = await this.generateEntryNumber(tenantId);
+    const entryNumber = await this.generateEntryNumber(tenantId, db);
 
-    return this.prisma.journalEntry.create({
+    return db.journalEntry.create({
       data: {
         tenantId,
         entryNumber,
@@ -155,7 +172,11 @@ export class JournalService {
    * Auto-post Journal Entries when a Payment is received
    * Dt 5110 (Bank) or Dt 5010 (Cash) / Kt 4010 (Customer)
    */
-  async autoPostPayment(tenantId: string, payment: CashPaymentForJournal) {
+  async autoPostPayment(
+    tenantId: string,
+    payment: CashPaymentForJournal,
+    db: JournalWriter = this.prisma,
+  ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
     const exchangeRate = requireExchangeRateForCurrency(
       payment.currency,
@@ -180,7 +201,9 @@ export class JournalService {
 
     const linkedDocument = payment.invoice ?? payment.salesOrder;
     if (!linkedDocument || linkedDocument.currency !== payment.currency) {
-      throw new BadRequestException('Payment must link to a sales document in the same currency');
+      throw new BadRequestException(
+        'Payment must link to a sales document in the same currency',
+      );
     }
     const documentExchangeRate = requireExchangeRateForCurrency(
       linkedDocument.currency,
@@ -196,20 +219,30 @@ export class JournalService {
       linkedDocument.currency,
       documentExchangeRate,
     );
-    const exchangeDifference = Math.round((cashAmountInUzs - receivableReductionInUzs) * 100) / 100;
-    const exchangeNote = payment.currency === 'USD'
-      ? ` (to'lov kursi: 1 USD = ${exchangeRate} UZS, hujjat kursi: 1 USD = ${documentExchangeRate} UZS)`
-      : '';
-    const journalLines = [{
-      debitAccountId: accBank.id,
-      creditAccountId: acc4010.id,
-      amount: Math.min(cashAmountInUzs, receivableReductionInUzs),
-      description: `Mijozdan to'lov (${payment.method})`,
-    }];
+    const exchangeDifference =
+      Math.round((cashAmountInUzs - receivableReductionInUzs) * 100) / 100;
+    const exchangeNote =
+      payment.currency === 'USD'
+        ? ` (to'lov kursi: 1 USD = ${exchangeRate} UZS, hujjat kursi: 1 USD = ${documentExchangeRate} UZS)`
+        : '';
+    const journalLines = [
+      {
+        debitAccountId: accBank.id,
+        creditAccountId: acc4010.id,
+        amount: Math.min(cashAmountInUzs, receivableReductionInUzs),
+        description: `Mijozdan to'lov (${payment.method})`,
+      },
+    ];
 
     if (exchangeDifference > 0) {
-      const exchangeGainAccount = await this.accountsService.findByCode(tenantId, '9540');
-      if (!exchangeGainAccount) throw new BadRequestException('Valyuta kursi daromad hisobi (9540) topilmadi');
+      const exchangeGainAccount = await this.accountsService.findByCode(
+        tenantId,
+        '9540',
+      );
+      if (!exchangeGainAccount)
+        throw new BadRequestException(
+          'Valyuta kursi daromad hisobi (9540) topilmadi',
+        );
       journalLines.push({
         debitAccountId: accBank.id,
         creditAccountId: exchangeGainAccount.id,
@@ -217,8 +250,14 @@ export class JournalService {
         description: `To'lov bo'yicha valyuta kursi daromadi${exchangeNote}`,
       });
     } else if (exchangeDifference < 0) {
-      const exchangeLossAccount = await this.accountsService.findByCode(tenantId, '9620');
-      if (!exchangeLossAccount) throw new BadRequestException('Valyuta kursi zarar hisobi (9620) topilmadi');
+      const exchangeLossAccount = await this.accountsService.findByCode(
+        tenantId,
+        '9620',
+      );
+      if (!exchangeLossAccount)
+        throw new BadRequestException(
+          'Valyuta kursi zarar hisobi (9620) topilmadi',
+        );
       journalLines.push({
         debitAccountId: exchangeLossAccount.id,
         creditAccountId: acc4010.id,
@@ -227,19 +266,27 @@ export class JournalService {
       });
     }
 
-    await this.createJournalEntry(tenantId, {
-      description: `Avtomatik provodka: To'lov kelib tushishi № ${payment.paymentNumber}${exchangeNote}`,
-      sourceDocType: 'Payment',
-      sourceDocId: payment.id,
-      lines: journalLines,
-    });
+    await this.createJournalEntry(
+      tenantId,
+      {
+        description: `Avtomatik provodka: To'lov kelib tushishi № ${payment.paymentNumber}${exchangeNote}`,
+        sourceDocType: 'Payment',
+        sourceDocId: payment.id,
+        lines: journalLines,
+      },
+      db,
+    );
   }
 
   /**
    * Auto-post Journal Entries when goods are received from supplier (Inbound Receiving)
    * Dt 2910 (Warehouse Goods) / Kt 6010 (Accounts Payable)
    */
-  async autoPostInboundDoc(tenantId: string, doc: any) {
+  async autoPostInboundDoc(
+    tenantId: string,
+    doc: any,
+    db: JournalWriter = this.prisma,
+  ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const acc2910 = await this.accountsService.findByCode(tenantId, '2910');
@@ -249,19 +296,23 @@ export class JournalService {
 
     const total = Number(doc.totalAmount);
     if (total > 0) {
-      await this.createJournalEntry(tenantId, {
-        description: `Avtomatik provodka: Omborga tovar kirim qilish № ${doc.docNumber}`,
-        sourceDocType: 'InventoryDocument',
-        sourceDocId: doc.id,
-        lines: [
-          {
-            debitAccountId: acc2910.id,
-            creditAccountId: acc6010.id,
-            amount: total,
-            description: `Omborga tovar kelib tushishi (Kirim № ${doc.docNumber})`,
-          },
-        ],
-      });
+      await this.createJournalEntry(
+        tenantId,
+        {
+          description: `Avtomatik provodka: Omborga tovar kirim qilish № ${doc.docNumber}`,
+          sourceDocType: 'InventoryDocument',
+          sourceDocId: doc.id,
+          lines: [
+            {
+              debitAccountId: acc2910.id,
+              creditAccountId: acc6010.id,
+              amount: total,
+              description: `Omborga tovar kelib tushishi (Kirim № ${doc.docNumber})`,
+            },
+          ],
+        },
+        db,
+      );
     }
   }
 
@@ -273,6 +324,8 @@ export class JournalService {
     tenantId: string,
     transfer: any,
     totalCostValue: number,
+
+    db: JournalWriter = this.prisma,
   ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
@@ -281,19 +334,23 @@ export class JournalService {
 
     if (!acc2920 || !acc2910 || totalCostValue <= 0) return;
 
-    await this.createJournalEntry(tenantId, {
-      description: `Avtomatik provodka: Omborlararo tovar jo'natish № ${transfer.transferNumber}`,
-      sourceDocType: 'StockTransfer',
-      sourceDocId: transfer.id,
-      lines: [
-        {
-          debitAccountId: acc2920.id,
-          creditAccountId: acc2910.id,
-          amount: totalCostValue,
-          description: `Yo'ldagi tovarlar bo'yicha kirim (Transfer № ${transfer.transferNumber})`,
-        },
-      ],
-    });
+    await this.createJournalEntry(
+      tenantId,
+      {
+        description: `Avtomatik provodka: Omborlararo tovar jo'natish № ${transfer.transferNumber}`,
+        sourceDocType: 'StockTransfer',
+        sourceDocId: transfer.id,
+        lines: [
+          {
+            debitAccountId: acc2920.id,
+            creditAccountId: acc2910.id,
+            amount: totalCostValue,
+            description: `Yo'ldagi tovarlar bo'yicha kirim (Transfer № ${transfer.transferNumber})`,
+          },
+        ],
+      },
+      db,
+    );
   }
 
   /**
@@ -304,6 +361,8 @@ export class JournalService {
     tenantId: string,
     transfer: any,
     totalCostValue: number,
+
+    db: JournalWriter = this.prisma,
   ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
@@ -312,19 +371,23 @@ export class JournalService {
 
     if (!acc2910 || !acc2920 || totalCostValue <= 0) return;
 
-    await this.createJournalEntry(tenantId, {
-      description: `Avtomatik provodka: Omborlararo tovar qabul qilish № ${transfer.transferNumber}`,
-      sourceDocType: 'StockTransfer',
-      sourceDocId: transfer.id,
-      lines: [
-        {
-          debitAccountId: acc2910.id,
-          creditAccountId: acc2920.id,
-          amount: totalCostValue,
-          description: `Mo'ljallangan omborga tovar yetib kelishi (Transfer № ${transfer.transferNumber})`,
-        },
-      ],
-    });
+    await this.createJournalEntry(
+      tenantId,
+      {
+        description: `Avtomatik provodka: Omborlararo tovar qabul qilish № ${transfer.transferNumber}`,
+        sourceDocType: 'StockTransfer',
+        sourceDocId: transfer.id,
+        lines: [
+          {
+            debitAccountId: acc2910.id,
+            creditAccountId: acc2920.id,
+            amount: totalCostValue,
+            description: `Mo'ljallangan omborga tovar yetib kelishi (Transfer № ${transfer.transferNumber})`,
+          },
+        ],
+      },
+      db,
+    );
   }
 
   async findAllByTenant(tenantId: string) {
@@ -351,7 +414,11 @@ export class JournalService {
    * 1. Dt 9420 (Admin Expenses) / Kt 6010 (Supplier Payables) — Subtotal
    * 2. Dt 4410 (Input VAT) / Kt 6010 (Supplier Payables) — VAT Amount (if > 0)
    */
-  async autoPostServiceAct(tenantId: string, act: any) {
+  async autoPostServiceAct(
+    tenantId: string,
+    act: any,
+    db: JournalWriter = this.prisma,
+  ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const lines: any[] = [];
@@ -359,13 +426,22 @@ export class JournalService {
       act.currency,
       Number(act.exchangeRate),
     );
-    const subtotal = convertAmountToUzs(Number(act.subtotal), act.currency, exchangeRate);
-    const vat = convertAmountToUzs(Number(act.vatAmount), act.currency, exchangeRate);
+    const subtotal = convertAmountToUzs(
+      Number(act.subtotal),
+      act.currency,
+      exchangeRate,
+    );
+    const vat = convertAmountToUzs(
+      Number(act.vatAmount),
+      act.currency,
+      exchangeRate,
+    );
 
     if (act.type === 'PROVIDED') {
       const acc4010 = await this.accountsService.findByCode(tenantId, '4010');
       let acc9030 = await this.accountsService.findByCode(tenantId, '9030');
-      if (!acc9030) acc9030 = await this.accountsService.findByCode(tenantId, '9010');
+      if (!acc9030)
+        acc9030 = await this.accountsService.findByCode(tenantId, '9010');
       const acc6410 = await this.accountsService.findByCode(tenantId, '6410');
 
       if (!acc4010 || !acc9030) return;
@@ -414,17 +490,24 @@ export class JournalService {
     }
 
     if (lines.length > 0) {
-      await this.createJournalEntry(tenantId, {
-        description: `Avtomatik provodka: Xizmatlar dalolatnomasi № ${act.actNumber}`,
-        sourceDocType: 'ServiceAct',
-        sourceDocId: act.id,
-        lines,
-      });
+      await this.createJournalEntry(
+        tenantId,
+        {
+          description: `Avtomatik provodka: Xizmatlar dalolatnomasi № ${act.actNumber}`,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: act.id,
+          lines,
+        },
+        db,
+      );
     }
   }
 
-  private async generateEntryNumber(tenantId: string): Promise<string> {
-    const count = await this.prisma.journalEntry.count({ where: { tenantId } });
+  private async generateEntryNumber(
+    tenantId: string,
+    db: JournalWriter,
+  ): Promise<string> {
+    const count = await db.journalEntry.count({ where: { tenantId } });
     const nextSeq = (count + 1).toString().padStart(6, '0');
     return `JE-${nextSeq}`;
   }

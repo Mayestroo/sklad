@@ -186,6 +186,13 @@ export class PaymentsService {
         });
       }
 
+      // 5. Automatic double-entry posting (Dt 5010/5020/5110/5210 / Kt 4010) commits with the payment.
+      await this.journalService.autoPostPayment(
+        tenantId,
+        { ...payment, currency: dto.currency, exchangeRate },
+        tx,
+      );
+
       return payment;
     });
 
@@ -196,17 +203,6 @@ export class PaymentsService {
       } catch (err) {
         console.error('Failed to evaluate order payment gate:', err);
       }
-    }
-
-    // 6. Module 4 Integration: Auto-post Payment NAS double-entry journal (Dt 5110/5010 / Kt 4010)
-    try {
-      await this.journalService.autoPostPayment(tenantId, {
-        ...result,
-        currency: dto.currency,
-        exchangeRate,
-      });
-    } catch (err) {
-      console.error('Failed to auto-post journal entry for payment:', err);
     }
 
     // Audit Log

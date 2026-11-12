@@ -124,7 +124,7 @@ export class StockTransfersService {
         totalCostValue += requestedQty * costPrice;
       }
 
-      return tx.stockTransfer.update({
+      const shipped = await tx.stockTransfer.update({
         where: { id },
         data: {
           status: 'IN_TRANSIT',
@@ -136,21 +136,17 @@ export class StockTransfersService {
           items: { include: { product: true } },
         },
       });
-    });
 
-    // Auto-post NAS journal entry: Dt 2920 / Kt 2910
-    try {
+      // Dt 2920 / Kt 2910 commits with the stock movement
       await this.journalService.autoPostShipTransfer(
         tenantId,
-        updated,
+        shipped,
         totalCostValue,
+        tx,
       );
-    } catch (err) {
-      console.error(
-        'Failed to auto-post journal entry for ship transfer:',
-        err,
-      );
-    }
+
+      return shipped;
+    });
 
     // Audit log
     await this.auditService.logAction({
@@ -234,7 +230,7 @@ export class StockTransfersService {
         totalCostValue += requestedQty * costPrice;
       }
 
-      return tx.stockTransfer.update({
+      const received = await tx.stockTransfer.update({
         where: { id },
         data: {
           status: 'RECEIVED',
@@ -246,21 +242,17 @@ export class StockTransfersService {
           items: { include: { product: true } },
         },
       });
-    });
 
-    // Auto-post NAS journal entry: Dt 2910 / Kt 2920
-    try {
+      // Dt 2910 / Kt 2920 commits with the stock movement
       await this.journalService.autoPostReceiveTransfer(
         tenantId,
-        updated,
+        received,
         totalCostValue,
+        tx,
       );
-    } catch (err) {
-      console.error(
-        'Failed to auto-post journal entry for receive transfer:',
-        err,
-      );
-    }
+
+      return received;
+    });
 
     // Audit log
     await this.auditService.logAction({

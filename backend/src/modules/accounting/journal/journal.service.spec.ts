@@ -109,6 +109,19 @@ describe('JournalService cash-account routing', () => {
     ]);
   });
 
+  it('writes the entry through the transaction client it is given, so it commits or rolls back with the business document', async () => {
+    const tx = createPrismaMock();
+
+    await service.autoPostInboundDoc(
+      tenantId,
+      { id: 'doc-1', docNumber: 'IN-000001', totalAmount: 500 },
+      tx as never,
+    );
+
+    expect(tx.journalEntry.create).toHaveBeenCalledTimes(1);
+    expect(prisma.journalEntry.create).not.toHaveBeenCalled();
+  });
+
   it('posts the settlement-rate loss separately from customer receivables', async () => {
     await service.autoPostPayment(tenantId, {
       id: 'payment-loss',
