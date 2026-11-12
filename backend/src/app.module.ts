@@ -1,11 +1,11 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateRequiredEnv } from './common/config/required-env';
-import { ThrottlerModule } from '@nestjs/throttler';
 
 // Common
 import { PrismaModule } from './common/prisma';
 import { I18nMiddleware } from './common/middleware/i18n.middleware';
+import { RateLimitModule } from './common/rate-limit/rate-limit';
 
 // Feature modules
 import { HealthModule } from './modules/health/health.module';
@@ -36,13 +36,8 @@ import { ProductionModule } from './modules/production/production.module';
       validate: validateRequiredEnv,
     }),
 
-    // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    // Rate limiting (global guard; strict limits on auth and webhooks)
+    RateLimitModule,
 
     // Database & Audit
     PrismaModule,

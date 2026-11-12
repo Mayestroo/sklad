@@ -59,6 +59,10 @@ export interface ClickResponse {
 const ACTION_PREPARE = '0';
 const ACTION_COMPLETE = '1';
 
+/** The callback was refused because its signature did not check out. */
+export const isClickAuthFailure = (response: ClickResponse): boolean =>
+  response.error === CLICK_ERROR.SIGN_CHECK_FAILED;
+
 /**
  * Click SHOP-API callbacks (Prepare, action=0; Complete, action=1).
  * Every request is authenticated by its MD5 `sign_string` before any row is

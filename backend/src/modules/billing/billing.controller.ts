@@ -5,11 +5,20 @@ import {
   Body,
   Headers,
   HttpCode,
+  Ip,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { BillingService } from './billing.service';
-import { ClickWebhookService } from './webhooks/click-webhook.service';
-import { PaymeWebhookService } from './webhooks/payme-webhook.service';
+import {
+  ClickWebhookService,
+  isClickAuthFailure,
+} from './webhooks/click-webhook.service';
+import {
+  PaymeWebhookService,
+  isPaymeAuthFailure,
+} from './webhooks/payme-webhook.service';
+import { WebhookAuthFailureLimiter } from '../../common/rate-limit/rate-limit';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -23,6 +32,7 @@ export class BillingController {
     private readonly billingService: BillingService,
     private readonly clickWebhooks: ClickWebhookService,
     private readonly paymeWebhooks: PaymeWebhookService,
+    private readonly webhookAuthFailures: WebhookAuthFailureLimiter,
   ) {}
 
   @Get('plans')
@@ -62,18 +72,32 @@ export class BillingController {
   // provider's signature (Click) or Basic auth (Payme) inside the service, and
   // both protocols expect HTTP 200 with the error in the body. The bodies are
   // provider formats, parsed by the services rather than by a DTO.
+  // Authenticated callbacks are never rate limited, so the providers'
+  // idempotent retries always get through; only requests that fail
+  // authentication are counted, per IP, and answered 429 past the limit.
   @Post('webhook/click')
   @HttpCode(200)
-  clickWebhook(@Body() body: Record<string, unknown>) {
-    return this.clickWebhooks.handle(body);
+  @SkipThrottle()
+  async clickWebhook(@Body() body: Record<string, unknown>, @Ip() ip: string) {
+    const response = await this.clickWebhooks.handle(body);
+    if (isClickAuthFailure(response)) {
+      await this.webhookAuthFailures.recordFailure('click', ip);
+    }
+    return response;
   }
 
   @Post('webhook/payme')
   @HttpCode(200)
-  paymeWebhook(
+  @SkipThrottle()
+  async paymeWebhook(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: Record<string, unknown>,
+    @Ip() ip: string,
   ) {
-    return this.paymeWebhooks.handle(authorization, body);
+    const response = await this.paymeWebhooks.handle(authorization, body);
+    if (isPaymeAuthFailure(response)) {
+      await this.webhookAuthFailures.recordFailure('payme', ip);
+    }
+    return response;
   }
 }

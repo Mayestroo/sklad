@@ -96,6 +96,10 @@ class PaymeError extends Error {
   }
 }
 
+/** The request was refused because its Basic auth did not check out. */
+export const isPaymeAuthFailure = (response: PaymeResponse): boolean =>
+  response.error?.code === PAYME_ERROR.INSUFFICIENT_PRIVILEGES;
+
 /**
  * Payme Merchant API (JSON-RPC 2.0). Every request is authenticated by the
  * `Authorization: Basic base64("Paycom:<PAYME_SECRET_KEY>")` header before any

@@ -45,11 +45,20 @@ tenants use the system. Tick each one off in the PR that resolves it.
       Production currently runs on Neon in Singapore. Get a legal answer and,
       if required, move the database (or the personal-data part) to a local
       host before real tenants onboard.
-- [ ] **Rate limiting is not enforced.** `ThrottlerModule` is configured
-      (100 requests/minute) in `app.module.ts`, but no `ThrottlerGuard` is
-      registered, so no route is limited (login and registration included).
-      Register it globally (behind the proxy, trust the forwarded IP) and give
-      auth routes a stricter limit.
+- [x] **Rate limiting is enforced.** `ThrottlerGuard` is registered globally
+      (`backend/src/common/rate-limit/rate-limit.ts`): 300 requests/minute per
+      IP per route by default; login 5/minute, registration 5/hour; Click and
+      Payme callbacks that fail authentication 10 per 15 minutes per IP
+      (authenticated callbacks and their retries are never limited).
+- [ ] **Set `TRUST_PROXY` in production** to the number of reverse-proxy hops
+      in front of the API (usually `1`). Without it every request appears to
+      come from the proxy, so all users share one login limit and get 429
+      together. `true` is refused (clients could spoof their IP).
+- [ ] **Rate-limit counters are in memory, per process.** With more than one
+      API instance each counts separately (an attacker gets N × the limit).
+      Before scaling out, move the throttler storage to Redis.
+- [ ] **Password reset has no route yet.** When it is added, give it
+      `@Throttle(strictThrottle(...))` like login and registration.
 - [ ] **Registration email enumeration.** `POST /api/auth/register` answers
       `409 A user with this email address already exists` when the admin email
       is taken (`AuthService.registerCompany`), so anyone can probe which emails have
