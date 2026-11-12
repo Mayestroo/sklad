@@ -1800,17 +1800,6 @@ export class SalesInvoicesService {
     });
   }
 
-  async getProductPriceFromList(
-    tenantId: string,
-    priceListId: string,
-    productId: string,
-  ) {
-    const pp = await this.prisma.productPrice.findUnique({
-      where: { priceListId_productId: { priceListId, productId } },
-    });
-    return pp;
-  }
-
   async updatePriceList(
     tenantId: string,
     id: string,

@@ -58,43 +58,6 @@ export class StockReservationService {
   }
 
   /**
-   * Get free stock for multiple products in a warehouse
-   */
-  async getWarehouseStockAvailability(
-    tenantId: string,
-    warehouseId: string,
-    productIds?: string[],
-  ): Promise<Record<string, StockAvailability>> {
-    const where: Prisma.StockLevelWhereInput = {
-      tenantId,
-      warehouseId,
-    };
-
-    if (productIds && productIds.length > 0) {
-      where.productId = { in: productIds };
-    }
-
-    const stockLevels = await this.prisma.stockLevel.findMany({
-      where,
-    });
-
-    const result: Record<string, StockAvailability> = {};
-    for (const sl of stockLevels) {
-      const physical = Number(sl.quantity || 0);
-      const reserved = Number(sl.reservedQuantity || 0);
-      result[sl.productId] = {
-        productId: sl.productId,
-        warehouseId: sl.warehouseId,
-        physicalStock: physical,
-        reservedStock: reserved,
-        freeStock: Math.max(0, physical - reserved),
-      };
-    }
-
-    return result;
-  }
-
-  /**
    * Auto-reserve stock for a confirmed Sales Order
    * Reserves available free stock up to requested quantity and returns remaining gap for production.
    */

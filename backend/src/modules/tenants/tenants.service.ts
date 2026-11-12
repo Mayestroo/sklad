@@ -60,12 +60,6 @@ export class TenantsService {
     return company;
   }
 
-  async findBySlug(slug: string) {
-    return this.prisma.company.findUnique({
-      where: { slug },
-    });
-  }
-
   // ============================================
   // BRANCH MANAGEMENT
   // ============================================
