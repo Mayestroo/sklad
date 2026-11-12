@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { PrismaService } from '../../common/prisma';
 import { PricingPlan } from '../../../../shared/types';
 
@@ -147,7 +148,11 @@ export class BillingService {
       throw new BadRequestException('Invalid subscription plan');
     }
 
-    const paymentNumber = `BILL-${Date.now().toString().slice(-6)}`;
+    const paymentNumber = await nextDocumentNumber(
+      this.prisma,
+      tenantId,
+      'SUBSCRIPTION_PAYMENT',
+    );
     const amount = selectedPlan.priceMonthly;
 
     // Create Subscription record

@@ -16,7 +16,7 @@ import {
   SalesReturnStatus,
   SalesReturnDocStatus,
 } from '@prisma/client';
-import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import {
@@ -35,19 +35,11 @@ export class SalesInvoicesService {
   // ─── NUMBER GENERATORS ─────────────────────────────────────────
 
   private async generateInvoiceNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('INV', (prefix) =>
-      this.prisma.salesInvoice.count({
-        where: { tenantId, invoiceNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'SALES_INVOICE');
   }
 
   private async generateReturnNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('SRET', (prefix) =>
-      this.prisma.salesReturn.count({
-        where: { tenantId, returnNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'SALES_RETURN');
   }
 
   // ─── INVOICES LIST & DETAIL ────────────────────────────────────

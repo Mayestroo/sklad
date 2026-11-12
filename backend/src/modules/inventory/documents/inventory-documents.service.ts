@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
@@ -183,13 +184,14 @@ export class InventoryDocumentsService {
     tenantId: string,
     docType: string,
   ): Promise<string> {
-    const count = await this.prisma.inventoryDocument.count({
-      where: { tenantId, docType: docType as any },
-    });
-
-    const prefix =
-      docType === 'INBOUND' ? 'IN' : docType === 'OUTBOUND' ? 'OUT' : 'ST';
-    const nextSeq = (count + 1).toString().padStart(6, '0');
-    return `${prefix}-${nextSeq}`;
+    return nextDocumentNumber(
+      this.prisma,
+      tenantId,
+      docType === 'INBOUND'
+        ? 'INVENTORY_INBOUND'
+        : docType === 'OUTBOUND'
+          ? 'INVENTORY_OUTBOUND'
+          : 'INVENTORY_STOCKTAKE',
+    );
   }
 }

@@ -13,6 +13,8 @@ import { CounterpartySettlementService } from '../settlements/counterparty-settl
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
 
+jest.mock('../../common/sequences/document-sequence');
+
 describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Suite', () => {
   let service: PurchasesService;
   let prisma: any;

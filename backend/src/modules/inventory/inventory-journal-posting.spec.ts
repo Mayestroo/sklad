@@ -4,6 +4,8 @@ import { JournalService } from '../accounting/journal/journal.service';
 import { InventoryDocumentsService } from './documents/inventory-documents.service';
 import { StockTransfersService } from './transfers/stock-transfers.service';
 
+jest.mock('../../common/sequences/document-sequence');
+
 /**
  * ADR 0006: stock movements and their automatic journal entries commit together.
  * A movement whose journal entry cannot be posted must fail, not leave the ledger

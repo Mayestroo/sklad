@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { PrismaService } from '../../common/prisma';
 import { JournalService } from '../accounting/journal/journal.service';
 import {
@@ -86,16 +87,7 @@ export class ServicesService {
    * Generate sequential act number: ACT-YYYY-XXXX
    */
   async generateActNumber(tenantId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `ACT-${year}-`;
-    const count = await this.prisma.serviceAct.count({
-      where: {
-        tenantId,
-        actNumber: { startsWith: prefix },
-      },
-    });
-    const nextSeq = (count + 1).toString().padStart(4, '0');
-    return `${prefix}${nextSeq}`;
+    return nextDocumentNumber(this.prisma, tenantId, 'SERVICE_ACT');
   }
 
   /**

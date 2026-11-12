@@ -6,7 +6,7 @@ import {
 import { ManufacturingStatus, Prisma, ProductType } from '@prisma/client';
 import { PrismaService } from '../../common/prisma';
 import { AuditService } from '../audit/audit.service';
-import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import {
   allocateFifoCost,
   FifoBatchInput,
@@ -255,11 +255,7 @@ export class ProductionService {
     );
     if (dto.responsibleId)
       await this.requireTenantUser(tenantId, dto.responsibleId);
-    const docNumber = await generateDocumentSequence('PRD', (prefix) =>
-      this.prisma.productionDocument.count({
-        where: { tenantId, docNumber: { startsWith: prefix } },
-      }),
-    );
+    const docNumber = await nextDocumentNumber(this.prisma, tenantId, 'PRODUCTION');
 
     const document = await this.prisma.productionDocument.create({
       data: {

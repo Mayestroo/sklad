@@ -4,6 +4,8 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../../common/prisma';
 import { ProductionService } from './production.service';
 
+jest.mock('../../common/sequences/document-sequence');
+
 describe('ProductionService', () => {
   const tenantId = 'tenant-1';
   const userId = 'user-1';

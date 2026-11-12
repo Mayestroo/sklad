@@ -13,6 +13,8 @@ import {
 } from '@prisma/client';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
+jest.mock('../../../common/sequences/document-sequence');
+
 describe('SalesOrdersService', () => {
   let service: SalesOrdersService;
   let prisma: any;

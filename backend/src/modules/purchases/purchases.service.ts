@@ -24,7 +24,7 @@ import {
   SettlementAllocationTarget,
 } from '@prisma/client';
 
-import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
@@ -50,19 +50,11 @@ export class PurchasesService {
   // ─── RECEIPT NUMBER GENERATOR ─────────────────────────────────
 
   private async generateDocNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('PUR', (prefix) =>
-      this.prisma.purchaseReceipt.count({
-        where: { tenantId, docNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'PURCHASE_RECEIPT');
   }
 
   private async generateReturnNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('PRET', (prefix) =>
-      this.prisma.purchaseReturn.count({
-        where: { tenantId, returnNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'PURCHASE_RETURN');
   }
 
   // ─── RECEIPTS ─────────────────────────────────────────────────
@@ -948,10 +940,7 @@ export class PurchasesService {
       });
 
       // 2. Create Finance Transaction (EXPENSE)
-      const txCount = await tx.financeTransaction.count({
-        where: { tenantId },
-      });
-      const txNumber = `FT-${new Date().getFullYear()}-${(txCount + 1).toString().padStart(5, '0')}`;
+      const txNumber = await nextDocumentNumber(tx, tenantId, 'FINANCE_TRANSACTION');
 
       const financeTransaction = await tx.financeTransaction.create({
         data: {

@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import {
   OpeningBalanceStatus,
   OpeningBalanceCategory,
@@ -225,9 +226,12 @@ export class OpeningBalancesService {
   async create(tenantId: string, userId: string, dto: CreateOpeningBalanceDto) {
     let docNumber = dto.docNumber;
     if (!docNumber) {
-      const count = await this.prisma.openingBalanceDocument.count({ where: { tenantId } });
-      const year = new Date(dto.openingDate).getFullYear();
-      docNumber = `OB-${year}-${String(count + 1).padStart(4, '0')}`;
+      docNumber = await nextDocumentNumber(
+        this.prisma,
+        tenantId,
+        'OPENING_BALANCE',
+        new Date(dto.openingDate),
+      );
     }
 
     const existing = await this.prisma.openingBalanceDocument.findFirst({

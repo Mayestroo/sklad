@@ -11,6 +11,8 @@ import {
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
 
+jest.mock('../../common/sequences/document-sequence');
+
 describe('AdditionalExpensesService Unit Tests', () => {
   let service: AdditionalExpensesService;
   let prisma: any;

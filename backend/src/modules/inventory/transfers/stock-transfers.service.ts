@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
@@ -320,10 +321,6 @@ export class StockTransfersService {
   }
 
   private async generateTransferNumber(tenantId: string): Promise<string> {
-    const count = await this.prisma.stockTransfer.count({
-      where: { tenantId },
-    });
-    const nextSeq = (count + 1).toString().padStart(6, '0');
-    return `TR-${nextSeq}`;
+    return nextDocumentNumber(this.prisma, tenantId, 'STOCK_TRANSFER');
   }
 }

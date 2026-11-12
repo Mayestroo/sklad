@@ -25,7 +25,7 @@ import {
   isManagerOrAbove,
   isWarehouseOrAbove,
 } from '../../../common/utils/roles.util';
-import { generateDocumentSequence } from '../../../common/utils/document-sequence.util';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
@@ -87,11 +87,7 @@ export class SalesOrdersService {
   // ─── NUMBER GENERATOR ──────────────────────────────────────────
 
   private async generateOrderNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('Z', (prefix) =>
-      this.prisma.salesOrder.count({
-        where: { tenantId, orderNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'SALES_ORDER');
   }
 
   // ─── DISPATCH GATE HELPER ──────────────────────────────────────
@@ -1412,12 +1408,7 @@ export class SalesOrdersService {
       }
 
       // 2. Generate invoice number
-      const year = new Date().getFullYear();
-      const invPrefix = `INV-${year}-`;
-      const invCount = await tx.salesInvoice.count({
-        where: { tenantId, invoiceNumber: { startsWith: invPrefix } },
-      });
-      const invoiceNumber = `${invPrefix}${(invCount + 1).toString().padStart(4, '0')}`;
+      const invoiceNumber = await nextDocumentNumber(tx, tenantId, 'SALES_INVOICE');
 
       // 3. Prepare invoice items
       const lineInputs = dispatchPlan.map((dp) => ({

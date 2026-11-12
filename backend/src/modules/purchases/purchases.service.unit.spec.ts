@@ -17,6 +17,8 @@ import {
   ExpenseAllocationMethodDto,
 } from './dto/create-purchase-expense.dto';
 
+jest.mock('../../common/sequences/document-sequence');
+
 describe('PurchasesService Full Unit & Invariant Test Suite', () => {
   let service: PurchasesService;
   let prisma: any;
@@ -171,13 +173,6 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       );
 
       await service.createReceipt(tenantId, userId, dto as any);
-
-      expect(prisma.purchaseReceipt.count).toHaveBeenCalledWith({
-        where: {
-          tenantId,
-          docNumber: { startsWith: `PUR-${year}-` },
-        },
-      });
 
       expect(prisma.purchaseReceipt.create).toHaveBeenCalled();
       const createCall = prisma.purchaseReceipt.create.mock.calls[0][0];

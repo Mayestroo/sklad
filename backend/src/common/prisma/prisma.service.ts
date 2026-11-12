@@ -231,6 +231,7 @@ export class PrismaService
 
 /** Models that have a tenant_id column and must be scoped */
 const TENANT_SCOPED_MODELS = new Set([
+  'DocumentSequence',
   'User',
   'Role',
   'Branch',

@@ -11,6 +11,8 @@ import {
 } from '@prisma/client';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
+jest.mock('../../common/sequences/document-sequence');
+
 describe('ServicesService Unit Tests', () => {
   let service: ServicesService;
   let prisma: any;

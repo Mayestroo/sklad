@@ -18,7 +18,7 @@ import {
   CounterpartySettlementSide,
 } from '@prisma/client';
 
-import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
@@ -40,11 +40,7 @@ export class AdditionalExpensesService {
   // ─── DOCUMENT NUMBER GENERATOR ──────────────────────────────
 
   private async generateDocNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('EXP', (prefix) =>
-      this.prisma.additionalExpense.count({
-        where: { tenantId, docNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'ADDITIONAL_EXPENSE');
   }
 
   // ─── ALLOCATION CALCULATION ENGINE ──────────────────────────
@@ -787,10 +783,7 @@ export class AdditionalExpensesService {
         });
 
         // Create FinanceTransaction EXPENSE
-        const txCount = await tx.financeTransaction.count({
-          where: { tenantId },
-        });
-        const txNumber = `FT-${new Date().getFullYear()}-${(txCount + 1).toString().padStart(5, '0')}`;
+        const txNumber = await nextDocumentNumber(tx, tenantId, 'FINANCE_TRANSACTION');
 
         await tx.financeTransaction.create({
           data: {

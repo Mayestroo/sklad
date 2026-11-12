@@ -10,6 +10,8 @@ import {
   SalesReturnDocStatus,
 } from '@prisma/client';
 
+jest.mock('../../../common/sequences/document-sequence');
+
 describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
   let service: SalesInvoicesService;
   let prisma: any;

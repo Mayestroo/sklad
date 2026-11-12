@@ -13,6 +13,8 @@ import { CounterpartySettlementService } from '../settlements/counterparty-settl
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
 
+jest.mock('../../common/sequences/document-sequence');
+
 describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invariant Test Suite (#108)', () => {
   let service: PurchasesService;
   let prisma: any;

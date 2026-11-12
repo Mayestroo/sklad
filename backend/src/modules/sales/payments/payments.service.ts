@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
@@ -238,8 +239,6 @@ export class PaymentsService {
   }
 
   private async generatePaymentNumber(tenantId: string): Promise<string> {
-    const count = await this.prisma.payment.count({ where: { tenantId } });
-    const nextSeq = (count + 1).toString().padStart(6, '0');
-    return `PAY-${nextSeq}`;
+    return nextDocumentNumber(this.prisma, tenantId, 'PAYMENT');
   }
 }

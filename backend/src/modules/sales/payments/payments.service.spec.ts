@@ -9,6 +9,8 @@ import { CounterpartySettlementService } from '../../settlements/counterparty-se
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import { PaymentsService } from './payments.service';
 
+jest.mock('../../../common/sequences/document-sequence');
+
 describe('PaymentsService settlement ledger integration', () => {
   let service: PaymentsService;
   let prisma: any;

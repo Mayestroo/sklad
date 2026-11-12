@@ -306,6 +306,7 @@ model Company {
   inventoryDocs      InventoryDocument[]
   stockTransfers     StockTransfer[]
   counterparties     Counterparty[]
+  documentSequences  DocumentSequence[]
   salesOrders        SalesOrder[]
   salesInvoices      SalesInvoice[]
   purchaseOrders     PurchaseOrder[]
@@ -2099,4 +2100,19 @@ model OpeningBalanceImportError {
 
   @@index([tenantId, sessionId])
   @@map("opening_balance_import_errors")
+}
+
+/// Per-tenant document number counters (key = series, e.g. "INV-2026").
+/// Incremented atomically by common/sequences/document-sequence.ts; never
+/// derive a document number from count() + 1.
+model DocumentSequence {
+  tenantId  String   @map("tenant_id")
+  key       String
+  lastValue Int      @map("last_value")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key])
+  @@map("document_sequences")
 }
