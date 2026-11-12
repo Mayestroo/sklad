@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { translatableText } from '../../../common/utils/translatable-text';
 import { PrismaService } from '../../../common/prisma';
 import { StockReservationService } from '../../inventory/stock-reservation/stock-reservation.service';
 import { CreateSalesOrderDto } from '../dto/create-sales-order.dto';
@@ -1822,7 +1823,7 @@ export class SalesOrdersService {
         const availableQty = stockLevel ? Number(stockLevel.quantity) : 0;
         if (availableQty < qty) {
           throw new BadRequestException(
-            `"${(dp.orderItem.product.name as { uz?: string } | null)?.uz || String(dp.orderItem.product.name)}" uchun omborda yetarli qoldiq yo'q. Mavjud: ${availableQty}, chiqarilayotgan: ${qty}`,
+            `"${translatableText(dp.orderItem.product.name)}" uchun omborda yetarli qoldiq yo'q. Mavjud: ${availableQty}, chiqarilayotgan: ${qty}`,
           );
         }
 

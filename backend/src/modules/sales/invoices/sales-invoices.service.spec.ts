@@ -347,6 +347,8 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         id: 'inv-1',
         tenantId: 'tenant-1',
         warehouseId: 'wh-1',
+        currency: 'UZS',
+        exchangeRate: 1,
         status: SalesDocStatus.DRAFT,
         items: [
           {
@@ -366,7 +368,34 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       await expect(
         service.postInvoice('tenant-1', 'user-1', 'inv-1'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('"LED Lamp" uchun omborda yetarli miqdor');
+    });
+
+    it('names a product with only a Russian name in the insufficient-stock error', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        exchangeRate: 1,
+        status: SalesDocStatus.DRAFT,
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 10,
+            product: { name: { ru: 'Цемент М400' } },
+          },
+        ],
+      });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 5,
+      });
+
+      await expect(
+        service.postInvoice('tenant-1', 'user-1', 'inv-1'),
+      ).rejects.toThrow('"Цемент М400" uchun');
     });
 
     it('should consume batches via FIFO, calculate accurate COGS and economic gross profit, and post journal entries', async () => {

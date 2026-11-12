@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { translatableText } from '../../../common/utils/translatable-text';
 import { PrismaService } from '../../../common/prisma';
 import { CreateSalesInvoiceDto } from '../dto/create-sales-invoice.dto';
 import { FilterSalesInvoicesDto } from '../dto/filter-sales-invoices.dto';
@@ -504,9 +505,7 @@ export class SalesInvoicesService {
         const availableQty = invoice.salesOrderId ? physicalQty : freeQty;
 
         if (availableQty < qty) {
-          const prodName =
-            (item.product.name as { uz?: string } | null)?.uz ||
-            item.product.name;
+          const prodName = translatableText(item.product.name);
           if (!invoice.salesOrderId && reservedQty > 0) {
             throw new BadRequestException(
               `"${prodName}" uchun erkin qoldiq yetarli emas. Jami: ${physicalQty}, Band qilingan (rezerv): ${reservedQty}, Erkin: ${freeQty}, Talab qilingan: ${qty}`,
