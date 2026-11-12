@@ -126,3 +126,76 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.entries(
 export const ALL_PERMISSION_SLUGS: ReadonlySet<string> = new Set(
   PERMISSIONS.map((p) => p.slug),
 );
+
+export type PermissionRef = { module: string; action: PermissionAction };
+
+export interface SystemRoleDefinition {
+  slug: string;
+  name: { uz: string; ru: string };
+  /** Whether the role holds a permission. */
+  grants: (permission: PermissionRef) => boolean;
+}
+
+/**
+ * The system roles (tenantId = null) and what each holds. Used by both
+ * seeders; the resulting matrix is pinned in system-roles.spec.ts.
+ * super_admin and company_admin also bypass PermissionsGuard.
+ */
+export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
+  {
+    slug: 'super_admin',
+    name: { uz: 'Super Admin', ru: 'Супер Администратор' },
+    grants: () => true,
+  },
+  {
+    slug: 'company_admin',
+    name: { uz: 'Kompaniya Admini', ru: 'Администратор компании' },
+    grants: (p) => p.module !== 'billing' || p.action === 'VIEW',
+  },
+  {
+    slug: 'accountant',
+    name: { uz: 'Buxgalter', ru: 'Бухгалтер' },
+    grants: (p) =>
+      ['accounting', 'dashboard', 'analytics'].includes(p.module) ||
+      (p.module === 'inventory' && p.action === 'VIEW') ||
+      (p.module === 'sales' && p.action === 'VIEW'),
+  },
+  {
+    slug: 'warehouse_manager',
+    name: { uz: 'Ombor menejeri', ru: 'Менеджер склада' },
+    grants: (p) =>
+      p.module === 'inventory' ||
+      p.module === 'dashboard' ||
+      (p.module === 'sales' && p.action === 'VIEW'),
+  },
+  {
+    slug: 'salesperson',
+    name: { uz: 'Sotuvchi', ru: 'Продавец' },
+    grants: (p) =>
+      p.module === 'sales' ||
+      p.module === 'dashboard' ||
+      (p.module === 'inventory' && p.action === 'VIEW'),
+  },
+  {
+    slug: 'cashier',
+    name: { uz: 'Kassir', ru: 'Кассир' },
+    grants: (p) =>
+      (p.module === 'sales' && ['VIEW', 'CREATE'].includes(p.action)) ||
+      (p.module === 'finance' && ['VIEW', 'CREATE'].includes(p.action)) ||
+      p.module === 'dashboard',
+  },
+  {
+    slug: 'viewer',
+    name: { uz: "Faqat ko'rish", ru: 'Только просмотр' },
+    grants: (p) => p.action === 'VIEW',
+  },
+];
+
+/** Sorted permission slugs a system role holds. */
+export function systemRolePermissionSlugs(roleSlug: string): string[] {
+  const role = SYSTEM_ROLES.find((r) => r.slug === roleSlug);
+  if (!role) throw new Error(`Unknown system role: ${roleSlug}`);
+  return PERMISSIONS.filter((p) => role.grants(p))
+    .map((p) => p.slug)
+    .sort();
+}

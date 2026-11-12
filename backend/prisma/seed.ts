@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 import { PrismaClient, UnitOfMeasure, TransactionDirection } from '.prisma/client';
-import { PERMISSIONS } from '../src/common/auth/permission-catalog';
+import { PERMISSIONS, SYSTEM_ROLES } from '../src/common/auth/permission-catalog';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
@@ -63,71 +63,13 @@ async function main() {
   // ─── 4. System Roles ─────────────────────────────────────────────
   const allPermissions = await prisma.permission.findMany();
 
-  const systemRoles = [
-    {
-      slug: 'super_admin',
-      name: { uz: 'Super Admin', ru: 'Супер Администратор' },
-      permissions: allPermissions.map((p) => p.id),
-    },
-    {
-      slug: 'company_admin',
-      name: { uz: 'Kompaniya Admini', ru: 'Администратор компании' },
-      permissions: allPermissions
-        .filter((p) => p.module !== 'billing' || p.action === 'VIEW')
-        .map((p) => p.id),
-    },
-    {
-      slug: 'accountant',
-      name: { uz: 'Buxgalter', ru: 'Бухгалтер' },
-      permissions: allPermissions
-        .filter((p) =>
-          ['accounting', 'dashboard', 'analytics'].includes(p.module) ||
-          (p.module === 'inventory' && p.action === 'VIEW') ||
-          (p.module === 'sales' && p.action === 'VIEW'),
-        )
-        .map((p) => p.id),
-    },
-    {
-      slug: 'warehouse_manager',
-      name: { uz: 'Ombor menejeri', ru: 'Менеджер склада' },
-      permissions: allPermissions
-        .filter((p) =>
-          p.module === 'inventory' ||
-          p.module === 'dashboard' ||
-          (p.module === 'sales' && p.action === 'VIEW'),
-        )
-        .map((p) => p.id),
-    },
-    {
-      slug: 'salesperson',
-      name: { uz: 'Sotuvchi', ru: 'Продавец' },
-      permissions: allPermissions
-        .filter((p) =>
-          p.module === 'sales' ||
-          p.module === 'dashboard' ||
-          (p.module === 'inventory' && p.action === 'VIEW'),
-        )
-        .map((p) => p.id),
-    },
-    {
-      slug: 'cashier',
-      name: { uz: 'Kassir', ru: 'Кассир' },
-      permissions: allPermissions
-        .filter((p) =>
-          (p.module === 'sales' && ['VIEW', 'CREATE'].includes(p.action)) ||
-          (p.module === 'finance' && ['VIEW', 'CREATE'].includes(p.action)) ||
-          p.module === 'dashboard',
-        )
-        .map((p) => p.id),
-    },
-    {
-      slug: 'viewer',
-      name: { uz: "Faqat ko'rish", ru: 'Только просмотр' },
-      permissions: allPermissions
-        .filter((p) => p.action === 'VIEW')
-        .map((p) => p.id),
-    },
-  ];
+  const systemRoles = SYSTEM_ROLES.map((role) => ({
+    slug: role.slug,
+    name: role.name,
+    permissions: allPermissions
+      .filter((p) => role.grants(p))
+      .map((p) => p.id),
+  }));
 
   for (const role of systemRoles) {
     const existing = await prisma.role.findFirst({
