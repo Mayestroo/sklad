@@ -18,6 +18,15 @@ export interface TenantCompanySummary {
   trialEndsAt: string | null;
 }
 
+/** Result of creating a tenant. */
+export interface CreatedTenantSummary extends TenantCompanySummary {
+  /**
+   * Present only when the operator left the admin password empty: the
+   * generated password, returned exactly once and never stored in plain text.
+   */
+  generatedAdminPassword?: string;
+}
+
 export interface SystemAnnouncement {
   id: string;
   title: TranslatableField;

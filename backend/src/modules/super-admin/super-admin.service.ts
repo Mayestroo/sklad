@@ -8,8 +8,10 @@ import { PrismaService } from '../../common/prisma';
 import {
   GlobalMetrics,
   TenantCompanySummary,
+  CreatedTenantSummary,
   BackupMetadata,
 } from '../../../../shared/types';
+import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as bcrypt from 'bcrypt';
@@ -133,7 +135,7 @@ export class SuperAdminService {
     };
   }
 
-  async createTenant(dto: CreateTenantDto): Promise<TenantCompanySummary> {
+  async createTenant(dto: CreateTenantDto): Promise<CreatedTenantSummary> {
     const cleanSlug = dto.slug.trim().toLowerCase();
     const cleanEmail = dto.adminEmail.trim().toLowerCase();
 
@@ -161,7 +163,12 @@ export class SuperAdminService {
       throw new BadRequestException('System role company_admin not found.');
     }
 
-    const password = dto.adminPassword || 'Admin123!';
+    // No shared default password: when the operator leaves it empty, generate
+    // a random one and hand it back exactly once.
+    const password = dto.adminPassword
+      ? dto.adminPassword
+      : generateAdminPassword();
+    const generatedAdminPassword = dto.adminPassword ? undefined : password;
     const passwordHash = await bcrypt.hash(password, 10);
 
     const trialDays = dto.trialDays ?? 14;
@@ -250,6 +257,7 @@ export class SuperAdminService {
       userCount: 1,
       createdAt: company.createdAt.toISOString(),
       trialEndsAt: company.trialEndsAt ? company.trialEndsAt.toISOString() : null,
+      ...(generatedAdminPassword ? { generatedAdminPassword } : {}),
     };
   }
 
@@ -482,4 +490,9 @@ CREATE DATABASE IF NOT EXISTS crm_db;
       take: 50,
     });
   }
+}
+
+/** 18 URL-safe random characters (~108 bits of entropy). */
+function generateAdminPassword(): string {
+  return randomBytes(18).toString('base64url').slice(0, 18);
 }

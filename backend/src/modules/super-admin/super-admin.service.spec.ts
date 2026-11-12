@@ -145,6 +145,58 @@ describe('SuperAdminService', () => {
         }),
       );
       expect(result.slug).toBe('yangi-korxona');
+      // A password chosen by the operator is never echoed back.
+      expect(result.generatedAdminPassword).toBeUndefined();
+    });
+
+    type MockDb = Record<string, Record<string, jest.Mock>>;
+    const db = () => prisma as MockDb;
+    const storedPasswordHash = (call = 0): string => {
+      const calls = db().user.create.mock.calls as [
+        { data: { passwordHash: string } },
+      ][];
+      return calls[call][0].data.passwordHash;
+    };
+
+    const mockSuccessfulCreate = () => {
+      db().company.findUnique.mockResolvedValue(null);
+      db().user.findFirst.mockResolvedValue(null);
+      db().role.findFirst.mockResolvedValue({ id: 'role-id' });
+      db().company.create.mockResolvedValue({
+        id: 'c1',
+        name: validDto.name,
+        slug: validDto.slug,
+        status: 'ACTIVE',
+        createdAt: new Date(),
+        trialEndsAt: null,
+      });
+      db().user.create.mockResolvedValue({ id: 'u1' });
+      db().branch.create.mockResolvedValue({ id: 'b1' });
+    };
+
+    it('never falls back to a shared default password; generates one and returns it once', async () => {
+      mockSuccessfulCreate();
+      const withoutPassword = { ...validDto, adminPassword: undefined };
+
+      const first = await service.createTenant(withoutPassword);
+      const second = await service.createTenant(withoutPassword);
+
+      const password = first.generatedAdminPassword ?? '';
+      expect(password.length).toBeGreaterThanOrEqual(16);
+      expect(password).not.toBe('Admin123!');
+      expect(second.generatedAdminPassword).not.toBe(password);
+      expect(await bcrypt.compare(password, storedPasswordHash())).toBe(true);
+      expect(await bcrypt.compare('Admin123!', storedPasswordHash())).toBe(
+        false,
+      );
+    });
+
+    it('hashes the operator-chosen password', async () => {
+      mockSuccessfulCreate();
+      await service.createTenant(validDto);
+      expect(await bcrypt.compare('Password123!', storedPasswordHash())).toBe(
+        true,
+      );
     });
   });
 

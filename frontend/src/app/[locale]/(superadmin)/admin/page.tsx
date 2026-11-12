@@ -25,7 +25,7 @@ import {
   Clock,
   XCircle,
 } from 'lucide-react';
-import { GlobalMetrics, TenantCompanySummary } from '@shared/types';
+import { CreatedTenantSummary, GlobalMetrics, TenantCompanySummary } from '@shared/types';
 
 export default function SuperAdminTenantsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -51,7 +51,12 @@ export default function SuperAdminTenantsPage() {
   const [adminFirstName, setAdminFirstName] = useState('');
   const [adminLastName, setAdminLastName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('Admin123!');
+  // Empty means "generate one": the server returns it once and we show it once.
+  const [adminPassword, setAdminPassword] = useState('');
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
 
   // Edit Tenant Modal
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -89,7 +94,7 @@ export default function SuperAdminTenantsPage() {
     if (!token) return;
     setCreateLoading(true);
     try {
-      await apiFetch('/super-admin/tenants', {
+      const created = await apiFetch<CreatedTenantSummary>('/super-admin/tenants', {
         token,
         locale,
         method: 'POST',
@@ -100,9 +105,15 @@ export default function SuperAdminTenantsPage() {
           adminFirstName,
           adminLastName,
           adminEmail: adminEmail.trim().toLowerCase(),
-          adminPassword,
+          ...(adminPassword ? { adminPassword } : {}),
         }),
       });
+      if (created.generatedAdminPassword) {
+        setCreatedCredentials({
+          email: adminEmail.trim().toLowerCase(),
+          password: created.generatedAdminPassword,
+        });
+      }
 
       toast.success(
         isRu ? 'Предприятие успешно создано' : 'Yangi korxona muvaffaqiyatli yaratildi',
@@ -125,7 +136,7 @@ export default function SuperAdminTenantsPage() {
     setAdminFirstName('');
     setAdminLastName('');
     setAdminEmail('');
-    setAdminPassword('Admin123!');
+    setAdminPassword('');
   };
 
   const handleOpenEditModal = (t: TenantCompanySummary) => {
@@ -743,13 +754,15 @@ export default function SuperAdminTenantsPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                  {isRu ? 'Начальный пароль' : 'Dastlabki parol'} *
+                  {isRu ? 'Начальный пароль' : 'Dastlabki parol'}
                 </label>
                 <input
                   type="text"
-                  required
+                  minLength={8}
+                  autoComplete="new-password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder={isRu ? 'Пусто — сгенерировать' : 'Bo‘sh — avtomatik yaratish'}
                   style={inputStyle}
                 />
               </div>
@@ -765,6 +778,50 @@ export default function SuperAdminTenantsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* MODAL: generated admin password, shown exactly once */}
+      <Modal
+        isOpen={!!createdCredentials}
+        onClose={() => setCreatedCredentials(null)}
+        title={isRu ? 'Пароль администратора' : 'Administrator paroli'}
+        size="md"
+      >
+        {createdCredentials && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start', color: 'var(--color-warning-600)' }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 'var(--text-sm)' }}>
+                {isRu
+                  ? 'Пароль показывается только один раз. Сохраните его и передайте администратору — после закрытия окна его нельзя будет посмотреть.'
+                  : 'Parol faqat bir marta ko‘rsatiladi. Uni saqlab, administratorga yetkazing — oyna yopilgandan keyin uni qayta ko‘rib bo‘lmaydi.'}
+              </span>
+            </div>
+            <div style={{ fontSize: 'var(--text-sm)' }}>
+              <div>Email: <strong>{createdCredentials.email}</strong></div>
+              <div style={{ marginTop: 'var(--space-2)' }}>
+                {isRu ? 'Пароль' : 'Parol'}:{' '}
+                <code style={{ fontSize: 'var(--text-base)', userSelect: 'all' }}>{createdCredentials.password}</code>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard
+                    .writeText(createdCredentials.password)
+                    .then(() => toast.success(isRu ? 'Скопировано' : 'Nusxa olindi'))
+                    .catch(() => toast.error(isRu ? 'Не удалось скопировать' : 'Nusxa olib bo‘lmadi'));
+                }}
+              >
+                {isRu ? 'Копировать' : 'Nusxa olish'}
+              </Button>
+              <Button variant="primary" onClick={() => setCreatedCredentials(null)}>
+                {isRu ? 'Я сохранил пароль' : 'Parolni saqladim'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* MODAL: Edit Tenant Status & Plan */}
