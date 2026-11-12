@@ -1420,9 +1420,9 @@ describe('FinanceService Settlement Unit Test Suite', () => {
               return { count: 0 };
             }
 
-            transactionState!.transaction.status = data.status;
+            transactionState.transaction.status = data.status;
             if (data.isDeleted !== undefined) {
-              transactionState!.transaction.isDeleted = data.isDeleted;
+              transactionState.transaction.isDeleted = data.isDeleted;
             }
             return { count: 1 };
           }),

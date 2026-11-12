@@ -222,7 +222,7 @@ export class SalesOrdersService {
       ];
     }
     if (filters.counterpartyId) where.counterpartyId = filters.counterpartyId;
-    if (filters.status) where.status = filters.status as SalesOrderStatus;
+    if (filters.status) where.status = filters.status;
     if (filters.assignedSellerId)
       where.assignedSellerId = filters.assignedSellerId;
 
@@ -530,7 +530,7 @@ export class SalesOrdersService {
         counterpartyId: dto.counterpartyId,
         currency: dto.currency,
         exchangeRate: exchangeRate,
-        paymentCondition: dto.paymentCondition as PaymentCondition,
+        paymentCondition: dto.paymentCondition,
         requiredPaymentPercent:
           dto.paymentCondition === 'PARTIAL'
             ? dto.requiredPaymentPercent
@@ -644,9 +644,7 @@ export class SalesOrdersService {
       currency: dto.currency ?? undefined,
       exchangeRate:
         dto.exchangeRate !== undefined ? dto.exchangeRate : undefined,
-      paymentCondition: dto.paymentCondition
-        ? (dto.paymentCondition as PaymentCondition)
-        : undefined,
+      paymentCondition: dto.paymentCondition ? dto.paymentCondition : undefined,
       requiredPaymentPercent:
         dto.paymentCondition === 'PARTIAL'
           ? dto.requiredPaymentPercent
@@ -1022,7 +1020,7 @@ export class SalesOrdersService {
     tenantId: string,
     userId: string,
     id: string,
-    newStatus: SalesOrderStatus | string,
+    newStatus: string,
     userRoles: string[],
     warehouseId?: string,
     comment?: string,
@@ -1058,11 +1056,7 @@ export class SalesOrdersService {
       SalesOrderStatus.READY_FOR_SHIPMENT,
       SalesOrderStatus.READY_TO_SHIP,
     ];
-    if (
-      (warehouseTransitions as (SalesOrderStatus | string)[]).includes(
-        newStatus,
-      )
-    ) {
+    if ((warehouseTransitions as string[]).includes(newStatus)) {
       if (!isWarehouseOrAbove(userRoles)) {
         throw new ForbiddenException(
           'Ombor statuslarini o‘zgartirish uchun omborchi yoki admin roli talab qilinadi',
@@ -1094,7 +1088,7 @@ export class SalesOrdersService {
     };
 
     const allowed = validTransitions[order.status] || [];
-    if (!isAdmin(userRoles) && !allowed.includes(newStatus as string)) {
+    if (!isAdmin(userRoles) && !allowed.includes(newStatus)) {
       throw new BadRequestException(
         `"${order.status}" holatidan "${newStatus}" holatiga o‘tkazish mumkin emas`,
       );
@@ -1342,7 +1336,7 @@ export class SalesOrdersService {
       throw new NotFoundException("Ishlab chiqarish topshirig'i topilmadi");
     if (readyQty > Number(prodOrder.requiredQty)) {
       throw new BadRequestException(
-        `Tayyor miqdor kerakli miqdordan (${prodOrder.requiredQty}) oshib ketishi mumkin emas`,
+        `Tayyor miqdor kerakli miqdordan (${prodOrder.requiredQty.toString()}) oshib ketishi mumkin emas`,
       );
     }
 

@@ -158,7 +158,7 @@ export class FinanceService {
         currency: string;
       },
     ) => {
-      let summary = byAccount.get(accountId);
+      const summary = byAccount.get(accountId);
       if (!summary) {
         const newSummary: FinanceSummaryByAccount = {
           accountId,
@@ -280,7 +280,7 @@ export class FinanceService {
         };
       },
     );
-    for (const [key, totals] of byAccount) {
+    for (const totals of byAccount.values()) {
       if (
         totals.accountId &&
         reportingAccounts.some((account) => account.id === totals.accountId)
@@ -937,7 +937,7 @@ export class FinanceService {
     // Invariant: Cash account cannot go negative
     if (Number(account.balance) < Number(dto.amount)) {
       throw new BadRequestException(
-        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${account.balance} ${account.currency}, so'ralgan: ${dto.amount} ${dto.currency}`,
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${account.balance.toString()} ${account.currency}, so'ralgan: ${dto.amount} ${dto.currency}`,
       );
     }
 
@@ -1737,7 +1737,7 @@ export class FinanceService {
 
     if (Number(fromAccount.balance) < fromAmount) {
       throw new BadRequestException(
-        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${fromAccount.balance} ${fromAccount.currency}`,
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${fromAccount.balance.toString()} ${fromAccount.currency}`,
       );
     }
 

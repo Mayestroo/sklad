@@ -1,11 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { PrismaService } from '../../../common/prisma';
-import {
-  BadRequestException,
-  NotFoundException,
-  ConflictException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 describe('ProductsService', () => {
   let service: ProductsService;

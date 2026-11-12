@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PurchasesService } from './purchases.service';
 import { PrismaService } from '../../common/prisma';
-import { BadRequestException } from '@nestjs/common';
 import {
   PurchaseDocStatus,
   PurchasePaymentStatus,
@@ -168,7 +167,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         }),
       );
 
-      const receipt = await service.createReceipt(tenantId, userId, dto as any);
+      const receipt = await service.createReceipt(tenantId, userId, dto);
 
       expect(receipt).toBeDefined();
       expect(prisma.purchaseReceipt.create).toHaveBeenCalled();

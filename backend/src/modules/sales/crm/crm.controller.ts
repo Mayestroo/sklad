@@ -15,7 +15,6 @@ import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
-import { DealStageSlug } from '@prisma/client';
 import { UpdateDealDto, UpdateDealStageDto } from './dto/update-deal.dto';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)

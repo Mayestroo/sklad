@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PurchasesService } from './purchases.service';
 import { PrismaService } from '../../common/prisma';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import {
   PurchaseDocStatus,
   PurchaseReturnStatus,

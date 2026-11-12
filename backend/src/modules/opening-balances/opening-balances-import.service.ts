@@ -715,10 +715,8 @@ export class OpeningBalancesImportService {
         if (rowNumber === 1) return;
         const name = String(row.getCell(1).value || '').trim();
         const invNumber = String(row.getCell(2).value || '').trim();
-        const assetType = String(row.getCell(3).value || 'EQUIPMENT').trim();
         const rawCost = row.getCell(4).value;
         const rawDep = row.getCell(5).value || 0;
-        const usefulLife = Number(row.getCell(6).value || 60);
         const notes = String(row.getCell(7).value || '').trim();
 
         if (!name && !rawCost) return;

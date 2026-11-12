@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PurchasesService } from './purchases.service';
 import { PrismaService } from '../../common/prisma';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import {
   PurchaseDocStatus,
   PurchasePaymentStatus,
@@ -179,7 +179,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         }),
       );
 
-      await service.createReceipt(tenantId, userId, dto as any);
+      await service.createReceipt(tenantId, userId, dto);
 
       expect(prisma.purchaseReceipt.create).toHaveBeenCalled();
       const createCall = prisma.purchaseReceipt.create.mock.calls[0][0];

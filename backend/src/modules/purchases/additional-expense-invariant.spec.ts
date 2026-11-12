@@ -2,11 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AdditionalExpensesService } from './additional-expenses.service';
 import { PrismaService } from '../../common/prisma';
 import { BadRequestException } from '@nestjs/common';
-import {
-  ExpenseType,
-  ExpenseAllocationMethod,
-  PurchaseDocStatus,
-} from '@prisma/client';
+import { ExpenseAllocationMethod, PurchaseDocStatus } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
 import { JournalService } from '../accounting/journal/journal.service';

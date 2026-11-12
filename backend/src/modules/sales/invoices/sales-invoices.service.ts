@@ -2149,7 +2149,6 @@ export class SalesInvoicesService {
     const salesByCurrMap: Record<string, number> = {};
     let profitUzs = 0;
     let netSalesUzs = 0;
-    let totalSales = 0;
     let totalCogs = 0;
 
     for (const inv of postedInvoices) {
@@ -2165,7 +2164,6 @@ export class SalesInvoicesService {
       }
 
       salesByCurrMap[curr] = (salesByCurrMap[curr] || 0) + amt;
-      totalSales += amt;
       totalCogs += cogs;
       netSalesUzs += (amt - Number(inv.vatAmount || 0)) * exchangeRate;
       profitUzs += profit;
@@ -2397,9 +2395,6 @@ export class SalesInvoicesService {
       supplierDebt: Number(balance.supplierDebt),
       netBalance: Number(balance.customerDebt) - Number(balance.supplierDebt),
     }));
-    const receivableCurrencies = balancesByCurrency.filter(
-      (balance) => balance.customerDebt > 0,
-    );
     const customerAdvancesByCurrency = balancesByCurrency
       .filter((balance) => balance.customerDebt < 0)
       .map((balance) => ({

@@ -639,7 +639,6 @@ export class AdditionalExpensesService {
     const capitalizedTotal = totalAmount * capitalizationRate;
 
     return this.prisma.$transaction(async (tx) => {
-      let totalStockAdjustment = 0;
       let totalCogsAdjustment = 0;
 
       // 1. Update ProductBatch landed cost & Retroactive COGS
@@ -759,13 +758,6 @@ export class AdditionalExpensesService {
         }
 
         // Update item fields
-        const stockPortion = Math.max(
-          0,
-          allocatedAmount -
-            (Number(item.soldQuantity) / itemQty) * allocatedAmount,
-        );
-        totalStockAdjustment += stockPortion;
-
         await tx.additionalExpenseItem.update({
           where: { id: item.id },
           data: {
@@ -807,7 +799,7 @@ export class AdditionalExpensesService {
 
         if (Number(cashAcc.balance) < totalAmount) {
           throw new BadRequestException(
-            `Kassada mablag' yetarli emas. Mavjud: ${cashAcc.balance} ${cashAcc.currency}, Xarajat: ${totalAmount} ${expense.currency}`,
+            `Kassada mablag' yetarli emas. Mavjud: ${cashAcc.balance.toString()} ${cashAcc.currency}, Xarajat: ${totalAmount} ${expense.currency}`,
           );
         }
 
@@ -860,7 +852,7 @@ export class AdditionalExpensesService {
       }
 
       // 3. Automated BHMS / NAS Double-Entry Journal Postings (ADR 0006)
-      // Debit 2910 (Inventory / Ombor tovarlari): totalStockAdjustment
+      // Debit 2910 (Inventory / Ombor tovarlari): netStock
       // Debit 9110 (COGS / Sotilgan tovarlar tannarxi): totalCogsAdjustment
       // Debit 4410 (Input VAT / Kiruvchi QQS): vatAmount (if any)
       // Credit 6010 / 5010 (Accounts Payable / Cash): totalAmount

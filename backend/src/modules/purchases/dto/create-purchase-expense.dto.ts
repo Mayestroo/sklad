@@ -7,19 +7,13 @@ import {
   Min,
 } from 'class-validator';
 
-export enum ExpenseTypeDto {
-  TRANSPORT = 'TRANSPORT',
-  CUSTOMS = 'CUSTOMS',
-  BROKER = 'BROKER',
-  INSURANCE = 'INSURANCE',
-  OTHER = 'OTHER',
-}
+import { ExpenseAllocationMethod, ExpenseType } from '@prisma/client';
 
-export enum ExpenseAllocationMethodDto {
-  BY_AMOUNT = 'BY_AMOUNT',
-  BY_QUANTITY = 'BY_QUANTITY',
-  BY_WEIGHT = 'BY_WEIGHT',
-}
+/** The DTO accepts exactly the database enums. */
+export const ExpenseTypeDto = ExpenseType;
+export type ExpenseTypeDto = ExpenseType;
+export const ExpenseAllocationMethodDto = ExpenseAllocationMethod;
+export type ExpenseAllocationMethodDto = ExpenseAllocationMethod;
 
 export class CreatePurchaseExpenseDto {
   @IsString()

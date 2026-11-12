@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdditionalExpensesService } from './additional-expenses.service';
 import { PrismaService } from '../../common/prisma';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import {
   ExpenseType,
   ExpenseAllocationMethod,

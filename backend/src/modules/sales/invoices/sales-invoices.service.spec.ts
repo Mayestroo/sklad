@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { PrismaService } from '../../../common/prisma';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import {
   SalesDocStatus,

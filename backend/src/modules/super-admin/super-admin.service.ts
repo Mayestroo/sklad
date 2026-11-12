@@ -435,7 +435,7 @@ export class SuperAdminService {
     return msg;
   }
 
-  async triggerBackup(): Promise<BackupMetadata> {
+  triggerBackup(): BackupMetadata {
     const backupDir = path.join(__dirname, '..', '..', '..', 'backups');
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
@@ -463,7 +463,7 @@ CREATE DATABASE IF NOT EXISTS crm_db;
     };
   }
 
-  async getBackupHistory(): Promise<BackupMetadata[]> {
+  getBackupHistory(): BackupMetadata[] {
     const backupDir = path.join(__dirname, '..', '..', '..', 'backups');
     if (!fs.existsSync(backupDir)) {
       return [];

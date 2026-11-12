@@ -8,7 +8,6 @@ import {
   SalesOrderStatus,
   PaymentCondition,
   ProductionOrderStatus,
-  SalesDocStatus,
   SalesPaymentStatus,
 } from '@prisma/client';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
@@ -729,7 +728,7 @@ describe('SalesOrdersService', () => {
         },
       ]);
 
-      const result = await service.dispatch('tenant-1', 'user-1', 'order-1', {
+      await service.dispatch('tenant-1', 'user-1', 'order-1', {
         warehouseId: 'wh-1',
       });
 

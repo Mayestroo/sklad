@@ -40,7 +40,6 @@ describe('DashboardService debt projection', () => {
   });
 
   it('keeps gross profit KPIs in UZS and excludes unposted invoices', async () => {
-    const date = new Date('2026-10-09T10:00:00.000Z');
     const prisma: any = {
       financeTransaction: { findMany: jest.fn().mockResolvedValue([]) },
       cashAccount: { findMany: jest.fn().mockResolvedValue([]) },

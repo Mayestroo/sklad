@@ -17,7 +17,6 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateOpeningBalanceDto } from './dto/create-opening-balance.dto';
 import { UpdateOpeningBalanceLinesDto } from './dto/update-opening-balance.dto';
-import { OpeningBalanceLineDto } from './dto/opening-balance-line.dto';
 import { UnpostOpeningBalanceDto } from './dto/unpost-opening-balance.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';

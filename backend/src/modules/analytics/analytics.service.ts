@@ -42,7 +42,6 @@ export class AnalyticsService {
 
     const revenueByCurrencyMap: Record<string, number> = {};
     let totalNetRevenueUzs = 0;
-    let totalCogs = 0;
     let grossProfit = 0;
     for (const invoice of invoices) {
       const invoiceCurrency = invoice.currency;
@@ -57,7 +56,6 @@ export class AnalyticsService {
       revenueByCurrencyMap[invoiceCurrency] =
         (revenueByCurrencyMap[invoiceCurrency] || 0) + amount;
       totalNetRevenueUzs += netRevenue * rate;
-      totalCogs += Number(invoice.totalCogs || 0);
       grossProfit += Number(invoice.grossProfit || 0);
     }
     for (const salesReturn of returns) {
@@ -79,7 +77,6 @@ export class AnalyticsService {
       revenueByCurrencyMap[currency] =
         (revenueByCurrencyMap[currency] || 0) - amount;
       totalNetRevenueUzs -= netRevenue * rate;
-      totalCogs -= cogs;
       grossProfit -= netRevenue * rate - cogs;
     }
     const totalRevenueByCurrency = Object.entries(revenueByCurrencyMap)

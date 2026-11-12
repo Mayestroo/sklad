@@ -9,7 +9,7 @@ import {
   ServicePaymentStatus,
   ServiceActType,
 } from '@prisma/client';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
 jest.mock('../../common/sequences/document-sequence');
 
@@ -203,7 +203,7 @@ describe('ServicesService Unit Tests', () => {
         totalAmount: 1000000,
       });
 
-      const res = await service.post(tenantId, 'act-1');
+      await service.post(tenantId, 'act-1');
 
       expect(prisma.serviceAct.update).toHaveBeenCalledWith(
         expect.objectContaining({

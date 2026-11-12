@@ -6,10 +6,7 @@ import {
 import { PrismaService } from '../../common/prisma';
 import { CreatePurchaseReceiptDto } from './dto/create-purchase-receipt.dto';
 import { FilterPurchaseReceiptsDto } from './dto/filter-purchase-receipts.dto';
-import {
-  CreatePurchaseExpenseDto,
-  ExpenseAllocationMethodDto,
-} from './dto/create-purchase-expense.dto';
+import { CreatePurchaseExpenseDto } from './dto/create-purchase-expense.dto';
 import { CreatePurchaseReturnDto } from './dto/create-purchase-return.dto';
 import {
   Prisma,
@@ -18,7 +15,6 @@ import {
   PurchaseReturnStatus,
   ReturnDocStatus,
   ExpenseAllocationMethod,
-  ExpenseType,
   TransactionDirection,
   CounterpartySettlementSide,
   SettlementAllocationTarget,
@@ -794,7 +790,7 @@ export class PurchasesService {
       receipt.paymentStatus !== PurchasePaymentStatus.UNPAID
     ) {
       throw new BadRequestException(
-        `Ushbu xarid hujjati bo'yicha to'lovlar kiritilgan (To'langan: ${receipt.paidAmount} ${receipt.currency}). Hujjatni bekor qilishdan avval Moliya modulida unga bog'liq to'lovlarni o'chiring.`,
+        `Ushbu xarid hujjati bo'yicha to'lovlar kiritilgan (To'langan: ${receipt.paidAmount.toString()} ${receipt.currency}). Hujjatni bekor qilishdan avval Moliya modulida unga bog'liq to'lovlarni o'chiring.`,
       );
     }
 
@@ -956,7 +952,7 @@ export class PurchasesService {
 
     if (Number(cashAccount.balance) < dto.amount) {
       throw new BadRequestException(
-        `Kassada mablag' yetarli emas. Mavjud: ${cashAccount.balance} ${cashAccount.currency}, To'lov: ${dto.amount} ${receipt.currency}`,
+        `Kassada mablag' yetarli emas. Mavjud: ${cashAccount.balance.toString()} ${cashAccount.currency}, To'lov: ${dto.amount} ${receipt.currency}`,
       );
     }
 
@@ -1463,7 +1459,7 @@ export class PurchasesService {
             Number(batch.remainingQty)
         ) {
           throw new BadRequestException(
-            `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
+            `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty.toString()}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
           );
         }
       }
