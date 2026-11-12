@@ -1195,6 +1195,122 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       ).rejects.toThrow('Rollback Guardrail');
     });
 
+    it('cancelling a posted USD return with VAT reverses the posting in UZS, line by line', async () => {
+      // In-memory journal so post + cancel can be checked as a ledger.
+      const journal: any[] = [];
+      prisma.journalEntry.create.mockImplementation(({ data }: any) => {
+        const entry = {
+          id: `je-${journal.length + 1}`,
+          ...data,
+          lines: data.lines.create,
+        };
+        journal.push(entry);
+        return entry;
+      });
+      prisma.journalEntry.findMany = jest.fn(({ where }: any) =>
+        journal.filter(
+          (e) =>
+            e.tenantId === where.tenantId &&
+            e.sourceDocType === where.sourceDocType &&
+            e.sourceDocId === where.sourceDocId,
+        ),
+      );
+      prisma.productBatch.findFirst = jest.fn().mockResolvedValue(null);
+      prisma.productBatch.delete = jest.fn();
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `acc-${where.code}`,
+        code: where.code,
+      }));
+
+      // 10 units sold for 1,120 USD incl. 120 USD VAT at 12,500 UZS/USD.
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        ...postedInvoiceFor([
+          {
+            productId: 'prod-1',
+            quantity: 10,
+            totalPrice: 1120,
+            vatRate: 12,
+            vatAmount: 120,
+            unitCogs: 1000000,
+          },
+        ]),
+        currency: 'USD',
+        exchangeRate: 12500,
+        totalAmount: 1120,
+      });
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 0 });
+      let posted: any;
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => {
+        posted = { id: 'sret-usd', ...data, items: data.items.create };
+        return posted;
+      });
+
+      await service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'USD',
+        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 112 }],
+      });
+      expect(journal).toHaveLength(1);
+      const postingLines = journal[0].lines;
+      // 200 USD net + 24 USD VAT at 12,500; COGS 2 x 1,000,000 UZS.
+      expect(postingLines).toEqual([
+        expect.objectContaining({
+          debitAccountId: 'acc-9010',
+          creditAccountId: 'acc-4010',
+          amount: 2500000,
+        }),
+        expect.objectContaining({
+          debitAccountId: 'acc-6410',
+          creditAccountId: 'acc-4010',
+          amount: 300000,
+        }),
+        expect.objectContaining({
+          debitAccountId: 'acc-2910',
+          creditAccountId: 'acc-9110',
+          amount: 2000000,
+        }),
+      ]);
+
+      // Cancel: the restocked goods are still there.
+      prisma.salesReturn.findFirst.mockResolvedValue(posted);
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 2 });
+      await service.cancelReturn('tenant-1', 'user-1', 'sret-usd');
+
+      expect(journal).toHaveLength(2);
+      const reversal = journal[1];
+      expect(reversal.sourceDocType).toBe('SalesReturnCancel');
+      expect(reversal.sourceDocId).toBe('sret-usd');
+      expect(reversal.lines).toHaveLength(postingLines.length);
+      postingLines.forEach((line: any, i: number) => {
+        expect(reversal.lines[i]).toEqual(
+          expect.objectContaining({
+            debitAccountId: line.creditAccountId,
+            creditAccountId: line.debitAccountId,
+            amount: line.amount,
+          }),
+        );
+      });
+
+      const balance = new Map<string, number>();
+      for (const entry of journal) {
+        for (const l of entry.lines) {
+          balance.set(
+            l.debitAccountId,
+            (balance.get(l.debitAccountId) ?? 0) + l.amount,
+          );
+          balance.set(
+            l.creditAccountId,
+            (balance.get(l.creditAccountId) ?? 0) - l.amount,
+          );
+        }
+      }
+      for (const [account, net] of balance) {
+        expect([account, net]).toEqual([account, 0]);
+      }
+    });
+
     it('should reject cancellation of a return with an active refund allocation', async () => {
       prisma.salesReturn.findFirst.mockResolvedValue({
         id: 'sret-posted-1',

@@ -1602,46 +1602,25 @@ export class SalesInvoicesService {
         }
       }
 
-      // Reversal double-entry journal entries
-      const revenueAcc = await tx.account.findFirst({
-        where: { tenantId, code: '9010' },
+      // Reverse exactly what the posting wrote (already in UZS, with the
+      // 6410 VAT line), rather than recomputing it from document totals.
+      const postedEntries = await tx.journalEntry.findMany({
+        where: {
+          tenantId,
+          sourceDocType: 'SalesReturn',
+          sourceDocId: existing.id,
+        },
+        include: { lines: true },
+        orderBy: { createdAt: 'asc' },
       });
-      const receivableAcc = await tx.account.findFirst({
-        where: { tenantId, code: '4010' },
-      });
-      const cogsAcc = await tx.account.findFirst({
-        where: { tenantId, code: '9110' },
-      });
-      const inventoryAcc = await tx.account.findFirst({
-        where: { tenantId, code: '2910' },
-      });
-
-      const journalLines: Array<{
-        debitAccountId: string;
-        creditAccountId: string;
-        amount: number;
-        description: string;
-      }> = [];
-
-      const totalAmount = Number(existing.totalAmount);
-      const totalCogs = Number(existing.totalCogs);
-
-      if (revenueAcc && receivableAcc && totalAmount > 0) {
-        journalLines.push({
-          debitAccountId: receivableAcc.id,
-          creditAccountId: revenueAcc.id,
-          amount: totalAmount,
-          description: `Sotuv qaytarilishini bekor qilish № ${existing.returnNumber}`,
-        });
-      }
-      if (cogsAcc && inventoryAcc && totalCogs > 0) {
-        journalLines.push({
-          debitAccountId: cogsAcc.id,
-          creditAccountId: inventoryAcc.id,
-          amount: totalCogs,
-          description: `Sotuv qaytarilishini bekor qilish tannarxi № ${existing.returnNumber}`,
-        });
-      }
+      const journalLines = postedEntries.flatMap((entry) =>
+        entry.lines.map((line) => ({
+          debitAccountId: line.creditAccountId,
+          creditAccountId: line.debitAccountId,
+          amount: Number(line.amount),
+          description: `Bekor qilish: ${line.description ?? existing.returnNumber}`,
+        })),
+      );
 
       if (journalLines.length > 0) {
         await this.journalService.createJournalEntry(
