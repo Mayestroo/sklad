@@ -4,7 +4,10 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { CreateFixedAssetDto, UpdateFixedAssetDto } from './dto/fixed-asset.dto';
+import {
+  CreateFixedAssetDto,
+  UpdateFixedAssetDto,
+} from './dto/fixed-asset.dto';
 
 @Injectable()
 export class FixedAssetsService {
@@ -94,8 +97,13 @@ export class FixedAssetsService {
     if (dto.acquisitionDate) {
       data.acquisitionDate = new Date(dto.acquisitionDate);
     }
-    if (dto.initialCost !== undefined || dto.accumulatedDepreciation !== undefined) {
-      const current = await this.prisma.fixedAsset.findUnique({ where: { id } });
+    if (
+      dto.initialCost !== undefined ||
+      dto.accumulatedDepreciation !== undefined
+    ) {
+      const current = await this.prisma.fixedAsset.findUnique({
+        where: { id },
+      });
       const initCost =
         dto.initialCost !== undefined
           ? Number(dto.initialCost)

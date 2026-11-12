@@ -1,4 +1,8 @@
-import { PERMISSIONS, SYSTEM_ROLES, systemRolePermissionSlugs } from './permission-catalog';
+import {
+  PERMISSIONS,
+  SYSTEM_ROLES,
+  systemRolePermissionSlugs,
+} from './permission-catalog';
 
 /**
  * The role × permission matrix, pinned. Changing what a system role may do is a
@@ -53,9 +57,12 @@ describe('system roles', () => {
     );
   });
 
-  it.each(Object.entries(MATRIX))('%s holds exactly its pinned permissions', (slug, expected) => {
-    expect(systemRolePermissionSlugs(slug)).toEqual([...expected].sort());
-  });
+  it.each(Object.entries(MATRIX))(
+    '%s holds exactly its pinned permissions',
+    (slug, expected) => {
+      expect(systemRolePermissionSlugs(slug)).toEqual([...expected].sort());
+    },
+  );
 
   it('every role has a bilingual name', () => {
     for (const role of SYSTEM_ROLES) {

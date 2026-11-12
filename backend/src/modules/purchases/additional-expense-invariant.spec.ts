@@ -41,7 +41,9 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         update: jest.fn(),
       },
       purchaseReceiptItem: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
         update: jest.fn(),
       },
       productBatch: {
@@ -74,11 +76,16 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       },
       account: {
         findFirst: jest.fn().mockImplementation(({ where }) => {
-          if (where.code === '2910') return Promise.resolve({ id: 'acc-2910', code: '2910' });
-          if (where.code === '9110') return Promise.resolve({ id: 'acc-9110', code: '9110' });
-          if (where.code === '4410') return Promise.resolve({ id: 'acc-4410', code: '4410' });
-          if (where.code === '6010') return Promise.resolve({ id: 'acc-6010', code: '6010' });
-          if (where.code === '5010') return Promise.resolve({ id: 'acc-5010', code: '5010' });
+          if (where.code === '2910')
+            return Promise.resolve({ id: 'acc-2910', code: '2910' });
+          if (where.code === '9110')
+            return Promise.resolve({ id: 'acc-9110', code: '9110' });
+          if (where.code === '4410')
+            return Promise.resolve({ id: 'acc-4410', code: '4410' });
+          if (where.code === '6010')
+            return Promise.resolve({ id: 'acc-6010', code: '6010' });
+          if (where.code === '5010')
+            return Promise.resolve({ id: 'acc-5010', code: '5010' });
           return Promise.resolve(null);
         }),
       },
@@ -98,8 +105,16 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         JournalService,
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
-        { provide: CounterpartySettlementService, useValue: { recordMovement: jest.fn().mockResolvedValue({ created: true }) } },
-        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
+        {
+          provide: CounterpartySettlementService,
+          useValue: {
+            recordMovement: jest.fn().mockResolvedValue({ created: true }),
+          },
+        },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -156,7 +171,11 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     });
     expect(prisma.product.update).toHaveBeenCalledWith({
       where: { id: 'prod-iphone' },
-      data: { costPrice: 1200000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 },
+      data: {
+        costPrice: 1200000,
+        costPriceCurrency: 'UZS',
+        costPriceExchangeRate: 1,
+      },
     });
     expect(prisma.journalEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -287,9 +306,30 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     prisma.purchaseReceipt.findFirst.mockResolvedValue({
       id: receiptId,
       items: [
-        { id: 'i-1', productId: 'p-1', quantity: 1, totalPrice: 50000, landedCost: 50000, product: { weight: 1 } },
-        { id: 'i-2', productId: 'p-2', quantity: 1, totalPrice: 30000, landedCost: 30000, product: { weight: 1 } },
-        { id: 'i-3', productId: 'p-3', quantity: 1, totalPrice: 20000, landedCost: 20000, product: { weight: 1 } },
+        {
+          id: 'i-1',
+          productId: 'p-1',
+          quantity: 1,
+          totalPrice: 50000,
+          landedCost: 50000,
+          product: { weight: 1 },
+        },
+        {
+          id: 'i-2',
+          productId: 'p-2',
+          quantity: 1,
+          totalPrice: 30000,
+          landedCost: 30000,
+          product: { weight: 1 },
+        },
+        {
+          id: 'i-3',
+          productId: 'p-3',
+          quantity: 1,
+          totalPrice: 20000,
+          landedCost: 20000,
+          product: { weight: 1 },
+        },
       ],
       batches: [],
     });
@@ -375,7 +415,11 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       status: PurchaseDocStatus.CANCELLED,
     });
 
-    const cancelled = await service.cancelExpense(tenantId, userId, 'exp-inv-5');
+    const cancelled = await service.cancelExpense(
+      tenantId,
+      userId,
+      'exp-inv-5',
+    );
 
     expect(cancelled.status).toBe(PurchaseDocStatus.CANCELLED);
     expect(prisma.productBatch.update).toHaveBeenCalledWith({

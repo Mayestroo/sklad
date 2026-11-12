@@ -50,13 +50,11 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         count: jest.fn(),
       },
       counterparty: {
-        findFirst: jest
-          .fn()
-          .mockResolvedValue({
-            id: 'cp-1',
-            tenantId: 'tenant-1',
-            type: 'CUSTOMER',
-          }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'cp-1',
+          tenantId: 'tenant-1',
+          type: 'CUSTOMER',
+        }),
         update: jest.fn(),
         findMany: jest.fn(),
       },

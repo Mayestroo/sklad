@@ -256,7 +256,11 @@ export class ProductionService {
     );
     if (dto.responsibleId)
       await this.requireTenantUser(tenantId, dto.responsibleId);
-    const docNumber = await nextDocumentNumber(this.prisma, tenantId, 'PRODUCTION');
+    const docNumber = await nextDocumentNumber(
+      this.prisma,
+      tenantId,
+      'PRODUCTION',
+    );
 
     const document = await this.prisma.productionDocument.create({
       data: {

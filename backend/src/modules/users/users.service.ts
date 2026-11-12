@@ -231,7 +231,8 @@ export class UsersService {
 
     // Protect last owner
     const isOwner = user.userRoles?.some(
-      (ur: any) => ur.role?.slug === 'owner' || ur.role?.slug === 'company_admin',
+      (ur: any) =>
+        ur.role?.slug === 'owner' || ur.role?.slug === 'company_admin',
     );
     if (isOwner) {
       const otherOwners = await this.prisma.userRole.count({
@@ -267,7 +268,7 @@ export class UsersService {
         success: true,
         action: 'DEACTIVATED',
         message:
-          "Foydalanuvchi orqali tizimda arxiv hujjatlari mavjudligi sababli u faolsizlantirildi (deactivated).",
+          'Foydalanuvchi orqali tizimda arxiv hujjatlari mavjudligi sababli u faolsizlantirildi (deactivated).',
       };
     }
 

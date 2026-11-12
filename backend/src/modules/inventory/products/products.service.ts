@@ -20,43 +20,64 @@ export class ProductsService {
     });
 
     if (existingSku) {
-      throw new ConflictException(
-        `Product with SKU '${sku}' already exists`,
-      );
+      throw new ConflictException(`Product with SKU '${sku}' already exists`);
     }
 
     const company = await this.prisma.company.findUnique({
       where: { id: tenantId },
       select: { settings: true },
     });
-    const salesDefaultCurrency = (company?.settings as any)?.sales?.defaultCurrency;
-    const salePriceCurrency = dto.salePriceCurrency ?? (
-      SUPPORTED_CURRENCIES.includes(salesDefaultCurrency as (typeof SUPPORTED_CURRENCIES)[number])
+    const salesDefaultCurrency = (company?.settings as any)?.sales
+      ?.defaultCurrency;
+    const salePriceCurrency =
+      dto.salePriceCurrency ??
+      (SUPPORTED_CURRENCIES.includes(
+        salesDefaultCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
         ? salesDefaultCurrency
-        : null
-    );
+        : null);
     if (
       salePriceCurrency !== null &&
-      !SUPPORTED_CURRENCIES.includes(salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])
+      !SUPPORTED_CURRENCIES.includes(
+        salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
     ) {
-      throw new BadRequestException('Product sale-price currency must be USD or UZS');
+      throw new BadRequestException(
+        'Product sale-price currency must be USD or UZS',
+      );
     }
     if (Number(dto.salePrice ?? 0) > 0 && !salePriceCurrency) {
-      throw new BadRequestException('Set a supported sale-price currency before saving a nonzero product price');
+      throw new BadRequestException(
+        'Set a supported sale-price currency before saving a nonzero product price',
+      );
     }
 
     const costPriceCurrency = dto.costPriceCurrency ?? 'UZS';
     const costPriceExchangeRateInput = Number(dto.costPriceExchangeRate);
-    const costPriceExchangeRate = costPriceCurrency === 'UZS'
-      ? 1
-      : Number(dto.costPrice ?? 0) === 0 && (!Number.isFinite(costPriceExchangeRateInput) || costPriceExchangeRateInput <= 0)
+    const costPriceExchangeRate =
+      costPriceCurrency === 'UZS'
         ? 1
-        : costPriceExchangeRateInput;
-    if (!SUPPORTED_CURRENCIES.includes(costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])) {
-      throw new BadRequestException('Product cost-price currency must be USD or UZS');
+        : Number(dto.costPrice ?? 0) === 0 &&
+            (!Number.isFinite(costPriceExchangeRateInput) ||
+              costPriceExchangeRateInput <= 0)
+          ? 1
+          : costPriceExchangeRateInput;
+    if (
+      !SUPPORTED_CURRENCIES.includes(
+        costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Product cost-price currency must be USD or UZS',
+      );
     }
-    if (Number(dto.costPrice ?? 0) > 0 && (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)) {
-      throw new BadRequestException('Enter a positive exchange rate for a foreign-currency cost price');
+    if (
+      Number(dto.costPrice ?? 0) > 0 &&
+      (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)
+    ) {
+      throw new BadRequestException(
+        'Enter a positive exchange rate for a foreign-currency cost price',
+      );
     }
 
     return this.prisma.product.create({
@@ -85,7 +106,8 @@ export class ProductsService {
   }
 
   private generateSku(type?: CreateProductDto['type']): string {
-    const prefix = type === 'RAW_MATERIAL' ? 'RAW' : type === 'SERVICE' ? 'SRV' : 'PRD';
+    const prefix =
+      type === 'RAW_MATERIAL' ? 'RAW' : type === 'SERVICE' ? 'SRV' : 'PRD';
     return `${prefix}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
   }
 
@@ -264,30 +286,57 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
-    const costPriceCurrency = dto.costPriceCurrency ?? product.costPriceCurrency ?? 'UZS';
-    const nextCostPrice = dto.costPrice !== undefined ? Number(dto.costPrice) : Number(product.costPrice);
-    const costPriceExchangeRateInput = dto.costPriceExchangeRate !== undefined
-      ? Number(dto.costPriceExchangeRate)
-      : Number(product.costPriceExchangeRate);
-    const costPriceExchangeRate = costPriceCurrency === 'UZS'
-      ? 1
-      : nextCostPrice === 0 && (!Number.isFinite(costPriceExchangeRateInput) || costPriceExchangeRateInput <= 0)
+    const costPriceCurrency =
+      dto.costPriceCurrency ?? product.costPriceCurrency ?? 'UZS';
+    const nextCostPrice =
+      dto.costPrice !== undefined
+        ? Number(dto.costPrice)
+        : Number(product.costPrice);
+    const costPriceExchangeRateInput =
+      dto.costPriceExchangeRate !== undefined
+        ? Number(dto.costPriceExchangeRate)
+        : Number(product.costPriceExchangeRate);
+    const costPriceExchangeRate =
+      costPriceCurrency === 'UZS'
         ? 1
-        : costPriceExchangeRateInput;
-    if (!SUPPORTED_CURRENCIES.includes(costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])) {
-      throw new BadRequestException('Product cost-price currency must be USD or UZS');
+        : nextCostPrice === 0 &&
+            (!Number.isFinite(costPriceExchangeRateInput) ||
+              costPriceExchangeRateInput <= 0)
+          ? 1
+          : costPriceExchangeRateInput;
+    if (
+      !SUPPORTED_CURRENCIES.includes(
+        costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Product cost-price currency must be USD or UZS',
+      );
     }
-    if (nextCostPrice > 0 && (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)) {
-      throw new BadRequestException('Enter a positive exchange rate for a foreign-currency cost price');
+    if (
+      nextCostPrice > 0 &&
+      (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)
+    ) {
+      throw new BadRequestException(
+        'Enter a positive exchange rate for a foreign-currency cost price',
+      );
     }
 
-    const nextSalePrice = dto.salePrice !== undefined ? Number(dto.salePrice) : Number(product.salePrice);
-    const salePriceCurrency = dto.salePriceCurrency ?? product.salePriceCurrency;
+    const nextSalePrice =
+      dto.salePrice !== undefined
+        ? Number(dto.salePrice)
+        : Number(product.salePrice);
+    const salePriceCurrency =
+      dto.salePriceCurrency ?? product.salePriceCurrency;
     if (
       salePriceCurrency != null &&
-      !SUPPORTED_CURRENCIES.includes(salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])
+      !SUPPORTED_CURRENCIES.includes(
+        salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
     ) {
-      throw new BadRequestException('Product sale-price currency must be USD or UZS');
+      throw new BadRequestException(
+        'Product sale-price currency must be USD or UZS',
+      );
     }
     if (
       dto.salePrice !== undefined &&
@@ -295,7 +344,9 @@ export class ProductsService {
       nextSalePrice > 0 &&
       !salePriceCurrency
     ) {
-      throw new BadRequestException('Choose a sale-price currency before changing an unresolved product price');
+      throw new BadRequestException(
+        'Choose a sale-price currency before changing an unresolved product price',
+      );
     }
 
     if (dto.sku && dto.sku !== product.sku) {
@@ -314,11 +365,8 @@ export class ProductsService {
       data: {
         name: dto.name ? (dto.name as any) : undefined,
         description:
-          dto.description !== undefined
-            ? (dto.description as any)
-            : undefined,
-        categoryId:
-          dto.categoryId !== undefined ? dto.categoryId : undefined,
+          dto.description !== undefined ? (dto.description as any) : undefined,
+        categoryId: dto.categoryId !== undefined ? dto.categoryId : undefined,
         type: dto.type ?? undefined,
         sku: dto.sku ?? undefined,
         barcode: dto.barcode !== undefined ? dto.barcode : undefined,

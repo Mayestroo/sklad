@@ -95,64 +95,66 @@ export class ExpenseAllocationEngine {
     let maxLineItemIndex = 0;
     let maxLineItemValue = -1;
 
-    const previewItems: AllocationPreviewItem[] = targetItems.map((item, index) => {
-      const qty = Number(item.quantity) || 1;
-      const lineTotal = Number(item.totalPrice) || 0;
-      const unitWeight =
-        Number(item.weight) > 0
-          ? Number(item.weight)
-          : Number(item.product?.weight) || 1;
+    const previewItems: AllocationPreviewItem[] = targetItems.map(
+      (item, index) => {
+        const qty = Number(item.quantity) || 1;
+        const lineTotal = Number(item.totalPrice) || 0;
+        const unitWeight =
+          Number(item.weight) > 0
+            ? Number(item.weight)
+            : Number(item.product?.weight) || 1;
 
-      if (lineTotal > maxLineItemValue) {
-        maxLineItemValue = lineTotal;
-        maxLineItemIndex = index;
-      }
+        if (lineTotal > maxLineItemValue) {
+          maxLineItemValue = lineTotal;
+          maxLineItemIndex = index;
+        }
 
-      let ratio = 0;
-      if (allocationMethod === ExpenseAllocationMethod.BY_AMOUNT) {
-        ratio = lineTotal / basisSum;
-      } else if (allocationMethod === ExpenseAllocationMethod.BY_QUANTITY) {
-        ratio = qty / basisSum;
-      } else if (allocationMethod === ExpenseAllocationMethod.BY_WEIGHT) {
-        ratio = (qty * unitWeight) / basisSum;
-      } else {
-        ratio = 1 / targetItems.length;
-      }
+        let ratio = 0;
+        if (allocationMethod === ExpenseAllocationMethod.BY_AMOUNT) {
+          ratio = lineTotal / basisSum;
+        } else if (allocationMethod === ExpenseAllocationMethod.BY_QUANTITY) {
+          ratio = qty / basisSum;
+        } else if (allocationMethod === ExpenseAllocationMethod.BY_WEIGHT) {
+          ratio = (qty * unitWeight) / basisSum;
+        } else {
+          ratio = 1 / targetItems.length;
+        }
 
-      const allocatedRaw = Math.round(totalAmount * ratio * 100) / 100;
-      runningAllocated += allocatedRaw;
+        const allocatedRaw = Math.round(totalAmount * ratio * 100) / 100;
+        runningAllocated += allocatedRaw;
 
-      // Find batch for remaining vs sold quantities
-      const batch = batches.find((b) => b.productId === item.productId);
-      const remainingQty = batch ? Number(batch.remainingQty) : qty;
-      const soldQty = Math.max(0, qty - remainingQty);
+        // Find batch for remaining vs sold quantities
+        const batch = batches.find((b) => b.productId === item.productId);
+        const remainingQty = batch ? Number(batch.remainingQty) : qty;
+        const soldQty = Math.max(0, qty - remainingQty);
 
-      const initialLandedCost =
-        Number(item.landedCost) > 0
-          ? Number(item.landedCost)
-          : Number(item.unitPrice);
+        const initialLandedCost =
+          Number(item.landedCost) > 0
+            ? Number(item.landedCost)
+            : Number(item.unitPrice);
 
-      return {
-        receiptItemId: item.id,
-        productId: item.productId,
-        productName: item.product?.name,
-        sku: item.product?.sku || '',
-        unitOfMeasure: item.product?.unitOfMeasure || 'piece',
-        quantity: qty,
-        unitPrice: Number(item.unitPrice),
-        totalPrice: lineTotal,
-        weight: unitWeight,
-        initialLandedCost,
-        allocatedAmount: allocatedRaw,
-        allocatedPerUnit: 0,
-        newLandedCost: 0,
-        costIncreasePercent: 0,
-        soldQuantity: soldQty,
-        remainingQuantity: remainingQty,
-        cogsAdjustment: 0,
-        stockAdjustment: 0,
-      };
-    });
+        return {
+          receiptItemId: item.id,
+          productId: item.productId,
+          productName: item.product?.name,
+          sku: item.product?.sku || '',
+          unitOfMeasure: item.product?.unitOfMeasure || 'piece',
+          quantity: qty,
+          unitPrice: Number(item.unitPrice),
+          totalPrice: lineTotal,
+          weight: unitWeight,
+          initialLandedCost,
+          allocatedAmount: allocatedRaw,
+          allocatedPerUnit: 0,
+          newLandedCost: 0,
+          costIncreasePercent: 0,
+          soldQuantity: soldQty,
+          remainingQuantity: remainingQty,
+          cogsAdjustment: 0,
+          stockAdjustment: 0,
+        };
+      },
+    );
 
     // Remainder Rule: allocate penny/tiyin drift to highest-value line item
     const remainder = Math.round((totalAmount - runningAllocated) * 100) / 100;

@@ -25,7 +25,9 @@ export class CreateExpenseDto {
   currency: string;
 
   @IsOptional()
-  @Transform(({ value }) => value === '' || value === null ? undefined : Number(value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : Number(value),
+  )
   @Type(() => Number)
   @IsNumber()
   @IsPositive()

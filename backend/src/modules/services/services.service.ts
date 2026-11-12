@@ -40,7 +40,10 @@ export class ServicesService {
       orderBy: { openingDate: 'asc' },
     });
 
-    if (postedDoc && new Date(transactionDate) < new Date(postedDoc.openingDate)) {
+    if (
+      postedDoc &&
+      new Date(transactionDate) < new Date(postedDoc.openingDate)
+    ) {
       throw new BadRequestException(
         `Hujjat sanasi korxonaning boshlang‘ich qoldiq sanasidan (${postedDoc.openingDate.toISOString().slice(0, 10)}) oldin bo‘lishi mumkin emas`,
       );
@@ -53,16 +56,22 @@ export class ServicesService {
   private calculateItem(item: CreateServiceActItemDto) {
     const qty = Number(item.quantity);
     if (item.quantity == null || isNaN(qty) || qty <= 0) {
-      throw new BadRequestException("Xizmat qatorida miqdor (quantity) 0 dan katta bo'lishi shart");
+      throw new BadRequestException(
+        "Xizmat qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+      );
     }
     const price = Number(item.unitPrice);
     if (item.unitPrice == null || isNaN(price) || price < 0) {
-      throw new BadRequestException("Xizmat qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart");
+      throw new BadRequestException(
+        "Xizmat qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+      );
     }
     const subtotal = qty * price;
     const vatRate = item.vatRate != null ? Number(item.vatRate) : 0;
     if (isNaN(vatRate) || vatRate < 0) {
-      throw new BadRequestException("QQS stavkasi (vatRate) 0 yoki undan katta bo'lishi shart");
+      throw new BadRequestException(
+        "QQS stavkasi (vatRate) 0 yoki undan katta bo'lishi shart",
+      );
     }
     const vatAmount = (subtotal * vatRate) / 100;
     const lineTotal = subtotal + vatAmount;
@@ -99,7 +108,9 @@ export class ServicesService {
     createdById?: string,
   ) {
     if (!dto.items || dto.items.length === 0) {
-      throw new BadRequestException("Kamida bitta xizmat qatori kiritilishi shart");
+      throw new BadRequestException(
+        'Kamida bitta xizmat qatori kiritilishi shart',
+      );
     }
 
     if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
@@ -135,7 +146,10 @@ export class ServicesService {
     await this.checkCutoffDate(tenantId, actDate);
 
     const subtotal = calculatedItems.reduce((s, i) => s + i.subtotalNumber, 0);
-    const vatAmount = calculatedItems.reduce((s, i) => s + i.vatAmountNumber, 0);
+    const vatAmount = calculatedItems.reduce(
+      (s, i) => s + i.vatAmountNumber,
+      0,
+    );
     const totalAmount = calculatedItems.reduce((s, i) => s + i.totalNumber, 0);
 
     const actNumber = await this.generateActNumber(tenantId);
@@ -240,7 +254,13 @@ export class ServicesService {
         orderBy: { actDate: 'desc' },
         include: {
           counterparty: {
-            select: { id: true, name: true, inn: true, phone: true, type: true },
+            select: {
+              id: true,
+              name: true,
+              inn: true,
+              phone: true,
+              type: true,
+            },
           },
           items: true,
         },
@@ -307,7 +327,7 @@ export class ServicesService {
 
     if (act.status !== ServiceActStatus.DRAFT) {
       throw new BadRequestException(
-        "Faqat qoralama (DRAFT) holatidagi aktni tahrirlash mumkin",
+        'Faqat qoralama (DRAFT) holatidagi aktni tahrirlash mumkin',
       );
     }
 
@@ -331,7 +351,9 @@ export class ServicesService {
 
     if (dto.items) {
       if (dto.items.length === 0) {
-        throw new BadRequestException("Kamida bitta xizmat qatori kiritilishi shart");
+        throw new BadRequestException(
+          'Kamida bitta xizmat qatori kiritilishi shart',
+        );
       }
       calculatedItems = dto.items.map((item) => this.calculateItem(item));
       subtotal = calculatedItems.reduce((s, i) => s + i.subtotalNumber, 0);
@@ -366,9 +388,16 @@ export class ServicesService {
           counterpartyId: dto.counterpartyId ?? act.counterpartyId,
           actDate: dto.actDate ? new Date(dto.actDate) : act.actDate,
           currency: dto.currency ?? act.currency,
-          exchangeRate: dto.exchangeRate ? new Prisma.Decimal(dto.exchangeRate) : act.exchangeRate,
-          externalNumber: dto.externalNumber !== undefined ? dto.externalNumber : act.externalNumber,
-          externalDate: dto.externalDate ? new Date(dto.externalDate) : act.externalDate,
+          exchangeRate: dto.exchangeRate
+            ? new Prisma.Decimal(dto.exchangeRate)
+            : act.exchangeRate,
+          externalNumber:
+            dto.externalNumber !== undefined
+              ? dto.externalNumber
+              : act.externalNumber,
+          externalDate: dto.externalDate
+            ? new Date(dto.externalDate)
+            : act.externalDate,
           subtotal: new Prisma.Decimal(subtotal),
           vatAmount: new Prisma.Decimal(vatAmount),
           totalAmount: new Prisma.Decimal(totalAmount),
@@ -399,7 +428,9 @@ export class ServicesService {
     }
 
     if (act.status !== ServiceActStatus.DRAFT) {
-      throw new BadRequestException("Faqat qoralama (DRAFT) holatidagi akt tasdiqlanishi mumkin");
+      throw new BadRequestException(
+        'Faqat qoralama (DRAFT) holatidagi akt tasdiqlanishi mumkin',
+      );
     }
 
     await this.checkCutoffDate(tenantId, act.actDate);
@@ -417,9 +448,10 @@ export class ServicesService {
           tenantId,
           counterpartyId: act.counterpartyId,
           currency: act.currency,
-          side: act.type === ServiceActType.PROVIDED
-            ? CounterpartySettlementSide.CUSTOMER
-            : CounterpartySettlementSide.SUPPLIER,
+          side:
+            act.type === ServiceActType.PROVIDED
+              ? CounterpartySettlementSide.CUSTOMER
+              : CounterpartySettlementSide.SUPPLIER,
           amount: Number(act.totalAmount),
           entryType: 'SERVICE_ACT_POSTED',
           effectiveAt: act.actDate,
@@ -477,14 +509,18 @@ export class ServicesService {
 
     return this.prisma.$transaction(async (tx) => {
       // If was POSTED, reverse counterparty debt and remove journal entry
-      if (act.status === ServiceActStatus.POSTED && Number(act.totalAmount) > 0) {
+      if (
+        act.status === ServiceActStatus.POSTED &&
+        Number(act.totalAmount) > 0
+      ) {
         await this.settlementService.recordMovement(tx, {
           tenantId,
           counterpartyId: act.counterpartyId,
           currency: act.currency,
-          side: act.type === ServiceActType.PROVIDED
-            ? CounterpartySettlementSide.CUSTOMER
-            : CounterpartySettlementSide.SUPPLIER,
+          side:
+            act.type === ServiceActType.PROVIDED
+              ? CounterpartySettlementSide.CUSTOMER
+              : CounterpartySettlementSide.SUPPLIER,
           amount: -Number(act.totalAmount),
           entryType: 'SERVICE_ACT_CANCELLED',
           effectiveAt: act.actDate,
@@ -525,7 +561,9 @@ export class ServicesService {
     }
 
     if (act.status !== ServiceActStatus.POSTED) {
-      throw new BadRequestException('Faqat tasdiqlangan (POSTED) akt o‘tkazmasini bekor qilish mumkin');
+      throw new BadRequestException(
+        'Faqat tasdiqlangan (POSTED) akt o‘tkazmasini bekor qilish mumkin',
+      );
     }
 
     // Check Rollback Invariant: Cannot unpost if any payments were received/made
@@ -557,9 +595,10 @@ export class ServicesService {
           tenantId,
           counterpartyId: act.counterpartyId,
           currency: act.currency,
-          side: act.type === ServiceActType.PROVIDED
-            ? CounterpartySettlementSide.CUSTOMER
-            : CounterpartySettlementSide.SUPPLIER,
+          side:
+            act.type === ServiceActType.PROVIDED
+              ? CounterpartySettlementSide.CUSTOMER
+              : CounterpartySettlementSide.SUPPLIER,
           amount: -Number(act.totalAmount),
           entryType: 'SERVICE_ACT_UNPOSTED',
           effectiveAt: act.actDate,

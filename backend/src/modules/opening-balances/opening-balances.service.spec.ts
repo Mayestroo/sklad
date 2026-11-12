@@ -83,7 +83,10 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         OpeningBalancesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
-        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -297,8 +300,14 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             sourceDocType: 'OpeningBalanceDocument',
             lines: {
               create: expect.arrayContaining([
-                expect.objectContaining({ debitAccountId: 'account-5020', amount: 125000 }),
-                expect.objectContaining({ creditAccountId: 'account-8330', amount: 125000 }),
+                expect.objectContaining({
+                  debitAccountId: 'account-5020',
+                  amount: 125000,
+                }),
+                expect.objectContaining({
+                  creditAccountId: 'account-8330',
+                  amount: 125000,
+                }),
               ]),
             },
           }),

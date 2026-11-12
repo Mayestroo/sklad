@@ -781,15 +781,15 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         ],
       });
       prisma.productBatch.findMany.mockResolvedValue([
-          {
-            id: 'batch-1',
-            productId: 'prod-1',
-            remainingQty: 10,
-            landedCost: 100000,
-            purchasePrice: 100000,
-            createdAt: new Date('2026-01-01T00:00:00Z'),
-          },
-        ]);
+        {
+          id: 'batch-1',
+          productId: 'prod-1',
+          remainingQty: 10,
+          landedCost: 100000,
+          purchasePrice: 100000,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+      ]);
       prisma.product.findFirst.mockResolvedValue({
         id: 'prod-1',
         type: 'PRODUCT',
@@ -860,9 +860,27 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
             returnedQuantity: 0,
           },
         ],
-        batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 2, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') }],
+        batches: [
+          {
+            id: 'batch-1',
+            productId: 'prod-1',
+            remainingQty: 2,
+            landedCost: 100000,
+            purchasePrice: 100000,
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          },
+        ],
       });
-      prisma.productBatch.findMany.mockResolvedValue([{ id: 'batch-1', productId: 'prod-1', remainingQty: 2, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') }]);
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-1',
+          productId: 'prod-1',
+          remainingQty: 2,
+          landedCost: 100000,
+          purchasePrice: 100000,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+      ]);
 
       const attempt = service.createReturn('tenant-123', 'user-1', {
         receiptId: 'rec-1',
@@ -932,7 +950,16 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
               returnedQuantity: 2,
             },
           ],
-          batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 8, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') }],
+          batches: [
+            {
+              id: 'batch-1',
+              productId: 'prod-1',
+              remainingQty: 8,
+              landedCost: 100000,
+              purchasePrice: 100000,
+              createdAt: new Date('2026-01-01T00:00:00Z'),
+            },
+          ],
         },
       });
       prisma.stockLevel.findUnique.mockResolvedValue({

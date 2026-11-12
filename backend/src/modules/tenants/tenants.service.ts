@@ -141,7 +141,9 @@ export class TenantsService {
       where: { tenantId },
     });
     if (totalBranches <= 1) {
-      throw new BadRequestException('Kompaniyada kamida bitta filial qolishi kerak');
+      throw new BadRequestException(
+        'Kompaniyada kamida bitta filial qolishi kerak',
+      );
     }
 
     await this.prisma.branch.delete({ where: { id: branchId } });
@@ -215,7 +217,9 @@ export class TenantsService {
       where: { tenantId },
     });
     if (totalWarehouses <= 1) {
-      throw new BadRequestException('Kompaniyada kamida bitta omborxona qolishi kerak');
+      throw new BadRequestException(
+        'Kompaniyada kamida bitta omborxona qolishi kerak',
+      );
     }
 
     // Check if warehouse has non-zero stock
@@ -252,7 +256,6 @@ export class TenantsService {
     await this.prisma.warehouse.delete({ where: { id: warehouseId } });
     return { success: true, message: 'Omborxona o‘chirildi' };
   }
-
 
   // ============================================
   // SETTINGS MANAGEMENT

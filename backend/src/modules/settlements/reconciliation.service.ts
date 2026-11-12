@@ -8,7 +8,10 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
-import { CounterpartySettlementService, RecordSettlementMovementInput } from './counterparty-settlement.service';
+import {
+  CounterpartySettlementService,
+  RecordSettlementMovementInput,
+} from './counterparty-settlement.service';
 
 type ReconciliationException = {
   sourceType: string;
@@ -72,9 +75,17 @@ export class ReconciliationService {
     private readonly settlementService: CounterpartySettlementService,
   ) {}
 
-  async reconcileCounterpartyLedger(tenantId: string, options: { apply: boolean }) {
-    if (!tenantId?.trim()) throw new BadRequestException('Tenant is required for settlement reconciliation');
-    return this.prisma.$transaction((tx) => this.runReconciliation(tx, tenantId, options.apply));
+  async reconcileCounterpartyLedger(
+    tenantId: string,
+    options: { apply: boolean },
+  ) {
+    if (!tenantId?.trim())
+      throw new BadRequestException(
+        'Tenant is required for settlement reconciliation',
+      );
+    return this.prisma.$transaction((tx) =>
+      this.runReconciliation(tx, tenantId, options.apply),
+    );
   }
 
   private async runReconciliation(
@@ -115,7 +126,9 @@ export class ReconciliationService {
           tenantId,
           status: 'POSTED',
           isDeleted: false,
-          direction: { in: [TransactionDirection.INCOME, TransactionDirection.EXPENSE] },
+          direction: {
+            in: [TransactionDirection.INCOME, TransactionDirection.EXPENSE],
+          },
           counterpartyId: { not: null },
         },
       }),
@@ -126,8 +139,27 @@ export class ReconciliationService {
       tx.payment.findMany({
         where: { tenantId },
         include: {
-          invoice: { select: { id: true, counterpartyId: true, currency: true, totalAmount: true, paidAmount: true, invoiceDate: true } },
-          salesOrder: { select: { id: true, counterpartyId: true, currency: true, totalAmount: true, paidAmount: true, orderDate: true, status: true } },
+          invoice: {
+            select: {
+              id: true,
+              counterpartyId: true,
+              currency: true,
+              totalAmount: true,
+              paidAmount: true,
+              invoiceDate: true,
+            },
+          },
+          salesOrder: {
+            select: {
+              id: true,
+              counterpartyId: true,
+              currency: true,
+              totalAmount: true,
+              paidAmount: true,
+              orderDate: true,
+              status: true,
+            },
+          },
           cashAccount: { select: { id: true, currency: true } },
         },
       }),
@@ -136,7 +168,12 @@ export class ReconciliationService {
       tx.counterpartyBalance.findMany({ where: { tenantId } }),
       tx.counterparty.findMany({
         where: { tenantId },
-        select: { id: true, debtBalance: true, customerDebt: true, supplierDebt: true },
+        select: {
+          id: true,
+          debtBalance: true,
+          customerDebt: true,
+          supplierDebt: true,
+        },
       }),
     ]);
 
@@ -148,12 +185,18 @@ export class ReconciliationService {
     const hasEvidence = new Set<string>();
     const existingFinanceTransactionIds = new Set<string>();
     const paymentSourceIds = new Set(
-      paymentSourceTransactions.map((transaction) => transaction.sourceDocId).filter((id): id is string => Boolean(id)),
+      paymentSourceTransactions
+        .map((transaction) => transaction.sourceDocId)
+        .filter((id): id is string => Boolean(id)),
     );
-    const paymentById = new Map(payments.map((payment) => [payment.id, payment]));
+    const paymentById = new Map(
+      payments.map((payment) => [payment.id, payment]),
+    );
     const orderById = new Map(salesOrders.map((order) => [order.id, order]));
     const serviceActById = new Map(serviceActs.map((act) => [act.id, act]));
-    const additionalExpenseById = new Map(additionalExpenses.map((expense) => [expense.id, expense]));
+    const additionalExpenseById = new Map(
+      additionalExpenses.map((expense) => [expense.id, expense]),
+    );
 
     const movementIdentity = (movement: {
       sourceDocType: string;
@@ -161,20 +204,39 @@ export class ReconciliationService {
       entryType: string;
       side: CounterpartySettlementSide;
       currency: string;
-    }) => [movement.sourceDocType, movement.sourceDocId, movement.entryType, movement.side, movement.currency].join('\u0000');
+    }) =>
+      [
+        movement.sourceDocType,
+        movement.sourceDocId,
+        movement.entryType,
+        movement.side,
+        movement.currency,
+      ].join('\u0000');
 
     for (const allocation of existingAllocations) {
       existingFinanceTransactionIds.add(allocation.financeTransactionId);
     }
 
     const addMovement = (movement: RecordSettlementMovementInput) => {
-      if (!Number.isFinite(Number(movement.amount)) || Number(movement.amount) === 0) return;
+      if (
+        !Number.isFinite(Number(movement.amount)) ||
+        Number(movement.amount) === 0
+      )
+        return;
       if (!movement.counterpartyId) {
-        exceptions.push({ sourceType: movement.sourceDocType, sourceId: movement.sourceDocId, reason: 'Counterparty is missing' });
+        exceptions.push({
+          sourceType: movement.sourceDocType,
+          sourceId: movement.sourceDocId,
+          reason: 'Counterparty is missing',
+        });
         return;
       }
       hasEvidence.add(movement.counterpartyId);
-      if (!SUPPORTED_CURRENCIES.includes(movement.currency as (typeof SUPPORTED_CURRENCIES)[number])) {
+      if (
+        !SUPPORTED_CURRENCIES.includes(
+          movement.currency as (typeof SUPPORTED_CURRENCIES)[number],
+        )
+      ) {
         exceptions.push({
           sourceType: movement.sourceDocType,
           sourceId: movement.sourceDocId,
@@ -183,7 +245,9 @@ export class ReconciliationService {
         return;
       }
       const identity = movementIdentity(movement);
-      const existing = existingEntries.find((entry) => movementIdentity(entry) === identity);
+      const existing = existingEntries.find(
+        (entry) => movementIdentity(entry) === identity,
+      );
       if (existing) {
         if (Number(existing.amount) !== Number(movement.amount)) {
           exceptions.push({
@@ -194,7 +258,11 @@ export class ReconciliationService {
         }
         return;
       }
-      if (!plannedEntries.some((item) => item.idempotencyKey === movement.idempotencyKey)) {
+      if (
+        !plannedEntries.some(
+          (item) => item.idempotencyKey === movement.idempotencyKey,
+        )
+      ) {
         plannedEntries.push(movement);
       }
     };
@@ -211,7 +279,12 @@ export class ReconciliationService {
         side: CounterpartySettlementSide;
       },
     ) => {
-      if (!SUPPORTED_CURRENCIES.includes(source.currency as (typeof SUPPORTED_CURRENCIES)[number])) return;
+      if (
+        !SUPPORTED_CURRENCIES.includes(
+          source.currency as (typeof SUPPORTED_CURRENCIES)[number],
+        )
+      )
+        return;
       targets.set(`${targetType}:${source.id}`, {
         id: source.id,
         targetType,
@@ -227,17 +300,21 @@ export class ReconciliationService {
 
     for (const line of openingLines) {
       if (line.document.status !== 'POSTED' || !line.counterpartyId) continue;
-      const side = line.category === OpeningBalanceCategory.CUSTOMER_DEBT || line.category === OpeningBalanceCategory.CUSTOMER_ADVANCE
-        ? CounterpartySettlementSide.CUSTOMER
-        : line.category === OpeningBalanceCategory.SUPPLIER_DEBT || line.category === OpeningBalanceCategory.SUPPLIER_ADVANCE
-          ? CounterpartySettlementSide.SUPPLIER
-          : null;
+      const side =
+        line.category === OpeningBalanceCategory.CUSTOMER_DEBT ||
+        line.category === OpeningBalanceCategory.CUSTOMER_ADVANCE
+          ? CounterpartySettlementSide.CUSTOMER
+          : line.category === OpeningBalanceCategory.SUPPLIER_DEBT ||
+              line.category === OpeningBalanceCategory.SUPPLIER_ADVANCE
+            ? CounterpartySettlementSide.SUPPLIER
+            : null;
       if (!side) continue;
-      const amount = Number(line.amount) * (
-        line.category === OpeningBalanceCategory.CUSTOMER_ADVANCE || line.category === OpeningBalanceCategory.SUPPLIER_ADVANCE
+      const amount =
+        Number(line.amount) *
+        (line.category === OpeningBalanceCategory.CUSTOMER_ADVANCE ||
+        line.category === OpeningBalanceCategory.SUPPLIER_ADVANCE
           ? -1
-          : 1
-      );
+          : 1);
       addMovement({
         tenantId,
         counterpartyId: line.counterpartyId,
@@ -388,9 +465,10 @@ export class ReconciliationService {
     }
 
     for (const act of serviceActs) {
-      const side = act.type === 'PROVIDED'
-        ? CounterpartySettlementSide.CUSTOMER
-        : CounterpartySettlementSide.SUPPLIER;
+      const side =
+        act.type === 'PROVIDED'
+          ? CounterpartySettlementSide.CUSTOMER
+          : CounterpartySettlementSide.SUPPLIER;
       addMovement({
         tenantId,
         counterpartyId: act.counterpartyId,
@@ -414,16 +492,30 @@ export class ReconciliationService {
       });
     }
 
-    const transactionByPaymentId = new Map<string, (typeof financeTransactions)[number]>();
+    const transactionByPaymentId = new Map<
+      string,
+      (typeof financeTransactions)[number]
+    >();
     for (const transaction of financeTransactions) {
       if (!transaction.counterpartyId) continue;
       if (
         transaction.direction !== TransactionDirection.INCOME &&
         transaction.direction !== TransactionDirection.EXPENSE
-      ) continue;
+      )
+        continue;
       if (
         transaction.sourceDocType &&
-        ['SalesInvoice', 'SalesOrder', 'SalesReturn', 'PurchaseReceipt', 'PurchaseReturn', 'AdditionalExpense', 'ServiceAct', 'PAYMENT', 'Payment'].includes(transaction.sourceDocType) &&
+        [
+          'SalesInvoice',
+          'SalesOrder',
+          'SalesReturn',
+          'PurchaseReceipt',
+          'PurchaseReturn',
+          'AdditionalExpense',
+          'ServiceAct',
+          'PAYMENT',
+          'Payment',
+        ].includes(transaction.sourceDocType) &&
         !transaction.sourceDocId
       ) {
         exceptions.push({
@@ -433,12 +525,21 @@ export class ReconciliationService {
         });
         continue;
       }
-      const sourceSide = this.sideFromSource(transaction.sourceDocType, transaction.sourceDocId, serviceActById);
-      if (transaction.settlementSide && sourceSide && transaction.settlementSide !== sourceSide) {
+      const sourceSide = this.sideFromSource(
+        transaction.sourceDocType,
+        transaction.sourceDocId,
+        serviceActById,
+      );
+      if (
+        transaction.settlementSide &&
+        sourceSide &&
+        transaction.settlementSide !== sourceSide
+      ) {
         exceptions.push({
           sourceType: 'FinanceTransaction',
           sourceId: transaction.id,
-          reason: 'Stored settlement side conflicts with the linked source document',
+          reason:
+            'Stored settlement side conflicts with the linked source document',
         });
         continue;
       }
@@ -447,7 +548,8 @@ export class ReconciliationService {
         exceptions.push({
           sourceType: 'FinanceTransaction',
           sourceId: transaction.id,
-          reason: 'Settlement side is missing and cannot be derived from a typed source document',
+          reason:
+            'Settlement side is missing and cannot be derived from a typed source document',
         });
         continue;
       }
@@ -460,54 +562,86 @@ export class ReconciliationService {
         exceptions.push({
           sourceType: 'FinanceTransaction',
           sourceId: transaction.id,
-          reason: 'Finance transaction direction conflicts with the linked settlement source',
+          reason:
+            'Finance transaction direction conflicts with the linked settlement source',
         });
         continue;
       }
       if (transaction.sourceDocType === 'AdditionalExpense') {
-        const expense = transaction.sourceDocId ? additionalExpenseById.get(transaction.sourceDocId) : undefined;
+        const expense = transaction.sourceDocId
+          ? additionalExpenseById.get(transaction.sourceDocId)
+          : undefined;
         if (expense?.isPaid) continue;
       }
 
-      let directTarget = this.targetFromSource(transaction.sourceDocType, transaction.sourceDocId);
+      let directTarget = this.targetFromSource(
+        transaction.sourceDocType,
+        transaction.sourceDocId,
+      );
       let paymentOrderId: string | undefined;
-      if (transaction.sourceDocType === 'PAYMENT' || transaction.sourceDocType === 'Payment') {
-        if (transaction.sourceDocId) transactionByPaymentId.set(transaction.sourceDocId, transaction);
-        const payment = transaction.sourceDocId ? paymentById.get(transaction.sourceDocId) : undefined;
+      if (
+        transaction.sourceDocType === 'PAYMENT' ||
+        transaction.sourceDocType === 'Payment'
+      ) {
+        if (transaction.sourceDocId)
+          transactionByPaymentId.set(transaction.sourceDocId, transaction);
+        const payment = transaction.sourceDocId
+          ? paymentById.get(transaction.sourceDocId)
+          : undefined;
         if (payment && payment.counterpartyId !== transaction.counterpartyId) {
           exceptions.push({
             sourceType: 'FinanceTransaction',
             sourceId: transaction.id,
-            reason: 'Linked Payment counterparty does not match the Finance transaction',
+            reason:
+              'Linked Payment counterparty does not match the Finance transaction',
           });
           continue;
         }
-        const paymentCurrencies = [payment?.invoice?.currency, payment?.salesOrder?.currency, payment?.cashAccount?.currency]
-          .filter((currency): currency is string => Boolean(currency));
-        if (paymentCurrencies.some((currency) => currency !== transaction.currency)) {
+        const paymentCurrencies = [
+          payment?.invoice?.currency,
+          payment?.salesOrder?.currency,
+          payment?.cashAccount?.currency,
+        ].filter((currency): currency is string => Boolean(currency));
+        if (
+          paymentCurrencies.some(
+            (currency) => currency !== transaction.currency,
+          )
+        ) {
           exceptions.push({
             sourceType: 'FinanceTransaction',
             sourceId: transaction.id,
-            reason: 'Finance transaction currency conflicts with its Payment document or cash account',
+            reason:
+              'Finance transaction currency conflicts with its Payment document or cash account',
           });
           continue;
         }
         if (payment?.invoiceId) {
-          directTarget = { targetType: SettlementAllocationTarget.SALES_INVOICE, targetId: payment.invoiceId };
+          directTarget = {
+            targetType: SettlementAllocationTarget.SALES_INVOICE,
+            targetId: payment.invoiceId,
+          };
         } else if (payment?.orderId) {
           paymentOrderId = payment.orderId;
           const orderInvoices = salesInvoices
             .filter((invoice) => invoice.salesOrderId === payment.orderId)
-            .sort((left, right) => left.invoiceDate.getTime() - right.invoiceDate.getTime());
+            .sort(
+              (left, right) =>
+                left.invoiceDate.getTime() - right.invoiceDate.getTime(),
+            );
           if (orderInvoices.length === 0) {
-            directTarget = { targetType: SettlementAllocationTarget.SALES_ORDER, targetId: payment.orderId };
+            directTarget = {
+              targetType: SettlementAllocationTarget.SALES_ORDER,
+              targetId: payment.orderId,
+            };
           } else {
             directTarget = undefined;
           }
         }
       }
       if (directTarget) {
-        const target = targets.get(`${directTarget.targetType}:${directTarget.targetId}`);
+        const target = targets.get(
+          `${directTarget.targetType}:${directTarget.targetId}`,
+        );
         if (
           !target ||
           target.counterpartyId !== transaction.counterpartyId ||
@@ -517,12 +651,17 @@ export class ReconciliationService {
           exceptions.push({
             sourceType: 'FinanceTransaction',
             sourceId: transaction.id,
-            reason: 'Linked settlement target is missing or has a different counterparty, side, or currency',
+            reason:
+              'Linked settlement target is missing or has a different counterparty, side, or currency',
           });
           continue;
         }
       }
-      const movementAmount = this.movementAmount(transaction.direction, side, Number(transaction.amount));
+      const movementAmount = this.movementAmount(
+        transaction.direction,
+        side,
+        Number(transaction.amount),
+      );
       const settlement: FinanceSettlement = {
         id: transaction.id,
         counterpartyId: transaction.counterpartyId,
@@ -558,14 +697,18 @@ export class ReconciliationService {
     for (const payment of payments) {
       if (transactionByPaymentId.has(payment.id)) continue;
       if (paymentSourceIds.has(payment.id)) continue;
-      const currencies = [payment.invoice?.currency, payment.salesOrder?.currency, payment.cashAccount?.currency]
-        .filter((currency): currency is string => Boolean(currency));
+      const currencies = [
+        payment.invoice?.currency,
+        payment.salesOrder?.currency,
+        payment.cashAccount?.currency,
+      ].filter((currency): currency is string => Boolean(currency));
       const currency = currencies[0];
       if (!currency || currencies.some((candidate) => candidate !== currency)) {
         exceptions.push({
           sourceType: 'Payment',
           sourceId: payment.id,
-          reason: 'Payment currency is missing or conflicts across its linked document and cash account',
+          reason:
+            'Payment currency is missing or conflicts across its linked document and cash account',
         });
         continue;
       }
@@ -584,26 +727,39 @@ export class ReconciliationService {
       exceptions.push({
         sourceType: 'Payment',
         sourceId: payment.id,
-        reason: 'Cash settlement is included, but no FinanceTransaction exists for an allocation link',
+        reason:
+          'Cash settlement is included, but no FinanceTransaction exists for an allocation link',
       });
     }
 
-    for (const [key, total] of this.sumExistingAllocations(existingAllocations)) {
+    for (const [key, total] of this.sumExistingAllocations(
+      existingAllocations,
+    )) {
       const target = targets.get(key);
       if (target) target.allocated = total;
     }
 
-    for (const settlement of financeSettlements.sort((left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime())) {
+    for (const settlement of financeSettlements.sort(
+      (left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime(),
+    )) {
       if (existingFinanceTransactionIds.has(settlement.id)) continue;
-      const isDocumentSettlement = settlement.movementAmount < 0 || Boolean(
-        settlement.directTarget && (
-          settlement.directTarget.targetType === SettlementAllocationTarget.SALES_RETURN ||
-          settlement.directTarget.targetType === SettlementAllocationTarget.PURCHASE_RETURN
-        ),
-      );
+      const isDocumentSettlement =
+        settlement.movementAmount < 0 ||
+        Boolean(
+          settlement.directTarget &&
+          (settlement.directTarget.targetType ===
+            SettlementAllocationTarget.SALES_RETURN ||
+            settlement.directTarget.targetType ===
+              SettlementAllocationTarget.PURCHASE_RETURN),
+        );
       if (!isDocumentSettlement) continue;
 
-      const candidates = this.allocationCandidates(settlement, targets, salesInvoices, orderById);
+      const candidates = this.allocationCandidates(
+        settlement,
+        targets,
+        salesInvoices,
+        orderById,
+      );
       let remaining = settlement.amount;
       for (const target of candidates) {
         if (remaining <= 0) break;
@@ -611,7 +767,8 @@ export class ReconciliationService {
           target.counterpartyId !== settlement.counterpartyId ||
           target.currency !== settlement.currency ||
           target.side !== settlement.side
-        ) continue;
+        )
+          continue;
         const amount = Math.min(
           remaining,
           Math.max(0, target.allocationGoal - target.allocated),
@@ -655,36 +812,55 @@ export class ReconciliationService {
     for (const counterparty of counterparties) {
       if (
         !hasEvidence.has(counterparty.id) &&
-        !currentBalances.some((balance) => balance.counterpartyId === counterparty.id) &&
-        (Number(counterparty.debtBalance) !== 0 || Number(counterparty.customerDebt) !== 0 || Number(counterparty.supplierDebt) !== 0)
+        !currentBalances.some(
+          (balance) => balance.counterpartyId === counterparty.id,
+        ) &&
+        (Number(counterparty.debtBalance) !== 0 ||
+          Number(counterparty.customerDebt) !== 0 ||
+          Number(counterparty.supplierDebt) !== 0)
       ) {
         exceptions.push({
           sourceType: 'Counterparty',
           sourceId: counterparty.id,
-          reason: 'Non-zero legacy scalar balance has no source record or currency evidence',
+          reason:
+            'Non-zero legacy scalar balance has no source record or currency evidence',
         });
       }
     }
 
     const ledgerEvidence = new Set([
-      ...existingEntries.map((entry) => `${entry.counterpartyId}\u0000${entry.currency}`),
-      ...plannedEntries.map((entry) => `${entry.counterpartyId}\u0000${entry.currency}`),
+      ...existingEntries.map(
+        (entry) => `${entry.counterpartyId}\u0000${entry.currency}`,
+      ),
+      ...plannedEntries.map(
+        (entry) => `${entry.counterpartyId}\u0000${entry.currency}`,
+      ),
     ]);
     for (const balance of currentBalances) {
       if (
-        !ledgerEvidence.has(`${balance.counterpartyId}\u0000${balance.currency}`) &&
-        (Number(balance.customerDebt) !== 0 || Number(balance.supplierDebt) !== 0)
+        !ledgerEvidence.has(
+          `${balance.counterpartyId}\u0000${balance.currency}`,
+        ) &&
+        (Number(balance.customerDebt) !== 0 ||
+          Number(balance.supplierDebt) !== 0)
       ) {
         exceptions.push({
           sourceType: 'CounterpartyBalance',
           sourceId: `${balance.counterpartyId}:${balance.currency}`,
-          reason: 'Non-zero currency projection has no settlement ledger or reconstructable source record',
+          reason:
+            'Non-zero currency projection has no settlement ledger or reconstructable source record',
         });
       }
     }
 
-    const expectedProjection = this.buildProjection(existingEntries, plannedEntries);
-    const beforeDifferences = this.findProjectionDifferences(expectedProjection, currentBalances);
+    const expectedProjection = this.buildProjection(
+      existingEntries,
+      plannedEntries,
+    );
+    const beforeDifferences = this.findProjectionDifferences(
+      expectedProjection,
+      currentBalances,
+    );
     let entriesCreated = 0;
     let allocationsCreated = 0;
     let balanceRowsRebuilt = 0;
@@ -692,16 +868,28 @@ export class ReconciliationService {
 
     if (apply && exceptions.length === 0) {
       for (const movement of plannedEntries) {
-        const result = await this.settlementService.recordMovement(tx, movement);
+        const result = await this.settlementService.recordMovement(
+          tx,
+          movement,
+        );
         if (result.created) entriesCreated += 1;
       }
       for (const allocation of plannedAllocations) {
-        const result = await tx.settlementAllocation.createMany({ data: [allocation], skipDuplicates: true });
+        const result = await tx.settlementAllocation.createMany({
+          data: [allocation],
+          skipDuplicates: true,
+        });
         allocationsCreated += result.count;
       }
-      const rebuilt = await this.settlementService.rebuildBalances(tx, tenantId);
+      const rebuilt = await this.settlementService.rebuildBalances(
+        tx,
+        tenantId,
+      );
       balanceRowsRebuilt = rebuilt.length;
-      afterDifferences = this.findProjectionDifferences(expectedProjection, rebuilt);
+      afterDifferences = this.findProjectionDifferences(
+        expectedProjection,
+        rebuilt,
+      );
     }
 
     return {
@@ -745,7 +933,10 @@ export class ReconciliationService {
     }
   }
 
-  private targetFromSource(sourceDocType: string | null, sourceDocId: string | null) {
+  private targetFromSource(
+    sourceDocType: string | null,
+    sourceDocId: string | null,
+  ) {
     if (!sourceDocType || !sourceDocId) return undefined;
     const targetType = {
       SalesInvoice: SettlementAllocationTarget.SALES_INVOICE,
@@ -793,16 +984,20 @@ export class ReconciliationService {
     amount: number,
   ) {
     const reducesObligation =
-      (direction === TransactionDirection.INCOME && side === CounterpartySettlementSide.CUSTOMER) ||
-      (direction === TransactionDirection.EXPENSE && side === CounterpartySettlementSide.SUPPLIER);
+      (direction === TransactionDirection.INCOME &&
+        side === CounterpartySettlementSide.CUSTOMER) ||
+      (direction === TransactionDirection.EXPENSE &&
+        side === CounterpartySettlementSide.SUPPLIER);
     return reducesObligation ? -amount : amount;
   }
 
-  private sumExistingAllocations(allocations: Array<{
-    targetType: SettlementAllocationTarget;
-    targetId: string;
-    amount: Prisma.Decimal;
-  }>) {
+  private sumExistingAllocations(
+    allocations: Array<{
+      targetType: SettlementAllocationTarget;
+      targetId: string;
+      amount: Prisma.Decimal;
+    }>,
+  ) {
     const grouped = new Map<string, number>();
     for (const allocation of allocations) {
       const key = `${allocation.targetType}:${allocation.targetId}`;
@@ -814,44 +1009,68 @@ export class ReconciliationService {
   private allocationCandidates(
     settlement: FinanceSettlement,
     targets: Map<string, ReconciliationTarget>,
-    invoices: Array<{ id: string; salesOrderId: string | null; invoiceDate: Date }>,
+    invoices: Array<{
+      id: string;
+      salesOrderId: string | null;
+      invoiceDate: Date;
+    }>,
     orders: Map<string, { status: string }>,
   ) {
-    const candidates = Array.from(targets.values()).filter((target) =>
-      target.counterpartyId === settlement.counterpartyId &&
-      target.currency === settlement.currency &&
-      target.side === settlement.side &&
-      target.allocationGoal - target.allocated > EPSILON,
+    const candidates = Array.from(targets.values()).filter(
+      (target) =>
+        target.counterpartyId === settlement.counterpartyId &&
+        target.currency === settlement.currency &&
+        target.side === settlement.side &&
+        target.allocationGoal - target.allocated > EPSILON,
     );
     if (settlement.directTarget) {
-      const direct = targets.get(`${settlement.directTarget.targetType}:${settlement.directTarget.targetId}`);
+      const direct = targets.get(
+        `${settlement.directTarget.targetType}:${settlement.directTarget.targetId}`,
+      );
       if (direct) return [direct];
       return [];
     }
-    if (settlement.sourceDocType === 'PAYMENT' || settlement.sourceDocType === 'Payment') {
+    if (
+      settlement.sourceDocType === 'PAYMENT' ||
+      settlement.sourceDocType === 'Payment'
+    ) {
       const matchingInvoiceIds = invoices
         .filter((invoice) => invoice.salesOrderId === settlement.paymentOrderId)
         .map((invoice) => invoice.id);
       if (matchingInvoiceIds.length > 0) {
         return candidates
-          .filter((target) => target.targetType === SettlementAllocationTarget.SALES_INVOICE && matchingInvoiceIds.includes(target.id))
-          .sort((left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime());
+          .filter(
+            (target) =>
+              target.targetType === SettlementAllocationTarget.SALES_INVOICE &&
+              matchingInvoiceIds.includes(target.id),
+          )
+          .sort(
+            (left, right) =>
+              left.effectiveAt.getTime() - right.effectiveAt.getTime(),
+          );
       }
       if (settlement.paymentOrderId) {
-        const orderTarget = targets.get(`${SettlementAllocationTarget.SALES_ORDER}:${settlement.paymentOrderId}`);
+        const orderTarget = targets.get(
+          `${SettlementAllocationTarget.SALES_ORDER}:${settlement.paymentOrderId}`,
+        );
         return orderTarget ? [orderTarget] : [];
       }
     }
     return candidates
-      .filter((target) =>
-        target.targetType !== SettlementAllocationTarget.SALES_ORDER ||
-        orders.get(target.id)?.status !== 'CANCELLED',
+      .filter(
+        (target) =>
+          target.targetType !== SettlementAllocationTarget.SALES_ORDER ||
+          orders.get(target.id)?.status !== 'CANCELLED',
       )
-      .filter((target) =>
-        target.targetType !== SettlementAllocationTarget.SALES_RETURN &&
-        target.targetType !== SettlementAllocationTarget.PURCHASE_RETURN,
+      .filter(
+        (target) =>
+          target.targetType !== SettlementAllocationTarget.SALES_RETURN &&
+          target.targetType !== SettlementAllocationTarget.PURCHASE_RETURN,
       )
-      .sort((left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime());
+      .sort(
+        (left, right) =>
+          left.effectiveAt.getTime() - right.effectiveAt.getTime(),
+      );
   }
 
   private buildProjection(
@@ -863,7 +1082,15 @@ export class ReconciliationService {
     }>,
     plannedEntries: RecordSettlementMovementInput[],
   ) {
-    const projection = new Map<string, { counterpartyId: string; currency: string; customerDebt: number; supplierDebt: number }>();
+    const projection = new Map<
+      string,
+      {
+        counterpartyId: string;
+        currency: string;
+        customerDebt: number;
+        supplierDebt: number;
+      }
+    >();
     const add = (entry: {
       counterpartyId: string;
       currency: string;
@@ -877,7 +1104,8 @@ export class ReconciliationService {
         customerDebt: 0,
         supplierDebt: 0,
       };
-      if (entry.side === CounterpartySettlementSide.CUSTOMER) current.customerDebt += Number(entry.amount);
+      if (entry.side === CounterpartySettlementSide.CUSTOMER)
+        current.customerDebt += Number(entry.amount);
       else current.supplierDebt += Number(entry.amount);
       projection.set(key, current);
     };
@@ -887,7 +1115,15 @@ export class ReconciliationService {
   }
 
   private findProjectionDifferences(
-    expected: Map<string, { counterpartyId: string; currency: string; customerDebt: number; supplierDebt: number }>,
+    expected: Map<
+      string,
+      {
+        counterpartyId: string;
+        currency: string;
+        customerDebt: number;
+        supplierDebt: number;
+      }
+    >,
     actualBalances: Array<{
       counterpartyId: string;
       currency: string;
@@ -895,16 +1131,19 @@ export class ReconciliationService {
       supplierDebt: Prisma.Decimal | number;
     }>,
   ): ProjectionDifference[] {
-    const actual = new Map(actualBalances.map((balance) => [
-      `${balance.counterpartyId}\u0000${balance.currency}`,
-      balance,
-    ]));
+    const actual = new Map(
+      actualBalances.map((balance) => [
+        `${balance.counterpartyId}\u0000${balance.currency}`,
+        balance,
+      ]),
+    );
     const keys = new Set([...expected.keys(), ...actual.keys()]);
     const differences: ProjectionDifference[] = [];
     for (const key of keys) {
       const expectedBalance = expected.get(key);
       const actualBalance = actual.get(key);
-      const customerId = expectedBalance?.counterpartyId ?? actualBalance!.counterpartyId;
+      const customerId =
+        expectedBalance?.counterpartyId ?? actualBalance!.counterpartyId;
       const currency = expectedBalance?.currency ?? actualBalance!.currency;
       const expectedCustomer = expectedBalance?.customerDebt ?? 0;
       const expectedSupplier = expectedBalance?.supplierDebt ?? 0;
@@ -917,8 +1156,14 @@ export class ReconciliationService {
         differences.push({
           counterpartyId: customerId,
           currency,
-          expected: { customerDebt: expectedCustomer, supplierDebt: expectedSupplier },
-          actual: { customerDebt: actualCustomer, supplierDebt: actualSupplier },
+          expected: {
+            customerDebt: expectedCustomer,
+            supplierDebt: expectedSupplier,
+          },
+          actual: {
+            customerDebt: actualCustomer,
+            supplierDebt: actualSupplier,
+          },
         });
       }
     }

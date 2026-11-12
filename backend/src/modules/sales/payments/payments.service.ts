@@ -1,11 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreatePaymentDto } from '../dto';
 import { SalesOrdersService } from '../orders/sales-orders.service';
-import { CounterpartySettlementSide, SettlementAllocationTarget } from '@prisma/client';
+import {
+  CounterpartySettlementSide,
+  SettlementAllocationTarget,
+} from '@prisma/client';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import {
@@ -38,29 +45,54 @@ export class PaymentsService {
       throw new NotFoundException('Mijoz topilmadi');
     }
     if (Boolean(dto.invoiceId) === Boolean(dto.orderId)) {
-      throw new BadRequestException("To'lov aynan bitta hujjatga: invoice yoki buyurtmaga biriktirilishi kerak");
+      throw new BadRequestException(
+        "To'lov aynan bitta hujjatga: invoice yoki buyurtmaga biriktirilishi kerak",
+      );
     }
 
     if (dto.invoiceId) {
       const invoice = await this.prisma.salesInvoice.findFirst({
-        where: { id: dto.invoiceId, tenantId, counterpartyId: dto.counterpartyId, status: 'POSTED' },
+        where: {
+          id: dto.invoiceId,
+          tenantId,
+          counterpartyId: dto.counterpartyId,
+          status: 'POSTED',
+        },
       });
       if (!invoice || invoice.currency !== dto.currency) {
-        throw new BadRequestException("Sotuv hujjati topilmadi yoki to'lov valyutasi mos emas");
+        throw new BadRequestException(
+          "Sotuv hujjati topilmadi yoki to'lov valyutasi mos emas",
+        );
       }
-      if (Number(invoice.paidAmount) + Number(dto.amount) > Number(invoice.totalAmount)) {
-        throw new BadRequestException("To'lov sotuv hujjatining qolgan qarzidan oshishi mumkin emas");
+      if (
+        Number(invoice.paidAmount) + Number(dto.amount) >
+        Number(invoice.totalAmount)
+      ) {
+        throw new BadRequestException(
+          "To'lov sotuv hujjatining qolgan qarzidan oshishi mumkin emas",
+        );
       }
     }
     if (dto.orderId) {
       const order = await this.prisma.salesOrder.findFirst({
-        where: { id: dto.orderId, tenantId, counterpartyId: dto.counterpartyId },
+        where: {
+          id: dto.orderId,
+          tenantId,
+          counterpartyId: dto.counterpartyId,
+        },
       });
       if (!order || order.currency !== dto.currency) {
-        throw new BadRequestException("Buyurtma topilmadi yoki to'lov valyutasi mos emas");
+        throw new BadRequestException(
+          "Buyurtma topilmadi yoki to'lov valyutasi mos emas",
+        );
       }
-      if (Number(order.paidAmount) + Number(dto.amount) > Number(order.totalAmount)) {
-        throw new BadRequestException("To'lov buyurtmaning qolgan summasidan oshishi mumkin emas");
+      if (
+        Number(order.paidAmount) + Number(dto.amount) >
+        Number(order.totalAmount)
+      ) {
+        throw new BadRequestException(
+          "To'lov buyurtmaning qolgan summasidan oshishi mumkin emas",
+        );
       }
     }
 
@@ -163,7 +195,11 @@ export class PaymentsService {
           idempotencyKey: `FinanceTransaction:${financeTransaction.id}:SalesInvoice:${dto.invoiceId}`,
         });
         const invoice = await tx.salesInvoice.findFirst({
-          where: { id: dto.invoiceId, tenantId, counterpartyId: dto.counterpartyId },
+          where: {
+            id: dto.invoiceId,
+            tenantId,
+            counterpartyId: dto.counterpartyId,
+          },
         });
 
         if (invoice) {
@@ -200,7 +236,11 @@ export class PaymentsService {
     // 5. If linked to a Sales Order, trigger dispatch gate evaluation
     if (dto.orderId) {
       try {
-        await this.salesOrdersService.onPaymentRegistered(tenantId, userId, dto.orderId);
+        await this.salesOrdersService.onPaymentRegistered(
+          tenantId,
+          userId,
+          dto.orderId,
+        );
       } catch (err) {
         console.error('Failed to evaluate order payment gate:', err);
       }

@@ -18,10 +18,7 @@ describe('TenantsService - Settings Management', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        TenantsService,
-        { provide: PrismaService, useValue: prisma },
-      ],
+      providers: [TenantsService, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     service = module.get<TenantsService>(TenantsService);
@@ -70,7 +67,11 @@ describe('TenantsService - Settings Management', () => {
       prisma.company.update.mockResolvedValue({
         id: 'tenant-1',
         settings: {
-          sales: { enableMultiTierPriceLists: true, allowSellerPriceOverride: false, defaultCurrency: 'UZS' },
+          sales: {
+            enableMultiTierPriceLists: true,
+            allowSellerPriceOverride: false,
+            defaultCurrency: 'UZS',
+          },
           inventory: {},
           accounting: {},
         },

@@ -109,7 +109,12 @@ export class StockReservationService {
     const results: ReservationResult[] = [];
 
     for (const item of items) {
-      const availability = await this.getFreeStock(tenantId, warehouseId, item.productId, client);
+      const availability = await this.getFreeStock(
+        tenantId,
+        warehouseId,
+        item.productId,
+        client,
+      );
       const toReserve = Math.min(availability.freeStock, item.quantity);
       const remainingGap = Math.max(0, item.quantity - toReserve);
 

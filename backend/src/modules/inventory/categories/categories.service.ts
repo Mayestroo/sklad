@@ -91,4 +91,3 @@ export class CategoriesService {
     return { success: true, message: 'Kategoriya muvaffaqiyatli o‘chirildi' };
   }
 }
-

@@ -151,10 +151,7 @@ export class PurchasesController {
 
   @Get('returns')
   @RequirePermissions('inventory:view')
-  async findAllReturns(
-    @CurrentTenant() tenantId: string,
-    @Query() query: any,
-  ) {
+  async findAllReturns(@CurrentTenant() tenantId: string, @Query() query: any) {
     return this.purchasesService.findAllReturns(tenantId, query);
   }
 

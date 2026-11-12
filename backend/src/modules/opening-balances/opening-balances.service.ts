@@ -59,29 +59,45 @@ export class OpeningBalancesService {
   // ─── Calculation Helper ──────────────────────────────────────────
 
   private exchangeRateToUzs(currency: string, exchangeRate: number) {
-    if (!SUPPORTED_CURRENCIES.includes(currency as (typeof SUPPORTED_CURRENCIES)[number])) {
-      throw new BadRequestException('Boshlang‘ich qoldiq valyutasi USD yoki UZS bo‘lishi kerak');
+    if (
+      !SUPPORTED_CURRENCIES.includes(
+        currency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Boshlang‘ich qoldiq valyutasi USD yoki UZS bo‘lishi kerak',
+      );
     }
     if (currency === 'UZS') return 1;
     if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
-      throw new BadRequestException('USD qoldiqlari uchun UZS kursi 0 dan katta bo‘lishi shart');
+      throw new BadRequestException(
+        'USD qoldiqlari uchun UZS kursi 0 dan katta bo‘lishi shart',
+      );
     }
     return exchangeRate;
   }
 
-  private validateLineCurrency(line: { currency?: string; exchangeRate?: number | string | Prisma.Decimal }) {
-    if (!line.currency) throw new BadRequestException('Har bir qoldiq qatori uchun valyutani tanlang');
+  private validateLineCurrency(line: {
+    currency?: string;
+    exchangeRate?: number | string | Prisma.Decimal;
+  }) {
+    if (!line.currency)
+      throw new BadRequestException(
+        'Har bir qoldiq qatori uchun valyutani tanlang',
+      );
     this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
   }
 
-  private calculateMetrics(lines: Array<{
-    category: OpeningBalanceCategory;
-    amount: number;
-    netAmount?: number;
-    accumulatedDepreciation?: number;
-    currency: string;
-    exchangeRate: number;
-  }>) {
+  private calculateMetrics(
+    lines: Array<{
+      category: OpeningBalanceCategory;
+      amount: number;
+      netAmount?: number;
+      accumulatedDepreciation?: number;
+      currency: string;
+      exchangeRate: number;
+    }>,
+  ) {
     let totalAssets = 0;
     let totalLiabilities = 0;
     let totalEquity = 0;
@@ -92,9 +108,13 @@ export class OpeningBalancesService {
     }
 
     for (const line of lines) {
-      const rate = this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
+      const rate = this.exchangeRateToUzs(
+        line.currency,
+        Number(line.exchangeRate),
+      );
       const amt = Number(line.amount || 0) * rate;
-      categoryBreakdown[line.category] = (categoryBreakdown[line.category] || 0) + amt;
+      categoryBreakdown[line.category] =
+        (categoryBreakdown[line.category] || 0) + amt;
 
       switch (line.category) {
         case OpeningBalanceCategory.CASH:
@@ -106,9 +126,13 @@ export class OpeningBalancesService {
           totalAssets += amt;
           break;
         case OpeningBalanceCategory.FIXED_ASSET: {
-          const net = line.netAmount !== undefined && line.netAmount !== null
-            ? Number(line.netAmount) * rate
-            : Math.max(0, amt - Number(line.accumulatedDepreciation || 0) * rate);
+          const net =
+            line.netAmount !== undefined && line.netAmount !== null
+              ? Number(line.netAmount) * rate
+              : Math.max(
+                  0,
+                  amt - Number(line.accumulatedDepreciation || 0) * rate,
+                );
           totalAssets += net;
           break;
         }
@@ -187,7 +211,13 @@ export class OpeningBalancesService {
               select: { id: true, name: true },
             },
             counterparty: {
-              select: { id: true, name: true, type: true, inn: true, phone: true },
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                inn: true,
+                phone: true,
+              },
             },
             fixedAsset: {
               select: {
@@ -204,7 +234,8 @@ export class OpeningBalancesService {
       },
     });
 
-    if (!doc) throw new NotFoundException('Boshlang‘ich qoldiq hujjati topilmadi');
+    if (!doc)
+      throw new NotFoundException('Boshlang‘ich qoldiq hujjati topilmadi');
 
     const lines = (doc as any).lines || [];
     const metrics = this.calculateMetrics(
@@ -241,7 +272,9 @@ export class OpeningBalancesService {
       where: { tenantId, docNumber },
     });
     if (existing) {
-      throw new ConflictException(`Hujjat raqami ${docNumber} allaqachon mavjud`);
+      throw new ConflictException(
+        `Hujjat raqami ${docNumber} allaqachon mavjud`,
+      );
     }
 
     const lines = dto.lines || [];
@@ -273,9 +306,10 @@ export class OpeningBalancesService {
             this.validateLineCurrency(l);
             const amt = Number(l.amount || 0);
             const accDep = Number(l.accumulatedDepreciation || 0);
-            const netAmt = l.category === OpeningBalanceCategory.FIXED_ASSET
-              ? Math.max(0, amt - accDep)
-              : amt;
+            const netAmt =
+              l.category === OpeningBalanceCategory.FIXED_ASSET
+                ? Math.max(0, amt - accDep)
+                : amt;
             return {
               tenantId,
               category: l.category,
@@ -284,13 +318,22 @@ export class OpeningBalancesService {
               warehouseId: l.warehouseId || null,
               counterpartyId: l.counterpartyId || null,
               fixedAssetId: l.fixedAssetId || null,
-              quantity: l.quantity !== undefined && l.quantity !== null ? Number(l.quantity) : null,
-              unitCost: l.unitCost !== undefined && l.unitCost !== null ? Number(l.unitCost) : null,
+              quantity:
+                l.quantity !== undefined && l.quantity !== null
+                  ? Number(l.quantity)
+                  : null,
+              unitCost:
+                l.unitCost !== undefined && l.unitCost !== null
+                  ? Number(l.unitCost)
+                  : null,
               amount: amt,
               accumulatedDepreciation: accDep,
               netAmount: netAmt,
               currency: l.currency,
-              exchangeRate: this.exchangeRateToUzs(l.currency, Number(l.exchangeRate)),
+              exchangeRate: this.exchangeRateToUzs(
+                l.currency,
+                Number(l.exchangeRate),
+              ),
               batchNumber: l.batchNumber || null,
               contractNumber: l.contractNumber || null,
               notes: l.notes || null,
@@ -348,9 +391,10 @@ export class OpeningBalancesService {
             this.validateLineCurrency(l);
             const amt = Number(l.amount || 0);
             const accDep = Number(l.accumulatedDepreciation || 0);
-            const netAmt = l.category === OpeningBalanceCategory.FIXED_ASSET
-              ? Math.max(0, amt - accDep)
-              : amt;
+            const netAmt =
+              l.category === OpeningBalanceCategory.FIXED_ASSET
+                ? Math.max(0, amt - accDep)
+                : amt;
             return {
               documentId,
               tenantId,
@@ -360,13 +404,22 @@ export class OpeningBalancesService {
               warehouseId: l.warehouseId || null,
               counterpartyId: l.counterpartyId || null,
               fixedAssetId: l.fixedAssetId || null,
-              quantity: l.quantity !== undefined && l.quantity !== null ? Number(l.quantity) : null,
-              unitCost: l.unitCost !== undefined && l.unitCost !== null ? Number(l.unitCost) : null,
+              quantity:
+                l.quantity !== undefined && l.quantity !== null
+                  ? Number(l.quantity)
+                  : null,
+              unitCost:
+                l.unitCost !== undefined && l.unitCost !== null
+                  ? Number(l.unitCost)
+                  : null,
               amount: amt,
               accumulatedDepreciation: accDep,
               netAmount: netAmt,
               currency: l.currency,
-              exchangeRate: this.exchangeRateToUzs(l.currency, Number(l.exchangeRate)),
+              exchangeRate: this.exchangeRateToUzs(
+                l.currency,
+                Number(l.exchangeRate),
+              ),
               batchNumber: l.batchNumber || null,
               contractNumber: l.contractNumber || null,
               notes: l.notes || null,
@@ -403,39 +456,52 @@ export class OpeningBalancesService {
     });
     if (!document) throw new NotFoundException('Hujjat topilmadi');
     if (document.status === OpeningBalanceStatus.POSTED) {
-      throw new BadRequestException('Tasdiqlangan hujjat kapitalini qayta hisoblab bo‘lmaydi');
+      throw new BadRequestException(
+        'Tasdiqlangan hujjat kapitalini qayta hisoblab bo‘lmaydi',
+      );
     }
 
     document.lines.forEach((line) => this.validateLineCurrency(line));
-    const metrics = this.calculateMetrics(document.lines.map((line) => ({
-      category: line.category,
-      amount: Number(line.amount),
-      netAmount: Number(line.netAmount),
-      accumulatedDepreciation: Number(line.accumulatedDepreciation),
-      currency: line.currency,
-      exchangeRate: Number(line.exchangeRate),
-    })));
-    const targetEquity = Math.round((metrics.totalAssets - metrics.totalLiabilities) * 100) / 100;
+    const metrics = this.calculateMetrics(
+      document.lines.map((line) => ({
+        category: line.category,
+        amount: Number(line.amount),
+        netAmount: Number(line.netAmount),
+        accumulatedDepreciation: Number(line.accumulatedDepreciation),
+        currency: line.currency,
+        exchangeRate: Number(line.exchangeRate),
+      })),
+    );
+    const targetEquity =
+      Math.round((metrics.totalAssets - metrics.totalLiabilities) * 100) / 100;
     if (targetEquity < 0) {
-      throw new BadRequestException('Majburiyatlar aktivlardan ko‘p; kapitalni avtomatik tenglashtirib bo‘lmaydi');
+      throw new BadRequestException(
+        'Majburiyatlar aktivlardan ko‘p; kapitalni avtomatik tenglashtirib bo‘lmaydi',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
       await tx.openingBalanceLine.deleteMany({
-        where: { documentId, tenantId, category: OpeningBalanceCategory.EQUITY },
+        where: {
+          documentId,
+          tenantId,
+          category: OpeningBalanceCategory.EQUITY,
+        },
       });
       if (targetEquity > 0) {
         await tx.openingBalanceLine.createMany({
-          data: [{
-            documentId,
-            tenantId,
-            category: OpeningBalanceCategory.EQUITY,
-            amount: targetEquity,
-            netAmount: targetEquity,
-            currency: 'UZS',
-            exchangeRate: 1,
-            accumulatedDepreciation: 0,
-          }],
+          data: [
+            {
+              documentId,
+              tenantId,
+              category: OpeningBalanceCategory.EQUITY,
+              amount: targetEquity,
+              netAmount: targetEquity,
+              currency: 'UZS',
+              exchangeRate: 1,
+              accumulatedDepreciation: 0,
+            },
+          ],
         });
       }
       return tx.openingBalanceDocument.update({
@@ -461,8 +527,13 @@ export class OpeningBalancesService {
     });
     if (!doc) throw new NotFoundException('Hujjat topilmadi');
 
-    if (doc.status !== OpeningBalanceStatus.DRAFT && doc.status !== OpeningBalanceStatus.PENDING_REVIEW) {
-      throw new BadRequestException('Faqat qoralama boshlang‘ich qoldiq hujjatini tasdiqlash mumkin');
+    if (
+      doc.status !== OpeningBalanceStatus.DRAFT &&
+      doc.status !== OpeningBalanceStatus.PENDING_REVIEW
+    ) {
+      throw new BadRequestException(
+        'Faqat qoralama boshlang‘ich qoldiq hujjatini tasdiqlash mumkin',
+      );
     }
 
     doc.lines.forEach((line) => this.validateLineCurrency(line));
@@ -489,27 +560,42 @@ export class OpeningBalancesService {
 
     return this.prisma.$transaction(async (tx) => {
       for (const line of doc.lines) {
-        if (line.category !== OpeningBalanceCategory.CASH && line.category !== OpeningBalanceCategory.BANK) {
+        if (
+          line.category !== OpeningBalanceCategory.CASH &&
+          line.category !== OpeningBalanceCategory.BANK
+        ) {
           continue;
         }
         if (Number(line.amount) <= 0) continue;
         if (!line.accountId) {
-          throw new BadRequestException('Kassa yoki bank qoldig‘i uchun hisobni tanlang');
+          throw new BadRequestException(
+            'Kassa yoki bank qoldig‘i uchun hisobni tanlang',
+          );
         }
         const account = await tx.cashAccount.findFirst({
           where: { id: line.accountId, tenantId, isActive: true },
         });
-        if (!account) throw new NotFoundException('Tanlangan kassa yoki bank hisobi topilmadi');
-        if (!isCashAccountCurrencyValid(account) || account.currency !== line.currency) {
+        if (!account)
+          throw new NotFoundException(
+            'Tanlangan kassa yoki bank hisobi topilmadi',
+          );
+        if (
+          !isCashAccountCurrencyValid(account) ||
+          account.currency !== line.currency
+        ) {
           throw new BadRequestException(
             `Tanlangan hisob turi/valyutasi qoldiq valyutasiga (${line.currency}) mos kelmaydi`,
           );
         }
         if (
-          (line.category === OpeningBalanceCategory.BANK && account.accountType !== 'BANK') ||
-          (line.category === OpeningBalanceCategory.CASH && account.accountType === 'BANK')
+          (line.category === OpeningBalanceCategory.BANK &&
+            account.accountType !== 'BANK') ||
+          (line.category === OpeningBalanceCategory.CASH &&
+            account.accountType === 'BANK')
         ) {
-          throw new BadRequestException('Tanlangan hisob turi qoldiq qatori turiga mos kelmaydi');
+          throw new BadRequestException(
+            'Tanlangan hisob turi qoldiq qatori turiga mos kelmaydi',
+          );
         }
       }
 
@@ -537,7 +623,10 @@ export class OpeningBalancesService {
               status: TransactionStatus.POSTED,
               amount: amt,
               currency: line.currency,
-              exchangeRate: this.exchangeRateToUzs(line.currency, Number(line.exchangeRate)),
+              exchangeRate: this.exchangeRateToUzs(
+                line.currency,
+                Number(line.exchangeRate),
+              ),
               comment: line.notes || `Boshlang‘ich qoldiq: ${doc.docNumber}`,
               sourceDocType: 'OpeningBalanceDocument',
               sourceDocId: doc.id,
@@ -558,10 +647,9 @@ export class OpeningBalancesService {
         ) {
           itemIndex++;
           const qty = Number(line.quantity || 0);
-          const unitCost = Number(line.unitCost || 0) * this.exchangeRateToUzs(
-            line.currency,
-            Number(line.exchangeRate),
-          );
+          const unitCost =
+            Number(line.unitCost || 0) *
+            this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
 
           if (qty <= 0) continue;
 
@@ -586,7 +674,8 @@ export class OpeningBalancesService {
           });
 
           // Create active ProductBatch with receiptId = null
-          const batchNumber = line.batchNumber || `INIT-${doc.docNumber}-${itemIndex}`;
+          const batchNumber =
+            line.batchNumber || `INIT-${doc.docNumber}-${itemIndex}`;
           await tx.productBatch.create({
             data: {
               tenantId,
@@ -607,7 +696,10 @@ export class OpeningBalancesService {
       for (const line of doc.lines) {
         if (!line.counterpartyId) continue;
 
-        const settlement = this.getCounterpartyOpeningMovement(line.category, Number(line.amount));
+        const settlement = this.getCounterpartyOpeningMovement(
+          line.category,
+          Number(line.amount),
+        );
         if (!settlement) continue;
 
         await this.settlementService.recordMovement(tx, {
@@ -658,27 +750,58 @@ export class OpeningBalancesService {
       const journalLines: JournalLineDto[] = [];
 
       // Find or link standard asset and liability accounts
-      const acc2910 = await tx.account.findFirst({ where: { tenantId, code: '2910' } });
-      const acc4010 = await tx.account.findFirst({ where: { tenantId, code: '4010' } });
-      const acc6010 = await tx.account.findFirst({ where: { tenantId, code: '6010' } });
-      const acc8330 = await tx.account.findFirst({ where: { tenantId, code: '8330' } });
+      const acc2910 = await tx.account.findFirst({
+        where: { tenantId, code: '2910' },
+      });
+      const acc4010 = await tx.account.findFirst({
+        where: { tenantId, code: '4010' },
+      });
+      const acc6010 = await tx.account.findFirst({
+        where: { tenantId, code: '6010' },
+      });
+      const acc8330 = await tx.account.findFirst({
+        where: { tenantId, code: '8330' },
+      });
 
       // Asset journal lines (Debit Asset / Credit 00)
       for (const line of doc.lines) {
-        if (line.category !== OpeningBalanceCategory.CASH && line.category !== OpeningBalanceCategory.BANK) continue;
+        if (
+          line.category !== OpeningBalanceCategory.CASH &&
+          line.category !== OpeningBalanceCategory.BANK
+        )
+          continue;
         if (Number(line.amount) <= 0) continue;
-        if (!line.accountId) throw new BadRequestException('Kassa yoki bank qoldig‘i uchun hisobni tanlang');
+        if (!line.accountId)
+          throw new BadRequestException(
+            'Kassa yoki bank qoldig‘i uchun hisobni tanlang',
+          );
         const cashAccount = await tx.cashAccount.findFirst({
           where: { id: line.accountId, tenantId, isActive: true },
         });
-        if (!cashAccount || !isCashAccountCurrencyValid(cashAccount) || cashAccount.currency !== line.currency) {
-          throw new BadRequestException('Boshlang‘ich qoldiq hisobi va valyutasi o‘zaro mos emas');
+        if (
+          !cashAccount ||
+          !isCashAccountCurrencyValid(cashAccount) ||
+          cashAccount.currency !== line.currency
+        ) {
+          throw new BadRequestException(
+            'Boshlang‘ich qoldiq hisobi va valyutasi o‘zaro mos emas',
+          );
         }
         const ledgerCode = ledgerAccountCodeForCashAccount(cashAccount);
-        if (!ledgerCode) throw new BadRequestException('Kassa/bank uchun buxgalteriya hisobi topilmadi');
-        const ledgerAccount = await tx.account.findFirst({ where: { tenantId, code: ledgerCode } });
-        if (!ledgerAccount) throw new BadRequestException(`Buxgalteriya hisobi ${ledgerCode} sozlanmagan`);
-        const amountInUzs = Number(line.amount) * this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
+        if (!ledgerCode)
+          throw new BadRequestException(
+            'Kassa/bank uchun buxgalteriya hisobi topilmadi',
+          );
+        const ledgerAccount = await tx.account.findFirst({
+          where: { tenantId, code: ledgerCode },
+        });
+        if (!ledgerAccount)
+          throw new BadRequestException(
+            `Buxgalteriya hisobi ${ledgerCode} sozlanmagan`,
+          );
+        const amountInUzs =
+          Number(line.amount) *
+          this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
         if (amountInUzs <= 0) continue;
         journalLines.push({
           debitAccountId: ledgerAccount.id,
@@ -687,7 +810,10 @@ export class OpeningBalancesService {
           description: `${cashAccount.accountType} (${cashAccount.currency}) boshlang‘ich qoldig‘i`,
         });
       }
-      if (acc2910 && metrics.categoryBreakdown[OpeningBalanceCategory.INVENTORY] > 0) {
+      if (
+        acc2910 &&
+        metrics.categoryBreakdown[OpeningBalanceCategory.INVENTORY] > 0
+      ) {
         journalLines.push({
           debitAccountId: acc2910.id,
           creditAccountId: auxiliaryAccount.id,
@@ -695,21 +821,29 @@ export class OpeningBalancesService {
           description: 'Tovar-moddiy zaxiralar boshlang‘ich qoldig‘i',
         });
       }
-      if (acc4010 && metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT] > 0) {
+      if (
+        acc4010 &&
+        metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT] > 0
+      ) {
         journalLines.push({
           debitAccountId: acc4010.id,
           creditAccountId: auxiliaryAccount.id,
-          amount: metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT],
+          amount:
+            metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT],
           description: 'Xaridorlar qarzdorligi (debitorlik)',
         });
       }
 
       // Liability & Equity journal lines (Debit 00 / Credit Liability/Equity)
-      if (acc6010 && metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT] > 0) {
+      if (
+        acc6010 &&
+        metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT] > 0
+      ) {
         journalLines.push({
           debitAccountId: auxiliaryAccount.id,
           creditAccountId: acc6010.id,
-          amount: metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT],
+          amount:
+            metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT],
           description: 'Yetkazib beruvchilarga qarzdorlik (kreditorlik)',
         });
       }
@@ -768,14 +902,20 @@ export class OpeningBalancesService {
     if (!doc) throw new NotFoundException('Hujjat topilmadi');
 
     if (doc.status !== OpeningBalanceStatus.POSTED) {
-      throw new BadRequestException('Faqat tasdiqlangan hujjatni qayta ochish mumkin');
+      throw new BadRequestException(
+        'Faqat tasdiqlangan hujjatni qayta ochish mumkin',
+      );
     }
 
     // ─── Enforce Rollback Invariant ───
 
     // 1. Check Inventory Depletion
     for (const line of doc.lines) {
-      if (line.category === OpeningBalanceCategory.INVENTORY && line.productId && line.warehouseId) {
+      if (
+        line.category === OpeningBalanceCategory.INVENTORY &&
+        line.productId &&
+        line.warehouseId
+      ) {
         const batchNumber = line.batchNumber || `INIT-${doc.docNumber}`;
         const batches = await this.prisma.productBatch.findMany({
           where: {
@@ -880,7 +1020,10 @@ export class OpeningBalancesService {
       for (const line of doc.lines) {
         if (!line.counterpartyId) continue;
 
-        const settlement = this.getCounterpartyOpeningMovement(line.category, Number(line.amount));
+        const settlement = this.getCounterpartyOpeningMovement(
+          line.category,
+          Number(line.amount),
+        );
         if (!settlement) continue;
 
         await this.settlementService.recordMovement(tx, {
@@ -917,7 +1060,9 @@ export class OpeningBalancesService {
           status: OpeningBalanceStatus.DRAFT,
           approvedById: null,
           approvedAt: null,
-          notes: dto?.reason ? `${doc.notes || ''}\n[Qayta ochildi]: ${dto.reason}`.trim() : doc.notes,
+          notes: dto?.reason
+            ? `${doc.notes || ''}\n[Qayta ochildi]: ${dto.reason}`.trim()
+            : doc.notes,
         },
         include: { lines: true },
       });
@@ -932,7 +1077,9 @@ export class OpeningBalancesService {
     });
     if (!doc) throw new NotFoundException('Hujjat topilmadi');
     if (doc.status === OpeningBalanceStatus.POSTED) {
-      throw new BadRequestException('Tasdiqlangan hujjatni o‘chirib bo‘lmaydi. Avval qayta oching');
+      throw new BadRequestException(
+        'Tasdiqlangan hujjatni o‘chirib bo‘lmaydi. Avval qayta oching',
+      );
     }
 
     return this.prisma.openingBalanceDocument.delete({ where: { id } });
@@ -946,7 +1093,10 @@ export class OpeningBalancesService {
       orderBy: { openingDate: 'asc' },
     });
 
-    if (postedDoc && new Date(transactionDate) < new Date(postedDoc.openingDate)) {
+    if (
+      postedDoc &&
+      new Date(transactionDate) < new Date(postedDoc.openingDate)
+    ) {
       throw new BadRequestException(
         `Hujjat sanasi korxonaning boshlang‘ich qoldiq sanasidan (${postedDoc.openingDate.toISOString().slice(0, 10)}) oldin bo‘lishi mumkin emas`,
       );

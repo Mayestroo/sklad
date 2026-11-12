@@ -160,7 +160,11 @@ export class OpeningBalancesImportService {
     const sheetAvans = workbook.addWorksheet('5_Avanslar');
     sheetAvans.columns = [
       { header: 'Kontragent nomi yoki INN', key: 'counterparty', width: 32 },
-      { header: 'Avans turi (MIJOZ_AVANSI / TAMINOTCHI_AVANSI)', key: 'type', width: 38 },
+      {
+        header: 'Avans turi (MIJOZ_AVANSI / TAMINOTCHI_AVANSI)',
+        key: 'type',
+        width: 38,
+      },
       { header: 'Avans summasi', key: 'amount', width: 22 },
       { header: 'Valyuta', key: 'currency', width: 16 },
       { header: 'UZS kursi (USD uchun)', key: 'exchangeRate', width: 24 },
@@ -201,7 +205,12 @@ export class OpeningBalancesImportService {
     // 7. Boshqa qoldiqlar (Other Items & Equity)
     const sheetBoshqa = workbook.addWorksheet('7_Boshqa_qoldiqlar');
     sheetBoshqa.columns = [
-      { header: 'Qoldiq turi (BOSHQACHA_AKTIV / BOSHQACHA_MAJBURIYAT / KAPITAL)', key: 'type', width: 44 },
+      {
+        header:
+          'Qoldiq turi (BOSHQACHA_AKTIV / BOSHQACHA_MAJBURIYAT / KAPITAL)',
+        key: 'type',
+        width: 44,
+      },
       { header: 'Nomlanishi / Shaxs / Hisob', key: 'title', width: 32 },
       { header: 'Summa', key: 'amount', width: 22 },
       { header: 'Valyuta', key: 'currency', width: 16 },
@@ -233,7 +242,9 @@ export class OpeningBalancesImportService {
     try {
       await workbook.xlsx.load(fileBuffer as any);
     } catch (e: any) {
-      throw new BadRequestException('Faylni ochib bo‘lmadi. Iltimos, haqiqiy .xlsx fayl yuklang');
+      throw new BadRequestException(
+        'Faylni ochib bo‘lmadi. Iltimos, haqiqiy .xlsx fayl yuklang',
+      );
     }
 
     // 1. Preload Tenant Lookups
@@ -255,9 +266,17 @@ export class OpeningBalancesImportService {
       sheetPul.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
         const accountName = String(row.getCell(1).value || '').trim();
-        const currency = String(row.getCell(2).value || 'UZS').trim().toUpperCase();
+        const currency = String(row.getCell(2).value || 'UZS')
+          .trim()
+          .toUpperCase();
         const rawAmount = row.getCell(3).value;
-        const exchangeRate = this.parseExchangeRate('1_Pul', rowNumber, currency, row.getCell(4).value, errors);
+        const exchangeRate = this.parseExchangeRate(
+          '1_Pul',
+          rowNumber,
+          currency,
+          row.getCell(4).value,
+          errors,
+        );
         const notes = String(row.getCell(5).value || '').trim();
 
         if (!accountName && !rawAmount) return; // Skip empty row
@@ -288,18 +307,27 @@ export class OpeningBalancesImportService {
         }
 
         // Match account by name or currency
-        const compatibleAccounts = accounts.filter((account) =>
-          isCashAccountCurrencyValid(account) && account.currency === currency,
+        const compatibleAccounts = accounts.filter(
+          (account) =>
+            isCashAccountCurrencyValid(account) &&
+            account.currency === currency,
         );
         const nameMatchedAccount = compatibleAccounts.find((a) => {
-          const nameObj = typeof a.name === 'object' && a.name !== null ? a.name as any : {};
+          const nameObj =
+            typeof a.name === 'object' && a.name !== null
+              ? (a.name as any)
+              : {};
           return (
             nameObj.uz?.toLowerCase() === accountName.toLowerCase() ||
             nameObj.ru?.toLowerCase() === accountName.toLowerCase()
           );
         });
         const sameCurrencyAccounts = compatibleAccounts;
-        const matchedAccount = nameMatchedAccount ?? (sameCurrencyAccounts.length === 1 ? sameCurrencyAccounts[0] : undefined);
+        const matchedAccount =
+          nameMatchedAccount ??
+          (sameCurrencyAccounts.length === 1
+            ? sameCurrencyAccounts[0]
+            : undefined);
 
         if (!matchedAccount) {
           errors.push({
@@ -324,7 +352,10 @@ export class OpeningBalancesImportService {
 
         validRows++;
         previewLines.push({
-          category: matchedAccount.accountType === 'BANK' ? OpeningBalanceCategory.BANK : OpeningBalanceCategory.CASH,
+          category:
+            matchedAccount.accountType === 'BANK'
+              ? OpeningBalanceCategory.BANK
+              : OpeningBalanceCategory.CASH,
           accountId: matchedAccount.id,
           amount,
           currency,
@@ -335,7 +366,8 @@ export class OpeningBalancesImportService {
     }
 
     // ─── Sheet 2: Tovar (Inventory) ───
-    const sheetTovar = workbook.getWorksheet('2_Tovar') || workbook.worksheets[1];
+    const sheetTovar =
+      workbook.getWorksheet('2_Tovar') || workbook.worksheets[1];
     if (sheetTovar) {
       sheetTovar.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
@@ -378,7 +410,8 @@ export class OpeningBalancesImportService {
         const product = products.find(
           (p) =>
             p.sku.toLowerCase() === sku.toLowerCase() ||
-            (p.name && (p.name as any).uz?.toLowerCase() === productName.toLowerCase()),
+            (p.name &&
+              (p.name as any).uz?.toLowerCase() === productName.toLowerCase()),
         );
         if (!product) {
           errors.push({
@@ -392,13 +425,17 @@ export class OpeningBalancesImportService {
         }
 
         // Match warehouse
-        const warehouse = warehouses.find((w) => {
-          const nameObj = typeof w.name === 'object' && w.name !== null ? (w.name as any) : {};
-          return (
-            nameObj.uz?.toLowerCase() === warehouseName.toLowerCase() ||
-            nameObj.ru?.toLowerCase() === warehouseName.toLowerCase()
-          );
-        }) || warehouses[0];
+        const warehouse =
+          warehouses.find((w) => {
+            const nameObj =
+              typeof w.name === 'object' && w.name !== null
+                ? (w.name as any)
+                : {};
+            return (
+              nameObj.uz?.toLowerCase() === warehouseName.toLowerCase() ||
+              nameObj.ru?.toLowerCase() === warehouseName.toLowerCase()
+            );
+          }) || warehouses[0];
 
         if (!warehouse) {
           errors.push({
@@ -428,15 +465,24 @@ export class OpeningBalancesImportService {
     }
 
     // ─── Sheet 3: Mijozlar (Customer Debts) ───
-    const sheetMijoz = workbook.getWorksheet('3_Mijozlar') || workbook.worksheets[2];
+    const sheetMijoz =
+      workbook.getWorksheet('3_Mijozlar') || workbook.worksheets[2];
     if (sheetMijoz) {
       sheetMijoz.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
         const customerIdent = String(row.getCell(1).value || '').trim();
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const exchangeRate = this.parseExchangeRate('3_Mijozlar', rowNumber, currency, row.getCell(5).value, errors);
+        const currency = String(row.getCell(4).value || 'UZS')
+          .trim()
+          .toUpperCase();
+        const exchangeRate = this.parseExchangeRate(
+          '3_Mijozlar',
+          rowNumber,
+          currency,
+          row.getCell(5).value,
+          errors,
+        );
         const notes = String(row.getCell(6).value || '').trim();
 
         if (!customerIdent && !rawAmount) return;
@@ -496,15 +542,24 @@ export class OpeningBalancesImportService {
     }
 
     // ─── Sheet 4: Yetkazib beruvchilar (Supplier Debts) ───
-    const sheetTaminot = workbook.getWorksheet('4_Yetkazib_beruvchilar') || workbook.worksheets[3];
+    const sheetTaminot =
+      workbook.getWorksheet('4_Yetkazib_beruvchilar') || workbook.worksheets[3];
     if (sheetTaminot) {
       sheetTaminot.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
         const suppIdent = String(row.getCell(1).value || '').trim();
         const contract = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const exchangeRate = this.parseExchangeRate('4_Yetkazib_beruvchilar', rowNumber, currency, row.getCell(5).value, errors);
+        const currency = String(row.getCell(4).value || 'UZS')
+          .trim()
+          .toUpperCase();
+        const exchangeRate = this.parseExchangeRate(
+          '4_Yetkazib_beruvchilar',
+          rowNumber,
+          currency,
+          row.getCell(5).value,
+          errors,
+        );
         const notes = String(row.getCell(6).value || '').trim();
 
         if (!suppIdent && !rawAmount) return;
@@ -564,15 +619,26 @@ export class OpeningBalancesImportService {
     }
 
     // ─── Sheet 5: Avanslar (Advances) ───
-    const sheetAvans = workbook.getWorksheet('5_Avanslar') || workbook.worksheets[4];
+    const sheetAvans =
+      workbook.getWorksheet('5_Avanslar') || workbook.worksheets[4];
     if (sheetAvans) {
       sheetAvans.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
         const cpIdent = String(row.getCell(1).value || '').trim();
-        const typeStr = String(row.getCell(2).value || 'MIJOZ_AVANSI').trim().toUpperCase();
+        const typeStr = String(row.getCell(2).value || 'MIJOZ_AVANSI')
+          .trim()
+          .toUpperCase();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const exchangeRate = this.parseExchangeRate('5_Avanslar', rowNumber, currency, row.getCell(5).value, errors);
+        const currency = String(row.getCell(4).value || 'UZS')
+          .trim()
+          .toUpperCase();
+        const exchangeRate = this.parseExchangeRate(
+          '5_Avanslar',
+          rowNumber,
+          currency,
+          row.getCell(5).value,
+          errors,
+        );
         const notes = String(row.getCell(6).value || '').trim();
 
         if (!cpIdent && !rawAmount) return;
@@ -634,7 +700,8 @@ export class OpeningBalancesImportService {
     }
 
     // ─── Sheet 6: Asosiy vositalar (Fixed Assets) ───
-    const sheetAsosiy = workbook.getWorksheet('6_Asosiy_vositalar') || workbook.worksheets[5];
+    const sheetAsosiy =
+      workbook.getWorksheet('6_Asosiy_vositalar') || workbook.worksheets[5];
     if (sheetAsosiy) {
       sheetAsosiy.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
@@ -668,7 +735,8 @@ export class OpeningBalancesImportService {
             rowNumber,
             fieldName: 'Amortizatsiya',
             invalidValue: String(rawDep),
-            errorMessage: 'Amortizatsiya 0 dan katta va boshlang‘ich qiymatdan oshmasligi kerak',
+            errorMessage:
+              'Amortizatsiya 0 dan katta va boshlang‘ich qiymatdan oshmasligi kerak',
           });
           return;
         }
@@ -688,15 +756,26 @@ export class OpeningBalancesImportService {
     }
 
     // ─── Sheet 7: Boshqa qoldiqlar (Other Items & Equity) ───
-    const sheetBoshqa = workbook.getWorksheet('7_Boshqa_qoldiqlar') || workbook.worksheets[6];
+    const sheetBoshqa =
+      workbook.getWorksheet('7_Boshqa_qoldiqlar') || workbook.worksheets[6];
     if (sheetBoshqa) {
       sheetBoshqa.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const typeStr = String(row.getCell(1).value || 'KAPITAL').trim().toUpperCase();
+        const typeStr = String(row.getCell(1).value || 'KAPITAL')
+          .trim()
+          .toUpperCase();
         const title = String(row.getCell(2).value || '').trim();
         const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS').trim().toUpperCase();
-        const exchangeRate = this.parseExchangeRate('7_Boshqa_qoldiqlar', rowNumber, currency, row.getCell(5).value, errors);
+        const currency = String(row.getCell(4).value || 'UZS')
+          .trim()
+          .toUpperCase();
+        const exchangeRate = this.parseExchangeRate(
+          '7_Boshqa_qoldiqlar',
+          rowNumber,
+          currency,
+          row.getCell(5).value,
+          errors,
+        );
         const notes = String(row.getCell(6).value || '').trim();
 
         if (!rawAmount) return;
@@ -729,7 +808,10 @@ export class OpeningBalancesImportService {
         let category: OpeningBalanceCategory = OpeningBalanceCategory.EQUITY;
         if (typeStr.includes('AKTIV') || typeStr.includes('ASSET')) {
           category = OpeningBalanceCategory.OTHER_ASSET;
-        } else if (typeStr.includes('MAJBURIYAT') || typeStr.includes('LIABILITY')) {
+        } else if (
+          typeStr.includes('MAJBURIYAT') ||
+          typeStr.includes('LIABILITY')
+        ) {
           category = OpeningBalanceCategory.OTHER_LIABILITY;
         }
 

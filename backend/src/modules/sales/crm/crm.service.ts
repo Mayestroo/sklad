@@ -100,9 +100,13 @@ export class CrmService {
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.amount !== undefined && { amount: Number(dto.amount) }),
-        ...(dto.counterpartyId !== undefined && { counterpartyId: dto.counterpartyId }),
+        ...(dto.counterpartyId !== undefined && {
+          counterpartyId: dto.counterpartyId,
+        }),
         ...(dto.stage !== undefined && { stage: dto.stage }),
-        ...(dto.assignedUserId !== undefined && { assignedUserId: dto.assignedUserId }),
+        ...(dto.assignedUserId !== undefined && {
+          assignedUserId: dto.assignedUserId,
+        }),
       },
       include: {
         counterparty: true,
@@ -127,4 +131,3 @@ export class CrmService {
     return { success: true, message: 'Deal deleted successfully' };
   }
 }
-

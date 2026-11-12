@@ -539,16 +539,16 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         ],
       });
       prisma.productBatch.findMany.mockResolvedValue([
-          {
-            id: 'batch-raw',
-            createdAt: new Date('2026-01-01T00:00:01Z'),
-            productId: 'raw-alu',
-            remainingQty: 50,
-            initialQty: 50,
-            purchasePrice: 40000,
-            landedCost: 40000,
-          },
-        ]);
+        {
+          id: 'batch-raw',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
+          productId: 'raw-alu',
+          remainingQty: 50,
+          initialQty: 50,
+          purchasePrice: 40000,
+          landedCost: 40000,
+        },
+      ]);
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.findMany.mockResolvedValue([
         { id: 'item-raw', quantity: 50, returnedQuantity: 10 },

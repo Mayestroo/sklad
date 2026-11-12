@@ -37,7 +37,13 @@ describe('AdditionalExpensesService Unit Tests', () => {
         totalPrice: 10000000,
         weight: 0.2,
         landedCost: 1000000,
-        product: { id: 'prod-iphone', name: { uz: 'iPhone' }, sku: 'IPH-13', weight: 0.2, unitOfMeasure: 'piece' },
+        product: {
+          id: 'prod-iphone',
+          name: { uz: 'iPhone' },
+          sku: 'IPH-13',
+          weight: 0.2,
+          unitOfMeasure: 'piece',
+        },
       },
       {
         id: 'item-2',
@@ -47,7 +53,13 @@ describe('AdditionalExpensesService Unit Tests', () => {
         totalPrice: 1000000,
         weight: 0.05,
         landedCost: 50000,
-        product: { id: 'prod-cable', name: { uz: 'Kabel' }, sku: 'CAB-01', weight: 0.05, unitOfMeasure: 'piece' },
+        product: {
+          id: 'prod-cable',
+          name: { uz: 'Kabel' },
+          sku: 'CAB-01',
+          weight: 0.05,
+          unitOfMeasure: 'piece',
+        },
       },
       {
         id: 'item-3',
@@ -57,7 +69,13 @@ describe('AdditionalExpensesService Unit Tests', () => {
         totalPrice: 200000,
         weight: 0.1,
         landedCost: 20000,
-        product: { id: 'prod-charger', name: { uz: 'Zaryadlovchi' }, sku: 'CHG-01', weight: 0.1, unitOfMeasure: 'piece' },
+        product: {
+          id: 'prod-charger',
+          name: { uz: 'Zaryadlovchi' },
+          sku: 'CHG-01',
+          weight: 0.1,
+          unitOfMeasure: 'piece',
+        },
       },
     ],
     batches: [
@@ -92,7 +110,9 @@ describe('AdditionalExpensesService Unit Tests', () => {
   };
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       additionalExpense: {
         count: jest.fn().mockResolvedValue(0),
@@ -112,7 +132,9 @@ describe('AdditionalExpensesService Unit Tests', () => {
         update: jest.fn(),
       },
       purchaseReceiptItem: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
         update: jest.fn(),
       },
       productBatch: {
@@ -144,12 +166,18 @@ describe('AdditionalExpensesService Unit Tests', () => {
       },
       account: {
         findFirst: jest.fn().mockImplementation(({ where }) => {
-          if (where.code === '2910') return Promise.resolve({ id: 'acc-2910', code: '2910' });
-          if (where.code === '9110') return Promise.resolve({ id: 'acc-9110', code: '9110' });
-          if (where.code === '4410') return Promise.resolve({ id: 'acc-4410', code: '4410' });
-          if (where.code === '6010') return Promise.resolve({ id: 'acc-6010', code: '6010' });
-          if (where.code === '5010') return Promise.resolve({ id: 'acc-5010', code: '5010' });
-          if (where.code === '5210') return Promise.resolve({ id: 'acc-5210', code: '5210' });
+          if (where.code === '2910')
+            return Promise.resolve({ id: 'acc-2910', code: '2910' });
+          if (where.code === '9110')
+            return Promise.resolve({ id: 'acc-9110', code: '9110' });
+          if (where.code === '4410')
+            return Promise.resolve({ id: 'acc-4410', code: '4410' });
+          if (where.code === '6010')
+            return Promise.resolve({ id: 'acc-6010', code: '6010' });
+          if (where.code === '5010')
+            return Promise.resolve({ id: 'acc-5010', code: '5010' });
+          if (where.code === '5210')
+            return Promise.resolve({ id: 'acc-5210', code: '5210' });
           return Promise.resolve(null);
         }),
       },
@@ -170,7 +198,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
-        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -198,7 +229,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
       expect(cable).toBeDefined();
       expect(charger).toBeDefined();
 
-      const sum = iphone!.allocatedAmount + cable!.allocatedAmount + charger!.allocatedAmount;
+      const sum =
+        iphone!.allocatedAmount +
+        cable!.allocatedAmount +
+        charger!.allocatedAmount;
       expect(sum).toBe(2000000);
       expect(iphone!.newLandedCost).toBeGreaterThan(1000000);
     });
@@ -328,8 +362,9 @@ describe('AdditionalExpensesService Unit Tests', () => {
         items: [],
       });
 
-      await expect(service.postExpense(tenantId, userId, 'exp-missing-account'))
-        .rejects.toThrow(BadRequestException);
+      await expect(
+        service.postExpense(tenantId, userId, 'exp-missing-account'),
+      ).rejects.toThrow(BadRequestException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
@@ -364,22 +399,36 @@ describe('AdditionalExpensesService Unit Tests', () => {
         balance: 500,
         isActive: true,
       });
-      prisma.additionalExpense.update.mockResolvedValue({ ...expense, status: PurchaseDocStatus.POSTED });
+      prisma.additionalExpense.update.mockResolvedValue({
+        ...expense,
+        status: PurchaseDocStatus.POSTED,
+      });
 
       await service.postExpense(tenantId, userId, expense.id);
 
-      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ accountId: 'bank-usd', currency: 'USD', amount: 100 }),
-      }));
-      expect(prisma.journalEntry.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          lines: expect.objectContaining({
-            create: expect.arrayContaining([
-              expect.objectContaining({ creditAccountId: 'acc-5210', amount: 1280000 }),
-            ]),
+      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            accountId: 'bank-usd',
+            currency: 'USD',
+            amount: 100,
           }),
         }),
-      }));
+      );
+      expect(prisma.journalEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            lines: expect.objectContaining({
+              create: expect.arrayContaining([
+                expect.objectContaining({
+                  creditAccountId: 'acc-5210',
+                  amount: 1280000,
+                }),
+              ]),
+            }),
+          }),
+        }),
+      );
     });
 
     it('posts expense on unsold inventory, updating ProductBatch and Product.costPrice', async () => {
@@ -431,18 +480,25 @@ describe('AdditionalExpensesService Unit Tests', () => {
       });
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { id: 'prod-iphone' },
-        data: { costPrice: 1100000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 },
+        data: {
+          costPrice: 1100000,
+          costPriceCurrency: 'UZS',
+          costPriceExchangeRate: 1,
+        },
       });
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId: 'carrier-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 1000000,
-        entryType: 'ADDITIONAL_EXPENSE_POSTED',
-        sourceDocType: 'AdditionalExpense',
-        sourceDocId: 'exp-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId: 'carrier-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 1000000,
+          entryType: 'ADDITIONAL_EXPENSE_POSTED',
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: 'exp-1',
+        }),
+      );
       expect(prisma.journalEntry.create).toHaveBeenCalled();
     });
 

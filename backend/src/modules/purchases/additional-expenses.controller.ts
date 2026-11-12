@@ -53,10 +53,7 @@ export class AdditionalExpensesController {
 
   @Get(':id')
   @RequirePermissions('inventory:view')
-  async findById(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async findById(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.additionalExpensesService.findById(tenantId, id);
   }
 

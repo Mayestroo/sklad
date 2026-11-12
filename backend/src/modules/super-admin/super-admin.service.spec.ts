@@ -79,24 +79,41 @@ describe('SuperAdminService', () => {
     };
 
     it('should throw ConflictException if company slug already exists', async () => {
-      prisma.company.findUnique.mockResolvedValue({ id: 'existing-id', slug: 'yangi-korxona' });
+      prisma.company.findUnique.mockResolvedValue({
+        id: 'existing-id',
+        slug: 'yangi-korxona',
+      });
 
-      await expect(service.createTenant(validDto)).rejects.toThrow(ConflictException);
-      await expect(service.createTenant(validDto)).rejects.toThrow('Company with this slug already exists');
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        ConflictException,
+      );
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        'Company with this slug already exists',
+      );
     });
 
     it('should throw ConflictException if admin email already exists', async () => {
       prisma.company.findUnique.mockResolvedValue(null);
-      prisma.user.findFirst.mockResolvedValue({ id: 'existing-user-id', email: 'admin@yangi.uz' });
+      prisma.user.findFirst.mockResolvedValue({
+        id: 'existing-user-id',
+        email: 'admin@yangi.uz',
+      });
 
-      await expect(service.createTenant(validDto)).rejects.toThrow(ConflictException);
-      await expect(service.createTenant(validDto)).rejects.toThrow('User with this email already exists');
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        ConflictException,
+      );
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        'User with this email already exists',
+      );
     });
 
     it('should atomically create company, admin user, main branch, main warehouse, and subscription', async () => {
       prisma.company.findUnique.mockResolvedValue(null);
       prisma.user.findFirst.mockResolvedValue(null);
-      prisma.role.findFirst.mockResolvedValue({ id: 'role-company-admin-id', slug: 'company_admin' });
+      prisma.role.findFirst.mockResolvedValue({
+        id: 'role-company-admin-id',
+        slug: 'company_admin',
+      });
 
       const createdCompany = {
         id: 'new-company-id',
@@ -114,7 +131,10 @@ describe('SuperAdminService', () => {
         firstName: validDto.adminFirstName,
         lastName: validDto.adminLastName,
       });
-      prisma.branch.create.mockResolvedValue({ id: 'new-branch-id', isMain: true });
+      prisma.branch.create.mockResolvedValue({
+        id: 'new-branch-id',
+        isMain: true,
+      });
       prisma.warehouse.create.mockResolvedValue({ id: 'new-warehouse-id' });
       prisma.subscription.create.mockResolvedValue({
         id: 'new-sub-id',
@@ -131,17 +151,26 @@ describe('SuperAdminService', () => {
       });
       expect(prisma.branch.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ isMain: true, tenantId: 'new-company-id' }),
+          data: expect.objectContaining({
+            isMain: true,
+            tenantId: 'new-company-id',
+          }),
         }),
       );
       expect(prisma.warehouse.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ branchId: 'new-branch-id', tenantId: 'new-company-id' }),
+          data: expect.objectContaining({
+            branchId: 'new-branch-id',
+            tenantId: 'new-company-id',
+          }),
         }),
       );
       expect(prisma.subscription.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ plan: 'PROFESSIONAL', tenantId: 'new-company-id' }),
+          data: expect.objectContaining({
+            plan: 'PROFESSIONAL',
+            tenantId: 'new-company-id',
+          }),
         }),
       );
       expect(result.slug).toBe('yangi-korxona');
@@ -213,7 +242,10 @@ describe('SuperAdminService', () => {
     });
 
     it('should throw NotFoundException if company has no active users', async () => {
-      prisma.company.findUnique.mockResolvedValue({ id: 'comp-1', name: 'Test' });
+      prisma.company.findUnique.mockResolvedValue({
+        id: 'comp-1',
+        name: 'Test',
+      });
       prisma.user.findMany.mockResolvedValue([]);
 
       await expect(

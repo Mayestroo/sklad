@@ -281,7 +281,14 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
           },
         ],
         batches: [
-          { id: 'batch-100', productId: 'prod-iphone', remainingQty: 10, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') },
+          {
+            id: 'batch-100',
+            productId: 'prod-iphone',
+            remainingQty: 10,
+            landedCost: 100000,
+            purchasePrice: 100000,
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          },
         ],
       });
 
@@ -619,7 +626,14 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
             { id: 'item-100', productId: 'prod-item', returnedQuantity: 5 },
           ],
           batches: [
-            { id: 'batch-100', productId: 'prod-item', remainingQty: 5, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') },
+            {
+              id: 'batch-100',
+              productId: 'prod-item',
+              remainingQty: 5,
+              landedCost: 100000,
+              purchasePrice: 100000,
+              createdAt: new Date('2026-01-01T00:00:00Z'),
+            },
           ],
         },
       };

@@ -1,4 +1,8 @@
-import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { TenantGuard } from './tenant.guard';
 
 describe('TenantGuard', () => {
@@ -8,7 +12,10 @@ describe('TenantGuard', () => {
     guard = new TenantGuard();
   });
 
-  const createMockContext = (user?: any, headers: Record<string, string> = {}): ExecutionContext => {
+  const createMockContext = (
+    user?: any,
+    headers: Record<string, string> = {},
+  ): ExecutionContext => {
     const request: any = {
       user,
       headers: { ...headers },
@@ -52,7 +59,9 @@ describe('TenantGuard', () => {
     const context = createMockContext(undefined);
 
     expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
-    expect(() => guard.canActivate(context)).toThrow('User authentication context missing');
+    expect(() => guard.canActivate(context)).toThrow(
+      'User authentication context missing',
+    );
   });
 
   it('should throw ForbiddenException when user has no tenantId and is not super_admin', () => {

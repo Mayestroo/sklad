@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
-import { SalesDocStatus, TransactionDirection, TransactionStatus } from '@prisma/client';
+import {
+  SalesDocStatus,
+  TransactionDirection,
+  TransactionStatus,
+} from '@prisma/client';
 import type { FinanceSummaryByAccount } from '../../../../shared/types/finance';
 import { convertAmountToUzs } from '../../common/utils/transaction-exchange-rate';
 
@@ -73,10 +77,14 @@ export class DashboardService {
         amount: true,
         currency: true,
         accountId: true,
-        account: { select: { id: true, accountType: true, name: true, currency: true } },
+        account: {
+          select: { id: true, accountType: true, name: true, currency: true },
+        },
         transferToId: true,
         transferToAmount: true,
-        transferToAccount: { select: { id: true, accountType: true, name: true, currency: true } },
+        transferToAccount: {
+          select: { id: true, accountType: true, name: true, currency: true },
+        },
       },
     });
 
@@ -84,7 +92,9 @@ export class DashboardService {
     const byCurrency: Record<string, { income: number; expense: number }> = {};
     const byAccount = new Map<string, FinanceSummaryByAccount>();
 
-    const accountSummary = (account: NonNullable<typeof transactions[number]['account']>) => {
+    const accountSummary = (
+      account: NonNullable<(typeof transactions)[number]['account']>,
+    ) => {
       let summary = byAccount.get(account.id);
       if (!summary) {
         summary = {
@@ -105,25 +115,40 @@ export class DashboardService {
 
     for (const tx of transactions) {
       if (!tx.accountId || !tx.account || tx.account.currency !== tx.currency) {
-        throw new Error('Dashboard finance transaction has missing or mismatched source-account currency');
+        throw new Error(
+          'Dashboard finance transaction has missing or mismatched source-account currency',
+        );
       }
       const amount = Number(tx.amount);
       if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error('Dashboard finance transaction amount must be positive and finite');
+        throw new Error(
+          'Dashboard finance transaction amount must be positive and finite',
+        );
       }
       if (tx.direction === TransactionDirection.TRANSFER) {
         if (!tx.transferToId || !tx.transferToAccount) {
-          throw new Error('Dashboard finance transfer has no destination account');
+          throw new Error(
+            'Dashboard finance transfer has no destination account',
+          );
         }
-        if (tx.transferToAmount == null || !Number.isFinite(Number(tx.transferToAmount)) || Number(tx.transferToAmount) <= 0) {
-          throw new Error('Dashboard finance transfer destination amount must be positive and finite');
+        if (
+          tx.transferToAmount == null ||
+          !Number.isFinite(Number(tx.transferToAmount)) ||
+          Number(tx.transferToAmount) <= 0
+        ) {
+          throw new Error(
+            'Dashboard finance transfer destination amount must be positive and finite',
+          );
         }
-        const source = !filters.currency || tx.account.currency === filters.currency
-          ? accountSummary(tx.account)
-          : undefined;
-        const target = !filters.currency || tx.transferToAccount.currency === filters.currency
-          ? accountSummary(tx.transferToAccount)
-          : undefined;
+        const source =
+          !filters.currency || tx.account.currency === filters.currency
+            ? accountSummary(tx.account)
+            : undefined;
+        const target =
+          !filters.currency ||
+          tx.transferToAccount.currency === filters.currency
+            ? accountSummary(tx.transferToAccount)
+            : undefined;
         if (source) {
           source.transferOut += amount;
         }
@@ -146,7 +171,11 @@ export class DashboardService {
     }
 
     for (const account of byAccount.values()) {
-      account.netCashFlow = account.totalIncome + account.transferIn - account.totalExpense - account.transferOut;
+      account.netCashFlow =
+        account.totalIncome +
+        account.transferIn -
+        account.totalExpense -
+        account.transferOut;
     }
 
     const summaryByCurrency = Object.entries(byCurrency).map(
@@ -187,12 +216,21 @@ export class DashboardService {
       }
     }
 
-    const accountOrder: Record<string, number> = { UZS_CASH: 0, USD_CASH: 1, BANK: 2 };
-    const summaryByAccount = Array.from(byAccount.values()).sort((left, right) => {
-      return (accountOrder[left.accountType ?? ''] ?? 3) - (accountOrder[right.accountType ?? ''] ?? 3)
-        || left.currency.localeCompare(right.currency)
-        || (left.accountId ?? '').localeCompare(right.accountId ?? '');
-    });
+    const accountOrder: Record<string, number> = {
+      UZS_CASH: 0,
+      USD_CASH: 1,
+      BANK: 2,
+    };
+    const summaryByAccount = Array.from(byAccount.values()).sort(
+      (left, right) => {
+        return (
+          (accountOrder[left.accountType ?? ''] ?? 3) -
+            (accountOrder[right.accountType ?? ''] ?? 3) ||
+          left.currency.localeCompare(right.currency) ||
+          (left.accountId ?? '').localeCompare(right.accountId ?? '')
+        );
+      },
+    );
 
     // Profit: gross = sales - COGS
     const invoices = await this.prisma.salesInvoice.findMany({
@@ -202,7 +240,13 @@ export class DashboardService {
         invoiceDate: { gte: from, lte: to },
         ...(filters.currency ? { currency: filters.currency } : {}),
       },
-      select: { totalAmount: true, totalCogs: true, grossProfit: true, currency: true, exchangeRate: true },
+      select: {
+        totalAmount: true,
+        totalCogs: true,
+        grossProfit: true,
+        currency: true,
+        exchangeRate: true,
+      },
     });
 
     let totalRevenue = 0;
@@ -262,7 +306,9 @@ export class DashboardService {
       totalSales += convertAmountToUzs(amt, curr, Number(inv.exchangeRate));
     });
 
-    const byCurrency = Object.entries(salesByCurr).map(([currency, amount]) => ({ currency, amount }));
+    const byCurrency = Object.entries(salesByCurr).map(
+      ([currency, amount]) => ({ currency, amount }),
+    );
 
     // Sales dynamics by granularity
     const granularity = filters.granularity ?? 'day';
@@ -280,11 +326,13 @@ export class DashboardService {
       } else {
         key = d.toISOString().slice(0, 10);
       }
-      dynamicsMap[key] = (dynamicsMap[key] ?? 0) + convertAmountToUzs(
-        Number(inv.totalAmount),
-        inv.currency,
-        Number(inv.exchangeRate),
-      );
+      dynamicsMap[key] =
+        (dynamicsMap[key] ?? 0) +
+        convertAmountToUzs(
+          Number(inv.totalAmount),
+          inv.currency,
+          Number(inv.exchangeRate),
+        );
     });
 
     const dynamics = Object.entries(dynamicsMap)
@@ -302,10 +350,20 @@ export class DashboardService {
       include: { counterparty: { select: { name: true } } },
     });
 
-    const debtors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
-    const creditors: Array<{ id: string; name: string; amount: number; currency: string }> = [];
-    const debtorMap = new Map<string, typeof debtors[number]>();
-    const creditorMap = new Map<string, typeof creditors[number]>();
+    const debtors: Array<{
+      id: string;
+      name: string;
+      amount: number;
+      currency: string;
+    }> = [];
+    const creditors: Array<{
+      id: string;
+      name: string;
+      amount: number;
+      currency: string;
+    }> = [];
+    const debtorMap = new Map<string, (typeof debtors)[number]>();
+    const creditorMap = new Map<string, (typeof creditors)[number]>();
     const receivableByCurr: Record<string, number> = {};
     const payableByCurr: Record<string, number> = {};
     const customerAdvancesByCurr: Record<string, number> = {};
@@ -322,7 +380,8 @@ export class DashboardService {
           currency: balance.currency,
           amount: netBalance,
         });
-        receivableByCurr[balance.currency] = (receivableByCurr[balance.currency] || 0) + netBalance;
+        receivableByCurr[balance.currency] =
+          (receivableByCurr[balance.currency] || 0) + netBalance;
       } else if (netBalance < 0) {
         creditorMap.set(key, {
           id: balance.counterpartyId,
@@ -330,13 +389,18 @@ export class DashboardService {
           currency: balance.currency,
           amount: Math.abs(netBalance),
         });
-        payableByCurr[balance.currency] = (payableByCurr[balance.currency] || 0) + Math.abs(netBalance);
+        payableByCurr[balance.currency] =
+          (payableByCurr[balance.currency] || 0) + Math.abs(netBalance);
       }
       if (customerDebt < 0) {
-        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
+        customerAdvancesByCurr[balance.currency] =
+          (customerAdvancesByCurr[balance.currency] || 0) +
+          Math.abs(customerDebt);
       }
       if (supplierDebt < 0) {
-        supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
+        supplierAdvancesByCurr[balance.currency] =
+          (supplierAdvancesByCurr[balance.currency] || 0) +
+          Math.abs(supplierDebt);
       }
     }
     debtors.push(...debtorMap.values());
@@ -345,12 +409,22 @@ export class DashboardService {
     debtors.sort((a, b) => b.amount - a.amount);
     creditors.sort((a, b) => b.amount - a.amount);
 
-    const receivableByCurrency = Object.entries(receivableByCurr).map(([currency, amount]) => ({ currency, amount }));
-    const payableByCurrency = Object.entries(payableByCurr).map(([currency, amount]) => ({ currency, amount }));
-    const customerAdvancesByCurrency = Object.entries(customerAdvancesByCurr).map(([currency, amount]) => ({ currency, amount }));
-    const supplierAdvancesByCurrency = Object.entries(supplierAdvancesByCurr).map(([currency, amount]) => ({ currency, amount }));
-    const receivableTotal = receivableByCurrency.length === 1 ? receivableByCurrency[0].amount : 0;
-    const payableTotal = payableByCurrency.length === 1 ? payableByCurrency[0].amount : 0;
+    const receivableByCurrency = Object.entries(receivableByCurr).map(
+      ([currency, amount]) => ({ currency, amount }),
+    );
+    const payableByCurrency = Object.entries(payableByCurr).map(
+      ([currency, amount]) => ({ currency, amount }),
+    );
+    const customerAdvancesByCurrency = Object.entries(
+      customerAdvancesByCurr,
+    ).map(([currency, amount]) => ({ currency, amount }));
+    const supplierAdvancesByCurrency = Object.entries(
+      supplierAdvancesByCurr,
+    ).map(([currency, amount]) => ({ currency, amount }));
+    const receivableTotal =
+      receivableByCurrency.length === 1 ? receivableByCurrency[0].amount : 0;
+    const payableTotal =
+      payableByCurrency.length === 1 ? payableByCurrency[0].amount : 0;
 
     return {
       receivable: {

@@ -53,7 +53,9 @@ export class SuperAdminService {
     });
 
     if (!users || users.length === 0) {
-      throw new NotFoundException('No active administrator found for this tenant');
+      throw new NotFoundException(
+        'No active administrator found for this tenant',
+      );
     }
 
     const adminUser =
@@ -256,7 +258,9 @@ export class SuperAdminService {
       plan,
       userCount: 1,
       createdAt: company.createdAt.toISOString(),
-      trialEndsAt: company.trialEndsAt ? company.trialEndsAt.toISOString() : null,
+      trialEndsAt: company.trialEndsAt
+        ? company.trialEndsAt.toISOString()
+        : null,
       ...(generatedAdminPassword ? { generatedAdminPassword } : {}),
     };
   }

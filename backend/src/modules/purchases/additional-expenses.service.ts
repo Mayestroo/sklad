@@ -118,7 +118,11 @@ export class AdditionalExpensesService {
       exchangeRate = Number(dto.exchangeRate);
     }
 
-    if (dto.amount == null || isNaN(Number(dto.amount)) || Number(dto.amount) <= 0) {
+    if (
+      dto.amount == null ||
+      isNaN(Number(dto.amount)) ||
+      Number(dto.amount) <= 0
+    ) {
       throw new BadRequestException(
         "Xarajat summasi (amount) 0 dan katta bo'lishi shart",
       );
@@ -224,7 +228,8 @@ export class AdditionalExpensesService {
     }
 
     const receiptId = dto.receiptId || existing.receiptId;
-    const amount = dto.amount !== undefined ? Number(dto.amount) : Number(existing.amount);
+    const amount =
+      dto.amount !== undefined ? Number(dto.amount) : Number(existing.amount);
     if (amount <= 0 || isNaN(amount)) {
       throw new BadRequestException(
         "Xarajat summasi (amount) 0 dan katta bo'lishi shart",
@@ -241,7 +246,9 @@ export class AdditionalExpensesService {
     let exchangeRate = Number(existing.exchangeRate);
     if (targetCurrency !== 'UZS') {
       const rateToCheck =
-        dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : exchangeRate;
+        dto.exchangeRate !== undefined
+          ? Number(dto.exchangeRate)
+          : exchangeRate;
       if (isNaN(rateToCheck) || rateToCheck <= 0) {
         throw new BadRequestException(
           "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
@@ -252,8 +259,7 @@ export class AdditionalExpensesService {
       exchangeRate = 1;
     }
 
-    const allocationMethod =
-      dto.allocationMethod || existing.allocationMethod;
+    const allocationMethod = dto.allocationMethod || existing.allocationMethod;
 
     const allocation = await this.calculateAllocationPreview(tenantId, {
       receiptId,
@@ -264,8 +270,7 @@ export class AdditionalExpensesService {
 
     const vatRate =
       dto.vatRate !== undefined ? dto.vatRate : Number(existing.vatRate);
-    const vatAmount =
-      vatRate > 0 ? (amount * vatRate) / (100 + vatRate) : 0;
+    const vatAmount = vatRate > 0 ? (amount * vatRate) / (100 + vatRate) : 0;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.additionalExpenseItem.deleteMany({
@@ -457,7 +462,8 @@ export class AdditionalExpensesService {
         totalCustoms,
         totalBroker,
         totalAll,
-        currency: allPosted[0]?.currency || (items[0] as any)?.currency || 'USD',
+        currency:
+          allPosted[0]?.currency || (items[0] as any)?.currency || 'USD',
       },
     };
   }
@@ -598,7 +604,9 @@ export class AdditionalExpensesService {
     }
     const paidCashAccountId = expense.cashAccountId;
     if (expense.isPaid && !paidCashAccountId) {
-      throw new BadRequestException('To‘langan qo‘shimcha xarajat uchun kassa yoki bank hisobini tanlang');
+      throw new BadRequestException(
+        'To‘langan qo‘shimcha xarajat uchun kassa yoki bank hisobini tanlang',
+      );
     }
 
     await this.accountsService.ensureDefaultAccounts(tenantId);
@@ -617,7 +625,8 @@ export class AdditionalExpensesService {
 
       // 1. Update ProductBatch landed cost & Retroactive COGS
       for (const item of expense.items) {
-        const allocatedAmount = Number(item.allocatedAmount) * capitalizationRate;
+        const allocatedAmount =
+          Number(item.allocatedAmount) * capitalizationRate;
         const itemQty =
           Number(item.soldQuantity) + Number(item.remainingQuantity) || 1;
         const allocatedPerUnit = allocatedAmount / itemQty;
@@ -731,12 +740,11 @@ export class AdditionalExpensesService {
         }
 
         // Update item fields
-        const stockPortion =
-          Math.max(
-            0,
-            allocatedAmount -
-              (Number(item.soldQuantity) / itemQty) * allocatedAmount,
-          );
+        const stockPortion = Math.max(
+          0,
+          allocatedAmount -
+            (Number(item.soldQuantity) / itemQty) * allocatedAmount,
+        );
         totalStockAdjustment += stockPortion;
 
         await tx.additionalExpenseItem.update({
@@ -758,7 +766,8 @@ export class AdditionalExpensesService {
       });
 
       // 2. Financial Settlements
-      let paidCashAccount: { accountType: string; currency: string } | null = null;
+      let paidCashAccount: { accountType: string; currency: string } | null =
+        null;
       if (expense.isPaid && paidCashAccountId) {
         const cashAcc = await tx.cashAccount.findFirst({
           where: { id: paidCashAccountId, tenantId, isActive: true },
@@ -767,7 +776,10 @@ export class AdditionalExpensesService {
         if (!cashAcc) {
           throw new NotFoundException('Kassa hisobi topilmadi');
         }
-        if (!isCashAccountCurrencyValid(cashAcc) || cashAcc.currency !== expense.currency) {
+        if (
+          !isCashAccountCurrencyValid(cashAcc) ||
+          cashAcc.currency !== expense.currency
+        ) {
           throw new BadRequestException(
             `Tanlangan kassa turi/valyutasi xarajat valyutasiga (${expense.currency}) mos kelmaydi`,
           );
@@ -787,7 +799,11 @@ export class AdditionalExpensesService {
         });
 
         // Create FinanceTransaction EXPENSE
-        const txNumber = await nextDocumentNumber(tx, tenantId, 'FINANCE_TRANSACTION');
+        const txNumber = await nextDocumentNumber(
+          tx,
+          tenantId,
+          'FINANCE_TRANSACTION',
+        );
 
         await tx.financeTransaction.create({
           data: {
@@ -842,15 +858,21 @@ export class AdditionalExpensesService {
         ? ledgerAccountCodeForCashAccount(paidCashAccount)
         : null;
       const creditAcc = expense.isPaid
-        ? await tx.account.findFirst({ where: { tenantId, code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__' } })
+        ? await tx.account.findFirst({
+            where: {
+              tenantId,
+              code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__',
+            },
+          })
         : await tx.account.findFirst({ where: { tenantId, code: '6010' } });
 
       if (creditAcc) {
-
         const journalLines: any[] = [];
         const netStock = Math.max(
           0,
-          capitalizedTotal - totalCogsAdjustment - Number(expense.vatAmount || 0) * capitalizationRate,
+          capitalizedTotal -
+            totalCogsAdjustment -
+            Number(expense.vatAmount || 0) * capitalizationRate,
         );
 
         if (inventoryAcc && netStock > 0) {
@@ -858,7 +880,8 @@ export class AdditionalExpensesService {
             debitAccountId: inventoryAcc.id,
             creditAccountId: creditAcc.id,
             amount: netStock,
-            description: 'Ombordagi tovarlar tannarxiga xarajat kapitalizatsiyasi',
+            description:
+              'Ombordagi tovarlar tannarxiga xarajat kapitalizatsiyasi',
           });
         }
 

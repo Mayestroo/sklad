@@ -172,7 +172,8 @@ export class SalesOrdersService {
       const shipped = Number(item.shippedQty || 0);
       const reserved = Number(item.reservedQty || 0);
       const cost = Number(item.product?.costPrice || 0);
-      const effectivePrice = Number(item.unitPrice) * (1 - Number(item.discount || 0) / 100);
+      const effectivePrice =
+        Number(item.unitPrice) * (1 - Number(item.discount || 0) / 100);
       const isBelowCost = cost > 0 && effectivePrice < cost;
       if (isBelowCost) hasBelowCost = true;
 
@@ -188,7 +189,8 @@ export class SalesOrdersService {
 
     const paid = Number(order.paidAmount);
     const total = Number(order.totalAmount);
-    const paymentPercent = total > 0 ? Math.round((paid / total) * 100 * 100) / 100 : 0;
+    const paymentPercent =
+      total > 0 ? Math.round((paid / total) * 100 * 100) / 100 : 0;
 
     return {
       ...order,
@@ -208,13 +210,18 @@ export class SalesOrdersService {
     if (filters.search) {
       where.OR = [
         { orderNumber: { contains: filters.search, mode: 'insensitive' } },
-        { counterparty: { name: { contains: filters.search, mode: 'insensitive' } } },
+        {
+          counterparty: {
+            name: { contains: filters.search, mode: 'insensitive' },
+          },
+        },
         { deliveryAddress: { contains: filters.search, mode: 'insensitive' } },
       ];
     }
     if (filters.counterpartyId) where.counterpartyId = filters.counterpartyId;
     if (filters.status) where.status = filters.status as SalesOrderStatus;
-    if (filters.assignedSellerId) where.assignedSellerId = filters.assignedSellerId;
+    if (filters.assignedSellerId)
+      where.assignedSellerId = filters.assignedSellerId;
 
     if (filters.dateFrom || filters.dateTo) {
       where.orderDate = {};
@@ -223,8 +230,10 @@ export class SalesOrdersService {
     }
     if (filters.deliveryDateFrom || filters.deliveryDateTo) {
       where.deliveryDate = {};
-      if (filters.deliveryDateFrom) where.deliveryDate.gte = new Date(filters.deliveryDateFrom);
-      if (filters.deliveryDateTo) where.deliveryDate.lte = new Date(filters.deliveryDateTo);
+      if (filters.deliveryDateFrom)
+        where.deliveryDate.gte = new Date(filters.deliveryDateFrom);
+      if (filters.deliveryDateTo)
+        where.deliveryDate.lte = new Date(filters.deliveryDateTo);
     }
 
     if (filters.productId) {
@@ -278,7 +287,9 @@ export class SalesOrdersService {
       }),
     ]);
 
-    const counts = new Map(byStatus.map((row) => [row.status, row._count._all]));
+    const counts = new Map(
+      byStatus.map((row) => [row.status, row._count._all]),
+    );
     const count = (...statuses: SalesOrderStatus[]) =>
       statuses.reduce((sum, status) => sum + (counts.get(status) ?? 0), 0);
     const S = SalesOrderStatus;
@@ -333,7 +344,9 @@ export class SalesOrdersService {
         entityType: 'SalesOrder',
         entityId: id,
       },
-      include: { user: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -346,7 +359,10 @@ export class SalesOrdersService {
   // ─── CREATE ────────────────────────────────────────────────────
 
   /** Every order reserves and ships from one designated warehouse of its tenant (ADR 0018). */
-  private async requireTenantWarehouse(tenantId: string, warehouseId: string | undefined) {
+  private async requireTenantWarehouse(
+    tenantId: string,
+    warehouseId: string | undefined,
+  ) {
     if (!warehouseId) {
       throw new BadRequestException('Buyurtma uchun ombor tanlanishi shart');
     }
@@ -358,9 +374,16 @@ export class SalesOrdersService {
     }
   }
 
-  async create(tenantId: string, userId: string, userRoles: string[], dto: CreateSalesOrderDto) {
+  async create(
+    tenantId: string,
+    userId: string,
+    userRoles: string[],
+    dto: CreateSalesOrderDto,
+  ) {
     if (!dto.items?.length) {
-      throw new BadRequestException('Buyurtmada kamida bitta tovar tanlanishi shart');
+      throw new BadRequestException(
+        'Buyurtmada kamida bitta tovar tanlanishi shart',
+      );
     }
     await this.requireTenantWarehouse(tenantId, dto.warehouseId);
 
@@ -399,14 +422,23 @@ export class SalesOrdersService {
       }
       if (
         item.discount != null &&
-        (isNaN(Number(item.discount)) || Number(item.discount) < 0 || Number(item.discount) > 100)
+        (isNaN(Number(item.discount)) ||
+          Number(item.discount) < 0 ||
+          Number(item.discount) > 100)
       ) {
         throw new BadRequestException(
           'Chegirma foizi 0 va 100 orasida bo‘lishi shart',
         );
       }
-      if (item.vatRate != null && (!Number.isFinite(Number(item.vatRate)) || Number(item.vatRate) < 0 || Number(item.vatRate) > 100)) {
-        throw new BadRequestException('QQS stavkasi 0 va 100 orasida bo‘lishi shart');
+      if (
+        item.vatRate != null &&
+        (!Number.isFinite(Number(item.vatRate)) ||
+          Number(item.vatRate) < 0 ||
+          Number(item.vatRate) > 100)
+      ) {
+        throw new BadRequestException(
+          'QQS stavkasi 0 va 100 orasida bo‘lishi shart',
+        );
       }
     }
 
@@ -423,7 +455,10 @@ export class SalesOrdersService {
 
     const lineInputs = dto.items.map((item) => {
       const product = productMap.get(item.productId);
-      const vatRate = item.vatRate !== undefined ? Number(item.vatRate) : Number(product?.vatRate ?? 0);
+      const vatRate =
+        item.vatRate !== undefined
+          ? Number(item.vatRate)
+          : Number(product?.vatRate ?? 0);
       return {
         quantity: Number(item.quantity),
         unitPrice: Number(item.unitPrice),
@@ -435,9 +470,17 @@ export class SalesOrdersService {
     const additionalChargeVatRate = Number(dto.additionalChargeVatRate ?? 12);
     let totals: ReturnType<typeof calculateSalesDocumentTotals>;
     try {
-      totals = calculateSalesDocumentTotals(lineInputs, additionalChargeAmount, additionalChargeVatRate);
+      totals = calculateSalesDocumentTotals(
+        lineInputs,
+        additionalChargeAmount,
+        additionalChargeVatRate,
+      );
     } catch (error) {
-      throw new BadRequestException(error instanceof Error ? error.message : 'Buyurtma summalarini hisoblab bo‘lmadi');
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Buyurtma summalarini hisoblab bo‘lmadi',
+      );
     }
 
     const preparedItems = dto.items.map((item, index) => {
@@ -447,9 +490,10 @@ export class SalesOrdersService {
       const vatRate = lineInputs[index].vatRate;
       const amounts = calculateSalesLineAmounts(lineInputs[index]);
       const prd = productMap.get(item.productId);
-      const costInUzs = Number(prd?.costPrice || 0) * Number(prd?.costPriceExchangeRate || 1);
+      const costInUzs =
+        Number(prd?.costPrice || 0) * Number(prd?.costPriceExchangeRate || 1);
       const orderToUzsRate = dto.currency === 'USD' ? exchangeRate : 1;
-      const effectivePriceInUzs = amounts.netAmount * orderToUzsRate / qty;
+      const effectivePriceInUzs = (amounts.netAmount * orderToUzsRate) / qty;
       if (costInUzs > 0 && effectivePriceInUzs < costInUzs) {
         isAnyBelowCost = true;
       }
@@ -485,7 +529,9 @@ export class SalesOrdersService {
         exchangeRate: exchangeRate,
         paymentCondition: dto.paymentCondition as PaymentCondition,
         requiredPaymentPercent:
-          dto.paymentCondition === 'PARTIAL' ? dto.requiredPaymentPercent : null,
+          dto.paymentCondition === 'PARTIAL'
+            ? dto.requiredPaymentPercent
+            : null,
         deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : null,
         deliveryAddress: dto.deliveryAddress || null,
         comment: dto.comment || null,
@@ -557,7 +603,10 @@ export class SalesOrdersService {
       include: { items: true },
     });
     if (!order) throw new NotFoundException('Buyurtma topilmadi');
-    if (order.status !== SalesOrderStatus.NEW && order.status !== SalesOrderStatus.PENDING_APPROVAL) {
+    if (
+      order.status !== SalesOrderStatus.NEW &&
+      order.status !== SalesOrderStatus.PENDING_APPROVAL
+    ) {
       throw new BadRequestException(
         "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tahrirlash mumkin",
       );
@@ -566,20 +615,41 @@ export class SalesOrdersService {
       await this.requireTenantWarehouse(tenantId, dto.warehouseId);
     }
     const currency = dto.currency ?? order.currency;
-    const exchangeRate = dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : Number(order.exchangeRate);
-    if (!SUPPORTED_CURRENCIES.includes(currency as (typeof SUPPORTED_CURRENCIES)[number])) {
-      throw new BadRequestException('Sotuv buyurtmasi valyutasi USD yoki UZS bo‘lishi kerak');
+    const exchangeRate =
+      dto.exchangeRate !== undefined
+        ? Number(dto.exchangeRate)
+        : Number(order.exchangeRate);
+    if (
+      !SUPPORTED_CURRENCIES.includes(
+        currency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Sotuv buyurtmasi valyutasi USD yoki UZS bo‘lishi kerak',
+      );
     }
-    if (currency !== 'UZS' && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
-      throw new BadRequestException('Xorijiy valyuta uchun 0 dan katta kursni kiriting');
+    if (
+      currency !== 'UZS' &&
+      (!Number.isFinite(exchangeRate) || exchangeRate <= 0)
+    ) {
+      throw new BadRequestException(
+        'Xorijiy valyuta uchun 0 dan katta kursni kiriting',
+      );
     }
 
     const updateData: Prisma.SalesOrderUncheckedUpdateInput = {
       currency: dto.currency ?? undefined,
-      exchangeRate: dto.exchangeRate !== undefined ? dto.exchangeRate : undefined,
-      paymentCondition: dto.paymentCondition ? dto.paymentCondition as PaymentCondition : undefined,
+      exchangeRate:
+        dto.exchangeRate !== undefined ? dto.exchangeRate : undefined,
+      paymentCondition: dto.paymentCondition
+        ? (dto.paymentCondition as PaymentCondition)
+        : undefined,
       requiredPaymentPercent:
-        dto.paymentCondition === 'PARTIAL' ? dto.requiredPaymentPercent : dto.paymentCondition ? null : undefined,
+        dto.paymentCondition === 'PARTIAL'
+          ? dto.requiredPaymentPercent
+          : dto.paymentCondition
+            ? null
+            : undefined,
       deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
       deliveryAddress: dto.deliveryAddress,
       comment: dto.comment,
@@ -590,22 +660,42 @@ export class SalesOrdersService {
 
     const sourceItems = dto.items?.length ? dto.items : order.items;
     const products = await this.prisma.product.findMany({
-      where: { tenantId, id: { in: sourceItems.map((item) => item.productId) } },
+      where: {
+        tenantId,
+        id: { in: sourceItems.map((item) => item.productId) },
+      },
     });
-    const productMap = new Map(products.map((product) => [product.id, product]));
+    const productMap = new Map(
+      products.map((product) => [product.id, product]),
+    );
     const lineInputs = sourceItems.map((item) => ({
       quantity: Number(item.quantity),
       unitPrice: Number(item.unitPrice),
       discountPercent: Number(item.discount ?? 0),
-      vatRate: item.vatRate !== undefined ? Number(item.vatRate) : Number(productMap.get(item.productId)?.vatRate ?? 0),
+      vatRate:
+        item.vatRate !== undefined
+          ? Number(item.vatRate)
+          : Number(productMap.get(item.productId)?.vatRate ?? 0),
     }));
-    const additionalChargeAmount = Number(dto.additionalChargeAmount ?? order.additionalChargeAmount ?? 0);
-    const additionalChargeVatRate = Number(dto.additionalChargeVatRate ?? order.additionalChargeVatRate ?? 12);
+    const additionalChargeAmount = Number(
+      dto.additionalChargeAmount ?? order.additionalChargeAmount ?? 0,
+    );
+    const additionalChargeVatRate = Number(
+      dto.additionalChargeVatRate ?? order.additionalChargeVatRate ?? 12,
+    );
     let totals: ReturnType<typeof calculateSalesDocumentTotals>;
     try {
-      totals = calculateSalesDocumentTotals(lineInputs, additionalChargeAmount, additionalChargeVatRate);
+      totals = calculateSalesDocumentTotals(
+        lineInputs,
+        additionalChargeAmount,
+        additionalChargeVatRate,
+      );
     } catch (error) {
-      throw new BadRequestException(error instanceof Error ? error.message : 'Buyurtma summalarini hisoblab bo‘lmadi');
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Buyurtma summalarini hisoblab bo‘lmadi',
+      );
     }
     updateData.subtotalAmount = totals.subtotalAmount;
     updateData.discountAmount = totals.discountAmount;
@@ -765,37 +855,54 @@ export class SalesOrdersService {
     switch (action) {
       case 'SUBMIT': {
         if (order.status !== SalesOrderStatus.NEW) {
-          throw new BadRequestException("Faqat 'Yangi buyurtma' statusidagi buyurtmani topshirish mumkin");
+          throw new BadRequestException(
+            "Faqat 'Yangi buyurtma' statusidagi buyurtmani topshirish mumkin",
+          );
         }
         newStatus = SalesOrderStatus.PENDING_APPROVAL;
         break;
       }
       case 'APPROVE': {
         if (!isManagerOrAbove(userRoles)) {
-          throw new ForbiddenException('Tasdiqlash uchun menejer yoki admin roli talab qilinadi');
+          throw new ForbiddenException(
+            'Tasdiqlash uchun menejer yoki admin roli talab qilinadi',
+          );
         }
-        if (order.status !== SalesOrderStatus.PENDING_APPROVAL && order.status !== SalesOrderStatus.NEW) {
-          throw new BadRequestException("Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tasdiqlash mumkin");
+        if (
+          order.status !== SalesOrderStatus.PENDING_APPROVAL &&
+          order.status !== SalesOrderStatus.NEW
+        ) {
+          throw new BadRequestException(
+            "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tasdiqlash mumkin",
+          );
         }
         newStatus = SalesOrderStatus.APPROVED;
         break;
       }
       case 'REJECT': {
         if (!isManagerOrAbove(userRoles)) {
-          throw new ForbiddenException('Rad etish uchun menejer yoki admin roli talab qilinadi');
+          throw new ForbiddenException(
+            'Rad etish uchun menejer yoki admin roli talab qilinadi',
+          );
         }
         if (order.status !== SalesOrderStatus.PENDING_APPROVAL) {
-          throw new BadRequestException("Faqat 'Tasdiqlashda' statusidagi buyurtmani rad etish mumkin");
+          throw new BadRequestException(
+            "Faqat 'Tasdiqlashda' statusidagi buyurtmani rad etish mumkin",
+          );
         }
         newStatus = SalesOrderStatus.NEW;
         break;
       }
       case 'SEND_TO_PRODUCTION': {
         if (!isManagerOrAbove(userRoles)) {
-          throw new ForbiddenException('Ishlab chiqarishga yuborish uchun menejer yoki admin roli talab qilinadi');
+          throw new ForbiddenException(
+            'Ishlab chiqarishga yuborish uchun menejer yoki admin roli talab qilinadi',
+          );
         }
         if (order.status !== SalesOrderStatus.APPROVED) {
-          throw new BadRequestException("Faqat 'Tasdiqlangan' statusidagi zakazni ishlab chiqarishga yuborish mumkin");
+          throw new BadRequestException(
+            "Faqat 'Tasdiqlangan' statusidagi zakazni ishlab chiqarishga yuborish mumkin",
+          );
         }
         newStatus = SalesOrderStatus.SENT_TO_PRODUCTION;
         break;
@@ -815,29 +922,36 @@ export class SalesOrdersService {
       if (newStatus === SalesOrderStatus.APPROVED) {
         const warehouseId = order.warehouseId;
         if (!warehouseId) {
-          throw new BadRequestException('Buyurtma uchun ombor tanlanishi shart');
+          throw new BadRequestException(
+            'Buyurtma uchun ombor tanlanishi shart',
+          );
         }
 
         {
-          const resResults = await this.stockReservationService.reserveStockForOrder(
-            tenantId,
-            id,
-            warehouseId,
-            order.items
-              .filter((i) => Number(i.reservedQty) < Number(i.quantity))
-              .map((i) => ({
-              orderItemId: i.id,
-              productId: i.productId,
-              quantity: Number(i.quantity) - Number(i.reservedQty),
-              })),
-            tx,
-          );
+          const resResults =
+            await this.stockReservationService.reserveStockForOrder(
+              tenantId,
+              id,
+              warehouseId,
+              order.items
+                .filter((i) => Number(i.reservedQty) < Number(i.quantity))
+                .map((i) => ({
+                  orderItemId: i.id,
+                  productId: i.productId,
+                  quantity: Number(i.quantity) - Number(i.reservedQty),
+                })),
+              tx,
+            );
 
           // If 100% fulfilled from stock reservation
-          const freshItems = await tx.salesOrderItem.findMany({ where: { orderId: id } });
+          const freshItems = await tx.salesOrderItem.findMany({
+            where: { orderId: id },
+          });
           const is100Fulfilled =
             resResults.every((r) => r.remainingGap === 0) &&
-            freshItems.every((item) => Number(item.reservedQty) >= Number(item.quantity));
+            freshItems.every(
+              (item) => Number(item.reservedQty) >= Number(item.quantity),
+            );
           if (is100Fulfilled) {
             // Update readyQty to match quantity for all items
             for (const item of order.items) {
@@ -857,8 +971,11 @@ export class SalesOrdersService {
 
       // When SEND_TO_PRODUCTION, create stubs only for unreserved quantities
       if (newStatus === SalesOrderStatus.SENT_TO_PRODUCTION) {
-        const freshItems = await tx.salesOrderItem.findMany({ where: { orderId: id } });
-        const itemsToProduce = freshItems && freshItems.length > 0 ? freshItems : (order.items || []);
+        const freshItems = await tx.salesOrderItem.findMany({
+          where: { orderId: id },
+        });
+        const itemsToProduce =
+          freshItems && freshItems.length > 0 ? freshItems : order.items || [];
         for (const item of itemsToProduce) {
           const needed = Number(item.quantity) - Number(item.reservedQty || 0);
           if (needed > 0) {
@@ -916,7 +1033,9 @@ export class SalesOrdersService {
     // 1. If target status is SHIPPED -> execute 1-click dispatch
     if (newStatus === SalesOrderStatus.SHIPPED) {
       if (!isWarehouseOrAbove(userRoles)) {
-        throw new ForbiddenException('Jo‘natish uchun omborchi yoki admin roli talab qilinadi');
+        throw new ForbiddenException(
+          'Jo‘natish uchun omborchi yoki admin roli talab qilinadi',
+        );
       }
       return this.dispatch(tenantId, userId, id, {
         warehouseId: warehouseId || order.warehouseId || undefined,
@@ -936,7 +1055,11 @@ export class SalesOrdersService {
       SalesOrderStatus.READY_FOR_SHIPMENT,
       SalesOrderStatus.READY_TO_SHIP,
     ];
-    if ((warehouseTransitions as (SalesOrderStatus | string)[]).includes(newStatus)) {
+    if (
+      (warehouseTransitions as (SalesOrderStatus | string)[]).includes(
+        newStatus,
+      )
+    ) {
       if (!isWarehouseOrAbove(userRoles)) {
         throw new ForbiddenException(
           'Ombor statuslarini o‘zgartirish uchun omborchi yoki admin roli talab qilinadi',
@@ -956,7 +1079,12 @@ export class SalesOrdersService {
         'SENT_TO_PRODUCTION',
         'CANCELLED',
       ],
-      ACCEPTED: ['PROCESSING', 'READY_FOR_SHIPMENT', 'READY_TO_SHIP', 'CANCELLED'],
+      ACCEPTED: [
+        'PROCESSING',
+        'READY_FOR_SHIPMENT',
+        'READY_TO_SHIP',
+        'CANCELLED',
+      ],
       PROCESSING: ['READY_FOR_SHIPMENT', 'READY_TO_SHIP', 'CANCELLED'],
       READY_FOR_SHIPMENT: ['SHIPPED', 'CANCELLED'],
       READY_TO_SHIP: ['SHIPPED', 'CANCELLED'],
@@ -1044,19 +1172,30 @@ export class SalesOrdersService {
           'Jarayondagi buyurtmani faqat tizim administratori bekor qilishi mumkin',
         );
       }
-      throw new BadRequestException('Bu holatdagi buyurtmani bekor qilish mumkin emas');
+      throw new BadRequestException(
+        'Bu holatdagi buyurtmani bekor qilish mumkin emas',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
       // Release any stock reservations
-      await this.stockReservationService.releaseOrderReservations(tenantId, order.id, tx);
+      await this.stockReservationService.releaseOrderReservations(
+        tenantId,
+        order.id,
+        tx,
+      );
 
       // Cancel linked production orders if needed
       if (isInProduction) {
         await tx.productionOrder.updateMany({
           where: {
             salesOrderId: order.id,
-            status: { in: [ProductionOrderStatus.PENDING, ProductionOrderStatus.IN_PROGRESS] },
+            status: {
+              in: [
+                ProductionOrderStatus.PENDING,
+                ProductionOrderStatus.IN_PROGRESS,
+              ],
+            },
           },
           data: { status: ProductionOrderStatus.CANCELLED },
         });
@@ -1083,14 +1222,25 @@ export class SalesOrdersService {
 
   // ─── CONFIRM DELIVERY (SHIPPED → COMPLETED) ──────────────────
 
-  async completeOrder(tenantId: string, userId: string, id: string, userRoles: string[]) {
+  async completeOrder(
+    tenantId: string,
+    userId: string,
+    id: string,
+    userRoles: string[],
+  ) {
     if (!isManagerOrAbove(userRoles)) {
-      throw new ForbiddenException('Yakunlash uchun menejer yoki admin roli talab qilinadi');
+      throw new ForbiddenException(
+        'Yakunlash uchun menejer yoki admin roli talab qilinadi',
+      );
     }
-    const order = await this.prisma.salesOrder.findFirst({ where: { id, tenantId } });
+    const order = await this.prisma.salesOrder.findFirst({
+      where: { id, tenantId },
+    });
     if (!order) throw new NotFoundException('Buyurtma topilmadi');
     if (order.status !== SalesOrderStatus.SHIPPED) {
-      throw new BadRequestException("Faqat 'Jo'natildi' statusidagi buyurtmani yakunlash mumkin");
+      throw new BadRequestException(
+        "Faqat 'Jo'natildi' statusidagi buyurtmani yakunlash mumkin",
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -1147,7 +1297,10 @@ export class SalesOrdersService {
       if (shouldAutoTransitionToReady) {
         await tx.salesOrder.update({
           where: { id: orderId },
-          data: { paidAmount: newPaidAmount, status: SalesOrderStatus.PAYMENT_CONFIRMED },
+          data: {
+            paidAmount: newPaidAmount,
+            status: SalesOrderStatus.PAYMENT_CONFIRMED,
+          },
         });
         await tx.salesOrder.update({
           where: { id: orderId },
@@ -1156,7 +1309,10 @@ export class SalesOrdersService {
       } else if (shouldTransitionToAwaiting) {
         await tx.salesOrder.update({
           where: { id: orderId },
-          data: { paidAmount: newPaidAmount, status: SalesOrderStatus.AWAITING_PAYMENT },
+          data: {
+            paidAmount: newPaidAmount,
+            status: SalesOrderStatus.AWAITING_PAYMENT,
+          },
         });
       } else {
         await tx.salesOrder.update({
@@ -1179,7 +1335,8 @@ export class SalesOrdersService {
       where: { id: productionOrderId, tenantId },
       include: { salesOrder: { include: { items: true } } },
     });
-    if (!prodOrder) throw new NotFoundException("Ishlab chiqarish topshirig'i topilmadi");
+    if (!prodOrder)
+      throw new NotFoundException("Ishlab chiqarish topshirig'i topilmadi");
     if (readyQty > Number(prodOrder.requiredQty)) {
       throw new BadRequestException(
         `Tayyor miqdor kerakli miqdordan (${prodOrder.requiredQty}) oshib ketishi mumkin emas`,
@@ -1202,7 +1359,9 @@ export class SalesOrdersService {
 
       if (prodOrder.salesOrderItemId) {
         // Line total ready = reserved from stock + manufactured ready
-        const matchingItem = (order?.items || []).find((i) => i.id === prodOrder.salesOrderItemId);
+        const matchingItem = (order?.items || []).find(
+          (i) => i.id === prodOrder.salesOrderItemId,
+        );
         const reserved = Number(matchingItem?.reservedQty || 0);
         await tx.salesOrderItem.update({
           where: { id: prodOrder.salesOrderItemId },
@@ -1214,8 +1373,14 @@ export class SalesOrdersService {
         where: { salesOrderId: order.id, tenantId },
       });
 
-      const totalRequired = allProdOrders.reduce((sum, p) => sum + Number(p.requiredQty), 0);
-      const totalReady = allProdOrders.reduce((sum, p) => sum + Number(p.readyQty), 0);
+      const totalRequired = allProdOrders.reduce(
+        (sum, p) => sum + Number(p.requiredQty),
+        0,
+      );
+      const totalReady = allProdOrders.reduce(
+        (sum, p) => sum + Number(p.readyQty),
+        0,
+      );
 
       let newOrderStatus = order.status;
       if (totalReady >= totalRequired && totalRequired > 0) {
@@ -1265,14 +1430,21 @@ export class SalesOrdersService {
 
   // ─── PRODUCTION: start production order ──────────────────────
 
-  async startProductionOrder(tenantId: string, userId: string, productionOrderId: string) {
+  async startProductionOrder(
+    tenantId: string,
+    userId: string,
+    productionOrderId: string,
+  ) {
     const prodOrder = await this.prisma.productionOrder.findFirst({
       where: { id: productionOrderId, tenantId },
       include: { salesOrder: true },
     });
-    if (!prodOrder) throw new NotFoundException("Ishlab chiqarish topshirig'i topilmadi");
+    if (!prodOrder)
+      throw new NotFoundException("Ishlab chiqarish topshirig'i topilmadi");
     if (prodOrder.status !== ProductionOrderStatus.PENDING) {
-      throw new BadRequestException('Topshiriq allaqachon boshlangan yoki tugallangan');
+      throw new BadRequestException(
+        'Topshiriq allaqachon boshlangan yoki tugallangan',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -1298,7 +1470,10 @@ export class SalesOrdersService {
 
   // ─── LIST PRODUCTION ORDERS ───────────────────────────────────
 
-  async findProductionOrders(tenantId: string, filters: { salesOrderId?: string; status?: string }) {
+  async findProductionOrders(
+    tenantId: string,
+    filters: { salesOrderId?: string; status?: string },
+  ) {
     const where: Prisma.ProductionOrderWhereInput = { tenantId };
     if (filters.salesOrderId) where.salesOrderId = filters.salesOrderId;
     if (filters.status) where.status = filters.status as ProductionOrderStatus;
@@ -1319,7 +1494,12 @@ export class SalesOrdersService {
 
   // ─── DISPATCH: MULTI-SHIPMENT & FIFO INVOICING ────────────────
 
-  async dispatch(tenantId: string, userId: string, id: string, dto: DispatchSalesOrderDto) {
+  async dispatch(
+    tenantId: string,
+    userId: string,
+    id: string,
+    dto: DispatchSalesOrderDto,
+  ) {
     const order = await this.prisma.salesOrder.findFirst({
       where: { id, tenantId },
       include: {
@@ -1344,7 +1524,9 @@ export class SalesOrdersService {
     }
 
     if (!this.isGateSatisfied(order)) {
-      throw new BadRequestException("To'lov sharti bajarilmagan. Jo'natishga ruxsat yo'q");
+      throw new BadRequestException(
+        "To'lov sharti bajarilmagan. Jo'natishga ruxsat yo'q",
+      );
     }
 
     const warehouseId = dto.warehouseId || order.warehouseId;
@@ -1364,9 +1546,13 @@ export class SalesOrdersService {
 
       if (dto.items && dto.items.length > 0) {
         for (const reqItem of dto.items) {
-          const matchingItem = order.items.find((i) => i.id === reqItem.orderItemId);
+          const matchingItem = order.items.find(
+            (i) => i.id === reqItem.orderItemId,
+          );
           if (!matchingItem) {
-            throw new BadRequestException(`Buyurtma qatori topilmadi (${reqItem.orderItemId})`);
+            throw new BadRequestException(
+              `Buyurtma qatori topilmadi (${reqItem.orderItemId})`,
+            );
           }
           const totalQty = Number(matchingItem.quantity);
           const shippedQty = Number(matchingItem.shippedQty || 0);
@@ -1407,11 +1593,17 @@ export class SalesOrdersService {
       }
 
       if (dispatchPlan.length === 0) {
-        throw new BadRequestException("Jo'natish uchun tovar miqdori tanlanmagan");
+        throw new BadRequestException(
+          "Jo'natish uchun tovar miqdori tanlanmagan",
+        );
       }
 
       // 2. Generate invoice number
-      const invoiceNumber = await nextDocumentNumber(tx, tenantId, 'SALES_INVOICE');
+      const invoiceNumber = await nextDocumentNumber(
+        tx,
+        tenantId,
+        'SALES_INVOICE',
+      );
 
       // 3. Prepare invoice items
       const lineInputs = dispatchPlan.map((dp) => ({
@@ -1425,29 +1617,54 @@ export class SalesOrdersService {
         select: { paidAmount: true, additionalChargeAmount: true },
       });
       const previousCharges = priorInvoices.reduce(
-        (sum, priorInvoice) => sum + Number(priorInvoice.additionalChargeAmount || 0),
+        (sum, priorInvoice) =>
+          sum + Number(priorInvoice.additionalChargeAmount || 0),
         0,
       );
-      const remainingCharge = Math.max(0, Number(order.additionalChargeAmount || 0) - previousCharges);
+      const remainingCharge = Math.max(
+        0,
+        Number(order.additionalChargeAmount || 0) - previousCharges,
+      );
       const remainingUnshippedNet = order.items.reduce((sum, item) => {
-        const unshipped = Math.max(0, Number(item.quantity) - Number(item.shippedQty || 0));
-        return sum + unshipped * Number(item.unitPrice) * (1 - Number(item.discount || 0) / 100);
+        const unshipped = Math.max(
+          0,
+          Number(item.quantity) - Number(item.shippedQty || 0),
+        );
+        return (
+          sum +
+          unshipped *
+            Number(item.unitPrice) *
+            (1 - Number(item.discount || 0) / 100)
+        );
       }, 0);
       const dispatchNet = lineInputs.reduce((sum, item) => {
-        return sum + item.quantity * item.unitPrice * (1 - item.discountPercent / 100);
+        return (
+          sum +
+          item.quantity * item.unitPrice * (1 - item.discountPercent / 100)
+        );
       }, 0);
       const isFinalDispatch = order.items.every((item) => {
         const dispatched = dispatchPlan
           .filter((line) => line.orderItem.id === item.id)
           .reduce((sum, line) => sum + line.dispatchQty, 0);
-        return Number(item.shippedQty || 0) + dispatched >= Number(item.quantity) - 0.0005;
+        return (
+          Number(item.shippedQty || 0) + dispatched >=
+          Number(item.quantity) - 0.0005
+        );
       });
-      const invoiceAdditionalCharge = remainingCharge <= 0
-        ? 0
-        : isFinalDispatch || remainingUnshippedNet <= 0
-          ? remainingCharge
-          : Math.round((remainingCharge * dispatchNet / remainingUnshippedNet + Number.EPSILON) * 100) / 100;
-      const additionalChargeVatRate = Number(order.additionalChargeVatRate ?? 12);
+      const invoiceAdditionalCharge =
+        remainingCharge <= 0
+          ? 0
+          : isFinalDispatch || remainingUnshippedNet <= 0
+            ? remainingCharge
+            : Math.round(
+                ((remainingCharge * dispatchNet) / remainingUnshippedNet +
+                  Number.EPSILON) *
+                  100,
+              ) / 100;
+      const additionalChargeVatRate = Number(
+        order.additionalChargeVatRate ?? 12,
+      );
       const totals = calculateSalesDocumentTotals(
         lineInputs,
         invoiceAdditionalCharge,
@@ -1523,24 +1740,28 @@ export class SalesOrdersService {
           select: { id: true },
         });
         const paymentIds = orderPayments.map((payment) => payment.id);
-        const paymentTransactions = paymentIds.length > 0
-          ? await tx.financeTransaction.findMany({
-              where: {
-                tenantId,
-                sourceDocType: 'PAYMENT',
-                sourceDocId: { in: paymentIds },
-                counterpartyId: order.counterpartyId,
-                currency: order.currency,
-                settlementSide: CounterpartySettlementSide.CUSTOMER,
-                status: 'POSTED',
-                isDeleted: false,
-              },
-              orderBy: { transactionDate: 'asc' },
-              select: { id: true, sourceDocId: true, amount: true },
-            })
-          : [];
+        const paymentTransactions =
+          paymentIds.length > 0
+            ? await tx.financeTransaction.findMany({
+                where: {
+                  tenantId,
+                  sourceDocType: 'PAYMENT',
+                  sourceDocId: { in: paymentIds },
+                  counterpartyId: order.counterpartyId,
+                  currency: order.currency,
+                  settlementSide: CounterpartySettlementSide.CUSTOMER,
+                  status: 'POSTED',
+                  isDeleted: false,
+                },
+                orderBy: { transactionDate: 'asc' },
+                select: { id: true, sourceDocId: true, amount: true },
+              })
+            : [];
         const transactionByPaymentId = new Map(
-          paymentTransactions.map((transaction) => [transaction.sourceDocId, transaction]),
+          paymentTransactions.map((transaction) => [
+            transaction.sourceDocId,
+            transaction,
+          ]),
         );
 
         for (const payment of orderPayments) {
@@ -1551,10 +1772,12 @@ export class SalesOrdersService {
             where: { financeTransactionId: transaction.id },
             select: { amount: true },
           });
-          const remainingOnPayment = Number(transaction.amount) - priorAllocations.reduce(
-            (sum, allocation) => sum + Number(allocation.amount),
-            0,
-          );
+          const remainingOnPayment =
+            Number(transaction.amount) -
+            priorAllocations.reduce(
+              (sum, allocation) => sum + Number(allocation.amount),
+              0,
+            );
           const allocate = Math.min(remainingOrderPayment, remainingOnPayment);
           if (allocate <= 0) continue;
           await this.settlementAllocationService.recordAllocation(tx, {
@@ -1578,9 +1801,12 @@ export class SalesOrdersService {
 
       // 5. Deduct FIFO stock batches & consume reservations
       let totalCogs = 0;
-      const ledgerRate = order.currency === 'UZS' ? 1 : Number(order.exchangeRate);
+      const ledgerRate =
+        order.currency === 'UZS' ? 1 : Number(order.exchangeRate);
       if (!Number.isFinite(ledgerRate) || ledgerRate <= 0) {
-        throw new BadRequestException(`Buyurtma uchun valyuta kursi noto'g'ri: ${order.currency}`);
+        throw new BadRequestException(
+          `Buyurtma uchun valyuta kursi noto'g'ri: ${order.currency}`,
+        );
       }
       for (let idx = 0; idx < dispatchPlan.length; idx++) {
         const dp = dispatchPlan[idx];
@@ -1615,7 +1841,12 @@ export class SalesOrdersService {
         const unitCogs = qty > 0 ? itemCogs / qty : 0;
         const lineTotal = Number(invItem.totalPrice);
         const lineVat = Number(invItem.vatAmount || 0);
-        const lineGrossProfit = grossProfitInUzs(lineTotal - lineVat, order.currency, ledgerRate, itemCogs);
+        const lineGrossProfit = grossProfitInUzs(
+          lineTotal - lineVat,
+          order.currency,
+          ledgerRate,
+          itemCogs,
+        );
         const discountedUnitPrice = dp.unitPrice * (1 - dp.discount / 100);
         totalCogs += itemCogs;
 
@@ -1685,24 +1916,30 @@ export class SalesOrdersService {
             ? SalesPaymentStatus.PARTIALLY_PAID
             : SalesPaymentStatus.UNPAID;
 
-      const [revenueAcc, receivableAcc, vatAcc, cogsAcc, inventoryAcc] = await Promise.all([
-        tx.account.findFirst({ where: { tenantId, code: '9010' } }),
-        tx.account.findFirst({ where: { tenantId, code: '4010' } }),
-        tx.account.findFirst({ where: { tenantId, code: '6410' } }),
-        tx.account.findFirst({ where: { tenantId, code: '9110' } }),
-        tx.account.findFirst({ where: { tenantId, code: '2910' } }),
-      ]);
+      const [revenueAcc, receivableAcc, vatAcc, cogsAcc, inventoryAcc] =
+        await Promise.all([
+          tx.account.findFirst({ where: { tenantId, code: '9010' } }),
+          tx.account.findFirst({ where: { tenantId, code: '4010' } }),
+          tx.account.findFirst({ where: { tenantId, code: '6410' } }),
+          tx.account.findFirst({ where: { tenantId, code: '9110' } }),
+          tx.account.findFirst({ where: { tenantId, code: '2910' } }),
+        ]);
       if (revenueAcc && receivableAcc) {
-        const netRevenueUzs = (Number(invoice.totalAmount) - Number(invoice.vatAmount || 0)) * ledgerRate;
+        const netRevenueUzs =
+          (Number(invoice.totalAmount) - Number(invoice.vatAmount || 0)) *
+          ledgerRate;
         const vatAmountUzs = Number(invoice.vatAmount || 0) * ledgerRate;
-        const lines = [{
-          debitAccountId: receivableAcc.id,
-          creditAccountId: revenueAcc.id,
-          amount: netRevenueUzs,
-          description: `Sotuv tushumi № ${invoiceNumber}`,
-        }];
+        const lines = [
+          {
+            debitAccountId: receivableAcc.id,
+            creditAccountId: revenueAcc.id,
+            amount: netRevenueUzs,
+            description: `Sotuv tushumi № ${invoiceNumber}`,
+          },
+        ];
         if (vatAmountUzs > 0) {
-          if (!vatAcc) throw new BadRequestException('QQS hisob raqami (6410) topilmadi');
+          if (!vatAcc)
+            throw new BadRequestException('QQS hisob raqami (6410) topilmadi');
           lines.push({
             debitAccountId: receivableAcc.id,
             creditAccountId: vatAcc.id,
@@ -1744,7 +1981,9 @@ export class SalesOrdersService {
       });
 
       // 7. Check if order is 100% shipped
-      const refreshedItems = await tx.salesOrderItem.findMany({ where: { orderId: id } });
+      const refreshedItems = await tx.salesOrderItem.findMany({
+        where: { orderId: id },
+      });
       const allFullyShipped = refreshedItems.every(
         (i) => Number(i.shippedQty) >= Number(i.quantity),
       );
@@ -1766,7 +2005,11 @@ export class SalesOrdersService {
           entityId: id,
           action: 'UPDATE',
           oldValue: { status: order.status },
-          newValue: { status: nextStatus, invoiceId: invoice.id, invoiceNumber },
+          newValue: {
+            status: nextStatus,
+            invoiceId: invoice.id,
+            invoiceNumber,
+          },
         },
       });
 
@@ -1787,9 +2030,17 @@ export class SalesOrdersService {
     });
 
     const totalOrdersCount = orders.length;
-    const completedOrdersCount = orders.filter((o) => o.status === SalesOrderStatus.COMPLETED).length;
-    const totalOrderValue = orders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
-    const totalPaidValue = orders.reduce((sum, o) => sum + Number(o.paidAmount), 0);
+    const completedOrdersCount = orders.filter(
+      (o) => o.status === SalesOrderStatus.COMPLETED,
+    ).length;
+    const totalOrderValue = orders.reduce(
+      (sum, o) => sum + Number(o.totalAmount),
+      0,
+    );
+    const totalPaidValue = orders.reduce(
+      (sum, o) => sum + Number(o.paidAmount),
+      0,
+    );
 
     return {
       orders: orders.map((o) => this.enrichOrder(o)),

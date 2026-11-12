@@ -337,7 +337,9 @@ export class PurchasesService {
     let exchangeRate = Number(existing.exchangeRate);
     if (targetCurrency !== 'UZS') {
       const rateToCheck =
-        dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : exchangeRate;
+        dto.exchangeRate !== undefined
+          ? Number(dto.exchangeRate)
+          : exchangeRate;
       if (isNaN(rateToCheck) || rateToCheck <= 0) {
         throw new BadRequestException(
           "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
@@ -514,10 +516,14 @@ export class PurchasesService {
 
         const rate = requireExchangeRateForCurrency(
           receipt.currency,
-          receipt.exchangeRate == null ? undefined : Number(receipt.exchangeRate),
+          receipt.exchangeRate == null
+            ? undefined
+            : Number(receipt.exchangeRate),
         );
-        const purchasePriceInBase = Math.round((Number(item.unitPrice) * rate) * 100) / 100;
-        const landedCostInBase = Math.round((Number(item.landedCost) * rate) * 100) / 100;
+        const purchasePriceInBase =
+          Math.round(Number(item.unitPrice) * rate * 100) / 100;
+        const landedCostInBase =
+          Math.round(Number(item.landedCost) * rate * 100) / 100;
 
         // Create product batch record
         await tx.productBatch.create({
@@ -597,12 +603,18 @@ export class PurchasesService {
 
         const rate = requireExchangeRateForCurrency(
           receipt.currency,
-          receipt.exchangeRate == null ? undefined : Number(receipt.exchangeRate),
+          receipt.exchangeRate == null
+            ? undefined
+            : Number(receipt.exchangeRate),
         );
         const totalNet =
-          Math.round((Number(receipt.subtotalAmount || 0) -
-            Number(receipt.discountAmount || 0) +
-            Number(receipt.additionalExpensesTotal || 0)) * rate * 100) / 100;
+          Math.round(
+            (Number(receipt.subtotalAmount || 0) -
+              Number(receipt.discountAmount || 0) +
+              Number(receipt.additionalExpensesTotal || 0)) *
+              rate *
+              100,
+          ) / 100;
 
         const hasSpecialTypes = receipt.items.some(
           (i: any) =>
@@ -616,7 +628,8 @@ export class PurchasesService {
             const lineTotal =
               (item.totalPrice !== undefined
                 ? Number(item.totalPrice)
-                : Number(item.quantity || 0) * Number(item.unitPrice || 0)) * rate;
+                : Number(item.quantity || 0) * Number(item.unitPrice || 0)) *
+              rate;
             const allocated = Number(item.allocatedExpenses || 0) * rate;
             const itemNet = Math.round((lineTotal + allocated) * 100) / 100;
             const itemType = item.product?.type || 'PRODUCT';
@@ -785,7 +798,10 @@ export class PurchasesService {
           },
         });
 
-        if (!stockLevel || Number(stockLevel.quantity) < Number(item.quantity)) {
+        if (
+          !stockLevel ||
+          Number(stockLevel.quantity) < Number(item.quantity)
+        ) {
           throw new BadRequestException(
             `Xaridni bekor qilish imkonsiz: ${item.productId} bo'yicha omborda yetarli qoldiq mavjud emas`,
           );
@@ -894,7 +910,10 @@ export class PurchasesService {
       throw new NotFoundException('Kassa hisobi topilmadi');
     }
 
-    if (!isCashAccountCurrencyValid(cashAccount) || cashAccount.currency !== receipt.currency) {
+    if (
+      !isCashAccountCurrencyValid(cashAccount) ||
+      cashAccount.currency !== receipt.currency
+    ) {
       throw new BadRequestException(
         `Tanlangan kassa turi/valyutasi xarid hujjatiga (${receipt.currency}) mos kelmaydi.`,
       );
@@ -923,8 +942,16 @@ export class PurchasesService {
     if (payAmount <= 0) {
       throw new BadRequestException("To'lov summasi noto'g'ri");
     }
-    const paymentAmountInUzs = convertAmountToUzs(payAmount, receipt.currency, exchangeRate);
-    const payableReductionInUzs = convertAmountToUzs(payAmount, receipt.currency, receiptExchangeRate);
+    const paymentAmountInUzs = convertAmountToUzs(
+      payAmount,
+      receipt.currency,
+      exchangeRate,
+    );
+    const payableReductionInUzs = convertAmountToUzs(
+      payAmount,
+      receipt.currency,
+      receiptExchangeRate,
+    );
 
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
@@ -942,7 +969,11 @@ export class PurchasesService {
       });
 
       // 2. Create Finance Transaction (EXPENSE)
-      const txNumber = await nextDocumentNumber(tx, tenantId, 'FINANCE_TRANSACTION');
+      const txNumber = await nextDocumentNumber(
+        tx,
+        tenantId,
+        'FINANCE_TRANSACTION',
+      );
 
       const financeTransaction = await tx.financeTransaction.create({
         data: {
@@ -1001,28 +1032,40 @@ export class PurchasesService {
       const supplierAcc = await tx.account.findFirst({
         where: { tenantId, code: '6010' },
       });
-      const cashLedgerAccountCode = ledgerAccountCodeForCashAccount(cashAccount);
+      const cashLedgerAccountCode =
+        ledgerAccountCodeForCashAccount(cashAccount);
       const cashAcc = await tx.account.findFirst({
-        where: { tenantId, code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__' },
+        where: {
+          tenantId,
+          code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__',
+        },
       });
 
       if (supplierAcc && cashAcc) {
-        const exchangeDifference = Math.round((paymentAmountInUzs - payableReductionInUzs) * 100) / 100;
+        const exchangeDifference =
+          Math.round((paymentAmountInUzs - payableReductionInUzs) * 100) / 100;
         const journalLines: Array<{
           debitAccountId: string;
           creditAccountId: string;
           amount: number;
           description: string;
-        }> = [{
-          debitAccountId: supplierAcc.id,
-          creditAccountId: cashAcc.id,
-          amount: Math.min(paymentAmountInUzs, payableReductionInUzs),
-          description: `Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (${payAmount} ${receipt.currency})`,
-        }];
+        }> = [
+          {
+            debitAccountId: supplierAcc.id,
+            creditAccountId: cashAcc.id,
+            amount: Math.min(paymentAmountInUzs, payableReductionInUzs),
+            description: `Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (${payAmount} ${receipt.currency})`,
+          },
+        ];
 
         if (exchangeDifference > 0) {
-          const exchangeLossAcc = await tx.account.findFirst({ where: { tenantId, code: '9620' } });
-          if (!exchangeLossAcc) throw new BadRequestException('Valyuta kursi zarar hisobi (9620) topilmadi');
+          const exchangeLossAcc = await tx.account.findFirst({
+            where: { tenantId, code: '9620' },
+          });
+          if (!exchangeLossAcc)
+            throw new BadRequestException(
+              'Valyuta kursi zarar hisobi (9620) topilmadi',
+            );
           journalLines.push({
             debitAccountId: exchangeLossAcc.id,
             creditAccountId: cashAcc.id,
@@ -1030,8 +1073,13 @@ export class PurchasesService {
             description: `Xarid to‘lovi bo‘yicha valyuta kursi zarari (${payAmount} ${receipt.currency})`,
           });
         } else if (exchangeDifference < 0) {
-          const exchangeGainAcc = await tx.account.findFirst({ where: { tenantId, code: '9540' } });
-          if (!exchangeGainAcc) throw new BadRequestException('Valyuta kursi daromad hisobi (9540) topilmadi');
+          const exchangeGainAcc = await tx.account.findFirst({
+            where: { tenantId, code: '9540' },
+          });
+          if (!exchangeGainAcc)
+            throw new BadRequestException(
+              'Valyuta kursi daromad hisobi (9540) topilmadi',
+            );
           journalLines.push({
             debitAccountId: supplierAcc.id,
             creditAccountId: exchangeGainAcc.id,
@@ -1264,7 +1312,8 @@ export class PurchasesService {
     }
 
     const returnNumber = await this.generateReturnNumber(tenantId);
-    const targetStatus = (dto.status as ReturnDocStatus) || ReturnDocStatus.POSTED;
+    const targetStatus =
+      (dto.status as ReturnDocStatus) || ReturnDocStatus.POSTED;
 
     // Validate products and check that SERVICE and BUNDLE are rejected
     for (const item of dto.items) {
@@ -1324,7 +1373,7 @@ export class PurchasesService {
       });
 
       if (!receipt) {
-        throw new NotFoundException("Biriktirilgan xarid hujjati topilmadi");
+        throw new NotFoundException('Biriktirilgan xarid hujjati topilmadi');
       }
 
       if (receipt.status !== PurchaseDocStatus.POSTED) {
@@ -1332,13 +1381,23 @@ export class PurchasesService {
           "Faqat tasdiqlangan (POSTED) xaridlar bo'yicha qaytarish yaratish mumkin",
         );
       }
-      if (receipt.counterpartyId !== dto.counterpartyId || receipt.warehouseId !== dto.warehouseId || receipt.currency !== dto.currency) {
-        throw new BadRequestException("Qaytarishdagi kontragent, ombor va valyuta asl xarid hujjatiga mos bo'lishi shart");
+      if (
+        receipt.counterpartyId !== dto.counterpartyId ||
+        receipt.warehouseId !== dto.warehouseId ||
+        receipt.currency !== dto.currency
+      ) {
+        throw new BadRequestException(
+          "Qaytarishdagi kontragent, ombor va valyuta asl xarid hujjatiga mos bo'lishi shart",
+        );
       }
 
       const requestedQtyByProduct = new Map<string, number>();
       for (const item of dto.items) {
-        requestedQtyByProduct.set(item.productId, (requestedQtyByProduct.get(item.productId) ?? 0) + Number(item.quantity));
+        requestedQtyByProduct.set(
+          item.productId,
+          (requestedQtyByProduct.get(item.productId) ?? 0) +
+            Number(item.quantity),
+        );
       }
 
       for (const item of dto.items) {
@@ -1352,7 +1411,8 @@ export class PurchasesService {
         }
 
         const unreturnedQty =
-          Number(receiptItem.quantity) - Number(receiptItem.returnedQuantity || 0);
+          Number(receiptItem.quantity) -
+          Number(receiptItem.returnedQuantity || 0);
         if ((requestedQtyByProduct.get(item.productId) ?? 0) > unreturnedQty) {
           throw new BadRequestException(
             `Qaytariladigan miqdor (${item.quantity}) ushbu xariddan qolgan qaytarilmagan miqdordan (${unreturnedQty}) oshishi mumkin emas`,
@@ -1362,7 +1422,11 @@ export class PurchasesService {
         const batch = receipt.batches.find(
           (b: any) => b.productId === item.productId,
         );
-        if (batch && (requestedQtyByProduct.get(item.productId) ?? 0) > Number(batch.remainingQty)) {
+        if (
+          batch &&
+          (requestedQtyByProduct.get(item.productId) ?? 0) >
+            Number(batch.remainingQty)
+        ) {
           throw new BadRequestException(
             `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
           );
@@ -1415,27 +1479,23 @@ export class PurchasesService {
         include: {
           counterparty: true,
           warehouse: true,
-          receipt: { include: { items: { include: { product: true } }, batches: true } },
+          receipt: {
+            include: { items: { include: { product: true } }, batches: true },
+          },
           items: { include: { product: true } },
         },
       });
 
       // If created directly in POSTED status, execute posting inventory & financial movements
       if (targetStatus === ReturnDocStatus.POSTED) {
-        await this.executeReturnPostingInternal(
-          tx,
-          tenantId,
-          userId,
-          pReturn,
-          {
-            items: preparedItems,
-            warehouseId: dto.warehouseId,
-            counterpartyId: dto.counterpartyId,
-            receiptId: dto.receiptId,
-            receipt,
-            returnNumber,
-          },
-        );
+        await this.executeReturnPostingInternal(tx, tenantId, userId, pReturn, {
+          items: preparedItems,
+          warehouseId: dto.warehouseId,
+          counterpartyId: dto.counterpartyId,
+          receiptId: dto.receiptId,
+          receipt,
+          returnNumber,
+        });
       }
 
       // Audit Log
@@ -1480,13 +1540,18 @@ export class PurchasesService {
       Array.isArray(pReturn?.items) && pReturn.items.length > 0
         ? pReturn.items
         : Array.isArray(fallbackData?.items)
-        ? fallbackData.items
-        : [];
+          ? fallbackData.items
+          : [];
     const warehouseId = pReturn?.warehouseId || fallbackData?.warehouseId;
-    const counterpartyId = pReturn?.counterpartyId || fallbackData?.counterpartyId;
-    const receiptId = pReturn?.receiptId !== undefined ? pReturn.receiptId : fallbackData?.receiptId;
+    const counterpartyId =
+      pReturn?.counterpartyId || fallbackData?.counterpartyId;
+    const receiptId =
+      pReturn?.receiptId !== undefined
+        ? pReturn.receiptId
+        : fallbackData?.receiptId;
     const receipt = pReturn?.receipt || fallbackData?.receipt;
-    const returnNumber = pReturn?.returnNumber || fallbackData?.returnNumber || 'RET';
+    const returnNumber =
+      pReturn?.returnNumber || fallbackData?.returnNumber || 'RET';
 
     for (const item of items) {
       const qty = Number(item.quantity);
@@ -1616,8 +1681,8 @@ export class PurchasesService {
       const returnStatus = allFullyReturned
         ? PurchaseReturnStatus.FULLY_RETURNED
         : anyReturned
-        ? PurchaseReturnStatus.PARTIALLY_RETURNED
-        : PurchaseReturnStatus.NONE;
+          ? PurchaseReturnStatus.PARTIALLY_RETURNED
+          : PurchaseReturnStatus.NONE;
 
       await tx.purchaseReceipt.update({
         where: { id: receiptId },
@@ -1691,7 +1756,6 @@ export class PurchasesService {
       }
 
       if (journalLines.length > 0) {
-
         await this.journalService.createJournalEntry(
           tenantId,
           {
@@ -1732,7 +1796,9 @@ export class PurchasesService {
     }
 
     if (pReturn.status === ReturnDocStatus.CANCELLED) {
-      throw new BadRequestException('Bekor qilingan hujjatni tasdiqlab bo\'lmaydi');
+      throw new BadRequestException(
+        "Bekor qilingan hujjatni tasdiqlab bo'lmaydi",
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -2088,8 +2154,16 @@ export class PurchasesService {
     }));
     const supplierAdvancesByCurrency = balancesByCurrency
       .filter((balance) => balance.supplierDebt < 0)
-      .map((balance) => ({ currency: balance.currency, amount: Math.abs(balance.supplierDebt) }));
-    const { debtBalance: _legacyDebtBalance, customerDebt: _legacyCustomerDebt, supplierDebt: _legacySupplierDebt, ...supplierData } = supplier;
+      .map((balance) => ({
+        currency: balance.currency,
+        amount: Math.abs(balance.supplierDebt),
+      }));
+    const {
+      debtBalance: _legacyDebtBalance,
+      customerDebt: _legacyCustomerDebt,
+      supplierDebt: _legacySupplierDebt,
+      ...supplierData
+    } = supplier;
 
     return {
       supplier: { ...supplierData, balancesByCurrency },
@@ -2127,10 +2201,12 @@ export class PurchasesService {
       purchasesByCurrMap[curr] = (purchasesByCurrMap[curr] || 0) + amt;
       monthlyPurchasesTotal += amt;
     }
-    const monthlyPurchasesByCurrency = Object.entries(purchasesByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
+    const monthlyPurchasesByCurrency = Object.entries(purchasesByCurrMap).map(
+      ([currency, amount]) => ({
+        currency,
+        amount,
+      }),
+    );
 
     const settlementBalances = await this.prisma.counterpartyBalance.findMany({
       where: { tenantId },
@@ -2142,19 +2218,28 @@ export class PurchasesService {
     for (const balance of settlementBalances) {
       const supplierDebt = Number(balance.supplierDebt);
       if (supplierDebt > 0) {
-        debtByCurrMap[balance.currency] = (debtByCurrMap[balance.currency] || 0) + supplierDebt;
+        debtByCurrMap[balance.currency] =
+          (debtByCurrMap[balance.currency] || 0) + supplierDebt;
         suppliersWithDebt.add(balance.counterpartyId);
       } else if (supplierDebt < 0) {
-        advancesByCurrMap[balance.currency] = (advancesByCurrMap[balance.currency] || 0) + Math.abs(supplierDebt);
+        advancesByCurrMap[balance.currency] =
+          (advancesByCurrMap[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     }
 
-    const totalSupplierDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
-    const supplierAdvancesByCurrency = Object.entries(advancesByCurrMap).map(([currency, amount]) => ({ currency, amount }));
-    const totalSupplierDebt = totalSupplierDebtByCurrency.length === 1 ? totalSupplierDebtByCurrency[0].amount : 0;
+    const totalSupplierDebtByCurrency = Object.entries(debtByCurrMap).map(
+      ([currency, amount]) => ({
+        currency,
+        amount,
+      }),
+    );
+    const supplierAdvancesByCurrency = Object.entries(advancesByCurrMap).map(
+      ([currency, amount]) => ({ currency, amount }),
+    );
+    const totalSupplierDebt =
+      totalSupplierDebtByCurrency.length === 1
+        ? totalSupplierDebtByCurrency[0].amount
+        : 0;
     const suppliersWithDebtCount = suppliersWithDebt.size;
 
     const monthlyReturns = await this.prisma.purchaseReturn.findMany({
@@ -2173,10 +2258,12 @@ export class PurchasesService {
       returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
       monthlyReturnsTotal += amt;
     }
-    const monthlyReturnsByCurrency = Object.entries(returnsByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
+    const monthlyReturnsByCurrency = Object.entries(returnsByCurrMap).map(
+      ([currency, amount]) => ({
+        currency,
+        amount,
+      }),
+    );
 
     const activeSuppliers = await this.prisma.counterparty.count({
       where: {
@@ -2193,7 +2280,10 @@ export class PurchasesService {
       monthlyReturnsTotal,
       monthlyReturnsCount: monthlyReturns.length,
       activeSuppliersCount: activeSuppliers,
-      currency: monthlyPurchasesByCurrency.length === 1 ? monthlyPurchasesByCurrency[0].currency : 'UZS',
+      currency:
+        monthlyPurchasesByCurrency.length === 1
+          ? monthlyPurchasesByCurrency[0].currency
+          : 'UZS',
       monthlyPurchasesByCurrency,
       totalSupplierDebtByCurrency,
       supplierAdvancesByCurrency,
