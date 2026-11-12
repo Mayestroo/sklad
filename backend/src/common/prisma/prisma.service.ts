@@ -24,7 +24,12 @@ export class PrismaService
       ssl: isCloudDb ? { rejectUnauthorized: false } : undefined,
     });
     const adapter = new PrismaPg(pool);
-    super({ adapter });
+    super({
+      adapter,
+      // Posting a document (FIFO batches, settlements, journal entries) is one
+      // interactive transaction; over a remote DB it exceeds Prisma's 5 s default.
+      transactionOptions: { maxWait: 10_000, timeout: 30_000 },
+    });
   }
 
   async onModuleInit() {
