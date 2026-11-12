@@ -14,6 +14,10 @@ import { AuditService } from '../audit/audit.service';
 import { RegisterCompanyDto, LoginDto, RefreshTokenDto } from './dto';
 import { JwtPayload, AuthResponse } from '../../../../shared/types';
 
+/** bcrypt hash (cost 10) of a random string no one knows; never matches. */
+const UNKNOWN_USER_HASH =
+  '$2b$10$kK0JChVph55J8KIdDDCEYu70ALxn7Spg0LmvSJ99XUsHwGbYGlGpi';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -161,40 +165,23 @@ export class AuthService {
       },
     });
 
-    console.log(
-      `[LOGIN_ATTEMPT] CleanEmail: "${cleanEmail}" (raw: "${dto.email}")`,
-    );
-
-    if (!user) {
-      const totalUsers = await this.prisma.user.count();
-      console.log(
-        `[LOGIN_FAILED] No user found with email: "${cleanEmail}". Total users in DB: ${totalUsers}`,
-      );
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    console.log(
-      `[LOGIN_USER_FOUND] User ID: ${user.id}, email: ${user.email}, isActive: ${user.isActive}`,
-    );
-
+    // Compare against a dummy hash when the email is unknown, so both cases
+    // cost one bcrypt round and fail with the same error.
     const isPasswordValid = await bcrypt.compare(
       dto.password,
-      user.passwordHash,
+      user?.passwordHash ?? UNKNOWN_USER_HASH,
     );
-    if (!isPasswordValid) {
-      console.log(
-        `[LOGIN_FAILED] Password comparison failed for user: "${cleanEmail}"`,
-      );
+    if (!user || !isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Reached only with the correct password, so these reveal nothing to a
+    // guesser.
     if (!user.isActive) {
-      console.log(`[LOGIN_FAILED] User account inactive: "${cleanEmail}"`);
       throw new UnauthorizedException('User account is deactivated');
     }
 
     if (user.company && user.company.status === 'BLOCKED') {
-      console.log(`[LOGIN_FAILED] Company blocked for user: "${cleanEmail}"`);
       throw new UnauthorizedException(
         'Company account is suspended or blocked',
       );
@@ -244,10 +231,7 @@ export class AuthService {
   ): Promise<{ accessToken: string; expiresIn: number }> {
     try {
       const payload = this.jwtService.verify<JwtPayload>(dto.refreshToken, {
-        secret: this.configService.get(
-          'JWT_REFRESH_SECRET',
-          'dev-jwt-refresh-secret-change-me-in-production',
-        ),
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
 
       const user = await this.prisma.user.findUnique({
@@ -389,10 +373,7 @@ export class AuthService {
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get(
-        'JWT_REFRESH_SECRET',
-        'dev-jwt-refresh-secret-change-me-in-production',
-      ),
+      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
 

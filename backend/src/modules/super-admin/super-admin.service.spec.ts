@@ -53,6 +53,7 @@ describe('SuperAdminService', () => {
     };
     const mockConfigService = {
       get: jest.fn((key: string, defaultVal: any) => defaultVal),
+      getOrThrow: jest.fn((key: string) => `test-${key}`),
     };
 
     const module: TestingModule = await Test.createTestingModule({

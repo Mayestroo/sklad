@@ -24,9 +24,12 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    const connectionString =
-      process.env.DATABASE_URL ||
-      'postgresql://crm_user:crm_password@localhost:5432/crm_dev?schema=public';
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString?.trim()) {
+      throw new Error(
+        'DATABASE_URL is not set. Set it in backend/.env (see .env.example).',
+      );
+    }
     const maskedUrl = connectionString.replace(/:[^:@]+@/, ':****@');
     console.log(`[PRISMA_INIT] Connecting to Database URL: ${maskedUrl}`);
     const isCloudDb =

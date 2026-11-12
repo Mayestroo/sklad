@@ -6,9 +6,12 @@ import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
 import * as readline from 'readline';
 
-const connectionString =
-  process.env.DATABASE_URL ||
-  'postgresql://crm_user:crm_password@localhost:5432/crm_dev?schema=public';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error(
+    'DATABASE_URL is not set. Set it in backend/.env (see .env.example).',
+  );
+}
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });

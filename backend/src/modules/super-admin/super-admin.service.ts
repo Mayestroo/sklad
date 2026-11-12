@@ -92,10 +92,7 @@ export class SuperAdminService {
       expiresIn: jwtExpiration as JwtSignOptions['expiresIn'],
     });
     const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get(
-        'JWT_REFRESH_SECRET',
-        'dev-jwt-refresh-secret-change-me-in-production',
-      ),
+      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
 

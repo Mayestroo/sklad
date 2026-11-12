@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { validateRequiredEnv } from './common/config/required-env';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 // Common
@@ -32,6 +33,7 @@ import { ProductionModule } from './modules/production/production.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validate: validateRequiredEnv,
     }),
 
     // Rate limiting
