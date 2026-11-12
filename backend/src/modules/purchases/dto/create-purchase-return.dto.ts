@@ -7,6 +7,7 @@ import {
   ValidateNested,
   Min,
   IsEnum,
+  IsPositive,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ReturnDocStatus } from '@prisma/client';
@@ -55,6 +56,15 @@ export class CreatePurchaseReturnDto {
 
   @IsValidCurrency()
   currency: string;
+
+  /**
+   * UZS per unit of `currency`. Required for a standalone foreign-currency
+   * return; a receipt-linked return uses the receipt's rate.
+   */
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  exchangeRate?: number;
 
   @IsOptional()
   @IsString()

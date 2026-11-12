@@ -128,6 +128,8 @@ export interface PurchaseReturn {
   counterpartyId: string;
   warehouseId: string;
   currency: string;
+  /** UZS per unit of `currency`; a receipt-linked return carries the receipt's rate. */
+  exchangeRate: number;
   actNumber?: string;
   reason?: string;
   comment?: string;

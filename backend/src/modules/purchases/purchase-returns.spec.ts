@@ -136,6 +136,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         counterpartyId,
         warehouseId,
         currency: 'UZS',
+        exchangeRate: 1,
         status: PurchaseDocStatus.POSTED,
         totalAmount: 1120000,
         returns: [],
@@ -271,6 +272,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         counterpartyId,
         warehouseId,
         currency: 'UZS',
+        exchangeRate: 1,
         status: PurchaseDocStatus.POSTED,
         items: [
           {
@@ -318,6 +320,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         counterpartyId,
         warehouseId,
         currency: 'UZS',
+        exchangeRate: 1,
         status: PurchaseDocStatus.POSTED,
         items: [
           {
@@ -447,19 +450,23 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         data: { remainingQty: { decrement: 5 } },
       });
 
-      // Inventory leaves at FIFO batch cost: 10 x 40,000 + 5 x 45,000.
-      // (The old copy divided the per-unit landedCost by initialQty: 37,916.67.)
-      expect(prisma.journalEntry.create).toHaveBeenCalledWith(
+      // Inventory leaves at FIFO batch cost: 10 x 40,000 + 5 x 45,000 =
+      // 625,000. The supplier takes it back at 15 x 40,000 = 600,000; the
+      // 25,000 above that is a loss (ADR 0009). 2910 is credited once.
+      const standaloneLines =
+        prisma.journalEntry.create.mock.calls[0][0].data.lines.create;
+      expect(standaloneLines).toEqual([
         expect.objectContaining({
-          data: expect.objectContaining({
-            lines: {
-              create: expect.arrayContaining([
-                expect.objectContaining({ amount: 625000 }),
-              ]),
-            },
-          }),
+          debitAccountId: 'acc-6010',
+          creditAccountId: 'acc-2910',
+          amount: 600000,
         }),
-      );
+        expect.objectContaining({
+          debitAccountId: 'acc-9430',
+          creditAccountId: 'acc-2910',
+          amount: 25000,
+        }),
+      ]);
 
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
         expect.anything(),
@@ -487,6 +494,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         counterpartyId,
         warehouseId,
         currency: 'UZS',
+        exchangeRate: 1,
         status: PurchaseDocStatus.POSTED,
         totalAmount: 1120000,
         returns: [],
@@ -584,13 +592,13 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       const jeCreate = prisma.journalEntry.create.mock.calls[0][0];
       const lines = jeCreate.data.lines.create;
 
-      // 1. Inventory credited at landed cost: 5 * 120,000 = 600,000 (Dt 6010 / Kt 2910)
+      // 1. Supplier payable falls by the base price: 5 * 100,000 = 500,000 (Dt 6010 / Kt 2910)
       expect(
         lines.find(
           (l: any) =>
             l.debitAccountId === 'acc-6010' && l.creditAccountId === 'acc-2910',
         )?.amount,
-      ).toBe(600000);
+      ).toBe(500000);
 
       // 2. Variance loss recognized: 600,000 - 500,000 = 100,000 (Dt 9430 / Kt 2910)
       const varianceLine = lines.find(
@@ -599,6 +607,12 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       );
       expect(varianceLine).toBeDefined();
       expect(varianceLine.amount).toBe(100000);
+
+      // 3. Together 2910 is credited exactly the landed cost that left: 5 * 120,000.
+      const inventoryCredit = lines
+        .filter((l: any) => l.creditAccountId === 'acc-2910')
+        .reduce((sum: number, l: any) => sum + l.amount, 0);
+      expect(inventoryCredit).toBe(600000);
     });
 
     it('should atomically cancel a posted return, restoring stock, batch, and supplier debt', async () => {
@@ -742,6 +756,174 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       await expect(
         service.cancelReturn(tenantId, userId, 'ret-paid-refund'),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── USD RETURNS: THE JOURNAL IS IN UZS (ADR 0006, ADR 0009) ───────
+  describe('USD purchase returns post their journal in UZS', () => {
+    type Line = {
+      debitAccountId: string;
+      creditAccountId: string;
+      amount: number;
+    };
+
+    const journalLines = (): Line[] =>
+      prisma.journalEntry.create.mock.calls[0][0].data.lines.create;
+    const credited = (lines: Line[], account: string) =>
+      lines
+        .filter((l) => l.creditAccountId === account)
+        .reduce((sum, l) => sum + Number(l.amount), 0);
+    const debited = (lines: Line[], account: string) =>
+      lines
+        .filter((l) => l.debitAccountId === account)
+        .reduce((sum, l) => sum + Number(l.amount), 0);
+
+    beforeEach(() => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'prod-usd',
+        type: ProductType.PRODUCT,
+        name: 'Imported Pump',
+      });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-usd',
+        quantity: 10,
+      });
+      prisma.stockLevel.update.mockResolvedValue({});
+      prisma.purchaseReceiptItem.update.mockResolvedValue({});
+      prisma.purchaseReceipt.update.mockResolvedValue({});
+      prisma.productBatch.update.mockResolvedValue({});
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: any }) => ({
+          id: `acc-${where.code}`,
+          code: where.code,
+        }),
+      );
+      prisma.journalEntry.create.mockResolvedValue({});
+      prisma.auditLog.create.mockResolvedValue({});
+    });
+
+    it('receipt-linked: converts base and VAT at the receipt rate; inventory leaves at landed cost', async () => {
+      // Bought at 10 USD + 12% VAT, rate 12,500. Freight made the landed cost
+      // 130,000 UZS per unit (landedCost is per unit, in UZS).
+      const receipt = {
+        id: 'rec-usd',
+        tenantId,
+        counterpartyId,
+        warehouseId,
+        currency: 'USD',
+        exchangeRate: 12500,
+        status: PurchaseDocStatus.POSTED,
+        returns: [],
+        items: [
+          {
+            id: 'rec-usd-item',
+            productId: 'prod-usd',
+            quantity: 10,
+            returnedQuantity: 0,
+            unitPrice: 10,
+            landedCost: 130000,
+            vatRate: 12,
+            product: { id: 'prod-usd', type: ProductType.PRODUCT },
+          },
+        ],
+        batches: [
+          {
+            id: 'batch-usd',
+            productId: 'prod-usd',
+            warehouseId,
+            createdAt: new Date('2026-01-01T00:00:05Z'),
+            remainingQty: 10,
+            initialQty: 10,
+            purchasePrice: 125000,
+            landedCost: 130000,
+          },
+        ],
+      };
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+      prisma.productBatch.findMany.mockResolvedValue(receipt.batches);
+      prisma.purchaseReceiptItem.findMany.mockResolvedValue([
+        { id: 'rec-usd-item', quantity: 10, returnedQuantity: 5 },
+      ]);
+      prisma.purchaseReturn.create.mockImplementation(
+        ({ data }: { data: any }) => ({ id: 'ret-usd-linked', ...data }),
+      );
+
+      await service.createReturn(tenantId, userId, {
+        receiptId: 'rec-usd',
+        counterpartyId,
+        warehouseId,
+        currency: 'USD',
+        items: [
+          { productId: 'prod-usd', quantity: 5, unitPrice: 10, vatRate: 12 },
+        ],
+      });
+
+      // Supplier payable is settled in USD: 5 x 10 + 6 VAT.
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ currency: 'USD', amount: -56 }),
+      );
+
+      const lines = journalLines();
+      // 2910 credited with exactly what left: 5 x 130,000 UZS.
+      expect(credited(lines, 'acc-2910')).toBe(650000);
+      // 6010 debited with the payable reduction at the receipt rate: 56 x 12,500.
+      expect(debited(lines, 'acc-6010')).toBe(700000);
+      // VAT reversed in UZS: 6 x 12,500.
+      expect(credited(lines, 'acc-4410')).toBe(75000);
+      // Non-refundable freight: 650,000 - 50 x 12,500.
+      expect(debited(lines, 'acc-9430')).toBe(25000);
+      expect(lines.every((l) => l.debitAccountId !== l.creditAccountId)).toBe(
+        true,
+      );
+    });
+
+    it('standalone: requires a rate, converts at it, and inventory leaves at FIFO cost', async () => {
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'fifo-usd',
+          createdAt: new Date('2026-01-01T00:00:06Z'),
+          initialQty: 10,
+          remainingQty: 10,
+          purchasePrice: 125000,
+          landedCost: 130000,
+        },
+      ]);
+      prisma.purchaseReturn.create.mockImplementation(
+        ({ data }: { data: any }) => ({ id: 'ret-usd-standalone', ...data }),
+      );
+
+      await expect(
+        service.createReturn(tenantId, userId, {
+          counterpartyId,
+          warehouseId,
+          currency: 'USD',
+          items: [{ productId: 'prod-usd', quantity: 2, unitPrice: 10 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.purchaseReturn.create).not.toHaveBeenCalled();
+
+      await service.createReturn(tenantId, userId, {
+        counterpartyId,
+        warehouseId,
+        currency: 'USD',
+        exchangeRate: 12600,
+        items: [{ productId: 'prod-usd', quantity: 2, unitPrice: 10 }],
+      });
+
+      expect(prisma.purchaseReturn.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            currency: 'USD',
+            exchangeRate: 12600,
+          }),
+        }),
+      );
+      const lines = journalLines();
+      // FIFO cost 2 x 130,000; payable reduction 20 USD x 12,600 = 252,000.
+      expect(credited(lines, 'acc-2910')).toBe(260000);
+      expect(debited(lines, 'acc-6010')).toBe(252000);
+      expect(debited(lines, 'acc-9430')).toBe(8000);
     });
   });
 });

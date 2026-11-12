@@ -757,6 +757,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         warehouseId: 'wh-1',
         status: PurchaseDocStatus.POSTED,
         currency: 'UZS',
+        exchangeRate: 1,
         totalAmount: 1000000,
         returns: [],
         items: [
@@ -933,6 +934,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.financeTransaction.findFirst.mockResolvedValue(null);
       prisma.purchaseReturn.findFirst.mockResolvedValue({
         id: 'ret-1',
+        exchangeRate: 1,
         returnDate: new Date('2026-09-14'),
         status: ReturnDocStatus.POSTED,
         counterpartyId: 'supp-1',
@@ -1023,6 +1025,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       ]);
       prisma.purchaseReturn.create.mockResolvedValue({
         id: 'ret-standalone',
+        currency: 'UZS',
+        exchangeRate: 1,
         returnNumber: 'RET-2026-0002',
         status: ReturnDocStatus.POSTED,
         totalAmount: 150000,
@@ -1071,6 +1075,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       });
       prisma.purchaseReturn.create.mockResolvedValue({
         id: 'ret-draft',
+        currency: 'UZS',
+        exchangeRate: 1,
         status: ReturnDocStatus.DRAFT,
         totalAmount: 100000,
         items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100000 }],
@@ -1092,6 +1098,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       // 2. Approve Draft
       prisma.purchaseReturn.findFirst.mockResolvedValue({
         id: 'ret-draft',
+        currency: 'UZS',
+        exchangeRate: 1,
         status: ReturnDocStatus.DRAFT,
         warehouseId: 'wh-1',
         counterpartyId: 'supp-1',

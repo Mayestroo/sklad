@@ -64,6 +64,8 @@ interface ReturnPostingLine {
 interface PurchaseReturnForPosting {
   id: string;
   currency: string;
+  /** UZS per unit of `currency`; the journal is kept in UZS. */
+  exchangeRate: Numeric;
   returnDate: Date;
   returnNumber?: string;
   warehouseId?: string;
@@ -1465,6 +1467,29 @@ export class PurchasesService {
       }
     }
 
+    // The supplier payable from a linked receipt was booked at the receipt's
+    // rate, so its return reverses at that rate. A standalone return needs one.
+    let exchangeRate: number;
+    if (receipt) {
+      exchangeRate = requireExchangeRateForCurrency(
+        receipt.currency,
+        Number(receipt.exchangeRate),
+      );
+      if (
+        dto.exchangeRate !== undefined &&
+        Number(dto.exchangeRate) !== exchangeRate
+      ) {
+        throw new BadRequestException(
+          `Xarid hujjatiga bog'langan qaytarish xarid kursida (${exchangeRate}) bo'lishi shart`,
+        );
+      }
+    } else {
+      exchangeRate = requireExchangeRateForCurrency(
+        dto.currency,
+        dto.exchangeRate,
+      );
+    }
+
     let totalAmount = 0;
     const preparedItems = dto.items.map((i) => {
       const vatRate = i.vatRate || 0;
@@ -1497,6 +1522,7 @@ export class PurchasesService {
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
           currency: dto.currency,
+          exchangeRate,
           actNumber: dto.actNumber || null,
           reason: dto.reason || null,
           comment: dto.comment || null,
@@ -1584,6 +1610,14 @@ export class PurchasesService {
         ? pReturn.receiptId
         : fallbackData?.receiptId;
     const receipt = pReturn?.receipt || fallbackData?.receipt;
+    // Line prices and VAT are in the return's currency; batch costs and the
+    // journal are in UZS.
+    const exchangeRate = requireExchangeRateForCurrency(
+      pReturn.currency,
+      Number(pReturn.exchangeRate),
+    );
+    const toUzs = (amount: number) =>
+      convertAmountToUzs(amount, pReturn.currency, exchangeRate);
 
     for (const item of items) {
       const qty = Number(item.quantity);
@@ -1623,8 +1657,8 @@ export class PurchasesService {
         data: { quantity: { decrement: qty } },
       });
 
-      // 2. Batch deduction & Landed cost calculation
-      let unitLandedCost = unitPrice;
+      // 2. Batch deduction & Landed cost calculation (UZS per unit)
+      let unitLandedCost = unitPrice * exchangeRate;
       // FIFO returns carry the exact allocated cost; never re-multiply a rounded average.
       let fifoLineCost: number | null = null;
 
@@ -1748,45 +1782,79 @@ export class PurchasesService {
 
     if (supplierAcc) {
       const journalLines: JournalLineDto[] = [];
-      const totalLandedCost =
-        productLandedCostTotal + rawMaterialLandedCostTotal;
-      const baseWithoutVat = basePurchaseTotalReduction - totalVatAmount;
-      const varianceLoss = Math.max(0, totalLandedCost - baseWithoutVat);
+      // Everything below is UZS. Inventory leaves at landed cost; the supplier
+      // payable falls by the base price; the non-refundable rest is a loss
+      // (ADR 0009).
+      const productCost = round2(productLandedCostTotal);
+      const rawMaterialCost = round2(rawMaterialLandedCostTotal);
+      const totalLandedCost = round2(productCost + rawMaterialCost);
+      const baseWithoutVat = toUzs(basePurchaseTotalReduction - totalVatAmount);
+      const vatInUzs = toUzs(totalVatAmount);
+      const varianceLoss = round2(
+        Math.max(0, totalLandedCost - baseWithoutVat),
+      );
+      // Landed cost below the base price leaves that gap unbooked, as before;
+      // there is no ledger account for it yet.
+      const fromSupplier = round2(totalLandedCost - varianceLoss);
+      const productFromSupplier =
+        totalLandedCost > 0
+          ? round2((fromSupplier * productCost) / totalLandedCost)
+          : 0;
+      const rawMaterialFromSupplier = round2(
+        fromSupplier - productFromSupplier,
+      );
+      const productLoss = round2(productCost - productFromSupplier);
+      const rawMaterialLoss = round2(rawMaterialCost - rawMaterialFromSupplier);
 
-      if (productLandedCostTotal > 0 && inventoryAcc) {
-        journalLines.push({
-          debitAccountId: supplierAcc.id,
-          creditAccountId: inventoryAcc.id,
-          amount: productLandedCostTotal,
-          description: `Qaytarilgan tovarlar hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
-        });
+      if (varianceLoss > 0 && !lossAcc) {
+        throw new BadRequestException(
+          'Qaytarish zarari uchun hisob (9430 yoki 9420) topilmadi',
+        );
       }
 
-      if (rawMaterialLandedCostTotal > 0 && rawMaterialAcc) {
-        journalLines.push({
-          debitAccountId: supplierAcc.id,
-          creditAccountId: rawMaterialAcc.id,
-          amount: rawMaterialLandedCostTotal,
-          description: `Qaytarilgan xomashyolar hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
-        });
+      const goods = [
+        {
+          account: inventoryAcc,
+          fromSupplier: productFromSupplier,
+          loss: productLoss,
+          label: 'tovarlar',
+        },
+        {
+          account: rawMaterialAcc,
+          fromSupplier: rawMaterialFromSupplier,
+          loss: rawMaterialLoss,
+          label: 'xomashyolar',
+        },
+      ];
+      for (const { account, fromSupplier: amount, label } of goods) {
+        if (amount > 0 && account) {
+          journalLines.push({
+            debitAccountId: supplierAcc.id,
+            creditAccountId: account.id,
+            amount,
+            description: `Qaytarilgan ${label} hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
+          });
+        }
       }
 
-      if (totalVatAmount > 0 && vatAcc) {
+      if (vatInUzs > 0 && vatAcc) {
         journalLines.push({
           debitAccountId: supplierAcc.id,
           creditAccountId: vatAcc.id,
-          amount: totalVatAmount,
+          amount: vatInUzs,
           description: `Qaytarilgan tovarlar bo‘yicha QQS kamayishi (№ ${pReturn.returnNumber})`,
         });
       }
 
-      if (varianceLoss > 0 && lossAcc && inventoryAcc) {
-        journalLines.push({
-          debitAccountId: lossAcc.id,
-          creditAccountId: inventoryAcc.id,
-          amount: varianceLoss,
-          description: `Qaytarish bo‘yicha taqsimlangan xarajatlar zarari (Landed Cost Return Variance, № ${pReturn.returnNumber})`,
-        });
+      for (const { account, loss } of goods) {
+        if (loss > 0 && lossAcc && account) {
+          journalLines.push({
+            debitAccountId: lossAcc.id,
+            creditAccountId: account.id,
+            amount: loss,
+            description: `Qaytarish bo‘yicha taqsimlangan xarajatlar zarari (Landed Cost Return Variance, № ${pReturn.returnNumber})`,
+          });
+        }
       }
 
       if (journalLines.length > 0) {
@@ -2325,4 +2393,9 @@ export class PurchasesService {
       monthlyReturnsByCurrency,
     };
   }
+}
+
+/** Round a UZS amount to tiyin. */
+function round2(amount: number): number {
+  return Math.round(amount * 100) / 100;
 }

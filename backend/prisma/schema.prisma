@@ -1729,6 +1729,7 @@ model PurchaseReturn {
   counterpartyId String          @map("counterparty_id")
   warehouseId    String          @map("warehouse_id")
   currency       String          @default("UZS")
+  exchangeRate   Decimal         @default(1) @db.Decimal(15, 4) @map("exchange_rate")
   actNumber      String?         @map("act_number")
   reason         String?
   comment        String?

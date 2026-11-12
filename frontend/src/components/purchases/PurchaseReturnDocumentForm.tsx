@@ -93,6 +93,9 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [receiptId, setReceiptId] = useState<string>(initialData?.receiptId || '');
   const [currency, setCurrency] = useState(initialData?.currency?.trim() || '');
+  const [exchangeRate, setExchangeRate] = useState(
+    initialData?.exchangeRate != null && initialData.currency !== 'UZS' ? String(initialData.exchangeRate) : '',
+  );
   const [actNumber, setActNumber] = useState(initialData?.actNumber || '');
   const [reason, setReason] = useState(initialData?.reason || '');
   const [comment, setComment] = useState(initialData?.comment || '');
@@ -390,6 +393,12 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
       return;
     }
+    // A linked return reverses at the receipt's rate; a standalone one needs its own.
+    const needsExchangeRate = currency.trim() !== 'UZS' && !receiptId;
+    if (needsExchangeRate && !(Number(exchangeRate) > 0)) {
+      setError(isRu ? 'Укажите курс валюты (больше 0)' : 'Valyuta kursini kiriting (0 dan katta)');
+      return;
+    }
     if (items.length === 0) {
       setError(
         isRu
@@ -421,6 +430,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         warehouseId,
         returnDate,
         currency: currency.trim(),
+        exchangeRate: needsExchangeRate ? Number(exchangeRate) : undefined,
         actNumber: actNumber || undefined,
         reason: reason || undefined,
         comment: comment || undefined,
@@ -721,6 +731,21 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               disabled={isReadOnly}
             />
           </div>
+
+          {currency && currency !== 'UZS' && !receiptId && (
+            <div>
+              <Input
+                label={isRu ? `Курс (UZS за 1 ${currency}) *` : `Kurs (1 ${currency} uchun UZS) *`}
+                type="number"
+                min="0"
+                step="0.0001"
+                value={exchangeRate}
+                onChange={(e) => setExchangeRate(e.target.value)}
+                disabled={isReadOnly}
+                placeholder={isRu ? 'Напр: 12650' : 'Masalan: 12650'}
+              />
+            </div>
+          )}
         </div>
 
         <div>
@@ -991,6 +1016,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               counterpartyId,
               warehouseId,
               currency,
+              exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
               actNumber,
               reason,
               comment,
