@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { apiFetch, ApiError } from './api.ts';
+import { apiDownload, apiFetch, ApiError } from './api.ts';
 
 const storage = new Map<string, string>();
 const events: string[] = [];
@@ -50,5 +50,47 @@ test('errors carry the HTTP status and the server message', async () => {
     apiFetch('/sales/invoices', { token: 't', method: 'POST', body: '{}' }),
     (err: unknown) =>
       err instanceof ApiError && err.status === 409 && err.message === 'Hujjat raqami band',
+  );
+});
+
+test('a FormData body is sent as multipart, not labelled as JSON', async () => {
+  let sent: Headers | undefined;
+  globalThis.fetch = async (_url, init) => {
+    sent = new Headers(init?.headers);
+    return new Response('{"ok":true}', { status: 200 });
+  };
+  const body = new FormData();
+  body.append('file', new Blob(['x']), 'a.xlsx');
+
+  await apiFetch('/opening-balances/d1/import-preview', { token: 't', method: 'POST', body });
+
+  // The browser must set multipart/form-data with its own boundary.
+  assert.equal(sent?.has('Content-Type'), false);
+  assert.equal(sent?.get('Authorization'), 'Bearer t');
+});
+
+test('apiDownload returns the file as a Blob and sends the auth headers', async () => {
+  let sentUrl = '';
+  let sent: Headers | undefined;
+  globalThis.fetch = async (url, init) => {
+    sentUrl = String(url);
+    sent = new Headers(init?.headers);
+    return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+  };
+
+  const blob = await apiDownload('/api/opening-balances/template', { token: 't', tenantId: 'c1' });
+
+  assert.ok(sentUrl.endsWith('/api/opening-balances/template'));
+  assert.ok(!sentUrl.includes('/api/api/'));
+  assert.equal(sent?.get('Authorization'), 'Bearer t');
+  assert.equal(sent?.get('X-Tenant-Id'), 'c1');
+  assert.equal(blob.size, 3);
+});
+
+test('apiDownload surfaces server errors as ApiError', async () => {
+  respondWith(403, { statusCode: 403, message: 'Ruxsat yo‘q', details: null });
+  await assert.rejects(
+    apiDownload('/opening-balances/template', { token: 't' }),
+    (err: unknown) => err instanceof ApiError && err.status === 403 && err.message === 'Ruxsat yo‘q',
   );
 });

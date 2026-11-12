@@ -3,7 +3,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { apiDownload, apiFetch } from '@/lib/api';
+import {
+  IMPORT_CATEGORY_LABELS,
+  openingBalanceImportPaths,
+  summarizeImportPreview,
+} from '@/lib/opening-balance-import';
 import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -43,6 +48,7 @@ import type {
   OpeningBalanceStatus,
   OpeningBalanceMetrics,
   ImportErrorItem,
+  ImportValidationResult,
 } from '@shared/types/opening-balances';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 
@@ -85,6 +91,7 @@ export default function OpeningBalancesPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importErrors, setImportErrors] = useState<ImportErrorItem[]>([]);
+  const [importPreview, setImportPreview] = useState<ImportValidationResult | null>(null);
   const [importing, setImporting] = useState(false);
 
   const [showUnpostModal, setShowUnpostModal] = useState(false);
@@ -261,6 +268,7 @@ export default function OpeningBalancesPage() {
   }, [lines]);
 
   const isReadOnly = currentDoc?.status === 'POSTED' || currentDoc?.status === 'CANCELLED';
+  const importSummary = importPreview ? summarizeImportPreview(importPreview) : null;
 
   // ─── Actions & Handlers ────────────────────────────────────────
 
@@ -424,49 +432,86 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    window.open('/api/opening-balances/template/download', '_blank');
+  const handleDownloadTemplate = async () => {
+    if (!token || !companyId) return;
+    try {
+      const blob = await apiDownload(openingBalanceImportPaths('').template, {
+        token,
+        tenantId: companyId,
+        locale,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'boshlangich_qoldiqlar_shablon.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : isRu ? 'Не удалось скачать шаблон' : 'Shablonni yuklab bo‘lmadi');
+    }
   };
 
-  const handleImportFile = async () => {
+  const resetImport = () => {
+    setImportFile(null);
+    setImportErrors([]);
+    setImportPreview(null);
+  };
+
+  const closeImportModal = () => {
+    setShowImportModal(false);
+    resetImport();
+  };
+
+  const importFormData = (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return formData;
+  };
+
+  /** Step 1: the server validates the file and returns the lines it would save. */
+  const handlePreviewImport = async () => {
     if (!importFile || !token || !companyId || !selectedDocId) return;
     setImporting(true);
     setImportErrors([]);
+    setImportPreview(null);
     try {
-      const formData = new FormData();
-      formData.append('file', importFile);
-      formData.append('documentId', selectedDocId);
+      const result = await apiFetch<ImportValidationResult>(
+        openingBalanceImportPaths(selectedDocId).preview,
+        { token, tenantId: companyId, locale, method: 'POST', body: importFormData(importFile) },
+      );
+      setImportPreview(result);
+      setImportErrors(result.errors);
+      if (result.errors.length > 0) {
+        toast.error(isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : isRu ? 'Ошибка загрузки файла' : 'Faylni yuklashda xatolik');
+    } finally {
+      setImporting(false);
+    }
+  };
 
-      const res = await fetch('/api/opening-balances/import/excel', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'x-tenant-id': companyId,
-        },
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.errors && Array.isArray(data.errors)) {
-          setImportErrors(data.errors);
-          toast.error(isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi');
-        } else {
-          toast.error(data.message || (isRu ? 'Ошибка импорта' : 'Yuklashda xatolik'));
-        }
+  /** Step 2: save the previewed lines into the draft document. */
+  const handleCommitImport = async () => {
+    if (!importFile || !token || !companyId || !selectedDocId) return;
+    setImporting(true);
+    try {
+      const result = await apiFetch<{ success: boolean; message: string; errors?: ImportErrorItem[] }>(
+        openingBalanceImportPaths(selectedDocId).commit,
+        { token, tenantId: companyId, locale, method: 'POST', body: importFormData(importFile) },
+      );
+      if (!result.success) {
+        setImportErrors(result.errors ?? []);
+        toast.error(result.message || (isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi'));
         return;
       }
-
-      setShowImportModal(false);
-      setImportFile(null);
-      toast.success(
-        isRu
-          ? `Импорт завершен! Загружено строк: ${data.importedCount}`
-          : `Excel muvaffaqiyatli yuklandi! Kiritilgan qatorlar: ${data.importedCount}`,
-      );
+      closeImportModal();
+      toast.success(result.message);
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка загрузки файла' : 'Faylni yuklashda xatolik'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : isRu ? 'Ошибка импорта' : 'Yuklashda xatolik');
     } finally {
       setImporting(false);
     }
@@ -1196,7 +1241,7 @@ export default function OpeningBalancesPage() {
       <Modal
         isOpen={showImportModal}
         title={isRu ? 'Импорт остатков из Excel' : 'Boshlang‘ich qoldiqlarni Exceldan yuklash'}
-        onClose={() => setShowImportModal(false)}
+        onClose={closeImportModal}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -1218,7 +1263,10 @@ export default function OpeningBalancesPage() {
             <input
               type="file"
               accept=".xlsx,.xls"
-              onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                resetImport();
+                setImportFile(e.target.files?.[0] ?? null);
+              }}
               style={{ display: 'block', margin: '0 auto', fontSize: 'var(--text-sm)' }}
             />
           </div>
@@ -1247,19 +1295,72 @@ export default function OpeningBalancesPage() {
             </div>
           )}
 
+          {importSummary && importPreview && (
+            <div
+              style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3)',
+                fontSize: 'var(--text-sm)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <div>
+                {isRu ? 'Строк в файле' : 'Fayldagi qatorlar'}: <strong>{importPreview.totalRows}</strong>
+                {' · '}
+                {isRu ? 'Готово к сохранению' : 'Saqlashga tayyor'}: <strong>{importSummary.lineCount}</strong>
+                {' · '}
+                {isRu ? 'Ошибок' : 'Xatoliklar'}: <strong>{importPreview.errors.length}</strong>
+              </div>
+              {importSummary.byCategory.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {importSummary.byCategory.map(({ category, count }) => (
+                    <Badge key={category} variant="info">
+                      {IMPORT_CATEGORY_LABELS[category][locale]}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {importSummary.canCommit && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', color: 'var(--color-warning-600)' }}>
+                  <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                  <span>
+                    {isRu
+                      ? 'При сохранении все текущие строки черновика будут заменены строками из файла.'
+                      : 'Saqlaganda qoralamaning hozirgi barcha qatorlari fayldagi qatorlar bilan almashtiriladi.'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={() => setShowImportModal(false)}>
+            <Button variant="secondary" onClick={closeImportModal}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleImportFile}
-              disabled={!importFile || importing}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Upload size={16} />
-              <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Загрузить и применить' : 'Yuklash va saqlash'}</span>
-            </Button>
+            {importSummary?.canCommit ? (
+              <Button
+                variant="primary"
+                onClick={handleCommitImport}
+                disabled={importing}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Save size={16} />
+                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={handlePreviewImport}
+                disabled={!importFile || importing}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Upload size={16} />
+                <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
