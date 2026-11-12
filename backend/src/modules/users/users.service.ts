@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma';
 import { AuditService } from '../audit/audit.service';
 import { CreateUserDto, UpdateUserDto } from './dto';
@@ -134,7 +135,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const updateData: any = {};
+    const updateData: Prisma.UserUpdateInput = {};
     if (dto.firstName) updateData.firstName = dto.firstName;
     if (dto.lastName) updateData.lastName = dto.lastName;
     if (dto.preferredLanguage)
@@ -231,8 +232,7 @@ export class UsersService {
 
     // Protect last owner
     const isOwner = user.userRoles?.some(
-      (ur: any) =>
-        ur.role?.slug === 'owner' || ur.role?.slug === 'company_admin',
+      (ur) => ur.role?.slug === 'owner' || ur.role?.slug === 'company_admin',
     );
     if (isOwner) {
       const otherOwners = await this.prisma.userRole.count({
@@ -257,7 +257,7 @@ export class UsersService {
       await this.prisma.user.delete({
         where: { id: userId },
       });
-    } catch (err: any) {
+    } catch {
       // If historical documents link to this user, deactivate instead of crashing
       await this.prisma.user.update({
         where: { id: userId },
@@ -293,11 +293,16 @@ export class UsersService {
     };
   }
 
-  private sanitizeUser(user: any) {
+  private sanitizeUser<
+    T extends {
+      passwordHash: string;
+      userRoles?: { role: { slug: string } }[];
+    },
+  >(user: T) {
     const { passwordHash, ...sanitized } = user;
     return {
       ...sanitized,
-      roles: user.userRoles?.map((ur: any) => ur.role.slug) || [],
+      roles: user.userRoles?.map((ur) => ur.role.slug) || [],
     };
   }
 }

@@ -20,7 +20,10 @@ import {
 } from './dto/create-service-act.dto';
 import { UpdateServiceActDto } from './dto/update-service-act.dto';
 import { FilterServiceActsDto } from './dto/filter-service-acts.dto';
-import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 
 @Injectable()
@@ -113,7 +116,7 @@ export class ServicesService {
       );
     }
 
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );

@@ -24,7 +24,7 @@ export class CreateTransferDto {
   amount: number;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null || value === undefined
       ? undefined
       : Number(value),
@@ -35,7 +35,7 @@ export class CreateTransferDto {
   targetAmount?: number;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null || value === undefined
       ? undefined
       : Number(value),
@@ -50,14 +50,14 @@ export class CreateTransferDto {
 
   @IsDateString()
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   transactionDate?: string;
 
   @IsString()
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   comment?: string;

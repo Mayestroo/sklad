@@ -8,6 +8,12 @@ import { applyDecorators } from '@nestjs/common';
 export const SUPPORTED_CURRENCIES = ['USD', 'UZS'] as const;
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
+export function isSupportedCurrency(
+  currency: string,
+): currency is SupportedCurrency {
+  return (SUPPORTED_CURRENCIES as readonly string[]).includes(currency);
+}
+
 /**
  * Validates that a currency field is present and belongs to the
  * set of supported currencies.  Apply this to any DTO field that

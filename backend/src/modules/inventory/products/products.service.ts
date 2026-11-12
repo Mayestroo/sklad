@@ -5,9 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import type { Prisma, ProductType } from '@prisma/client';
+import { asJson } from '../../../common/utils/json-column';
 import { PrismaService } from '../../../common/prisma';
 import { CreateProductDto, UpdateProductDto } from '../dto';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
+import { readCompanySettings } from '../../../common/utils/company-settings';
 
 @Injectable()
 export class ProductsService {
@@ -27,7 +30,7 @@ export class ProductsService {
       where: { id: tenantId },
       select: { settings: true },
     });
-    const salesDefaultCurrency = (company?.settings as any)?.sales
+    const salesDefaultCurrency = readCompanySettings(company?.settings).sales
       ?.defaultCurrency;
     const salePriceCurrency =
       dto.salePriceCurrency ??
@@ -83,8 +86,8 @@ export class ProductsService {
     return this.prisma.product.create({
       data: {
         tenantId,
-        name: dto.name as any,
-        description: dto.description ? (dto.description as any) : undefined,
+        name: asJson(dto.name),
+        description: dto.description ? asJson(dto.description) : undefined,
         categoryId: dto.categoryId || null,
         type: dto.type || 'PRODUCT',
         sku,
@@ -117,14 +120,14 @@ export class ProductsService {
     search?: string,
     type?: string,
   ) {
-    const where: any = { tenantId, isActive: true };
+    const where: Prisma.ProductWhereInput = { tenantId, isActive: true };
 
     if (categoryId) {
       where.categoryId = categoryId;
     }
 
     if (type && type !== 'ALL') {
-      where.type = type as any;
+      where.type = type as ProductType;
     }
 
     let products = await this.prisma.product.findMany({
@@ -264,7 +267,7 @@ export class ProductsService {
   }
 
   async findStockLevels(tenantId: string, warehouseId?: string) {
-    const where: any = { tenantId };
+    const where: Prisma.StockLevelWhereInput = { tenantId };
     if (warehouseId) {
       where.warehouseId = warehouseId;
     }
@@ -363,9 +366,9 @@ export class ProductsService {
     return this.prisma.product.update({
       where: { id },
       data: {
-        name: dto.name ? (dto.name as any) : undefined,
+        name: dto.name ? asJson(dto.name) : undefined,
         description:
-          dto.description !== undefined ? (dto.description as any) : undefined,
+          dto.description !== undefined ? asJson(dto.description) : undefined,
         categoryId: dto.categoryId !== undefined ? dto.categoryId : undefined,
         type: dto.type ?? undefined,
         sku: dto.sku ?? undefined,

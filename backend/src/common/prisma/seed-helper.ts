@@ -4,8 +4,9 @@ import {
   type PermissionRef,
 } from '../auth/permission-catalog';
 import * as bcrypt from 'bcrypt';
+import type { PrismaClient } from '@prisma/client';
 
-export async function autoSeedIfEmpty(prisma: any) {
+export async function autoSeedIfEmpty(prisma: PrismaClient) {
   try {
     const userCount = await prisma.user.count();
     if (userCount > 0) {
@@ -48,7 +49,7 @@ export async function autoSeedIfEmpty(prisma: any) {
       await prisma.currency.upsert({
         where: { code: currency.code },
         update: {},
-        create: currency as any,
+        create: currency,
       });
     }
 
@@ -73,7 +74,7 @@ export async function autoSeedIfEmpty(prisma: any) {
         where: { code: tax.code, tenantId: null },
       });
       if (!existing) {
-        await prisma.taxRate.create({ data: tax as any });
+        await prisma.taxRate.create({ data: tax });
       }
     }
 
@@ -110,7 +111,7 @@ export async function autoSeedIfEmpty(prisma: any) {
         (await prisma.role.create({
           data: {
             slug: role.slug,
-            name: role.name as any,
+            name: role.name,
             isSystemRole: true,
             tenantId: null,
           },

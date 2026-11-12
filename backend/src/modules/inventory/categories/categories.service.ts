@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { asJson } from '../../../common/utils/json-column';
 import { PrismaService } from '../../../common/prisma';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto';
 
@@ -10,7 +11,7 @@ export class CategoriesService {
     return this.prisma.category.create({
       data: {
         tenantId,
-        name: dto.name as any,
+        name: asJson(dto.name),
         parentId: dto.parentId || null,
       },
     });
@@ -51,7 +52,7 @@ export class CategoriesService {
     return this.prisma.category.update({
       where: { id },
       data: {
-        name: dto.name ? (dto.name as any) : undefined,
+        name: dto.name ? asJson(dto.name) : undefined,
         parentId: dto.parentId !== undefined ? dto.parentId : undefined,
       },
       include: {

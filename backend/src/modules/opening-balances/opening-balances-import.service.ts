@@ -2,7 +2,11 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { OpeningBalanceCategory } from '@prisma/client';
-import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import type { OpeningBalanceLineDto } from './dto/opening-balance-line.dto';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../common/validators/currency.validator';
 import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
 export interface ImportErrorItem {
   sheetName: string;
@@ -12,13 +16,16 @@ export interface ImportErrorItem {
   errorMessage: string;
 }
 
+/** A `{ uz, ru }` JSON name column as read back from the database. */
+type TranslatableName = { uz?: string; ru?: string };
+
 export interface ImportValidationResult {
   fileName: string;
   totalRows: number;
   validRows: number;
   errorCount: number;
   errors: ImportErrorItem[];
-  previewLines?: any[];
+  previewLines?: OpeningBalanceLineDto[];
 }
 
 @Injectable()
@@ -240,8 +247,8 @@ export class OpeningBalancesImportService {
   ): Promise<ImportValidationResult> {
     const workbook = new ExcelJS.Workbook();
     try {
-      await workbook.xlsx.load(fileBuffer as any);
-    } catch (e: any) {
+      await workbook.xlsx.load(fileBuffer as unknown as ExcelJS.Buffer);
+    } catch {
       throw new BadRequestException(
         'Faylni ochib bo‘lmadi. Iltimos, haqiqiy .xlsx fayl yuklang',
       );
@@ -256,7 +263,7 @@ export class OpeningBalancesImportService {
     ]);
 
     const errors: ImportErrorItem[] = [];
-    const previewLines: any[] = [];
+    const previewLines: OpeningBalanceLineDto[] = [];
     let totalRows = 0;
     let validRows = 0;
 
@@ -282,7 +289,7 @@ export class OpeningBalancesImportService {
         if (!accountName && !rawAmount) return; // Skip empty row
         totalRows++;
 
-        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+        if (!isSupportedCurrency(currency)) {
           errors.push({
             sheetName: '1_Pul',
             rowNumber,
@@ -315,7 +322,7 @@ export class OpeningBalancesImportService {
         const nameMatchedAccount = compatibleAccounts.find((a) => {
           const nameObj =
             typeof a.name === 'object' && a.name !== null
-              ? (a.name as any)
+              ? (a.name as TranslatableName)
               : {};
           return (
             nameObj.uz?.toLowerCase() === accountName.toLowerCase() ||
@@ -411,7 +418,8 @@ export class OpeningBalancesImportService {
           (p) =>
             p.sku.toLowerCase() === sku.toLowerCase() ||
             (p.name &&
-              (p.name as any).uz?.toLowerCase() === productName.toLowerCase()),
+              (p.name as TranslatableName).uz?.toLowerCase() ===
+                productName.toLowerCase()),
         );
         if (!product) {
           errors.push({
@@ -429,7 +437,7 @@ export class OpeningBalancesImportService {
           warehouses.find((w) => {
             const nameObj =
               typeof w.name === 'object' && w.name !== null
-                ? (w.name as any)
+                ? (w.name as TranslatableName)
                 : {};
             return (
               nameObj.uz?.toLowerCase() === warehouseName.toLowerCase() ||
@@ -488,7 +496,7 @@ export class OpeningBalancesImportService {
         if (!customerIdent && !rawAmount) return;
         totalRows++;
 
-        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+        if (!isSupportedCurrency(currency)) {
           errors.push({
             sheetName: '3_Mijozlar',
             rowNumber,
@@ -565,7 +573,7 @@ export class OpeningBalancesImportService {
         if (!suppIdent && !rawAmount) return;
         totalRows++;
 
-        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+        if (!isSupportedCurrency(currency)) {
           errors.push({
             sheetName: '4_Yetkazib_beruvchilar',
             rowNumber,
@@ -644,7 +652,7 @@ export class OpeningBalancesImportService {
         if (!cpIdent && !rawAmount) return;
         totalRows++;
 
-        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+        if (!isSupportedCurrency(currency)) {
           errors.push({
             sheetName: '5_Avanslar',
             rowNumber,
@@ -781,7 +789,7 @@ export class OpeningBalancesImportService {
         if (!rawAmount) return;
         totalRows++;
 
-        if (!SUPPORTED_CURRENCIES.includes(currency as any)) {
+        if (!isSupportedCurrency(currency)) {
           errors.push({
             sheetName: '7_Boshqa_qoldiqlar',
             rowNumber,

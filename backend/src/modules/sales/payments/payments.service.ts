@@ -11,6 +11,7 @@ import { CreatePaymentDto } from '../dto';
 import { SalesOrdersService } from '../orders/sales-orders.service';
 import {
   CounterpartySettlementSide,
+  SalesPaymentStatus,
   SettlementAllocationTarget,
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
@@ -205,14 +206,14 @@ export class PaymentsService {
         if (invoice) {
           const newPaidAmount = Number(invoice.paidAmount) + dto.amount;
           const totalAmount = Number(invoice.totalAmount);
-          const newPaymentStatus =
+          const newPaymentStatus: SalesPaymentStatus =
             newPaidAmount >= totalAmount ? 'PAID' : 'PARTIALLY_PAID';
 
           await tx.salesInvoice.update({
             where: { id: dto.invoiceId },
             data: {
               paidAmount: newPaidAmount,
-              paymentStatus: newPaymentStatus as any,
+              paymentStatus: newPaymentStatus,
             },
           });
         }

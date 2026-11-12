@@ -22,6 +22,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../common/auth/request-context';
 import { CreateOpeningBalanceDto } from './dto/create-opening-balance.dto';
 import { UpdateOpeningBalanceLinesDto } from './dto/update-opening-balance.dto';
 import { UnpostOpeningBalanceDto } from './dto/unpost-opening-balance.dto';
@@ -65,7 +66,7 @@ export class OpeningBalancesController {
   @RequirePermissions('accounting:create')
   async create(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateOpeningBalanceDto,
   ) {
     return this.service.create(tenantId, user.id, dto);
@@ -94,7 +95,7 @@ export class OpeningBalancesController {
   @RequirePermissions('accounting:edit')
   async postDocument(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.service.post(tenantId, user.id, id);
@@ -104,7 +105,7 @@ export class OpeningBalancesController {
   @RequirePermissions('accounting:edit')
   async unpostDocument(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto?: UnpostOpeningBalanceDto,
   ) {
@@ -158,7 +159,7 @@ export class OpeningBalancesController {
 
     const lines = result.previewLines || [];
     const updated = await this.service.updateLines(tenantId, id, {
-      lines: lines as any,
+      lines,
     });
 
     return {

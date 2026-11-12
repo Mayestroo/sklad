@@ -25,7 +25,10 @@ import {
 } from '@prisma/client';
 
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
-import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
@@ -38,10 +41,42 @@ import {
   requireExchangeRateForCurrency,
 } from '../../common/utils/transaction-exchange-rate';
 import { JournalService } from '../accounting/journal/journal.service';
+import type { JournalLineDto } from '../accounting/dto';
 import {
   consumeFifoBatches,
   restoreBatchConsumptions,
 } from '../inventory/fifo/fifo-batches';
+
+type Numeric = number | string | Prisma.Decimal;
+
+/** A purchase receipt with the lines and batches a return is matched against. */
+type ReceiptForReturn = Prisma.PurchaseReceiptGetPayload<{
+  include: { items: { include: { product: true } }; batches: true };
+}>;
+
+/** A purchase-return line as posting reads it (a stored line or a prepared one). */
+interface ReturnPostingLine {
+  id?: string;
+  productId: string;
+  quantity: Numeric;
+  unitPrice: Numeric;
+  vatAmount?: Numeric | null;
+  product?: { type: string } | null;
+}
+
+/** A purchase return as posting reads it; links missing here come from `fallbackData`. */
+interface PurchaseReturnForPosting {
+  id: string;
+  currency: string;
+  returnDate: Date;
+  returnNumber?: string;
+  warehouseId?: string;
+  counterpartyId?: string;
+  receiptId?: string | null;
+  items?: ReturnPostingLine[];
+  receipt?: ReceiptForReturn | null;
+  counterparty?: { name: string } | null;
+}
 
 @Injectable()
 export class PurchasesService {
@@ -182,7 +217,7 @@ export class PurchasesService {
       );
     }
 
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -328,7 +363,7 @@ export class PurchasesService {
     }
 
     const targetCurrency = dto.currency || existing.currency;
-    if (!SUPPORTED_CURRENCIES.includes(targetCurrency as any)) {
+    if (!isSupportedCurrency(targetCurrency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -617,7 +652,7 @@ export class PurchasesService {
           ) / 100;
 
         const hasSpecialTypes = receipt.items.some(
-          (i: any) =>
+          (i) =>
             i.product?.type === 'RAW_MATERIAL' || i.product?.type === 'SERVICE',
         );
 
@@ -645,7 +680,7 @@ export class PurchasesService {
         }
 
         const vatSum = Math.round(Number(receipt.vatAmount) * rate * 100) / 100;
-        const journalLines: any[] = [];
+        const journalLines: JournalLineDto[] = [];
 
         if (productSum > 0 && inventoryAcc) {
           journalLines.push({
@@ -782,7 +817,7 @@ export class PurchasesService {
     return this.prisma.$transaction(async (tx) => {
       // 1. Decrement stock levels & delete batches
       for (const item of receipt.items) {
-        const itemType = (item as any).product?.type || 'PRODUCT';
+        const itemType = item.product?.type || 'PRODUCT';
         if (itemType === 'SERVICE') {
           // Services do not have physical warehouse stock or product batches
           continue;
@@ -1361,7 +1396,7 @@ export class PurchasesService {
     }
 
     // Validate receipt & items if receiptId is linked
-    let receipt: any = null;
+    let receipt: ReceiptForReturn | null = null;
     if (dto.receiptId) {
       receipt = await this.prisma.purchaseReceipt.findFirst({
         where: { id: dto.receiptId, tenantId },
@@ -1402,7 +1437,7 @@ export class PurchasesService {
 
       for (const item of dto.items) {
         const receiptItem = receipt.items.find(
-          (ri: any) => ri.productId === item.productId,
+          (ri) => ri.productId === item.productId,
         );
         if (!receiptItem) {
           throw new BadRequestException(
@@ -1420,7 +1455,7 @@ export class PurchasesService {
         }
 
         const batch = receipt.batches.find(
-          (b: any) => b.productId === item.productId,
+          (b) => b.productId === item.productId,
         );
         if (
           batch &&
@@ -1518,16 +1553,16 @@ export class PurchasesService {
    * Internal reusable posting engine for Purchase Returns (ADR 0009 & ADR 0017)
    */
   private async executeReturnPostingInternal(
-    tx: any,
+    tx: Prisma.TransactionClient,
     tenantId: string,
     userId: string,
-    pReturn: any,
+    pReturn: PurchaseReturnForPosting,
     fallbackData?: {
-      items?: any[];
+      items?: ReturnPostingLine[];
       warehouseId?: string;
       counterpartyId?: string;
       receiptId?: string | null;
-      receipt?: any;
+      receipt?: ReceiptForReturn | null;
       returnNumber?: string;
     },
   ) {
@@ -1542,16 +1577,17 @@ export class PurchasesService {
         : Array.isArray(fallbackData?.items)
           ? fallbackData.items
           : [];
-    const warehouseId = pReturn?.warehouseId || fallbackData?.warehouseId;
-    const counterpartyId =
-      pReturn?.counterpartyId || fallbackData?.counterpartyId;
+    // Typed as present: FIFO consumption and the settlement ledger reject a
+    // missing warehouse or counterparty themselves.
+    const warehouseId = (pReturn?.warehouseId ||
+      fallbackData?.warehouseId) as string;
+    const counterpartyId = (pReturn?.counterpartyId ||
+      fallbackData?.counterpartyId) as string;
     const receiptId =
       pReturn?.receiptId !== undefined
         ? pReturn.receiptId
         : fallbackData?.receiptId;
     const receipt = pReturn?.receipt || fallbackData?.receipt;
-    const returnNumber =
-      pReturn?.returnNumber || fallbackData?.returnNumber || 'RET';
 
     for (const item of items) {
       const qty = Number(item.quantity);
@@ -1597,8 +1633,8 @@ export class PurchasesService {
       let fifoLineCost: number | null = null;
 
       if (receiptId && receipt) {
-        const receiptItem = receipt.items?.find(
-          (ri: any) => ri.productId === item.productId,
+        const receiptItem = receipt.items.find(
+          (ri) => ri.productId === item.productId,
         );
 
         if (
@@ -1619,8 +1655,8 @@ export class PurchasesService {
         }
 
         // Return the receipt's own goods when they are still in this warehouse.
-        const batch = receipt.batches?.find(
-          (b: any) =>
+        const batch = receipt.batches.find(
+          (b) =>
             b.productId === item.productId && b.warehouseId === warehouseId,
         );
         await consumeFifoBatches(tx, {
@@ -1629,7 +1665,8 @@ export class PurchasesService {
           productId: item.productId,
           quantity: qty,
           batchIds: batch ? [batch.id] : undefined,
-          source: { purchaseReturnItemId: item.id },
+          // Stored return lines always have an id; prepared lines are only a fallback.
+          source: { purchaseReturnItemId: item.id as string },
         });
       } else {
         // Standalone return: FIFO batch consumption from warehouse
@@ -1638,7 +1675,8 @@ export class PurchasesService {
           warehouseId,
           productId: item.productId,
           quantity: qty,
-          source: { purchaseReturnItemId: item.id },
+          // Stored return lines always have an id; prepared lines are only a fallback.
+          source: { purchaseReturnItemId: item.id as string },
         });
         unitLandedCost = allocation.unitCost;
         fifoLineCost = allocation.totalCost;
@@ -1673,10 +1711,10 @@ export class PurchasesService {
       });
 
       const allFullyReturned = updatedItems.every(
-        (ri: any) => Number(ri.returnedQuantity) >= Number(ri.quantity),
+        (ri) => Number(ri.returnedQuantity) >= Number(ri.quantity),
       );
       const anyReturned = updatedItems.some(
-        (ri: any) => Number(ri.returnedQuantity) > 0,
+        (ri) => Number(ri.returnedQuantity) > 0,
       );
       const returnStatus = allFullyReturned
         ? PurchaseReturnStatus.FULLY_RETURNED
@@ -1713,7 +1751,7 @@ export class PurchasesService {
       }));
 
     if (supplierAcc) {
-      const journalLines: any[] = [];
+      const journalLines: JournalLineDto[] = [];
       const totalLandedCost =
         productLandedCostTotal + rawMaterialLandedCostTotal;
       const baseWithoutVat = basePurchaseTotalReduction - totalVatAmount;
@@ -1914,7 +1952,7 @@ export class PurchasesService {
           // 2. Decrement PurchaseReceiptItem returnedQuantity
           if (pReturn.receipt) {
             const receiptItem = pReturn.receipt.items.find(
-              (ri: any) => ri.productId === item.productId,
+              (ri) => ri.productId === item.productId,
             );
             if (receiptItem) {
               await tx.purchaseReceiptItem.update({
@@ -2048,7 +2086,7 @@ export class PurchasesService {
       endDate?: string;
     },
   ) {
-    const where: any = { tenantId };
+    const where: Prisma.PurchaseReturnWhereInput = { tenantId };
 
     if (filters?.supplierId) {
       where.counterpartyId = filters.supplierId;
@@ -2063,15 +2101,16 @@ export class PurchasesService {
     }
 
     if (filters?.startDate || filters?.endDate) {
-      where.returnDate = {};
+      const returnDate: Prisma.DateTimeFilter = {};
       if (filters.startDate) {
-        where.returnDate.gte = new Date(filters.startDate);
+        returnDate.gte = new Date(filters.startDate);
       }
       if (filters.endDate) {
         const end = new Date(filters.endDate);
         end.setHours(23, 59, 59, 999);
-        where.returnDate.lte = end;
+        returnDate.lte = end;
       }
+      where.returnDate = returnDate;
     }
 
     if (filters?.search) {
@@ -2254,7 +2293,7 @@ export class PurchasesService {
     let monthlyReturnsTotal = 0;
     for (const ret of monthlyReturns) {
       const amt = Number(ret.totalAmount || 0);
-      const curr = (ret as any).currency || 'UZS';
+      const curr = ret.currency || 'UZS';
       returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
       monthlyReturnsTotal += amt;
     }

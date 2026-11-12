@@ -232,7 +232,7 @@ export class CounterpartiesService {
     hasDebt?: boolean,
     balanceFilter?: 'all' | 'receivables' | 'payables' | 'settled',
   ) {
-    const where: any = { tenantId };
+    const where: Prisma.CounterpartyWhereInput = { tenantId };
 
     // A BOTH counterparty is a customer and a supplier at the same time.
     if (

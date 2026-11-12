@@ -15,7 +15,7 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: configService.get('FRONTEND_URL', 'http://localhost:3000'),
+    origin: configService.get<string>('FRONTEND_URL', 'http://localhost:3000'),
     credentials: true,
   });
 
@@ -48,11 +48,13 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port =
-    configService.get('PORT') || configService.get('APP_PORT') || 3001;
+    configService.get<string>('PORT') ||
+    configService.get<string>('APP_PORT') ||
+    3001;
   await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 Backend running on http://localhost:${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
 }
 
-bootstrap();
+void bootstrap();

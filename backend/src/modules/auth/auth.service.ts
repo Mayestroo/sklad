@@ -4,9 +4,11 @@ import {
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
+import type { Company, User } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { asJson } from '../../common/utils/json-column';
 import { PrismaService } from '../../common/prisma';
 import { AuditService } from '../audit/audit.service';
 import { RegisterCompanyDto, LoginDto, RefreshTokenDto } from './dto';
@@ -66,7 +68,7 @@ export class AuthService {
       // Create Company
       const company = await tx.company.create({
         data: {
-          name: dto.companyName as any,
+          name: asJson(dto.companyName),
           slug: dto.companySlug,
           defaultLanguage: dto.defaultLanguage || 'uz',
           status: 'TRIAL',
@@ -100,7 +102,7 @@ export class AuthService {
       const branch = await tx.branch.create({
         data: {
           tenantId: company.id,
-          name: { uz: 'Asosiy filial', ru: 'Главный филиал' } as any,
+          name: { uz: 'Asosiy filial', ru: 'Главный филиал' },
           isMain: true,
         },
       });
@@ -110,7 +112,7 @@ export class AuthService {
         data: {
           tenantId: company.id,
           branchId: branch.id,
-          name: { uz: 'Asosiy ombor', ru: 'Главный склад' } as any,
+          name: { uz: 'Asosiy ombor', ru: 'Главный склад' },
         },
       });
 
@@ -241,7 +243,7 @@ export class AuthService {
     dto: RefreshTokenDto,
   ): Promise<{ accessToken: string; expiresIn: number }> {
     try {
-      const payload = this.jwtService.verify(dto.refreshToken, {
+      const payload = this.jwtService.verify<JwtPayload>(dto.refreshToken, {
         secret: this.configService.get(
           'JWT_REFRESH_SECRET',
           'dev-jwt-refresh-secret-change-me-in-production',
@@ -292,7 +294,7 @@ export class AuthService {
         '1d',
       );
       const accessToken = this.jwtService.sign(newPayload, {
-        expiresIn: jwtExpiration as any,
+        expiresIn: jwtExpiration as JwtSignOptions['expiresIn'],
       });
 
       return {
@@ -364,12 +366,12 @@ export class AuthService {
   }
 
   private buildAuthResponse(
-    user: any,
-    company: any,
+    user: User,
+    company: Company | null,
     roles: string[],
     permissions: string[],
   ): AuthResponse {
-    const payload: any = {
+    const payload: JwtPayload = {
       sub: user.id,
       tenantId: company ? company.id : null,
       email: user.email,
@@ -383,7 +385,7 @@ export class AuthService {
       '1d',
     );
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: jwtExpiration as any,
+      expiresIn: jwtExpiration as JwtSignOptions['expiresIn'],
     });
 
     const refreshToken = this.jwtService.sign(payload, {
@@ -413,7 +415,7 @@ export class AuthService {
             status: company.status,
             defaultLanguage: company.defaultLanguage,
           }
-        : (null as any),
+        : null,
       tokens: {
         accessToken,
         refreshToken,

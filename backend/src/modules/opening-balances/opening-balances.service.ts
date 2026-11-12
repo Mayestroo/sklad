@@ -237,9 +237,9 @@ export class OpeningBalancesService {
     if (!doc)
       throw new NotFoundException('Boshlang‘ich qoldiq hujjati topilmadi');
 
-    const lines = (doc as any).lines || [];
+    const lines = doc.lines || [];
     const metrics = this.calculateMetrics(
-      lines.map((l: any) => ({
+      lines.map((l) => ({
         category: l.category,
         amount: Number(l.amount),
         netAmount: Number(l.netAmount),
@@ -429,7 +429,7 @@ export class OpeningBalancesService {
       }
 
       // 3. Update master document totals
-      const updateData: any = {
+      const updateData: Prisma.OpeningBalanceDocumentUpdateInput = {
         totalAssets: metrics.totalAssets,
         totalLiabilities: metrics.totalLiabilities,
         totalEquity: metrics.totalEquity,

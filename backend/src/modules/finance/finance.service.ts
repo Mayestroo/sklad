@@ -31,6 +31,7 @@ import type {
   FinanceAccountFlow,
   FinanceSummaryByAccount,
 } from '../../../../shared/types/finance';
+import { readCompanySettings } from '../../common/utils/company-settings';
 
 interface FinanceSettlementContext {
   side: CounterpartySettlementSide | null;
@@ -103,18 +104,18 @@ export class FinanceService {
     tenantId: string,
     filters: { date_from?: string; date_to?: string; currency?: string },
   ) {
-    const where: any = {
+    const where: Prisma.FinanceTransactionWhereInput = {
       tenantId,
       isDeleted: false,
       status: TransactionStatus.POSTED,
     };
 
     if (filters.date_from || filters.date_to) {
-      where.transactionDate = {};
-      if (filters.date_from)
-        where.transactionDate.gte = new Date(filters.date_from);
+      const transactionDate: Prisma.DateTimeFilter = {};
+      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
       if (filters.date_to)
-        where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+      where.transactionDate = transactionDate;
     }
 
     if (filters.currency) {
@@ -584,7 +585,8 @@ export class FinanceService {
     const reportCurrency =
       monthByCurrency.length === 1
         ? monthByCurrency[0].currency
-        : (company?.settings as any)?.sales?.defaultCurrency || 'UZS';
+        : readCompanySettings(company?.settings).sales?.defaultCurrency ||
+          'UZS';
 
     let totalCustomerDebt = 0; // Receivables (Kutilayotgan tushumlar)
     let totalSupplierDebt = 0; // Payables (To'lanishi kerak bo'lgan qarzlar)
@@ -695,19 +697,19 @@ export class FinanceService {
     const limit = Math.min(filters.limit ?? 50, 100);
     const skip = (page - 1) * limit;
 
-    const where: any = {
+    const where: Prisma.FinanceTransactionWhereInput = {
       tenantId,
       isDeleted,
     };
 
     if (filters.date_from || filters.date_to) {
-      where.transactionDate = {};
-      if (filters.date_from)
-        where.transactionDate.gte = new Date(filters.date_from);
+      const transactionDate: Prisma.DateTimeFilter = {};
+      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
       if (filters.date_to)
-        where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+      where.transactionDate = transactionDate;
     }
-    const ledgerFilters: any[] = [];
+    const ledgerFilters: Prisma.FinanceTransactionWhereInput[] = [];
     if (filters.accountId) {
       ledgerFilters.push({
         OR: [

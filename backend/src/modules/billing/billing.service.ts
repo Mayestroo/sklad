@@ -83,6 +83,14 @@ export const PLANS: PricingPlan[] = [
   },
 ];
 
+/** Fields read from a Click or Payme callback body (provider format, unvalidated). */
+export interface ProviderWebhookPayload {
+  paymentId?: string;
+  transaction_param?: string;
+  trans_id?: string;
+  payme_trans_id?: string;
+}
+
 @Injectable()
 export class BillingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -216,7 +224,10 @@ export class BillingService {
     });
   }
 
-  async processWebhook(provider: 'CLICK' | 'PAYME', payload: any) {
+  async processWebhook(
+    provider: 'CLICK' | 'PAYME',
+    payload: ProviderWebhookPayload,
+  ) {
     const paymentId = payload.paymentId || payload.transaction_param;
     if (!paymentId) {
       return { status: 'error', message: 'Missing payment identifier' };

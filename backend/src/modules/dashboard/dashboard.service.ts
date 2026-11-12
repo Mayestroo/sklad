@@ -3,6 +3,7 @@ import { PrismaService } from '../../common/prisma';
 import {
   SalesDocStatus,
   TransactionDirection,
+  Prisma,
   TransactionStatus,
 } from '@prisma/client';
 import type { FinanceSummaryByAccount } from '../../../../shared/types/finance';
@@ -48,7 +49,7 @@ export class DashboardService {
   async getFinanceKPIs(tenantId: string, filters: DashboardFilters) {
     const { from, to } = this.dateRange(filters);
 
-    const whereBase: any = {
+    const whereBase: Prisma.FinanceTransactionWhereInput = {
       tenantId,
       isDeleted: false,
       status: TransactionStatus.POSTED,

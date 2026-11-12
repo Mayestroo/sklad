@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
-import { CreateJournalEntryDto } from '../dto';
+import { CreateJournalEntryDto, JournalLineDto } from '../dto';
 import { ledgerAccountCodeForCashAccount } from '../../../../../shared/types/cash-account-policy';
 import { CashAccountType, PaymentMethod, Prisma } from '@prisma/client';
 import {
@@ -26,6 +26,29 @@ interface CashPaymentForJournal {
     currency: string;
     exchangeRate: number | string | Prisma.Decimal;
   } | null;
+}
+
+type Numeric = number | string | Prisma.Decimal;
+
+interface InboundDocForJournal {
+  id: string;
+  docNumber: string;
+  totalAmount: Numeric;
+}
+
+interface TransferForJournal {
+  id: string;
+  transferNumber: string;
+}
+
+interface ServiceActForJournal {
+  id: string;
+  actNumber: string;
+  type: string;
+  currency: string;
+  exchangeRate: Numeric | null;
+  subtotal: Numeric;
+  vatAmount: Numeric;
 }
 
 /**
@@ -303,7 +326,7 @@ export class JournalService {
    */
   async autoPostInboundDoc(
     tenantId: string,
-    doc: any,
+    doc: InboundDocForJournal,
     db: JournalWriter = this.prisma,
   ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
@@ -341,7 +364,7 @@ export class JournalService {
    */
   async autoPostShipTransfer(
     tenantId: string,
-    transfer: any,
+    transfer: TransferForJournal,
     totalCostValue: number,
 
     db: JournalWriter = this.prisma,
@@ -378,7 +401,7 @@ export class JournalService {
    */
   async autoPostReceiveTransfer(
     tenantId: string,
-    transfer: any,
+    transfer: TransferForJournal,
     totalCostValue: number,
 
     db: JournalWriter = this.prisma,
@@ -435,12 +458,12 @@ export class JournalService {
    */
   async autoPostServiceAct(
     tenantId: string,
-    act: any,
+    act: ServiceActForJournal,
     db: JournalWriter = this.prisma,
   ) {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
-    const lines: any[] = [];
+    const lines: JournalLineDto[] = [];
     const exchangeRate = requireExchangeRateForCurrency(
       act.currency,
       Number(act.exchangeRate),

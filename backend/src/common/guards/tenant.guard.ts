@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
+import type { AppRequest } from '../auth/request-context';
 
 /**
  * Guard that ensures a valid tenant context exists on the request.
@@ -19,7 +20,7 @@ import {
 @Injectable()
 export class TenantGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AppRequest>();
     const user = request.user;
 
     if (!user) {
@@ -33,7 +34,7 @@ export class TenantGuard implements CanActivate {
     }
 
     // 2. If the user is a global SuperAdmin, allow specifying target tenant via X-Tenant-Id header.
-    const roles: string[] = Array.isArray(user.roles) ? user.roles : [];
+    const roles: unknown[] = Array.isArray(user.roles) ? user.roles : [];
     const isSuperAdmin = roles.some(
       (r) => typeof r === 'string' && r.toLowerCase() === 'super_admin',
     );

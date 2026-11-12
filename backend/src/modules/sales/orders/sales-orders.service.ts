@@ -26,7 +26,10 @@ import {
   isWarehouseOrAbove,
 } from '../../../common/utils/roles.util';
 import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
-import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import {
@@ -387,7 +390,7 @@ export class SalesOrdersService {
     }
     await this.requireTenantWarehouse(tenantId, dto.warehouseId);
 
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -961,7 +964,7 @@ export class SalesOrdersService {
               });
             }
 
-            const gateSatisfied = this.isGateSatisfied(order as any);
+            const gateSatisfied = this.isGateSatisfied(order);
             finalStatus = gateSatisfied
               ? SalesOrderStatus.READY_TO_SHIP
               : SalesOrderStatus.AWAITING_PAYMENT;
@@ -1279,7 +1282,7 @@ export class SalesOrdersService {
     const newPaidAmount = Number(agg._sum.amount || 0);
 
     const updatedOrder = { ...order, paidAmount: newPaidAmount };
-    const gateSatisfied = this.isGateSatisfied(updatedOrder as any);
+    const gateSatisfied = this.isGateSatisfied(updatedOrder);
 
     const dispatchableStatuses: SalesOrderStatus[] = [
       SalesOrderStatus.READY,
@@ -1390,7 +1393,7 @@ export class SalesOrdersService {
       }
 
       if (newOrderStatus === SalesOrderStatus.READY) {
-        const gateSatisfied = this.isGateSatisfied(order as any);
+        const gateSatisfied = this.isGateSatisfied(order);
         if (gateSatisfied) {
           newOrderStatus = SalesOrderStatus.READY_TO_SHIP;
         } else {
@@ -1825,7 +1828,7 @@ export class SalesOrdersService {
         const availableQty = stockLevel ? Number(stockLevel.quantity) : 0;
         if (availableQty < qty) {
           throw new BadRequestException(
-            `"${(dp.orderItem.product.name as any)?.uz || dp.orderItem.product.name}" uchun omborda yetarli qoldiq yo'q. Mavjud: ${availableQty}, chiqarilayotgan: ${qty}`,
+            `"${(dp.orderItem.product.name as { uz?: string } | null)?.uz || String(dp.orderItem.product.name)}" uchun omborda yetarli qoldiq yo'q. Mavjud: ${availableQty}, chiqarilayotgan: ${qty}`,
           );
         }
 

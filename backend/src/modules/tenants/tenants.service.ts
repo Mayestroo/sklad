@@ -4,8 +4,17 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { asJson } from '../../common/utils/json-column';
 import { PrismaService } from '../../common/prisma';
 import { CreateTenantDto, UpdateCompanySettingsDto } from './dto';
+
+/** Shape of `Company.settings` (JSON); every section is optional. */
+interface StoredCompanySettings {
+  sales?: Prisma.JsonObject;
+  inventory?: Prisma.JsonObject;
+  accounting?: Prisma.JsonObject;
+}
 
 @Injectable()
 export class TenantsService {
@@ -25,7 +34,7 @@ export class TenantsService {
 
     return this.prisma.company.create({
       data: {
-        name: dto.name as any,
+        name: asJson(dto.name),
         slug: dto.slug,
         defaultLanguage: dto.defaultLanguage || 'uz',
         status: 'TRIAL',
@@ -266,7 +275,7 @@ export class TenantsService {
       where: { id: tenantId },
       select: { settings: true },
     });
-    const settings = (company?.settings as any) || {};
+    const settings = (company?.settings as StoredCompanySettings | null) || {};
     return {
       sales: {
         enableMultiTierPriceLists: false,

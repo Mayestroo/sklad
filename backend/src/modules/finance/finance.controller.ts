@@ -18,6 +18,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../common/auth/request-context';
 import { CreateIncomeDto } from './dto/create-income.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
@@ -97,7 +98,7 @@ export class FinanceController {
   @RequirePermissions('finance:create')
   async createIncome(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateIncomeDto,
   ) {
     return this.financeService.createIncome(tenantId, dto, user?.id);
@@ -109,7 +110,7 @@ export class FinanceController {
   @RequirePermissions('finance:create')
   async createExpense(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateExpenseDto,
   ) {
     return this.financeService.createExpense(tenantId, dto, user?.id);
@@ -121,7 +122,7 @@ export class FinanceController {
   @RequirePermissions('finance:create')
   async createTransfer(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateTransferDto,
   ) {
     return this.financeService.createTransfer(tenantId, dto, user?.id);
@@ -147,7 +148,7 @@ export class FinanceController {
   async cancelTransaction(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CancelTransactionDto,
   ) {
     return this.financeService.cancelTransaction(tenantId, id, dto, user?.id);
@@ -161,7 +162,7 @@ export class FinanceController {
   async deleteTransaction(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.financeService.deleteTransaction(tenantId, id, user?.id);
   }

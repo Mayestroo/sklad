@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterCompanyDto, LoginDto, RefreshTokenDto } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import type { AppRequest } from '../../common/auth/request-context';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('api/auth')
@@ -14,8 +15,8 @@ export class AuthController {
   }
 
   @Post('login')
-  login(@Body() dto: LoginDto, @Req() req: any) {
-    const ipAddress = req.ip || req.headers['x-forwarded-for'];
+  login(@Body() dto: LoginDto, @Req() req: AppRequest) {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string);
     return this.authService.login(dto, ipAddress);
   }
 

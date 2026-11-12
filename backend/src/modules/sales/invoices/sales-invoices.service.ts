@@ -17,7 +17,10 @@ import {
   SalesReturnDocStatus,
 } from '@prisma/client';
 import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
-import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import {
   calculateSalesDocumentTotals,
@@ -26,6 +29,7 @@ import {
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { consumeFifoBatches } from '../../inventory/fifo/fifo-batches';
+import { readCompanySettings } from '../../../common/utils/company-settings';
 
 @Injectable()
 export class SalesInvoicesService {
@@ -135,7 +139,7 @@ export class SalesInvoicesService {
       );
     }
 
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -291,7 +295,7 @@ export class SalesInvoicesService {
         'Sotuv hujjatida kamida bitta tovar bo‘lishi shart',
       );
     }
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         'Sotuv hujjati uchun USD yoki UZS valyutasini tanlang',
       );
@@ -500,7 +504,9 @@ export class SalesInvoicesService {
         const availableQty = invoice.salesOrderId ? physicalQty : freeQty;
 
         if (availableQty < qty) {
-          const prodName = (item.product.name as any)?.uz || item.product.name;
+          const prodName =
+            (item.product.name as { uz?: string } | null)?.uz ||
+            item.product.name;
           if (!invoice.salesOrderId && reservedQty > 0) {
             throw new BadRequestException(
               `"${prodName}" uchun erkin qoldiq yetarli emas. Jami: ${physicalQty}, Band qilingan (rezerv): ${reservedQty}, Erkin: ${freeQty}, Talab qilingan: ${qty}`,
@@ -910,7 +916,7 @@ export class SalesInvoicesService {
       );
     }
 
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -920,7 +926,6 @@ export class SalesInvoicesService {
     let totalAmount = 0;
     let totalCogs = 0;
 
-    let originalInvoice: any = null;
     const returnedQtyMap = new Map<string, number>();
 
     if (!dto.invoiceId) {
@@ -929,7 +934,7 @@ export class SalesInvoicesService {
       );
     }
 
-    originalInvoice = await this.prisma.salesInvoice.findFirst({
+    const originalInvoice = await this.prisma.salesInvoice.findFirst({
       where: { id: dto.invoiceId, tenantId, status: SalesDocStatus.POSTED },
       include: {
         items: true,
@@ -987,7 +992,7 @@ export class SalesInvoicesService {
       }
       let unitCogs = 0;
       const origItem = originalInvoice.items.find(
-        (oi: any) => oi.productId === i.productId,
+        (oi) => oi.productId === i.productId,
       );
       if (!origItem) {
         throw new BadRequestException(
@@ -1942,7 +1947,7 @@ export class SalesInvoicesService {
       where: { id: tenantId },
       select: { settings: true },
     });
-    const settings = (company?.settings as any) || {};
+    const settings = readCompanySettings(company?.settings);
     const isMultiTierEnabled = Boolean(
       settings?.sales?.enableMultiTierPriceLists,
     );

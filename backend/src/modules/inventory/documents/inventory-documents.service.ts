@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
+import type { InventoryDocType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
@@ -182,9 +183,9 @@ export class InventoryDocumentsService {
   }
 
   async findAllByTenant(tenantId: string, docType?: string) {
-    const where: any = { tenantId };
+    const where: Prisma.InventoryDocumentWhereInput = { tenantId };
     if (docType) {
-      where.docType = docType;
+      where.docType = docType as InventoryDocType;
     }
 
     return this.prisma.inventoryDocument.findMany({

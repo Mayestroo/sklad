@@ -1,30 +1,33 @@
-import { ExpenseAllocationMethod } from '@prisma/client';
+import { ExpenseAllocationMethod, Prisma } from '@prisma/client';
+
+/** Inputs are read through Number(), so Prisma Decimals are accepted as-is. */
+type Numeric = number | string | Prisma.Decimal;
 
 export interface AllocationTargetItem {
   id: string;
   productId: string;
   product?: {
-    name?: any;
+    name?: Prisma.JsonValue;
     sku?: string;
-    weight?: number | null;
+    weight?: Numeric | null;
     unitOfMeasure?: string;
   } | null;
-  quantity: number;
-  unitPrice: number;
-  totalPrice?: number;
-  weight?: number;
-  landedCost?: number;
+  quantity: Numeric;
+  unitPrice: Numeric;
+  totalPrice?: Numeric;
+  weight?: Numeric | null;
+  landedCost?: Numeric | null;
 }
 
 export interface BatchInfo {
   productId: string;
-  remainingQty: number;
+  remainingQty: Numeric;
 }
 
 export interface AllocationPreviewItem {
   receiptItemId: string;
   productId: string;
-  productName: any;
+  productName: Prisma.JsonValue | undefined;
   sku: string;
   unitOfMeasure: string;
   quantity: number;

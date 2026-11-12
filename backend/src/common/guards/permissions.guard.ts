@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { AppRequest } from '../auth/request-context';
 import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
 
 @Injectable()
@@ -21,7 +22,7 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    const { user } = context.switchToHttp().getRequest();
+    const { user } = context.switchToHttp().getRequest<AppRequest>();
 
     if (!user) {
       throw new ForbiddenException('User authentication context missing');

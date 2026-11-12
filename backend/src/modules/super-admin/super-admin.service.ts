@@ -10,12 +10,13 @@ import {
   TenantCompanySummary,
   CreatedTenantSummary,
   BackupMetadata,
+  TranslatableField,
 } from '../../../../shared/types';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as bcrypt from 'bcrypt';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { CreateTenantDto } from './dto/super-admin.dto';
 
@@ -88,7 +89,7 @@ export class SuperAdminService {
       '1d',
     );
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: jwtExpiration as any,
+      expiresIn: jwtExpiration as JwtSignOptions['expiresIn'],
     });
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get(
@@ -185,7 +186,7 @@ export class SuperAdminService {
           name:
             typeof dto.name === 'string'
               ? { uz: dto.name, ru: dto.name }
-              : (dto.name as any),
+              : dto.name,
           slug: cleanSlug,
           status: 'ACTIVE',
           trialEndsAt,
@@ -252,9 +253,9 @@ export class SuperAdminService {
 
     return {
       id: company.id,
-      name: company.name as any,
+      name: company.name as unknown as TranslatableField,
       slug: company.slug,
-      status: company.status as any,
+      status: company.status,
       plan,
       userCount: 1,
       createdAt: company.createdAt.toISOString(),
@@ -307,10 +308,10 @@ export class SuperAdminService {
       const activeSub = c.subscriptions[0];
       return {
         id: c.id,
-        name: c.name as any,
+        name: c.name as unknown as TranslatableField,
         slug: c.slug,
-        status: c.status as any,
-        plan: activeSub ? (activeSub.plan as any) : 'STARTER',
+        status: c.status,
+        plan: activeSub ? activeSub.plan : 'STARTER',
         userCount: c.users.length,
         createdAt: c.createdAt.toISOString(),
         trialEndsAt: c.trialEndsAt ? c.trialEndsAt.toISOString() : null,

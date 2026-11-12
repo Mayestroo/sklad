@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
-import { BillingService } from './billing.service';
+import { BillingService, type ProviderWebhookPayload } from './billing.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -46,12 +46,12 @@ export class BillingController {
 
   // Webhooks for Click and Payme (Public)
   @Post('webhook/click')
-  clickWebhook(@Body() payload: any) {
+  clickWebhook(@Body() payload: ProviderWebhookPayload) {
     return this.billingService.processWebhook('CLICK', payload);
   }
 
   @Post('webhook/payme')
-  paymeWebhook(@Body() payload: any) {
+  paymeWebhook(@Body() payload: ProviderWebhookPayload) {
     return this.billingService.processWebhook('PAYME', payload);
   }
 }

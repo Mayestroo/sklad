@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   CreateFixedAssetDto,
@@ -14,7 +15,7 @@ export class FixedAssetsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(tenantId: string, search?: string) {
-    const where: any = { tenantId };
+    const where: Prisma.FixedAssetWhereInput = { tenantId };
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -93,7 +94,7 @@ export class FixedAssetsService {
   async update(tenantId: string, id: string, dto: UpdateFixedAssetDto) {
     await this.findOne(tenantId, id);
 
-    const data: any = { ...dto };
+    const data: Prisma.FixedAssetUncheckedUpdateInput = { ...dto };
     if (dto.acquisitionDate) {
       data.acquisitionDate = new Date(dto.acquisitionDate);
     }

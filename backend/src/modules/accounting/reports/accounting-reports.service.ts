@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
+import { readCompanySettings } from '../../../common/utils/company-settings';
 
 @Injectable()
 export class AccountingReportsService {
@@ -80,7 +81,7 @@ export class AccountingReportsService {
     const reportCurrency =
       recentReceipt?.currency ||
       recentInvoice?.currency ||
-      (company?.settings as any)?.sales?.defaultCurrency ||
+      readCompanySettings(company?.settings).sales?.defaultCurrency ||
       'UZS';
 
     return {

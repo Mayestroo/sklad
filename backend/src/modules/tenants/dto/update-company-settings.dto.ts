@@ -5,6 +5,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import type { Prisma } from '@prisma/client';
 
 export class SalesSettingsDto {
   @IsOptional()
@@ -27,8 +28,8 @@ export class UpdateCompanySettingsDto {
   sales?: SalesSettingsDto;
 
   @IsOptional()
-  inventory?: Record<string, any>;
+  inventory?: Prisma.InputJsonObject;
 
   @IsOptional()
-  accounting?: Record<string, any>;
+  accounting?: Prisma.InputJsonObject;
 }

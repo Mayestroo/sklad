@@ -20,7 +20,10 @@ import {
 
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
-import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
 import {
@@ -29,6 +32,23 @@ import {
 } from '../../../../shared/types/cash-account-policy';
 import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
 import { JournalService } from '../accounting/journal/journal.service';
+import type { JournalLineDto } from '../accounting/dto';
+
+/** A posted sales invoice whose COGS a posted expense changed retroactively. */
+export interface RetroactiveSalesImpact {
+  invoiceId: string;
+  invoiceNumber: string | undefined;
+  invoiceDate: Date | undefined;
+  customerName: string | undefined;
+  totalDeltaCogs: number;
+  items: {
+    productId: string;
+    productName: Prisma.JsonValue | undefined;
+    quantity: number;
+    unitDelta: number;
+    cogsDelta: number;
+  }[];
+}
 
 @Injectable()
 export class AdditionalExpensesService {
@@ -84,10 +104,10 @@ export class AdditionalExpensesService {
     const totalAmount = Number(dto.amount);
 
     return ExpenseAllocationEngine.allocateExpense(
-      targetItems as any,
+      targetItems,
       totalAmount,
       allocationMethod,
-      receipt.batches as any,
+      receipt.batches,
     );
   }
 
@@ -98,7 +118,7 @@ export class AdditionalExpensesService {
     userId: string,
     dto: CreateAdditionalExpenseDto,
   ) {
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -237,7 +257,7 @@ export class AdditionalExpensesService {
     }
 
     const targetCurrency = dto.currency || existing.currency;
-    if (!SUPPORTED_CURRENCIES.includes(targetCurrency as any)) {
+    if (!isSupportedCurrency(targetCurrency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -462,8 +482,7 @@ export class AdditionalExpensesService {
         totalCustoms,
         totalBroker,
         totalAll,
-        currency:
-          allPosted[0]?.currency || (items[0] as any)?.currency || 'USD',
+        currency: allPosted[0]?.currency || items[0]?.currency || 'USD',
       },
     };
   }
@@ -497,7 +516,7 @@ export class AdditionalExpensesService {
     }
 
     // Query retroactive sales impact if posted
-    let retroactiveSalesImpact: any[] = [];
+    let retroactiveSalesImpact: RetroactiveSalesImpact[] = [];
     if (expense.status === PurchaseDocStatus.POSTED) {
       const productIds = expense.items.map((i) => i.productId);
       const batches = await this.prisma.productBatch.findMany({
@@ -522,7 +541,7 @@ export class AdditionalExpensesService {
         },
       });
 
-      const impactMap = new Map<string, any>();
+      const impactMap = new Map<string, RetroactiveSalesImpact>();
       for (const batch of batches) {
         const itemExpense = expense.items.find(
           (i) => i.productId === batch.productId,
@@ -541,7 +560,8 @@ export class AdditionalExpensesService {
           const consumedQty = Number(c.quantity);
           const cogsDelta = consumedQty * unitExpense;
 
-          if (!impactMap.has(key)) {
+          const existing = impactMap.get(key);
+          if (!existing) {
             impactMap.set(key, {
               invoiceId: invItem.invoiceId,
               invoiceNumber: invItem.invoice?.invoiceNumber,
@@ -559,7 +579,6 @@ export class AdditionalExpensesService {
               ],
             });
           } else {
-            const existing = impactMap.get(key);
             existing.totalDeltaCogs += cogsDelta;
             existing.items.push({
               productId: invItem.productId,
@@ -867,7 +886,7 @@ export class AdditionalExpensesService {
         : await tx.account.findFirst({ where: { tenantId, code: '6010' } });
 
       if (creditAcc) {
-        const journalLines: any[] = [];
+        const journalLines: JournalLineDto[] = [];
         const netStock = Math.max(
           0,
           capitalizedTotal -
