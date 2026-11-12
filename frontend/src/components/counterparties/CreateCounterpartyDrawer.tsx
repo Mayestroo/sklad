@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { buildCounterpartyPayload } from '@/lib/counterparty-form';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -98,19 +99,9 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
     setError(null);
 
     try {
-      const payload = {
-        name: name.trim(),
-        type,
-        folderId: folderId || null,
-        discountPercent: Number(discountPercent) || 0,
-        inn: inn.trim() || undefined,
-        phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
-        address: address.trim() || undefined,
-        bankName: bankName.trim() || undefined,
-        bankAccount: bankAccount.trim() || undefined,
-        mfo: mfo.trim() || undefined,
-      };
+      const payload = buildCounterpartyPayload({
+        name, type, folderId, discountPercent, inn, phone, email, address, bankName, bankAccount, mfo,
+      });
 
       let res: any;
       if (isEdit && counterpartyToEdit?.id) {
