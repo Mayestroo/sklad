@@ -5,6 +5,17 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
+/** Thrown for every non-2xx response; `status` lets callers tell 401/403/404/409 apart. */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 export interface RequestOptions extends RequestInit {
   tenantId?: string;
   token?: string;
@@ -61,7 +72,9 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
       // ignore parse error
     }
 
-    if (response.status === 401) {
+    // Only an authenticated request can mean "session expired". A 401 from the
+    // login form is a wrong password and must not wipe the stored session.
+    if (response.status === 401 && token) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('crm_access_token');
         localStorage.removeItem('crm_refresh_token');
@@ -71,7 +84,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
       }
     }
 
-    throw new Error(errorMessage);
+    throw new ApiError(response.status, errorMessage);
   }
 
   if (response.status === 204) {
