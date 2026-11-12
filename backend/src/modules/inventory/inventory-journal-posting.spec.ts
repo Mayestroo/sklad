@@ -21,7 +21,12 @@ function createPrismaMock() {
     sourceWarehouseId: 'wh-a',
     targetWarehouseId: 'wh-b',
     items: [
-      { productId: 'p-1', quantity: 2, product: { id: 'p-1', costPrice: 100 } },
+      {
+        id: 'tri-1',
+        productId: 'p-1',
+        quantity: 2,
+        product: { id: 'p-1', costPrice: 100 },
+      },
     ],
   });
   const tx = {
@@ -46,10 +51,28 @@ function createPrismaMock() {
     },
     productBatch: {
       create: jest.fn().mockResolvedValue({ id: 'batch-1' }),
-      findMany: jest.fn().mockResolvedValue([]),
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'batch-src',
+          remainingQty: 10,
+          landedCost: 100,
+          purchasePrice: 100,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+      ]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    batchConsumption: { create: jest.fn().mockResolvedValue({}) },
+    batchConsumption: {
+      create: jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'bc-1',
+          quantity: 2,
+          unitCost: 100,
+          batch: { createdAt: new Date('2026-01-01T00:00:00Z') },
+        },
+      ]),
+    },
     stockLevel: {
       findUnique: jest.fn().mockResolvedValue({ quantity: 10 }),
       update: jest.fn().mockResolvedValue({}),

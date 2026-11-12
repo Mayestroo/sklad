@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
+import { consumeFifoBatches, createFifoBatch } from '../fifo/fifo-batches';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
@@ -121,9 +122,18 @@ export class StockTransfersService {
           },
         });
 
-        const costPrice = Number(item.product?.costPrice) || 0;
-        totalCostValue += requestedQty * costPrice;
+        // Goods leave the source at their FIFO batch cost; the consumption is
+        // recorded so receipt can recreate the same cost layers.
+        const allocation = await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId: transfer.sourceWarehouseId,
+          productId: item.productId,
+          quantity: requestedQty,
+          source: { stockTransferItemId: item.id },
+        });
+        totalCostValue += allocation.totalCost;
       }
+      totalCostValue = Math.round(totalCostValue * 100) / 100;
 
       const shipped = await tx.stockTransfer.update({
         where: { id },
@@ -227,9 +237,36 @@ export class StockTransfersService {
           },
         });
 
-        const costPrice = Number(item.product?.costPrice) || 0;
-        totalCostValue += requestedQty * costPrice;
+        // Recreate exactly the cost layers that left the source, keeping each
+        // batch's FIFO age, so 2920 (in transit) nets to zero.
+        const shippedLayers = await tx.batchConsumption.findMany({
+          where: { tenantId, stockTransferItemId: item.id },
+          include: { batch: { select: { createdAt: true } } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+        const shippedQty = shippedLayers.reduce(
+          (sum, layer) => sum + Number(layer.quantity),
+          0,
+        );
+        if (Math.abs(shippedQty - requestedQty) > 0.0005) {
+          throw new BadRequestException(
+            `Jo'natilgan partiyalar (${shippedQty}) ko'chirish miqdoriga (${requestedQty}) mos emas`,
+          );
+        }
+        for (const [index, layer] of shippedLayers.entries()) {
+          await createFifoBatch(tx, {
+            tenantId,
+            warehouseId: transfer.targetWarehouseId,
+            productId: item.productId,
+            quantity: Number(layer.quantity),
+            unitCost: Number(layer.unitCost),
+            batchNumber: `${transfer.transferNumber}-${index + 1}`,
+            createdAt: layer.batch.createdAt,
+          });
+          totalCostValue += Number(layer.quantity) * Number(layer.unitCost);
+        }
       }
+      totalCostValue = Math.round(totalCostValue * 100) / 100;
 
       const received = await tx.stockTransfer.update({
         where: { id },

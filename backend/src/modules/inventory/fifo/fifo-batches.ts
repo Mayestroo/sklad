@@ -105,7 +105,8 @@ export function allocateFifoCost(
 export type BatchConsumptionSource =
   | { salesInvoiceItemId: string }
   | { purchaseReturnItemId: string }
-  | { inventoryDocumentItemId: string };
+  | { inventoryDocumentItemId: string }
+  | { stockTransferItemId: string };
 
 export interface ConsumeFifoParams {
   tenantId: string;
