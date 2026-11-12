@@ -7,14 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import {
-  ShieldCheck,
-  Lock,
-  Database,
-  FileCheck,
-  Server,
-  Activity,
-} from 'lucide-react';
+import { Database, Activity } from 'lucide-react';
 import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '@shared/types';
 
 export default function SecurityPage() {
@@ -30,7 +23,7 @@ export default function SecurityPage() {
     if (!token || !company) return;
     setLoading(true);
     try {
-      const logs = await apiFetch<any[]>('/super-admin/audit-logs', { token, tenantId: company.id, locale });
+      const logs = await apiFetch<any[]>('/audit-logs', { token, tenantId: company.id, locale });
       setAuditLogs(logs);
     } catch (err) {
       console.error(err);
@@ -52,59 +45,6 @@ export default function SecurityPage() {
             {isRu ? 'Безопасность и соответствие' : 'Xavfsizlik va muvofiqlik'}
           </h1>
         </div>
-      </div>
-
-      {/* Uzbekistan Lex ZRU-547 Compliance Badge Banner */}
-      <Card style={{ background: 'linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(22,163,74,0.02) 100%)', border: '1px solid var(--color-success-100)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-xl)', backgroundColor: 'var(--color-success-100)', color: 'var(--color-success-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <FileCheck size={24} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-                O&apos;zbekiston Respublikasi Shaxsiy Ma&apos;lumotlar Qonuniga (ZRU-547) To&apos;liq Mos
-              </h3>
-              <Badge variant="success">LEX ZRU-547 COMPLIANT</Badge>
-            </div>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-              Barcha client kompaniyalar ma&apos;lumotlari va server infratuzilmasi O&apos;zbekiston Respublikasi hududidagi (Tashkent Data Center) serverlarda xavfsiz saqlanadi hamda yillik 30 kunlik avtomatik zaxiralash siyosatiga egadir.
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Security Audit Checklist & Tokens */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
-        <Card style={{ borderLeft: '4px solid var(--color-primary-600)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
-            <ShieldCheck size={18} style={{ color: 'var(--color-primary-600)' }} />
-            <span>Tenant Isolation Middleware</span>
-          </div>
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '8px' }}>
-            Har bir Prisma ORM va SQL so&apos;roviga avtomatik <code>tenant_id</code> filtri biriktirilgan. Ma&apos;lumotlar sizib chiqish xavfi 0%.
-          </p>
-        </Card>
-
-        <Card style={{ borderLeft: '4px solid var(--color-success-600)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
-            <Lock size={18} style={{ color: 'var(--color-success-600)' }} />
-            <span>Bcrypt & JWT Encryption</span>
-          </div>
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '8px' }}>
-            Parollar bcrypt xeshlanishi bilan saqlanadi va JWT auth tokenlar 7 kunlik amal qilish muddati hamda RBAC rollar bilan himoyalangan.
-          </p>
-        </Card>
-
-        <Card style={{ borderLeft: '4px solid #8b5cf6' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
-            <Server size={18} style={{ color: '#8b5cf6' }} />
-            <span>Throttler Rate Limiting</span>
-          </div>
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '8px' }}>
-            DDoS hujumlaridan himoya qilish uchun har bir IP uchun minutiga maksimal 100 ta REST API so&apos;rovi cheklovi o&apos;rnatilgan.
-          </p>
-        </Card>
       </div>
 
       {loading ? (
@@ -158,7 +98,7 @@ export default function SecurityPage() {
                         <td style={{ padding: '12px', fontWeight: 'bold' }}>{log.user ? `${log.user.firstName} ${log.user.lastName}` : 'System'}</td>
                         <td style={{ padding: '12px' }}><Badge variant="neutral">{log.action}</Badge></td>
                         <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{log.entityType} ({log.entityId.slice(0, 8)}...)</td>
-                        <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{log.ipAddress || '127.0.0.1'}</td>
+                        <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{log.ipAddress || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
