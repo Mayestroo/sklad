@@ -6,21 +6,16 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { toast } from '@/context/ToastContext';
 import {
   ShieldCheck,
   Lock,
   Database,
-  Download,
-  RefreshCw,
   FileCheck,
   Server,
   Activity,
-  CheckCircle2,
 } from 'lucide-react';
-import { BackupMetadata } from '@shared/types';
+import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '@shared/types';
 
 export default function SecurityPage() {
   const tCommon = useTranslations('common');
@@ -28,20 +23,14 @@ export default function SecurityPage() {
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
-  const [backups, setBackups] = useState<BackupMetadata[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [backupLoading, setBackupLoading] = useState(false);
 
   const fetchSecurityData = async () => {
     if (!token || !company) return;
     setLoading(true);
     try {
-      const [b, logs] = await Promise.all([
-        apiFetch<BackupMetadata[]>('/super-admin/backups/history', { token, tenantId: company.id, locale }),
-        apiFetch<any[]>('/super-admin/audit-logs', { token, tenantId: company.id, locale }),
-      ]);
-      setBackups(b);
+      const logs = await apiFetch<any[]>('/super-admin/audit-logs', { token, tenantId: company.id, locale });
       setAuditLogs(logs);
     } catch (err) {
       console.error(err);
@@ -54,32 +43,6 @@ export default function SecurityPage() {
     fetchSecurityData();
   }, [token, company]);
 
-  const handleTriggerBackup = async () => {
-    if (!token || !company) return;
-    setBackupLoading(true);
-    try {
-      const res = await apiFetch<BackupMetadata>('/super-admin/backups/trigger', {
-        token,
-        tenantId: company.id,
-        locale,
-        method: 'POST',
-      });
-      toast.success(
-        locale === 'ru'
-          ? `Резервная копия PostgreSQL успешно создана: ${res.filename}`
-          : `PostgreSQL zaxira nusxasi shakllantirildi: ${res.filename}`
-      );
-      fetchSecurityData();
-    } catch (err: any) {
-      toast.error(
-        err.message ||
-          (locale === 'ru' ? 'Ошибка при создании резервной копии' : 'Zaxira nusxa yaratishda xatolik')
-      );
-    } finally {
-      setBackupLoading(false);
-    }
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Page Header */}
@@ -89,10 +52,6 @@ export default function SecurityPage() {
             {isRu ? 'Безопасность и соответствие' : 'Xavfsizlik va muvofiqlik'}
           </h1>
         </div>
-
-        <Button variant="primary" onClick={handleTriggerBackup} disabled={backupLoading}>
-          <Database size={16} /> {backupLoading ? 'Zaxiralanmoqda...' : 'Zahiraviy Nusxa Olish (PostgreSQL Dump)'}
-        </Button>
       </div>
 
       {/* Uzbekistan Lex ZRU-547 Compliance Badge Banner */}
@@ -154,51 +113,17 @@ export default function SecurityPage() {
         </div>
       ) : (
         <>
-          {/* Database Backups History Table */}
+          {/* Database backups are Neon's job, not the app's */}
           <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+              <Database size={18} style={{ color: 'var(--color-primary-600)' }} />
               <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-                PostgreSQL Zaxira Nusxalari Tarixi (Backup History)
+                {isRu ? 'Резервные копии' : 'Zaxira nusxalar'}
               </h3>
-              <Badge variant="info">30 KUNLIK RETENTION POLICY</Badge>
             </div>
-
-            {backups.length === 0 ? (
-              <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                Hozircha zaxira fayllari yaratilmagan. Yuqoridagi tugma orqali zaxira oling.
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                      <th style={{ padding: '12px' }}>FAYL NOMI</th>
-                      <th style={{ padding: '12px' }}>HACMI (BYTES)</th>
-                      <th style={{ padding: '12px' }}>YARATILGAN SANA</th>
-                      <th style={{ padding: '12px', textAlign: 'center' }}>HOLATI</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {backups.map((b, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                        <td style={{ padding: '12px', fontWeight: 'bold', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
-                          {b.filename}
-                        </td>
-                        <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                          {(b.sizeBytes / 1024).toFixed(2)} KB
-                        </td>
-                        <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                          {formatDate(b.createdAt, locale)}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          <Badge variant="success">COMPLETED</Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {BACKUPS_MANAGED_BY_NEON_MESSAGE[locale]}
+            </p>
           </Card>
 
           {/* Audit Logs Trail Table */}

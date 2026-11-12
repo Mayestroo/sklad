@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  NotImplementedException,
+} from '@nestjs/common';
+import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '../../../../shared/types';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { SuperAdminService } from './super-admin.service';
@@ -297,6 +302,36 @@ describe('SuperAdminService', () => {
       expect(result.tokens.accessToken).toBeDefined();
       expect(result.user.email).toBe('admin@test.uz');
       expect((result as any).isImpersonated).toBe(true);
+    });
+  });
+
+  describe('backups', () => {
+    // Backups come from Neon (PITR, branch snapshots). The app must never
+    // claim it took one.
+    it.each(['uz', 'ru'] as const)(
+      'trigger answers 501 and never reports COMPLETED (%s)',
+      (locale) => {
+        let thrown: unknown;
+        let returned: unknown;
+        try {
+          returned = service.triggerBackup(locale);
+        } catch (err) {
+          thrown = err;
+        }
+
+        expect(returned).toBeUndefined();
+        expect(thrown).toBeInstanceOf(NotImplementedException);
+        const exception = thrown as NotImplementedException;
+        expect(exception.getStatus()).toBe(501);
+        expect(exception.message).toBe(BACKUPS_MANAGED_BY_NEON_MESSAGE[locale]);
+        expect(JSON.stringify(exception.getResponse())).not.toContain(
+          'COMPLETED',
+        );
+      },
+    );
+
+    it('history lists no backup files', () => {
+      expect(service.getBackupHistory()).toEqual([]);
     });
   });
 });

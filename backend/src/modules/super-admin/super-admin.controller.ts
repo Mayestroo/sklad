@@ -6,6 +6,7 @@ import {
   Param,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { SuperAdminService } from './super-admin.service';
@@ -73,8 +74,8 @@ export class SuperAdminController {
   }
 
   @Post('backups/trigger')
-  triggerBackup() {
-    return this.superAdminService.triggerBackup();
+  triggerBackup(@Req() req: { locale?: string }) {
+    return this.superAdminService.triggerBackup(req.locale ?? 'uz');
   }
 
   @Get('backups/history')

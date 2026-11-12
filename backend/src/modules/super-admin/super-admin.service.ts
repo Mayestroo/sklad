@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  NotImplementedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
 import {
@@ -10,11 +11,10 @@ import {
   TenantCompanySummary,
   CreatedTenantSummary,
   BackupMetadata,
+  BACKUPS_MANAGED_BY_NEON_MESSAGE,
   TranslatableField,
 } from '../../../../shared/types';
 import { randomBytes } from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
 import * as bcrypt from 'bcrypt';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -432,56 +432,21 @@ export class SuperAdminService {
     return msg;
   }
 
-  triggerBackup(): BackupMetadata {
-    const backupDir = path.join(__dirname, '..', '..', '..', 'backups');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `crm_backup_${timestamp}.sql`;
-    const filePath = path.join(backupDir, filename);
-
-    const content = `-- PostgreSQL Database Dump
--- CRM SaaS Platform (Uzbekistan Lex ZRU-547 Compliant Backup)
--- Timestamp: ${new Date().toISOString()}
-
-CREATE DATABASE IF NOT EXISTS crm_db;
--- Dump Completed Successfully.
-`;
-
-    fs.writeFileSync(filePath, content, 'utf8');
-
-    return {
-      filename,
-      sizeBytes: Buffer.byteLength(content, 'utf8'),
-      createdAt: new Date().toISOString(),
-      status: 'COMPLETED',
-    };
+  /**
+   * Backups come from Neon (point-in-time restore, branch snapshots), not from
+   * the application. Answer 501 instead of pretending a dump was taken.
+   */
+  triggerBackup(locale: string): never {
+    const message =
+      locale === 'ru'
+        ? BACKUPS_MANAGED_BY_NEON_MESSAGE.ru
+        : BACKUPS_MANAGED_BY_NEON_MESSAGE.uz;
+    throw new NotImplementedException(message);
   }
 
+  /** The application keeps no backup files, so there is nothing to list. */
   getBackupHistory(): BackupMetadata[] {
-    const backupDir = path.join(__dirname, '..', '..', '..', 'backups');
-    if (!fs.existsSync(backupDir)) {
-      return [];
-    }
-
-    const files = fs.readdirSync(backupDir);
-    return files
-      .filter((f) => f.endsWith('.sql'))
-      .map((filename) => {
-        const stat = fs.statSync(path.join(backupDir, filename));
-        return {
-          filename,
-          sizeBytes: stat.size,
-          createdAt: stat.birthtime.toISOString(),
-          status: 'COMPLETED' as const,
-        };
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
+    return [];
   }
 
   async getAuditLogs(tenantId?: string) {

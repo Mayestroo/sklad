@@ -55,6 +55,15 @@ export interface SupportTicket {
   messages?: TicketMessage[];
 }
 
+/**
+ * The application does not take database backups. The database runs on Neon,
+ * whose point-in-time restore and branch snapshots are the backup mechanism.
+ */
+export const BACKUPS_MANAGED_BY_NEON_MESSAGE = {
+  uz: "Ma'lumotlar bazasi zaxirasi ilova tomonidan olinmaydi. Zaxiralash Neon platformasida: vaqt nuqtasiga tiklash (point-in-time restore) va branch snapshotlari orqali amalga oshiriladi.",
+  ru: 'Приложение не создаёт резервные копии базы данных. Резервное копирование выполняется в Neon: восстановление на момент времени (point-in-time restore) и снапшоты веток (branch snapshots).',
+} as const;
+
 export interface BackupMetadata {
   filename: string;
   sizeBytes: number;
