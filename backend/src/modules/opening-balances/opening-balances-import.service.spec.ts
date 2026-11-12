@@ -63,4 +63,56 @@ describe('OpeningBalancesImportService', () => {
       ]),
     );
   });
+
+  it('reads formula, rich-text and hyperlink cells as the value the user sees', async () => {
+    const prisma = {
+      cashAccount: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'cash-uzs',
+            accountType: 'UZS_CASH',
+            currency: 'UZS',
+            name: { uz: 'Naqd kassa', ru: 'Наличная касса' },
+          },
+        ]),
+      },
+      product: { findMany: jest.fn().mockResolvedValue([]) },
+      warehouse: { findMany: jest.fn().mockResolvedValue([]) },
+      counterparty: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new OpeningBalancesImportService(
+      prisma as unknown as PrismaService,
+    );
+    const workbook = new ExcelJS.Workbook();
+    const cashSheet = workbook.addWorksheet('1_Pul');
+    cashSheet.addRow(['Nomi', 'Valyuta', 'Summa', 'Kurs', 'Izoh']);
+    const row = cashSheet.addRow([]);
+    row.getCell(1).value = {
+      richText: [{ text: 'Naqd ' }, { font: { bold: true }, text: 'kassa' }],
+    };
+    row.getCell(2).value = { formula: '"UZ"&"S"', result: 'UZS' };
+    row.getCell(3).value = { formula: '50000*2', result: 100000 };
+    row.getCell(4).value = 1;
+    row.getCell(5).value = {
+      text: 'opening note',
+      hyperlink: 'https://example.com/note',
+    };
+    const file = Buffer.from(await workbook.xlsx.writeBuffer());
+
+    const result = await service.validateAndParse(
+      'tenant-1',
+      file,
+      'opening.xlsx',
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.previewLines).toEqual([
+      expect.objectContaining({
+        accountId: 'cash-uzs',
+        currency: 'UZS',
+        amount: 100000,
+        notes: 'opening note',
+      }),
+    ]);
+  });
 });

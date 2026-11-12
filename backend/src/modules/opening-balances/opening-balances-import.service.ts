@@ -16,6 +16,30 @@ export interface ImportErrorItem {
   errorMessage: string;
 }
 
+/** A cell value as the user sees it in Excel. */
+type PlainCellValue = string | number | boolean | Date | null;
+
+/**
+ * Unwraps formula results, rich text and hyperlink text, so a cell holding
+ * `=A1*2` or bold text reads as its displayed value. Error cells read as empty.
+ */
+export function plainCellValue(value: ExcelJS.CellValue): PlainCellValue {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'object' || value instanceof Date) return value;
+  if ('richText' in value) {
+    return value.richText.map((part) => part.text).join('');
+  }
+  if ('hyperlink' in value) return value.text;
+  if ('formula' in value || 'sharedFormula' in value) {
+    return plainCellValue(value.result ?? null);
+  }
+  return null;
+}
+
+function cellValue(row: ExcelJS.Row, column: number): PlainCellValue {
+  return plainCellValue(row.getCell(column).value);
+}
+
 /** A `{ uz, ru }` JSON name column as read back from the database. */
 type TranslatableName = { uz?: string; ru?: string };
 
@@ -36,7 +60,7 @@ export class OpeningBalancesImportService {
     sheetName: string,
     rowNumber: number,
     currency: string,
-    rawRate: unknown,
+    rawRate: PlainCellValue,
     errors: ImportErrorItem[],
   ): number | null {
     if (currency === 'UZS') return 1;
@@ -272,19 +296,19 @@ export class OpeningBalancesImportService {
     if (sheetPul) {
       sheetPul.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
-        const accountName = String(row.getCell(1).value || '').trim();
-        const currency = String(row.getCell(2).value || 'UZS')
+        const accountName = String(cellValue(row, 1) || '').trim();
+        const currency = String(cellValue(row, 2) || 'UZS')
           .trim()
           .toUpperCase();
-        const rawAmount = row.getCell(3).value;
+        const rawAmount = cellValue(row, 3);
         const exchangeRate = this.parseExchangeRate(
           '1_Pul',
           rowNumber,
           currency,
-          row.getCell(4).value,
+          cellValue(row, 4),
           errors,
         );
-        const notes = String(row.getCell(5).value || '').trim();
+        const notes = String(cellValue(row, 5) || '').trim();
 
         if (!accountName && !rawAmount) return; // Skip empty row
         totalRows++;
@@ -378,13 +402,13 @@ export class OpeningBalancesImportService {
     if (sheetTovar) {
       sheetTovar.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const sku = String(row.getCell(1).value || '').trim();
-        const productName = String(row.getCell(2).value || '').trim();
-        const warehouseName = String(row.getCell(3).value || '').trim();
-        const rawQty = row.getCell(4).value;
-        const rawCost = row.getCell(5).value;
-        const batchNumber = String(row.getCell(6).value || '').trim();
-        const notes = String(row.getCell(7).value || '').trim();
+        const sku = String(cellValue(row, 1) || '').trim();
+        const productName = String(cellValue(row, 2) || '').trim();
+        const warehouseName = String(cellValue(row, 3) || '').trim();
+        const rawQty = cellValue(row, 4);
+        const rawCost = cellValue(row, 5);
+        const batchNumber = String(cellValue(row, 6) || '').trim();
+        const notes = String(cellValue(row, 7) || '').trim();
 
         if (!sku && !rawQty) return;
         totalRows++;
@@ -478,20 +502,20 @@ export class OpeningBalancesImportService {
     if (sheetMijoz) {
       sheetMijoz.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const customerIdent = String(row.getCell(1).value || '').trim();
-        const contract = String(row.getCell(2).value || '').trim();
-        const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS')
+        const customerIdent = String(cellValue(row, 1) || '').trim();
+        const contract = String(cellValue(row, 2) || '').trim();
+        const rawAmount = cellValue(row, 3);
+        const currency = String(cellValue(row, 4) || 'UZS')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(
           '3_Mijozlar',
           rowNumber,
           currency,
-          row.getCell(5).value,
+          cellValue(row, 5),
           errors,
         );
-        const notes = String(row.getCell(6).value || '').trim();
+        const notes = String(cellValue(row, 6) || '').trim();
 
         if (!customerIdent && !rawAmount) return;
         totalRows++;
@@ -555,20 +579,20 @@ export class OpeningBalancesImportService {
     if (sheetTaminot) {
       sheetTaminot.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const suppIdent = String(row.getCell(1).value || '').trim();
-        const contract = String(row.getCell(2).value || '').trim();
-        const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS')
+        const suppIdent = String(cellValue(row, 1) || '').trim();
+        const contract = String(cellValue(row, 2) || '').trim();
+        const rawAmount = cellValue(row, 3);
+        const currency = String(cellValue(row, 4) || 'UZS')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(
           '4_Yetkazib_beruvchilar',
           rowNumber,
           currency,
-          row.getCell(5).value,
+          cellValue(row, 5),
           errors,
         );
-        const notes = String(row.getCell(6).value || '').trim();
+        const notes = String(cellValue(row, 6) || '').trim();
 
         if (!suppIdent && !rawAmount) return;
         totalRows++;
@@ -632,22 +656,22 @@ export class OpeningBalancesImportService {
     if (sheetAvans) {
       sheetAvans.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const cpIdent = String(row.getCell(1).value || '').trim();
-        const typeStr = String(row.getCell(2).value || 'MIJOZ_AVANSI')
+        const cpIdent = String(cellValue(row, 1) || '').trim();
+        const typeStr = String(cellValue(row, 2) || 'MIJOZ_AVANSI')
           .trim()
           .toUpperCase();
-        const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS')
+        const rawAmount = cellValue(row, 3);
+        const currency = String(cellValue(row, 4) || 'UZS')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(
           '5_Avanslar',
           rowNumber,
           currency,
-          row.getCell(5).value,
+          cellValue(row, 5),
           errors,
         );
-        const notes = String(row.getCell(6).value || '').trim();
+        const notes = String(cellValue(row, 6) || '').trim();
 
         if (!cpIdent && !rawAmount) return;
         totalRows++;
@@ -713,11 +737,11 @@ export class OpeningBalancesImportService {
     if (sheetAsosiy) {
       sheetAsosiy.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const name = String(row.getCell(1).value || '').trim();
-        const invNumber = String(row.getCell(2).value || '').trim();
-        const rawCost = row.getCell(4).value;
-        const rawDep = row.getCell(5).value || 0;
-        const notes = String(row.getCell(7).value || '').trim();
+        const name = String(cellValue(row, 1) || '').trim();
+        const invNumber = String(cellValue(row, 2) || '').trim();
+        const rawCost = cellValue(row, 4);
+        const rawDep = cellValue(row, 5) || 0;
+        const notes = String(cellValue(row, 7) || '').trim();
 
         if (!name && !rawCost) return;
         totalRows++;
@@ -767,22 +791,22 @@ export class OpeningBalancesImportService {
     if (sheetBoshqa) {
       sheetBoshqa.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const typeStr = String(row.getCell(1).value || 'KAPITAL')
+        const typeStr = String(cellValue(row, 1) || 'KAPITAL')
           .trim()
           .toUpperCase();
-        const title = String(row.getCell(2).value || '').trim();
-        const rawAmount = row.getCell(3).value;
-        const currency = String(row.getCell(4).value || 'UZS')
+        const title = String(cellValue(row, 2) || '').trim();
+        const rawAmount = cellValue(row, 3);
+        const currency = String(cellValue(row, 4) || 'UZS')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(
           '7_Boshqa_qoldiqlar',
           rowNumber,
           currency,
-          row.getCell(5).value,
+          cellValue(row, 5),
           errors,
         );
-        const notes = String(row.getCell(6).value || '').trim();
+        const notes = String(cellValue(row, 6) || '').trim();
 
         if (!rawAmount) return;
         totalRows++;
