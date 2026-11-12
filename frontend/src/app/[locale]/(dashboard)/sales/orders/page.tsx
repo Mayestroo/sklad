@@ -40,6 +40,8 @@ import { apiFetch } from '@/lib/api';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 
+const ORDERS_PAGE_SIZE = 50;
+
 interface CounterpartyItem {
   id: string;
   name: string;
@@ -95,6 +97,7 @@ export default function SalesOrdersPage() {
   const [search, setSearch] = useState('');
   const [counterpartyId, setCounterpartyId] = useState('');
   const [status, setStatus] = useState('');
+  const [pageSize, setPageSize] = useState(ORDERS_PAGE_SIZE);
   const [paymentStatus, setPaymentStatus] = useState('');
   const [assignedSellerId, setAssignedSellerId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -248,25 +251,24 @@ export default function SalesOrdersPage() {
     if (assignedSellerId) query.append('assignedSellerId', assignedSellerId);
     if (dateFrom) query.append('dateFrom', dateFrom);
     if (dateTo) query.append('dateTo', dateTo);
+    query.append('take', String(pageSize));
     return `/sales/orders?${query.toString()}`;
-  }, [token, company, search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo]);
+  }, [token, company, search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo, pageSize]);
 
   const {
     data: rawOrders,
     loading,
     refetch: fetchOrders,
-  } = useApiData<OrderItemSummary[] | { data: OrderItemSummary[] }>(ordersEndpoint, {
+  } = useApiData<{ data: OrderItemSummary[]; total: number }>(ordersEndpoint, {
     staleTime: 10000,
     token: token || undefined,
     tenantId: company?.id,
     locale,
   });
 
-  const orders: OrderItemSummary[] = useMemo(() => {
-    if (!rawOrders) return [];
-    if (Array.isArray(rawOrders)) return rawOrders;
-    return (rawOrders as { data: OrderItemSummary[] }).data || [];
-  }, [rawOrders]);
+  // GET /sales/orders returns { data, total, page, pageSize }
+  const orders: OrderItemSummary[] = rawOrders?.data ?? [];
+  const totalOrders = rawOrders?.total ?? 0;
 
   const handleApplyFilter = () => {
     fetchOrders();
@@ -737,6 +739,16 @@ export default function SalesOrdersPage() {
                 })}
               </tbody>
             </table>
+            {orders.length < totalOrders && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? `Показано ${orders.length} из ${totalOrders}` : `${totalOrders} tadan ${orders.length} tasi ko‘rsatilmoqda`}
+                </span>
+                <Button variant="secondary" size="sm" onClick={() => setPageSize((n) => n + ORDERS_PAGE_SIZE)}>
+                  {isRu ? 'Показать ещё' : 'Yana ko‘rsatish'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>

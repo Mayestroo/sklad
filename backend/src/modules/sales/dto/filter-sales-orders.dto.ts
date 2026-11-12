@@ -1,3 +1,4 @@
+import { SalesOrderStatus } from '@prisma/client';
 import {
   IsDateString,
   IsEnum,
@@ -26,24 +27,10 @@ export class FilterSalesOrdersDto {
   @IsDateString()
   dateTo?: string;
 
+  // Validated against the Prisma enum so the API accepts every status the UI offers.
   @IsOptional()
-  @IsEnum([
-    'NEW',
-    'PENDING_APPROVAL',
-    'APPROVED',
-    'SENT_TO_PRODUCTION',
-    'IN_PRODUCTION',
-    'PARTIALLY_READY',
-    'READY',
-    'AWAITING_PAYMENT',
-    'PAYMENT_CONFIRMED',
-    'READY_TO_SHIP',
-    'PARTIALLY_SHIPPED',
-    'SHIPPED',
-    'COMPLETED',
-    'CANCELLED',
-  ])
-  status?: string;
+  @IsEnum(SalesOrderStatus)
+  status?: SalesOrderStatus;
 
   @IsOptional()
   @IsString()

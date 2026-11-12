@@ -232,6 +232,18 @@ export class SalesOrdersService {
       where.items = { some: { productId: filters.productId } };
     }
 
+    // Payment status is derived from paidAmount vs totalAmount; filter in SQL so
+    // that paging and total describe the same set of orders.
+    const totalAmountField = this.prisma.salesOrder.fields.totalAmount;
+    if (filters.paymentStatus === 'PAID') {
+      where.totalAmount = { gt: 0 };
+      where.paidAmount = { gte: totalAmountField };
+    } else if (filters.paymentStatus === 'PARTIALLY_PAID') {
+      where.paidAmount = { gt: 0, lt: totalAmountField };
+    } else if (filters.paymentStatus === 'UNPAID') {
+      where.paidAmount = 0;
+    }
+
     const orders = await this.prisma.salesOrder.findMany({
       where,
       include: this.buildOrderInclude(),
@@ -242,18 +254,7 @@ export class SalesOrdersService {
 
     const total = await this.prisma.salesOrder.count({ where });
 
-    let enriched = orders.map((o) => this.enrichOrder(o));
-
-    if (filters.paymentStatus) {
-      enriched = enriched.filter((o) => {
-        const paid = Number(o.paidAmount);
-        const tot = Number(o.totalAmount);
-        if (filters.paymentStatus === 'PAID') return paid >= tot && tot > 0;
-        if (filters.paymentStatus === 'PARTIALLY_PAID') return paid > 0 && paid < tot;
-        if (filters.paymentStatus === 'UNPAID') return paid === 0;
-        return true;
-      });
-    }
+    const enriched = orders.map((o) => this.enrichOrder(o));
 
     return {
       data: enriched,
@@ -266,73 +267,48 @@ export class SalesOrdersService {
   // ─── STATS / PIPELINE COUNTERS ────────────────────────────────
 
   async getStats(tenantId: string) {
-    const [
-      newCount,
-      pendingApprovalCount,
-      approvedCount,
-      sentToProdCount,
-      inProdCount,
-      partiallyReadyCount,
-      readyCount,
-      awaitingPaymentCount,
-      paymentConfirmedCount,
-      readyToShipCount,
-      partiallyShippedCount,
-      shippedCount,
-      completedCount,
-      cancelledCount,
-      financials,
-    ] = await Promise.all([
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.NEW } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.PENDING_APPROVAL } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.APPROVED } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.SENT_TO_PRODUCTION } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.IN_PRODUCTION } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.PARTIALLY_READY } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.READY } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.AWAITING_PAYMENT } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.PAYMENT_CONFIRMED } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.READY_TO_SHIP } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.PARTIALLY_SHIPPED } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.SHIPPED } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.COMPLETED } }),
-      this.prisma.salesOrder.count({ where: { tenantId, status: SalesOrderStatus.CANCELLED } }),
+    const [byStatus, financials] = await Promise.all([
+      this.prisma.salesOrder.groupBy({
+        by: ['status'],
+        where: { tenantId },
+        _count: { _all: true },
+      }),
       this.prisma.salesOrder.aggregate({
         where: { tenantId, status: { not: SalesOrderStatus.CANCELLED } },
         _sum: { totalAmount: true, paidAmount: true },
       }),
     ]);
 
-    const totalOrdersAmount = Number(financials._sum.totalAmount || 0);
-    const totalCollectedAmount = Number(financials._sum.paidAmount || 0);
+    const counts = new Map(byStatus.map((row) => [row.status, row._count._all]));
+    const count = (...statuses: SalesOrderStatus[]) =>
+      statuses.reduce((sum, status) => sum + (counts.get(status) ?? 0), 0);
+    const S = SalesOrderStatus;
+    const finished: SalesOrderStatus[] = [S.SHIPPED, S.COMPLETED, S.CANCELLED];
+
+    const totalOrdersAmount = Number(financials._sum.totalAmount ?? 0);
+    const totalCollectedAmount = Number(financials._sum.paidAmount ?? 0);
 
     return {
-      new: newCount,
-      pendingApproval: pendingApprovalCount,
-      approved: approvedCount,
-      sentToProduction: sentToProdCount,
-      inProduction: inProdCount,
-      partiallyReady: partiallyReadyCount,
-      ready: readyCount,
-      awaitingPayment: awaitingPaymentCount,
-      paymentConfirmed: paymentConfirmedCount,
-      readyToShip: readyToShipCount,
-      partiallyShipped: partiallyShippedCount,
-      shipped: shippedCount,
-      completed: completedCount,
-      cancelled: cancelledCount,
-      activeOrders:
-        newCount +
-        pendingApprovalCount +
-        approvedCount +
-        sentToProdCount +
-        inProdCount +
-        partiallyReadyCount +
-        readyCount +
-        awaitingPaymentCount +
-        paymentConfirmedCount +
-        readyToShipCount +
-        partiallyShippedCount,
+      new: count(S.NEW),
+      pendingApproval: count(S.PENDING_APPROVAL),
+      approved: count(S.APPROVED),
+      accepted: count(S.ACCEPTED),
+      processing: count(S.PROCESSING),
+      sentToProduction: count(S.SENT_TO_PRODUCTION),
+      inProduction: count(S.IN_PRODUCTION),
+      partiallyReady: count(S.PARTIALLY_READY),
+      ready: count(S.READY),
+      awaitingPayment: count(S.AWAITING_PAYMENT),
+      paymentConfirmed: count(S.PAYMENT_CONFIRMED),
+      // Both statuses mean "ready to ship" (sales flow vs warehouse flow, ADR 0018)
+      readyToShip: count(S.READY_TO_SHIP, S.READY_FOR_SHIPMENT),
+      partiallyShipped: count(S.PARTIALLY_SHIPPED),
+      shipped: count(S.SHIPPED),
+      completed: count(S.COMPLETED),
+      cancelled: count(S.CANCELLED),
+      activeOrders: count(
+        ...Object.values(S).filter((status) => !finished.includes(status)),
+      ),
       totalOrdersAmount,
       totalCollectedAmount,
       outstandingAmount: Math.max(0, totalOrdersAmount - totalCollectedAmount),
