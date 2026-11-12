@@ -396,7 +396,7 @@ export class SalesInvoicesService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.salesInvoice.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
@@ -571,7 +571,7 @@ export class SalesInvoicesService {
       // 2. Update each item with COGS data
       for (const itemUpdate of updatedItemData) {
         await tx.salesInvoiceItem.update({
-          where: { id: itemUpdate.id },
+          where: { invoice: { tenantId }, id: itemUpdate.id },
           data: {
             unitCogs: itemUpdate.unitCogs,
             lineCogs: itemUpdate.lineCogs,
@@ -691,7 +691,7 @@ export class SalesInvoicesService {
 
       // 6. Update invoice header
       return tx.salesInvoice.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: SalesDocStatus.POSTED,
           totalCogs,
@@ -751,7 +751,7 @@ export class SalesInvoicesService {
 
         if (stockLevel) {
           await tx.stockLevel.update({
-            where: { id: stockLevel.id },
+            where: { tenantId, id: stockLevel.id },
             data: { quantity: { increment: item.quantity } },
           });
         }
@@ -759,22 +759,18 @@ export class SalesInvoicesService {
 
       // Restore product batches from batch consumptions
       const consumptions = await tx.batchConsumption.findMany({
-        where: {
-          salesInvoiceItem: { invoiceId: id },
-        },
+        where: { tenantId, salesInvoiceItem: { invoiceId: id } },
       });
 
       for (const c of consumptions) {
         await tx.productBatch.update({
-          where: { id: c.batchId },
+          where: { tenantId, id: c.batchId },
           data: { remainingQty: { increment: c.quantity } },
         });
       }
 
       await tx.batchConsumption.deleteMany({
-        where: {
-          salesInvoiceItem: { invoiceId: id },
-        },
+        where: { tenantId, salesInvoiceItem: { invoiceId: id } },
       });
 
       // Reverse the receivable without deleting its original ledger movement.
@@ -798,7 +794,7 @@ export class SalesInvoicesService {
 
       // Reset COGS fields
       await tx.salesInvoiceItem.updateMany({
-        where: { invoiceId: id },
+        where: { invoice: { tenantId }, invoiceId: id },
         data: {
           unitCogs: 0,
           lineCogs: 0,
@@ -820,7 +816,7 @@ export class SalesInvoicesService {
       });
 
       return tx.salesInvoice.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: SalesDocStatus.DRAFT,
           totalCogs: 0,
@@ -852,7 +848,7 @@ export class SalesInvoicesService {
         "Faqat qoralama yoki bekor qilingan holatdagi hujjatlarni o'chirish mumkin",
       );
     }
-    await this.prisma.salesInvoice.delete({ where: { id } });
+    await this.prisma.salesInvoice.delete({ where: { tenantId, id } });
     return { success: true, message: "Sotuv hujjati o'chirildi" };
   }
 
@@ -1128,7 +1124,7 @@ export class SalesInvoicesService {
       let salesReturn;
       if (params.existingReturnId) {
         salesReturn = await tx.salesReturn.update({
-          where: { id: params.existingReturnId },
+          where: { tenantId, id: params.existingReturnId },
           data: {
             status: SalesReturnDocStatus.POSTED,
           },
@@ -1193,7 +1189,7 @@ export class SalesInvoicesService {
 
         if (stockLevel) {
           await tx.stockLevel.update({
-            where: { id: stockLevel.id },
+            where: { tenantId, id: stockLevel.id },
             data: { quantity: { increment: item.quantity } },
           });
         } else {
@@ -1252,7 +1248,7 @@ export class SalesInvoicesService {
               ? SalesReturnStatus.FULLY_RETURNED
               : SalesReturnStatus.PARTIALLY_RETURNED;
           await tx.salesInvoice.update({
-            where: { id: params.invoiceId },
+            where: { tenantId, id: params.invoiceId },
             data: { returnStatus: newReturnStatus },
           });
         }
@@ -1480,7 +1476,7 @@ export class SalesInvoicesService {
 
     if (existing.status === SalesReturnDocStatus.DRAFT) {
       return this.prisma.salesReturn.update({
-        where: { id: returnId },
+        where: { tenantId, id: returnId },
         data: { status: SalesReturnDocStatus.CANCELLED },
       });
     }
@@ -1533,7 +1529,7 @@ export class SalesInvoicesService {
 
         // Deduct returned stock
         await tx.stockLevel.update({
-          where: { id: stockLevel.id },
+          where: { tenantId, id: stockLevel.id },
           data: { quantity: { decrement: Number(item.quantity) } },
         });
 
@@ -1553,7 +1549,7 @@ export class SalesInvoicesService {
               'Qaytarilgan partiyadan tovar sarflangan, bekor qilish mumkin emas',
             );
           }
-          await tx.productBatch.delete({ where: { id: batch.id } });
+          await tx.productBatch.delete({ where: { tenantId, id: batch.id } });
         }
       }
 
@@ -1596,7 +1592,7 @@ export class SalesInvoicesService {
                 ? SalesReturnStatus.FULLY_RETURNED
                 : SalesReturnStatus.PARTIALLY_RETURNED;
           await tx.salesInvoice.update({
-            where: { id: existing.invoiceId },
+            where: { tenantId, id: existing.invoiceId },
             data: { returnStatus: newStatus },
           });
         }
@@ -1637,7 +1633,7 @@ export class SalesInvoicesService {
       }
 
       const cancelledReturn = await tx.salesReturn.update({
-        where: { id: returnId },
+        where: { tenantId, id: returnId },
         data: { status: SalesReturnDocStatus.CANCELLED },
       });
 
@@ -1675,11 +1671,11 @@ export class SalesInvoicesService {
     }
 
     await this.prisma.salesReturnItem.deleteMany({
-      where: { returnId },
+      where: { return: { tenantId }, returnId },
     });
 
     await this.prisma.salesReturn.delete({
-      where: { id: returnId },
+      where: { tenantId, id: returnId },
     });
 
     await this.prisma.auditLog.create({
@@ -1775,9 +1771,13 @@ export class SalesInvoicesService {
       where: { id: priceListId, tenantId },
     });
     if (!pl) throw new NotFoundException('Narx jadvali topilmadi');
+    await this.assertTenantProducts(tenantId, [productId]);
 
     return this.prisma.productPrice.upsert({
-      where: { priceListId_productId: { priceListId, productId } },
+      where: {
+        priceList: { tenantId },
+        priceListId_productId: { priceListId, productId },
+      },
       update: { price },
       create: { priceListId, productId, price },
       include: { product: true },
@@ -1807,7 +1807,7 @@ export class SalesInvoicesService {
     }
 
     return this.prisma.priceList.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
         ...(data.name ? { name: data.name } : {}),
         ...(data.currency ? { currency: data.currency } : {}),
@@ -1838,13 +1838,13 @@ export class SalesInvoicesService {
       pl._count.counterparties > 0
     ) {
       return this.prisma.priceList.update({
-        where: { id },
+        where: { tenantId, id },
         data: { isActive: false },
       });
     }
 
     return this.prisma.priceList.delete({
-      where: { id },
+      where: { tenantId, id },
     });
   }
 
@@ -1857,6 +1857,10 @@ export class SalesInvoicesService {
       where: { id: priceListId, tenantId },
     });
     if (!pl) throw new NotFoundException('Narx jadvali topilmadi');
+    await this.assertTenantProducts(
+      tenantId,
+      items.map((item) => item.productId),
+    );
 
     const results = [];
     for (const item of items) {
@@ -1865,6 +1869,7 @@ export class SalesInvoicesService {
 
       const updated = await this.prisma.productPrice.upsert({
         where: {
+          priceList: { tenantId },
           priceListId_productId: { priceListId, productId: item.productId },
         },
         update: { price: priceVal },
@@ -1874,6 +1879,20 @@ export class SalesInvoicesService {
       results.push(updated);
     }
     return results;
+  }
+
+  /**
+   * A price row links a price list to a product; both must be the caller's,
+   * or the row (and its included product) exposes another tenant's product.
+   */
+  private async assertTenantProducts(tenantId: string, productIds: string[]) {
+    const ids = [...new Set(productIds)];
+    const found = await this.prisma.product.count({
+      where: { tenantId, id: { in: ids } },
+    });
+    if (found !== ids.length) {
+      throw new NotFoundException('Tovar topilmadi');
+    }
   }
 
   private convertSalePriceCurrency(
@@ -2030,6 +2049,7 @@ export class SalesInvoicesService {
 
     const customPrice = await this.prisma.productPrice.findUnique({
       where: {
+        priceList: { tenantId },
         priceListId_productId: { priceListId: targetPriceListId, productId },
       },
     });

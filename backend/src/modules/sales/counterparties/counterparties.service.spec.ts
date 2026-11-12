@@ -201,7 +201,7 @@ describe('CounterpartiesService', () => {
       const result = await service.deleteFolder(tenantId, folderId);
       expect(result).toEqual({ id: folderId });
       expect(mockPrisma.counterpartyFolder.delete).toHaveBeenCalledWith({
-        where: { id: folderId },
+        where: { tenantId: 'tenant-1', id: folderId },
       });
     });
   });
@@ -520,7 +520,7 @@ describe('CounterpartiesService', () => {
       const result = await service.delete(tenantId, id);
       expect(result.success).toBe(true);
       expect(mockPrisma.counterparty.delete).toHaveBeenCalledWith({
-        where: { id },
+        where: { tenantId: 'tenant-1', id },
       });
     });
 

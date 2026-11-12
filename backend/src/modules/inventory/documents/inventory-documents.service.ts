@@ -122,7 +122,7 @@ export class InventoryDocumentsService {
             unitPrice = allocation.unitCost;
             lineTotal = allocation.totalCost;
             await tx.inventoryDocumentItem.update({
-              where: { id: line.id },
+              where: { document: { tenantId }, id: line.id },
               data: { unitPrice, totalPrice: lineTotal },
             });
           }
@@ -148,7 +148,7 @@ export class InventoryDocumentsService {
       }
 
       const posted = await tx.inventoryDocument.update({
-        where: { id: doc.id },
+        where: { tenantId, id: doc.id },
         data: { totalAmount: Math.round(totalAmount * 100) / 100 },
         include: {
           items: {

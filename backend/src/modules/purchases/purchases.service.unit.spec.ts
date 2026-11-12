@@ -335,7 +335,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       // Item 1 gets 60% = 60,000; Landed cost = (600,000 + 60,000) / 6 = 110,000
       expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-1' },
+        where: {
+          receipt: { tenantId: 'tenant-123' },
+          id: 'item-1',
+        },
         data: {
           allocatedExpenses: 60000,
           landedCost: 110000,
@@ -344,7 +347,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       // Item 2 gets 40% = 40,000; Landed cost = (400,000 + 40,000) / 4 = 110,000
       expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-2' },
+        where: { receipt: { tenantId: 'tenant-123' }, id: 'item-2' },
         data: {
           allocatedExpenses: 40000,
           landedCost: 110000,
@@ -403,7 +406,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       // Item 1 gets 8/10 * 50k = 40,000
       expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-1' },
+        where: {
+          receipt: { tenantId: 'tenant-123' },
+          id: 'item-1',
+        },
         data: {
           allocatedExpenses: 40000,
           landedCost: (400000 + 40000) / 8, // 55,000
@@ -412,7 +418,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       // Item 2 gets 2/10 * 50k = 10,000
       expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-2' },
+        where: { receipt: { tenantId: 'tenant-123' }, id: 'item-2' },
         data: {
           allocatedExpenses: 10000,
           landedCost: (100000 + 10000) / 2, // 55,000
@@ -478,7 +484,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       // 1. Stock increased by 10
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-1' },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'stock-1',
+        },
         data: { quantity: { increment: 10 } },
       });
 
@@ -696,17 +705,20 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       // Stock updated for prod-1 (10 -> 8) and raw-1 (20 -> 15), NOT for srv-1
       expect(prisma.stockLevel.update).toHaveBeenCalledTimes(2);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-prod' },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'stock-prod',
+        },
         data: { quantity: 8 },
       });
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-raw' },
+        where: { tenantId: 'tenant-123', id: 'stock-raw' },
         data: { quantity: 15 },
       });
 
       // Product batches deleted for receipt
       expect(prisma.productBatch.deleteMany).toHaveBeenCalledWith({
-        where: { receiptId: 'rec-unpost-mixed' },
+        where: { tenantId: 'tenant-123', receiptId: 'rec-unpost-mixed' },
       });
 
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
@@ -814,7 +826,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       // Decremented stock by 2 (10 -> 8)
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-1' },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'stock-1',
+        },
         data: { quantity: { decrement: 2 } },
       });
 
@@ -834,7 +849,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       // Updated return status on receipt to PARTIALLY_RETURNED
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
-        where: { id: 'rec-1' },
+        where: { tenantId: 'tenant-123', id: 'rec-1' },
         data: { returnStatus: PurchaseReturnStatus.PARTIALLY_RETURNED },
       });
     });
@@ -1053,11 +1068,18 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
       expect(res.status).toBe(ReturnDocStatus.POSTED);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-1' },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'stock-1',
+        },
         data: { quantity: { decrement: 3 } },
       });
       expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
-        where: { id: 'batch-1', remainingQty: { gte: 3 } },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'batch-1',
+          remainingQty: { gte: 3 },
+        },
         data: { remainingQty: { decrement: 3 } },
       });
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -1135,7 +1157,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       );
       expect(approved.status).toBe(ReturnDocStatus.POSTED);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-1' },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'stock-1',
+        },
         data: { quantity: { decrement: 1 } },
       });
     });

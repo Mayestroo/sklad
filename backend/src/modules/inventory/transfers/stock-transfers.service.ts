@@ -136,7 +136,7 @@ export class StockTransfersService {
       totalCostValue = Math.round(totalCostValue * 100) / 100;
 
       const shipped = await tx.stockTransfer.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: 'IN_TRANSIT',
           shippedAt: new Date(),
@@ -269,7 +269,7 @@ export class StockTransfersService {
       totalCostValue = Math.round(totalCostValue * 100) / 100;
 
       const received = await tx.stockTransfer.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: 'RECEIVED',
           receivedAt: new Date(),
@@ -337,11 +337,11 @@ export class StockTransfersService {
     }
 
     await this.prisma.stockTransferItem.deleteMany({
-      where: { transferId: id },
+      where: { transfer: { tenantId }, transferId: id },
     });
 
     await this.prisma.stockTransfer.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     await this.auditService.logAction({

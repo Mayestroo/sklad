@@ -54,7 +54,7 @@ export class SettlementAllocationService {
     this.validateInput(input);
 
     const existing = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (existing) {
       this.assertSameAllocation(existing, input);
@@ -129,7 +129,10 @@ export class SettlementAllocationService {
     }
 
     const existingPaymentAllocations = await tx.settlementAllocation.findMany({
-      where: { financeTransactionId: input.financeTransactionId },
+      where: {
+        tenantId: input.tenantId,
+        financeTransactionId: input.financeTransactionId,
+      },
       select: { amount: true },
     });
     const alreadyAllocated = this.sumAmounts(
@@ -174,7 +177,7 @@ export class SettlementAllocationService {
       skipDuplicates: true,
     });
     const allocation = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (!allocation) {
       throw new ConflictException('Settlement allocation was not created');
@@ -201,7 +204,7 @@ export class SettlementAllocationService {
     }
 
     const existingReversal = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (existingReversal) {
       if (existingReversal.reversesAllocationId !== input.allocationId) {
@@ -254,7 +257,7 @@ export class SettlementAllocationService {
       skipDuplicates: true,
     });
     const reversal = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (!reversal) {
       throw new ConflictException(
@@ -512,7 +515,7 @@ export class SettlementAllocationService {
       targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE
     ) {
       const allocations = await tx.settlementAllocation.findMany({
-        where: { targetType, targetId },
+        where: { tenantId: target.tenantId, targetType, targetId },
         select: { amount: true },
       });
       const allocated = this.sumAmounts(allocations.map((item) => item.amount));
@@ -526,6 +529,7 @@ export class SettlementAllocationService {
       ) {
         const balance = await tx.counterpartyBalance.findUnique({
           where: {
+            tenantId: target.tenantId,
             counterpartyId_currency: {
               counterpartyId: target.counterpartyId,
               currency: target.currency,

@@ -366,7 +366,7 @@ export class ServicesService {
 
     return this.prisma.$transaction(async (tx) => {
       if (calculatedItems) {
-        await tx.serviceActItem.deleteMany({ where: { actId: id } });
+        await tx.serviceActItem.deleteMany({ where: { tenantId, actId: id } });
         await tx.serviceActItem.createMany({
           data: calculatedItems.map((item) => ({
             tenantId,
@@ -385,7 +385,7 @@ export class ServicesService {
       }
 
       return tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           type: dto.type ?? act.type,
           counterpartyId: dto.counterpartyId ?? act.counterpartyId,
@@ -440,7 +440,7 @@ export class ServicesService {
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: ServiceActStatus.POSTED },
         include: { counterparty: true, items: true },
       });
@@ -542,7 +542,7 @@ export class ServicesService {
       }
 
       return tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: ServiceActStatus.CANCELLED },
         include: { counterparty: true, items: true },
       });
@@ -621,7 +621,7 @@ export class ServicesService {
       });
 
       return tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: ServiceActStatus.DRAFT },
         include: { counterparty: true, items: true },
       });
@@ -651,11 +651,11 @@ export class ServicesService {
 
     return this.prisma.$transaction(async (tx) => {
       await tx.serviceActItem.deleteMany({
-        where: { actId: id },
+        where: { tenantId, actId: id },
       });
 
       return tx.serviceAct.delete({
-        where: { id },
+        where: { tenantId, id },
       });
     });
   }

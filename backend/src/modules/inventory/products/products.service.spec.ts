@@ -263,7 +263,7 @@ describe('ProductsService', () => {
       expect(result.sku).toBe('NEW-SKU');
       expect(mockPrisma.product.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id },
+          where: { id, tenantId: 't-1' },
         }),
       );
     });
@@ -304,7 +304,9 @@ describe('ProductsService', () => {
 
       const result = await service.delete(tenantId, id);
       expect(result.archived).toBe(false);
-      expect(mockPrisma.product.delete).toHaveBeenCalledWith({ where: { id } });
+      expect(mockPrisma.product.delete).toHaveBeenCalledWith({
+        where: { tenantId: 't-1', id },
+      });
     });
 
     it('should soft delete (archive) product if transactions exist', async () => {
@@ -319,7 +321,7 @@ describe('ProductsService', () => {
       const result = await service.delete(tenantId, id);
       expect(result.archived).toBe(true);
       expect(mockPrisma.product.update).toHaveBeenCalledWith({
-        where: { id },
+        where: { tenantId: 't-1', id },
         data: { isActive: false },
       });
       expect(mockPrisma.product.delete).not.toHaveBeenCalled();

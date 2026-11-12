@@ -370,7 +370,7 @@ export class ProductsService {
     }
 
     return this.prisma.product.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
         name: dto.name ? asJson(dto.name) : undefined,
         description:
@@ -415,9 +415,13 @@ export class ProductsService {
 
     // Check if product has transaction references
     const [receiptItems, invoiceItems, batches] = await Promise.all([
-      this.prisma.purchaseReceiptItem.count({ where: { productId: id } }),
-      this.prisma.salesInvoiceItem.count({ where: { productId: id } }),
-      this.prisma.productBatch.count({ where: { productId: id } }),
+      this.prisma.purchaseReceiptItem.count({
+        where: { receipt: { tenantId }, productId: id },
+      }),
+      this.prisma.salesInvoiceItem.count({
+        where: { invoice: { tenantId }, productId: id },
+      }),
+      this.prisma.productBatch.count({ where: { tenantId, productId: id } }),
     ]);
 
     const hasTransactions = receiptItems > 0 || invoiceItems > 0 || batches > 0;
@@ -425,7 +429,7 @@ export class ProductsService {
     if (hasTransactions) {
       // Soft-delete (archive) to preserve accounting and batch invariants
       await this.prisma.product.update({
-        where: { id },
+        where: { tenantId, id },
         data: { isActive: false },
       });
       return {
@@ -436,9 +440,13 @@ export class ProductsService {
     }
 
     // Safe to hard-delete if no transactional history
-    await this.prisma.stockLevel.deleteMany({ where: { productId: id } });
-    await this.prisma.productPrice.deleteMany({ where: { productId: id } });
-    await this.prisma.product.delete({ where: { id } });
+    await this.prisma.stockLevel.deleteMany({
+      where: { tenantId, productId: id },
+    });
+    await this.prisma.productPrice.deleteMany({
+      where: { priceList: { tenantId }, productId: id },
+    });
+    await this.prisma.product.delete({ where: { tenantId, id } });
 
     return {
       success: true,

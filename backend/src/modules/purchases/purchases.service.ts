@@ -450,11 +450,11 @@ export class PurchasesService {
 
     return this.prisma.$transaction(async (tx) => {
       await tx.purchaseReceiptItem.deleteMany({
-        where: { receiptId: id },
+        where: { receipt: { tenantId }, receiptId: id },
       });
 
       return tx.purchaseReceipt.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
@@ -530,7 +530,7 @@ export class PurchasesService {
 
         if (stockLevel) {
           await tx.stockLevel.update({
-            where: { id: stockLevel.id },
+            where: { tenantId, id: stockLevel.id },
             data: {
               quantity: { increment: item.quantity },
             },
@@ -576,7 +576,7 @@ export class PurchasesService {
         // Sync Product catalog costPrice in base currency
         if (tx.product?.update) {
           await tx.product.update({
-            where: { id: item.productId },
+            where: { tenantId, id: item.productId },
             data: {
               costPrice: landedCostInBase,
               costPriceCurrency: 'UZS',
@@ -746,7 +746,7 @@ export class PurchasesService {
 
       // 5. Update purchase receipt status
       return tx.purchaseReceipt.update({
-        where: { id: receipt.id },
+        where: { tenantId, id: receipt.id },
         data: {
           status: PurchaseDocStatus.POSTED,
           postedById: userId,
@@ -841,7 +841,7 @@ export class PurchasesService {
         }
 
         await tx.stockLevel.update({
-          where: { id: stockLevel.id },
+          where: { tenantId, id: stockLevel.id },
           data: {
             quantity: Number(stockLevel.quantity) - Number(item.quantity),
           },
@@ -849,7 +849,7 @@ export class PurchasesService {
       }
 
       await tx.productBatch.deleteMany({
-        where: { receiptId: id },
+        where: { tenantId, receiptId: id },
       });
 
       // 2. Reverse the supplier payable without deleting its history.
@@ -886,7 +886,7 @@ export class PurchasesService {
 
       // 5. Update status
       return tx.purchaseReceipt.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: PurchaseDocStatus.DRAFT,
           postedById: null,
@@ -997,7 +997,7 @@ export class PurchasesService {
 
       // 1. Decrement CashAccount balance
       await tx.cashAccount.update({
-        where: { id: dto.cashAccountId },
+        where: { tenantId, id: dto.cashAccountId },
         data: { balance: { decrement: payAmount } },
       });
 
@@ -1053,7 +1053,7 @@ export class PurchasesService {
 
       // 3. Update receipt paidAmount and paymentStatus after validating the allocation.
       const updatedReceipt = await tx.purchaseReceipt.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           paidAmount: newPaidAmount,
           paymentStatus: newPaymentStatus,
@@ -1176,7 +1176,7 @@ export class PurchasesService {
     }
 
     await this.prisma.purchaseReceipt.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     return {
@@ -1222,7 +1222,7 @@ export class PurchasesService {
 
       // Recalculate total additional expenses for this receipt
       const allExpenses = await tx.purchaseExpense.findMany({
-        where: { receiptId: dto.receiptId },
+        where: { tenantId, receiptId: dto.receiptId },
       });
 
       const totalExpensesAmount = allExpenses.reduce(
@@ -1279,7 +1279,7 @@ export class PurchasesService {
           itemQty > 0 ? (itemTotal + allocatedForItem) / itemQty : 0;
 
         await tx.purchaseReceiptItem.update({
-          where: { id: item.id },
+          where: { receipt: { tenantId }, id: item.id },
           data: {
             allocatedExpenses: allocatedForItem,
             landedCost: newLandedCost,
@@ -1289,7 +1289,11 @@ export class PurchasesService {
         // Update product batch landed cost if created
         if (receipt.status === PurchaseDocStatus.POSTED) {
           await tx.productBatch.updateMany({
-            where: { receiptId: receipt.id, productId: item.productId },
+            where: {
+              tenantId,
+              receiptId: receipt.id,
+              productId: item.productId,
+            },
             data: { landedCost: newLandedCost },
           });
         }
@@ -1303,7 +1307,7 @@ export class PurchasesService {
         totalExpensesAmount;
 
       const updatedReceipt = await tx.purchaseReceipt.update({
-        where: { id: receipt.id },
+        where: { tenantId, id: receipt.id },
         data: {
           additionalExpensesTotal: totalExpensesAmount,
           totalAmount: newTotalAmount,
@@ -1653,7 +1657,7 @@ export class PurchasesService {
       }
 
       await tx.stockLevel.update({
-        where: { id: stockLevel.id },
+        where: { tenantId, id: stockLevel.id },
         data: { quantity: { decrement: qty } },
       });
 
@@ -1677,7 +1681,7 @@ export class PurchasesService {
 
         if (receiptItem) {
           await tx.purchaseReceiptItem.update({
-            where: { id: receiptItem.id },
+            where: { receipt: { tenantId }, id: receiptItem.id },
             data: {
               returnedQuantity: { increment: qty },
             },
@@ -1737,7 +1741,7 @@ export class PurchasesService {
     // 4. Update main receipt returnStatus if linked
     if (receiptId) {
       const updatedItems = await tx.purchaseReceiptItem.findMany({
-        where: { receiptId },
+        where: { receipt: { tenantId }, receiptId },
       });
 
       const allFullyReturned = updatedItems.every(
@@ -1753,7 +1757,7 @@ export class PurchasesService {
           : PurchaseReturnStatus.NONE;
 
       await tx.purchaseReceipt.update({
-        where: { id: receiptId },
+        where: { tenantId, id: receiptId },
         data: { returnStatus },
       });
     }
@@ -1907,7 +1911,7 @@ export class PurchasesService {
       await this.executeReturnPostingInternal(tx, tenantId, userId, pReturn);
 
       const updated = await tx.purchaseReturn.update({
-        where: { id: returnId },
+        where: { tenantId, id: returnId },
         data: { status: ReturnDocStatus.POSTED },
         include: {
           counterparty: true,
@@ -2008,7 +2012,7 @@ export class PurchasesService {
 
           if (stockLevel) {
             await tx.stockLevel.update({
-              where: { id: stockLevel.id },
+              where: { tenantId, id: stockLevel.id },
               data: { quantity: { increment: qty } },
             });
           }
@@ -2020,7 +2024,7 @@ export class PurchasesService {
             );
             if (receiptItem) {
               await tx.purchaseReceiptItem.update({
-                where: { id: receiptItem.id },
+                where: { receipt: { tenantId }, id: receiptItem.id },
                 data: {
                   returnedQuantity: {
                     decrement: Math.min(
@@ -2056,7 +2060,7 @@ export class PurchasesService {
         // 4. Update receipt returnStatus
         if (pReturn.receiptId) {
           const updatedItems = await tx.purchaseReceiptItem.findMany({
-            where: { receiptId: pReturn.receiptId },
+            where: { receipt: { tenantId }, receiptId: pReturn.receiptId },
           });
 
           const totalReturned = updatedItems.reduce(
@@ -2069,7 +2073,7 @@ export class PurchasesService {
               : PurchaseReturnStatus.PARTIALLY_RETURNED;
 
           await tx.purchaseReceipt.update({
-            where: { id: pReturn.receiptId },
+            where: { tenantId, id: pReturn.receiptId },
             data: { returnStatus },
           });
         }
@@ -2086,7 +2090,7 @@ export class PurchasesService {
 
       // Update status to CANCELLED
       const updatedReturn = await tx.purchaseReturn.update({
-        where: { id: returnId },
+        where: { tenantId, id: returnId },
         data: { status: ReturnDocStatus.CANCELLED },
         include: { items: true, counterparty: true, warehouse: true },
       });
@@ -2126,11 +2130,11 @@ export class PurchasesService {
     }
 
     await this.prisma.purchaseReturnItem.deleteMany({
-      where: { returnId: id },
+      where: { return: { tenantId }, returnId: id },
     });
 
     await this.prisma.purchaseReturn.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     return {

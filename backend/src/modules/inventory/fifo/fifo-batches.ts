@@ -191,7 +191,11 @@ export async function consumeFifoBatches(
 
   for (const item of allocation.batches) {
     const changed = await db.productBatch.updateMany({
-      where: { id: item.batchId, remainingQty: { gte: item.quantity } },
+      where: {
+        tenantId,
+        id: item.batchId,
+        remainingQty: { gte: item.quantity },
+      },
       data: { remainingQty: { decrement: item.quantity } },
     });
     if (changed.count !== 1) {
@@ -230,7 +234,7 @@ export async function restoreBatchConsumptions(
   let restored = 0;
   for (const consumption of consumptions) {
     await db.productBatch.update({
-      where: { id: consumption.batchId },
+      where: { tenantId, id: consumption.batchId },
       data: { remainingQty: { increment: consumption.quantity } },
     });
     restored += Number(consumption.quantity);

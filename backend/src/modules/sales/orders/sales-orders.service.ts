@@ -587,7 +587,7 @@ export class SalesOrdersService {
     }
 
     const refreshedOrder = await this.prisma.salesOrder.findFirst({
-      where: { id: order.id },
+      where: { tenantId, id: order.id },
       include: this.buildOrderInclude(),
     });
 
@@ -726,12 +726,14 @@ export class SalesOrdersService {
 
       // Existing reservations reference the old order items and must not survive an edit.
       await this.stockReservationService.releaseOrderReservations(tenantId, id);
-      await this.prisma.salesOrderItem.deleteMany({ where: { orderId: id } });
+      await this.prisma.salesOrderItem.deleteMany({
+        where: { order: { tenantId }, orderId: id },
+      });
       updateData.items = { create: preparedItems };
     }
 
     const updated = await this.prisma.salesOrder.update({
-      where: { id },
+      where: { tenantId, id },
       data: updateData,
       include: this.buildOrderInclude(),
     });
@@ -814,11 +816,11 @@ export class SalesOrdersService {
 
     // Delete order items
     await this.prisma.salesOrderItem.deleteMany({
-      where: { orderId: id },
+      where: { order: { tenantId }, orderId: id },
     });
 
     await this.prisma.salesOrder.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     await this.prisma.auditLog.create({
@@ -947,7 +949,7 @@ export class SalesOrdersService {
 
           // If 100% fulfilled from stock reservation
           const freshItems = await tx.salesOrderItem.findMany({
-            where: { orderId: id },
+            where: { order: { tenantId }, orderId: id },
           });
           const is100Fulfilled =
             resResults.every((r) => r.remainingGap === 0) &&
@@ -958,7 +960,7 @@ export class SalesOrdersService {
             // Update readyQty to match quantity for all items
             for (const item of order.items) {
               await tx.salesOrderItem.update({
-                where: { id: item.id },
+                where: { order: { tenantId }, id: item.id },
                 data: { readyQty: item.quantity },
               });
             }
@@ -974,7 +976,7 @@ export class SalesOrdersService {
       // When SEND_TO_PRODUCTION, create stubs only for unreserved quantities
       if (newStatus === SalesOrderStatus.SENT_TO_PRODUCTION) {
         const freshItems = await tx.salesOrderItem.findMany({
-          where: { orderId: id },
+          where: { order: { tenantId }, orderId: id },
         });
         const itemsToProduce =
           freshItems && freshItems.length > 0 ? freshItems : order.items || [];
@@ -997,7 +999,7 @@ export class SalesOrdersService {
       }
 
       await tx.salesOrder.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: finalStatus },
       });
 
@@ -1097,7 +1099,7 @@ export class SalesOrdersService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.salesOrder.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: newStatus as SalesOrderStatus,
           ...(warehouseId ? { warehouseId } : {}),
@@ -1187,6 +1189,7 @@ export class SalesOrdersService {
       if (isInProduction) {
         await tx.productionOrder.updateMany({
           where: {
+            tenantId,
             salesOrderId: order.id,
             status: {
               in: [
@@ -1200,7 +1203,7 @@ export class SalesOrdersService {
       }
 
       await tx.salesOrder.update({
-        where: { id: order.id },
+        where: { tenantId, id: order.id },
         data: { status: SalesOrderStatus.CANCELLED },
       });
 
@@ -1243,7 +1246,7 @@ export class SalesOrdersService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.salesOrder.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: SalesOrderStatus.COMPLETED },
       });
       await tx.auditLog.create({
@@ -1294,19 +1297,19 @@ export class SalesOrdersService {
     await this.prisma.$transaction(async (tx) => {
       if (shouldAutoTransitionToReady) {
         await tx.salesOrder.update({
-          where: { id: orderId },
+          where: { tenantId, id: orderId },
           data: {
             paidAmount: newPaidAmount,
             status: SalesOrderStatus.PAYMENT_CONFIRMED,
           },
         });
         await tx.salesOrder.update({
-          where: { id: orderId },
+          where: { tenantId, id: orderId },
           data: { status: SalesOrderStatus.READY_TO_SHIP },
         });
       } else if (shouldTransitionToAwaiting) {
         await tx.salesOrder.update({
-          where: { id: orderId },
+          where: { tenantId, id: orderId },
           data: {
             paidAmount: newPaidAmount,
             status: SalesOrderStatus.AWAITING_PAYMENT,
@@ -1314,7 +1317,7 @@ export class SalesOrdersService {
         });
       } else {
         await tx.salesOrder.update({
-          where: { id: orderId },
+          where: { tenantId, id: orderId },
           data: { paidAmount: newPaidAmount },
         });
       }
@@ -1345,7 +1348,7 @@ export class SalesOrdersService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.productionOrder.update({
-        where: { id: productionOrderId },
+        where: { tenantId, id: productionOrderId },
         data: {
           readyQty,
           status:
@@ -1362,7 +1365,7 @@ export class SalesOrdersService {
         );
         const reserved = Number(matchingItem?.reservedQty || 0);
         await tx.salesOrderItem.update({
-          where: { id: prodOrder.salesOrderItemId },
+          where: { order: { tenantId }, id: prodOrder.salesOrderItemId },
           data: { readyQty: reserved + readyQty },
         });
       }
@@ -1398,7 +1401,7 @@ export class SalesOrdersService {
 
       if (newOrderStatus !== order.status) {
         await tx.salesOrder.update({
-          where: { id: order.id },
+          where: { tenantId, id: order.id },
           data: { status: newOrderStatus },
         });
 
@@ -1417,7 +1420,7 @@ export class SalesOrdersService {
     });
 
     return this.prisma.productionOrder.findFirst({
-      where: { id: productionOrderId },
+      where: { tenantId, id: productionOrderId },
       include: {
         salesOrder: true,
         product: true,
@@ -1447,21 +1450,21 @@ export class SalesOrdersService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.productionOrder.update({
-        where: { id: productionOrderId },
+        where: { tenantId, id: productionOrderId },
         data: { status: ProductionOrderStatus.IN_PROGRESS },
       });
 
       const order = prodOrder.salesOrder;
       if (order.status === SalesOrderStatus.SENT_TO_PRODUCTION) {
         await tx.salesOrder.update({
-          where: { id: order.id },
+          where: { tenantId, id: order.id },
           data: { status: SalesOrderStatus.IN_PRODUCTION },
         });
       }
     });
 
     return this.prisma.productionOrder.findFirst({
-      where: { id: productionOrderId },
+      where: { tenantId, id: productionOrderId },
       include: { salesOrder: true, product: true },
     });
   }
@@ -1767,7 +1770,7 @@ export class SalesOrdersService {
           const transaction = transactionByPaymentId.get(payment.id);
           if (!transaction) continue;
           const priorAllocations = await tx.settlementAllocation.findMany({
-            where: { financeTransactionId: transaction.id },
+            where: { tenantId, financeTransactionId: transaction.id },
             select: { amount: true },
           });
           const remainingOnPayment =
@@ -1849,7 +1852,7 @@ export class SalesOrdersService {
         totalCogs += itemCogs;
 
         await tx.salesInvoiceItem.update({
-          where: { id: invItem.id },
+          where: { invoice: { tenantId }, id: invItem.id },
           data: {
             unitCogs,
             lineCogs: itemCogs,
@@ -1871,7 +1874,7 @@ export class SalesOrdersService {
 
         // Update SalesOrderItem.shippedQty
         await tx.salesOrderItem.update({
-          where: { id: dp.orderItem.id },
+          where: { order: { tenantId }, id: dp.orderItem.id },
           data: { shippedQty: { increment: qty } },
         });
 
@@ -1966,7 +1969,7 @@ export class SalesOrdersService {
       }
 
       await tx.salesInvoice.update({
-        where: { id: invoice.id },
+        where: { tenantId, id: invoice.id },
         data: {
           status: SalesDocStatus.POSTED,
           totalCogs,
@@ -1980,7 +1983,7 @@ export class SalesOrdersService {
 
       // 7. Check if order is 100% shipped
       const refreshedItems = await tx.salesOrderItem.findMany({
-        where: { orderId: id },
+        where: { order: { tenantId }, orderId: id },
       });
       const allFullyShipped = refreshedItems.every(
         (i) => Number(i.shippedQty) >= Number(i.quantity),
@@ -1991,7 +1994,7 @@ export class SalesOrdersService {
         : SalesOrderStatus.PARTIALLY_SHIPPED;
 
       await tx.salesOrder.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: nextStatus, warehouseId },
       });
 
@@ -2012,7 +2015,7 @@ export class SalesOrdersService {
       });
 
       return {
-        order: await tx.salesOrder.findFirst({ where: { id } }),
+        order: await tx.salesOrder.findFirst({ where: { tenantId, id } }),
         invoice,
       };
     });

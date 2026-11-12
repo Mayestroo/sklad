@@ -551,7 +551,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       );
 
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
+        where: { tenantId: 'tenant-1', id: 'inv-1' },
         data: {
           paidAmount: 5000000,
           paymentStatus: SalesPaymentStatus.PAID,
@@ -698,7 +698,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'ord-1' },
+        where: { tenantId: 'tenant-1', id: 'ord-1' },
         data: {
           paidAmount: 10000000,
           status: 'PAYMENT_CONFIRMED',
@@ -749,7 +749,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
+        where: { tenantId: 'tenant-1', id: 'inv-1' },
         data: {
           paidAmount: 3000000,
           paymentStatus: SalesPaymentStatus.PAID,
@@ -757,7 +757,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-2' },
+        where: { tenantId: 'tenant-1', id: 'inv-2' },
         data: {
           paidAmount: 2000000,
           paymentStatus: SalesPaymentStatus.PARTIALLY_PAID,
@@ -818,7 +818,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'acc-bank' },
+        where: { tenantId: 'tenant-1', id: 'acc-bank' },
         data: { balance: { decrement: 15000000 } },
       });
 
@@ -842,7 +842,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       );
 
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
-        where: { id: 'rcp-1' },
+        where: { tenantId: 'tenant-1', id: 'rcp-1' },
         data: {
           paidAmount: 15000000,
           paymentStatus: PurchasePaymentStatus.PAID,
@@ -925,11 +925,14 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.cashAccount.update).toHaveBeenNthCalledWith(1, {
-        where: { id: 'from-uzs-cash' },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'from-uzs-cash',
+        },
         data: { balance: { decrement: 100 } },
       });
       expect(prisma.cashAccount.update).toHaveBeenNthCalledWith(2, {
-        where: { id: 'to-uzs-bank' },
+        where: { tenantId: 'tenant-1', id: 'to-uzs-bank' },
         data: { balance: { increment: 100 } },
       });
     });
@@ -973,11 +976,14 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         }),
       );
       expect(prisma.cashAccount.update).toHaveBeenNthCalledWith(1, {
-        where: { id: 'from-uzs-cash' },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'from-uzs-cash',
+        },
         data: { balance: { decrement: 128000 } },
       });
       expect(prisma.cashAccount.update).toHaveBeenNthCalledWith(2, {
-        where: { id: 'to-usd-cash' },
+        where: { tenantId: 'tenant-1', id: 'to-usd-cash' },
         data: { balance: { increment: 10 } },
       });
     });
@@ -1025,7 +1031,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
-        where: { id: 'rcp-1' },
+        where: { tenantId: 'tenant-1', id: 'rcp-1' },
         data: {
           paidAmount: 4000000,
           paymentStatus: PurchasePaymentStatus.PAID,
@@ -1033,7 +1039,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
-        where: { id: 'rcp-2' },
+        where: { tenantId: 'tenant-1', id: 'rcp-2' },
         data: {
           paidAmount: 2000000,
           paymentStatus: PurchasePaymentStatus.PARTIALLY_PAID,
@@ -1074,7 +1080,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       expect(res.status).toBe(TransactionStatus.CANCELLED);
 
       expect(prisma.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'acc-1' },
+        where: { tenantId: 'tenant-1', id: 'acc-1' },
         data: { balance: { decrement: 2000000 } },
       });
 
@@ -1092,7 +1098,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       );
 
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
+        where: { tenantId: 'tenant-1', id: 'inv-1' },
         data: {
           paidAmount: 0,
           paymentStatus: SalesPaymentStatus.UNPAID,
@@ -1209,7 +1215,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         isDeleted: true,
       });
       expect(prisma.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'acc-1' },
+        where: { tenantId: 'tenant-1', id: 'acc-1' },
         data: { balance: { decrement: 2000000 } },
       });
       expect(prisma.financeTransaction.updateMany).toHaveBeenCalledWith({
@@ -1238,7 +1244,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         }),
       );
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
+        where: { tenantId: 'tenant-1', id: 'inv-1' },
         data: { paidAmount: 0, paymentStatus: SalesPaymentStatus.UNPAID },
       });
     });
@@ -1266,7 +1272,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       await service.deleteTransaction('tenant-1', 'tx-expense', 'user-1');
 
       expect(prisma.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'acc-1' },
+        where: { tenantId: 'tenant-1', id: 'acc-1' },
         data: { balance: { increment: 2000000 } },
       });
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
@@ -1282,7 +1288,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         }),
       );
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
-        where: { id: 'receipt-1' },
+        where: { tenantId: 'tenant-1', id: 'receipt-1' },
         data: { paidAmount: 0, paymentStatus: PurchasePaymentStatus.UNPAID },
       });
       expect(prisma.financeTransaction.updateMany).toHaveBeenCalledWith({
@@ -1319,11 +1325,14 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       await service.deleteTransaction('tenant-1', 'tx-transfer', 'user-1');
 
       expect(prisma.cashAccount.update).toHaveBeenNthCalledWith(1, {
-        where: { id: 'acc-destination' },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'acc-destination',
+        },
         data: { balance: { decrement: 120 } },
       });
       expect(prisma.cashAccount.update).toHaveBeenNthCalledWith(2, {
-        where: { id: 'acc-source' },
+        where: { tenantId: 'tenant-1', id: 'acc-source' },
         data: { balance: { increment: 100 } },
       });
       expect(prisma.financeTransaction.updateMany).toHaveBeenCalledWith({
@@ -1490,7 +1499,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
       expect(persistedState).toEqual(initialPersistedState);
       expect(transactionClient.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'acc-1' },
+        where: { tenantId: 'tenant-1', id: 'acc-1' },
         data: { balance: { decrement: 100 } },
       });
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
@@ -1548,7 +1557,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       await service.deleteTransaction('tenant-1', 'tx-cancelled', 'user-1');
 
       expect(prisma.financeTransaction.update).toHaveBeenCalledWith({
-        where: { id: 'tx-cancelled' },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'tx-cancelled',
+        },
         data: { isDeleted: true },
       });
       expect(prisma.cashAccount.update).not.toHaveBeenCalled();
@@ -1576,7 +1588,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         isDeleted: false,
       });
       expect(prisma.financeTransaction.update).toHaveBeenCalledWith({
-        where: { id: 'tx-restore' },
+        where: { tenantId: 'tenant-1', id: 'tx-restore' },
         data: { isDeleted: false },
       });
       expect(prisma.cashAccount.update).not.toHaveBeenCalled();
@@ -1669,7 +1681,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
 
       expect(prisma.serviceAct.update).toHaveBeenCalledWith({
-        where: { id: 'act-1' },
+        where: { tenantId: 'tenant-1', id: 'act-1' },
         data: {
           paidAmount: 1200000,
           paymentStatus: ServicePaymentStatus.PAID,

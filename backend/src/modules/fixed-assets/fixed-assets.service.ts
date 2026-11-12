@@ -103,7 +103,7 @@ export class FixedAssetsService {
       dto.accumulatedDepreciation !== undefined
     ) {
       const current = await this.prisma.fixedAsset.findUnique({
-        where: { id },
+        where: { tenantId, id },
       });
       const initCost =
         dto.initialCost !== undefined
@@ -117,13 +117,13 @@ export class FixedAssetsService {
     }
 
     return this.prisma.fixedAsset.update({
-      where: { id },
+      where: { tenantId, id },
       data,
     });
   }
 
   async delete(tenantId: string, id: string) {
     await this.findOne(tenantId, id);
-    return this.prisma.fixedAsset.delete({ where: { id } });
+    return this.prisma.fixedAsset.delete({ where: { tenantId, id } });
   }
 }

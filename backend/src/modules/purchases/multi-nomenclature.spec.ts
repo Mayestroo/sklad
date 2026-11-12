@@ -289,11 +289,14 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       // 1. StockLevel invariant: incremented ONLY for PRODUCT and RAW_MATERIAL (2 times), NEVER for SERVICE
       expect(prisma.stockLevel.update).toHaveBeenCalledTimes(2);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-prod' },
+        where: {
+          tenantId: 'tenant-xyz',
+          id: 'stock-prod',
+        },
         data: { quantity: { increment: 10 } },
       });
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-raw' },
+        where: { tenantId: 'tenant-xyz', id: 'stock-raw' },
         data: { quantity: { increment: 50 } },
       });
 
@@ -430,17 +433,20 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       // Stock decremented only for physical items (15 -> 5, 150 -> 100), NEVER called for SERVICE
       expect(prisma.stockLevel.update).toHaveBeenCalledTimes(2);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-prod' },
+        where: {
+          tenantId: 'tenant-xyz',
+          id: 'stock-prod',
+        },
         data: { quantity: 5 },
       });
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-raw' },
+        where: { tenantId: 'tenant-xyz', id: 'stock-raw' },
         data: { quantity: 100 },
       });
 
       // Product batches deleted
       expect(prisma.productBatch.deleteMany).toHaveBeenCalledWith({
-        where: { receiptId: 'rec-hetero-1' },
+        where: { tenantId: 'tenant-xyz', receiptId: 'rec-hetero-1' },
       });
 
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
@@ -574,7 +580,10 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       expect(pReturn).toBeDefined();
       // Stock decremented by 10
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-raw' },
+        where: {
+          tenantId: 'tenant-xyz',
+          id: 'stock-raw',
+        },
         data: { quantity: { decrement: 10 } },
       });
       expect(settlementService.recordMovement).toHaveBeenCalledWith(

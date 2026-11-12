@@ -150,7 +150,7 @@ export class ProductionService {
 
     const replacement = await this.createRecipe(tenantId, userId, dto);
     await this.prisma.productionRecipe.update({
-      where: { id: current.id },
+      where: { tenantId, id: current.id },
       data: { isActive: false },
     });
     await this.auditService.logAction({
@@ -525,7 +525,7 @@ export class ProductionService {
         }
 
         const allocations = await tx.productionMaterialBatch.findMany({
-          where: { lineId: line.id },
+          where: { batch: { tenantId }, lineId: line.id },
         });
         const quantity = allocations.reduce(
           (sum, allocation) => sum + Number(allocation.quantity),
@@ -539,7 +539,7 @@ export class ProductionService {
           ),
         );
         await tx.productionMaterialLine.update({
-          where: { id: line.id },
+          where: { productionDocument: { tenantId }, id: line.id },
           data: {
             actualQuantity: desiredQuantity,
             unitCost: quantity > 0 ? roundMoney(totalCost / quantity) : 0,
@@ -554,13 +554,13 @@ export class ProductionService {
       }
 
       const updatedLines = await tx.productionMaterialLine.findMany({
-        where: { productionDocumentId: id },
+        where: { productionDocument: { tenantId }, productionDocumentId: id },
       });
       const actualMaterialCost = roundMoney(
         updatedLines.reduce((sum, line) => sum + Number(line.totalCost), 0),
       );
       const updatedDocument = await tx.productionDocument.update({
-        where: { id },
+        where: { tenantId, id },
         data: { actualMaterialCost },
         include: documentInclude,
       });
@@ -596,7 +596,7 @@ export class ProductionService {
       );
     }
     const result = await this.prisma.productionDocument.update({
-      where: { id },
+      where: { tenantId, id },
       data: { status: ManufacturingStatus.READY },
       include: documentInclude,
     });
@@ -673,7 +673,7 @@ export class ProductionService {
         },
       });
       await tx.product.update({
-        where: { id: document.productId },
+        where: { tenantId, id: document.productId },
         data: {
           costPrice: unitCost,
           costPriceCurrency: 'UZS',
@@ -681,7 +681,7 @@ export class ProductionService {
         },
       });
       return tx.productionDocument.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           producedQuantity,
           actualMaterialCost,
@@ -808,7 +808,10 @@ export class ProductionService {
 
     for (const item of allocation.batches) {
       await tx.productionMaterialBatch.upsert({
-        where: { lineId_batchId: { lineId: line.id, batchId: item.batchId } },
+        where: {
+          batch: { tenantId },
+          lineId_batchId: { lineId: line.id, batchId: item.batchId },
+        },
         update: { quantity: { increment: item.quantity } },
         create: {
           lineId: line.id,
@@ -832,7 +835,7 @@ export class ProductionService {
     }
 
     const changedStock = await tx.stockLevel.updateMany({
-      where: { id: stock.id, quantity: { gte: quantity } },
+      where: { tenantId, id: stock.id, quantity: { gte: quantity } },
       data: { quantity: { decrement: quantity } },
     });
     if (changedStock.count !== 1) {
@@ -864,7 +867,7 @@ export class ProductionService {
       const allocatedQuantity = Number(allocation.quantity);
       const restoreQuantity = Math.min(allocatedQuantity, remaining);
       await tx.productBatch.update({
-        where: { id: allocation.batchId },
+        where: { tenantId, id: allocation.batchId },
         data: { remainingQty: { increment: restoreQuantity } },
       });
       await tx.stockLevel.update({
@@ -891,11 +894,11 @@ export class ProductionService {
       });
       if (restoreQuantity + 0.0005 >= allocatedQuantity) {
         await tx.productionMaterialBatch.delete({
-          where: { id: allocation.id },
+          where: { batch: { tenantId }, id: allocation.id },
         });
       } else {
         await tx.productionMaterialBatch.update({
-          where: { id: allocation.id },
+          where: { batch: { tenantId }, id: allocation.id },
           data: { quantity: { decrement: restoreQuantity } },
         });
       }

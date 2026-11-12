@@ -117,7 +117,7 @@ export class TenantsService {
     }
 
     return this.prisma.branch.update({
-      where: { id: branchId },
+      where: { tenantId, id: branchId },
       data: {
         ...(data.name && { name: data.name }),
         ...(data.address !== undefined && { address: data.address }),
@@ -149,7 +149,7 @@ export class TenantsService {
       );
     }
 
-    await this.prisma.branch.delete({ where: { id: branchId } });
+    await this.prisma.branch.delete({ where: { tenantId, id: branchId } });
     return { success: true, message: 'Filial o‘chirildi' };
   }
 
@@ -199,7 +199,7 @@ export class TenantsService {
     if (!warehouse) throw new NotFoundException('Omborxona topilmadi');
 
     return this.prisma.warehouse.update({
-      where: { id: warehouseId },
+      where: { tenantId, id: warehouseId },
       data: {
         ...(data.branchId !== undefined && { branchId: data.branchId }),
         ...(data.name && { name: data.name }),
@@ -256,7 +256,9 @@ export class TenantsService {
       where: { tenantId, warehouseId },
     });
 
-    await this.prisma.warehouse.delete({ where: { id: warehouseId } });
+    await this.prisma.warehouse.delete({
+      where: { tenantId, id: warehouseId },
+    });
     return { success: true, message: 'Omborxona o‘chirildi' };
   }
 

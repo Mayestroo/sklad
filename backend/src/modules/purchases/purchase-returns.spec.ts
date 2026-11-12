@@ -220,19 +220,26 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
 
       // Invariant Check 1: Warehouse stock decremented by 3
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-iphone' },
+        where: {
+          tenantId: 'tenant-ret-test',
+          id: 'stock-iphone',
+        },
         data: { quantity: { decrement: 3 } },
       });
 
       // Invariant Check 2: Batch remaining quantity reduced by 3 (10 -> 7)
       expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
-        where: { id: 'batch-100', remainingQty: { gte: 3 } },
+        where: {
+          tenantId: 'tenant-ret-test',
+          id: 'batch-100',
+          remainingQty: { gte: 3 },
+        },
         data: { remainingQty: { decrement: 3 } },
       });
 
       // Invariant Check 3: Receipt item returnedQuantity tracked
       expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-100' },
+        where: { receipt: { tenantId: 'tenant-ret-test' }, id: 'item-100' },
         data: { returnedQuantity: { increment: 3 } },
       });
 
@@ -252,7 +259,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
 
       // Invariant Check 5: Receipt returnStatus updated to PARTIALLY_RETURNED
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
-        where: { id: 'rec-100' },
+        where: { tenantId: 'tenant-ret-test', id: 'rec-100' },
         data: { returnStatus: PurchaseReturnStatus.PARTIALLY_RETURNED },
       });
     });
@@ -436,17 +443,28 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
 
       // Warehouse stock decremented by 15
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-alu' },
+        where: {
+          tenantId: 'tenant-ret-test',
+          id: 'stock-alu',
+        },
         data: { quantity: { decrement: 15 } },
       });
 
       // FIFO batch consumption: consumes all 10 from batch1, then 5 from batch2
       expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
-        where: { id: 'b1', remainingQty: { gte: 10 } },
+        where: {
+          tenantId: 'tenant-ret-test',
+          id: 'b1',
+          remainingQty: { gte: 10 },
+        },
         data: { remainingQty: { decrement: 10 } },
       });
       expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
-        where: { id: 'b2', remainingQty: { gte: 5 } },
+        where: {
+          tenantId: 'tenant-ret-test',
+          id: 'b2',
+          remainingQty: { gte: 5 },
+        },
         data: { remainingQty: { decrement: 5 } },
       });
 
@@ -689,13 +707,16 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
 
       // 1. Stock re-incremented by 5 (15 -> 20)
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-item' },
+        where: {
+          tenantId: 'tenant-ret-test',
+          id: 'stock-item',
+        },
         data: { quantity: { increment: 5 } },
       });
 
       // 2. Exactly the recorded consumption is put back, then forgotten
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-100' },
+        where: { tenantId: 'tenant-ret-test', id: 'batch-100' },
         data: { remainingQty: { increment: 5 } },
       });
       expect(prisma.batchConsumption.deleteMany).toHaveBeenCalledWith({
@@ -704,7 +725,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
 
       // 3. Receipt item returnedQuantity decremented
       expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-100' },
+        where: { receipt: { tenantId: 'tenant-ret-test' }, id: 'item-100' },
         data: { returnedQuantity: { decrement: 5 } },
       });
 
@@ -725,7 +746,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
 
       // 5. Receipt returnStatus restored to NONE
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
-        where: { id: 'rec-100' },
+        where: { tenantId: 'tenant-ret-test', id: 'rec-100' },
         data: { returnStatus: PurchaseReturnStatus.NONE },
       });
 

@@ -118,7 +118,7 @@ export class StockReservationService {
 
         // Update SalesOrderItem reservedQty
         await client.salesOrderItem.update({
-          where: { id: item.orderItemId },
+          where: { order: { tenantId }, id: item.orderItemId },
           data: {
             reservedQty: toReserve,
           },
@@ -174,7 +174,7 @@ export class StockReservationService {
     });
 
     await client.salesOrderItem.updateMany({
-      where: { orderId },
+      where: { order: { tenantId }, orderId },
       data: {
         reservedQty: 0,
       },
@@ -224,11 +224,11 @@ export class StockReservationService {
 
         if (currentResQty <= consumedQty) {
           await client.stockReservation.delete({
-            where: { id: reservation.id },
+            where: { tenantId, id: reservation.id },
           });
         } else {
           await client.stockReservation.update({
-            where: { id: reservation.id },
+            where: { tenantId, id: reservation.id },
             data: {
               quantity: {
                 decrement: consumedQty,

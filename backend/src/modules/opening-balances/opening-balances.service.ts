@@ -441,7 +441,7 @@ export class OpeningBalancesService {
       }
 
       return tx.openingBalanceDocument.update({
-        where: { id: documentId },
+        where: { tenantId, id: documentId },
         data: updateData,
         include: { lines: true },
       });
@@ -504,7 +504,7 @@ export class OpeningBalancesService {
         });
       }
       return tx.openingBalanceDocument.update({
-        where: { id: documentId },
+        where: { tenantId, id: documentId },
         data: {
           totalAssets: metrics.totalAssets,
           totalLiabilities: metrics.totalLiabilities,
@@ -609,7 +609,7 @@ export class OpeningBalancesService {
           if (amt <= 0) continue;
           // Increment CashAccount balance
           await tx.cashAccount.update({
-            where: { id: line.accountId },
+            where: { tenantId, id: line.accountId },
             data: { balance: { increment: amt } },
           });
 
@@ -720,7 +720,7 @@ export class OpeningBalancesService {
         if (line.category === OpeningBalanceCategory.FIXED_ASSET) {
           if (line.fixedAssetId) {
             await tx.fixedAsset.update({
-              where: { id: line.fixedAssetId },
+              where: { tenantId, id: line.fixedAssetId },
               data: { status: 'ACTIVE' },
             });
           }
@@ -871,7 +871,7 @@ export class OpeningBalancesService {
 
       // 7. Transition document status to POSTED
       return tx.openingBalanceDocument.update({
-        where: { id: documentId },
+        where: { tenantId, id: documentId },
         data: {
           status: OpeningBalanceStatus.POSTED,
           approvedById: userId,
@@ -945,7 +945,7 @@ export class OpeningBalancesService {
         line.accountId
       ) {
         const account = await this.prisma.cashAccount.findUnique({
-          where: { id: line.accountId },
+          where: { tenantId, id: line.accountId },
         });
         const currentBalance = Number(account?.balance || 0);
         const lineAmount = Number(line.amount);
@@ -967,7 +967,7 @@ export class OpeningBalancesService {
           line.accountId
         ) {
           await tx.cashAccount.update({
-            where: { id: line.accountId },
+            where: { tenantId, id: line.accountId },
             data: { balance: { decrement: Number(line.amount) } },
           });
         }
@@ -1048,13 +1048,15 @@ export class OpeningBalancesService {
         },
       });
       if (je) {
-        await tx.journalLine.deleteMany({ where: { entryId: je.id } });
-        await tx.journalEntry.delete({ where: { id: je.id } });
+        await tx.journalLine.deleteMany({
+          where: { entry: { tenantId }, entryId: je.id },
+        });
+        await tx.journalEntry.delete({ where: { tenantId, id: je.id } });
       }
 
       // 6. Reset document status to DRAFT
       return tx.openingBalanceDocument.update({
-        where: { id: documentId },
+        where: { tenantId, id: documentId },
         data: {
           status: OpeningBalanceStatus.DRAFT,
           approvedById: null,
@@ -1081,7 +1083,9 @@ export class OpeningBalancesService {
       );
     }
 
-    return this.prisma.openingBalanceDocument.delete({ where: { id } });
+    return this.prisma.openingBalanceDocument.delete({
+      where: { tenantId, id },
+    });
   }
 
   // ─── Cutoff Date Gate Helper ─────────────────────────────────────

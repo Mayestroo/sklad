@@ -199,7 +199,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(result.totalAmount).toBe(201600);
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inv-draft' },
+          where: { id: 'inv-draft', tenantId: 'tenant-1' },
           data: expect.objectContaining({
             subtotalAmount: 200000,
             discountAmount: 20000,
@@ -467,11 +467,19 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       // Expected COGS: (6 * 300,000) + (4 * 400,000) = 1,800,000 + 1,600,000 = 3,400,000 UZS
       // Gross Profit: 5,000,000 - 3,400,000 = 1,600,000 UZS
       expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
-        where: { id: 'batch-1', remainingQty: { gte: 6 } },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'batch-1',
+          remainingQty: { gte: 6 },
+        },
         data: { remainingQty: { decrement: 6 } },
       });
       expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
-        where: { id: 'batch-2', remainingQty: { gte: 4 } },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'batch-2',
+          remainingQty: { gte: 4 },
+        },
         data: { remainingQty: { decrement: 4 } },
       });
 
@@ -677,15 +685,15 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       const res = await service.unpostInvoice('tenant-1', 'user-1', 'inv-1');
 
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-1' },
+        where: { tenantId: 'tenant-1', id: 'stock-1' },
         data: { quantity: { increment: 10 } },
       });
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-1' },
+        where: { tenantId: 'tenant-1', id: 'batch-1' },
         data: { remainingQty: { increment: 6 } },
       });
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-2' },
+        where: { tenantId: 'tenant-1', id: 'batch-2' },
         data: { remainingQty: { increment: 4 } },
       });
       expect(prisma.batchConsumption.deleteMany).toHaveBeenCalled();
@@ -809,7 +817,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       // Parent invoice updated to PARTIALLY_RETURNED
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
+        where: { tenantId: 'tenant-1', id: 'inv-1' },
         data: { returnStatus: SalesReturnStatus.PARTIALLY_RETURNED },
       });
     });
@@ -1378,12 +1386,17 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           id: 'pp-1',
           price: 150000,
         });
+        // Both products are the tenant's own.
+        prisma.product.count = jest.fn().mockResolvedValue(2);
 
         const res = await service.bulkSetPrices('tenant-1', 'pl-1', [
           { productId: 'prod-1', price: 150000 },
           { productId: 'prod-2', price: 250000 },
         ]);
 
+        expect(prisma.product.count).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', id: { in: ['prod-1', 'prod-2'] } },
+        });
         expect(prisma.productPrice.upsert).toHaveBeenCalledTimes(2);
         expect(res.length).toBe(2);
       });
@@ -1408,7 +1421,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           data: { isDefault: false },
         });
         expect(prisma.priceList.update).toHaveBeenCalledWith({
-          where: { id: 'pl-2' },
+          where: { tenantId: 'tenant-1', id: 'pl-2' },
           data: expect.objectContaining({ isDefault: true }),
         });
       });
@@ -1429,7 +1442,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         await service.deletePriceList('tenant-1', 'pl-1');
 
         expect(prisma.priceList.update).toHaveBeenCalledWith({
-          where: { id: 'pl-1' },
+          where: { tenantId: 'tenant-1', id: 'pl-1' },
           data: { isActive: false },
         });
       });
@@ -1445,7 +1458,10 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         await service.deletePriceList('tenant-1', 'pl-unused');
 
         expect(prisma.priceList.delete).toHaveBeenCalledWith({
-          where: { id: 'pl-unused' },
+          where: {
+            tenantId: 'tenant-1',
+            id: 'pl-unused',
+          },
         });
       });
     });

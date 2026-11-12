@@ -67,7 +67,7 @@ export class CounterpartiesService {
     }
 
     return this.prisma.counterpartyFolder.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
         name: dto.name ?? folder.name,
         color: dto.color ?? folder.color,
@@ -84,7 +84,7 @@ export class CounterpartiesService {
     }
 
     return this.prisma.counterpartyFolder.delete({
-      where: { id },
+      where: { tenantId, id },
     });
   }
 
@@ -401,7 +401,7 @@ export class CounterpartiesService {
     }
 
     const updated = await this.prisma.counterparty.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
         type: dto.type ?? counterparty.type,
         name: dto.name ?? counterparty.name,
@@ -484,10 +484,14 @@ export class CounterpartiesService {
 
     const [invoicesCount, receiptsCount, paymentsCount, dealsCount] =
       await Promise.all([
-        this.prisma.salesInvoice.count({ where: { counterpartyId: id } }),
-        this.prisma.purchaseReceipt.count({ where: { counterpartyId: id } }),
-        this.prisma.payment.count({ where: { counterpartyId: id } }),
-        this.prisma.deal.count({ where: { counterpartyId: id } }),
+        this.prisma.salesInvoice.count({
+          where: { tenantId, counterpartyId: id },
+        }),
+        this.prisma.purchaseReceipt.count({
+          where: { tenantId, counterpartyId: id },
+        }),
+        this.prisma.payment.count({ where: { tenantId, counterpartyId: id } }),
+        this.prisma.deal.count({ where: { tenantId, counterpartyId: id } }),
       ]);
 
     if (
@@ -502,7 +506,7 @@ export class CounterpartiesService {
     }
 
     await this.prisma.counterparty.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     return {

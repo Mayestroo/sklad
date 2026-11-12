@@ -60,7 +60,7 @@ export class CounterpartySettlementService {
     });
 
     const entry = await tx.counterpartySettlementEntry.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (!entry) {
       throw new ConflictException('Settlement entry was not created');
@@ -70,6 +70,7 @@ export class CounterpartySettlementService {
       this.assertSameMovement(entry, input);
       const balance = await tx.counterpartyBalance.findUnique({
         where: {
+          tenantId: input.tenantId,
           counterpartyId_currency: {
             counterpartyId: input.counterpartyId,
             currency: input.currency,
@@ -87,6 +88,7 @@ export class CounterpartySettlementService {
       balanceField === 'customerDebt' ? 'supplierDebt' : 'customerDebt';
     const balance = await tx.counterpartyBalance.upsert({
       where: {
+        tenantId: input.tenantId,
         counterpartyId_currency: {
           counterpartyId: input.counterpartyId,
           currency: input.currency,

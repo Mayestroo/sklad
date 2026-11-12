@@ -50,7 +50,7 @@ export class CategoriesService {
     }
 
     return this.prisma.category.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
         name: dto.name ? asJson(dto.name) : undefined,
         parentId: dto.parentId !== undefined ? dto.parentId : undefined,
@@ -75,18 +75,18 @@ export class CategoriesService {
 
     // Unassign products from this category before deleting
     await this.prisma.product.updateMany({
-      where: { categoryId: id },
+      where: { tenantId, categoryId: id },
       data: { categoryId: null },
     });
 
     // Unassign child categories
     await this.prisma.category.updateMany({
-      where: { parentId: id },
+      where: { tenantId, parentId: id },
       data: { parentId: null },
     });
 
     await this.prisma.category.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     return { success: true, message: 'Kategoriya muvaffaqiyatli o‘chirildi' };

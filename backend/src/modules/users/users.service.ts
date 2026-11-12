@@ -157,7 +157,7 @@ export class UsersService {
 
       // Remove existing role assignments and re-assign
       await this.prisma.userRole.deleteMany({
-        where: { userId },
+        where: { user: { tenantId }, userId },
       });
 
       await this.prisma.userRole.create({
@@ -169,7 +169,7 @@ export class UsersService {
     }
 
     const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
+      where: { tenantId, id: userId },
       data: updateData,
       include: {
         userRoles: {
@@ -250,17 +250,17 @@ export class UsersService {
 
     // Delete role assignments first
     await this.prisma.userRole.deleteMany({
-      where: { userId },
+      where: { user: { tenantId }, userId },
     });
 
     try {
       await this.prisma.user.delete({
-        where: { id: userId },
+        where: { tenantId, id: userId },
       });
     } catch {
       // If historical documents link to this user, deactivate instead of crashing
       await this.prisma.user.update({
-        where: { id: userId },
+        where: { tenantId, id: userId },
         data: { isActive: false },
       });
 

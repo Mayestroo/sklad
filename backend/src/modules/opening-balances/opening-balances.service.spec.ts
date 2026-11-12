@@ -285,7 +285,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       await service.post('tenant-1', 'user-1', doc.id);
 
       expect(prisma.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'cash-usd' },
+        where: { tenantId: 'tenant-1', id: 'cash-usd' },
         data: { balance: { increment: 10 } },
       });
       expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
@@ -410,7 +410,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
 
       // 1. CashAccount incremented
       expect(prisma.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'acc-cash' },
+        where: { tenantId: 'tenant-1', id: 'acc-cash' },
         data: { balance: { increment: 25000000 } },
       });
 
@@ -585,7 +585,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       expect(result.status).toBe(OpeningBalanceStatus.DRAFT);
       // Cash decremented
       expect(prisma.cashAccount.update).toHaveBeenCalledWith({
-        where: { id: 'acc-cash' },
+        where: { tenantId: 'tenant-1', id: 'acc-cash' },
         data: { balance: { decrement: 25000000 } },
       });
       // Stock decremented

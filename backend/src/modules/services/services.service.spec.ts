@@ -207,7 +207,7 @@ describe('ServicesService Unit Tests', () => {
 
       expect(prisma.serviceAct.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'act-1' },
+          where: { id: 'act-1', tenantId: 'test-tenant-uuid' },
           data: { status: ServiceActStatus.POSTED },
         }),
       );
@@ -430,7 +430,10 @@ describe('ServicesService Unit Tests', () => {
 
       await service.remove(tenantId, 'act-1');
       expect(prisma.serviceAct.delete).toHaveBeenCalledWith({
-        where: { id: 'act-1' },
+        where: {
+          tenantId: 'test-tenant-uuid',
+          id: 'act-1',
+        },
       });
     });
 
@@ -443,7 +446,10 @@ describe('ServicesService Unit Tests', () => {
 
       await service.remove(tenantId, 'act-1');
       expect(prisma.serviceAct.delete).toHaveBeenCalledWith({
-        where: { id: 'act-1' },
+        where: {
+          tenantId: 'test-tenant-uuid',
+          id: 'act-1',
+        },
       });
     });
   });

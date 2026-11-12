@@ -294,11 +294,11 @@ export class AdditionalExpensesService {
 
     return this.prisma.$transaction(async (tx) => {
       await tx.additionalExpenseItem.deleteMany({
-        where: { expenseId: id },
+        where: { expense: { tenantId }, expenseId: id },
       });
 
       const updated = await tx.additionalExpense.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           docDate: dto.docDate ? new Date(dto.docDate) : existing.docDate,
           expenseType: dto.expenseType || existing.expenseType,
@@ -372,10 +372,10 @@ export class AdditionalExpensesService {
     }
 
     await this.prisma.additionalExpenseItem.deleteMany({
-      where: { expenseId: id },
+      where: { expense: { tenantId }, expenseId: id },
     });
 
-    await this.prisma.additionalExpense.delete({ where: { id } });
+    await this.prisma.additionalExpense.delete({ where: { tenantId, id } });
 
     return {
       success: true,
@@ -671,7 +671,7 @@ export class AdditionalExpensesService {
           const newBatchLandedCost = currentBatchLandedCost + allocatedPerUnit;
 
           await tx.productBatch.update({
-            where: { id: batch.id },
+            where: { tenantId, id: batch.id },
             data: { landedCost: newBatchLandedCost },
           });
 
@@ -679,20 +679,21 @@ export class AdditionalExpensesService {
           // Keep it synchronized with the revalued batch cost.
           const receiptItem = await tx.purchaseReceiptItem.findFirst({
             where: {
+              receipt: { tenantId },
               receiptId: expense.receiptId,
               productId: item.productId,
             },
           });
           if (receiptItem) {
             await tx.purchaseReceiptItem.update({
-              where: { id: receiptItem.id },
+              where: { receipt: { tenantId }, id: receiptItem.id },
               data: { landedCost: newBatchLandedCost },
             });
           }
 
           // Sync Product catalog costPrice (ADR 0007)
           await tx.product.update({
-            where: { id: item.productId },
+            where: { tenantId, id: item.productId },
             data: {
               costPrice: newBatchLandedCost,
               costPriceCurrency: 'UZS',
@@ -721,7 +722,10 @@ export class AdditionalExpensesService {
                 Number(consumption.salesInvoiceItem.totalPrice) - newLineCogs;
 
               await tx.salesInvoiceItem.update({
-                where: { id: consumption.salesInvoiceItem.id },
+                where: {
+                  invoice: { tenantId },
+                  id: consumption.salesInvoiceItem.id,
+                },
                 data: {
                   unitCogs: newUnitCogs,
                   lineCogs: newLineCogs,
@@ -731,7 +735,10 @@ export class AdditionalExpensesService {
 
               // Recalculate parent sales invoice total cogs & gross profit
               const allInvoiceItems = await tx.salesInvoiceItem.findMany({
-                where: { invoiceId: consumption.salesInvoiceItem.invoiceId },
+                where: {
+                  invoice: { tenantId },
+                  invoiceId: consumption.salesInvoiceItem.invoiceId,
+                },
               });
               const invoiceTotalCogs = allInvoiceItems.reduce((s, it) => {
                 if (it.id === consumption.salesInvoiceItemId) {
@@ -741,13 +748,13 @@ export class AdditionalExpensesService {
               }, 0);
 
               const invoice = await tx.salesInvoice.findUnique({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
               });
               const newInvoiceGrossProfit =
                 Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
 
               await tx.salesInvoice.update({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
                 data: {
                   totalCogs: invoiceTotalCogs,
                   grossProfit: newInvoiceGrossProfit,
@@ -759,7 +766,7 @@ export class AdditionalExpensesService {
 
         // Update item fields
         await tx.additionalExpenseItem.update({
-          where: { id: item.id },
+          where: { expense: { tenantId }, id: item.id },
           data: {
             newLandedCost: Number(item.initialLandedCost) + allocatedPerUnit,
             cogsAdjustment:
@@ -770,7 +777,7 @@ export class AdditionalExpensesService {
 
       // Update PurchaseReceipt total additional expenses
       await tx.purchaseReceipt.update({
-        where: { id: expense.receiptId },
+        where: { tenantId, id: expense.receiptId },
         data: {
           additionalExpensesTotal: { increment: capitalizedTotal },
         },
@@ -805,7 +812,7 @@ export class AdditionalExpensesService {
 
         // Decrement cash balance
         await tx.cashAccount.update({
-          where: { id: paidCashAccountId },
+          where: { tenantId, id: paidCashAccountId },
           data: { balance: { decrement: totalAmount } },
         });
 
@@ -932,7 +939,7 @@ export class AdditionalExpensesService {
 
       // 4. Update status to POSTED
       const updatedExpense = await tx.additionalExpense.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: PurchaseDocStatus.POSTED,
           postedById: userId,
@@ -1030,13 +1037,13 @@ export class AdditionalExpensesService {
           );
 
           await tx.productBatch.update({
-            where: { id: batch.id },
+            where: { tenantId, id: batch.id },
             data: { landedCost: restoredBatchLandedCost },
           });
 
           // Sync catalog cost price
           await tx.product.update({
-            where: { id: item.productId },
+            where: { tenantId, id: item.productId },
             data: {
               costPrice: restoredBatchLandedCost,
               costPriceCurrency: 'UZS',
@@ -1069,7 +1076,10 @@ export class AdditionalExpensesService {
                 restoredLineCogs;
 
               await tx.salesInvoiceItem.update({
-                where: { id: consumption.salesInvoiceItem.id },
+                where: {
+                  invoice: { tenantId },
+                  id: consumption.salesInvoiceItem.id,
+                },
                 data: {
                   unitCogs: restoredUnitCogs,
                   lineCogs: restoredLineCogs,
@@ -1079,7 +1089,10 @@ export class AdditionalExpensesService {
 
               // Recalculate parent invoice
               const allInvoiceItems = await tx.salesInvoiceItem.findMany({
-                where: { invoiceId: consumption.salesInvoiceItem.invoiceId },
+                where: {
+                  invoice: { tenantId },
+                  invoiceId: consumption.salesInvoiceItem.invoiceId,
+                },
               });
               const invoiceTotalCogs = allInvoiceItems.reduce((s, it) => {
                 if (it.id === consumption.salesInvoiceItemId) {
@@ -1089,13 +1102,13 @@ export class AdditionalExpensesService {
               }, 0);
 
               const invoice = await tx.salesInvoice.findUnique({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
               });
               const newInvoiceGrossProfit =
                 Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
 
               await tx.salesInvoice.update({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
                 data: {
                   totalCogs: invoiceTotalCogs,
                   grossProfit: newInvoiceGrossProfit,
@@ -1108,7 +1121,7 @@ export class AdditionalExpensesService {
 
       // Revert PurchaseReceipt additionalExpensesTotal
       await tx.purchaseReceipt.update({
-        where: { id: expense.receiptId },
+        where: { tenantId, id: expense.receiptId },
         data: {
           additionalExpensesTotal: { decrement: totalAmount },
         },
@@ -1141,7 +1154,7 @@ export class AdditionalExpensesService {
 
       // 4. Update status to CANCELLED
       const cancelledExpense = await tx.additionalExpense.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: PurchaseDocStatus.CANCELLED },
       });
 

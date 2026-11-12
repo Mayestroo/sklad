@@ -844,7 +844,7 @@ export class FinanceService {
       });
 
       await tx.cashAccount.update({
-        where: { id: dto.accountId },
+        where: { tenantId, id: dto.accountId },
         data: { balance: { increment: dto.amount } },
       });
 
@@ -879,6 +879,7 @@ export class FinanceService {
         ) {
           await this.assertCreditAvailable(
             tx,
+            tenantId,
             dto.counterpartyId!,
             dto.currency,
             settlement.side,
@@ -973,7 +974,7 @@ export class FinanceService {
       });
 
       await tx.cashAccount.update({
-        where: { id: dto.accountId },
+        where: { tenantId, id: dto.accountId },
         data: { balance: { decrement: dto.amount } },
       });
 
@@ -1008,6 +1009,7 @@ export class FinanceService {
         ) {
           await this.assertCreditAvailable(
             tx,
+            tenantId,
             dto.counterpartyId!,
             dto.currency,
             settlement.side,
@@ -1060,7 +1062,7 @@ export class FinanceService {
             ? SalesPaymentStatus.PARTIALLY_PAID
             : SalesPaymentStatus.UNPAID;
       await tx.salesInvoice.update({
-        where: { id: targetId },
+        where: { tenantId, id: targetId },
         data: { paidAmount, paymentStatus },
       });
       return;
@@ -1087,7 +1089,7 @@ export class FinanceService {
         }
       }
       await tx.salesOrder.update({
-        where: { id: targetId },
+        where: { tenantId, id: targetId },
         data: { paidAmount, status },
       });
       return;
@@ -1109,7 +1111,7 @@ export class FinanceService {
             ? PurchasePaymentStatus.PARTIALLY_PAID
             : PurchasePaymentStatus.UNPAID;
       await tx.purchaseReceipt.update({
-        where: { id: targetId },
+        where: { tenantId, id: targetId },
         data: { paidAmount, paymentStatus },
       });
       return;
@@ -1129,7 +1131,7 @@ export class FinanceService {
             ? ServicePaymentStatus.PARTIALLY_PAID
             : ServicePaymentStatus.UNPAID;
       await tx.serviceAct.update({
-        where: { id: targetId },
+        where: { tenantId, id: targetId },
         data: { paidAmount, paymentStatus },
       });
       return;
@@ -1144,7 +1146,7 @@ export class FinanceService {
           'Additional expense settlement target not found',
         );
       const allocations = await tx.settlementAllocation.findMany({
-        where: { targetType, targetId },
+        where: { tenantId, targetType, targetId },
         select: { amount: true },
       });
       const allocatedAmount = allocations.reduce(
@@ -1155,7 +1157,7 @@ export class FinanceService {
         allocatedAmount >= Number(expense.amount) + Number(expense.vatAmount);
       if (expense.isPaid !== isPaid) {
         await tx.additionalExpense.update({
-          where: { id: targetId },
+          where: { tenantId, id: targetId },
           data: { isPaid },
         });
       }
@@ -1335,13 +1337,17 @@ export class FinanceService {
 
   private async assertCreditAvailable(
     tx: Prisma.TransactionClient,
+    tenantId: string,
     counterpartyId: string,
     currency: string,
     side: CounterpartySettlementSide,
     amount: number,
   ) {
     const balance = await tx.counterpartyBalance.findUnique({
-      where: { counterpartyId_currency: { counterpartyId, currency } },
+      where: {
+        tenantId,
+        counterpartyId_currency: { counterpartyId, currency },
+      },
       select: { customerDebt: true, supplierDebt: true },
     });
     const current = Number(
@@ -1392,7 +1398,7 @@ export class FinanceService {
             ? SalesPaymentStatus.PARTIALLY_PAID
             : SalesPaymentStatus.UNPAID;
       await tx.salesInvoice.update({
-        where: { id: invoice.id },
+        where: { tenantId, id: invoice.id },
         data: { paidAmount, paymentStatus },
       });
     } else if (
@@ -1421,7 +1427,7 @@ export class FinanceService {
         status = 'AWAITING_PAYMENT';
       }
       await tx.salesOrder.update({
-        where: { id: order.id },
+        where: { tenantId, id: order.id },
         data: { paidAmount, status },
       });
     } else if (
@@ -1442,7 +1448,7 @@ export class FinanceService {
             ? PurchasePaymentStatus.PARTIALLY_PAID
             : PurchasePaymentStatus.UNPAID;
       await tx.purchaseReceipt.update({
-        where: { id: receipt.id },
+        where: { tenantId, id: receipt.id },
         data: { paidAmount, paymentStatus },
       });
     } else if (
@@ -1461,7 +1467,7 @@ export class FinanceService {
             ? ServicePaymentStatus.PARTIALLY_PAID
             : ServicePaymentStatus.UNPAID;
       await tx.serviceAct.update({
-        where: { id: act.id },
+        where: { tenantId, id: act.id },
         data: { paidAmount, paymentStatus },
       });
     } else if (
@@ -1476,6 +1482,7 @@ export class FinanceService {
         );
       const allocations = await tx.settlementAllocation.findMany({
         where: {
+          tenantId,
           targetType: settlement.targetType,
           targetId: settlement.targetId,
         },
@@ -1487,7 +1494,7 @@ export class FinanceService {
       );
       if (paidAmount >= Number(expense.amount) + Number(expense.vatAmount)) {
         await tx.additionalExpense.update({
-          where: { id: expense.id },
+          where: { tenantId, id: expense.id },
           data: { isPaid: true },
         });
       }
@@ -1839,13 +1846,13 @@ export class FinanceService {
 
       // Deduct from source
       await tx.cashAccount.update({
-        where: { id: dto.fromAccountId },
+        where: { tenantId, id: dto.fromAccountId },
         data: { balance: { decrement: fromAmount } },
       });
 
       // Add to destination
       await tx.cashAccount.update({
-        where: { id: dto.toAccountId },
+        where: { tenantId, id: dto.toAccountId },
         data: { balance: { increment: toAmount } },
       });
 
@@ -1906,6 +1913,7 @@ export class FinanceService {
 
     const originalEntry = await tx.counterpartySettlementEntry.findUnique({
       where: {
+        tenantId,
         idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT`,
       },
     });
@@ -1935,7 +1943,7 @@ export class FinanceService {
     });
 
     const allocations = await tx.settlementAllocation.findMany({
-      where: { financeTransactionId: transaction.id },
+      where: { tenantId, financeTransactionId: transaction.id },
       select: {
         id: true,
         amount: true,
@@ -2063,7 +2071,7 @@ export class FinanceService {
       // Safe check: Account balance cannot go negative
       if (existing.accountId) {
         const acc = await tx.cashAccount.findUnique({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
         });
         if (!acc || Number(acc.balance) < amount) {
           throw new BadRequestException(
@@ -2071,7 +2079,7 @@ export class FinanceService {
           );
         }
         await tx.cashAccount.update({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
           data: { balance: { decrement: amount } },
         });
       }
@@ -2087,7 +2095,7 @@ export class FinanceService {
       // Return money to account
       if (existing.accountId) {
         await tx.cashAccount.update({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
           data: { balance: { increment: amount } },
         });
       }
@@ -2103,7 +2111,7 @@ export class FinanceService {
       const destinationAmount = Number(existing.transferToAmount ?? amount);
       if (existing.transferToId) {
         const toAcc = await tx.cashAccount.findUnique({
-          where: { id: existing.transferToId },
+          where: { tenantId, id: existing.transferToId },
         });
         if (!toAcc || Number(toAcc.balance) < destinationAmount) {
           throw new BadRequestException(
@@ -2111,13 +2119,13 @@ export class FinanceService {
           );
         }
         await tx.cashAccount.update({
-          where: { id: existing.transferToId },
+          where: { tenantId, id: existing.transferToId },
           data: { balance: { decrement: destinationAmount } },
         });
       }
       if (existing.accountId) {
         await tx.cashAccount.update({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
           data: { balance: { increment: amount } },
         });
       }
@@ -2171,7 +2179,7 @@ export class FinanceService {
     if (!existing) throw new NotFoundException('Transaction not found');
 
     return this.prisma.financeTransaction.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
         comment: data.comment,
         transactionTypeId: data.transactionTypeId,
@@ -2202,7 +2210,7 @@ export class FinanceService {
       }
 
       await tx.financeTransaction.update({
-        where: { id },
+        where: { tenantId, id },
         data: { isDeleted: true },
       });
       return {
@@ -2221,7 +2229,7 @@ export class FinanceService {
     if (!existing) throw new NotFoundException('Transaction not found');
 
     return this.prisma.financeTransaction.update({
-      where: { id },
+      where: { tenantId, id },
       data: { isDeleted: false },
     });
   }

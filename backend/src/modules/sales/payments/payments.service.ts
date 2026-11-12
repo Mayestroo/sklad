@@ -150,7 +150,7 @@ export class PaymentsService {
 
       // 2. Record cash and the customer-side settlement movement once.
       await tx.cashAccount.update({
-        where: { id: cashAccountId },
+        where: { tenantId, id: cashAccountId },
         data: { balance: { increment: dto.amount } },
       });
 
@@ -210,7 +210,7 @@ export class PaymentsService {
             newPaidAmount >= totalAmount ? 'PAID' : 'PARTIALLY_PAID';
 
           await tx.salesInvoice.update({
-            where: { id: dto.invoiceId },
+            where: { tenantId, id: dto.invoiceId },
             data: {
               paidAmount: newPaidAmount,
               paymentStatus: newPaymentStatus,
@@ -219,7 +219,7 @@ export class PaymentsService {
         }
       } else if (dto.orderId) {
         await tx.salesOrder.update({
-          where: { id: dto.orderId },
+          where: { tenantId, id: dto.orderId },
           data: { paidAmount: { increment: dto.amount } },
         });
       }

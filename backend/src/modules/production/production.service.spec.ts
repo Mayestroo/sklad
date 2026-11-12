@@ -147,14 +147,22 @@ describe('ProductionService', () => {
     expect(tx.productBatch.updateMany).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        where: { id: 'old-batch', remainingQty: { gte: 2 } },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'old-batch',
+          remainingQty: { gte: 2 },
+        },
         data: { remainingQty: { decrement: 2 } },
       }),
     );
     expect(tx.productBatch.updateMany).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        where: { id: 'new-batch', remainingQty: { gte: 1 } },
+        where: {
+          tenantId: 'tenant-1',
+          id: 'new-batch',
+          remainingQty: { gte: 1 },
+        },
         data: { remainingQty: { decrement: 1 } },
       }),
     );
@@ -172,7 +180,7 @@ describe('ProductionService', () => {
     );
     expect(tx.stockLevel.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'stock-1', quantity: { gte: 3 } },
+        where: { tenantId: 'tenant-1', id: 'stock-1', quantity: { gte: 3 } },
         data: { quantity: { decrement: 3 } },
       }),
     );
@@ -216,7 +224,7 @@ describe('ProductionService', () => {
     });
 
     expect(tx.productBatch.update).toHaveBeenCalledWith({
-      where: { id: 'batch-1' },
+      where: { tenantId: 'tenant-1', id: 'batch-1' },
       data: { remainingQty: { increment: 0.5 } },
     });
     expect(tx.stockLevel.update).toHaveBeenCalledWith(
@@ -232,7 +240,7 @@ describe('ProductionService', () => {
       }),
     );
     expect(tx.productionMaterialBatch.update).toHaveBeenCalledWith({
-      where: { id: 'allocation-1' },
+      where: { batch: { tenantId: 'tenant-1' }, id: 'allocation-1' },
       data: { quantity: { decrement: 0.5 } },
     });
     expect(tx.productionMaterialMovement.create).toHaveBeenCalledWith(
@@ -295,7 +303,7 @@ describe('ProductionService', () => {
       }),
     );
     expect(tx.product.update).toHaveBeenCalledWith({
-      where: { id: 'finished-1' },
+      where: { tenantId: 'tenant-1', id: 'finished-1' },
       data: {
         costPrice: 34_300,
         costPriceCurrency: 'UZS',

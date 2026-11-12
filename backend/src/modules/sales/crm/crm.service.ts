@@ -67,7 +67,7 @@ export class CrmService {
     }
 
     return this.prisma.deal.update({
-      where: { id: dealId },
+      where: { tenantId, id: dealId },
       data: { stage },
       include: {
         counterparty: true,
@@ -96,7 +96,7 @@ export class CrmService {
     }
 
     return this.prisma.deal.update({
-      where: { id: dealId },
+      where: { tenantId, id: dealId },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.amount !== undefined && { amount: Number(dto.amount) }),
@@ -125,7 +125,7 @@ export class CrmService {
     }
 
     await this.prisma.deal.delete({
-      where: { id: dealId },
+      where: { tenantId, id: dealId },
     });
 
     return { success: true, message: 'Deal deleted successfully' };

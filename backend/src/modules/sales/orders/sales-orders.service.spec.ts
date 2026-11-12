@@ -450,7 +450,7 @@ describe('SalesOrdersService', () => {
       ]);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.PENDING_APPROVAL },
       });
     });
@@ -469,7 +469,7 @@ describe('SalesOrdersService', () => {
       ]);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.APPROVED },
       });
     });
@@ -509,7 +509,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.SENT_TO_PRODUCTION },
       });
       expect(prisma.productionOrder.create).toHaveBeenCalledTimes(2);
@@ -540,15 +540,15 @@ describe('SalesOrdersService', () => {
       await service.updateProductionReadyQty('tenant-1', 'user-1', 'po-1', 4);
 
       expect(prisma.productionOrder.update).toHaveBeenCalledWith({
-        where: { id: 'po-1' },
+        where: { tenantId: 'tenant-1', id: 'po-1' },
         data: { readyQty: 4, status: ProductionOrderStatus.IN_PROGRESS },
       });
       expect(prisma.salesOrderItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-1' },
+        where: { order: { tenantId: 'tenant-1' }, id: 'item-1' },
         data: { readyQty: 4 },
       });
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.PARTIALLY_READY },
       });
     });
@@ -577,7 +577,7 @@ describe('SalesOrdersService', () => {
       await service.updateProductionReadyQty('tenant-1', 'user-1', 'po-1', 10);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.AWAITING_PAYMENT },
       });
     });
@@ -605,7 +605,7 @@ describe('SalesOrdersService', () => {
       await service.updateProductionReadyQty('tenant-1', 'user-1', 'po-1', 10);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.READY_TO_SHIP },
       });
     });
@@ -629,7 +629,7 @@ describe('SalesOrdersService', () => {
       await service.onPaymentRegistered('tenant-1', 'user-1', 'order-1');
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.READY_TO_SHIP },
       });
     });
@@ -795,7 +795,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.SHIPPED, warehouseId: 'wh-1' },
       });
     });
@@ -894,7 +894,7 @@ describe('SalesOrdersService', () => {
       );
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inv-prepaid-1' },
+          where: { id: 'inv-prepaid-1', tenantId: 'tenant-1' },
           data: expect.objectContaining({
             paidAmount: 1000000,
             paymentStatus: SalesPaymentStatus.PAID,
@@ -935,7 +935,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.ACCEPTED },
       });
     });
@@ -976,7 +976,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.PROCESSING },
       });
     });
@@ -1001,7 +1001,7 @@ describe('SalesOrdersService', () => {
         stockReservationService.releaseOrderReservations,
       ).toHaveBeenCalledWith('tenant-1', 'order-1', expect.anything());
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.CANCELLED },
       });
     });
@@ -1084,7 +1084,7 @@ describe('SalesOrdersService', () => {
         }),
       );
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.SHIPPED, warehouseId: 'wh-1' },
       });
     });

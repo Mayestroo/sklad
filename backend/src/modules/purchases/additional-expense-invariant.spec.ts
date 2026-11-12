@@ -162,11 +162,14 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     expect(posted.status).toBe(PurchaseDocStatus.POSTED);
     // 2,000,000 / 10 = 200,000 -> 1,000,000 + 200,000 = 1,200,000
     expect(prisma.productBatch.update).toHaveBeenCalledWith({
-      where: { id: 'batch-1' },
+      where: {
+        tenantId: 'tenant-invariant-1',
+        id: 'batch-1',
+      },
       data: { landedCost: 1200000 },
     });
     expect(prisma.product.update).toHaveBeenCalledWith({
-      where: { id: 'prod-iphone' },
+      where: { tenantId: 'tenant-invariant-1', id: 'prod-iphone' },
       data: {
         costPrice: 1200000,
         costPriceCurrency: 'UZS',
@@ -260,7 +263,10 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     // Unit expense = 200,000 per unit
     // Batch landed cost = 1,000,000 + 200,000 = 1,200,000
     expect(prisma.productBatch.update).toHaveBeenCalledWith({
-      where: { id: 'batch-1' },
+      where: {
+        tenantId: 'tenant-invariant-1',
+        id: 'batch-1',
+      },
       data: { landedCost: 1200000 },
     });
 
@@ -268,7 +274,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     // New lineCogs = 6,000,000 + 1,200,000 = 7,200,000
     // New grossProfit = 9,000,000 - 7,200,000 = 1,800,000
     expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
-      where: { id: 'inv-item-1' },
+      where: { invoice: { tenantId: 'tenant-invariant-1' }, id: 'inv-item-1' },
       data: {
         unitCogs: 1200000,
         lineCogs: 7200000,
@@ -419,11 +425,14 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
 
     expect(cancelled.status).toBe(PurchaseDocStatus.CANCELLED);
     expect(prisma.productBatch.update).toHaveBeenCalledWith({
-      where: { id: 'batch-1' },
+      where: {
+        tenantId: 'tenant-invariant-1',
+        id: 'batch-1',
+      },
       data: { landedCost: 1000000 }, // Restored to initial cost
     });
     expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
-      where: { id: 'inv-item-1' },
+      where: { invoice: { tenantId: 'tenant-invariant-1' }, id: 'inv-item-1' },
       data: {
         unitCogs: 1000000,
         lineCogs: 6000000,

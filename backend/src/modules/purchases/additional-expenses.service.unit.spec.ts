@@ -475,11 +475,14 @@ describe('AdditionalExpensesService Unit Tests', () => {
       expect(res.status).toBe(PurchaseDocStatus.POSTED);
       // Unit expense: 1,000,000 / 10 = 100,000 -> New landed cost: 1,100,000
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-1' },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'batch-1',
+        },
         data: { landedCost: 1100000 },
       });
       expect(prisma.product.update).toHaveBeenCalledWith({
-        where: { id: 'prod-iphone' },
+        where: { tenantId: 'tenant-123', id: 'prod-iphone' },
         data: {
           costPrice: 1100000,
           costPriceCurrency: 'UZS',
@@ -576,7 +579,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
       // New lineCogs = 6,000,000 + 600,000 = 6,600,000
       // New lineGrossProfit = 9,000,000 - 6,600,000 = 2,400,000
       expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
-        where: { id: 'inv-item-1' },
+        where: {
+          invoice: { tenantId: 'tenant-123' },
+          id: 'inv-item-1',
+        },
         data: {
           unitCogs: 1100000,
           lineCogs: 6600000,
@@ -585,7 +591,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       });
 
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
+        where: { tenantId: 'tenant-123', id: 'inv-1' },
         data: {
           totalCogs: 6600000,
           grossProfit: 2400000,
@@ -667,11 +673,14 @@ describe('AdditionalExpensesService Unit Tests', () => {
 
       expect(res.status).toBe(PurchaseDocStatus.CANCELLED);
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-1' },
+        where: {
+          tenantId: 'tenant-123',
+          id: 'batch-1',
+        },
         data: { landedCost: 1000000 }, // Restored to initial
       });
       expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
-        where: { id: 'inv-item-1' },
+        where: { invoice: { tenantId: 'tenant-123' }, id: 'inv-item-1' },
         data: {
           unitCogs: 1000000, // Restored to 1,000,000
           lineCogs: 6000000,

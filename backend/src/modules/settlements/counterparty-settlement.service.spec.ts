@@ -88,6 +88,7 @@ describe('CounterpartySettlementService', () => {
     });
     expect(tx.counterpartyBalance.upsert).toHaveBeenCalledWith({
       where: {
+        tenantId: 'tenant-1',
         counterpartyId_currency: {
           counterpartyId: 'counterparty-1',
           currency: 'USD',
@@ -126,6 +127,7 @@ describe('CounterpartySettlementService', () => {
     expect(tx.counterpartyBalance.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          tenantId: 'tenant-1',
           counterpartyId_currency: {
             counterpartyId: 'counterparty-1',
             currency: 'UZS',
