@@ -428,11 +428,21 @@ model SubscriptionPayment {
   receiptUrl     String?            @map("receipt_url")
   createdAt      DateTime           @default(now()) @map("created_at")
 
+  // Provider (Click / Payme) transaction lifecycle. `transactionId` holds the
+  // provider's transaction id; state follows Payme: 1 created, 2 performed,
+  // -1 cancelled before perform, -2 cancelled after perform.
+  providerState        Int?      @map("provider_state")
+  providerCreatedAt    DateTime? @map("provider_created_at")
+  providerPerformedAt  DateTime? @map("provider_performed_at")
+  providerCancelledAt  DateTime? @map("provider_cancelled_at")
+  providerCancelReason Int?      @map("provider_cancel_reason")
+
   company      Company       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId])
+  @@index([method, transactionId])
   @@map("subscription_payments")
 }
 

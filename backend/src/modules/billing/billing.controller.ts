@@ -1,5 +1,15 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
-import { BillingService, type ProviderWebhookPayload } from './billing.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Headers,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
+import { BillingService } from './billing.service';
+import { ClickWebhookService } from './webhooks/click-webhook.service';
+import { PaymeWebhookService } from './webhooks/payme-webhook.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -9,7 +19,11 @@ import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
 @Controller('api/billing')
 export class BillingController {
-  constructor(private readonly billingService: BillingService) {}
+  constructor(
+    private readonly billingService: BillingService,
+    private readonly clickWebhooks: ClickWebhookService,
+    private readonly paymeWebhooks: PaymeWebhookService,
+  ) {}
 
   @Get('plans')
   getPlans() {
@@ -44,14 +58,22 @@ export class BillingController {
     return this.billingService.getPaymentHistory(tenantId);
   }
 
-  // Webhooks for Click and Payme (Public)
+  // Provider callbacks. Public routes: each request is authenticated by the
+  // provider's signature (Click) or Basic auth (Payme) inside the service, and
+  // both protocols expect HTTP 200 with the error in the body. The bodies are
+  // provider formats, parsed by the services rather than by a DTO.
   @Post('webhook/click')
-  clickWebhook(@Body() payload: ProviderWebhookPayload) {
-    return this.billingService.processWebhook('CLICK', payload);
+  @HttpCode(200)
+  clickWebhook(@Body() body: Record<string, unknown>) {
+    return this.clickWebhooks.handle(body);
   }
 
   @Post('webhook/payme')
-  paymeWebhook(@Body() payload: ProviderWebhookPayload) {
-    return this.billingService.processWebhook('PAYME', payload);
+  @HttpCode(200)
+  paymeWebhook(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.paymeWebhooks.handle(authorization, body);
   }
 }

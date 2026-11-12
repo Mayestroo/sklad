@@ -83,14 +83,6 @@ export const PLANS: PricingPlan[] = [
   },
 ];
 
-/** Fields read from a Click or Payme callback body (provider format, unvalidated). */
-export interface ProviderWebhookPayload {
-  paymentId?: string;
-  transaction_param?: string;
-  trans_id?: string;
-  payme_trans_id?: string;
-}
-
 @Injectable()
 export class BillingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -222,52 +214,5 @@ export class BillingService {
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
     });
-  }
-
-  async processWebhook(
-    provider: 'CLICK' | 'PAYME',
-    payload: ProviderWebhookPayload,
-  ) {
-    const paymentId = payload.paymentId || payload.transaction_param;
-    if (!paymentId) {
-      return { status: 'error', message: 'Missing payment identifier' };
-    }
-
-    const payment = await this.prisma.subscriptionPayment.findUnique({
-      where: { id: paymentId },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Subscription payment not found');
-    }
-
-    // Update payment & subscription to ACTIVE
-    await this.prisma.subscriptionPayment.update({
-      where: { id: paymentId },
-      data: {
-        status: 'PAID',
-        paidAt: new Date(),
-        transactionId:
-          payload.trans_id || payload.payme_trans_id || `TX-${Date.now()}`,
-      },
-    });
-
-    if (payment.subscriptionId) {
-      await this.prisma.subscription.update({
-        where: { id: payment.subscriptionId },
-        data: {
-          status: 'ACTIVE',
-        },
-      });
-    }
-
-    await this.prisma.company.update({
-      where: { id: payment.tenantId },
-      data: {
-        status: 'ACTIVE',
-      },
-    });
-
-    return { status: 'success', paymentId, activated: true };
   }
 }
