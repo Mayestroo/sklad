@@ -18,13 +18,15 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:integration": "jest --config ./test/jest-integration.json --runInBand",
     "db:migrate": "npx prisma migrate dev",
     "db:seed": "npx prisma db seed",
     "db:reset": "npx prisma migrate reset",
     "db:studio": "npx prisma studio",
     "db:generate": "npx prisma generate",
     "create:superadmin": "ts-node scripts/create-superadmin.ts",
-    "settlement:reconcile": "node --env-file=.env -r ts-node/register -r tsconfig-paths/register scripts/reconcile-counterparty-settlement.ts"
+    "settlement:reconcile": "node --env-file=.env -r ts-node/register -r tsconfig-paths/register scripts/reconcile-counterparty-settlement.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

@@ -1,5 +1,23 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
+
+/**
+ * Integration test: runs against a REAL Postgres database.
+ * It must never touch a development or production database, so it only runs
+ * when DATABASE_URL_TEST is set to a dedicated, disposable test database
+ * (npm run test:integration). Data is written under a fresh tenant per run.
+ */
+const TEST_DATABASE_URL = process.env.DATABASE_URL_TEST;
+if (!TEST_DATABASE_URL) {
+  throw new Error(
+    'DATABASE_URL_TEST is not set. Point it at a disposable test database to run integration tests.',
+  );
+}
+if (TEST_DATABASE_URL === process.env.DATABASE_URL) {
+  throw new Error(
+    'DATABASE_URL_TEST must differ from DATABASE_URL; refusing to run integration tests against the application database.',
+  );
+}
+process.env.DATABASE_URL = TEST_DATABASE_URL;
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { PurchasesService } from './purchases.service';
@@ -36,20 +54,20 @@ describe('Purchase Document End-to-End Invariant Test', () => {
     }).compile();
 
     purchasesService = module.get<PurchasesService>(PurchasesService);
-    reportsService = module.get<AccountingReportsService>(AccountingReportsService);
+    reportsService = module.get<AccountingReportsService>(
+      AccountingReportsService,
+    );
     accountsService = module.get<AccountsService>(AccountsService);
     prisma = module.get<PrismaService>(PrismaService);
 
-    // 1. Get or create test tenant
-    let company = await prisma.company.findFirst();
-    if (!company) {
-      company = await prisma.company.create({
-        data: {
-          name: 'Test Tenant Company',
-          slug: 'test-tenant-company',
-        },
-      });
-    }
+    // 1. Create an isolated tenant for this run
+    const runId = Date.now().toString(36);
+    const company = await prisma.company.create({
+      data: {
+        name: { uz: 'Invariant Test ' + runId, ru: 'Invariant Test ' + runId },
+        slug: 'invariant-test-' + runId,
+      },
+    });
     tenantId = company.id;
 
     // Ensure default COA accounts exist
@@ -321,9 +339,7 @@ describe('Purchase Document End-to-End Invariant Test', () => {
       trialBalance.totalCreditTurnover,
     );
 
-    const finStatements = await reportsService.getFinancialStatements(
-      tenantId,
-    );
+    const finStatements = await reportsService.getFinancialStatements(tenantId);
     expect(finStatements.balanceSheet.isBalanced).toBe(true);
 
     // Clean up test receipt records
