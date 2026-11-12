@@ -8,6 +8,7 @@ import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreateInventoryDocDto } from '../dto';
+import { consumeFifoBatches, createFifoBatch } from '../fifo/fifo-batches';
 
 @Injectable()
 export class InventoryDocumentsService {
@@ -36,15 +37,11 @@ export class InventoryDocumentsService {
 
     const docNumber = await this.generateDocNumber(tenantId, dto.docType);
 
-    // Compute total amount
-    const totalAmount = dto.items.reduce(
-      (sum, item) => sum + item.quantity * item.unitPrice,
-      0,
-    );
-
-    // Atomic Prisma Transaction
+    // Atomic Prisma Transaction: stock levels, FIFO batches and the journal
+    // entry commit together, or not at all.
     const result = await this.prisma.$transaction(async (tx) => {
-      // 1. Create Document header
+      // 1. Document header; lines are added one by one so each line's id is
+      //    known when its batch consumption is recorded.
       const doc = await tx.inventoryDocument.create({
         data: {
           tenantId,
@@ -53,26 +50,13 @@ export class InventoryDocumentsService {
           docType: dto.docType,
           docStatus: 'POSTED',
           comment: dto.comment,
-          totalAmount,
+          totalAmount: 0,
           createdById: userId,
-          items: {
-            create: dto.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              totalPrice: item.quantity * item.unitPrice,
-            })),
-          },
-        },
-        include: {
-          items: {
-            include: { product: true },
-          },
         },
       });
 
-      // 2. Update Warehouse Stock Levels per line item
-      for (const item of dto.items) {
+      let totalAmount = 0;
+      for (const [index, item] of dto.items.entries()) {
         const existingStock = await tx.stockLevel.findUnique({
           where: {
             tenantId_warehouseId_productId: {
@@ -82,22 +66,67 @@ export class InventoryDocumentsService {
             },
           },
         });
+        const currentQuantity = existingStock
+          ? Number(existingStock.quantity)
+          : 0;
 
-        let newQuantity = existingStock ? Number(existingStock.quantity) : 0;
-
+        // 2. Stock movement of this line (STOCKTAKING: counted - book)
+        let delta: number;
         if (dto.docType === 'INBOUND') {
-          newQuantity += item.quantity;
+          delta = item.quantity;
         } else if (dto.docType === 'OUTBOUND') {
-          if (newQuantity < item.quantity) {
+          if (currentQuantity < item.quantity) {
             throw new BadRequestException(
-              `Insufficient stock for product ID ${item.productId}. Current: ${newQuantity}, requested: ${item.quantity}`,
+              `Insufficient stock for product ID ${item.productId}. Current: ${currentQuantity}, requested: ${item.quantity}`,
             );
           }
-          newQuantity -= item.quantity;
-        } else if (dto.docType === 'STOCKTAKING') {
-          // Physical count adjustment
-          newQuantity = item.quantity;
+          delta = -item.quantity;
+        } else {
+          delta = Math.round((item.quantity - currentQuantity) * 1000) / 1000;
         }
+
+        let unitPrice = item.unitPrice;
+        let lineTotal = item.quantity * item.unitPrice;
+        const line = await tx.inventoryDocumentItem.create({
+          data: {
+            documentId: doc.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice,
+            totalPrice: lineTotal,
+          },
+        });
+
+        // 3. FIFO cost layers: goods in become a batch at the line price,
+        //    goods out consume the oldest batches at their cost.
+        if (delta > 0) {
+          await createFifoBatch(tx, {
+            tenantId,
+            warehouseId: dto.warehouseId,
+            productId: item.productId,
+            quantity: delta,
+            unitCost: item.unitPrice,
+            batchNumber: `${docNumber}-${index + 1}`,
+          });
+        } else if (delta < 0) {
+          const allocation = await consumeFifoBatches(tx, {
+            tenantId,
+            warehouseId: dto.warehouseId,
+            productId: item.productId,
+            quantity: -delta,
+            source: { inventoryDocumentItemId: line.id },
+          });
+          if (dto.docType === 'OUTBOUND') {
+            // Goods leave at what they cost, not at a typed-in price.
+            unitPrice = allocation.unitCost;
+            lineTotal = allocation.totalCost;
+            await tx.inventoryDocumentItem.update({
+              where: { id: line.id },
+              data: { unitPrice, totalPrice: lineTotal },
+            });
+          }
+        }
+        totalAmount += lineTotal;
 
         await tx.stockLevel.upsert({
           where: {
@@ -107,22 +136,32 @@ export class InventoryDocumentsService {
               productId: item.productId,
             },
           },
-          update: { quantity: newQuantity },
+          update: { quantity: currentQuantity + delta },
           create: {
             tenantId,
             warehouseId: dto.warehouseId,
             productId: item.productId,
-            quantity: newQuantity,
+            quantity: currentQuantity + delta,
           },
         });
       }
 
-      // 3. Inbound documents post Dt 2910 / Kt 6010 in the same transaction
+      const posted = await tx.inventoryDocument.update({
+        where: { id: doc.id },
+        data: { totalAmount: Math.round(totalAmount * 100) / 100 },
+        include: {
+          items: {
+            include: { product: true },
+          },
+        },
+      });
+
+      // 4. Inbound documents post Dt 2910 / Kt 6010 in the same transaction
       if (dto.docType === 'INBOUND') {
-        await this.journalService.autoPostInboundDoc(tenantId, doc, tx);
+        await this.journalService.autoPostInboundDoc(tenantId, posted, tx);
       }
 
-      return doc;
+      return posted;
     });
 
     // 4. Record Audit Log
@@ -132,7 +171,11 @@ export class InventoryDocumentsService {
       entityType: 'InventoryDocument',
       entityId: result.id,
       action: 'CREATE',
-      newValue: { docNumber, docType: dto.docType, totalAmount },
+      newValue: {
+        docNumber,
+        docType: dto.docType,
+        totalAmount: result.totalAmount,
+      },
     });
 
     return result;

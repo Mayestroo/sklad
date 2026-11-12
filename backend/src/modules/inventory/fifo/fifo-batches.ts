@@ -103,7 +103,9 @@ export function allocateFifoCost(
 
 /** The document line a consumption is recorded against (exactly one). */
 export type BatchConsumptionSource =
-  { salesInvoiceItemId: string } | { purchaseReturnItemId: string };
+  | { salesInvoiceItemId: string }
+  | { purchaseReturnItemId: string }
+  | { inventoryDocumentItemId: string };
 
 export interface ConsumeFifoParams {
   tenantId: string;
@@ -234,4 +236,46 @@ export async function restoreBatchConsumptions(
   }
   await db.batchConsumption.deleteMany({ where: { tenantId, ...source } });
   return round(restored, 3);
+}
+
+export interface CreateFifoBatchParams {
+  tenantId: string;
+  warehouseId: string;
+  productId: string;
+  quantity: number;
+  /** Per-unit cost in the base currency (UZS). */
+  unitCost: number;
+  batchNumber: string;
+  /** FIFO age; defaults to now. Transfers keep the source batch's age. */
+  createdAt?: Date;
+}
+
+/** Adds a new cost layer (batch) to a warehouse. */
+export async function createFifoBatch(
+  db: Pick<Prisma.TransactionClient, 'productBatch'>,
+  params: CreateFifoBatchParams,
+) {
+  const { quantity, unitCost } = params;
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new BadRequestException('Partiya miqdori 0 dan katta bo‘lishi shart');
+  }
+  if (!Number.isFinite(unitCost) || unitCost < 0) {
+    throw new BadRequestException(
+      'Partiya tannarxi 0 yoki undan katta bo‘lishi shart',
+    );
+  }
+  const cost = round(unitCost, 2);
+  return db.productBatch.create({
+    data: {
+      tenantId: params.tenantId,
+      warehouseId: params.warehouseId,
+      productId: params.productId,
+      batchNumber: params.batchNumber,
+      initialQty: round(quantity, 3),
+      remainingQty: round(quantity, 3),
+      purchasePrice: cost,
+      landedCost: cost,
+      ...(params.createdAt ? { createdAt: params.createdAt } : {}),
+    },
+  });
 }

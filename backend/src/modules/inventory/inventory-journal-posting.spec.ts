@@ -31,10 +31,25 @@ function createPrismaMock() {
       create: jest.fn().mockResolvedValue({
         id: 'doc-1',
         docNumber: 'IN-000001',
+        totalAmount: 0,
+      }),
+      update: jest.fn().mockResolvedValue({
+        id: 'doc-1',
+        docNumber: 'IN-000001',
         totalAmount: 500,
         items: [],
       }),
     },
+    inventoryDocumentItem: {
+      create: jest.fn().mockResolvedValue({ id: 'line-1' }),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    productBatch: {
+      create: jest.fn().mockResolvedValue({ id: 'batch-1' }),
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    batchConsumption: { create: jest.fn().mockResolvedValue({}) },
     stockLevel: {
       findUnique: jest.fn().mockResolvedValue({ quantity: 10 }),
       update: jest.fn().mockResolvedValue({}),
