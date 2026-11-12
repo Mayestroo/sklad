@@ -1271,7 +1271,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         },
         counterpartyBalance: { upsert: jest.fn().mockRejectedValue(failure) },
       };
-      prisma.$transaction.mockImplementation(async (callback) => {
+      prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => {
         const workingState = {
           cashBalance: persistedState.cashBalance,
           counterparty: { ...persistedState.counterparty },

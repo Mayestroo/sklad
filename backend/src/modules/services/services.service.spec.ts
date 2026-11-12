@@ -74,9 +74,10 @@ describe('ServicesService Unit Tests', () => {
         service.create(tenantId, {
           type: ServiceActType.PROVIDED,
           counterpartyId,
+          currency: 'UZS',
           items: [],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('Kamida bitta xizmat qatori');
     });
 
     it('should calculate line subtotal, VAT, and total correctly on create', async () => {

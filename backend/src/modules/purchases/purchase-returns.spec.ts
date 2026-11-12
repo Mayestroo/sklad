@@ -256,7 +256,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
           currency: 'UZS',
           items: [{ productId: 'prod-iphone', quantity: 5, unitPrice: 100000 }],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('qolgan qaytarilmagan miqdordan');
     });
 
     it('should reject return if items were already sold (remaining batch qty < return qty)', async () => {
@@ -300,7 +300,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
           currency: 'UZS',
           items: [{ productId: 'prod-iphone', quantity: 5, unitPrice: 100000 }],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('partiyada qolgan miqdordan');
     });
 
     it('should reject return if on-hand warehouse stock is lower than return quantity', async () => {
@@ -319,9 +319,10 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         service.createReturn(tenantId, userId, {
           counterpartyId,
           warehouseId,
+          currency: 'UZS',
           items: [{ productId: 'prod-iphone', quantity: 5, unitPrice: 100000 }],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('omborda mavjud qoldiqdan (2)');
     });
   });
 

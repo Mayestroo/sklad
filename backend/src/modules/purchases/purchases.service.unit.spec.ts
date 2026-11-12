@@ -756,21 +756,27 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         type: 'PRODUCT',
         name: 'Test Product',
       });
-      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+      prisma.stockLevel.findUnique.mockResolvedValue({ quantity: 10 });
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-1',
         status: PurchaseDocStatus.POSTED,
-        items: [{ id: 'item-1', productId: 'prod-1', quantity: 10, returnedQuantity: 8 }],
+        counterpartyId: 'supp-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        // Nothing returned yet, so only the batch remainder (2 of 10, the rest was sold) limits the return.
+        items: [{ id: 'item-1', productId: 'prod-1', quantity: 10, returnedQuantity: 0 }],
         batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 2 }],
       });
 
-      await expect(
-        service.createReturn('tenant-123', 'user-1', {
-          receiptId: 'rec-1',
-          counterpartyId: 'supp-1',
-          warehouseId: 'wh-1',
-          items: [{ productId: 'prod-1', quantity: 5, unitPrice: 100000 }],
-        }),
-      ).rejects.toThrow(BadRequestException);
+      const attempt = service.createReturn('tenant-123', 'user-1', {
+        receiptId: 'rec-1',
+        counterpartyId: 'supp-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        items: [{ productId: 'prod-1', quantity: 5, unitPrice: 100000 }],
+      });
+      await expect(attempt).rejects.toThrow(BadRequestException);
+      await expect(attempt).rejects.toThrow('partiyada qolgan miqdordan (2)');
     });
 
     it('should disallow returning SERVICE items in purchase return', async () => {
@@ -780,7 +786,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         type: 'SERVICE',
         name: 'Test Service',
       });
-      prisma.purchaseReceipt.findUnique.mockResolvedValue({
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
         id: 'rec-srv',
         status: PurchaseDocStatus.POSTED,
         totalAmount: 50000,
@@ -803,23 +809,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
           receiptId: 'rec-srv',
           counterpartyId: 'supp-1',
           warehouseId: 'wh-1',
+          currency: 'UZS',
           items: [{ productId: 'srv-1', quantity: 1, unitPrice: 50000 }],
         }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should support ReturnDocStatus.UNDER_REVIEW and track returnedQuantity on receipt items', async () => {
-      const mockReceiptItem = {
-        id: 'item-1',
-        productId: 'prod-1',
-        quantity: 10,
-        returnedQuantity: 2,
-        unitPrice: 100000,
-        landedCost: 110000,
-      };
-
-      expect(mockReceiptItem.returnedQuantity).toBe(2);
-      expect(mockReceiptItem.quantity - mockReceiptItem.returnedQuantity).toBe(8);
+      ).rejects.toThrow('Xizmat (SERVICE)');
     });
 
     it('should cancel posted return: restore stock, product batch remainingQty, and supplier debt', async () => {
@@ -889,6 +882,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       const res = await service.createReturn('tenant-123', 'user-1', {
         counterpartyId: 'supp-1',
         warehouseId: 'wh-1',
+        currency: 'UZS',
         status: ReturnDocStatus.POSTED,
         items: [{ productId: 'prod-raw', quantity: 3, unitPrice: 50000 }],
       });
@@ -923,6 +917,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       const draft = await service.createReturn('tenant-123', 'user-1', {
         counterpartyId: 'supp-1',
         warehouseId: 'wh-1',
+        currency: 'UZS',
         status: ReturnDocStatus.DRAFT,
         items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100000 }],
       });

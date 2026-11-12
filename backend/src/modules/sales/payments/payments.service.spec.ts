@@ -117,9 +117,11 @@ describe('PaymentsService settlement ledger integration', () => {
       counterpartyId: 'cp-1',
       invoiceId: 'invoice-1',
       method: 'CASH',
+      cashAccountId: 'cash-usd',
       amount: 100,
       currency: 'USD',
-    }, 'user-1')).rejects.toThrow(BadRequestException);
+      exchangeRate: 12800,
+    }, 'user-1')).rejects.toThrow('USD valyutasidagi USD_CASH hisobini tanlang');
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -128,9 +130,10 @@ describe('PaymentsService settlement ledger integration', () => {
     await expect(service.registerPayment('tenant-1', {
       counterpartyId: 'cp-1',
       method: 'CASH',
+      cashAccountId: 'cash-uzs',
       amount: 100,
       currency: 'UZS',
-    }, 'user-1')).rejects.toThrow(BadRequestException);
+    }, 'user-1')).rejects.toThrow("To'lov aynan bitta hujjatga");
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

@@ -413,9 +413,10 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         service.createReturn(tenantId, userId, {
           counterpartyId,
           warehouseId,
+          currency: 'UZS',
           items: [{ productId: 'srv-freight', quantity: 1, unitPrice: 300000 }],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('Xizmat (SERVICE)');
     });
 
     it('should permit returning RAW_MATERIAL lines within valid stock & batch limits', async () => {

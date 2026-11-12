@@ -1,23 +1,10 @@
-import 'dotenv/config';
-
 /**
- * Integration test: runs against a REAL Postgres database.
- * It must never touch a development or production database, so it only runs
- * when DATABASE_URL_TEST is set to a dedicated, disposable test database
- * (npm run test:integration). Data is written under a fresh tenant per run.
+ * Integration test: runs against a REAL Postgres database, so it only runs via
+ * `npm run test:integration` with DATABASE_URL_TEST pointing at a disposable
+ * test database. Data is written under a fresh tenant per run.
  */
-const TEST_DATABASE_URL = process.env.DATABASE_URL_TEST;
-if (!TEST_DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL_TEST is not set. Point it at a disposable test database to run integration tests.',
-  );
-}
-if (TEST_DATABASE_URL === process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL_TEST must differ from DATABASE_URL; refusing to run integration tests against the application database.',
-  );
-}
-process.env.DATABASE_URL = TEST_DATABASE_URL;
+import { useTestDatabase } from '../../../test/use-test-database';
+useTestDatabase();
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { PurchasesService } from './purchases.service';
@@ -174,10 +161,14 @@ describe('Purchase Document End-to-End Invariant Test', () => {
     });
     const initialQty = initStock ? Number(initStock.quantity) : 0;
 
-    const initSupplier = await prisma.counterparty.findUnique({
-      where: { id: counterpartyId },
-    });
-    const initialSupplierDebt = Number(initSupplier?.debtBalance || 0);
+    // Supplier payables live per currency in CounterpartyBalance (ADR 0011), not on Counterparty.
+    const supplierDebtUzs = async () => {
+      const row = await prisma.counterpartyBalance.findUnique({
+        where: { counterpartyId_currency: { counterpartyId, currency: 'UZS' } },
+      });
+      return Number(row?.supplierDebt ?? 0);
+    };
+    const initialSupplierDebt = await supplierDebtUzs();
 
     const initCash = await prisma.cashAccount.findUnique({
       where: { id: cashAccountId },
@@ -240,12 +231,7 @@ describe('Purchase Document End-to-End Invariant Test', () => {
     expect(Number(batch?.purchasePrice)).toBe(1000000);
 
     // INVARIANT CHECK 3: Supplier Debt Incremented by +11,200,000
-    const postedSupplier = await prisma.counterparty.findUnique({
-      where: { id: counterpartyId },
-    });
-    expect(Number(postedSupplier?.debtBalance)).toBe(
-      initialSupplierDebt + 11200000,
-    );
+    expect(await supplierDebtUzs()).toBe(initialSupplierDebt + 11200000);
 
     // INVARIANT CHECK 4: Journal Entry & Lines Created (Dt 2910 = 10M, Dt 4410 = 1.2M, Kt 6010 = 11.2M)
     const postJe = await prisma.journalEntry.findFirst({
@@ -303,10 +289,7 @@ describe('Purchase Document End-to-End Invariant Test', () => {
     expect(Number(paidCash?.balance)).toBe(initialCashBalance - 11200000);
 
     // INVARIANT CHECK 6: Supplier Debt Returned to Initial Level (Net Debt 0 for this receipt)
-    const paidSupplier = await prisma.counterparty.findUnique({
-      where: { id: counterpartyId },
-    });
-    expect(Number(paidSupplier?.debtBalance)).toBe(initialSupplierDebt);
+    expect(await supplierDebtUzs()).toBe(initialSupplierDebt);
 
     // INVARIANT CHECK 7: Payment Journal Entry Created (Dt 6010 / Kt 5010 = 11,200,000)
     const payJe = await prisma.journalEntry.findFirst({
@@ -341,22 +324,5 @@ describe('Purchase Document End-to-End Invariant Test', () => {
 
     const finStatements = await reportsService.getFinancialStatements(tenantId);
     expect(finStatements.balanceSheet.isBalanced).toBe(true);
-
-    // Clean up test receipt records
-    await prisma.financeTransaction.deleteMany({
-      where: { sourceDocId: receipt.id },
-    });
-    await prisma.journalEntry.deleteMany({
-      where: { sourceDocId: receipt.id },
-    });
-    await prisma.productBatch.deleteMany({
-      where: { receiptId: receipt.id },
-    });
-    await prisma.purchaseReceiptItem.deleteMany({
-      where: { receiptId: receipt.id },
-    });
-    await prisma.purchaseReceipt.delete({
-      where: { id: receipt.id },
-    });
   }, 60000);
 });
