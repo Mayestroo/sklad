@@ -1,9 +1,22 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
 import { autoSeedIfEmpty } from './seed-helper';
+
+/**
+ * API contract: money and quantities travel as JSON numbers, matching
+ * shared/types. Prisma's Decimal serializes to a string by default, which made
+ * documents fail @IsNumber() validation when the UI saved them back unchanged.
+ * Every Decimal column is at most 15 significant digits, so the conversion to
+ * a double is exact.
+ */
+(Prisma.Decimal.prototype as { toJSON: () => unknown }).toJSON = function (
+  this: Prisma.Decimal,
+) {
+  return this.toNumber();
+};
 
 @Injectable()
 export class PrismaService
