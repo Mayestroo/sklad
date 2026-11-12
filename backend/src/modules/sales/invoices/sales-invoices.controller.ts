@@ -76,7 +76,7 @@ export class SalesInvoicesController {
   }
 
   @Post('invoices/:id/post')
-  @RequirePermissions('sales:post')
+  @RequirePermissions('sales:edit')
   postInvoice(
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
@@ -86,7 +86,7 @@ export class SalesInvoicesController {
   }
 
   @Post('invoices/:id/unpost')
-  @RequirePermissions('sales:post')
+  @RequirePermissions('sales:edit')
   unpostInvoice(
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
@@ -138,7 +138,7 @@ export class SalesInvoicesController {
   }
 
   @Post('returns/:id/confirm')
-  @RequirePermissions('sales:post')
+  @RequirePermissions('sales:edit')
   confirmReturn(
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
@@ -148,7 +148,7 @@ export class SalesInvoicesController {
   }
 
   @Post('returns/:id/cancel')
-  @RequirePermissions('sales:post')
+  @RequirePermissions('sales:edit')
   cancelReturn(
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,

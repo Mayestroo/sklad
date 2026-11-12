@@ -187,7 +187,7 @@ export class SalesOrdersController {
   }
 
   @Post(':id/complete')
-  @RequirePermissions('sales:post')
+  @RequirePermissions('sales:edit')
   completeOrder(
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
