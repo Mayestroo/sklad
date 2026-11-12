@@ -118,7 +118,13 @@ export class CounterpartiesService {
         },
       },
     });
-    const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterparty } = created;
+    const {
+      balances,
+      debtBalance: _debtBalance,
+      customerDebt: _customerDebt,
+      supplierDebt: _supplierDebt,
+      ...counterparty
+    } = created;
     return {
       ...counterparty,
       balancesByCurrency: balances.map((balance) => ({
@@ -131,30 +137,29 @@ export class CounterpartiesService {
   }
 
   async getSummary(tenantId: string) {
-    const [customersCount, suppliersCount, balances] =
-      await Promise.all([
-        this.prisma.counterparty.count({
-          where: {
-            tenantId,
-            type: { in: [CounterpartyType.CUSTOMER, CounterpartyType.BOTH] },
-          },
-        }),
-        this.prisma.counterparty.count({
-          where: {
-            tenantId,
-            type: { in: [CounterpartyType.SUPPLIER, CounterpartyType.BOTH] },
-          },
-        }),
-        this.prisma.counterpartyBalance.findMany({
-          where: { tenantId },
-          select: {
-            counterpartyId: true,
-            currency: true,
-            customerDebt: true,
-            supplierDebt: true,
-          },
-        }),
-      ]);
+    const [customersCount, suppliersCount, balances] = await Promise.all([
+      this.prisma.counterparty.count({
+        where: {
+          tenantId,
+          type: { in: [CounterpartyType.CUSTOMER, CounterpartyType.BOTH] },
+        },
+      }),
+      this.prisma.counterparty.count({
+        where: {
+          tenantId,
+          type: { in: [CounterpartyType.SUPPLIER, CounterpartyType.BOTH] },
+        },
+      }),
+      this.prisma.counterpartyBalance.findMany({
+        where: { tenantId },
+        select: {
+          counterpartyId: true,
+          currency: true,
+          customerDebt: true,
+          supplierDebt: true,
+        },
+      }),
+    ]);
 
     const receivableCounterparties = new Set<string>();
     const payableCounterparties = new Set<string>();
@@ -168,17 +173,23 @@ export class CounterpartiesService {
       const netBalance = customerDebt - supplierDebt;
       if (netBalance > 0) {
         receivableCounterparties.add(balance.counterpartyId);
-        receivablesByCurrency[balance.currency] = (receivablesByCurrency[balance.currency] ?? 0) + netBalance;
+        receivablesByCurrency[balance.currency] =
+          (receivablesByCurrency[balance.currency] ?? 0) + netBalance;
       }
       if (netBalance < 0) {
         payableCounterparties.add(balance.counterpartyId);
-        payablesByCurrency[balance.currency] = (payablesByCurrency[balance.currency] ?? 0) + Math.abs(netBalance);
+        payablesByCurrency[balance.currency] =
+          (payablesByCurrency[balance.currency] ?? 0) + Math.abs(netBalance);
       }
       if (customerDebt < 0) {
-        customerAdvancesByCurrency[balance.currency] = (customerAdvancesByCurrency[balance.currency] ?? 0) + Math.abs(customerDebt);
+        customerAdvancesByCurrency[balance.currency] =
+          (customerAdvancesByCurrency[balance.currency] ?? 0) +
+          Math.abs(customerDebt);
       }
       if (supplierDebt < 0) {
-        supplierAdvancesByCurrency[balance.currency] = (supplierAdvancesByCurrency[balance.currency] ?? 0) + Math.abs(supplierDebt);
+        supplierAdvancesByCurrency[balance.currency] =
+          (supplierAdvancesByCurrency[balance.currency] ?? 0) +
+          Math.abs(supplierDebt);
       }
     }
 
@@ -193,15 +204,23 @@ export class CounterpartiesService {
       receivables: {
         count: receivableCounterparties.size,
         total_amount: amountInOnlyCurrency(receivablesByCurrency),
-        byCurrency: Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount })),
+        byCurrency: Object.entries(receivablesByCurrency).map(
+          ([currency, amount]) => ({ currency, amount }),
+        ),
       },
       payables: {
         count: payableCounterparties.size,
         total_amount: amountInOnlyCurrency(payablesByCurrency),
-        byCurrency: Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount })),
+        byCurrency: Object.entries(payablesByCurrency).map(
+          ([currency, amount]) => ({ currency, amount }),
+        ),
       },
-      customerAdvancesByCurrency: Object.entries(customerAdvancesByCurrency).map(([currency, amount]) => ({ currency, amount })),
-      supplierAdvancesByCurrency: Object.entries(supplierAdvancesByCurrency).map(([currency, amount]) => ({ currency, amount })),
+      customerAdvancesByCurrency: Object.entries(
+        customerAdvancesByCurrency,
+      ).map(([currency, amount]) => ({ currency, amount })),
+      supplierAdvancesByCurrency: Object.entries(
+        supplierAdvancesByCurrency,
+      ).map(([currency, amount]) => ({ currency, amount })),
     };
   }
 
@@ -215,7 +234,13 @@ export class CounterpartiesService {
   ) {
     const where: any = { tenantId };
 
-    if (type) {
+    // A BOTH counterparty is a customer and a supplier at the same time.
+    if (
+      type === CounterpartyType.CUSTOMER ||
+      type === CounterpartyType.SUPPLIER
+    ) {
+      where.type = { in: [type, CounterpartyType.BOTH] };
+    } else if (type) {
       where.type = type as CounterpartyType;
     }
 
@@ -227,17 +252,23 @@ export class CounterpartiesService {
 
     if (balanceFilter === 'receivables') {
       where.balances = {
-        some: { OR: [{ customerDebt: { gt: 0 } }, { supplierDebt: { lt: 0 } }] },
+        some: {
+          OR: [{ customerDebt: { gt: 0 } }, { supplierDebt: { lt: 0 } }],
+        },
       };
     } else if (balanceFilter === 'payables') {
       where.balances = {
-        some: { OR: [{ supplierDebt: { gt: 0 } }, { customerDebt: { lt: 0 } }] },
+        some: {
+          OR: [{ supplierDebt: { gt: 0 } }, { customerDebt: { lt: 0 } }],
+        },
       };
     } else if (balanceFilter === 'settled') {
       // Net-settled counterparties can still have offsets on both sides, so filter after loading balances.
     } else if (hasDebt) {
       where.balances = {
-        some: { OR: [{ customerDebt: { not: 0 } }, { supplierDebt: { not: 0 } }] },
+        some: {
+          OR: [{ customerDebt: { not: 0 } }, { supplierDebt: { not: 0 } }],
+        },
       };
     }
 
@@ -252,7 +283,10 @@ export class CounterpartiesService {
         where.AND = [{ OR: where.OR }, { OR: searchOr }];
         delete where.OR;
       } else if (where.AND) {
-        where.AND = [...(Array.isArray(where.AND) ? where.AND : [where.AND]), { OR: searchOr }];
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : [where.AND]),
+          { OR: searchOr },
+        ];
       } else {
         where.OR = searchOr;
       }
@@ -275,7 +309,13 @@ export class CounterpartiesService {
     });
 
     const result = counterparties.map((cp) => {
-      const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterparty } = cp;
+      const {
+        balances,
+        debtBalance: _debtBalance,
+        customerDebt: _customerDebt,
+        supplierDebt: _supplierDebt,
+        ...counterparty
+      } = cp;
       const balancesByCurrency = balances.map((balance) => ({
         currency: balance.currency,
         customerDebt: Number(balance.customerDebt),
@@ -288,17 +328,28 @@ export class CounterpartiesService {
       };
     });
     if (balanceFilter === 'receivables') {
-      return result.filter((counterparty) => counterparty.balancesByCurrency.some((balance) => balance.netBalance > 0));
+      return result.filter((counterparty) =>
+        counterparty.balancesByCurrency.some(
+          (balance) => balance.netBalance > 0,
+        ),
+      );
     }
     if (balanceFilter === 'payables') {
-      return result.filter((counterparty) => counterparty.balancesByCurrency.some((balance) => balance.netBalance < 0));
+      return result.filter((counterparty) =>
+        counterparty.balancesByCurrency.some(
+          (balance) => balance.netBalance < 0,
+        ),
+      );
     }
     if (balanceFilter === 'settled') {
-      return result.filter((counterparty) => counterparty.balancesByCurrency.every((balance) => balance.netBalance === 0));
+      return result.filter((counterparty) =>
+        counterparty.balancesByCurrency.every(
+          (balance) => balance.netBalance === 0,
+        ),
+      );
     }
     return result;
   }
-
 
   async findById(tenantId: string, id: string) {
     const counterparty = await this.prisma.counterparty.findFirst({
@@ -321,7 +372,13 @@ export class CounterpartiesService {
       throw new NotFoundException('Counterparty not found');
     }
 
-    const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterpartyData } = counterparty;
+    const {
+      balances,
+      debtBalance: _debtBalance,
+      customerDebt: _customerDebt,
+      supplierDebt: _supplierDebt,
+      ...counterpartyData
+    } = counterparty;
     const balancesByCurrency = balances.map((balance) => ({
       currency: balance.currency,
       customerDebt: Number(balance.customerDebt),
@@ -362,7 +419,9 @@ export class CounterpartiesService {
         folderId:
           dto.folderId !== undefined ? dto.folderId : counterparty.folderId,
         priceListId:
-          dto.priceListId !== undefined ? dto.priceListId : counterparty.priceListId,
+          dto.priceListId !== undefined
+            ? dto.priceListId
+            : counterparty.priceListId,
         discountPercent:
           dto.discountPercent !== undefined
             ? Number(dto.discountPercent)
@@ -377,7 +436,13 @@ export class CounterpartiesService {
         },
       },
     });
-    const { balances, debtBalance: _debtBalance, customerDebt: _customerDebt, supplierDebt: _supplierDebt, ...counterpartyData } = updated;
+    const {
+      balances,
+      debtBalance: _debtBalance,
+      customerDebt: _customerDebt,
+      supplierDebt: _supplierDebt,
+      ...counterpartyData
+    } = updated;
     return {
       ...counterpartyData,
       balancesByCurrency: balances.map((balance) => ({
@@ -403,7 +468,9 @@ export class CounterpartiesService {
       select: { customerDebt: true, supplierDebt: true },
     });
     const hasOutstandingBalance = balances.some(
-      (balance) => Math.abs(Number(balance.customerDebt)) > 0.001 || Math.abs(Number(balance.supplierDebt)) > 0.001,
+      (balance) =>
+        Math.abs(Number(balance.customerDebt)) > 0.001 ||
+        Math.abs(Number(balance.supplierDebt)) > 0.001,
     );
     const hasLegacyScalarBalance =
       Math.abs(Number(counterparty.debtBalance)) > 0.001 ||
@@ -466,16 +533,28 @@ export class CounterpartiesService {
       orderBy: { effectiveAt: 'desc' },
       take: 500,
     });
-    const financeIds = [...new Set(
-      entries.filter((entry) => entry.sourceDocType === 'FinanceTransaction').map((entry) => entry.sourceDocId),
-    )];
-    const financeTransactions = financeIds.length > 0
-      ? await this.prisma.financeTransaction.findMany({
-          where: { tenantId, id: { in: financeIds } },
-          select: { id: true, direction: true, docNumber: true, comment: true },
-        })
-      : [];
-    const financeById = new Map(financeTransactions.map((transaction) => [transaction.id, transaction]));
+    const financeIds = [
+      ...new Set(
+        entries
+          .filter((entry) => entry.sourceDocType === 'FinanceTransaction')
+          .map((entry) => entry.sourceDocId),
+      ),
+    ];
+    const financeTransactions =
+      financeIds.length > 0
+        ? await this.prisma.financeTransaction.findMany({
+            where: { tenantId, id: { in: financeIds } },
+            select: {
+              id: true,
+              direction: true,
+              docNumber: true,
+              comment: true,
+            },
+          })
+        : [];
+    const financeById = new Map(
+      financeTransactions.map((transaction) => [transaction.id, transaction]),
+    );
     const balancesByCurrency = counterparty.balances.map((balance) => ({
       currency: balance.currency,
       customerDebt: Number(balance.customerDebt),
@@ -484,9 +563,16 @@ export class CounterpartiesService {
     }));
     const groupedTransactions = new Map<string, number>();
     for (const entry of entries) {
-      if (entry.sourceDocType !== 'SalesInvoice' && entry.sourceDocType !== 'PurchaseReceipt') continue;
+      if (
+        entry.sourceDocType !== 'SalesInvoice' &&
+        entry.sourceDocType !== 'PurchaseReceipt'
+      )
+        continue;
       const key = `${entry.sourceDocType}\u0000${entry.currency}`;
-      groupedTransactions.set(key, (groupedTransactions.get(key) ?? 0) + Number(entry.amount));
+      groupedTransactions.set(
+        key,
+        (groupedTransactions.get(key) ?? 0) + Number(entry.amount),
+      );
     }
     const salesInvoicedByCurrency = Array.from(groupedTransactions)
       .filter(([key]) => key.startsWith('SalesInvoice\u0000'))
@@ -494,35 +580,49 @@ export class CounterpartiesService {
     const purchasesInvoicedByCurrency = Array.from(groupedTransactions)
       .filter(([key]) => key.startsWith('PurchaseReceipt\u0000'))
       .map(([key, amount]) => ({ currency: key.split('\u0000')[1], amount }));
-    const totalForOnlyCurrency = (items: Array<{ currency: string; amount: number }>) => items.length === 1 ? items[0].amount : 0;
+    const totalForOnlyCurrency = (
+      items: Array<{ currency: string; amount: number }>,
+    ) => (items.length === 1 ? items[0].amount : 0);
 
     const transactions = entries.map((entry) => {
       const signedAmount = Number(entry.amount);
       const isCustomerSide = entry.side === 'CUSTOMER';
-      const finance = entry.sourceDocType === 'FinanceTransaction' ? financeById.get(entry.sourceDocId) : undefined;
-      const type = entry.sourceDocType === 'SalesInvoice'
-        ? 'SALES_INVOICE'
-        : entry.sourceDocType === 'PurchaseReceipt'
-          ? 'PURCHASE_RECEIPT'
-          : entry.sourceDocType === 'SalesReturn'
-            ? 'SALES_RETURN'
-            : entry.sourceDocType === 'PurchaseReturn'
-              ? 'PURCHASE_RETURN'
-              : entry.sourceDocType === 'FinanceTransaction'
-                ? finance?.direction === 'INCOME' ? 'PAYMENT_INCOME' : 'PAYMENT_EXPENSE'
-                : entry.sourceDocType === 'OpeningBalanceLine'
-                  ? 'OPENING_BALANCE'
-                  : entry.entryType;
+      const finance =
+        entry.sourceDocType === 'FinanceTransaction'
+          ? financeById.get(entry.sourceDocId)
+          : undefined;
+      const type =
+        entry.sourceDocType === 'SalesInvoice'
+          ? 'SALES_INVOICE'
+          : entry.sourceDocType === 'PurchaseReceipt'
+            ? 'PURCHASE_RECEIPT'
+            : entry.sourceDocType === 'SalesReturn'
+              ? 'SALES_RETURN'
+              : entry.sourceDocType === 'PurchaseReturn'
+                ? 'PURCHASE_RETURN'
+                : entry.sourceDocType === 'FinanceTransaction'
+                  ? finance?.direction === 'INCOME'
+                    ? 'PAYMENT_INCOME'
+                    : 'PAYMENT_EXPENSE'
+                  : entry.sourceDocType === 'OpeningBalanceLine'
+                    ? 'OPENING_BALANCE'
+                    : entry.entryType;
       return {
         id: entry.id,
         date: entry.effectiveAt.toISOString(),
-        docNumber: finance?.docNumber || `${entry.sourceDocType} ${entry.sourceDocId}`,
+        docNumber:
+          finance?.docNumber || `${entry.sourceDocType} ${entry.sourceDocId}`,
         type,
         entryType: entry.entryType,
         side: entry.side,
-        description: finance?.comment || `${entry.entryType} (${entry.sourceDocType})`,
-        debit: isCustomerSide ? Math.max(0, signedAmount) : Math.max(0, -signedAmount),
-        credit: isCustomerSide ? Math.max(0, -signedAmount) : Math.max(0, signedAmount),
+        description:
+          finance?.comment || `${entry.entryType} (${entry.sourceDocType})`,
+        debit: isCustomerSide
+          ? Math.max(0, signedAmount)
+          : Math.max(0, -signedAmount),
+        credit: isCustomerSide
+          ? Math.max(0, -signedAmount)
+          : Math.max(0, signedAmount),
         amount: signedAmount,
         currency: entry.currency,
       };
@@ -546,7 +646,9 @@ export class CounterpartiesService {
         salesInvoicedByCurrency,
         purchasesInvoicedByCurrency,
         totalSalesInvoiced: totalForOnlyCurrency(salesInvoicedByCurrency),
-        totalPurchasesInvoiced: totalForOnlyCurrency(purchasesInvoicedByCurrency),
+        totalPurchasesInvoiced: totalForOnlyCurrency(
+          purchasesInvoicedByCurrency,
+        ),
         totalTransactionsCount: transactions.length,
       },
       transactions,

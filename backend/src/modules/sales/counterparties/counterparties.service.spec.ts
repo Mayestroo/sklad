@@ -129,13 +129,40 @@ describe('CounterpartiesService', () => {
     });
   });
 
+  describe('findAll counterparties by role', () => {
+    const whereOf = () =>
+      (
+        mockPrisma.counterparty.findMany.mock.calls[0] as [
+          { where: Record<string, unknown> },
+        ]
+      )[0].where;
+
+    it.each([
+      ['CUSTOMER', ['CUSTOMER', 'BOTH']],
+      ['SUPPLIER', ['SUPPLIER', 'BOTH']],
+    ])('treats a BOTH counterparty as a %s too', async (type, expected) => {
+      mockPrisma.counterparty.findMany.mockResolvedValue([]);
+      await service.findAll('tenant-1', type);
+      expect(whereOf().type).toEqual({ in: expected });
+    });
+
+    it('filters BOTH exactly', async () => {
+      mockPrisma.counterparty.findMany.mockResolvedValue([]);
+      await service.findAll('tenant-1', 'BOTH');
+      expect(whereOf().type).toBe('BOTH');
+    });
+  });
+
   describe('findAll counterparties by folderId', () => {
     it('should filter by folderId = unassigned (null)', async () => {
       const tenantId = 'tenant-1';
       mockPrisma.counterparty.findMany.mockResolvedValue([]);
 
       await service.findAll(tenantId, undefined, 'unassigned');
-      const expectedWhere = expect.objectContaining({ tenantId, folderId: null }) as Record<string, unknown>;
+      const expectedWhere = expect.objectContaining({
+        tenantId,
+        folderId: null,
+      }) as Record<string, unknown>;
       expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expectedWhere,
@@ -148,7 +175,10 @@ describe('CounterpartiesService', () => {
       mockPrisma.counterparty.findMany.mockResolvedValue([]);
 
       await service.findAll(tenantId, undefined, 'folder-123');
-      const expectedWhere = expect.objectContaining({ tenantId, folderId: 'folder-123' }) as Record<string, unknown>;
+      const expectedWhere = expect.objectContaining({
+        tenantId,
+        folderId: 'folder-123',
+      }) as Record<string, unknown>;
       expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expectedWhere,
@@ -178,9 +208,16 @@ describe('CounterpartiesService', () => {
 
   describe('getSummary', () => {
     it('nets customer and supplier positions before classifying a BOTH counterparty', async () => {
-      mockPrisma.counterparty.count.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      mockPrisma.counterparty.count
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(1);
       mockPrisma.counterpartyBalance.findMany.mockResolvedValueOnce([
-        { counterpartyId: 'both-1', currency: 'USD', customerDebt: 800, supplierDebt: 500 },
+        {
+          counterpartyId: 'both-1',
+          currency: 'USD',
+          customerDebt: 800,
+          supplierDebt: 500,
+        },
       ]);
 
       const result = await service.getSummary('tenant-1');
@@ -190,7 +227,11 @@ describe('CounterpartiesService', () => {
         total_amount: 300,
         byCurrency: [{ currency: 'USD', amount: 300 }],
       });
-      expect(result.payables).toEqual({ count: 0, total_amount: 0, byCurrency: [] });
+      expect(result.payables).toEqual({
+        count: 0,
+        total_amount: 0,
+        byCurrency: [],
+      });
     });
 
     it('aggregates receivables and payables per currency without combining currencies', async () => {
@@ -199,9 +240,24 @@ describe('CounterpartiesService', () => {
         .mockResolvedValueOnce(3) // total_customers
         .mockResolvedValueOnce(2); // total_suppliers
       mockPrisma.counterpartyBalance.findMany.mockResolvedValueOnce([
-        { counterpartyId: '1', currency: 'UZS', customerDebt: 12500000, supplierDebt: 0 },
-        { counterpartyId: '2', currency: 'UZS', customerDebt: 0, supplierDebt: 4779040 },
-        { counterpartyId: '3', currency: 'USD', customerDebt: 0, supplierDebt: 220960 },
+        {
+          counterpartyId: '1',
+          currency: 'UZS',
+          customerDebt: 12500000,
+          supplierDebt: 0,
+        },
+        {
+          counterpartyId: '2',
+          currency: 'UZS',
+          customerDebt: 0,
+          supplierDebt: 4779040,
+        },
+        {
+          counterpartyId: '3',
+          currency: 'USD',
+          customerDebt: 0,
+          supplierDebt: 220960,
+        },
       ]);
 
       const result = await service.getSummary(tenantId);
@@ -234,19 +290,44 @@ describe('CounterpartiesService', () => {
         .mockResolvedValueOnce(3);
 
       mockPrisma.counterpartyBalance.findMany.mockResolvedValueOnce([
-        { counterpartyId: '1', currency: 'USD', customerDebt: 8000000, supplierDebt: 5000000 },
-        { counterpartyId: '2', currency: 'USD', customerDebt: -2000000, supplierDebt: 0 },
-        { counterpartyId: '3', currency: 'USD', customerDebt: 0, supplierDebt: -1000000 },
+        {
+          counterpartyId: '1',
+          currency: 'USD',
+          customerDebt: 8000000,
+          supplierDebt: 5000000,
+        },
+        {
+          counterpartyId: '2',
+          currency: 'USD',
+          customerDebt: -2000000,
+          supplierDebt: 0,
+        },
+        {
+          counterpartyId: '3',
+          currency: 'USD',
+          customerDebt: 0,
+          supplierDebt: -1000000,
+        },
       ]);
 
       const result = await service.getSummary(tenantId);
 
       expect(result.total_customers).toBe(5);
       expect(result.total_suppliers).toBe(3);
-      expect(result.receivables).toMatchObject({ count: 2, total_amount: 4000000 });
-      expect(result.payables).toMatchObject({ count: 1, total_amount: 2000000 });
-      expect(result.customerAdvancesByCurrency).toEqual([{ currency: 'USD', amount: 2000000 }]);
-      expect(result.supplierAdvancesByCurrency).toEqual([{ currency: 'USD', amount: 1000000 }]);
+      expect(result.receivables).toMatchObject({
+        count: 2,
+        total_amount: 4000000,
+      });
+      expect(result.payables).toMatchObject({
+        count: 1,
+        total_amount: 2000000,
+      });
+      expect(result.customerAdvancesByCurrency).toEqual([
+        { currency: 'USD', amount: 2000000 },
+      ]);
+      expect(result.supplierAdvancesByCurrency).toEqual([
+        { currency: 'USD', amount: 1000000 },
+      ]);
     });
   });
 
@@ -255,13 +336,24 @@ describe('CounterpartiesService', () => {
       const tenantId = 'tenant-1';
       mockPrisma.counterparty.findMany.mockResolvedValue([]);
 
-      await service.findAll(tenantId, undefined, undefined, undefined, undefined, 'receivables');
+      await service.findAll(
+        tenantId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'receivables',
+      );
 
       expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             tenantId,
-            balances: { some: { OR: [{ customerDebt: { gt: 0 } }, { supplierDebt: { lt: 0 } }] } },
+            balances: {
+              some: {
+                OR: [{ customerDebt: { gt: 0 } }, { supplierDebt: { lt: 0 } }],
+              },
+            },
           }),
         }),
       );
@@ -271,13 +363,24 @@ describe('CounterpartiesService', () => {
       const tenantId = 'tenant-1';
       mockPrisma.counterparty.findMany.mockResolvedValue([]);
 
-      await service.findAll(tenantId, undefined, undefined, undefined, undefined, 'payables');
+      await service.findAll(
+        tenantId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'payables',
+      );
 
       expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             tenantId,
-            balances: { some: { OR: [{ supplierDebt: { gt: 0 } }, { customerDebt: { lt: 0 } }] } },
+            balances: {
+              some: {
+                OR: [{ supplierDebt: { gt: 0 } }, { customerDebt: { lt: 0 } }],
+              },
+            },
           }),
         }),
       );
@@ -287,7 +390,14 @@ describe('CounterpartiesService', () => {
       const tenantId = 'tenant-1';
       mockPrisma.counterparty.findMany.mockResolvedValue([]);
 
-      await service.findAll(tenantId, undefined, undefined, undefined, undefined, 'settled');
+      await service.findAll(
+        tenantId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'settled',
+      );
 
       expect(mockPrisma.counterparty.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -298,31 +408,95 @@ describe('CounterpartiesService', () => {
 
     it('filters settled counterparties by net balance, including offsetting sides', async () => {
       mockPrisma.counterparty.findMany.mockResolvedValue([
-        { id: 'offset', type: 'BOTH', balances: [{ currency: 'UZS', customerDebt: 1000, supplierDebt: 1000 }] },
+        {
+          id: 'offset',
+          type: 'BOTH',
+          balances: [
+            { currency: 'UZS', customerDebt: 1000, supplierDebt: 1000 },
+          ],
+        },
         { id: 'zero', type: 'CUSTOMER', balances: [] },
-        { id: 'open', type: 'BOTH', balances: [{ currency: 'USD', customerDebt: 1000, supplierDebt: 0 }] },
+        {
+          id: 'open',
+          type: 'BOTH',
+          balances: [{ currency: 'USD', customerDebt: 1000, supplierDebt: 0 }],
+        },
       ]);
 
-      const result = await service.findAll('tenant-1', undefined, undefined, undefined, undefined, 'settled');
+      const result = await service.findAll(
+        'tenant-1',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'settled',
+      );
 
-      expect(result.map((counterparty) => counterparty.id)).toEqual(['offset', 'zero']);
+      expect(result.map((counterparty) => counterparty.id)).toEqual([
+        'offset',
+        'zero',
+      ]);
     });
 
     it('returns gross side positions and net balance for each currency', async () => {
       const tenantId = 'tenant-1';
       mockPrisma.counterparty.findMany.mockResolvedValue([
-        { id: '1', type: 'CUSTOMER', balances: [{ currency: 'UZS', customerDebt: 10000000, supplierDebt: 0 }] },
-        { id: '2', type: 'SUPPLIER', balances: [{ currency: 'USD', customerDebt: 0, supplierDebt: 4500000 }] },
-        { id: '3', type: 'BOTH', balances: [{ currency: 'USD', customerDebt: 8000000, supplierDebt: 5000000 }] },
-        { id: '4', type: 'CUSTOMER', balances: [{ currency: 'UZS', customerDebt: -1500000, supplierDebt: 0 }] },
+        {
+          id: '1',
+          type: 'CUSTOMER',
+          balances: [
+            { currency: 'UZS', customerDebt: 10000000, supplierDebt: 0 },
+          ],
+        },
+        {
+          id: '2',
+          type: 'SUPPLIER',
+          balances: [
+            { currency: 'USD', customerDebt: 0, supplierDebt: 4500000 },
+          ],
+        },
+        {
+          id: '3',
+          type: 'BOTH',
+          balances: [
+            { currency: 'USD', customerDebt: 8000000, supplierDebt: 5000000 },
+          ],
+        },
+        {
+          id: '4',
+          type: 'CUSTOMER',
+          balances: [
+            { currency: 'UZS', customerDebt: -1500000, supplierDebt: 0 },
+          ],
+        },
       ]);
 
       const list = await service.findAll(tenantId);
       expect(list.map((item) => item.balancesByCurrency[0])).toEqual([
-        { currency: 'UZS', customerDebt: 10000000, supplierDebt: 0, netBalance: 10000000 },
-        { currency: 'USD', customerDebt: 0, supplierDebt: 4500000, netBalance: -4500000 },
-        { currency: 'USD', customerDebt: 8000000, supplierDebt: 5000000, netBalance: 3000000 },
-        { currency: 'UZS', customerDebt: -1500000, supplierDebt: 0, netBalance: -1500000 },
+        {
+          currency: 'UZS',
+          customerDebt: 10000000,
+          supplierDebt: 0,
+          netBalance: 10000000,
+        },
+        {
+          currency: 'USD',
+          customerDebt: 0,
+          supplierDebt: 4500000,
+          netBalance: -4500000,
+        },
+        {
+          currency: 'USD',
+          customerDebt: 8000000,
+          supplierDebt: 5000000,
+          netBalance: 3000000,
+        },
+        {
+          currency: 'UZS',
+          customerDebt: -1500000,
+          supplierDebt: 0,
+          netBalance: -1500000,
+        },
       ]);
       expect(list[0]).not.toHaveProperty('debtBalance');
     });
@@ -345,7 +519,9 @@ describe('CounterpartiesService', () => {
 
       const result = await service.delete(tenantId, id);
       expect(result.success).toBe(true);
-      expect(mockPrisma.counterparty.delete).toHaveBeenCalledWith({ where: { id } });
+      expect(mockPrisma.counterparty.delete).toHaveBeenCalledWith({
+        where: { id },
+      });
     });
 
     it('blocks deletion when a currency projection has a nonzero customer position', async () => {
@@ -362,7 +538,11 @@ describe('CounterpartiesService', () => {
     it('does not delete a counterparty with an unreconciled legacy scalar balance', async () => {
       const tenantId = 'tenant-1';
       const id = 'cp-legacy';
-      mockPrisma.counterparty.findFirst.mockResolvedValue({ id, tenantId, debtBalance: 125 });
+      mockPrisma.counterparty.findFirst.mockResolvedValue({
+        id,
+        tenantId,
+        debtBalance: 125,
+      });
       mockPrisma.counterpartyBalance.findMany.mockResolvedValueOnce([]);
 
       await expect(service.delete(tenantId, id)).rejects.toThrow();
@@ -417,7 +597,9 @@ describe('CounterpartiesService', () => {
         inn: '123456789',
         folder: null,
         priceList: null,
-        balances: [{ currency: 'UZS', customerDebt: 10000000, supplierDebt: 4000000 }],
+        balances: [
+          { currency: 'UZS', customerDebt: 10000000, supplierDebt: 4000000 },
+        ],
       });
       mockPrisma.counterpartySettlementEntry.findMany.mockResolvedValue([
         {
@@ -452,14 +634,24 @@ describe('CounterpartiesService', () => {
         },
       ]);
       mockPrisma.financeTransaction.findMany.mockResolvedValue([
-        { id: 'tx-1', docNumber: 'TX-001', direction: 'INCOME', comment: 'Partial payment' },
+        {
+          id: 'tx-1',
+          docNumber: 'TX-001',
+          direction: 'INCOME',
+          comment: 'Partial payment',
+        },
       ]);
 
       const res = await service.getStatement(tenantId, id);
 
       expect(res.counterparty.id).toBe(id);
       expect(res.counterparty.balancesByCurrency).toEqual([
-        { currency: 'UZS', customerDebt: 10000000, supplierDebt: 4000000, netBalance: 6000000 },
+        {
+          currency: 'UZS',
+          customerDebt: 10000000,
+          supplierDebt: 4000000,
+          netBalance: 6000000,
+        },
       ]);
       expect(res.summary.totalSalesInvoiced).toBe(10000000);
       expect(res.summary.totalPurchasesInvoiced).toBe(4000000);
