@@ -40,31 +40,44 @@ tenants use the system. Tick each one off in the PR that resolves it.
       ("automatic tenant_id filter on every query, 0% leak risk", "JWT valid 7
       days", "100 requests/minute"). Before release, confirm no other page or
       marketing text repeats these claims.
-- [ ] **ZRU-547 data localisation.** The Law on Personal Data requires
-      personal data of Uzbek citizens to be stored on servers in Uzbekistan.
-      Production currently runs on Neon in Singapore. Get a legal answer and,
-      if required, move the database (or the personal-data part) to a local
-      host before real tenants onboard.
+- [ ] **ZRU-547 data localisation (owner decision, needs legal advice).**
+      The Law on Personal Data (ZRU-547, art. 27-1) requires personal data of
+      citizens of Uzbekistan to be collected, processed and stored on servers
+      physically located in Uzbekistan. The production database is Neon,
+      region `ap-southeast-1` (Singapore). It holds tenant user names, emails
+      and phone numbers, and counterparty contact data. Hosting has **not**
+      been changed in this branch. The owner must get a legal answer and
+      decide before real tenants onboard; see "Decisions needed from owner".
 - [x] **Rate limiting is enforced.** `ThrottlerGuard` is registered globally
       (`backend/src/common/rate-limit/rate-limit.ts`): 300 requests/minute per
       IP per route by default; login 5/minute, registration 5/hour; Click and
       Payme callbacks that fail authentication 10 per 15 minutes per IP
       (authenticated callbacks and their retries are never limited).
 - [ ] **Set `TRUST_PROXY` in production** to the number of reverse-proxy hops
-      in front of the API (usually `1`). Without it every request appears to
-      come from the proxy, so all users share one login limit and get 429
-      together. `true` is refused (clients could spoof their IP).
-- [ ] **Rate-limit counters are in memory, per process.** With more than one
-      API instance each counts separately (an attacker gets N × the limit).
-      Before scaling out, move the throttler storage to Redis.
+      in front of the API (usually `1`), or to the proxy addresses. Read once at
+      startup (`configureTrustProxy` in
+      `backend/src/common/rate-limit/rate-limit.ts`, called from `main.ts`).
+      Without it every request appears to come from the proxy, so all users
+      share one login limit and get 429 together. `true` is refused at startup
+      (clients could spoof `X-Forwarded-For` and bypass the limits). Listed,
+      empty, in `.env.example`.
+- [ ] **Rate-limit counters are in memory, per process.** `ThrottlerModule`
+      uses its default in-memory storage. With more than one API instance (or
+      after every restart) each process counts separately, so an attacker
+      gets N × the limit and counters reset on deploy. Acceptable for a single
+      instance. Before scaling out, move the throttler storage to Redis (Redis
+      is already in `docker-compose.yml`, `REDIS_URL` is in `.env`), e.g. with
+      a `ThrottlerStorage` backed by Redis `INCR` + `PEXPIRE`.
 - [ ] **Password reset has no route yet.** When it is added, give it
       `@Throttle(strictThrottle(...))` like login and registration.
-- [ ] **Registration email enumeration.** `POST /api/auth/register` answers
-      `409 A user with this email address already exists` when the admin email
-      is taken (`AuthService.registerCompany`), so anyone can probe which emails have
-      accounts. Login no longer reveals this; registration still does. Fix by
-      answering the same way for taken and free emails (e.g. confirm by email
-      before creating the tenant) and/or rate-limiting the route.
+- [ ] **Registration email enumeration (owner decision).**
+      `POST /api/auth/register` answers `409 A user with this email address
+      already exists` when the admin email is taken
+      (`AuthService.registerCompany`, `backend/src/modules/auth/auth.service.ts`),
+      so anyone can probe which emails have accounts. Login no longer reveals
+      this; registration still does. Mitigated, not fixed: the route is limited
+      to 5 registrations per hour per IP. A real fix changes the sign-up flow
+      (see "Decisions needed from owner").
 
 ## Accounting decisions
 
@@ -80,3 +93,16 @@ tenants use the system. Tick each one off in the PR that resolves it.
       counterparty settlement by that amount. The accountant must choose the
       account that takes the gain (other operating income, an FX gain account,
       or a 2910 cost correction) before this is coded.
+
+## Decisions needed from owner
+
+Each item below has a safe default already in place, so nothing is blocked.
+The owner should confirm the default or choose the alternative.
+
+| # | Decision | Default in place now | Alternative(s) | Why the default |
+|---|---|---|---|---|
+| D1 | **ZRU-547 hosting**: may tenant personal data stay on Neon (Singapore)? | Nothing changed; hosting stays on Neon `ap-southeast-1`. The false "stored in Uzbekistan" claim was removed from the tenant UI. | Move the whole database to a host in Uzbekistan (e.g. a local cloud/DC Postgres), or split personal data into a local store. | Changing hosting is a legal/commercial decision and was explicitly out of scope. Needs a lawyer's answer before real tenants onboard. |
+| D2 | **Purchase-return gap account** (landed cost below base price) | Gap stays unbooked; 6010 is debited only with the landed cost (current behaviour, documented in the code). | Book the gain to other operating income (9390), to an FX gain account (9540), or as a correction of 2910 cost. | An accounting policy choice; coding a guess would create entries the accountant may have to reverse. |
+| D3 | **Registration email enumeration** | Registration still returns 409 for a taken email; the route is limited to 5/hour per IP. | (a) Email-confirmation sign-up: always answer "check your inbox", create the tenant only after the link is clicked; (b) answer 201 for both, and email the existing owner instead. | Both alternatives change the onboarding UX and need an email provider, which the project does not have yet. |
+| D4 | **Accounting period closing** | Not implemented: any document date can be posted, unposted or cancelled, including cancelling a posted sales return dated in a month that is already reported. | Add a per-tenant "books closed up to" date; reject posting, unposting, cancelling and editing of documents dated on or before it (sales-return cancel was the requested first user). | A closing date is a product feature (who may close/reopen, which documents it covers), not a bug fix; see `docs/progress.md` A1. |
+| D5 | **Rate-limit storage** | In-memory, per process. | Redis-backed throttler storage. | Single instance today; Redis storage is only needed before scaling out. |
