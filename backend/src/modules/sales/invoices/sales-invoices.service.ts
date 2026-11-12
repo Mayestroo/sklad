@@ -29,7 +29,11 @@ import {
   grossProfitInUzs,
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
-import { consumeFifoBatches } from '../../inventory/fifo/fifo-batches';
+import {
+  consumeFifoBatches,
+  createFifoBatch,
+} from '../../inventory/fifo/fifo-batches';
+import { originalSaleUnitCost } from './sales-return-cost';
 import { readCompanySettings } from '../../../common/utils/company-settings';
 
 @Injectable()
@@ -936,7 +940,14 @@ export class SalesInvoicesService {
     const originalInvoice = await this.prisma.salesInvoice.findFirst({
       where: { id: dto.invoiceId, tenantId, status: SalesDocStatus.POSTED },
       include: {
-        items: true,
+        items: {
+          include: {
+            batchConsumptions: {
+              where: { tenantId },
+              select: { quantity: true, unitCost: true },
+            },
+          },
+        },
         returns: {
           where: { status: SalesReturnDocStatus.POSTED },
           include: { items: true },
@@ -989,7 +1000,6 @@ export class SalesInvoicesService {
           "Qaytarish qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
         );
       }
-      let unitCogs = 0;
       const origItem = originalInvoice.items.find(
         (oi) => oi.productId === i.productId,
       );
@@ -1012,7 +1022,10 @@ export class SalesInvoicesService {
         );
       }
 
-      unitCogs = Number(origItem.unitCogs || 0);
+      // Returned goods re-enter stock at the FIFO cost the sale took out.
+      const unitCogs = originalSaleUnitCost(
+        originalInvoice.items.filter((oi) => oi.productId === i.productId),
+      );
       const unitTotalPrice = Number(origItem.totalPrice) / soldQty;
       const unitVatAmount = Number(origItem.vatAmount || 0) / soldQty;
       const unitPrice = unitTotalPrice - unitVatAmount;
@@ -1020,16 +1033,7 @@ export class SalesInvoicesService {
       const lineTotal = roundMoney(unitPrice * qty + lineVatAmount);
       totalAmount += lineTotal;
 
-      if (unitCogs <= 0) {
-        const prod = await this.prisma.product.findUnique({
-          where: { id: i.productId },
-        });
-        unitCogs =
-          Number(prod?.costPrice || 0) *
-          Number(prod?.costPriceExchangeRate || 1);
-      }
-
-      const lineCogs = i.quantity * unitCogs;
+      const lineCogs = roundMoney(qty * unitCogs);
       totalCogs += lineCogs;
 
       preparedItems.push({
@@ -1204,18 +1208,14 @@ export class SalesInvoicesService {
           });
         }
 
-        // ProductBatch with historical landed cost
-        await tx.productBatch.create({
-          data: {
-            tenantId,
-            productId: item.productId,
-            warehouseId: targetWarehouseId,
-            batchNumber: `RET-${params.returnNumber}-${item.productId.slice(0, 4)}`,
-            initialQty: item.quantity,
-            remainingQty: item.quantity,
-            purchasePrice: item.unitCogs,
-            landedCost: item.unitCogs,
-          },
+        // New cost layer at the FIFO cost the original sale took out
+        await createFifoBatch(tx, {
+          tenantId,
+          productId: item.productId,
+          warehouseId: targetWarehouseId,
+          batchNumber: `RET-${params.returnNumber}-${item.productId.slice(0, 4)}`,
+          quantity: item.quantity,
+          unitCost: item.unitCogs,
         });
       }
 
@@ -1235,8 +1235,8 @@ export class SalesInvoicesService {
 
       // Update originating invoice returnStatus
       if (params.invoiceId) {
-        const origInvoice = await tx.salesInvoice.findUnique({
-          where: { id: params.invoiceId },
+        const origInvoice = await tx.salesInvoice.findFirst({
+          where: { id: params.invoiceId, tenantId },
           include: {
             returns: {
               where: { status: SalesReturnDocStatus.POSTED },
@@ -1259,8 +1259,13 @@ export class SalesInvoicesService {
       }
 
       // Double-entry accounting reversal for Sales Return (BHMS)
-      const originalInvoice = await tx.salesInvoice.findUnique({
-        where: { id: params.invoiceId! },
+      if (!params.invoiceId) {
+        throw new BadRequestException(
+          'Qaytarish faqat asl sotuv fakturasiga biriktirilishi mumkin',
+        );
+      }
+      const originalInvoice = await tx.salesInvoice.findFirst({
+        where: { id: params.invoiceId, tenantId },
         include: { items: true },
       });
       if (!originalInvoice) {
@@ -1568,8 +1573,8 @@ export class SalesInvoicesService {
 
       // Update invoice return status
       if (existing.invoiceId) {
-        const origInvoice = await tx.salesInvoice.findUnique({
-          where: { id: existing.invoiceId },
+        const origInvoice = await tx.salesInvoice.findFirst({
+          where: { id: existing.invoiceId, tenantId },
           include: {
             returns: {
               where: {

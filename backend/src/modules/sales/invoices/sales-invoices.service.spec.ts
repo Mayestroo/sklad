@@ -814,6 +814,119 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       });
     });
 
+    const postedInvoiceFor = (items: any[]) => ({
+      id: 'inv-1',
+      tenantId: 'tenant-1',
+      counterpartyId: 'cust-1',
+      warehouseId: 'wh-1',
+      currency: 'UZS',
+      exchangeRate: 1,
+      status: SalesDocStatus.POSTED,
+      totalAmount: 5000000,
+      items,
+      returns: [],
+    });
+    const returnTwoOfProd1 = () =>
+      service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 500000 }],
+      });
+
+    it('restocks at the FIFO cost of the batches the sale consumed', async () => {
+      const invoice = postedInvoiceFor([
+        {
+          productId: 'prod-1',
+          quantity: 10,
+          totalPrice: 5000000,
+          vatAmount: 0,
+          unitCogs: 999999, // stale; the recorded consumptions are exact
+          batchConsumptions: [
+            { quantity: 4, unitCost: 300000 },
+            { quantity: 6, unitCost: 350000 },
+          ],
+        },
+      ]);
+      prisma.salesInvoice.findFirst.mockResolvedValue(invoice);
+      prisma.account.findFirst.mockResolvedValue(null);
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 0 });
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-1',
+        ...data,
+      }));
+
+      const res = await returnTwoOfProd1();
+
+      // (4*300,000 + 6*350,000) / 10 = 330,000 per unit
+      expect(res.totalCogs).toBe(660000);
+      expect(prisma.productBatch.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ landedCost: 330000 }),
+      });
+      // The consumptions are read through the tenant-scoped invoice only.
+      expect(prisma.salesInvoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-1' }),
+          include: expect.objectContaining({
+            items: {
+              include: {
+                batchConsumptions: expect.objectContaining({
+                  where: { tenantId: 'tenant-1' },
+                }),
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    it("never reads a product's catalog cost, so another tenant's product cannot leak into a return", async () => {
+      // The sale posted 0 COGS for this line and recorded no consumptions.
+      // The old code then read product.costPrice by id alone (no tenantId).
+      const otherTenantProduct = {
+        id: 'prod-1',
+        tenantId: 'tenant-OTHER',
+        costPrice: 777000,
+        costPriceExchangeRate: 1,
+      };
+      prisma.product.findUnique.mockResolvedValue(otherTenantProduct);
+      prisma.product.findFirst.mockResolvedValue(otherTenantProduct);
+      prisma.salesInvoice.findFirst.mockResolvedValue(
+        postedInvoiceFor([
+          {
+            productId: 'prod-1',
+            quantity: 10,
+            totalPrice: 5000000,
+            vatAmount: 0,
+            unitCogs: 0,
+            batchConsumptions: [],
+          },
+        ]),
+      );
+      prisma.account.findFirst.mockResolvedValue(null);
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 0 });
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-1',
+        ...data,
+      }));
+
+      const res = await returnTwoOfProd1();
+
+      expect(prisma.product.findUnique).not.toHaveBeenCalled();
+      expect(prisma.product.findFirst).not.toHaveBeenCalled();
+      // Reverses exactly what the sale expensed: nothing.
+      expect(res.totalCogs).toBe(0);
+      expect(prisma.productBatch.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ landedCost: 0, purchasePrice: 0 }),
+      });
+      // Every invoice read during posting is tenant-scoped.
+      expect(prisma.salesInvoice.findUnique).not.toHaveBeenCalled();
+      for (const [args] of prisma.salesInvoice.findFirst.mock.calls) {
+        expect(args.where.tenantId).toBe('tenant-1');
+      }
+    });
+
     it('should calculate returnable items accurately and respect previous returns', async () => {
       prisma.salesInvoice.findFirst.mockResolvedValue({
         id: 'inv-1',
