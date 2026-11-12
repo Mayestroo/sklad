@@ -23,6 +23,7 @@ import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
 import { CancelTransactionDto } from './dto/cancel-transaction.dto';
+import { UpdateTransactionDto } from './dto/update-transaction.dto';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/finance')
@@ -133,7 +134,7 @@ export class FinanceController {
   async updateTransaction(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
-    @Body() body: { comment?: string; transactionTypeId?: string },
+    @Body() body: UpdateTransactionDto,
   ) {
     return this.financeService.updateTransaction(tenantId, id, body);
   }

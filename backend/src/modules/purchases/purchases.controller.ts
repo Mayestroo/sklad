@@ -20,6 +20,7 @@ import { CreatePurchaseReceiptDto } from './dto/create-purchase-receipt.dto';
 import { FilterPurchaseReceiptsDto } from './dto/filter-purchase-receipts.dto';
 import { CreatePurchaseExpenseDto } from './dto/create-purchase-expense.dto';
 import { CreatePurchaseReturnDto } from './dto/create-purchase-return.dto';
+import { PayPurchaseReceiptDto } from './dto/pay-purchase-receipt.dto';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/purchases')
@@ -100,14 +101,7 @@ export class PurchasesController {
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body()
-    dto: {
-      amount: number;
-      cashAccountId: string;
-      exchangeRate?: number;
-      note?: string;
-      paymentDate?: string;
-    },
+    @Body() dto: PayPurchaseReceiptDto,
   ) {
     return this.purchasesService.payPurchaseReceipt(
       tenantId,

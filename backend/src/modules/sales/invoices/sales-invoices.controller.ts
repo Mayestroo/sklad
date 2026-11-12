@@ -21,6 +21,11 @@ import { RequirePermissions } from '../../../common/decorators/require-permissio
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  SetPriceListItemsDto,
+  UpdatePriceListDto,
+  UpsertProductPriceDto,
+} from '../dto/price-list-mutations.dto';
 
 @ApiTags('Sales')
 @ApiBearerAuth()
@@ -120,10 +125,7 @@ export class SalesInvoicesController {
 
   @Get('returns/:id')
   @RequirePermissions('sales:view')
-  findOneReturn(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  findOneReturn(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.service.findOneReturn(tenantId, id);
   }
 
@@ -189,23 +191,14 @@ export class SalesInvoicesController {
   updatePriceList(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
-    @Body()
-    body: {
-      name?: { uz: string; ru: string };
-      currency?: string;
-      isDefault?: boolean;
-      isActive?: boolean;
-    },
+    @Body() body: UpdatePriceListDto,
   ) {
     return this.service.updatePriceList(tenantId, id, body);
   }
 
   @Delete('price-lists/:id')
   @RequirePermissions('sales:delete')
-  deletePriceList(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  deletePriceList(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.service.deletePriceList(tenantId, id);
   }
 
@@ -214,19 +207,16 @@ export class SalesInvoicesController {
   upsertProductPriceItem(
     @CurrentTenant() tenantId: string,
     @Param('priceListId') priceListId: string,
-    @Body() body: any,
+    @Body() body: SetPriceListItemsDto,
   ) {
-    if (Array.isArray(body)) {
-      return this.service.bulkSetPrices(tenantId, priceListId, body);
-    }
-    if (body?.items && Array.isArray(body.items)) {
+    if (body.items) {
       return this.service.bulkSetPrices(tenantId, priceListId, body.items);
     }
     return this.service.upsertProductPrice(
       tenantId,
       priceListId,
-      body.productId,
-      Number(body.price),
+      body.productId as string,
+      body.price as number,
     );
   }
 
@@ -236,13 +226,13 @@ export class SalesInvoicesController {
     @CurrentTenant() tenantId: string,
     @Param('priceListId') priceListId: string,
     @Param('productId') productId: string,
-    @Body('price') price: number,
+    @Body() body: UpsertProductPriceDto,
   ) {
     return this.service.upsertProductPrice(
       tenantId,
       priceListId,
       productId,
-      Number(price),
+      body.price,
     );
   }
 

@@ -15,17 +15,7 @@ import * as path from 'path';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-
-export class CreateTenantDto {
-  name: { uz: string; ru: string } | string;
-  slug: string;
-  plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
-  trialDays?: number;
-  adminEmail: string;
-  adminPassword?: string;
-  adminFirstName: string;
-  adminLastName: string;
-}
+import type { CreateTenantDto } from './dto/super-admin.dto';
 
 @Injectable()
 export class SuperAdminService {

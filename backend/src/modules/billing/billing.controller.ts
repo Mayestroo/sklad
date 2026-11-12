@@ -5,6 +5,7 @@ import { TenantGuard } from '../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { CreateCheckoutDto } from './dto/create-checkout.dto';
 
 @Controller('api/billing')
 export class BillingController {
@@ -27,11 +28,7 @@ export class BillingController {
   @RequirePermissions('settings:edit')
   createCheckout(
     @CurrentTenant() tenantId: string,
-    @Body()
-    body: {
-      planId: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
-      method: 'CLICK' | 'PAYME' | 'BANK_TRANSFER';
-    },
+    @Body() body: CreateCheckoutDto,
   ) {
     return this.billingService.createCheckout(
       tenantId,

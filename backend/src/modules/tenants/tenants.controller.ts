@@ -16,6 +16,12 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import {
+  CreateBranchDto,
+  UpdateBranchDto,
+  CreateWarehouseDto,
+  UpdateWarehouseDto,
+} from './dto/branch-warehouse.dto';
 
 @Controller('api/tenants')
 export class TenantsController {
@@ -43,12 +49,7 @@ export class TenantsController {
   @RequirePermissions('settings:edit')
   createBranch(
     @CurrentTenant() tenantId: string,
-    @Body()
-    body: {
-      name: { uz: string; ru: string };
-      address?: string;
-      isMain?: boolean;
-    },
+    @Body() body: CreateBranchDto,
   ) {
     return this.tenantsService.createBranch(
       tenantId,
@@ -64,12 +65,7 @@ export class TenantsController {
   updateBranch(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
-    @Body()
-    body: {
-      name?: { uz: string; ru: string };
-      address?: string;
-      isMain?: boolean;
-    },
+    @Body() body: UpdateBranchDto,
   ) {
     return this.tenantsService.updateBranch(tenantId, id, body);
   }
@@ -77,10 +73,7 @@ export class TenantsController {
   @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
   @Delete('branches/:id')
   @RequirePermissions('settings:edit')
-  deleteBranch(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  deleteBranch(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.tenantsService.deleteBranch(tenantId, id);
   }
 
@@ -96,13 +89,7 @@ export class TenantsController {
   @RequirePermissions('settings:edit')
   createWarehouse(
     @CurrentTenant() tenantId: string,
-    @Body()
-    body: {
-      branchId?: string;
-      name: { uz: string; ru: string };
-      address?: string;
-      phone?: string;
-    },
+    @Body() body: CreateWarehouseDto,
   ) {
     return this.tenantsService.createWarehouse(
       tenantId,
@@ -119,13 +106,7 @@ export class TenantsController {
   updateWarehouse(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
-    @Body()
-    body: {
-      branchId?: string | null;
-      name?: { uz: string; ru: string };
-      address?: string;
-      phone?: string;
-    },
+    @Body() body: UpdateWarehouseDto,
   ) {
     return this.tenantsService.updateWarehouse(tenantId, id, body);
   }
@@ -133,13 +114,9 @@ export class TenantsController {
   @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
   @Delete('warehouses/:id')
   @RequirePermissions('settings:edit')
-  deleteWarehouse(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  deleteWarehouse(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.tenantsService.deleteWarehouse(tenantId, id);
   }
-
 
   // Settings Endpoints
   @UseGuards(JwtAuthGuard, TenantGuard)
