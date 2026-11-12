@@ -55,6 +55,12 @@ export class ProductsService {
       );
     }
 
+    if (Number(dto.costPrice ?? 0) > 0 && !dto.costPriceCurrency) {
+      throw new BadRequestException(
+        'Set a cost-price currency before saving a nonzero cost price',
+      );
+    }
+    // A zero cost carries no currency; the column default labels it.
     const costPriceCurrency = dto.costPriceCurrency ?? 'UZS';
     const costPriceExchangeRateInput = Number(dto.costPriceExchangeRate);
     const costPriceExchangeRate =
@@ -290,7 +296,7 @@ export class ProductsService {
     }
 
     const costPriceCurrency =
-      dto.costPriceCurrency ?? product.costPriceCurrency ?? 'UZS';
+      dto.costPriceCurrency ?? product.costPriceCurrency;
     const nextCostPrice =
       dto.costPrice !== undefined
         ? Number(dto.costPrice)

@@ -63,6 +63,8 @@ export class OpeningBalancesImportService {
     rawRate: PlainCellValue,
     errors: ImportErrorItem[],
   ): number | null {
+    // A missing or unknown currency is reported by the row's currency check.
+    if (!isSupportedCurrency(currency)) return null;
     if (currency === 'UZS') return 1;
     const rate = Number(rawRate);
     if (Number.isFinite(rate) && rate > 0) return rate;
@@ -297,7 +299,7 @@ export class OpeningBalancesImportService {
       sheetPul.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
         const accountName = String(cellValue(row, 1) || '').trim();
-        const currency = String(cellValue(row, 2) || 'UZS')
+        const currency = String(cellValue(row, 2) || '')
           .trim()
           .toUpperCase();
         const rawAmount = cellValue(row, 3);
@@ -505,7 +507,7 @@ export class OpeningBalancesImportService {
         const customerIdent = String(cellValue(row, 1) || '').trim();
         const contract = String(cellValue(row, 2) || '').trim();
         const rawAmount = cellValue(row, 3);
-        const currency = String(cellValue(row, 4) || 'UZS')
+        const currency = String(cellValue(row, 4) || '')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(
@@ -582,7 +584,7 @@ export class OpeningBalancesImportService {
         const suppIdent = String(cellValue(row, 1) || '').trim();
         const contract = String(cellValue(row, 2) || '').trim();
         const rawAmount = cellValue(row, 3);
-        const currency = String(cellValue(row, 4) || 'UZS')
+        const currency = String(cellValue(row, 4) || '')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(
@@ -661,7 +663,7 @@ export class OpeningBalancesImportService {
           .trim()
           .toUpperCase();
         const rawAmount = cellValue(row, 3);
-        const currency = String(cellValue(row, 4) || 'UZS')
+        const currency = String(cellValue(row, 4) || '')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(
@@ -796,7 +798,7 @@ export class OpeningBalancesImportService {
           .toUpperCase();
         const title = String(cellValue(row, 2) || '').trim();
         const rawAmount = cellValue(row, 3);
-        const currency = String(cellValue(row, 4) || 'UZS')
+        const currency = String(cellValue(row, 4) || '')
           .trim()
           .toUpperCase();
         const exchangeRate = this.parseExchangeRate(

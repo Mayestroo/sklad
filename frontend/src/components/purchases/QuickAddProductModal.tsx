@@ -88,7 +88,7 @@ export function QuickAddProductModal({
       setError(isRu ? 'Введите наименование' : 'Nomini kiriting');
       return;
     }
-    if (costPrice > 0 && costPriceCurrency === 'USD' && Number(costPriceExchangeRate) <= 0) {
+    if (costPrice > 0 && costPriceCurrency === 'USD' && !(Number(costPriceExchangeRate) > 0)) {
       setError(isRu ? 'Укажите положительный курс себестоимости' : 'Xarid tannarxi uchun 0 dan katta kursni kiriting');
       return;
     }
@@ -114,7 +114,9 @@ export function QuickAddProductModal({
           unitOfMeasure,
           costPrice: Number(costPrice) || 0,
           costPriceCurrency,
-          costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : (Number(costPriceExchangeRate) || 1),
+          // Never invent a rate: a zero USD cost may omit it, a nonzero one was validated above.
+          costPriceExchangeRate:
+            costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate) > 0 ? Number(costPriceExchangeRate) : undefined,
           salePrice: Number(salePrice) || 0,
         }),
       });

@@ -123,6 +123,9 @@ describe('ProductsService', () => {
         sku: 'SKU-1',
         salePrice: 100,
         salePriceCurrency: 'USD',
+        costPriceCurrency: 'UZS',
+        costPrice: 0,
+        costPriceExchangeRate: 1,
       });
       mockPrisma.product.update.mockResolvedValue({
         id: 'p-1',
@@ -199,6 +202,20 @@ describe('ProductsService', () => {
       expect(mockPrisma.product.create).not.toHaveBeenCalled();
     });
 
+    it('rejects a nonzero cost price without a currency instead of assuming UZS', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      mockPrisma.product.create.mockResolvedValue({ id: 'p-cost' });
+
+      await expect(
+        service.create('t-1', {
+          name: { uz: 'Xomashyo', ru: 'Сырье' },
+          sku: 'COST-NO-CCY',
+          costPrice: 10,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.product.create).not.toHaveBeenCalled();
+    });
+
     it('generates a SKU when the optional SKU field is omitted', async () => {
       mockPrisma.product.findFirst.mockResolvedValue(null);
       mockPrisma.product.create.mockResolvedValue({ id: 'p-auto' });
@@ -228,6 +245,9 @@ describe('ProductsService', () => {
           sku: 'OLD-SKU',
           salePrice: 0,
           salePriceCurrency: 'UZS',
+          costPriceCurrency: 'UZS',
+          costPrice: 0,
+          costPriceExchangeRate: 1,
         })
         .mockResolvedValueOnce(null);
       mockPrisma.product.update.mockResolvedValue({
@@ -258,6 +278,9 @@ describe('ProductsService', () => {
           sku: 'OLD-SKU',
           salePrice: 0,
           salePriceCurrency: 'UZS',
+          costPriceCurrency: 'UZS',
+          costPrice: 0,
+          costPriceExchangeRate: 1,
         }) // first call for product lookup
         .mockResolvedValueOnce({ id: 'p-2', tenantId, sku: 'EXISTING-SKU' }); // second call for sku collision check
 

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
-import { readCompanySettings } from '../../../common/utils/company-settings';
 
 @Injectable()
 export class AccountingReportsService {
@@ -63,31 +62,11 @@ export class AccountingReportsService {
       };
     });
 
-    const recentReceipt = await this.prisma.purchaseReceipt.findFirst({
-      where: { tenantId, status: 'POSTED' },
-      select: { currency: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    const recentInvoice = await this.prisma.salesInvoice.findFirst({
-      where: { tenantId, status: 'POSTED' },
-      select: { currency: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    const company = await this.prisma.company.findUnique({
-      where: { id: tenantId },
-      select: { settings: true },
-    });
-
-    const reportCurrency =
-      recentReceipt?.currency ||
-      recentInvoice?.currency ||
-      readCompanySettings(company?.settings).sales?.defaultCurrency ||
-      'UZS';
-
     return {
       periodStart: new Date(new Date().getFullYear(), 0, 1).toISOString(),
       periodEnd: new Date().toISOString(),
-      currency: reportCurrency,
+      // Journal lines are always UZS (ADR 0006), whatever the documents' currency.
+      currency: 'UZS',
       items,
       totalDebitTurnover,
       totalCreditTurnover,
@@ -121,7 +100,7 @@ export class AccountingReportsService {
     const netProfit = grossProfit; // Simplification before operating expenses
 
     return {
-      currency: osv.currency || 'UZS',
+      currency: osv.currency,
       balanceSheet: {
         totalAssets,
         totalLiabilities,

@@ -2300,7 +2300,7 @@ export class PurchasesService {
     let monthlyPurchasesTotal = 0;
     for (const r of monthlyReceipts) {
       const amt = Number(r.totalAmount || 0);
-      const curr = r.currency || 'UZS';
+      const curr = r.currency;
       purchasesByCurrMap[curr] = (purchasesByCurrMap[curr] || 0) + amt;
       monthlyPurchasesTotal += amt;
     }
@@ -2357,7 +2357,7 @@ export class PurchasesService {
     let monthlyReturnsTotal = 0;
     for (const ret of monthlyReturns) {
       const amt = Number(ret.totalAmount || 0);
-      const curr = ret.currency || 'UZS';
+      const curr = ret.currency;
       returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
       monthlyReturnsTotal += amt;
     }

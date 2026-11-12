@@ -115,4 +115,65 @@ describe('OpeningBalancesImportService', () => {
       }),
     ]);
   });
+
+  it('rejects a row with a blank currency instead of assuming UZS (ADR 0022)', async () => {
+    const prisma = {
+      cashAccount: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'cash-usd',
+            accountType: 'USD_CASH',
+            currency: 'USD',
+            name: { uz: 'Dollar kassa', ru: 'Долларовая касса' },
+          },
+          {
+            id: 'cash-uzs',
+            accountType: 'UZS_CASH',
+            currency: 'UZS',
+            name: { uz: 'Naqd kassa', ru: 'Наличная касса' },
+          },
+        ]),
+      },
+      product: { findMany: jest.fn().mockResolvedValue([]) },
+      warehouse: { findMany: jest.fn().mockResolvedValue([]) },
+      counterparty: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'cp-1', name: 'Mijoz', inn: null }]),
+      },
+    };
+    const service = new OpeningBalancesImportService(
+      prisma as unknown as PrismaService,
+    );
+    const workbook = new ExcelJS.Workbook();
+    const cashSheet = workbook.addWorksheet('1_Pul');
+    cashSheet.addRow(['Nomi', 'Valyuta', 'Summa', 'Kurs', 'Izoh']);
+    // A dollar balance typed without its currency must not become 500 UZS.
+    cashSheet.addRow(['Dollar kassa', '', 500, 12600, '']);
+    workbook.addWorksheet('2_Tovar').addRow(['Header only']);
+    const receivables = workbook.addWorksheet('3_Mijozlar');
+    receivables.addRow(['Mijoz', 'Shartnoma', 'Summa', 'Valyuta', 'Kurs']);
+    receivables.addRow(['Mijoz', '', 500, '', 12600]);
+    const file = Buffer.from(await workbook.xlsx.writeBuffer());
+
+    const result = await service.validateAndParse(
+      'tenant-1',
+      file,
+      'opening.xlsx',
+    );
+
+    expect(result.previewLines).toEqual([]);
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        sheetName: '1_Pul',
+        fieldName: 'Valyuta',
+        invalidValue: '',
+      }),
+      expect.objectContaining({
+        sheetName: '3_Mijozlar',
+        fieldName: 'Valyuta',
+        invalidValue: '',
+      }),
+    ]);
+  });
 });
