@@ -23,7 +23,7 @@ import type {
   FinanceAccountFlow,
   TransactionType,
 } from '@shared/types';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import {
   Plus,
   Minus,

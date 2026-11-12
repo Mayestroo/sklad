@@ -8,7 +8,8 @@ export type ExpenseType = 'TRANSPORT' | 'CUSTOMS' | 'BROKER' | 'INSURANCE' | 'OT
 
 export type ExpenseAllocationMethod = 'BY_AMOUNT' | 'BY_QUANTITY' | 'BY_WEIGHT';
 
-export type ReturnDocStatus = 'DRAFT' | 'POSTED' | 'CANCELLED';
+/** Mirrors the Prisma enum ReturnDocStatus. */
+export type ReturnDocStatus = 'DRAFT' | 'UNDER_REVIEW' | 'POSTED' | 'CANCELLED';
 
 export interface PurchaseReceiptItem {
   id: string;
@@ -23,6 +24,8 @@ export interface PurchaseReceiptItem {
   totalPrice: number;
   allocatedExpenses: number;
   landedCost: number;
+  /** Quantity already returned to the supplier. */
+  returnedQuantity: number;
   product?: {
     id: string;
     name: any;

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import {
   Printer,
   CheckCircle2,

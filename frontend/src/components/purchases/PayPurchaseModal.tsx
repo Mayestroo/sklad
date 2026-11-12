@@ -11,7 +11,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { formatCurrency } from '@/lib/utils';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import { CreditCard, DollarSign, Calendar, FileText } from 'lucide-react';
 
 interface PayPurchaseModalProps {

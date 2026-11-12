@@ -45,7 +45,7 @@ import {
   ExpenseAllocationMethod,
   AllocationPreviewResult,
 } from '@shared/types';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 
 interface Counterparty {
   id: string;

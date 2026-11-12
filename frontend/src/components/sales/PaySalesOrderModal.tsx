@@ -15,7 +15,7 @@ import {
 import {
   isCashAccountCompatibleWithSalesPayment,
   isCashAccountCurrencyValid,
-} from '@/lib/cash-account-policy';
+} from '@shared/types/cash-account-policy';
 import { CreditCard, AlertCircle, Percent } from 'lucide-react';
 
 type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME';

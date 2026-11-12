@@ -44,7 +44,7 @@ import type {
   OpeningBalanceMetrics,
   ImportErrorItem,
 } from '@shared/types/opening-balances';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 
 type TabKey = 'cash' | 'inventory' | 'customers' | 'suppliers' | 'advances' | 'fixed-assets' | 'other';
 type OpeningBalanceDraftLine = Omit<Partial<OpeningBalanceLine>, 'exchangeRate'> & { exchangeRate?: number | string };
