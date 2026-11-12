@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
-import { EventsGateway } from '../../../common/websockets/events.gateway';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreateStockTransferDto } from '../dto';
 
@@ -14,7 +13,6 @@ export class StockTransfersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-    private readonly eventsGateway: EventsGateway,
     private readonly journalService: JournalService,
   ) {}
 
@@ -154,7 +152,7 @@ export class StockTransfersService {
       );
     }
 
-    // Audit log & WebSocket broadcast
+    // Audit log
     await this.auditService.logAction({
       tenantId,
       userId,
@@ -165,12 +163,6 @@ export class StockTransfersService {
         status: 'IN_TRANSIT',
         transferNumber: updated.transferNumber,
       },
-    });
-
-    this.eventsGateway.notifyStockUpdate(tenantId, {
-      event: 'transfer_shipped',
-      transferNumber: updated.transferNumber,
-      updatedAt: new Date().toISOString(),
     });
 
     return updated;
@@ -270,7 +262,7 @@ export class StockTransfersService {
       );
     }
 
-    // Audit log & WebSocket broadcast
+    // Audit log
     await this.auditService.logAction({
       tenantId,
       userId,
@@ -278,12 +270,6 @@ export class StockTransfersService {
       entityId: updated.id,
       action: 'UPDATE',
       newValue: { status: 'RECEIVED', transferNumber: updated.transferNumber },
-    });
-
-    this.eventsGateway.notifyStockUpdate(tenantId, {
-      event: 'transfer_received',
-      transferNumber: updated.transferNumber,
-      updatedAt: new Date().toISOString(),
     });
 
     return updated;

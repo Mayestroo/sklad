@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
-import { EventsGateway } from '../../../common/websockets/events.gateway';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreateInventoryDocDto } from '../dto';
 
@@ -14,13 +13,12 @@ export class InventoryDocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-    private readonly eventsGateway: EventsGateway,
     private readonly journalService: JournalService,
   ) {}
 
   /**
    * Post Inventory Document (INBOUND, OUTBOUND, STOCKTAKING)
-   * Executes atomic stock balance updates and triggers WebSockets.
+   * Executes atomic stock balance updates.
    */
   async createAndPostDocument(
     tenantId: string,
@@ -141,15 +139,6 @@ export class InventoryDocumentsService {
       entityId: result.id,
       action: 'CREATE',
       newValue: { docNumber, docType: dto.docType, totalAmount },
-    });
-
-    // 5. Broadcast Real-Time Stock Update over WebSockets
-    this.eventsGateway.notifyStockUpdate(tenantId, {
-      event: 'inventory_posted',
-      warehouseId: dto.warehouseId,
-      docNumber,
-      docType: dto.docType,
-      updatedAt: new Date().toISOString(),
     });
 
     return result;
