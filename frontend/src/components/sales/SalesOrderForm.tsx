@@ -98,6 +98,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const [orderNumber] = useState<string>(initialData?.orderNumber || '');
   const [orderStatus, setOrderStatus] = useState<string>(initialData?.status || 'NEW');
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
+  // Stock is reserved and shipped from this warehouse (ADR 0018)
+  const [warehouseId, setWarehouseId] = useState<string>(initialData?.warehouseId || '');
   const [currency, setCurrency] = useState(initialData?.currency || defaultCurrency);
   const [exchangeRate, setExchangeRate] = useState<number | string>(
     initialData?.exchangeRate !== undefined
@@ -162,6 +164,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     if (!isDirty) setIsDirty(true);
   };
 
+  // Preselect the first warehouse in create mode (visible and changeable, like the invoice form)
+  const effectiveWarehouseId =
+    warehouseId || (mode === 'create' ? (warehouses[0]?.id ?? '') : '');
+
   // Set default counterparty if empty in create mode
   useEffect(() => {
     if (!counterpartyId && counterparties.length > 0 && mode === 'create') {
@@ -180,6 +186,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const handleWarehouseAdded = (newWarehouse: { id: string; name: string | Record<string, string> }) => {
     markDirty();
     setWarehouses((prev) => [newWarehouse, ...prev]);
+    setWarehouseId(newWarehouse.id);
   };
 
   // Calculations
@@ -350,6 +357,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   // Save Order
   const handleSave = async () => {
     setError(null);
+    if (!effectiveWarehouseId) {
+      setError(isRu ? 'Выберите склад' : 'Omborni tanlang');
+      return;
+    }
     if (!currency) {
       setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
       return;
@@ -391,6 +402,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     try {
       const payload = {
         counterpartyId,
+        warehouseId: effectiveWarehouseId,
         currency,
         exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
         paymentCondition,
@@ -620,6 +632,11 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   };
 
   const statusMeta = ORDER_STATUS_LABELS[orderStatus] || { uz: orderStatus, ru: orderStatus, variant: 'neutral' };
+
+  const warehouseOptions: SelectOption[] = warehouses.map((w) => ({
+    value: w.id,
+    label: getLocalizedName(w.name, locale),
+  }));
 
   const customerOptions: SelectOption[] = counterparties.map((c) => ({
     value: c.id,
@@ -878,6 +895,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         onCounterpartyChange={handleCounterpartySelect}
         customerOptions={customerOptions}
         onQuickCustomerOpen={() => setIsQuickCustomerOpen(true)}
+        warehouseId={effectiveWarehouseId}
+        onWarehouseChange={(val) => { markDirty(); setWarehouseId(val); }}
+        warehouseOptions={warehouseOptions}
+        onQuickWarehouseOpen={() => setIsQuickWarehouseOpen(true)}
         paymentCondition={paymentCondition}
         onPaymentConditionChange={(val) => { markDirty(); setPaymentCondition(val); }}
         requiredPaymentPercent={requiredPaymentPercent}

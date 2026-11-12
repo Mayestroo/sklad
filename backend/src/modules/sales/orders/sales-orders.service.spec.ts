@@ -161,6 +161,7 @@ describe('SalesOrdersService', () => {
 
       const dto: any = {
         counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
         paymentCondition: 'PREPAID_100',
         currency: 'UZS',
         items: [
@@ -199,6 +200,7 @@ describe('SalesOrdersService', () => {
 
       const result = await service.create('tenant-1', 'user-1', ['SELLER'], {
         counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
         paymentCondition: 'CREDIT',
         currency: 'UZS',
         additionalChargeAmount: 50_000,
@@ -232,6 +234,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'UZS',
           items: [],
@@ -243,6 +246,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: '' as any,
           items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
@@ -252,6 +256,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'RUB' as any,
           items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
@@ -263,6 +268,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'USD',
           items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
@@ -272,6 +278,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'USD',
           exchangeRate: 0,
@@ -284,11 +291,140 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'UZS',
           items: [{ productId: 'p1', quantity: 0, unitPrice: 100 }],
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Designated warehouse (ADR 0018)', () => {
+    type CreateDto = Parameters<SalesOrdersService['create']>[3];
+    type CreateArgs = {
+      data: { items: { create: Record<string, unknown>[] } } & Record<
+        string,
+        unknown
+      >;
+    };
+    const db = () =>
+      prisma as {
+        salesOrder: Record<
+          'count' | 'create' | 'findFirst' | 'update',
+          jest.Mock
+        >;
+        warehouse: { findFirst: jest.Mock };
+      };
+    const reservations = () =>
+      stockReservationService as { reserveStockForOrder: jest.Mock };
+    const orderDto = (warehouseId?: string) =>
+      ({
+        counterpartyId: 'cust-1',
+        paymentCondition: 'CREDIT',
+        currency: 'UZS',
+        warehouseId,
+        items: [{ productId: 'prod-1', quantity: 5, unitPrice: 1000 }],
+      }) as unknown as CreateDto;
+
+    beforeEach(() => {
+      db().salesOrder.count.mockResolvedValue(0);
+      db().salesOrder.create.mockImplementation(({ data }: CreateArgs) => ({
+        id: 'order-1',
+        ...data,
+        items: data.items.create.map((item, index) => ({
+          id: `item-${index + 1}`,
+          ...item,
+        })),
+        payments: [],
+        salesInvoices: [],
+      }));
+    });
+
+    it('rejects an order without a warehouse instead of reserving stock in the first warehouse', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', ['SELLER'], orderDto(undefined)),
+      ).rejects.toThrow('Buyurtma uchun ombor tanlanishi shart');
+      expect(reservations().reserveStockForOrder).not.toHaveBeenCalled();
+    });
+
+    it('rejects a warehouse that does not belong to the tenant', async () => {
+      db().warehouse.findFirst.mockResolvedValue(null);
+      await expect(
+        service.create(
+          'tenant-1',
+          'user-1',
+          ['SELLER'],
+          orderDto('wh-foreign'),
+        ),
+      ).rejects.toThrow('Ombor topilmadi');
+      expect(db().warehouse.findFirst).toHaveBeenCalledWith({
+        where: { id: 'wh-foreign', tenantId: 'tenant-1' },
+      });
+    });
+
+    it('reserves stock in the designated warehouse', async () => {
+      db().warehouse.findFirst.mockResolvedValue({ id: 'wh-2' });
+      await service.create('tenant-1', 'user-1', ['SELLER'], orderDto('wh-2'));
+      expect(reservations().reserveStockForOrder).toHaveBeenCalledWith(
+        'tenant-1',
+        'order-1',
+        'wh-2',
+        expect.any(Array),
+      );
+    });
+
+    it("rejects moving an order to another tenant's warehouse", async () => {
+      db().salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.NEW,
+        currency: 'UZS',
+        exchangeRate: 1,
+        warehouseId: 'wh-1',
+        items: [],
+      });
+      db().warehouse.findFirst.mockResolvedValue(null);
+      await expect(
+        service.update('tenant-1', 'user-1', 'order-1', {
+          warehouseId: 'wh-foreign',
+        }),
+      ).rejects.toThrow('Ombor topilmadi');
+      expect(db().salesOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch from an arbitrary warehouse when none is designated', async () => {
+      db().salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.READY_FOR_SHIPMENT,
+        paymentCondition: PaymentCondition.CREDIT,
+        warehouseId: null,
+        items: [],
+        payments: [],
+      });
+      await expect(
+        service.dispatch('tenant-1', 'user-1', 'order-1', {}),
+      ).rejects.toThrow('Chiqarish uchun ombor tanlanmagan');
+      expect(db().warehouse.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('does not approve an order without a warehouse by reserving in the first warehouse', async () => {
+      db().salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.PENDING_APPROVAL,
+        warehouseId: null,
+        items: [
+          { id: 'item-1', productId: 'prod-1', quantity: 5, reservedQty: 0 },
+        ],
+      });
+      await expect(
+        service.transition('tenant-1', 'user-1', 'order-1', 'APPROVE', [
+          'MANAGER',
+        ]),
+      ).rejects.toThrow('Buyurtma uchun ombor tanlanishi shart');
+      expect(reservations().reserveStockForOrder).not.toHaveBeenCalled();
     });
   });
 
@@ -316,6 +452,7 @@ describe('SalesOrdersService', () => {
         id: 'order-1',
         tenantId: 'tenant-1',
         status: SalesOrderStatus.PENDING_APPROVAL,
+        warehouseId: 'wh-1',
         items: [],
       });
 
@@ -634,8 +771,14 @@ describe('SalesOrdersService', () => {
           data: expect.objectContaining({
             lines: {
               create: expect.arrayContaining([
-                expect.objectContaining({ creditAccountId: 'acc-9010', amount: 1050000 }),
-                expect.objectContaining({ creditAccountId: 'acc-6410', amount: 126000 }),
+                expect.objectContaining({
+                  creditAccountId: 'acc-9010',
+                  amount: 1050000,
+                }),
+                expect.objectContaining({
+                  creditAccountId: 'acc-6410',
+                  amount: 126000,
+                }),
               ]),
             },
           }),

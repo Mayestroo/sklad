@@ -370,10 +370,24 @@ export class SalesOrdersService {
 
   // ─── CREATE ────────────────────────────────────────────────────
 
+  /** Every order reserves and ships from one designated warehouse of its tenant (ADR 0018). */
+  private async requireTenantWarehouse(tenantId: string, warehouseId: string | undefined) {
+    if (!warehouseId) {
+      throw new BadRequestException('Buyurtma uchun ombor tanlanishi shart');
+    }
+    const warehouse = await this.prisma.warehouse.findFirst({
+      where: { id: warehouseId, tenantId },
+    });
+    if (!warehouse) {
+      throw new NotFoundException('Ombor topilmadi');
+    }
+  }
+
   async create(tenantId: string, userId: string, userRoles: string[], dto: CreateSalesOrderDto) {
     if (!dto.items?.length) {
       throw new BadRequestException('Buyurtmada kamida bitta tovar tanlanishi shart');
     }
+    await this.requireTenantWarehouse(tenantId, dto.warehouseId);
 
     if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
       throw new BadRequestException(
@@ -501,7 +515,7 @@ export class SalesOrdersService {
         deliveryAddress: dto.deliveryAddress || null,
         comment: dto.comment || null,
         priceListId: dto.priceListId || null,
-        warehouseId: dto.warehouseId || null,
+        warehouseId: dto.warehouseId,
         assignedSellerId: dto.assignedSellerId || null,
         createdById: userId,
         status: initialStatus,
@@ -533,18 +547,12 @@ export class SalesOrdersService {
       },
     });
 
-    // Auto-reserve warehouse stock for items upon order creation
-    let reservationWarehouseId = order.warehouseId;
-    if (!reservationWarehouseId) {
-      const firstWh = await this.prisma.warehouse.findFirst({ where: { tenantId } });
-      if (firstWh) reservationWarehouseId = firstWh.id;
-    }
-
-    if (reservationWarehouseId && order.items && order.items.length > 0) {
+    // Auto-reserve stock in the order's designated warehouse (ADR 0018)
+    if (order.items && order.items.length > 0) {
       await this.stockReservationService.reserveStockForOrder(
         tenantId,
         order.id,
-        reservationWarehouseId,
+        dto.warehouseId,
         order.items.map((i) => ({
           orderItemId: i.id,
           productId: i.productId,
@@ -578,6 +586,9 @@ export class SalesOrdersService {
       throw new BadRequestException(
         "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tahrirlash mumkin",
       );
+    }
+    if (dto.warehouseId !== undefined) {
+      await this.requireTenantWarehouse(tenantId, dto.warehouseId);
     }
     const currency = dto.currency ?? order.currency;
     const exchangeRate = dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : Number(order.exchangeRate);
@@ -659,23 +670,19 @@ export class SalesOrdersService {
     });
 
     if (dto.items?.length) {
-      let reservationWarehouseId = updated.warehouseId;
-      if (!reservationWarehouseId) {
-        const firstWarehouse = await this.prisma.warehouse.findFirst({ where: { tenantId } });
-        reservationWarehouseId = firstWarehouse?.id ?? null;
+      if (!updated.warehouseId) {
+        throw new BadRequestException('Buyurtma uchun ombor tanlanishi shart');
       }
-      if (reservationWarehouseId) {
-        await this.stockReservationService.reserveStockForOrder(
-          tenantId,
-          id,
-          reservationWarehouseId,
-          updated.items.map((item) => ({
-            orderItemId: item.id,
-            productId: item.productId,
-            quantity: Number(item.quantity),
-          })),
-        );
-      }
+      await this.stockReservationService.reserveStockForOrder(
+        tenantId,
+        id,
+        updated.warehouseId,
+        updated.items.map((item) => ({
+          orderItemId: item.id,
+          productId: item.productId,
+          quantity: Number(item.quantity),
+        })),
+      );
     }
 
     const refreshed = await this.prisma.salesOrder.findFirst({
@@ -831,13 +838,12 @@ export class SalesOrdersService {
 
       // When APPROVED, auto-reserve available warehouse inventory
       if (newStatus === SalesOrderStatus.APPROVED) {
-        let warehouseId = order.warehouseId;
+        const warehouseId = order.warehouseId;
         if (!warehouseId) {
-          const firstWh = await tx.warehouse.findFirst({ where: { tenantId } });
-          if (firstWh) warehouseId = firstWh.id;
+          throw new BadRequestException('Buyurtma uchun ombor tanlanishi shart');
         }
 
-        if (warehouseId) {
+        {
           const resResults = await this.stockReservationService.reserveStockForOrder(
             tenantId,
             id,
@@ -1366,11 +1372,7 @@ export class SalesOrdersService {
       throw new BadRequestException("To'lov sharti bajarilmagan. Jo'natishga ruxsat yo'q");
     }
 
-    let warehouseId = dto.warehouseId || order.warehouseId;
-    if (!warehouseId) {
-      const firstWh = await this.prisma.warehouse.findFirst({ where: { tenantId } });
-      if (firstWh) warehouseId = firstWh.id;
-    }
+    const warehouseId = dto.warehouseId || order.warehouseId;
     if (!warehouseId) {
       throw new BadRequestException('Chiqarish uchun ombor tanlanmagan');
     }

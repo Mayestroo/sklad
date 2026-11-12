@@ -17,6 +17,10 @@ export interface OrderGeneralInfoProps {
   onCounterpartyChange: (id: string) => void;
   customerOptions: SelectOption[];
   onQuickCustomerOpen?: () => void;
+  warehouseId: string;
+  onWarehouseChange: (id: string) => void;
+  warehouseOptions: SelectOption[];
+  onQuickWarehouseOpen?: () => void;
   paymentCondition: 'PREPAID_100' | 'PARTIAL' | 'CREDIT';
   onPaymentConditionChange: (cond: 'PREPAID_100' | 'PARTIAL' | 'CREDIT') => void;
   requiredPaymentPercent: number;
@@ -43,6 +47,10 @@ export function OrderGeneralInfo({
   onCounterpartyChange,
   customerOptions,
   onQuickCustomerOpen,
+  warehouseId,
+  onWarehouseChange,
+  warehouseOptions,
+  onQuickWarehouseOpen,
   paymentCondition,
   onPaymentConditionChange,
   requiredPaymentPercent,
@@ -81,6 +89,20 @@ export function OrderGeneralInfo({
             disabled={isLocked}
             onCreateNew={!isLocked ? onQuickCustomerOpen : undefined}
             createNewLabel={isRu ? 'Добавить клиента' : 'Yangi mijoz qo‘shish'}
+          />
+        </div>
+
+        {/* Warehouse: stock is reserved and shipped from here */}
+        <div style={{ minWidth: '150px', flex: '1.5 1 170px' }}>
+          <Select
+            label={isRu ? 'Склад отгрузки *' : 'Jo‘natish ombori *'}
+            options={warehouseOptions}
+            value={warehouseId}
+            onChange={onWarehouseChange}
+            placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
+            disabled={isLocked}
+            onCreateNew={!isLocked ? onQuickWarehouseOpen : undefined}
+            createNewLabel={isRu ? 'Создать новый склад' : 'Yangi ombor qo‘shish'}
           />
         </div>
 

@@ -46,9 +46,9 @@ export class CreateSalesOrderDto {
   @IsNotEmpty()
   counterpartyId: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  warehouseId?: string;
+  warehouseId: string;
 
   @IsValidCurrency()
   currency: string;
