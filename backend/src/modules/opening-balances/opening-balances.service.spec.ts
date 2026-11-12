@@ -11,6 +11,9 @@ import {
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
+import { JournalService } from '../accounting/journal/journal.service';
+
+jest.mock('../../common/sequences/document-sequence');
 
 describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
   let service: OpeningBalancesService;
@@ -76,6 +79,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
         OpeningBalancesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
@@ -286,19 +290,17 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
           data: expect.objectContaining({ amount: 10, currency: 'USD' }),
         }),
       );
-      expect(prisma.journalLine.create).toHaveBeenCalledWith(
+      expect(prisma.journalEntry.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            debitAccountId: 'account-5020',
-            amount: 125000,
-          }),
-        }),
-      );
-      expect(prisma.journalLine.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            creditAccountId: 'account-8330',
-            amount: 125000,
+            entryNumber: expect.stringMatching(/^JE-\d{4}-\d{5}$/),
+            sourceDocType: 'OpeningBalanceDocument',
+            lines: {
+              create: expect.arrayContaining([
+                expect.objectContaining({ debitAccountId: 'account-5020', amount: 125000 }),
+                expect.objectContaining({ creditAccountId: 'account-8330', amount: 125000 }),
+              ]),
+            },
           }),
         }),
       );

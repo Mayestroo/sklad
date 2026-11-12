@@ -8,6 +8,7 @@ import { CounterpartySettlementService } from '../../settlements/counterparty-se
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import { FilterSalesOrdersDto } from '../dto/filter-sales-orders.dto';
 import { SalesOrdersService } from './sales-orders.service';
+import { JournalService } from '../../accounting/journal/journal.service';
 
 function createService() {
   const prisma = {
@@ -26,6 +27,7 @@ function createService() {
     {} as StockReservationService,
     {} as CounterpartySettlementService,
     {} as SettlementAllocationService,
+    {} as JournalService,
   );
   return { prisma, service };
 }

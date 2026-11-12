@@ -16,6 +16,7 @@ import {
   ExpenseTypeDto,
   ExpenseAllocationMethodDto,
 } from './dto/create-purchase-expense.dto';
+import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
 
@@ -112,6 +113,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },

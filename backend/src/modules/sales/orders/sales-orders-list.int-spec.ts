@@ -6,6 +6,7 @@ import { StockReservationService } from '../../inventory/stock-reservation/stock
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import { SalesOrdersService } from './sales-orders.service';
+import { JournalService } from '../../accounting/journal/journal.service';
 
 describe('sales order list queries (real database)', () => {
   const prisma = new PrismaService();
@@ -14,6 +15,7 @@ describe('sales order list queries (real database)', () => {
     {} as StockReservationService,
     {} as CounterpartySettlementService,
     {} as SettlementAllocationService,
+    {} as JournalService,
   );
 
   afterAll(async () => {

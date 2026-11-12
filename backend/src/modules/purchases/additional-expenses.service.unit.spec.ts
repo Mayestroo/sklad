@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
+import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
 
@@ -165,6 +166,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },

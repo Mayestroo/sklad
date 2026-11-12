@@ -12,6 +12,8 @@ import {
   SalesPaymentStatus,
 } from '@prisma/client';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { AccountsService } from '../../accounting/accounts/accounts.service';
+import { JournalService } from '../../accounting/journal/journal.service';
 
 jest.mock('../../../common/sequences/document-sequence');
 
@@ -136,6 +138,8 @@ describe('SalesOrdersService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
+        { provide: AccountsService, useValue: {} },
         SalesOrdersService,
         { provide: PrismaService, useValue: prisma },
         { provide: StockReservationService, useValue: stockReservationService },

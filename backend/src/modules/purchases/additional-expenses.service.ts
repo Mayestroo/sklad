@@ -28,6 +28,7 @@ import {
   ledgerAccountCodeForCashAccount,
 } from '../../../../shared/types/cash-account-policy';
 import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
+import { JournalService } from '../accounting/journal/journal.service';
 
 @Injectable()
 export class AdditionalExpensesService {
@@ -35,6 +36,7 @@ export class AdditionalExpensesService {
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly accountsService: AccountsService,
+    private readonly journalService: JournalService,
   ) {}
 
   // ─── DOCUMENT NUMBER GENERATOR ──────────────────────────────
@@ -842,8 +844,6 @@ export class AdditionalExpensesService {
         : await tx.account.findFirst({ where: { tenantId, code: '6010' } });
 
       if (creditAcc) {
-        const jeCount = await tx.journalEntry.count({ where: { tenantId } });
-        const jeNumber = `JE-${new Date().getFullYear()}-${(jeCount + 1).toString().padStart(5, '0')}`;
 
         const journalLines: any[] = [];
         const netStock = Math.max(
@@ -880,19 +880,17 @@ export class AdditionalExpensesService {
         }
 
         if (journalLines.length > 0) {
-          await tx.journalEntry.create({
-            data: {
-              tenantId,
-              entryNumber: jeNumber,
+          await this.journalService.createJournalEntry(
+            tenantId,
+            {
               entryDate: expense.docDate,
               description: `Qo‘shimcha xarajat: ${expense.docNumber} — ${expense.counterparty.name}`,
               sourceDocType: 'AdditionalExpense',
               sourceDocId: expense.id,
-              lines: {
-                create: journalLines,
-              },
+              lines: journalLines,
             },
-          });
+            tx,
+          );
         }
       }
 

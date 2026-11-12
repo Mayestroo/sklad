@@ -14,6 +14,7 @@ import { PrismaService } from '../../common/prisma';
 import { PurchaseDocStatus, PurchasePaymentStatus } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+import { JournalService } from '../accounting/journal/journal.service';
 
 describe('Purchase Document End-to-End Invariant Test', () => {
   let purchasesService: PurchasesService;
@@ -31,6 +32,7 @@ describe('Purchase Document End-to-End Invariant Test', () => {
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
         PrismaService,
         PurchasesService,
         CounterpartySettlementService,

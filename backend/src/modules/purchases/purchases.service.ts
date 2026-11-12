@@ -37,6 +37,7 @@ import {
   convertAmountToUzs,
   requireExchangeRateForCurrency,
 } from '../../common/utils/transaction-exchange-rate';
+import { JournalService } from '../accounting/journal/journal.service';
 
 @Injectable()
 export class PurchasesService {
@@ -45,6 +46,7 @@ export class PurchasesService {
     private readonly settlementService: CounterpartySettlementService,
     private readonly settlementAllocationService: SettlementAllocationService,
     private readonly accountsService: AccountsService,
+    private readonly journalService: JournalService,
   ) {}
 
   // ─── RECEIPT NUMBER GENERATOR ─────────────────────────────────
@@ -561,8 +563,6 @@ export class PurchasesService {
       // Debit 9420/9430 (Operating Expense / Xizmat xarajatlari): Service costs
       // Debit 4410 (Input VAT / Kiruvchi QQS): VAT amount
       // Credit 6010 (Accounts Payable / Yetkazib beruvchiga qarz): Total Amount
-      const entryCount = await tx.journalEntry.count({ where: { tenantId } });
-      const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
 
       const inventoryAcc = await tx.account.findFirst({
         where: { tenantId, code: '2910' },
@@ -667,19 +667,17 @@ export class PurchasesService {
         }
 
         if (journalLines.length > 0) {
-          await tx.journalEntry.create({
-            data: {
-              tenantId,
-              entryNumber,
+          await this.journalService.createJournalEntry(
+            tenantId,
+            {
               entryDate: receipt.docDate,
               description: `Nomenklatura qabul qilish № ${receipt.docNumber} (${receipt.counterparty.name})`,
               sourceDocType: 'PurchaseReceipt',
               sourceDocId: receipt.id,
-              lines: {
-                create: journalLines,
-              },
+              lines: journalLines,
             },
-          });
+            tx,
+          );
         }
       }
 
@@ -1005,8 +1003,6 @@ export class PurchasesService {
       });
 
       if (supplierAcc && cashAcc) {
-        const jeCount = await tx.journalEntry.count({ where: { tenantId } });
-        const jeNumber = `JE-${new Date().getFullYear()}-${(jeCount + 1).toString().padStart(5, '0')}`;
         const exchangeDifference = Math.round((paymentAmountInUzs - payableReductionInUzs) * 100) / 100;
         const journalLines: Array<{
           debitAccountId: string;
@@ -1040,17 +1036,17 @@ export class PurchasesService {
           });
         }
 
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber: jeNumber,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             entryDate: paymentDate,
             description: `To'lov: ${receipt.docNumber} — ${receipt.counterparty.name}`,
             sourceDocType: 'PurchasePayment',
             sourceDocId: receipt.id,
-            lines: { create: journalLines },
+            lines: journalLines,
           },
-        });
+          tx,
+        );
       }
 
       // 6. Audit Log
@@ -1709,20 +1705,18 @@ export class PurchasesService {
       }
 
       if (journalLines.length > 0) {
-        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
-        const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
 
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             entryDate: pReturn.returnDate,
             description: `Yetkazib beruvchiga qaytarish № ${pReturn.returnNumber} (${pReturn.counterparty?.name || ''})`,
             sourceDocType: 'PurchaseReturn',
             sourceDocId: pReturn.id,
-            lines: { create: journalLines },
+            lines: journalLines,
           },
-        });
+          tx,
+        );
       }
     }
   }

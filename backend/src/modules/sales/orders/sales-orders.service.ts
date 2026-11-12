@@ -34,6 +34,7 @@ import {
   calculateSalesLineAmounts,
   grossProfitInUzs,
 } from '../sales-calculations';
+import { JournalService } from '../../accounting/journal/journal.service';
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -82,6 +83,7 @@ export class SalesOrdersService {
     private readonly stockReservationService: StockReservationService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly settlementAllocationService: SettlementAllocationService,
+    private readonly journalService: JournalService,
   ) {}
 
   // ─── NUMBER GENERATOR ──────────────────────────────────────────
@@ -1722,7 +1724,6 @@ export class SalesOrdersService {
         tx.account.findFirst({ where: { tenantId, code: '2910' } }),
       ]);
       if (revenueAcc && receivableAcc) {
-        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
         const netRevenueUzs = (Number(invoice.totalAmount) - Number(invoice.vatAmount || 0)) * ledgerRate;
         const vatAmountUzs = Number(invoice.vatAmount || 0) * ledgerRate;
         const lines = [{
@@ -1748,16 +1749,16 @@ export class SalesOrdersService {
             description: `Sotilgan tovar tannarxi (COGS) № ${invoiceNumber}`,
           });
         }
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber: `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             description: `Buyurtma ${order.orderNumber} bo'yicha sotuv`,
             sourceDocType: 'SalesInvoice',
             sourceDocId: invoice.id,
-            lines: { create: lines },
+            lines: lines,
           },
-        });
+          tx,
+        );
       }
 
       await tx.salesInvoice.update({

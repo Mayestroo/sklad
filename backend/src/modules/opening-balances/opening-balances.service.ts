@@ -26,6 +26,8 @@ import {
   isCashAccountCurrencyValid,
   ledgerAccountCodeForCashAccount,
 } from '../../../../shared/types/cash-account-policy';
+import { JournalService } from '../accounting/journal/journal.service';
+import { JournalLineDto } from '../accounting/dto';
 
 @Injectable()
 export class OpeningBalancesService {
@@ -33,6 +35,7 @@ export class OpeningBalancesService {
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly accountsService: AccountsService,
+    private readonly journalService: JournalService,
   ) {}
 
   private getCounterpartyOpeningMovement(
@@ -652,16 +655,7 @@ export class OpeningBalancesService {
         });
       }
 
-      const journalEntry = await tx.journalEntry.create({
-        data: {
-          tenantId,
-          entryNumber: `JE-OB-${doc.docNumber}`,
-          entryDate: doc.openingDate,
-          description: `Boshlang‘ich qoldiqlar o‘tkazmasi (${doc.docNumber})`,
-          sourceDocType: 'OpeningBalanceDocument',
-          sourceDocId: doc.id,
-        },
-      });
+      const journalLines: JournalLineDto[] = [];
 
       // Find or link standard asset and liability accounts
       const acc2910 = await tx.account.findFirst({ where: { tenantId, code: '2910' } });
@@ -669,7 +663,6 @@ export class OpeningBalancesService {
       const acc6010 = await tx.account.findFirst({ where: { tenantId, code: '6010' } });
       const acc8330 = await tx.account.findFirst({ where: { tenantId, code: '8330' } });
 
-      let lineIdx = 0;
       // Asset journal lines (Debit Asset / Credit 00)
       for (const line of doc.lines) {
         if (line.category !== OpeningBalanceCategory.CASH && line.category !== OpeningBalanceCategory.BANK) continue;
@@ -687,61 +680,60 @@ export class OpeningBalancesService {
         if (!ledgerAccount) throw new BadRequestException(`Buxgalteriya hisobi ${ledgerCode} sozlanmagan`);
         const amountInUzs = Number(line.amount) * this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
         if (amountInUzs <= 0) continue;
-        await tx.journalLine.create({
-          data: {
-            entryId: journalEntry.id,
-            debitAccountId: ledgerAccount.id,
-            creditAccountId: auxiliaryAccount.id,
-            amount: Math.round(amountInUzs * 100) / 100,
-            description: `${cashAccount.accountType} (${cashAccount.currency}) boshlang‘ich qoldig‘i`,
-          },
+        journalLines.push({
+          debitAccountId: ledgerAccount.id,
+          creditAccountId: auxiliaryAccount.id,
+          amount: Math.round(amountInUzs * 100) / 100,
+          description: `${cashAccount.accountType} (${cashAccount.currency}) boshlang‘ich qoldig‘i`,
         });
       }
       if (acc2910 && metrics.categoryBreakdown[OpeningBalanceCategory.INVENTORY] > 0) {
-        await tx.journalLine.create({
-          data: {
-            entryId: journalEntry.id,
-            debitAccountId: acc2910.id,
-            creditAccountId: auxiliaryAccount.id,
-            amount: metrics.categoryBreakdown[OpeningBalanceCategory.INVENTORY],
-            description: 'Tovar-moddiy zaxiralar boshlang‘ich qoldig‘i',
-          },
+        journalLines.push({
+          debitAccountId: acc2910.id,
+          creditAccountId: auxiliaryAccount.id,
+          amount: metrics.categoryBreakdown[OpeningBalanceCategory.INVENTORY],
+          description: 'Tovar-moddiy zaxiralar boshlang‘ich qoldig‘i',
         });
       }
       if (acc4010 && metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT] > 0) {
-        await tx.journalLine.create({
-          data: {
-            entryId: journalEntry.id,
-            debitAccountId: acc4010.id,
-            creditAccountId: auxiliaryAccount.id,
-            amount: metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT],
-            description: 'Xaridorlar qarzdorligi (debitorlik)',
-          },
+        journalLines.push({
+          debitAccountId: acc4010.id,
+          creditAccountId: auxiliaryAccount.id,
+          amount: metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT],
+          description: 'Xaridorlar qarzdorligi (debitorlik)',
         });
       }
 
       // Liability & Equity journal lines (Debit 00 / Credit Liability/Equity)
       if (acc6010 && metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT] > 0) {
-        await tx.journalLine.create({
-          data: {
-            entryId: journalEntry.id,
-            debitAccountId: auxiliaryAccount.id,
-            creditAccountId: acc6010.id,
-            amount: metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT],
-            description: 'Yetkazib beruvchilarga qarzdorlik (kreditorlik)',
-          },
+        journalLines.push({
+          debitAccountId: auxiliaryAccount.id,
+          creditAccountId: acc6010.id,
+          amount: metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT],
+          description: 'Yetkazib beruvchilarga qarzdorlik (kreditorlik)',
         });
       }
       if (acc8330 && metrics.totalEquity > 0) {
-        await tx.journalLine.create({
-          data: {
-            entryId: journalEntry.id,
-            debitAccountId: auxiliaryAccount.id,
-            creditAccountId: acc8330.id,
-            amount: metrics.totalEquity,
-            description: 'Boshlang‘ich ustav kapitali / taqsimlanmagan foyda',
-          },
+        journalLines.push({
+          debitAccountId: auxiliaryAccount.id,
+          creditAccountId: acc8330.id,
+          amount: metrics.totalEquity,
+          description: 'Boshlang‘ich ustav kapitali / taqsimlanmagan foyda',
         });
+      }
+
+      if (journalLines.length > 0) {
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
+            entryDate: doc.openingDate,
+            description: `Boshlang‘ich qoldiqlar o‘tkazmasi (${doc.docNumber})`,
+            sourceDocType: 'OpeningBalanceDocument',
+            sourceDocId: doc.id,
+            lines: journalLines,
+          },
+          tx,
+        );
       }
 
       // 7. Transition document status to POSTED

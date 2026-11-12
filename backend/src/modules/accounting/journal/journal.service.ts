@@ -8,6 +8,7 @@ import {
   convertAmountToUzs,
   requireExchangeRateForCurrency,
 } from '../../../common/utils/transaction-exchange-rate';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 
 interface CashPaymentForJournal {
   id: string;
@@ -32,7 +33,16 @@ interface CashPaymentForJournal {
  * document pass their Prisma transaction client so the entry commits or rolls
  * back together with the document (ADR 0006).
  */
-export type JournalWriter = Pick<Prisma.TransactionClient, 'journalEntry'>;
+export type JournalWriter = Pick<
+  Prisma.TransactionClient,
+  'journalEntry' | '$queryRaw'
+>;
+
+/**
+ * A journal entry to post. `entryDate` is the business document's date; it
+ * dates the entry and selects the yearly number series (JE-YYYY-NNNNN).
+ */
+export type JournalEntryInput = CreateJournalEntryDto & { entryDate?: Date };
 
 @Injectable()
 export class JournalService {
@@ -42,11 +52,13 @@ export class JournalService {
   ) {}
 
   /**
-   * Post a balanced double-entry Journal Entry (Provodka)
+   * Post a balanced double-entry Journal Entry (Provodka).
+   * The only writer of journal entries: business documents pass their
+   * transaction client so the entry commits or rolls back with the document.
    */
   async createJournalEntry(
     tenantId: string,
-    dto: CreateJournalEntryDto,
+    dto: JournalEntryInput,
     db: JournalWriter = this.prisma,
   ) {
     if (!dto.lines || dto.lines.length === 0) {
@@ -55,12 +67,19 @@ export class JournalService {
       );
     }
 
-    const entryNumber = await this.generateEntryNumber(tenantId, db);
+    const entryDate = dto.entryDate ?? new Date();
+    const entryNumber = await nextDocumentNumber(
+      db,
+      tenantId,
+      'JOURNAL_ENTRY',
+      entryDate,
+    );
 
     return db.journalEntry.create({
       data: {
         tenantId,
         entryNumber,
+        entryDate,
         description: dto.description,
         sourceDocType: dto.sourceDocType || null,
         sourceDocId: dto.sourceDocId || null,
@@ -501,14 +520,5 @@ export class JournalService {
         db,
       );
     }
-  }
-
-  private async generateEntryNumber(
-    tenantId: string,
-    db: JournalWriter,
-  ): Promise<string> {
-    const count = await db.journalEntry.count({ where: { tenantId } });
-    const nextSeq = (count + 1).toString().padStart(6, '0');
-    return `JE-${nextSeq}`;
   }
 }

@@ -24,12 +24,14 @@ import {
   calculateSalesLineAmounts,
   grossProfitInUzs,
 } from '../sales-calculations';
+import { JournalService } from '../../accounting/journal/journal.service';
 
 @Injectable()
 export class SalesInvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
+    private readonly journalService: JournalService,
   ) {}
 
   // ─── NUMBER GENERATORS ─────────────────────────────────────────
@@ -580,8 +582,6 @@ export class SalesInvoicesService {
       });
 
       // 4. NAS / BHMS Accounting Journal Entries
-      const entryCount = await tx.journalEntry.count({ where: { tenantId } });
-      const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
 
       const revenueAcc = await tx.account.findFirst({
         where: { tenantId, code: '9010' },
@@ -640,17 +640,17 @@ export class SalesInvoicesService {
           });
         }
 
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             entryDate: invoice.invoiceDate,
             description: `Sotuv № ${invoice.invoiceNumber} (${invoice.counterparty.name})`,
             sourceDocType: 'SalesInvoice',
             sourceDocId: invoice.id,
-            lines: { create: journalLines },
+            lines: journalLines,
           },
-        });
+          tx,
+        );
       }
 
       // 5. Audit Log
@@ -1276,19 +1276,17 @@ export class SalesInvoicesService {
       }
 
       if (journalLines.length > 0) {
-        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
-        const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             entryDate: salesReturn.returnDate,
             description: `Sotuv qaytarilishi № ${params.returnNumber}`,
             sourceDocType: 'SalesReturn',
             sourceDocId: salesReturn.id,
-            lines: { create: journalLines },
+            lines: journalLines,
           },
-        });
+          tx,
+        );
       }
 
       await tx.auditLog.create({
@@ -1572,19 +1570,17 @@ export class SalesInvoicesService {
       }
 
       if (journalLines.length > 0) {
-        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
-        const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             entryDate: new Date(),
             description: `Sotuv qaytarilishini bekor qilish № ${existing.returnNumber}`,
             sourceDocType: 'SalesReturnCancel',
             sourceDocId: existing.id,
-            lines: { create: journalLines },
+            lines: journalLines,
           },
-        });
+          tx,
+        );
       }
 
       const cancelledReturn = await tx.salesReturn.update({

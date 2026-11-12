@@ -2,6 +2,8 @@ import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
 import { JournalService } from './journal.service';
 
+jest.mock('../../../common/sequences/document-sequence');
+
 const cashAccountLedgerCases: Array<[string, string, string, number]> = [
   ['UZS_CASH', 'UZS', '5010', 25],
   ['USD_CASH', 'USD', '5020', 320000],

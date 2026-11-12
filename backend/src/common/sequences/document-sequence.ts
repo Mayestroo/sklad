@@ -89,6 +89,7 @@ const SERIES = {
     table: 'opening_balance_documents',
     column: 'doc_number',
   },
+  JOURNAL_ENTRY: { prefix: 'JE', yearly: true, pad: 5, table: 'journal_entries', column: 'entry_number' },
   FINANCE_TRANSACTION: {
     prefix: 'FT',
     yearly: true,

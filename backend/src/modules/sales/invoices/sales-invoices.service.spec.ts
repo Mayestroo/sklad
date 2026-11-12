@@ -9,6 +9,8 @@ import {
   SalesReturnStatus,
   SalesReturnDocStatus,
 } from '@prisma/client';
+import { AccountsService } from '../../accounting/accounts/accounts.service';
+import { JournalService } from '../../accounting/journal/journal.service';
 
 jest.mock('../../../common/sequences/document-sequence');
 
@@ -106,6 +108,8 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
+        { provide: AccountsService, useValue: {} },
         SalesInvoicesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
