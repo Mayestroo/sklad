@@ -20,10 +20,15 @@ describe('FinanceService Settlement Unit Test Suite', () => {
   let service: FinanceService;
   let prisma: any;
   let settlementService: { recordMovement: jest.Mock };
-  let allocationService: { recordAllocation: jest.Mock; reverseAllocation: jest.Mock };
+  let allocationService: {
+    recordAllocation: jest.Mock;
+    reverseAllocation: jest.Mock;
+  };
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
     allocationService = {
       recordAllocation: jest.fn().mockResolvedValue({ created: true }),
       reverseAllocation: jest.fn().mockResolvedValue({ created: true }),
@@ -45,7 +50,13 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         count: jest.fn(),
       },
       counterparty: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'cp-1', tenantId: 'tenant-1', type: 'CUSTOMER' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({
+            id: 'cp-1',
+            tenantId: 'tenant-1',
+            type: 'CUSTOMER',
+          }),
         update: jest.fn(),
         findMany: jest.fn(),
       },
@@ -79,9 +90,19 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
       },
-      salesReturn: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
-      purchaseReturn: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
-      additionalExpense: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
+      salesReturn: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      purchaseReturn: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      additionalExpense: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn(),
+      },
       $transaction: jest.fn(async (cb) => cb(prisma)),
     };
 
@@ -104,10 +125,12 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       await service.ensureDefaultAccounts('tenant-1');
 
       expect(prisma.cashAccount.upsert).toHaveBeenCalledTimes(3);
-      expect(prisma.cashAccount.upsert.mock.calls.map(([args]: any) => ({
-        accountType: args.create.accountType,
-        currency: args.create.currency,
-      }))).toEqual([
+      expect(
+        prisma.cashAccount.upsert.mock.calls.map(([args]: any) => ({
+          accountType: args.create.accountType,
+          currency: args.create.currency,
+        })),
+      ).toEqual([
         { accountType: 'UZS_CASH', currency: 'UZS' },
         { accountType: 'USD_CASH', currency: 'USD' },
         { accountType: 'BANK', currency: 'UZS' },
@@ -115,15 +138,54 @@ describe('FinanceService Settlement Unit Test Suite', () => {
     });
 
     it('keeps cash-flow dashboard totals separate by native currency', async () => {
-      const usdCash = { id: 'usd-cash', accountType: 'USD_CASH', name: { uz: 'USD', ru: 'USD' }, currency: 'USD', balance: 250 };
-      const uzsCash = { id: 'uzs-cash', accountType: 'UZS_CASH', name: { uz: 'UZS', ru: 'UZS' }, currency: 'UZS', balance: 800000 };
-      const bank = { id: 'bank', accountType: 'BANK', name: { uz: 'Bank', ru: 'Банк' }, currency: 'UZS', balance: 1200000 };
+      const usdCash = {
+        id: 'usd-cash',
+        accountType: 'USD_CASH',
+        name: { uz: 'USD', ru: 'USD' },
+        currency: 'USD',
+        balance: 250,
+      };
+      const uzsCash = {
+        id: 'uzs-cash',
+        accountType: 'UZS_CASH',
+        name: { uz: 'UZS', ru: 'UZS' },
+        currency: 'UZS',
+        balance: 800000,
+      };
+      const bank = {
+        id: 'bank',
+        accountType: 'BANK',
+        name: { uz: 'Bank', ru: 'Банк' },
+        currency: 'UZS',
+        balance: 1200000,
+      };
       prisma.cashAccount.findMany.mockResolvedValue([usdCash, uzsCash, bank]);
       const now = new Date();
       prisma.financeTransaction.findMany.mockResolvedValue([
-        { accountId: usdCash.id, account: usdCash, direction: TransactionDirection.INCOME, amount: 100, currency: 'USD', transactionDate: now },
-        { accountId: usdCash.id, account: usdCash, direction: TransactionDirection.EXPENSE, amount: 20, currency: 'USD', transactionDate: now },
-        { accountId: uzsCash.id, account: uzsCash, direction: TransactionDirection.INCOME, amount: 500000, currency: 'UZS', transactionDate: now },
+        {
+          accountId: usdCash.id,
+          account: usdCash,
+          direction: TransactionDirection.INCOME,
+          amount: 100,
+          currency: 'USD',
+          transactionDate: now,
+        },
+        {
+          accountId: usdCash.id,
+          account: usdCash,
+          direction: TransactionDirection.EXPENSE,
+          amount: 20,
+          currency: 'USD',
+          transactionDate: now,
+        },
+        {
+          accountId: uzsCash.id,
+          account: uzsCash,
+          direction: TransactionDirection.INCOME,
+          amount: 500000,
+          currency: 'UZS',
+          transactionDate: now,
+        },
       ]);
       prisma.counterpartyBalance = { findMany: jest.fn() };
       prisma.counterpartyBalance.findMany.mockResolvedValue([]);
@@ -218,7 +280,12 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         },
       ]);
       expect(summary.summaryByCurrency).toEqual([
-        { currency: 'UZS', totalIncome: 300, totalExpense: 100, netCashFlow: 200 },
+        {
+          currency: 'UZS',
+          totalIncome: 300,
+          totalExpense: 100,
+          netCashFlow: 200,
+        },
       ]);
     });
 
@@ -240,16 +307,18 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         },
       ];
       prisma.cashAccount.findMany.mockResolvedValue(accounts);
-      prisma.financeTransaction.findMany.mockResolvedValue([{
-        accountId: 'uzs-cash',
-        account: accounts[0],
-        transferToId: 'usd-cash',
-        transferToAmount: 10,
-        transferToAccount: accounts[1],
-        direction: TransactionDirection.TRANSFER,
-        amount: 128000,
-        currency: 'UZS',
-      }]);
+      prisma.financeTransaction.findMany.mockResolvedValue([
+        {
+          accountId: 'uzs-cash',
+          account: accounts[0],
+          transferToId: 'usd-cash',
+          transferToAmount: 10,
+          transferToAccount: accounts[1],
+          direction: TransactionDirection.TRANSFER,
+          amount: 128000,
+          currency: 'UZS',
+        },
+      ]);
 
       const summary = await service.getSummary('tenant-1', { currency: 'USD' });
 
@@ -356,17 +425,19 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         balance: 0,
       };
       prisma.cashAccount.findMany.mockResolvedValue([uzsCash, usdCash, bank]);
-      prisma.financeTransaction.findMany.mockResolvedValue([{
-        accountId: uzsCash.id,
-        account: uzsCash,
-        transferToId: usdCash.id,
-        transferToAccount: usdCash,
-        direction: TransactionDirection.TRANSFER,
-        amount: 128000,
-        transferToAmount: 10,
-        currency: 'UZS',
-        transactionDate: new Date(),
-      }]);
+      prisma.financeTransaction.findMany.mockResolvedValue([
+        {
+          accountId: uzsCash.id,
+          account: uzsCash,
+          transferToId: usdCash.id,
+          transferToAccount: usdCash,
+          direction: TransactionDirection.TRANSFER,
+          amount: 128000,
+          transferToAmount: 10,
+          currency: 'UZS',
+          transactionDate: new Date(),
+        },
+      ]);
       prisma.counterpartyBalance.findMany = jest.fn().mockResolvedValue([]);
       prisma.purchaseReceipt.findFirst.mockResolvedValue(null);
       prisma.salesInvoice.findFirst.mockResolvedValue(null);
@@ -375,9 +446,25 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       const metrics = await service.getDashboardMetrics('tenant-1');
 
       expect(metrics.month.byAccount).toEqual([
-        expect.objectContaining({ accountId: 'uzs-cash', currency: 'UZS', transferOut: 128000, netCashFlow: -128000 }),
-        expect.objectContaining({ accountId: 'usd-cash', currency: 'USD', transferIn: 10, netCashFlow: 10 }),
-        expect.objectContaining({ accountId: 'uzs-bank', currency: 'UZS', transferIn: 0, transferOut: 0, netCashFlow: 0 }),
+        expect.objectContaining({
+          accountId: 'uzs-cash',
+          currency: 'UZS',
+          transferOut: 128000,
+          netCashFlow: -128000,
+        }),
+        expect.objectContaining({
+          accountId: 'usd-cash',
+          currency: 'USD',
+          transferIn: 10,
+          netCashFlow: 10,
+        }),
+        expect.objectContaining({
+          accountId: 'uzs-bank',
+          currency: 'UZS',
+          transferIn: 0,
+          transferOut: 0,
+          netCashFlow: 0,
+        }),
       ]);
       expect(metrics.month.byCurrency).toEqual([]);
     });
@@ -390,7 +477,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         { currency: 'UZS', customerDebt: -30, supplierDebt: -40 },
       ]);
       prisma.purchaseReceipt = { findFirst: jest.fn().mockResolvedValue(null) };
-      prisma.salesInvoice = { ...prisma.salesInvoice, findFirst: jest.fn().mockResolvedValue(null) };
+      prisma.salesInvoice = {
+        ...prisma.salesInvoice,
+        findFirst: jest.fn().mockResolvedValue(null),
+      };
       prisma.company = { findUnique: jest.fn().mockResolvedValue(null) };
 
       const metrics = await service.getDashboardMetrics('tenant-1');
@@ -440,21 +530,27 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         sourceDocId: 'inv-1',
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-1',
-        counterpartyId: 'cust-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: -5000000,
-      }));
-      expect(allocationService.recordAllocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-1',
-        counterpartyId: 'cust-1',
-        financeTransactionId: 'tx-1',
-        targetType: SettlementAllocationTarget.SALES_INVOICE,
-        targetId: 'inv-1',
-        amount: 5000000,
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: -5000000,
+        }),
+      );
+      expect(allocationService.recordAllocation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'cust-1',
+          financeTransactionId: 'tx-1',
+          targetType: SettlementAllocationTarget.SALES_INVOICE,
+          targetId: 'inv-1',
+          amount: 5000000,
+        }),
+      );
 
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
         where: { id: 'inv-1' },
@@ -466,23 +562,36 @@ describe('FinanceService Settlement Unit Test Suite', () => {
     });
 
     it('requires a settlement side for an unlinked counterparty income', async () => {
-      prisma.cashAccount.findFirst.mockResolvedValue({ id: 'acc-1', accountType: 'UZS_CASH', balance: 1000, currency: 'UZS' });
-      prisma.counterparty.findFirst.mockResolvedValue({ id: 'cp-both', tenantId: 'tenant-1', type: 'BOTH' });
-
-      await expect(service.createIncome('tenant-1', {
-        accountId: 'acc-1',
-        amount: 100,
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        accountType: 'UZS_CASH',
+        balance: 1000,
         currency: 'UZS',
-        counterpartyId: 'cp-both',
-      })).rejects.toThrow(BadRequestException);
+      });
+      prisma.counterparty.findFirst.mockResolvedValue({
+        id: 'cp-both',
+        tenantId: 'tenant-1',
+        type: 'BOTH',
+      });
+
+      await expect(
+        service.createIncome('tenant-1', {
+          accountId: 'acc-1',
+          amount: 100,
+          currency: 'UZS',
+          counterpartyId: 'cp-both',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('requires an explicit exchange rate for a direct USD cash transaction', async () => {
-      await expect(service.createIncome('tenant-1', {
-        accountId: 'usd-cash',
-        amount: 100,
-        currency: 'USD',
-      })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createIncome('tenant-1', {
+          accountId: 'usd-cash',
+          amount: 100,
+          currency: 'USD',
+        }),
+      ).rejects.toThrow(BadRequestException);
 
       expect(prisma.financeTransaction.create).not.toHaveBeenCalled();
     });
@@ -495,7 +604,9 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         balance: 0,
         isActive: true,
       });
-      prisma.financeTransaction.create.mockResolvedValue({ id: 'usd-income-1' });
+      prisma.financeTransaction.create.mockResolvedValue({
+        id: 'usd-income-1',
+      });
 
       await service.createIncome('tenant-1', {
         accountId: 'usd-cash',
@@ -504,16 +615,37 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         exchangeRate: 12950,
       });
 
-      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ currency: 'USD', exchangeRate: 12950, accountId: 'usd-cash' }),
-      }));
+      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            currency: 'USD',
+            exchangeRate: 12950,
+            accountId: 'usd-cash',
+          }),
+        }),
+      );
     });
 
     it('classifies a supplier refund separately from customer income', async () => {
-      prisma.cashAccount.findFirst.mockResolvedValue({ id: 'acc-1', accountType: 'USD_CASH', balance: 1000, currency: 'USD' });
-      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-supplier-refund', amount: 100 });
-      prisma.counterparty.findFirst.mockResolvedValue({ id: 'cp-both', tenantId: 'tenant-1', type: 'BOTH' });
-      prisma.counterpartyBalance.findUnique.mockResolvedValue({ supplierDebt: -250, customerDebt: 0 });
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        accountType: 'USD_CASH',
+        balance: 1000,
+        currency: 'USD',
+      });
+      prisma.financeTransaction.create.mockResolvedValue({
+        id: 'tx-supplier-refund',
+        amount: 100,
+      });
+      prisma.counterparty.findFirst.mockResolvedValue({
+        id: 'cp-both',
+        tenantId: 'tenant-1',
+        type: 'BOTH',
+      });
+      prisma.counterpartyBalance.findUnique.mockResolvedValue({
+        supplierDebt: -250,
+        customerDebt: 0,
+      });
 
       await service.createIncome('tenant-1', {
         accountId: 'acc-1',
@@ -524,20 +656,30 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         settlementSide: CounterpartySettlementSide.SUPPLIER,
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 100,
-        currency: 'USD',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 100,
+          currency: 'USD',
+        }),
+      );
       expect(prisma.counterparty.update).not.toHaveBeenCalled();
     });
-
   });
 
   describe('Sales Order Pre-Payment Settlement', () => {
     it('should accept prepayment on SalesOrder and transition status to PAYMENT_CONFIRMED when 100% paid', async () => {
-      prisma.cashAccount.findFirst.mockResolvedValue({ id: 'acc-1', accountType: 'UZS_CASH', balance: 500000, currency: 'UZS' });
-      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-ord-1', amount: 10000000 });
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        accountType: 'UZS_CASH',
+        balance: 500000,
+        currency: 'UZS',
+      });
+      prisma.financeTransaction.create.mockResolvedValue({
+        id: 'tx-ord-1',
+        amount: 10000000,
+      });
       prisma.salesOrder.findFirst.mockResolvedValue({
         id: 'ord-1',
         counterpartyId: 'cust-1',
@@ -636,11 +778,13 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         isActive: true,
       });
 
-      await expect(service.createExpense('tenant-1', {
-        accountId: 'cash-usd',
-        amount: 100,
-        currency: 'UZS',
-      })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createExpense('tenant-1', {
+          accountId: 'cash-usd',
+          amount: 100,
+          currency: 'UZS',
+        }),
+      ).rejects.toThrow(BadRequestException);
 
       expect(prisma.financeTransaction.create).not.toHaveBeenCalled();
       expect(prisma.cashAccount.update).not.toHaveBeenCalled();
@@ -680,18 +824,24 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         data: { balance: { decrement: 15000000 } },
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        counterpartyId: 'supp-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -15000000,
-      }));
-      expect(allocationService.recordAllocation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        targetType: SettlementAllocationTarget.PURCHASE_RECEIPT,
-        targetId: 'rcp-1',
-        financeTransactionId: 'tx-exp-1',
-        amount: 15000000,
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          counterpartyId: 'supp-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -15000000,
+        }),
+      );
+      expect(allocationService.recordAllocation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          targetType: SettlementAllocationTarget.PURCHASE_RECEIPT,
+          targetId: 'rcp-1',
+          financeTransactionId: 'tx-exp-1',
+          amount: 15000000,
+        }),
+      );
 
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
         where: { id: 'rcp-1' },
@@ -738,12 +888,14 @@ describe('FinanceService Settlement Unit Test Suite', () => {
           isActive: true,
         });
 
-      await expect(service.createTransfer('tenant-1', {
-        fromAccountId: 'from-usd',
-        toAccountId: 'to-bank',
-        amount: 100,
-        currency: 'UZS',
-      })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createTransfer('tenant-1', {
+          fromAccountId: 'from-usd',
+          toAccountId: 'to-bank',
+          amount: 100,
+          currency: 'UZS',
+        }),
+      ).rejects.toThrow(BadRequestException);
 
       expect(prisma.financeTransaction.create).not.toHaveBeenCalled();
       expect(prisma.cashAccount.update).not.toHaveBeenCalled();
@@ -811,15 +963,17 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         targetAmount: 10,
       });
 
-      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          amount: 128000,
-          currency: 'UZS',
-          transferToAmount: 10,
-          transferExchangeRate: 12800,
-          exchangeRate: 1,
+      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            amount: 128000,
+            currency: 'UZS',
+            transferToAmount: 10,
+            transferExchangeRate: 12800,
+            exchangeRate: 1,
+          }),
         }),
-      }));
+      );
       expect(prisma.cashAccount.update).toHaveBeenNthCalledWith(1, {
         where: { id: 'from-uzs-cash' },
         data: { balance: { decrement: 128000 } },
@@ -926,15 +1080,18 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         data: { balance: { decrement: 2000000 } },
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        counterpartyId: 'cust-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: 2000000,
-        entryType: 'FINANCE_TRANSACTION_CANCELLED',
-        sourceDocId: 'tx-inc',
-        reversesEntryId: 'ledger-entry-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: 2000000,
+          entryType: 'FINANCE_TRANSACTION_CANCELLED',
+          sourceDocId: 'tx-inc',
+          reversesEntryId: 'ledger-entry-1',
+        }),
+      );
 
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
         where: { id: 'inv-1' },
@@ -954,7 +1111,9 @@ describe('FinanceService Settlement Unit Test Suite', () => {
           status: TransactionStatus.CANCELLED,
         }),
       });
-      expect(prisma.financeTransaction.updateMany.mock.calls[0][0].data).not.toHaveProperty('isDeleted');
+      expect(
+        prisma.financeTransaction.updateMany.mock.calls[0][0].data,
+      ).not.toHaveProperty('isDeleted');
     });
 
     it('should block income cancellation if cash balance would go negative', async () => {
@@ -985,7 +1144,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         accountId: 'acc-1',
         amount: 100,
       });
-      prisma.cashAccount.findUnique.mockResolvedValue({ id: 'acc-1', balance: 500 });
+      prisma.cashAccount.findUnique.mockResolvedValue({
+        id: 'acc-1',
+        balance: 500,
+      });
       prisma.financeTransaction.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
@@ -1005,7 +1167,9 @@ describe('FinanceService Settlement Unit Test Suite', () => {
           cancellationReason: null,
         }),
       });
-      expect(prisma.financeTransaction.updateMany.mock.calls[0][0].data).not.toHaveProperty('isDeleted');
+      expect(
+        prisma.financeTransaction.updateMany.mock.calls[0][0].data,
+      ).not.toHaveProperty('isDeleted');
     });
   });
 
@@ -1024,14 +1188,21 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         sourceDocType: 'SalesInvoice',
         sourceDocId: 'inv-1',
       });
-      prisma.cashAccount.findUnique.mockResolvedValue({ id: 'acc-1', balance: 3000000 });
+      prisma.cashAccount.findUnique.mockResolvedValue({
+        id: 'acc-1',
+        balance: 3000000,
+      });
       prisma.salesInvoice.findFirst.mockResolvedValue({
         id: 'inv-1',
         totalAmount: 5000000,
         paidAmount: 2000000,
       });
 
-      const result = await service.deleteTransaction('tenant-1', 'tx-delete', 'user-1');
+      const result = await service.deleteTransaction(
+        'tenant-1',
+        'tx-delete',
+        'user-1',
+      );
 
       expect(result).toEqual({
         success: true,
@@ -1056,15 +1227,18 @@ describe('FinanceService Settlement Unit Test Suite', () => {
           isDeleted: true,
         }),
       });
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        counterpartyId: 'cust-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: 2000000,
-        entryType: 'FINANCE_TRANSACTION_DELETED',
-        sourceDocId: 'tx-delete',
-        reversesEntryId: 'ledger-entry-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          counterpartyId: 'cust-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: 2000000,
+          entryType: 'FINANCE_TRANSACTION_DELETED',
+          sourceDocId: 'tx-delete',
+          reversesEntryId: 'ledger-entry-1',
+        }),
+      );
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
         where: { id: 'inv-1' },
         data: { paidAmount: 0, paymentStatus: SalesPaymentStatus.UNPAID },
@@ -1097,15 +1271,18 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         where: { id: 'acc-1' },
         data: { balance: { increment: 2000000 } },
       });
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        counterpartyId: 'supplier-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 2000000,
-        entryType: 'FINANCE_TRANSACTION_DELETED',
-        sourceDocId: 'tx-expense',
-        reversesEntryId: 'ledger-entry-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          counterpartyId: 'supplier-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 2000000,
+          entryType: 'FINANCE_TRANSACTION_DELETED',
+          sourceDocId: 'tx-expense',
+          reversesEntryId: 'ledger-entry-1',
+        }),
+      );
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
         where: { id: 'receipt-1' },
         data: { paidAmount: 0, paymentStatus: PurchasePaymentStatus.UNPAID },
@@ -1117,7 +1294,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
           isDeleted: false,
           status: TransactionStatus.POSTED,
         },
-        data: expect.objectContaining({ isDeleted: true, status: TransactionStatus.CANCELLED }),
+        data: expect.objectContaining({
+          isDeleted: true,
+          status: TransactionStatus.CANCELLED,
+        }),
       });
     });
 
@@ -1133,7 +1313,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         transferToAmount: 120,
         currency: 'USD',
       });
-      prisma.cashAccount.findUnique.mockResolvedValue({ id: 'acc-destination', balance: 200 });
+      prisma.cashAccount.findUnique.mockResolvedValue({
+        id: 'acc-destination',
+        balance: 200,
+      });
 
       await service.deleteTransaction('tenant-1', 'tx-transfer', 'user-1');
 
@@ -1152,7 +1335,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
           isDeleted: false,
           status: TransactionStatus.POSTED,
         },
-        data: expect.objectContaining({ isDeleted: true, status: TransactionStatus.CANCELLED }),
+        data: expect.objectContaining({
+          isDeleted: true,
+          status: TransactionStatus.CANCELLED,
+        }),
       });
     });
 
@@ -1165,7 +1351,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         accountId: 'acc-1',
         amount: 100,
       });
-      prisma.cashAccount.findUnique.mockResolvedValue({ id: 'acc-1', balance: 500 });
+      prisma.cashAccount.findUnique.mockResolvedValue({
+        id: 'acc-1',
+        balance: 500,
+      });
       prisma.financeTransaction.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
@@ -1226,7 +1415,8 @@ describe('FinanceService Settlement Unit Test Suite', () => {
               where.tenantId !== 'tenant-1' ||
               where.isDeleted !== transactionState?.transaction.isDeleted ||
               where.status !== transactionState?.transaction.status ||
-              transactionState?.transaction.status !== TransactionStatus.POSTED ||
+              transactionState?.transaction.status !==
+                TransactionStatus.POSTED ||
               transactionState?.transaction.isDeleted !== false
             ) {
               return { count: 0 };
@@ -1271,19 +1461,21 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         },
         counterpartyBalance: { upsert: jest.fn().mockRejectedValue(failure) },
       };
-      prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => {
-        const workingState = {
-          cashBalance: persistedState.cashBalance,
-          counterparty: { ...persistedState.counterparty },
-          counterpartyBalance: { ...persistedState.counterpartyBalance },
-          transaction: { ...persistedState.transaction },
-        };
-        transactionState = workingState;
+      prisma.$transaction.mockImplementation(
+        async (callback: (tx: unknown) => unknown) => {
+          const workingState = {
+            cashBalance: persistedState.cashBalance,
+            counterparty: { ...persistedState.counterparty },
+            counterpartyBalance: { ...persistedState.counterpartyBalance },
+            transaction: { ...persistedState.transaction },
+          };
+          transactionState = workingState;
 
-        const result = await callback(transactionClient);
-        persistedState = workingState;
-        return result;
-      });
+          const result = await callback(transactionClient);
+          persistedState = workingState;
+          return result;
+        },
+      );
 
       await expect(
         service.deleteTransaction('tenant-1', 'tx-failed-reversal', 'user-1'),
@@ -1313,7 +1505,9 @@ describe('FinanceService Settlement Unit Test Suite', () => {
           reversesEntryId: 'ledger-entry-1',
         }),
       );
-      expect(transactionClient.financeTransaction.updateMany).not.toHaveBeenCalled();
+      expect(
+        transactionClient.financeTransaction.updateMany,
+      ).not.toHaveBeenCalled();
       expect(prisma.cashAccount.update).not.toHaveBeenCalled();
       expect(prisma.counterparty.update).not.toHaveBeenCalled();
       expect(prisma.counterpartyBalance.upsert).not.toHaveBeenCalled();
@@ -1330,11 +1524,14 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         accountId: 'acc-1',
         amount: 2000000,
       });
-      prisma.cashAccount.findUnique.mockResolvedValue({ id: 'acc-1', balance: 500000 });
+      prisma.cashAccount.findUnique.mockResolvedValue({
+        id: 'acc-1',
+        balance: 500000,
+      });
 
-      await expect(service.deleteTransaction('tenant-1', 'tx-insufficient', 'user-1')).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.deleteTransaction('tenant-1', 'tx-insufficient', 'user-1'),
+      ).rejects.toThrow(BadRequestException);
       expect(prisma.financeTransaction.update).not.toHaveBeenCalled();
       expect(prisma.financeTransaction.updateMany).not.toHaveBeenCalled();
       expect(prisma.cashAccount.update).not.toHaveBeenCalled();
@@ -1396,11 +1593,21 @@ describe('FinanceService Settlement Unit Test Suite', () => {
 
       expect(prisma.financeTransaction.findMany).toHaveBeenNthCalledWith(
         1,
-        expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', isDeleted: false }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: 'tenant-1',
+            isDeleted: false,
+          }),
+        }),
       );
       expect(prisma.financeTransaction.findMany).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant-1', isDeleted: true }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: 'tenant-1',
+            isDeleted: true,
+          }),
+        }),
       );
     });
 
@@ -1414,23 +1621,35 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         accountId: 'destination-account',
       });
 
-      expect(prisma.financeTransaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({
-          AND: [{
-            OR: [
-              { accountId: 'destination-account' },
-              { transferToId: 'destination-account' },
+      expect(prisma.financeTransaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: [
+              {
+                OR: [
+                  { accountId: 'destination-account' },
+                  { transferToId: 'destination-account' },
+                ],
+              },
             ],
-          }],
+          }),
         }),
-      }));
+      );
     });
   });
 
   describe('ServiceAct Settlement in Finance', () => {
     it('should reconcile income payment to ServiceAct, updating paidAmount and paymentStatus to PAID', async () => {
-      prisma.cashAccount.findFirst.mockResolvedValue({ id: 'acc-1', accountType: 'UZS_CASH', balance: 500000, currency: 'UZS' });
-      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-srv-1', amount: 1200000 });
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        accountType: 'UZS_CASH',
+        balance: 500000,
+        currency: 'UZS',
+      });
+      prisma.financeTransaction.create.mockResolvedValue({
+        id: 'tx-srv-1',
+        amount: 1200000,
+      });
       prisma.serviceAct.findFirst.mockResolvedValue({
         id: 'act-1',
         tenantId: 'tenant-1',

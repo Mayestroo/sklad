@@ -21,7 +21,9 @@ describe('ServicesService Unit Tests', () => {
   const counterpartyId = 'test-cp-uuid';
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       serviceAct: {
         count: jest.fn(),
@@ -208,15 +210,18 @@ describe('ServicesService Unit Tests', () => {
         }),
       );
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: 1000000,
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: 1000000,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-1',
+        }),
+      );
 
       // Verify double-entry journal posting was called
       expect(journalService.autoPostServiceAct).toHaveBeenCalled();
@@ -243,15 +248,18 @@ describe('ServicesService Unit Tests', () => {
 
       await service.post(tenantId, 'act-2');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'USD',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 500000,
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-2',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'USD',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 500000,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-2',
+        }),
+      );
     });
 
     it('should throw BadRequestException if posting an already posted act', async () => {
@@ -335,16 +343,19 @@ describe('ServicesService Unit Tests', () => {
 
       await service.cancel(tenantId, 'act-1');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: -1000000,
-        entryType: 'SERVICE_ACT_CANCELLED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: -1000000,
+          entryType: 'SERVICE_ACT_CANCELLED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-1',
+        }),
+      );
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
         where: {
@@ -380,16 +391,19 @@ describe('ServicesService Unit Tests', () => {
 
       await service.cancel(tenantId, 'act-2');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'USD',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -500000,
-        entryType: 'SERVICE_ACT_CANCELLED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-2',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'USD',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -500000,
+          entryType: 'SERVICE_ACT_CANCELLED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-2',
+        }),
+      );
     });
   });
 
@@ -465,16 +479,19 @@ describe('ServicesService Unit Tests', () => {
 
       const res = await service.unpost(tenantId, 'act-1');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: -1000000,
-        entryType: 'SERVICE_ACT_UNPOSTED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: -1000000,
+          entryType: 'SERVICE_ACT_UNPOSTED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-1',
+        }),
+      );
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
         where: {
@@ -512,16 +529,19 @@ describe('ServicesService Unit Tests', () => {
 
       await service.unpost(tenantId, 'act-2');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'USD',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -500000,
-        entryType: 'SERVICE_ACT_UNPOSTED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-2',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'USD',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -500000,
+          entryType: 'SERVICE_ACT_UNPOSTED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-2',
+        }),
+      );
     });
   });
 });

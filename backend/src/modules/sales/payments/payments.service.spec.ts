@@ -19,46 +19,78 @@ describe('PaymentsService settlement ledger integration', () => {
   let salesOrdersService: { onPaymentRegistered: jest.Mock };
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
-    allocationService = { recordAllocation: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
+    allocationService = {
+      recordAllocation: jest.fn().mockResolvedValue({ created: true }),
+    };
     auditService = { logAction: jest.fn().mockResolvedValue(undefined) };
-    journalService = { autoPostPayment: jest.fn().mockResolvedValue(undefined) };
-    salesOrdersService = { onPaymentRegistered: jest.fn().mockResolvedValue(undefined) };
+    journalService = {
+      autoPostPayment: jest.fn().mockResolvedValue(undefined),
+    };
+    salesOrdersService = {
+      onPaymentRegistered: jest.fn().mockResolvedValue(undefined),
+    };
     prisma = {
       counterparty: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'cp-1', tenantId: 'tenant-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'cp-1', tenantId: 'tenant-1' }),
         update: jest.fn(),
       },
       salesInvoice: {
-        findFirst: jest.fn()
+        findFirst: jest
+          .fn()
           .mockResolvedValueOnce({
-            id: 'invoice-1', tenantId: 'tenant-1', counterpartyId: 'cp-1',
-            currency: 'USD', exchangeRate: 12800, status: 'POSTED', paidAmount: 0, totalAmount: 300,
+            id: 'invoice-1',
+            tenantId: 'tenant-1',
+            counterpartyId: 'cp-1',
+            currency: 'USD',
+            exchangeRate: 12800,
+            status: 'POSTED',
+            paidAmount: 0,
+            totalAmount: 300,
           })
           .mockResolvedValueOnce({
-            id: 'invoice-1', tenantId: 'tenant-1', counterpartyId: 'cp-1',
-            currency: 'USD', exchangeRate: 12800, status: 'POSTED', paidAmount: 0, totalAmount: 300,
+            id: 'invoice-1',
+            tenantId: 'tenant-1',
+            counterpartyId: 'cp-1',
+            currency: 'USD',
+            exchangeRate: 12800,
+            status: 'POSTED',
+            paidAmount: 0,
+            totalAmount: 300,
           }),
         update: jest.fn(),
       },
       salesOrder: { findFirst: jest.fn(), update: jest.fn() },
       cashAccount: {
         findFirst: jest.fn().mockResolvedValue({
-          id: 'cash-usd', tenantId: 'tenant-1', accountType: CashAccountType.USD_CASH,
-          currency: 'USD', balance: 500,
+          id: 'cash-usd',
+          tenantId: 'tenant-1',
+          accountType: CashAccountType.USD_CASH,
+          currency: 'USD',
+          balance: 500,
         }),
         update: jest.fn(),
       },
       payment: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue({
-          id: 'payment-1', paymentNumber: 'PAY-000001', amount: 100, counterpartyId: 'cp-1',
+          id: 'payment-1',
+          paymentNumber: 'PAY-000001',
+          amount: 100,
+          counterpartyId: 'cp-1',
         }),
       },
       financeTransaction: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue({
-          id: 'finance-1', amount: 100, currency: 'USD', settlementSide: CounterpartySettlementSide.CUSTOMER,
+          id: 'finance-1',
+          amount: 100,
+          currency: 'USD',
+          settlementSide: CounterpartySettlementSide.CUSTOMER,
         }),
       },
       $transaction: jest.fn(async (callback) => callback(prisma)),
@@ -79,61 +111,85 @@ describe('PaymentsService settlement ledger integration', () => {
   });
 
   it('records exactly one customer-side USD movement and invoice allocation', async () => {
-    await service.registerPayment('tenant-1', {
-      counterpartyId: 'cp-1',
-      invoiceId: 'invoice-1',
-      method: 'CASH',
-      amount: 100,
-      currency: 'USD',
-      exchangeRate: 12800,
-      cashAccountId: 'cash-usd',
-    }, 'user-1');
+    await service.registerPayment(
+      'tenant-1',
+      {
+        counterpartyId: 'cp-1',
+        invoiceId: 'invoice-1',
+        method: 'CASH',
+        amount: 100,
+        currency: 'USD',
+        exchangeRate: 12800,
+        cashAccountId: 'cash-usd',
+      },
+      'user-1',
+    );
 
     expect(prisma.counterparty.update).not.toHaveBeenCalled();
-    expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ exchangeRate: 12800 }),
-    }));
-    expect(settlementService.recordMovement).toHaveBeenCalledWith(prisma, expect.objectContaining({
-      tenantId: 'tenant-1',
-      counterpartyId: 'cp-1',
-      currency: 'USD',
-      side: CounterpartySettlementSide.CUSTOMER,
-      amount: -100,
-      sourceDocType: 'FinanceTransaction',
-      sourceDocId: 'finance-1',
-    }));
-    expect(allocationService.recordAllocation).toHaveBeenCalledWith(prisma, expect.objectContaining({
-      tenantId: 'tenant-1',
-      counterpartyId: 'cp-1',
-      financeTransactionId: 'finance-1',
-      amount: 100,
-    }));
+    expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ exchangeRate: 12800 }),
+      }),
+    );
+    expect(settlementService.recordMovement).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        tenantId: 'tenant-1',
+        counterpartyId: 'cp-1',
+        currency: 'USD',
+        side: CounterpartySettlementSide.CUSTOMER,
+        amount: -100,
+        sourceDocType: 'FinanceTransaction',
+        sourceDocId: 'finance-1',
+      }),
+    );
+    expect(allocationService.recordAllocation).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        tenantId: 'tenant-1',
+        counterpartyId: 'cp-1',
+        financeTransactionId: 'finance-1',
+        amount: 100,
+      }),
+    );
   });
 
   it('requires a real same-currency cash or bank account for a sales payment', async () => {
     prisma.cashAccount.findFirst.mockResolvedValue(null);
 
-    await expect(service.registerPayment('tenant-1', {
-      counterpartyId: 'cp-1',
-      invoiceId: 'invoice-1',
-      method: 'CASH',
-      cashAccountId: 'cash-usd',
-      amount: 100,
-      currency: 'USD',
-      exchangeRate: 12800,
-    }, 'user-1')).rejects.toThrow('USD valyutasidagi USD_CASH hisobini tanlang');
+    await expect(
+      service.registerPayment(
+        'tenant-1',
+        {
+          counterpartyId: 'cp-1',
+          invoiceId: 'invoice-1',
+          method: 'CASH',
+          cashAccountId: 'cash-usd',
+          amount: 100,
+          currency: 'USD',
+          exchangeRate: 12800,
+        },
+        'user-1',
+      ),
+    ).rejects.toThrow('USD valyutasidagi USD_CASH hisobini tanlang');
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('requires a sales payment to be linked to exactly one invoice or order', async () => {
-    await expect(service.registerPayment('tenant-1', {
-      counterpartyId: 'cp-1',
-      method: 'CASH',
-      cashAccountId: 'cash-uzs',
-      amount: 100,
-      currency: 'UZS',
-    }, 'user-1')).rejects.toThrow("To'lov aynan bitta hujjatga");
+    await expect(
+      service.registerPayment(
+        'tenant-1',
+        {
+          counterpartyId: 'cp-1',
+          method: 'CASH',
+          cashAccountId: 'cash-uzs',
+          amount: 100,
+          currency: 'UZS',
+        },
+        'user-1',
+      ),
+    ).rejects.toThrow("To'lov aynan bitta hujjatga");
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -163,14 +219,20 @@ describe('PaymentsService settlement ledger integration', () => {
         isActive: true,
       });
 
-      await expect(service.registerPayment('tenant-1', {
-        counterpartyId: 'cp-1',
-        invoiceId: 'invoice-1',
-        method,
-        amount: 100,
-        currency: 'UZS',
-        cashAccountId: 'wrong-account',
-      }, 'user-1')).rejects.toThrow(BadRequestException);
+      await expect(
+        service.registerPayment(
+          'tenant-1',
+          {
+            counterpartyId: 'cp-1',
+            invoiceId: 'invoice-1',
+            method,
+            amount: 100,
+            currency: 'UZS',
+            cashAccountId: 'wrong-account',
+          },
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
     },

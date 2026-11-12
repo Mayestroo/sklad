@@ -24,8 +24,12 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
   let settlementAllocationService: { recordAllocation: jest.Mock };
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
-    settlementAllocationService = { recordAllocation: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
+    settlementAllocationService = {
+      recordAllocation: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       purchaseReceipt: {
         count: jest.fn(),
@@ -109,8 +113,14 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
-        { provide: SettlementAllocationService, useValue: settlementAllocationService },
-        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
+        {
+          provide: SettlementAllocationService,
+          useValue: settlementAllocationService,
+        },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -151,12 +161,14 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         ],
       };
 
-      prisma.purchaseReceipt.create.mockImplementation(({ data }: { data: any }) => ({
-        id: 'receipt-1',
-        ...data,
-        status: PurchaseDocStatus.DRAFT,
-        paymentStatus: PurchasePaymentStatus.UNPAID,
-      }));
+      prisma.purchaseReceipt.create.mockImplementation(
+        ({ data }: { data: any }) => ({
+          id: 'receipt-1',
+          ...data,
+          status: PurchaseDocStatus.DRAFT,
+          paymentStatus: PurchasePaymentStatus.UNPAID,
+        }),
+      );
 
       await service.createReceipt(tenantId, userId, dto as any);
 
@@ -260,7 +272,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.purchaseReceipt.delete.mockResolvedValue({ id: 'rec-1' });
 
       const result = await service.deleteReceipt('tenant-123', 'rec-1');
-      expect(result).toEqual({ success: true, message: "Xarid hujjati muvaffaqiyatli o'chirildi" });
+      expect(result).toEqual({
+        success: true,
+        message: "Xarid hujjati muvaffaqiyatli o'chirildi",
+      });
     });
   });
 
@@ -297,10 +312,17 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       };
 
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.purchaseExpense.create.mockResolvedValue({ id: 'exp-1', amount: 100000 });
-      prisma.purchaseExpense.findMany.mockResolvedValue([{ id: 'exp-1', amount: 100000 }]);
+      prisma.purchaseExpense.create.mockResolvedValue({
+        id: 'exp-1',
+        amount: 100000,
+      });
+      prisma.purchaseExpense.findMany.mockResolvedValue([
+        { id: 'exp-1', amount: 100000 },
+      ]);
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
-      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({ ...receipt, ...data }));
+      prisma.purchaseReceipt.update.mockImplementation(
+        ({ data }: { data: any }) => ({ ...receipt, ...data }),
+      );
 
       await service.addExpense('tenant-123', {
         receiptId: 'rec-1',
@@ -358,10 +380,17 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       };
 
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.purchaseExpense.create.mockResolvedValue({ id: 'exp-2', amount: 50000 });
-      prisma.purchaseExpense.findMany.mockResolvedValue([{ id: 'exp-2', amount: 50000 }]);
+      prisma.purchaseExpense.create.mockResolvedValue({
+        id: 'exp-2',
+        amount: 50000,
+      });
+      prisma.purchaseExpense.findMany.mockResolvedValue([
+        { id: 'exp-2', amount: 50000 },
+      ]);
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
-      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({ ...receipt, ...data }));
+      prisma.purchaseReceipt.update.mockImplementation(
+        ({ data }: { data: any }) => ({ ...receipt, ...data }),
+      );
 
       await service.addExpense('tenant-123', {
         receiptId: 'rec-2',
@@ -423,18 +452,25 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       };
 
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 5 });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 5,
+      });
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.productBatch.create.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
       prisma.journalEntry.count.mockResolvedValue(0);
-      prisma.account.findFirst.mockImplementation(({ where }: { where: any }) => ({
-        id: `acc-${where.code}`,
-        code: where.code,
-      }));
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: any }) => ({
+          id: `acc-${where.code}`,
+          code: where.code,
+        }),
+      );
       prisma.journalEntry.create.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
-      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({ ...receipt, ...data }));
+      prisma.purchaseReceipt.update.mockImplementation(
+        ({ data }: { data: any }) => ({ ...receipt, ...data }),
+      );
 
       await service.postReceipt('tenant-123', 'user-1', 'rec-post');
 
@@ -458,15 +494,18 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         }),
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-123',
-        counterpartyId: 'supp-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 1170000,
-        sourceDocType: 'PurchaseReceipt',
-        sourceDocId: 'rec-post',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-123',
+          counterpartyId: 'supp-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 1170000,
+          sourceDocType: 'PurchaseReceipt',
+          sourceDocId: 'rec-post',
+        }),
+      );
 
       // 4. Double-entry BHMS journal entry created
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -524,18 +563,25 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       };
 
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 10 });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 10,
+      });
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.productBatch.create.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
       prisma.journalEntry.count.mockResolvedValue(1);
-      prisma.account.findFirst.mockImplementation(({ where }: { where: any }) => ({
-        id: `acc-${where.code}`,
-        code: where.code,
-      }));
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: any }) => ({
+          id: `acc-${where.code}`,
+          code: where.code,
+        }),
+      );
       prisma.journalEntry.create.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
-      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({ ...receipt, ...data }));
+      prisma.purchaseReceipt.update.mockImplementation(
+        ({ data }: { data: any }) => ({ ...receipt, ...data }),
+      );
 
       await service.postReceipt('tenant-123', 'user-1', 'rec-mixed');
 
@@ -548,10 +594,18 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       const lastJeCall = jeCalls[jeCalls.length - 1][0];
       const lines = lastJeCall.data.lines.create;
       expect(lines).toHaveLength(4);
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-2910')?.amount).toBe(200000);
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-1010')?.amount).toBe(100000);
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-9420')?.amount).toBe(50000);
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-4410')?.amount).toBe(42000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-2910')?.amount,
+      ).toBe(200000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-1010')?.amount,
+      ).toBe(100000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-9420')?.amount,
+      ).toBe(50000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-4410')?.amount,
+      ).toBe(42000);
     });
 
     it('should block unposting if payments are already linked to the receipt', async () => {
@@ -607,26 +661,34 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       };
 
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.stockLevel.findUnique.mockImplementation(({ where }: { where: any }) => {
-        if (where.tenantId_warehouseId_productId.productId === 'prod-1') {
-          return Promise.resolve({ id: 'stock-prod', quantity: 10 });
-        }
-        if (where.tenantId_warehouseId_productId.productId === 'raw-1') {
-          return Promise.resolve({ id: 'stock-raw', quantity: 20 });
-        }
-        return Promise.resolve(null);
-      });
+      prisma.stockLevel.findUnique.mockImplementation(
+        ({ where }: { where: any }) => {
+          if (where.tenantId_warehouseId_productId.productId === 'prod-1') {
+            return Promise.resolve({ id: 'stock-prod', quantity: 10 });
+          }
+          if (where.tenantId_warehouseId_productId.productId === 'raw-1') {
+            return Promise.resolve({ id: 'stock-raw', quantity: 20 });
+          }
+          return Promise.resolve(null);
+        },
+      );
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.productBatch.deleteMany.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
       prisma.journalEntry.deleteMany.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
-      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({
-        ...receipt,
-        ...data,
-      }));
+      prisma.purchaseReceipt.update.mockImplementation(
+        ({ data }: { data: any }) => ({
+          ...receipt,
+          ...data,
+        }),
+      );
 
-      const res = await service.unpostReceipt('tenant-123', 'user-1', 'rec-unpost-mixed');
+      const res = await service.unpostReceipt(
+        'tenant-123',
+        'user-1',
+        'rec-unpost-mixed',
+      );
 
       expect(res.status).toBe(PurchaseDocStatus.DRAFT);
       // Stock updated for prod-1 (10 -> 8) and raw-1 (20 -> 15), NOT for srv-1
@@ -645,16 +707,19 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         where: { receiptId: 'rec-unpost-mixed' },
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-123',
-        counterpartyId: 'supp-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -392000,
-        entryType: 'PURCHASE_RECEIPT_UNPOSTED',
-        sourceDocType: 'PurchaseReceipt',
-        sourceDocId: 'rec-unpost-mixed',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-123',
+          counterpartyId: 'supp-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -392000,
+          entryType: 'PURCHASE_RECEIPT_UNPOSTED',
+          sourceDocType: 'PurchaseReceipt',
+          sourceDocId: 'rec-unpost-mixed',
+        }),
+      );
 
       // Journal entries removed
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
@@ -672,11 +737,16 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
   describe('Ticket #17: Purchase Returns & Inventory Reversal', () => {
     it('should create purchase return, decrement stock, reduce supplier debt, and update returnStatus', async () => {
       prisma.purchaseReturn.count.mockResolvedValue(0);
-      prisma.purchaseReturn.create.mockImplementation(({ data }: { data: any }) => ({
-        id: 'ret-1',
-        ...data,
-      }));
-      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 10 });
+      prisma.purchaseReturn.create.mockImplementation(
+        ({ data }: { data: any }) => ({
+          id: 'ret-1',
+          ...data,
+        }),
+      );
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 10,
+      });
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
       prisma.purchaseReceipt.findFirst.mockResolvedValue({
@@ -719,11 +789,11 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.auditLog.create.mockResolvedValue({});
 
       await service.createReturn('tenant-123', 'user-1', {
-          receiptId: 'rec-1',
-          counterpartyId: 'supp-1',
-          warehouseId: 'wh-1',
-          currency: 'UZS',
-          items: [{ productId: 'prod-1', quantity: 2, unitPrice: 100000 }],
+        receiptId: 'rec-1',
+        counterpartyId: 'supp-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 100000 }],
       });
 
       // Decremented stock by 2 (10 -> 8)
@@ -732,16 +802,19 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         data: { quantity: { decrement: 2 } },
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-123',
-        counterpartyId: 'supp-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -200000,
-        entryType: 'PURCHASE_RETURN_POSTED',
-        sourceDocType: 'PurchaseReturn',
-        sourceDocId: 'ret-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-123',
+          counterpartyId: 'supp-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -200000,
+          entryType: 'PURCHASE_RETURN_POSTED',
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: 'ret-1',
+        }),
+      );
 
       // Updated return status on receipt to PARTIALLY_RETURNED
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
@@ -764,7 +837,14 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         warehouseId: 'wh-1',
         currency: 'UZS',
         // Nothing returned yet, so only the batch remainder (2 of 10, the rest was sold) limits the return.
-        items: [{ id: 'item-1', productId: 'prod-1', quantity: 10, returnedQuantity: 0 }],
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 10,
+            returnedQuantity: 0,
+          },
+        ],
         batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 2 }],
       });
 
@@ -828,11 +908,21 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         totalAmount: 200000,
         items: [{ productId: 'prod-1', quantity: 2, totalPrice: 200000 }],
         receipt: {
-          items: [{ id: 'item-1', productId: 'prod-1', quantity: 10, returnedQuantity: 2 }],
+          items: [
+            {
+              id: 'item-1',
+              productId: 'prod-1',
+              quantity: 10,
+              returnedQuantity: 2,
+            },
+          ],
           batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 8 }],
         },
       });
-      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 8 });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 8,
+      });
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.productBatch.update.mockResolvedValue({});
@@ -841,39 +931,65 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         { id: 'item-1', quantity: 10, returnedQuantity: 0 },
       ]);
       prisma.purchaseReceipt.update.mockResolvedValue({});
-      prisma.purchaseReturn.update.mockResolvedValue({ id: 'ret-1', status: ReturnDocStatus.CANCELLED });
+      prisma.purchaseReturn.update.mockResolvedValue({
+        id: 'ret-1',
+        status: ReturnDocStatus.CANCELLED,
+      });
       prisma.auditLog.create.mockResolvedValue({});
 
-      const result = await service.cancelReturn('tenant-123', 'user-1', 'ret-1');
+      const result = await service.cancelReturn(
+        'tenant-123',
+        'user-1',
+        'ret-1',
+      );
       expect(result.status).toBe(ReturnDocStatus.CANCELLED);
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId: 'tenant-123',
-        counterpartyId: 'supp-1',
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 200000,
-        entryType: 'PURCHASE_RETURN_CANCELLED',
-        sourceDocType: 'PurchaseReturn',
-        sourceDocId: 'ret-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId: 'tenant-123',
+          counterpartyId: 'supp-1',
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 200000,
+          entryType: 'PURCHASE_RETURN_CANCELLED',
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: 'ret-1',
+        }),
+      );
     });
 
     it('should create standalone return and consume FIFO batches', async () => {
-      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 15 });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 15,
+      });
       prisma.product.findFirst.mockResolvedValue({
         id: 'prod-raw',
         type: 'RAW_MATERIAL',
         name: 'Iron Sheet',
       });
       prisma.productBatch.findMany.mockResolvedValue([
-        { id: 'batch-1', initialQty: 10, remainingQty: 5, purchasePrice: 50000, landedCost: 55000 },
+        {
+          id: 'batch-1',
+          initialQty: 10,
+          remainingQty: 5,
+          purchasePrice: 50000,
+          landedCost: 55000,
+        },
       ]);
       prisma.purchaseReturn.create.mockResolvedValue({
         id: 'ret-standalone',
         returnNumber: 'RET-2026-0002',
         status: ReturnDocStatus.POSTED,
         totalAmount: 150000,
-        items: [{ productId: 'prod-raw', quantity: 3, unitPrice: 50000, totalPrice: 150000 }],
+        items: [
+          {
+            productId: 'prod-raw',
+            quantity: 3,
+            unitPrice: 50000,
+            totalPrice: 150000,
+          },
+        ],
       });
       prisma.account.findFirst.mockResolvedValue({ id: 'acc-1' });
       prisma.journalEntry.count.mockResolvedValue(0);
@@ -900,7 +1016,10 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
     });
 
     it('should create a DRAFT return and approve it later', async () => {
-      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-1', quantity: 10 });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 10,
+      });
       prisma.product.findFirst.mockResolvedValue({
         id: 'prod-1',
         type: 'PRODUCT',
@@ -933,14 +1052,25 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         warehouseId: 'wh-1',
         counterpartyId: 'supp-1',
         totalAmount: 100000,
-        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100000, totalPrice: 100000 }],
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: 100000,
+            totalPrice: 100000,
+          },
+        ],
       });
       prisma.purchaseReturn.update.mockResolvedValue({
         id: 'ret-draft',
         status: ReturnDocStatus.POSTED,
       });
 
-      const approved = await service.approveReturn('tenant-123', 'user-1', 'ret-draft');
+      const approved = await service.approveReturn(
+        'tenant-123',
+        'user-1',
+        'ret-draft',
+      );
       expect(approved.status).toBe(ReturnDocStatus.POSTED);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
         where: { id: 'stock-1' },
@@ -973,8 +1103,9 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         balance: 200,
         isActive: true,
       });
-      prisma.account.findFirst.mockImplementation(({ where }: { where: { code: string } }) =>
-        Promise.resolve({ id: `account-${where.code}`, code: where.code }),
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: { code: string } }) =>
+          Promise.resolve({ id: `account-${where.code}`, code: where.code }),
       );
       prisma.purchaseReceipt.update.mockResolvedValue(receipt);
 
@@ -984,9 +1115,15 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         exchangeRate: 13000,
       });
 
-      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ currency: 'USD', exchangeRate: 13000, amount: 100 }),
-      }));
+      expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            currency: 'USD',
+            exchangeRate: 13000,
+            amount: 100,
+          }),
+        }),
+      );
       const journalArgs = prisma.journalEntry.create.mock.calls[0][0];
       expect(journalArgs.data.lines.create).toEqual([
         expect.objectContaining({
@@ -1024,10 +1161,12 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         isActive: true,
       });
 
-      await expect(service.payPurchaseReceipt('tenant-123', 'user-1', 'receipt-usd', {
-        amount: 100,
-        cashAccountId: 'usd-bank',
-      })).rejects.toThrow(BadRequestException);
+      await expect(
+        service.payPurchaseReceipt('tenant-123', 'user-1', 'receipt-usd', {
+          amount: 100,
+          cashAccountId: 'usd-bank',
+        }),
+      ).rejects.toThrow(BadRequestException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
@@ -1038,20 +1177,22 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
   describe('Multi-Currency Purchases Summary (ADR 0023)', () => {
     it('should return segregated currency totals for purchases, debts, and returns without flattening to UZS', async () => {
       // Mock receipts: 1 in UZS (12,000,000 UZS), 1 in USD ($1,500)
-      (prisma.purchaseReceipt.findMany as jest.Mock).mockImplementation(({ where }: { where: any }) => {
-        if (where?.paymentStatus) {
-          // Unpaid receipts for debt by currency
+      (prisma.purchaseReceipt.findMany as jest.Mock).mockImplementation(
+        ({ where }: { where: any }) => {
+          if (where?.paymentStatus) {
+            // Unpaid receipts for debt by currency
+            return Promise.resolve([
+              { totalAmount: 2000000, paidAmount: 0, currency: 'UZS' },
+              { totalAmount: 500, paidAmount: 0, currency: 'USD' },
+            ]);
+          }
+          // Monthly posted receipts
           return Promise.resolve([
-            { totalAmount: 2000000, paidAmount: 0, currency: 'UZS' },
-            { totalAmount: 500, paidAmount: 0, currency: 'USD' },
+            { totalAmount: 12000000, currency: 'UZS', exchangeRate: 1 },
+            { totalAmount: 1500, currency: 'USD', exchangeRate: 12800 },
           ]);
-        }
-        // Monthly posted receipts
-        return Promise.resolve([
-          { totalAmount: 12000000, currency: 'UZS', exchangeRate: 1 },
-          { totalAmount: 1500, currency: 'USD', exchangeRate: 12800 },
-        ]);
-      });
+        },
+      );
 
       // Mock returns: 1 in USD ($200)
       (prisma.purchaseReturn.findMany as jest.Mock).mockResolvedValue([

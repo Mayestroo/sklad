@@ -25,8 +25,12 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
   const counterpartyId = 'supp-main';
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
-    settlementAllocationService = { recordAllocation: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
+    settlementAllocationService = {
+      recordAllocation: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       purchaseReceipt: {
         count: jest.fn().mockResolvedValue(0),
@@ -100,8 +104,14 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
-        { provide: SettlementAllocationService, useValue: settlementAllocationService },
-        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
+        {
+          provide: SettlementAllocationService,
+          useValue: settlementAllocationService,
+        },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -154,10 +164,12 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         quantity: 10,
       });
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.purchaseReturn.create.mockImplementation(({ data }: { data: any }) => ({
-        id: 'ret-100',
-        ...data,
-      }));
+      prisma.purchaseReturn.create.mockImplementation(
+        ({ data }: { data: any }) => ({
+          id: 'ret-100',
+          ...data,
+        }),
+      );
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
@@ -166,10 +178,12 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       ]);
       prisma.productBatch.update.mockResolvedValue({});
       prisma.purchaseReceipt.update.mockResolvedValue({});
-      prisma.account.findFirst.mockImplementation(({ where }: { where: any }) => ({
-        id: `acc-${where.code}`,
-        code: where.code,
-      }));
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: any }) => ({
+          id: `acc-${where.code}`,
+          code: where.code,
+        }),
+      );
       prisma.journalEntry.create.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
 
@@ -180,7 +194,14 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         currency: 'UZS',
         reason: 'DEFECT',
         actNumber: 'AKT-001',
-        items: [{ productId: 'prod-iphone', quantity: 3, unitPrice: 100000, vatRate: 12 }],
+        items: [
+          {
+            productId: 'prod-iphone',
+            quantity: 3,
+            unitPrice: 100000,
+            vatRate: 12,
+          },
+        ],
       });
 
       expect(pReturn).toBeDefined();
@@ -203,16 +224,19 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         data: { returnedQuantity: { increment: 3 } },
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -336000,
-        entryType: 'PURCHASE_RETURN_POSTED',
-        sourceDocType: 'PurchaseReturn',
-        sourceDocId: 'ret-100',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -336000,
+          entryType: 'PURCHASE_RETURN_POSTED',
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: 'ret-100',
+        }),
+      );
 
       // Invariant Check 5: Receipt returnStatus updated to PARTIALLY_RETURNED
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
@@ -245,7 +269,9 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
             returnedQuantity: 8, // only 2 left unreturned
           },
         ],
-        batches: [{ id: 'batch-100', productId: 'prod-iphone', remainingQty: 10 }],
+        batches: [
+          { id: 'batch-100', productId: 'prod-iphone', remainingQty: 10 },
+        ],
       });
 
       await expect(
@@ -338,22 +364,38 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         id: 'stock-alu',
         quantity: 100,
       });
-      prisma.purchaseReturn.create.mockImplementation(({ data }: { data: any }) => ({
-        id: 'ret-standalone-1',
-        ...data,
-      }));
+      prisma.purchaseReturn.create.mockImplementation(
+        ({ data }: { data: any }) => ({
+          id: 'ret-standalone-1',
+          ...data,
+        }),
+      );
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
 
       // Two active FIFO batches in the warehouse
-      const batch1 = { id: 'b1', initialQty: 15, remainingQty: 10, purchasePrice: 40000, landedCost: 40000 };
-      const batch2 = { id: 'b2', initialQty: 20, remainingQty: 20, purchasePrice: 45000, landedCost: 45000 };
+      const batch1 = {
+        id: 'b1',
+        initialQty: 15,
+        remainingQty: 10,
+        purchasePrice: 40000,
+        landedCost: 40000,
+      };
+      const batch2 = {
+        id: 'b2',
+        initialQty: 20,
+        remainingQty: 20,
+        purchasePrice: 45000,
+        landedCost: 45000,
+      };
       prisma.productBatch.findMany.mockResolvedValue([batch1, batch2]);
       prisma.productBatch.update.mockResolvedValue({});
-      prisma.account.findFirst.mockImplementation(({ where }: { where: any }) => ({
-        id: `acc-${where.code}`,
-        code: where.code,
-      }));
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: any }) => ({
+          id: `acc-${where.code}`,
+          code: where.code,
+        }),
+      );
       prisma.journalEntry.create.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
 
@@ -362,7 +404,9 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         warehouseId,
         reason: 'EXCESS_STOCK',
         currency: 'UZS',
-        items: [{ productId: 'raw-alu', quantity: 15, unitPrice: 40000, vatRate: 0 }],
+        items: [
+          { productId: 'raw-alu', quantity: 15, unitPrice: 40000, vatRate: 0 },
+        ],
       });
 
       expect(pReturn).toBeDefined();
@@ -383,16 +427,19 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         data: { remainingQty: { decrement: 5 } },
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -600000,
-        entryType: 'PURCHASE_RETURN_POSTED',
-        sourceDocType: 'PurchaseReturn',
-        sourceDocId: 'ret-standalone-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -600000,
+          entryType: 'PURCHASE_RETURN_POSTED',
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: 'ret-standalone-1',
+        }),
+      );
     });
   });
 
@@ -443,10 +490,12 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         quantity: 10,
       });
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.purchaseReturn.create.mockImplementation(({ data }: { data: any }) => ({
-        id: 'ret-variance',
-        ...data,
-      }));
+      prisma.purchaseReturn.create.mockImplementation(
+        ({ data }: { data: any }) => ({
+          id: 'ret-variance',
+          ...data,
+        }),
+      );
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
@@ -455,10 +504,12 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       ]);
       prisma.productBatch.update.mockResolvedValue({});
       prisma.purchaseReceipt.update.mockResolvedValue({});
-      prisma.account.findFirst.mockImplementation(({ where }: { where: any }) => ({
-        id: `acc-${where.code}`,
-        code: where.code,
-      }));
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: any }) => ({
+          id: `acc-${where.code}`,
+          code: where.code,
+        }),
+      );
       prisma.journalEntry.create.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
 
@@ -468,19 +519,29 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         warehouseId,
         currency: 'UZS',
         reason: 'DEFECT',
-        items: [{ productId: 'prod-item', quantity: 5, unitPrice: 100000, vatRate: 0 }],
+        items: [
+          {
+            productId: 'prod-item',
+            quantity: 5,
+            unitPrice: 100000,
+            vatRate: 0,
+          },
+        ],
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -500000,
-        entryType: 'PURCHASE_RETURN_POSTED',
-        sourceDocType: 'PurchaseReturn',
-        sourceDocId: 'ret-variance',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -500000,
+          entryType: 'PURCHASE_RETURN_POSTED',
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: 'ret-variance',
+        }),
+      );
 
       // Check Journal Entry for Landed Cost Return Variance (Account 9430)
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -488,10 +549,18 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       const lines = jeCreate.data.lines.create;
 
       // 1. Inventory credited at landed cost: 5 * 120,000 = 600,000 (Dt 6010 / Kt 2910)
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-6010' && l.creditAccountId === 'acc-2910')?.amount).toBe(600000);
+      expect(
+        lines.find(
+          (l: any) =>
+            l.debitAccountId === 'acc-6010' && l.creditAccountId === 'acc-2910',
+        )?.amount,
+      ).toBe(600000);
 
       // 2. Variance loss recognized: 600,000 - 500,000 = 100,000 (Dt 9430 / Kt 2910)
-      const varianceLine = lines.find((l: any) => l.debitAccountId === 'acc-9430' && l.creditAccountId === 'acc-2910');
+      const varianceLine = lines.find(
+        (l: any) =>
+          l.debitAccountId === 'acc-9430' && l.creditAccountId === 'acc-2910',
+      );
       expect(varianceLine).toBeDefined();
       expect(varianceLine.amount).toBe(100000);
     });
@@ -517,14 +586,21 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         ],
         receipt: {
           id: 'rec-100',
-          items: [{ id: 'item-100', productId: 'prod-item', returnedQuantity: 5 }],
-          batches: [{ id: 'batch-100', productId: 'prod-item', remainingQty: 5 }],
+          items: [
+            { id: 'item-100', productId: 'prod-item', returnedQuantity: 5 },
+          ],
+          batches: [
+            { id: 'batch-100', productId: 'prod-item', remainingQty: 5 },
+          ],
         },
       };
 
       prisma.purchaseReturn.findFirst.mockResolvedValue(pReturn);
       prisma.financeTransaction.findFirst.mockResolvedValue(null); // no linked cash refunds
-      prisma.stockLevel.findUnique.mockResolvedValue({ id: 'stock-item', quantity: 15 });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-item',
+        quantity: 15,
+      });
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.productBatch.update.mockResolvedValue({});
@@ -534,13 +610,19 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       ]);
       prisma.purchaseReceipt.update.mockResolvedValue({});
       prisma.journalEntry.deleteMany.mockResolvedValue({});
-      prisma.purchaseReturn.update.mockImplementation(({ data }: { data: any }) => ({
-        ...pReturn,
-        ...data,
-      }));
+      prisma.purchaseReturn.update.mockImplementation(
+        ({ data }: { data: any }) => ({
+          ...pReturn,
+          ...data,
+        }),
+      );
       prisma.auditLog.create.mockResolvedValue({});
 
-      const cancelled = await service.cancelReturn(tenantId, userId, 'ret-cancel-test');
+      const cancelled = await service.cancelReturn(
+        tenantId,
+        userId,
+        'ret-cancel-test',
+      );
 
       expect(cancelled.status).toBe(ReturnDocStatus.CANCELLED);
 
@@ -563,16 +645,19 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       });
 
       // 4. Supplier debt restored
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 500000,
-        entryType: 'PURCHASE_RETURN_CANCELLED',
-        sourceDocType: 'PurchaseReturn',
-        sourceDocId: 'ret-cancel-test',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 500000,
+          entryType: 'PURCHASE_RETURN_CANCELLED',
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: 'ret-cancel-test',
+        }),
+      );
 
       // 5. Receipt returnStatus restored to NONE
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
