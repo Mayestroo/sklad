@@ -1750,6 +1750,7 @@ model PurchaseReturnItem {
 
   return     PurchaseReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
   product    Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchConsumptions BatchConsumption[]
 
   @@map("purchase_return_items")
 }
@@ -1847,19 +1848,23 @@ model AdditionalExpenseItem {
 model BatchConsumption {
   id                 String           @id @default(uuid())
   tenantId           String           @map("tenant_id")
-  salesInvoiceItemId String           @map("sales_invoice_item_id")
+  // Exactly one source line (CHECK batch_consumptions_single_source_check).
+  salesInvoiceItemId   String?             @map("sales_invoice_item_id")
+  purchaseReturnItemId String?             @map("purchase_return_item_id")
   batchId            String           @map("batch_id")
   quantity           Decimal          @db.Decimal(15, 3)
   unitCost           Decimal          @db.Decimal(15, 2) @map("unit_cost")
   createdAt          DateTime         @default(now()) @map("created_at")
 
   company            Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  salesInvoiceItem   SalesInvoiceItem @relation(fields: [salesInvoiceItemId], references: [id], onDelete: Cascade)
+  salesInvoiceItem   SalesInvoiceItem?   @relation(fields: [salesInvoiceItemId], references: [id], onDelete: Cascade)
+  purchaseReturnItem PurchaseReturnItem? @relation(fields: [purchaseReturnItemId], references: [id], onDelete: Cascade)
   batch              ProductBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([batchId])
   @@index([salesInvoiceItemId])
+  @@index([purchaseReturnItemId])
   @@map("batch_consumptions")
 }
 

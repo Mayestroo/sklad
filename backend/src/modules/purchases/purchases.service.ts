@@ -38,6 +38,10 @@ import {
   requireExchangeRateForCurrency,
 } from '../../common/utils/transaction-exchange-rate';
 import { JournalService } from '../accounting/journal/journal.service';
+import {
+  consumeFifoBatches,
+  restoreBatchConsumptions,
+} from '../inventory/fifo/fifo-batches';
 
 @Injectable()
 export class PurchasesService {
@@ -1524,6 +1528,8 @@ export class PurchasesService {
 
       // 2. Batch deduction & Landed cost calculation
       let unitLandedCost = unitPrice;
+      // FIFO returns carry the exact allocated cost; never re-multiply a rounded average.
+      let fifoLineCost: number | null = null;
 
       if (receiptId && receipt) {
         const receiptItem = receipt.items?.find(
@@ -1547,53 +1553,33 @@ export class PurchasesService {
           });
         }
 
+        // Return the receipt's own goods when they are still in this warehouse.
         const batch = receipt.batches?.find(
-          (b: any) => b.productId === item.productId,
+          (b: any) =>
+            b.productId === item.productId && b.warehouseId === warehouseId,
         );
-        if (batch) {
-          const newBatchQty = Math.max(0, Number(batch.remainingQty) - qty);
-          await tx.productBatch.update({
-            where: { id: batch.id },
-            data: { remainingQty: newBatchQty },
-          });
-        }
+        await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId,
+          productId: item.productId,
+          quantity: qty,
+          batchIds: batch ? [batch.id] : undefined,
+          source: { purchaseReturnItemId: item.id },
+        });
       } else {
         // Standalone return: FIFO batch consumption from warehouse
-        const batches = await tx.productBatch.findMany({
-          where: {
-            tenantId,
-            warehouseId,
-            productId: item.productId,
-            remainingQty: { gt: 0 },
-          },
-          orderBy: { createdAt: 'asc' },
+        const allocation = await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId,
+          productId: item.productId,
+          quantity: qty,
+          source: { purchaseReturnItemId: item.id },
         });
-
-        let needed = qty;
-        let accumulatedLandedCost = 0;
-        for (const b of batches) {
-          if (needed <= 0) break;
-          const bRemaining = Number(b.remainingQty);
-          const consume = Math.min(needed, bRemaining);
-          const bLandedUnit =
-            Number(b.initialQty) > 0
-              ? Number(b.landedCost) / Number(b.initialQty)
-              : Number(b.purchasePrice);
-          accumulatedLandedCost += consume * bLandedUnit;
-
-          await tx.productBatch.update({
-            where: { id: b.id },
-            data: { remainingQty: { decrement: consume } },
-          });
-          needed -= consume;
-        }
-
-        if (qty - needed > 0) {
-          unitLandedCost = accumulatedLandedCost / (qty - needed);
-        }
+        unitLandedCost = allocation.unitCost;
+        fifoLineCost = allocation.totalCost;
       }
 
-      const lineLandedCost = qty * unitLandedCost;
+      const lineLandedCost = fifoLineCost ?? qty * unitLandedCost;
       if (itemType === 'RAW_MATERIAL') {
         rawMaterialLandedCostTotal += lineLandedCost;
       } else {
@@ -1859,7 +1845,7 @@ export class PurchasesService {
             });
           }
 
-          // 2. Re-increment ProductBatch remainingQty and decrement PurchaseReceiptItem returnedQuantity
+          // 2. Decrement PurchaseReceiptItem returnedQuantity
           if (pReturn.receipt) {
             const receiptItem = pReturn.receipt.items.find(
               (ri: any) => ri.productId === item.productId,
@@ -1877,20 +1863,15 @@ export class PurchasesService {
                 },
               });
             }
-
-            const batch = pReturn.receipt.batches.find(
-              (b: any) => b.productId === item.productId,
-            );
-            if (batch) {
-              await tx.productBatch.update({
-                where: { id: batch.id },
-                data: { remainingQty: { increment: qty } },
-              });
-            }
           }
+
+          // 3. Put back exactly the batches this return line consumed.
+          await restoreBatchConsumptions(tx, tenantId, {
+            purchaseReturnItemId: item.id,
+          });
         }
 
-        // 3. Reverse the supplier-balance effect without deleting history.
+        // 4. Reverse the supplier-balance effect without deleting history.
         await this.settlementService.recordMovement(tx, {
           tenantId,
           counterpartyId: pReturn.counterpartyId,

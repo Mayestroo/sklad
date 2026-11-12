@@ -35,6 +35,7 @@ import {
   grossProfitInUzs,
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
+import { consumeFifoBatches } from '../../inventory/fifo/fifo-batches';
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -1602,46 +1603,14 @@ export class SalesOrdersService {
           );
         }
 
-        const batches = await tx.productBatch.findMany({
-          where: {
-            tenantId,
-            warehouseId,
-            productId: dp.orderItem.productId,
-            remainingQty: { gt: 0 },
-          },
-          orderBy: { createdAt: 'asc' },
+        const allocation = await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId,
+          productId: dp.orderItem.productId,
+          quantity: qty,
+          source: { salesInvoiceItemId: invItem.id },
         });
-
-        let remaining = qty;
-        let itemCogs = 0;
-
-        for (const batch of batches) {
-          if (remaining <= 0) break;
-          const batchAvail = Number(batch.remainingQty);
-          const consumed = Math.min(batchAvail, remaining);
-          const cost = Number(batch.landedCost) > 0 ? Number(batch.landedCost) : Number(batch.purchasePrice);
-          itemCogs += consumed * cost;
-          remaining -= consumed;
-
-          await tx.productBatch.update({
-            where: { id: batch.id },
-            data: { remainingQty: { decrement: consumed } },
-          });
-          await tx.batchConsumption.create({
-            data: {
-              tenantId,
-              salesInvoiceItemId: invItem.id,
-              batchId: batch.id,
-              quantity: consumed,
-              unitCost: cost,
-            },
-          });
-        }
-
-        if (remaining > 0) {
-          const product = await tx.product.findUnique({ where: { id: dp.orderItem.productId } });
-          itemCogs += remaining * Number(product?.costPrice || 0) * Number(product?.costPriceExchangeRate || 1);
-        }
+        const itemCogs = allocation.totalCost;
 
         const unitCogs = qty > 0 ? itemCogs / qty : 0;
         const lineTotal = Number(invItem.totalPrice);

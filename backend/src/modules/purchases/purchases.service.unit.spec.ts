@@ -62,10 +62,15 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         findMany: jest.fn(),
         update: jest.fn(),
       },
+      batchConsumption: {
+        create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+      },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn(),
         update: jest.fn(),
-        updateMany: jest.fn(),
         deleteMany: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -769,9 +774,22 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
             id: 'batch-1',
             productId: 'prod-1',
             remainingQty: 10,
+            landedCost: 100000,
+            purchasePrice: 100000,
+            createdAt: new Date('2026-01-01T00:00:00Z'),
           },
         ],
       });
+      prisma.productBatch.findMany.mockResolvedValue([
+          {
+            id: 'batch-1',
+            productId: 'prod-1',
+            remainingQty: 10,
+            landedCost: 100000,
+            purchasePrice: 100000,
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          },
+        ]);
       prisma.product.findFirst.mockResolvedValue({
         id: 'prod-1',
         type: 'PRODUCT',
@@ -842,8 +860,9 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
             returnedQuantity: 0,
           },
         ],
-        batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 2 }],
+        batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 2, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') }],
       });
+      prisma.productBatch.findMany.mockResolvedValue([{ id: 'batch-1', productId: 'prod-1', remainingQty: 2, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') }]);
 
       const attempt = service.createReturn('tenant-123', 'user-1', {
         receiptId: 'rec-1',
@@ -913,7 +932,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
               returnedQuantity: 2,
             },
           ],
-          batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 8 }],
+          batches: [{ id: 'batch-1', productId: 'prod-1', remainingQty: 8, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') }],
         },
       });
       prisma.stockLevel.findUnique.mockResolvedValue({
@@ -968,6 +987,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
           initialQty: 10,
           remainingQty: 5,
           purchasePrice: 50000,
@@ -1005,8 +1025,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         where: { id: 'stock-1' },
         data: { quantity: { decrement: 3 } },
       });
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-1' },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: { id: 'batch-1', remainingQty: { gte: 3 } },
         data: { remainingQty: { decrement: 3 } },
       });
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -1051,6 +1071,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         totalAmount: 100000,
         items: [
           {
+            id: 'ret-item-draft',
             productId: 'prod-1',
             quantity: 1,
             unitPrice: 100000,
@@ -1058,6 +1079,15 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
           },
         ],
       });
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-draft',
+          remainingQty: 5,
+          landedCost: 100000,
+          purchasePrice: 100000,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+        },
+      ]);
       prisma.purchaseReturn.update.mockResolvedValue({
         id: 'ret-draft',
         status: ReturnDocStatus.POSTED,

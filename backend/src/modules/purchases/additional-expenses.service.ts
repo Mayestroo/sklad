@@ -677,9 +677,11 @@ export class AdditionalExpensesService {
           for (const consumption of batch.consumptions) {
             const consumedQty = Number(consumption.quantity);
             const lineCogsDelta = consumedQty * allocatedPerUnit;
-            totalCogsAdjustment += lineCogsDelta;
 
+            // Only sales consumptions are COGS; goods returned to the supplier
+            // (purchase-return consumptions) are not.
             if (consumption.salesInvoiceItem) {
+              totalCogsAdjustment += lineCogsDelta;
               const currentUnitCogs = Number(
                 consumption.salesInvoiceItem.unitCogs || 0,
               );
@@ -692,7 +694,7 @@ export class AdditionalExpensesService {
                 Number(consumption.salesInvoiceItem.totalPrice) - newLineCogs;
 
               await tx.salesInvoiceItem.update({
-                where: { id: consumption.salesInvoiceItemId },
+                where: { id: consumption.salesInvoiceItem.id },
                 data: {
                   unitCogs: newUnitCogs,
                   lineCogs: newLineCogs,
@@ -1033,7 +1035,7 @@ export class AdditionalExpensesService {
                 restoredLineCogs;
 
               await tx.salesInvoiceItem.update({
-                where: { id: consumption.salesInvoiceItemId },
+                where: { id: consumption.salesInvoiceItem.id },
                 data: {
                   unitCogs: restoredUnitCogs,
                   lineCogs: restoredLineCogs,

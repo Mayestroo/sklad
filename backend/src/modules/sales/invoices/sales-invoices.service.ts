@@ -25,6 +25,7 @@ import {
   grossProfitInUzs,
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
+import { consumeFifoBatches } from '../../inventory/fifo/fifo-batches';
 
 @Injectable()
 export class SalesInvoicesService {
@@ -457,57 +458,15 @@ export class SalesInvoicesService {
           );
         }
 
-        // FIFO: consume batches oldest first
-        const batches = await tx.productBatch.findMany({
-          where: {
-            tenantId,
-            warehouseId: invoice.warehouseId,
-            productId: item.productId,
-            remainingQty: { gt: 0 },
-          },
-          orderBy: { createdAt: 'asc' },
+        // FIFO: consume batches oldest first (shared consumer, all or nothing)
+        const allocation = await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId: invoice.warehouseId,
+          productId: item.productId,
+          quantity: qty,
+          source: { salesInvoiceItemId: item.id },
         });
-
-        let remainingToConsume = qty;
-        let totalItemCogs = 0;
-
-        for (const batch of batches) {
-          if (remainingToConsume <= 0) break;
-
-          const batchAvail = Number(batch.remainingQty);
-          const consumed = Math.min(batchAvail, remainingToConsume);
-          const batchCostPerUnit =
-            Number(batch.landedCost) > 0
-              ? Number(batch.landedCost)
-              : Number(batch.purchasePrice);
-
-          totalItemCogs += consumed * batchCostPerUnit;
-          remainingToConsume -= consumed;
-
-          await tx.productBatch.update({
-            where: { id: batch.id },
-            data: { remainingQty: { decrement: consumed } },
-          });
-
-          await tx.batchConsumption.create({
-            data: {
-              tenantId,
-              salesInvoiceItemId: item.id,
-              batchId: batch.id,
-              quantity: consumed,
-              unitCost: batchCostPerUnit,
-            },
-          });
-        }
-
-        // If no batches found (no purchase history), fallback to product costPrice
-        if (batches.length === 0 || remainingToConsume > 0) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-          });
-          const fallbackCost = Number(product?.costPrice || 0) * Number(product?.costPriceExchangeRate || 1);
-          totalItemCogs += remainingToConsume * fallbackCost;
-        }
+        const totalItemCogs = allocation.totalCost;
 
         const unitCogs = qty > 0 ? totalItemCogs / qty : 0;
         const lineCogs = totalItemCogs;

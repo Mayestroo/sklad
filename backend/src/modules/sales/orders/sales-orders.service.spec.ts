@@ -97,11 +97,14 @@ describe('SalesOrdersService', () => {
         update: jest.fn(),
       },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn(),
         update: jest.fn(),
       },
       batchConsumption: {
         create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
       },
       counterparty: {
         update: jest.fn(),
@@ -719,6 +722,7 @@ describe('SalesOrdersService', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
           remainingQty: 5,
           landedCost: 120000,
           purchasePrice: 120000,
@@ -870,6 +874,7 @@ describe('SalesOrdersService', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:02Z'),
           remainingQty: 5,
           landedCost: 120000,
           purchasePrice: 120000,
@@ -1051,6 +1056,7 @@ describe('SalesOrdersService', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:03Z'),
           remainingQty: 5,
           landedCost: 100000,
           purchasePrice: 100000,

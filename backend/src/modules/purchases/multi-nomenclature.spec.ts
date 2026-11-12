@@ -63,10 +63,15 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         findMany: jest.fn(),
         update: jest.fn(),
       },
+      batchConsumption: {
+        create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+      },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn(),
         update: jest.fn(),
-        updateMany: jest.fn(),
         deleteMany: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
@@ -524,6 +529,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         batches: [
           {
             id: 'batch-raw',
+            createdAt: new Date('2026-01-01T00:00:01Z'),
             productId: 'raw-alu',
             remainingQty: 50,
             initialQty: 50,
@@ -532,6 +538,17 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
           },
         ],
       });
+      prisma.productBatch.findMany.mockResolvedValue([
+          {
+            id: 'batch-raw',
+            createdAt: new Date('2026-01-01T00:00:01Z'),
+            productId: 'raw-alu',
+            remainingQty: 50,
+            initialQty: 50,
+            purchasePrice: 40000,
+            landedCost: 40000,
+          },
+        ]);
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.findMany.mockResolvedValue([
         { id: 'item-raw', quantity: 50, returnedQuantity: 10 },

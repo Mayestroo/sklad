@@ -19,6 +19,7 @@ import {
   FilterProductionDocumentsDto,
   UpdateActualMaterialsDto,
 } from './dto/create-production-document.dto';
+import { consumeFifoBatches } from '../inventory/fifo/fifo-batches';
 
 const recipeInclude = {
   product: true,
@@ -792,34 +793,16 @@ export class ProductionService {
       );
     }
 
-    const batches = await tx.productBatch.findMany({
-      where: {
-        tenantId,
-        warehouseId,
-        productId: line.productId,
-        remainingQty: { gt: 0 },
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    // Shared FIFO consumer: guarded decrements, all or nothing. Production keeps
+    // its own per-batch records (material batches + movements) below.
+    const allocation = await consumeFifoBatches(tx, {
+      tenantId,
+      warehouseId,
+      productId: line.productId,
+      quantity,
     });
-    let allocation;
-    try {
-      allocation = allocateFifoCost(quantity, toFifoBatchInputs(batches));
-    } catch {
-      throw new BadRequestException(
-        'Xomashyo partiyalaridagi qoldiq ombor qoldig‘iga mos emas yoki tannarx ma’lumoti yo‘q',
-      );
-    }
 
     for (const item of allocation.batches) {
-      const changed = await tx.productBatch.updateMany({
-        where: { id: item.batchId, remainingQty: { gte: item.quantity } },
-        data: { remainingQty: { decrement: item.quantity } },
-      });
-      if (changed.count !== 1) {
-        throw new BadRequestException(
-          'Xomashyo partiyasi qoldig‘i o‘zgardi. Hujjatni qayta yuklab tekshiring',
-        );
-      }
       await tx.productionMaterialBatch.upsert({
         where: { lineId_batchId: { lineId: line.id, batchId: item.batchId } },
         update: { quantity: { increment: item.quantity } },

@@ -64,10 +64,15 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       purchaseReturnItem: {
         deleteMany: jest.fn(),
       },
+      batchConsumption: {
+        create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+      },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn(),
         update: jest.fn(),
-        updateMany: jest.fn(),
         deleteMany: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
@@ -149,6 +154,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         batches: [
           {
             id: 'batch-100',
+            createdAt: new Date('2026-01-01T00:00:01Z'),
             productId: 'prod-iphone',
             remainingQty: 10,
             initialQty: 10,
@@ -168,6 +174,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         quantity: 10,
       });
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+      prisma.productBatch.findMany.mockResolvedValue(receipt.batches ?? []);
       prisma.purchaseReturn.create.mockImplementation(
         ({ data }: { data: any }) => ({
           id: 'ret-100',
@@ -217,9 +224,9 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       });
 
       // Invariant Check 2: Batch remaining quantity reduced by 3 (10 -> 7)
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-100' },
-        data: { remainingQty: 7 },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: { id: 'batch-100', remainingQty: { gte: 3 } },
+        data: { remainingQty: { decrement: 3 } },
       });
 
       // Invariant Check 3: Receipt item returnedQuantity tracked
@@ -274,7 +281,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
           },
         ],
         batches: [
-          { id: 'batch-100', productId: 'prod-iphone', remainingQty: 10 },
+          { id: 'batch-100', productId: 'prod-iphone', remainingQty: 10, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') },
         ],
       });
 
@@ -380,6 +387,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       // Two active FIFO batches in the warehouse
       const batch1 = {
         id: 'b1',
+        createdAt: new Date('2026-01-01T00:00:02Z'),
         initialQty: 15,
         remainingQty: 10,
         purchasePrice: 40000,
@@ -387,6 +395,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       };
       const batch2 = {
         id: 'b2',
+        createdAt: new Date('2026-01-01T00:00:03Z'),
         initialQty: 20,
         remainingQty: 20,
         purchasePrice: 45000,
@@ -422,14 +431,28 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       });
 
       // FIFO batch consumption: consumes all 10 from batch1, then 5 from batch2
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'b1' },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: { id: 'b1', remainingQty: { gte: 10 } },
         data: { remainingQty: { decrement: 10 } },
       });
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'b2' },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: { id: 'b2', remainingQty: { gte: 5 } },
         data: { remainingQty: { decrement: 5 } },
       });
+
+      // Inventory leaves at FIFO batch cost: 10 x 40,000 + 5 x 45,000.
+      // (The old copy divided the per-unit landedCost by initialQty: 37,916.67.)
+      expect(prisma.journalEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            lines: {
+              create: expect.arrayContaining([
+                expect.objectContaining({ amount: 625000 }),
+              ]),
+            },
+          }),
+        }),
+      );
 
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
         expect.anything(),
@@ -475,6 +498,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         batches: [
           {
             id: 'batch-fr',
+            createdAt: new Date('2026-01-01T00:00:04Z'),
             productId: 'prod-item',
             remainingQty: 10,
             initialQty: 10,
@@ -494,6 +518,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         quantity: 10,
       });
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+      prisma.productBatch.findMany.mockResolvedValue(receipt.batches ?? []);
       prisma.purchaseReturn.create.mockImplementation(
         ({ data }: { data: any }) => ({
           id: 'ret-variance',
@@ -594,7 +619,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
             { id: 'item-100', productId: 'prod-item', returnedQuantity: 5 },
           ],
           batches: [
-            { id: 'batch-100', productId: 'prod-item', remainingQty: 5 },
+            { id: 'batch-100', productId: 'prod-item', remainingQty: 5, landedCost: 100000, purchasePrice: 100000, createdAt: new Date('2026-01-01T00:00:00Z') },
           ],
         },
       };
@@ -622,6 +647,10 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       );
       prisma.auditLog.create.mockResolvedValue({});
 
+      prisma.batchConsumption.findMany.mockResolvedValue([
+        { id: 'bc-1', batchId: 'batch-100', quantity: 5 },
+      ]);
+
       const cancelled = await service.cancelReturn(
         tenantId,
         userId,
@@ -636,10 +665,13 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         data: { quantity: { increment: 5 } },
       });
 
-      // 2. Batch re-incremented by 5
+      // 2. Exactly the recorded consumption is put back, then forgotten
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
         where: { id: 'batch-100' },
         data: { remainingQty: { increment: 5 } },
+      });
+      expect(prisma.batchConsumption.deleteMany).toHaveBeenCalledWith({
+        where: { tenantId, purchaseReturnItemId: expect.any(String) },
       });
 
       // 3. Receipt item returnedQuantity decremented

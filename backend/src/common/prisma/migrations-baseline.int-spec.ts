@@ -32,6 +32,7 @@ describe('database built from migrations', () => {
       SELECT conname FROM pg_constraint WHERE contype = 'c' ORDER BY conname`;
     expect(rows.map((r) => r.conname)).toEqual(
       expect.arrayContaining([
+        'batch_consumptions_single_source_check',
         'cash_accounts_type_currency_check',
         'counterparty_settlement_entries_amount_check',
         'counterparty_settlement_entries_currency_check',

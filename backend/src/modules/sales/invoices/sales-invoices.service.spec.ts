@@ -47,6 +47,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         aggregate: jest.fn(),
       },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
@@ -407,12 +408,14 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
           remainingQty: 6,
           landedCost: 300000,
           purchasePrice: 280000,
         },
         {
           id: 'batch-2',
+          createdAt: new Date('2026-01-01T00:00:02Z'),
           remainingQty: 8,
           landedCost: 400000,
           purchasePrice: 380000,
@@ -434,12 +437,12 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       // Expected COGS: (6 * 300,000) + (4 * 400,000) = 1,800,000 + 1,600,000 = 3,400,000 UZS
       // Gross Profit: 5,000,000 - 3,400,000 = 1,600,000 UZS
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-1' },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: { id: 'batch-1', remainingQty: { gte: 6 } },
         data: { remainingQty: { decrement: 6 } },
       });
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-2' },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: { id: 'batch-2', remainingQty: { gte: 4 } },
         data: { remainingQty: { decrement: 4 } },
       });
 
@@ -528,6 +531,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-usd-cost',
+          createdAt: new Date('2026-01-01T00:00:03Z'),
           remainingQty: 1,
           landedCost: 1_000_000,
           purchasePrice: 1_000_000,
