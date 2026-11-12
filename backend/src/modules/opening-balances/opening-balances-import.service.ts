@@ -458,18 +458,29 @@ export class OpeningBalancesImportService {
           return;
         }
 
-        // Match warehouse
-        const warehouse =
-          warehouses.find((w) => {
-            const nameObj =
-              typeof w.name === 'object' && w.name !== null
-                ? (w.name as TranslatableName)
-                : {};
-            return (
-              nameObj.uz?.toLowerCase() === warehouseName.toLowerCase() ||
-              nameObj.ru?.toLowerCase() === warehouseName.toLowerCase()
-            );
-          }) || warehouses[0];
+        // Match warehouse by name. No default: stock booked into the wrong
+        // warehouse is worse than a row the operator has to correct.
+        if (!warehouseName) {
+          errors.push({
+            sheetName: '2_Tovar',
+            rowNumber,
+            fieldName: 'Ombor',
+            invalidValue: '',
+            errorMessage: 'Ombor nomi ko‘rsatilishi shart',
+          });
+          return;
+        }
+        const wanted = warehouseName.toLowerCase();
+        const warehouse = warehouses.find((w) => {
+          const nameObj =
+            typeof w.name === 'object' && w.name !== null
+              ? (w.name as TranslatableName)
+              : {};
+          return (
+            nameObj.uz?.toLowerCase() === wanted ||
+            nameObj.ru?.toLowerCase() === wanted
+          );
+        });
 
         if (!warehouse) {
           errors.push({

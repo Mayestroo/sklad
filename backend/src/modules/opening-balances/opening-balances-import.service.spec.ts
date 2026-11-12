@@ -176,4 +176,62 @@ describe('OpeningBalancesImportService', () => {
       }),
     ]);
   });
+
+  it('rejects an inventory row whose warehouse is blank or unknown instead of using the first warehouse', async () => {
+    const prisma = {
+      cashAccount: { findMany: jest.fn().mockResolvedValue([]) },
+      product: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'prod-1', sku: 'SKU-1', name: { uz: 'Un', ru: 'Мука' } },
+          ]),
+      },
+      warehouse: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'wh-main', name: { uz: 'Asosiy ombor', ru: 'Основной склад' } },
+          { id: 'wh-2', name: { uz: 'Filial', ru: 'Филиал' } },
+        ]),
+      },
+      counterparty: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new OpeningBalancesImportService(
+      prisma as unknown as PrismaService,
+    );
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet('1_Pul').addRow(['Header only']);
+    const stock = workbook.addWorksheet('2_Tovar');
+    stock.addRow(['SKU', 'Nomi', 'Ombor', 'Miqdor', 'Tannarx', 'Partiya']);
+    stock.addRow(['SKU-1', 'Un', 'Yo‘q ombor', 10, 5000, '']); // typo
+    stock.addRow(['SKU-1', 'Un', '', 10, 5000, '']); // blank
+    stock.addRow(['SKU-1', 'Un', 'филиал', 3, 5000, '']); // ru, any case
+    const file = Buffer.from(await workbook.xlsx.writeBuffer());
+
+    const result = await service.validateAndParse(
+      'tenant-1',
+      file,
+      'opening.xlsx',
+    );
+
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        sheetName: '2_Tovar',
+        rowNumber: 2,
+        fieldName: 'Ombor',
+        invalidValue: 'Yo‘q ombor',
+      }),
+      expect.objectContaining({
+        sheetName: '2_Tovar',
+        rowNumber: 3,
+        fieldName: 'Ombor',
+        invalidValue: '',
+      }),
+    ]);
+    expect(result.previewLines).toEqual([
+      expect.objectContaining({ warehouseId: 'wh-2', quantity: 3 }),
+    ]);
+    expect(prisma.warehouse.findMany).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-1' },
+    });
+  });
 });
