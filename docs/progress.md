@@ -454,7 +454,11 @@ frontend changed.
 | Item | Status | Commit | Notes |
 |---|---|---|---|
 | 1a F5 journal entry dates | done | e6cb885 | 6 patterns, test per pattern; see decisions |
-| 1b Super-admin MRR card currency | done | (this commit) | API returns MRR per currency; card shows rows / error / empty |
+| 1b Super-admin MRR card currency | done | fd169b3 | API returns MRR per currency; card shows rows / error / empty |
+| Plan file committed | done | 4f88eb6 | |
+| T1.1 product currency tests | already done | 0bce6d3 | 5 cases in products.service.spec.ts pass |
+| T1.2 run focused product test | done | — | 16/16 |
+| T1.3 schema + backfill migration | done | (this commit) | column/CHECK were in the baseline; production was built with db push, so the backfill gets its own idempotent migration 20261113000300, int-spec runs it twice |
 
 ## Round 4 decisions
 

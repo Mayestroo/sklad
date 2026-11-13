@@ -110,6 +110,15 @@ branch**, never with `db push`. All are additive and idempotent.
       later**: until it is applied, `POST /api/auth/register` fails on
       production.
 
+- [ ] `20261113000300_sales_price_currency_backfill` — round 4, sales
+      plan Task 1 Step 3. **Apply to Neon later, in this order** (after the
+      three above). Idempotent: adds `products.sale_price_currency` and its
+      CHECK only if missing (production was built with `db push`), then
+      fills NULL currencies from a valid `settings.sales.defaultCurrency`.
+      Products of tenants without a valid default stay NULL and are listed
+      in a `NOTICE` (tenant/id:sku); those prices must get a currency in the
+      product form before they can be sold.
+
 ## Accounting decisions
 
 - [ ] **Purchase returns: configure the gap account** (D2, code path done in
