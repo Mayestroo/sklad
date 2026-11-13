@@ -320,6 +320,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.purchaseExpense.create.mockResolvedValue({
         id: 'exp-1',
         amount: 100000,
+        currency: 'UZS',
       });
       prisma.purchaseExpense.findMany.mockResolvedValue([
         { id: 'exp-1', amount: 100000 },
@@ -333,6 +334,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         receiptId: 'rec-1',
         expenseType: ExpenseTypeDto.TRANSPORT,
         amount: 100000,
+        currency: 'UZS',
         allocationMethod: ExpenseAllocationMethodDto.BY_AMOUNT,
       });
 
@@ -391,6 +393,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       prisma.purchaseExpense.create.mockResolvedValue({
         id: 'exp-2',
         amount: 50000,
+        currency: 'UZS',
       });
       prisma.purchaseExpense.findMany.mockResolvedValue([
         { id: 'exp-2', amount: 50000 },
@@ -404,6 +407,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         receiptId: 'rec-2',
         expenseType: ExpenseTypeDto.CUSTOMS,
         amount: 50000,
+        currency: 'UZS',
         allocationMethod: ExpenseAllocationMethodDto.BY_QUANTITY,
       });
 
