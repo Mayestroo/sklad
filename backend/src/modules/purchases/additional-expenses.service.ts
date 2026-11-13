@@ -474,16 +474,25 @@ export class AdditionalExpensesService {
       select: { expenseType: true, amount: true, currency: true },
     });
 
-    const totalTransport = allPosted
-      .filter((e) => e.expenseType === 'TRANSPORT')
-      .reduce((s, e) => s + Number(e.amount), 0);
-    const totalCustoms = allPosted
-      .filter((e) => e.expenseType === 'CUSTOMS')
-      .reduce((s, e) => s + Number(e.amount), 0);
-    const totalBroker = allPosted
-      .filter((e) => e.expenseType === 'BROKER')
-      .reduce((s, e) => s + Number(e.amount), 0);
-    const totalAll = allPosted.reduce((s, e) => s + Number(e.amount), 0);
+    // ADR 0023 / F8: one amount per currency, never a cross-currency sum or a guessed label.
+    const byCurrency = (type?: string) => {
+      const totals = new Map<string, number>();
+      for (const e of allPosted) {
+        if (type && e.expenseType !== type) continue;
+        totals.set(
+          e.currency,
+          (totals.get(e.currency) ?? 0) + Number(e.amount),
+        );
+      }
+      return [...totals.entries()]
+        .sort(([a], [b]) =>
+          a === b ? 0 : a === 'UZS' ? -1 : b === 'UZS' ? 1 : a.localeCompare(b),
+        )
+        .map(([currency, amount]) => ({
+          currency,
+          amount: Math.round(amount * 100) / 100,
+        }));
+    };
 
     return {
       items,
@@ -492,11 +501,10 @@ export class AdditionalExpensesService {
       limit: Number(limit),
       totalPages: Math.ceil(total / Number(limit)),
       stats: {
-        totalTransport,
-        totalCustoms,
-        totalBroker,
-        totalAll,
-        currency: allPosted[0]?.currency || items[0]?.currency || 'USD',
+        transport: byCurrency('TRANSPORT'),
+        customs: byCurrency('CUSTOMS'),
+        broker: byCurrency('BROKER'),
+        all: byCurrency(),
       },
     };
   }
