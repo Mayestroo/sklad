@@ -1,27 +1,57 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
+type Theme = 'light' | 'dark';
+const STORAGE_KEY = 'crm_theme';
+
+// The saved theme is an external store: every switcher on the page (header,
+// design-system page) reads the same value and re-renders when it changes,
+// also when another tab changes it.
+const listeners = new Set<() => void>();
+
+function subscribe(onChange: () => void) {
+  listeners.add(onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+
+function readTheme(): Theme {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function saveTheme(theme: Theme) {
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // storage unavailable: the theme still applies for this visit
+  }
+  applyTheme(theme);
+  listeners.forEach((listener) => listener());
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+}
+
 export function ThemeSwitcher() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  // Server render and hydration use light; the saved theme follows at once.
+  const theme = useSyncExternalStore(subscribe, readTheme, () => 'light' as Theme);
 
   useEffect(() => {
-    const saved = localStorage.getItem('crm_theme') as 'light' | 'dark';
-    if (saved) {
-      setTheme(saved);
-      document.documentElement.setAttribute('data-theme', saved);
-      document.documentElement.classList.toggle('dark', saved === 'dark');
-    }
-  }, []);
+    applyTheme(theme);
+  }, [theme]);
 
-  const toggleTheme = () => {
-    const nextTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(nextTheme);
-    localStorage.setItem('crm_theme', nextTheme);
-    document.documentElement.setAttribute('data-theme', nextTheme);
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
-  };
+  const toggleTheme = () => saveTheme(theme === 'light' ? 'dark' : 'light');
 
   return (
     <button

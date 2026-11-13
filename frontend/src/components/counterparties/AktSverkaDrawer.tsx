@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useState } from 'react';
 import { useLocale } from 'next-intl';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, type LocalizedName } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -68,29 +68,17 @@ export function AktSverkaDrawer({
   onClose,
   onOpenPayment,
 }: AktSverkaDrawerProps) {
-  const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [data, setData] = useState<StatementData | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Keyed by counterparty: opening another one never shows the previous
+  // statement. Under /sales/counterparties, so a payment refreshes it.
+  const statementQuery = useApiQuery<StatementData>(
+    isOpen && counterpartyId ? `/sales/counterparties/${counterpartyId}/statement` : null,
+  );
+  const data = statementQuery.data ?? null;
+  const loading = statementQuery.isPending;
   const [filterType, setFilterType] = useState<string>('all');
-
-  useEffect(() => {
-    if (!isOpen || !counterpartyId || !token || !company) return;
-
-    setLoading(true);
-    apiFetch<StatementData>(`/sales/counterparties/${counterpartyId}/statement`, {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setData(res))
-      .catch((err) => {
-        console.error('Failed to fetch statement:', err);
-      })
-      .finally(() => setLoading(false));
-  }, [isOpen, counterpartyId, token, company, locale]);
 
   if (!isOpen) return null;
 
@@ -207,7 +195,13 @@ export function AktSverkaDrawer({
 
         {/* Drawer Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-          {loading ? (
+          {statementQuery.isError ? (
+            <LoadError
+              error={statementQuery.error}
+              onRetry={() => void statementQuery.refetch()}
+              retrying={statementQuery.isFetching}
+            />
+          ) : loading ? (
             <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
               {isRu ? 'Формирование акта сверки...' : 'Akt sverka shakllantirilmoqda...'}
             </div>

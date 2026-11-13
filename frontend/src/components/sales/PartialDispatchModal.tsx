@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch, listOf, type ListResponse } from '@/lib/api';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import type { Warehouse } from '@shared/types';
 import type { SalesOrderDetail, StockAvailability } from './order-form/types';
 import { Modal } from '@/components/ui/Modal';
@@ -33,9 +35,8 @@ export function PartialDispatchModal({
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [dispatchQuantities, setDispatchQuantities] = useState<Record<string, number>>({});
-  const [stockMap, setStockMap] = useState<Record<string, StockAvailability>>({});
-  const [loadingStock, setLoadingStock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const invalidateApi = useInvalidateApi();
   const [error, setError] = useState('');
 
   // 1. Fetch warehouses
@@ -75,33 +76,27 @@ export function PartialDispatchModal({
     setError('');
   }, [isOpen, order]);
 
-  // 3. Fetch live free stock whenever warehouse changes
-  useEffect(() => {
-    if (!isOpen || !token || !company || !selectedWarehouseId) return;
-
-    setLoadingStock(true);
-    apiFetch<ListResponse<{ productId: string; quantity?: number | string | null; reservedQuantity?: number | string | null }>>(`/inventory/products/stock-levels?warehouseId=${selectedWarehouseId}`, {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => {
-        const list = listOf(res);
-        const map: Record<string, StockAvailability> = {};
-        list.forEach((sl) => {
-          const physical = Number(sl.quantity || 0);
-          const reserved = Number(sl.reservedQuantity || 0);
-          map[sl.productId] = {
-            physical,
-            reserved,
-            free: Math.max(0, physical - reserved),
-          };
-        });
-        setStockMap(map);
-      })
-      .catch((err) => console.error('Failed to load stock availability:', err))
-      .finally(() => setLoadingStock(false));
-  }, [isOpen, token, company, selectedWarehouseId, locale]);
+  // 3. Live stock of the chosen warehouse. staleTime 0: every opening and
+  // every warehouse change reloads it, as before (stock moves all the time).
+  const stockQuery = useApiQuery<ListResponse<{ productId: string; quantity?: number | string | null; reservedQuantity?: number | string | null }>>(
+    isOpen && selectedWarehouseId ? `/inventory/products/stock-levels?warehouseId=${selectedWarehouseId}` : null,
+    { staleTime: 0 },
+  );
+  const loadingStock = stockQuery.isFetching;
+  const stockMap = useMemo(() => {
+    const map: Record<string, StockAvailability> = {};
+    if (!stockQuery.data) return map;
+    listOf(stockQuery.data).forEach((sl) => {
+      const physical = Number(sl.quantity || 0);
+      const reserved = Number(sl.reservedQuantity || 0);
+      map[sl.productId] = {
+        physical,
+        reserved,
+        free: Math.max(0, physical - reserved),
+      };
+    });
+    return map;
+  }, [stockQuery.data]);
 
   if (!order) return null;
 
@@ -179,6 +174,7 @@ export function PartialDispatchModal({
         }),
       });
 
+      void invalidateApi('/inventory');
       onSuccess();
       onClose();
     } catch (err) {
@@ -238,6 +234,10 @@ export function PartialDispatchModal({
             placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
           />
         </div>
+
+        {stockQuery.isError && (
+          <LoadError error={stockQuery.error} onRetry={() => void stockQuery.refetch()} retrying={stockQuery.isFetching} />
+        )}
 
         {/* Items Table */}
         <div

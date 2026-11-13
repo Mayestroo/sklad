@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useState } from 'react';
 import { useLocale } from 'next-intl';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -52,27 +52,14 @@ export function SupplierProfileDrawer({
   onClose,
   supplierId,
 }: SupplierProfileDrawerProps) {
-  const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [data, setData] = useState<SupplierProfileData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Keyed by supplier: another supplier never shows the previous profile.
+  const profileQuery = useApiQuery<SupplierProfileData>(supplierId ? `/purchases/suppliers/${supplierId}` : null);
+  const data = profileQuery.data ?? null;
+  const loading = profileQuery.isPending;
   const [activeTab, setActiveTab] = useState<'info' | 'receipts' | 'payments' | 'returns'>('info');
-
-  useEffect(() => {
-    if (!token || !company || !supplierId) return;
-
-    setLoading(true);
-    apiFetch<SupplierProfileData>(`/purchases/suppliers/${supplierId}`, {
-      token,
-      tenantId: company.id,
-      locale,
-    })
-      .then(setData)
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, [token, company, supplierId, locale]);
 
   if (!supplierId) return null;
 
@@ -84,7 +71,9 @@ export function SupplierProfileDrawer({
       size="xl"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', width: '100%' }}>
-        {loading ? (
+        {profileQuery.isError ? (
+          <LoadError error={profileQuery.error} onRetry={() => void profileQuery.refetch()} retrying={profileQuery.isFetching} />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {isRu ? 'Загрузка профиля...' : 'Profil yuklanmoqda...'}
           </div>
