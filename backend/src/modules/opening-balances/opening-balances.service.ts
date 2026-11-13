@@ -27,6 +27,7 @@ import {
 } from '../../../../shared/types/cash-account-policy';
 import { JournalService } from '../accounting/journal/journal.service';
 import { JournalLineDto } from '../accounting/dto';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class OpeningBalancesService {
@@ -74,6 +75,26 @@ export class OpeningBalancesService {
       );
     }
     return exchangeRate;
+  }
+
+  /** Every id a line points at must be the caller's (ADR: tenant isolation). */
+  private assertLineReferences(
+    tenantId: string,
+    lines: Array<{
+      accountId?: string | null;
+      productId?: string | null;
+      warehouseId?: string | null;
+      counterpartyId?: string | null;
+      fixedAssetId?: string | null;
+    }>,
+  ) {
+    return assertTenantOwned(this.prisma, tenantId, {
+      account: lines.map((l) => l.accountId),
+      product: lines.map((l) => l.productId),
+      warehouse: lines.map((l) => l.warehouseId),
+      counterparty: lines.map((l) => l.counterpartyId),
+      fixedAsset: lines.map((l) => l.fixedAssetId),
+    });
   }
 
   private validateLineCurrency(line: {
@@ -277,6 +298,7 @@ export class OpeningBalancesService {
     }
 
     const lines = dto.lines || [];
+    await this.assertLineReferences(tenantId, lines);
     const metrics = this.calculateMetrics(
       lines.map((l) => ({
         category: l.category,
@@ -366,6 +388,7 @@ export class OpeningBalancesService {
 
     const lines = dto.lines || [];
     lines.forEach((line) => this.validateLineCurrency(line));
+    await this.assertLineReferences(tenantId, lines);
     const metrics = this.calculateMetrics(
       lines.map((l) => ({
         category: l.category,

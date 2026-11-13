@@ -9,6 +9,7 @@ import {
   CreateFixedAssetDto,
   UpdateFixedAssetDto,
 } from './dto/fixed-asset.dto';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class FixedAssetsService {
@@ -57,6 +58,9 @@ export class FixedAssetsService {
   }
 
   async create(tenantId: string, dto: CreateFixedAssetDto) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      user: dto.custodianUserId,
+    });
     const existing = await this.prisma.fixedAsset.findFirst({
       where: { tenantId, inventoryNumber: dto.inventoryNumber },
     });
@@ -93,6 +97,9 @@ export class FixedAssetsService {
 
   async update(tenantId: string, id: string, dto: UpdateFixedAssetDto) {
     await this.findOne(tenantId, id);
+    await assertTenantOwned(this.prisma, tenantId, {
+      user: dto.custodianUserId,
+    });
 
     const data: Prisma.FixedAssetUncheckedUpdateInput = { ...dto };
     if (dto.acquisitionDate) {

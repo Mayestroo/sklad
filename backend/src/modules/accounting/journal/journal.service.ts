@@ -9,6 +9,7 @@ import {
   requireExchangeRateForCurrency,
 } from '../../../common/utils/transaction-exchange-rate';
 import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 interface CashPaymentForJournal {
   id: string;
@@ -79,6 +80,22 @@ export class JournalService {
    * The only writer of journal entries: business documents pass their
    * transaction client so the entry commits or rolls back with the document.
    */
+  /**
+   * A journal entry typed in by a user (POST /api/accounting/journal). The
+   * account ids come from the request, so they must be the caller's.
+   * Automatic postings resolve accounts by code within the tenant and call
+   * createJournalEntry directly.
+   */
+  async createManualEntry(tenantId: string, dto: JournalEntryInput) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      account: (dto.lines ?? []).flatMap((line) => [
+        line.debitAccountId,
+        line.creditAccountId,
+      ]),
+    });
+    return this.createJournalEntry(tenantId, dto);
+  }
+
   async createJournalEntry(
     tenantId: string,
     dto: JournalEntryInput,

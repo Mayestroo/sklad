@@ -1,8 +1,17 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CategoriesService } from '../../modules/inventory/categories/categories.service';
 import { UsersService } from '../../modules/users/users.service';
 import { CounterpartySettlementService } from '../../modules/settlements/counterparty-settlement.service';
 import { SalesInvoicesService } from '../../modules/sales/invoices/sales-invoices.service';
+import { ProductsService } from '../../modules/inventory/products/products.service';
+import { FinanceService } from '../../modules/finance/finance.service';
+import { JournalService } from '../../modules/accounting/journal/journal.service';
+import { StockTransfersService } from '../../modules/inventory/transfers/stock-transfers.service';
+import { SalesOrdersService } from '../../modules/sales/orders/sales-orders.service';
 
 /**
  * One test per query pattern fixed in the tenant-isolation sweep. Each runs a
@@ -310,5 +319,194 @@ describe('tenant isolation', () => {
     expect(store.productPrice).toEqual([
       expect.objectContaining({ priceListId: 'pl-a', productId: 'prod-a' }),
     ]);
+  });
+
+  // ─── Second sweep: ids taken from the request (assertTenantOwned) ───
+
+  const referenceStore = (): Store => ({
+    counterparty: [
+      { id: 'cp-a', tenantId: 'A' },
+      { id: 'cp-b', tenantId: 'B', name: 'B customer' },
+    ],
+    warehouse: [
+      { id: 'wh-a', tenantId: 'A' },
+      { id: 'wh-a2', tenantId: 'A' },
+      { id: 'wh-b', tenantId: 'B' },
+    ],
+    product: [
+      { id: 'prod-a', tenantId: 'A', categoryId: null },
+      { id: 'prod-b', tenantId: 'B', categoryId: null },
+    ],
+    priceList: [{ id: 'pl-b', tenantId: 'B' }],
+    category: [
+      { id: 'cat-a', tenantId: 'A' },
+      { id: 'cat-b', tenantId: 'B' },
+    ],
+    salesInvoice: [],
+    stockTransfer: [],
+  });
+
+  it('header and line ids on create: an invoice cannot use another tenant’s warehouse, counterparty, price list or product', async () => {
+    const invoice = (overrides: Row = {}, items?: Row[]) => ({
+      counterpartyId: 'cp-a',
+      warehouseId: 'wh-a',
+      currency: 'UZS',
+      items: items ?? [{ productId: 'prod-a', quantity: 1, unitPrice: 10 }],
+      ...overrides,
+    });
+    for (const dto of [
+      invoice({ warehouseId: 'wh-b' }),
+      invoice({ counterpartyId: 'cp-b' }),
+      invoice({ priceListId: 'pl-b' }),
+      invoice({}, [
+        { productId: 'prod-a', quantity: 1, unitPrice: 10 },
+        { productId: 'prod-b', quantity: 1, unitPrice: 10 },
+      ]),
+    ]) {
+      const store = referenceStore();
+      const service = new SalesInvoicesService(
+        fakePrisma(store) as never,
+        {} as never,
+        {} as never,
+      );
+      await expect(
+        service.createInvoice('A', 'user-a', dto as never),
+      ).rejects.toThrow(BadRequestException);
+      expect(store.salesInvoice).toEqual([]);
+    }
+  });
+
+  it('two ids of one model plus line ids: a stock transfer cannot involve another tenant’s warehouse or product', async () => {
+    const store = referenceStore();
+    const service = new StockTransfersService(
+      fakePrisma(store) as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(
+      service.createTransfer(
+        'A',
+        {
+          sourceWarehouseId: 'wh-a',
+          targetWarehouseId: 'wh-b',
+          items: [{ productId: 'prod-a', quantity: 1 }],
+        },
+        'user-a',
+      ),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.createTransfer(
+        'A',
+        {
+          sourceWarehouseId: 'wh-a',
+          targetWarehouseId: 'wh-a2',
+          items: [{ productId: 'prod-b', quantity: 1 }],
+        },
+        'user-a',
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(store.stockTransfer).toEqual([]);
+  });
+
+  it('optional reference on update: a product cannot be moved into another tenant’s category', async () => {
+    const store = referenceStore();
+    const service = new ProductsService(fakePrisma(store) as never);
+
+    await expect(
+      service.update('A', 'prod-a', { categoryId: 'cat-b' }),
+    ).rejects.toThrow(/Kategoriya topilmadi: cat-b/);
+    expect(store.product.find((p) => p.id === 'prod-a')!.categoryId).toBeNull();
+  });
+
+  it('shared system rows: a transaction may use a system type or its own, never another tenant’s', async () => {
+    const store: Store = {
+      financeTransaction: [
+        {
+          id: 'tx-a',
+          tenantId: 'A',
+          isDeleted: false,
+          transactionTypeId: null,
+        },
+      ],
+      transactionType: [
+        { id: 'tt-system', tenantId: null },
+        { id: 'tt-a', tenantId: 'A' },
+        { id: 'tt-b', tenantId: 'B' },
+      ],
+    };
+    const service = new FinanceService(
+      fakePrisma(store) as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.updateTransaction('A', 'tx-a', { transactionTypeId: 'tt-b' }),
+    ).rejects.toThrow(BadRequestException);
+    expect(store.financeTransaction[0].transactionTypeId).toBeNull();
+
+    await service.updateTransaction('A', 'tx-a', {
+      transactionTypeId: 'tt-system',
+    });
+    expect(store.financeTransaction[0].transactionTypeId).toBe('tt-system');
+    await service.updateTransaction('A', 'tx-a', { transactionTypeId: 'tt-a' });
+    expect(store.financeTransaction[0].transactionTypeId).toBe('tt-a');
+  });
+
+  it('pairs of ids inside lines: a manual journal entry cannot post to another tenant’s account', async () => {
+    const store: Store = {
+      account: [
+        { id: 'acc-a-5010', tenantId: 'A' },
+        { id: 'acc-b-9900', tenantId: 'B' },
+      ],
+      journalEntry: [],
+    };
+    const service = new JournalService(fakePrisma(store) as never, {} as never);
+
+    await expect(
+      service.createManualEntry('A', {
+        description: 'manual',
+        lines: [
+          {
+            debitAccountId: 'acc-a-5010',
+            creditAccountId: 'acc-b-9900',
+            amount: 100,
+          },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(store.journalEntry).toEqual([]);
+  });
+
+  it('override on a lifecycle action: dispatching an order cannot ship from another tenant’s warehouse', async () => {
+    const store: Store = {
+      salesOrder: [
+        {
+          id: 'so-a',
+          tenantId: 'A',
+          status: 'APPROVED',
+          warehouseId: 'wh-a',
+          items: [],
+          counterparty: null,
+        },
+      ],
+      warehouse: [
+        { id: 'wh-a', tenantId: 'A' },
+        { id: 'wh-b', tenantId: 'B' },
+      ],
+    };
+    const prisma = fakePrisma(store);
+    const service = new SalesOrdersService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.dispatch('A', 'user-a', 'so-a', { warehouseId: 'wh-b' }),
+    ).rejects.toThrow(/Ombor topilmadi: wh-b/);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

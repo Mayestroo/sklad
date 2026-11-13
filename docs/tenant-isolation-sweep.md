@@ -301,3 +301,125 @@ now check the products belong to the caller.
 | By design: super-admin only, cross-tenant | 8 |
 | Not reachable: CLI script / seed | 10 |
 | **All** | **269** |
+
+## Second sweep: ids taken from the request (2026-11-13)
+The first sweep added tenant filters to `where` clauses. This one covers the
+other direction: ids a request supplies (body, route params, query, and ids
+nested in line arrays) that a service writes as foreign keys. Postgres foreign
+keys do not know tenants, so an unchecked id let tenant A attach tenant B's
+warehouse, counterparty, product, price list, category, cash account, account,
+user or branch to its own document, read B's row back through the document's
+relations (e.g. `include: { warehouse: true, items: { include: { product: true } } }`),
+and post stock or money into B's rows.
+
+**Shared helper:** `assertTenantOwned(db, tenantId, { warehouse: dto.warehouseId,
+product: dto.items.map((i) => i.productId), ... })` in
+`backend/src/common/prisma/assert-tenant-owned.ts`. One query per model,
+skips empty optional ids, accepts system transaction types (no tenant), scopes
+child rows through their parent, answers the same for unknown and foreign ids
+(`400 <Model> topilmadi: <ids>`).
+
+**Guard:** `backend/src/common/prisma/request-reference.spec.ts` scans every
+`*.service.ts` with the TypeScript AST (`request-reference-scan.ts`). A method
+that takes a DTO-typed or inline-object parameter and reads an id-like
+property from it (directly, or from an element of one of its arrays) must call
+`assertTenantOwned` (directly or through a same-class helper) or be allowlisted
+with a reason; stale allowlist entries fail too. Limitation: ids passed as bare
+positional string arguments are not seen by the scan; the positional ones that
+exist today are listed below by hand.
+
+**Tests (one per distinct pattern, all fail on the previous code):**
+`backend/src/common/prisma/tenant-isolation.spec.ts`
+1. header and line ids on create (sales invoice: warehouse, counterparty, price list, product);
+2. two ids of one model plus line ids (stock transfer);
+3. optional reference on update (product category);
+4. shared system rows (finance transaction type: system or own, never another tenant's);
+5. pairs of ids inside lines (manual journal entry accounts);
+6. override on a lifecycle action (sales-order dispatch warehouse).
+`assert-tenant-owned.spec.ts` covers the helper itself.
+
+Read-only list filters (`?counterpartyId=` etc.) are safe without the helper:
+the query is scoped by `tenantId`, so a foreign id matches nothing.
+
+"Checked before" is the state before this sweep. Line numbers are as of the
+commit that adds this section.
+
+| # | File:line | Method | Id source | Ids | Checked before | Outcome |
+|---|---|---|---|---|---|---|
+| 1 | `src/modules/accounting/journal/journal.service.ts:89` | JournalService.createManualEntry (POST /api/accounting/journal) | body lines | debitAccountId, creditAccountId | no (controller called createJournalEntry directly) | Fixed: new createManualEntry checks, controller uses it |
+| 2 | `src/modules/accounting/journal/journal.service.ts:99` | JournalService.createJournalEntry | body/query or internal | creditAccountId, debitAccountId, sourceDocId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 3 | `src/modules/audit/audit.service.ts:10` | AuditService.logAction | body/query or internal | entityId, userId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 4 | `src/modules/finance/finance.service.ts:1191` | FinanceService.resolveSettlementContext | body/query or internal | counterpartyId, sourceDocId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 5 | `src/modules/finance/finance.service.ts:1713` | FinanceService.createTransfer | body/query or internal | fromAccountId, toAccountId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 6 | `src/modules/finance/finance.service.ts:1908` | FinanceService.reverseCounterpartySettlement | body/query or internal | counterpartyId, sourceDocId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 7 | `src/modules/finance/finance.service.ts:2023` | FinanceService.reverseLegacyDocumentAllocation | body/query or internal | sourceDocId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 8 | `src/modules/finance/finance.service.ts:2069` | FinanceService.reversePostedTransaction | body/query or internal | accountId, transferToId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 9 | `src/modules/finance/finance.service.ts:2182` | FinanceService.updateTransaction | body | transactionTypeId | no | Fixed |
+| 10 | `src/modules/finance/finance.service.ts:692` | FinanceService.listTransactions | body/query or internal | accountId, counterpartyId, transactionTypeId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 11 | `src/modules/finance/finance.service.ts:792` | FinanceService.createIncome | body | accountId, counterpartyId, responsibleUserId, sourceDocId, transactionTypeId | partly: accountId, counterpartyId, sourceDocId checked; transactionTypeId, responsibleUserId not | Fixed |
+| 12 | `src/modules/finance/finance.service.ts:920` | FinanceService.createExpense | body | accountId, counterpartyId, responsibleUserId, sourceDocId, transactionTypeId | partly: accountId, counterpartyId, sourceDocId checked; transactionTypeId, responsibleUserId not | Fixed |
+| 13 | `src/modules/fixed-assets/fixed-assets.service.ts:60` | FixedAssetsService.create | body | custodianUserId | no | Fixed |
+| 14 | `src/modules/fixed-assets/fixed-assets.service.ts:98` | FixedAssetsService.update | body | custodianUserId | no | Fixed |
+| 15 | `src/modules/inventory/categories/categories.service.ts:11` | CategoriesService.create | body | parentId | no | Fixed |
+| 16 | `src/modules/inventory/categories/categories.service.ts:46` | CategoriesService.update | body | parentId | no | Fixed |
+| 17 | `src/modules/inventory/documents/inventory-documents.service.ts:27` | InventoryDocumentsService.createAndPostDocument | body + lines | productId, warehouseId | partly: warehouseId checked; line productId not | Fixed |
+| 18 | `src/modules/inventory/products/products.service.ts:20` | ProductsService.create | body | categoryId | no | Fixed |
+| 19 | `src/modules/inventory/products/products.service.ts:293` | ProductsService.update | body | categoryId | no | Fixed |
+| 20 | `src/modules/inventory/stock-reservation/stock-reservation.service.ts:64` | StockReservationService.reserveStockForOrder | body/query or internal | orderItemId, productId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 21 | `src/modules/inventory/transfers/stock-transfers.service.ts:25` | StockTransfersService.createTransfer | body + lines | productId, sourceWarehouseId, targetWarehouseId | no | Fixed |
+| 22 | `src/modules/opening-balances/opening-balances.service.ts:280` | OpeningBalancesService.create | lines | accountId, counterpartyId, fixedAssetId, productId, warehouseId | no (accountId only checked later, at posting) | Fixed |
+| 23 | `src/modules/opening-balances/opening-balances.service.ts:373` | OpeningBalancesService.updateLines | lines | accountId, counterpartyId, fixedAssetId, productId, warehouseId | no (accountId only checked later, at posting) | Fixed |
+| 24 | `src/modules/opening-balances/opening-balances.service.ts:81` | OpeningBalancesService.assertLineReferences | lines (helper) | accountId, counterpartyId, fixedAssetId, productId, warehouseId | n/a (new helper) | The check used by create/updateLines |
+| 25 | `src/modules/production/production.service.ts:246` | ProductionService.createDocument | body/query or internal | recipeId, responsibleId, warehouseId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 26 | `src/modules/production/production.service.ts:316` | ProductionService.findDocuments | body/query or internal | productId, responsibleId, warehouseId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 27 | `src/modules/production/production.service.ts:439` | ProductionService.updateActualMaterials | body/query or internal | productId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 28 | `src/modules/production/production.service.ts:73` | ProductionService.createRecipe | body/query or internal | productId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 29 | `src/modules/production/production.service.ts:774` | ProductionService.consumeMaterial | body/query or internal | productId, productionDocumentId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 30 | `src/modules/purchases/additional-expenses.service.ts:117` | AdditionalExpensesService.createDraft | body | cashAccountId, counterpartyId, receiptId, selectedItemIds | partly: receiptId, selectedItemIds checked; counterpartyId, cashAccountId not | Fixed |
+| 31 | `src/modules/purchases/additional-expenses.service.ts:235` | AdditionalExpensesService.updateDraft | body | cashAccountId, counterpartyId, receiptId, selectedItemIds | partly: receiptId, selectedItemIds checked; counterpartyId, cashAccountId not | Fixed |
+| 32 | `src/modules/purchases/additional-expenses.service.ts:399` | AdditionalExpensesService.findAll | body/query or internal | counterpartyId, receiptId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 33 | `src/modules/purchases/additional-expenses.service.ts:71` | AdditionalExpensesService.calculateAllocationPreview | body/query or internal | receiptId, selectedItemIds | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 34 | `src/modules/purchases/purchases.service.ts:102` | PurchasesService.findAllReceipts | body/query or internal | counterpartyId, warehouseId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 35 | `src/modules/purchases/purchases.service.ts:1203` | PurchasesService.addExpense | body | receiptId, supplierId | partly: receiptId checked; supplierId not | Fixed |
+| 36 | `src/modules/purchases/purchases.service.ts:1356` | PurchasesService.createReturn | body + lines | counterpartyId, productId, receiptId, warehouseId | partly: products and receipt checked; counterparty/warehouse only when a receipt is linked | Fixed |
+| 37 | `src/modules/purchases/purchases.service.ts:1604` | PurchasesService.executeReturnPostingInternal | body/query or internal | counterpartyId, receiptId, warehouseId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 38 | `src/modules/purchases/purchases.service.ts:208` | PurchasesService.createReceipt | body + lines | counterpartyId, productId, warehouseId | no | Fixed |
+| 39 | `src/modules/purchases/purchases.service.ts:2169` | PurchasesService.findAllReturns | body/query or internal | supplierId, warehouseId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 40 | `src/modules/purchases/purchases.service.ts:351` | PurchasesService.updateReceipt | body + lines | counterpartyId, productId, warehouseId | no | Fixed |
+| 41 | `src/modules/purchases/purchases.service.ts:920` | PurchasesService.payPurchaseReceipt | body/query or internal | cashAccountId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 42 | `src/modules/sales/counterparties/counterparties.service.ts:400` | CounterpartiesService.update | body | folderId, priceListId | no | Fixed |
+| 43 | `src/modules/sales/counterparties/counterparties.service.ts:96` | CounterpartiesService.create | body | folderId, priceListId | no | Fixed |
+| 44 | `src/modules/sales/crm/crm.service.ts:11` | CrmService.createDeal | body | assignedUserId, counterpartyId | no | Fixed |
+| 45 | `src/modules/sales/crm/crm.service.ts:61` | CrmService.updateDealStage | params | dealId only | yes | Checked |
+| 46 | `src/modules/sales/crm/crm.service.ts:84` | CrmService.updateDeal | body | assignedUserId, counterpartyId | no | Fixed |
+| 47 | `src/modules/sales/invoices/sales-invoices.service.ts:1116` | SalesInvoicesService.executePostReturn | body/query or internal | counterpartyId, defectWarehouseId, existingReturnId, invoiceId, productId, warehouseId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 48 | `src/modules/sales/invoices/sales-invoices.service.ts:137` | SalesInvoicesService.createInvoice | body + lines | counterpartyId, priceListId, productId, warehouseId | no | Fixed |
+| 49 | `src/modules/sales/invoices/sales-invoices.service.ts:1784` | SalesInvoicesService.upsertProductPrice | params + body (positional) | priceListId, productId | yes (fixed in the first sweep) | Checked |
+| 50 | `src/modules/sales/invoices/sales-invoices.service.ts:1872` | SalesInvoicesService.bulkSetPrices | body/query or internal | productId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 51 | `src/modules/sales/invoices/sales-invoices.service.ts:1948` | SalesInvoicesService.resolveProductPrice | body/query or internal | counterpartyId, priceListId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 52 | `src/modules/sales/invoices/sales-invoices.service.ts:290` | SalesInvoicesService.updateInvoice | body + lines | counterpartyId, priceListId, productId, warehouseId | no | Fixed |
+| 53 | `src/modules/sales/invoices/sales-invoices.service.ts:60` | SalesInvoicesService.findAll | body/query or internal | counterpartyId, warehouseId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 54 | `src/modules/sales/invoices/sales-invoices.service.ts:922` | SalesInvoicesService.createReturn | body + lines | counterpartyId, defectWarehouseId, invoiceId, productId, warehouseId | partly: invoice pins counterparty, warehouse, products; defectWarehouseId not | Fixed |
+| 55 | `src/modules/sales/orders/sales-orders.service.ts:1036` | SalesOrdersService.updateStatus | body (positional arg) | warehouseId | no | Fixed |
+| 56 | `src/modules/sales/orders/sales-orders.service.ts:1490` | SalesOrdersService.findProductionOrders | body/query or internal | salesOrderId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 57 | `src/modules/sales/orders/sales-orders.service.ts:1514` | SalesOrdersService.dispatch | body | orderItemId, warehouseId | partly: orderItemId matched to the order; warehouseId override not | Fixed |
+| 58 | `src/modules/sales/orders/sales-orders.service.ts:212` | SalesOrdersService.findAll | body/query or internal | assignedSellerId, counterpartyId, productId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 59 | `src/modules/sales/orders/sales-orders.service.ts:382` | SalesOrdersService.create | body + lines | assignedSellerId, counterpartyId, priceListId, productId, warehouseId | partly: warehouseId checked; counterparty, price list, seller, products not (unknown products were silently kept) | Fixed |
+| 60 | `src/modules/sales/orders/sales-orders.service.ts:607` | SalesOrdersService.update | body + lines | assignedSellerId, counterpartyId, priceListId, productId, warehouseId | partly: warehouseId checked; counterparty, price list, seller, products not | Fixed |
+| 61 | `src/modules/sales/payments/payments.service.ts:36` | PaymentsService.registerPayment | body/query or internal | cashAccountId, counterpartyId, invoiceId, orderId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 62 | `src/modules/services/services.service.ts:109` | ServicesService.create | body + lines | counterpartyId, productId | partly: counterpartyId checked; line productId not | Fixed |
+| 63 | `src/modules/services/services.service.ts:210` | ServicesService.findAll | body/query or internal | counterpartyId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 64 | `src/modules/services/services.service.ts:325` | ServicesService.update | body + lines | counterpartyId, productId | partly: counterpartyId checked; line productId not | Fixed |
+| 65 | `src/modules/services/services.service.ts:60` | ServicesService.calculateItem | body/query or internal | productId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 66 | `src/modules/settlements/counterparty-settlement.service.ts:215` | CounterpartySettlementService.assertSameMovement | body/query or internal | counterpartyId, reversesEntryId, sourceDocId, sourceLineId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 67 | `src/modules/settlements/reconciliation.service.ts:1009` | ReconciliationService.allocationCandidates | body/query or internal | salesOrderId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 68 | `src/modules/settlements/reconciliation.service.ts:1076` | ReconciliationService.buildProjection | body/query or internal | counterpartyId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 69 | `src/modules/settlements/reconciliation.service.ts:1117` | ReconciliationService.findProjectionDifferences | body/query or internal | counterpartyId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 70 | `src/modules/settlements/reconciliation.service.ts:994` | ReconciliationService.sumExistingAllocations | body/query or internal | targetId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 71 | `src/modules/settlements/settlement-allocation.service.ts:192` | SettlementAllocationService.reverseAllocation | body/query or internal | allocationId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 72 | `src/modules/settlements/settlement-allocation.service.ts:566` | SettlementAllocationService.assertSameAllocation | body/query or internal | counterpartyId, financeTransactionId, reversesAllocationId, targetId | yes | Allowlisted (see request-reference.spec.ts for the reason) |
+| 73 | `src/modules/tenants/tenants.service.ts:161` | TenantsService.createWarehouse | body (positional arg) | branchId | no | Fixed |
+| 74 | `src/modules/tenants/tenants.service.ts:188` | TenantsService.updateWarehouse | body | branchId | no | Fixed |
+| 75 | `src/modules/users/users.service.ts:23` | UsersService.createUser / updateUser | body | roleSlug (role looked up by slug) | yes: role looked up with the tenant (first sweep) | Checked |
+
+**Totals:** 75 entry points; 35 fixed (were unchecked or partly checked), 40 already checked, read-only, or internal.

@@ -2,12 +2,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { CreateDealDto } from '../dto';
 import { DealStageSlug } from '@prisma/client';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class CrmService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createDeal(tenantId: string, dto: CreateDealDto) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      user: dto.assignedUserId,
+    });
     return this.prisma.deal.create({
       data: {
         tenantId,
@@ -94,6 +99,11 @@ export class CrmService {
     if (!deal) {
       throw new NotFoundException('Deal not found');
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      user: dto.assignedUserId,
+    });
 
     return this.prisma.deal.update({
       where: { tenantId, id: dealId },

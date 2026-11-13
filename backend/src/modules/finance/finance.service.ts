@@ -32,6 +32,7 @@ import type {
   FinanceSummaryByAccount,
 } from '../../../../shared/types/finance';
 import { readCompanySettings } from '../../common/utils/company-settings';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 interface FinanceSettlementContext {
   side: CounterpartySettlementSide | null;
@@ -812,6 +813,11 @@ export class FinanceService {
       );
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      transactionType: dto.transactionTypeId,
+      user: dto.responsibleUserId,
+    });
+
     return this.prisma.$transaction(async (tx) => {
       const settlement = await this.resolveSettlementContext(
         tx,
@@ -941,6 +947,11 @@ export class FinanceService {
         `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${account.balance.toString()} ${account.currency}, so'ralgan: ${dto.amount} ${dto.currency}`,
       );
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      transactionType: dto.transactionTypeId,
+      user: dto.responsibleUserId,
+    });
 
     return this.prisma.$transaction(async (tx) => {
       const settlement = await this.resolveSettlementContext(
@@ -2177,6 +2188,9 @@ export class FinanceService {
       where: { id, tenantId, isDeleted: false },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
+    await assertTenantOwned(this.prisma, tenantId, {
+      transactionType: data.transactionTypeId,
+    });
 
     return this.prisma.financeTransaction.update({
       where: { tenantId, id },

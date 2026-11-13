@@ -25,6 +25,7 @@ import {
   isSupportedCurrency,
 } from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class ServicesService {
@@ -137,6 +138,9 @@ export class ServicesService {
     }
 
     const calculatedItems = dto.items.map((item) => this.calculateItem(item));
+    await assertTenantOwned(this.prisma, tenantId, {
+      product: dto.items.map((item) => item.productId),
+    });
 
     const counterparty = await this.prisma.counterparty.findFirst({
       where: { id: dto.counterpartyId, tenantId },
@@ -359,6 +363,9 @@ export class ServicesService {
         );
       }
       calculatedItems = dto.items.map((item) => this.calculateItem(item));
+      await assertTenantOwned(this.prisma, tenantId, {
+        product: dto.items.map((item) => item.productId),
+      });
       subtotal = calculatedItems.reduce((s, i) => s + i.subtotalNumber, 0);
       vatAmount = calculatedItems.reduce((s, i) => s + i.vatAmountNumber, 0);
       totalAmount = calculatedItems.reduce((s, i) => s + i.totalNumber, 0);

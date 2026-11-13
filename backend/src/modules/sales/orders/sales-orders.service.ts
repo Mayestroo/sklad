@@ -40,6 +40,7 @@ import {
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { consumeFifoBatches } from '../../inventory/fifo/fifo-batches';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 type FullSalesOrder = Prisma.SalesOrderGetPayload<{
   include: {
@@ -446,6 +447,13 @@ export class SalesOrdersService {
       }
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      priceList: dto.priceListId,
+      user: dto.assignedSellerId,
+      product: dto.items.map((item) => item.productId),
+    });
+
     const orderNumber = await this.generateOrderNumber(tenantId);
 
     let isAnyBelowCost = false;
@@ -618,6 +626,12 @@ export class SalesOrdersService {
     if (dto.warehouseId !== undefined) {
       await this.requireTenantWarehouse(tenantId, dto.warehouseId);
     }
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      priceList: dto.priceListId,
+      user: dto.assignedSellerId,
+      product: dto.items?.map((item) => item.productId),
+    });
     const currency = dto.currency ?? order.currency;
     const exchangeRate =
       dto.exchangeRate !== undefined
@@ -1033,6 +1047,8 @@ export class SalesOrdersService {
       include: { items: true },
     });
     if (!order) throw new NotFoundException('Buyurtma topilmadi');
+
+    await assertTenantOwned(this.prisma, tenantId, { warehouse: warehouseId });
 
     // 1. If target status is SHIPPED -> execute 1-click dispatch
     if (newStatus === SalesOrderStatus.SHIPPED) {
@@ -1509,6 +1525,9 @@ export class SalesOrdersService {
       },
     });
     if (!order) throw new NotFoundException('Buyurtma topilmadi');
+    await assertTenantOwned(this.prisma, tenantId, {
+      warehouse: dto.warehouseId,
+    });
 
     const allowedStatuses: SalesOrderStatus[] = [
       SalesOrderStatus.READY_TO_SHIP,

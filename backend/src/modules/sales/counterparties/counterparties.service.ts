@@ -11,6 +11,7 @@ import {
   CreateCounterpartyFolderDto,
   UpdateCounterpartyFolderDto,
 } from '../dto';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class CounterpartiesService {
@@ -93,6 +94,10 @@ export class CounterpartiesService {
   // ============================================
 
   async create(tenantId: string, dto: CreateCounterpartyDto) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterpartyFolder: dto.folderId,
+      priceList: dto.priceListId,
+    });
     const created = await this.prisma.counterparty.create({
       data: {
         tenantId,
@@ -399,6 +404,10 @@ export class CounterpartiesService {
     if (!counterparty) {
       throw new NotFoundException('Counterparty not found');
     }
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterpartyFolder: dto.folderId,
+      priceList: dto.priceListId,
+    });
 
     const updated = await this.prisma.counterparty.update({
       where: { tenantId, id },

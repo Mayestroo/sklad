@@ -33,6 +33,7 @@ import {
 import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
 import { JournalService } from '../accounting/journal/journal.service';
 import type { JournalLineDto } from '../accounting/dto';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 /** A posted sales invoice whose COGS a posted expense changed retroactively. */
 export interface RetroactiveSalesImpact {
@@ -148,6 +149,11 @@ export class AdditionalExpensesService {
       );
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      cashAccount: dto.cashAccountId,
+    });
+
     const docNumber = await this.generateDocNumber(tenantId);
     const allocation = await this.calculateAllocationPreview(tenantId, {
       receiptId: dto.receiptId,
@@ -246,6 +252,11 @@ export class AdditionalExpensesService {
         'Faqat qoralama holatidagi xarajatlarni tahrirlash mumkin',
       );
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      cashAccount: dto.cashAccountId,
+    });
 
     const receiptId = dto.receiptId || existing.receiptId;
     const amount =

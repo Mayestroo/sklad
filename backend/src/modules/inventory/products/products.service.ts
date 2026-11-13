@@ -11,12 +11,16 @@ import { PrismaService } from '../../../common/prisma';
 import { CreateProductDto, UpdateProductDto } from '../dto';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
 import { readCompanySettings } from '../../../common/utils/company-settings';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(tenantId: string, dto: CreateProductDto) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      category: dto.categoryId,
+    });
     const sku = dto.sku?.trim() || this.generateSku(dto.type);
     const existingSku = await this.prisma.product.findFirst({
       where: { tenantId, sku },
@@ -294,6 +298,9 @@ export class ProductsService {
     if (!product) {
       throw new NotFoundException('Product not found');
     }
+    await assertTenantOwned(this.prisma, tenantId, {
+      category: dto.categoryId,
+    });
 
     const costPriceCurrency =
       dto.costPriceCurrency ?? product.costPriceCurrency;

@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { asJson } from '../../../common/utils/json-column';
 import { PrismaService } from '../../../common/prisma';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(tenantId: string, dto: CreateCategoryDto) {
+    await assertTenantOwned(this.prisma, tenantId, { category: dto.parentId });
     return this.prisma.category.create({
       data: {
         tenantId,
@@ -48,6 +50,7 @@ export class CategoriesService {
     if (!category) {
       throw new NotFoundException('Category not found');
     }
+    await assertTenantOwned(this.prisma, tenantId, { category: dto.parentId });
 
     return this.prisma.category.update({
       where: { tenantId, id },

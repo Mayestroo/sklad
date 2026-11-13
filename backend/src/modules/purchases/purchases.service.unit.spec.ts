@@ -19,6 +19,7 @@ import {
 import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
+jest.mock('../../common/prisma/assert-tenant-owned');
 
 describe('PurchasesService Full Unit & Invariant Test Suite', () => {
   let service: PurchasesService;

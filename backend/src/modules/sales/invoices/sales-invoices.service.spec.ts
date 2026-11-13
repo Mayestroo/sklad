@@ -13,6 +13,7 @@ import { AccountsService } from '../../accounting/accounts/accounts.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 
 jest.mock('../../../common/sequences/document-sequence');
+jest.mock('../../../common/prisma/assert-tenant-owned');
 
 describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
   let service: SalesInvoicesService;

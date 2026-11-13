@@ -42,6 +42,7 @@ import {
   consumeFifoBatches,
   restoreBatchConsumptions,
 } from '../inventory/fifo/fifo-batches';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -258,6 +259,12 @@ export class PurchasesService {
       }
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+      product: dto.items.map((item) => item.productId),
+    });
+
     const docNumber = await this.generateDocNumber(tenantId);
 
     let subtotalAmount = 0;
@@ -359,6 +366,12 @@ export class PurchasesService {
         'Faqat qoralama holatidagi xarid hujjatlarini tahrirlash mumkin',
       );
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+      product: dto.items?.map((item) => item.productId),
+    });
 
     const targetCurrency = dto.currency || existing.currency;
     if (!isSupportedCurrency(targetCurrency)) {
@@ -1204,6 +1217,9 @@ export class PurchasesService {
 
     const allocationMethod =
       dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.supplierId,
+    });
 
     return this.prisma.$transaction(async (tx) => {
       // Create expense
@@ -1347,6 +1363,13 @@ export class PurchasesService {
         "Qaytarish hujjatida kamida bitta tovar bo'lishi shart",
       );
     }
+
+    // Products are checked one by one below; a return without a linked
+    // receipt takes its counterparty and warehouse only from the request.
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+    });
 
     const returnNumber = await this.generateReturnNumber(tenantId);
     const targetStatus =

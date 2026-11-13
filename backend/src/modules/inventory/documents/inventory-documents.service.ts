@@ -10,6 +10,7 @@ import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreateInventoryDocDto } from '../dto';
 import { consumeFifoBatches, createFifoBatch } from '../fifo/fifo-batches';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class InventoryDocumentsService {
@@ -35,6 +36,9 @@ export class InventoryDocumentsService {
     if (!warehouse) {
       throw new NotFoundException('Warehouse not found');
     }
+    await assertTenantOwned(this.prisma, tenantId, {
+      product: dto.items.map((item) => item.productId),
+    });
 
     const docNumber = await this.generateDocNumber(tenantId, dto.docType);
 

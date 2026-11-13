@@ -8,6 +8,7 @@ import type { Prisma } from '@prisma/client';
 import { asJson } from '../../common/utils/json-column';
 import { PrismaService } from '../../common/prisma';
 import { CreateTenantDto, UpdateCompanySettingsDto } from './dto';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 /** Shape of `Company.settings` (JSON); every section is optional. */
 interface StoredCompanySettings {
@@ -164,6 +165,7 @@ export class TenantsService {
     address?: string,
     phone?: string,
   ) {
+    await assertTenantOwned(this.prisma, tenantId, { branch: branchId });
     return this.prisma.warehouse.create({
       data: {
         tenantId,
@@ -197,6 +199,7 @@ export class TenantsService {
       where: { id: warehouseId, tenantId },
     });
     if (!warehouse) throw new NotFoundException('Omborxona topilmadi');
+    await assertTenantOwned(this.prisma, tenantId, { branch: data.branchId });
 
     return this.prisma.warehouse.update({
       where: { tenantId, id: warehouseId },

@@ -35,6 +35,7 @@ import {
 } from '../../inventory/fifo/fifo-batches';
 import { originalSaleUnitCost } from './sales-return-cost';
 import { readCompanySettings } from '../../../common/utils/company-settings';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class SalesInvoicesService {
@@ -188,6 +189,13 @@ export class SalesInvoicesService {
         );
       }
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+      priceList: dto.priceListId,
+      product: dto.items.map((item) => item.productId),
+    });
 
     const invoiceNumber = await this.generateInvoiceNumber(tenantId);
 
@@ -350,6 +358,13 @@ export class SalesInvoicesService {
         );
       }
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+      priceList: dto.priceListId,
+      product: dto.items.map((item) => item.productId),
+    });
 
     let totals: ReturnType<typeof calculateSalesDocumentTotals>;
     const additionalChargeAmount = Number(dto.additionalChargeAmount ?? 0);
@@ -1044,6 +1059,12 @@ export class SalesInvoicesService {
         isDefective: Boolean(i.isDefective),
       });
     }
+
+    // The invoice pins the counterparty, warehouse and products; the defect
+    // warehouse is the one id that comes only from the request.
+    await assertTenantOwned(this.prisma, tenantId, {
+      warehouse: dto.defectWarehouseId,
+    });
 
     const targetStatus = dto.status || SalesReturnDocStatus.POSTED;
 

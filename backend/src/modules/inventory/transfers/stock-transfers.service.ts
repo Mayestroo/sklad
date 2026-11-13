@@ -9,6 +9,7 @@ import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreateStockTransferDto } from '../dto';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class StockTransfersService {
@@ -31,6 +32,11 @@ export class StockTransfersService {
         'Source and target warehouses cannot be identical',
       );
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      warehouse: [dto.sourceWarehouseId, dto.targetWarehouseId],
+      product: dto.items.map((item) => item.productId),
+    });
 
     const transferNumber = await this.generateTransferNumber(tenantId);
 
