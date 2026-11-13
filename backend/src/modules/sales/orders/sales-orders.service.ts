@@ -612,19 +612,13 @@ export class SalesOrdersService {
     id: string,
     dto: Partial<CreateSalesOrderDto>,
   ) {
-    const order = await this.prisma.salesOrder.findFirst({
+    // Fail fast with a clear message; the status is checked again under the lock.
+    const current = await this.prisma.salesOrder.findFirst({
       where: { id, tenantId },
-      include: { items: true },
+      select: { status: true },
     });
-    if (!order) throw new NotFoundException('Buyurtma topilmadi');
-    if (
-      order.status !== SalesOrderStatus.NEW &&
-      order.status !== SalesOrderStatus.PENDING_APPROVAL
-    ) {
-      throw new BadRequestException(
-        "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tahrirlash mumkin",
-      );
-    }
+    if (!current) throw new NotFoundException('Buyurtma topilmadi');
+    this.assertOrderEditable(current.status);
     if (dto.warehouseId !== undefined) {
       await this.requireTenantWarehouse(tenantId, dto.warehouseId);
     }
@@ -634,147 +628,199 @@ export class SalesOrdersService {
       user: dto.assignedSellerId,
       product: dto.items?.map((item) => item.productId),
     });
-    const currency = dto.currency ?? order.currency;
-    const exchangeRate =
-      dto.exchangeRate !== undefined
-        ? Number(dto.exchangeRate)
-        : Number(order.exchangeRate);
-    if (
-      !SUPPORTED_CURRENCIES.includes(
-        currency as (typeof SUPPORTED_CURRENCIES)[number],
-      )
-    ) {
-      throw new BadRequestException(
-        'Sotuv buyurtmasi valyutasi USD yoki UZS bo‘lishi kerak',
-      );
-    }
-    if (
-      currency !== 'UZS' &&
-      (!Number.isFinite(exchangeRate) || exchangeRate <= 0)
-    ) {
-      throw new BadRequestException(
-        'Xorijiy valyuta uchun 0 dan katta kursni kiriting',
-      );
-    }
 
-    const updateData: Prisma.SalesOrderUncheckedUpdateInput = {
-      currency: dto.currency ?? undefined,
-      exchangeRate:
-        dto.exchangeRate !== undefined ? dto.exchangeRate : undefined,
-      paymentCondition: dto.paymentCondition ? dto.paymentCondition : undefined,
-      requiredPaymentPercent:
-        dto.paymentCondition === 'PARTIAL'
-          ? dto.requiredPaymentPercent
-          : dto.paymentCondition
-            ? null
-            : undefined,
-      deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
-      deliveryAddress: dto.deliveryAddress,
-      comment: dto.comment,
-      priceListId: dto.priceListId !== undefined ? dto.priceListId : undefined,
-      warehouseId: dto.warehouseId,
-      assignedSellerId: dto.assignedSellerId,
-    };
-
-    const sourceItems = dto.items?.length ? dto.items : order.items;
-    const products = await this.prisma.product.findMany({
-      where: {
-        tenantId,
-        id: { in: sourceItems.map((item) => item.productId) },
-      },
-    });
-    const productMap = new Map(
-      products.map((product) => [product.id, product]),
-    );
-    const lineInputs = sourceItems.map((item) => ({
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.unitPrice),
-      discountPercent: Number(item.discount ?? 0),
-      vatRate:
-        item.vatRate !== undefined
-          ? Number(item.vatRate)
-          : Number(productMap.get(item.productId)?.vatRate ?? 0),
-    }));
-    const additionalChargeAmount = Number(
-      dto.additionalChargeAmount ?? order.additionalChargeAmount ?? 0,
-    );
-    const additionalChargeVatRate = Number(
-      dto.additionalChargeVatRate ?? order.additionalChargeVatRate ?? 12,
-    );
-    let totals: ReturnType<typeof calculateSalesDocumentTotals>;
-    try {
-      totals = calculateSalesDocumentTotals(
-        lineInputs,
-        additionalChargeAmount,
-        additionalChargeVatRate,
+    // F9: the header, lines, totals and stock reservations change in ONE
+    // transaction (PrismaService default: 30 s timeout, as for posting), so a
+    // failure part-way leaves the order exactly as it was.
+    await this.prisma.$transaction(async (tx) => {
+      // Lock the order row and re-check it is still editable: a concurrent edit
+      // waits here, and an approval committed after the read above is seen.
+      const [locked] = await tx.$queryRaw<{ status: SalesOrderStatus }[]>(
+        Prisma.sql`
+          SELECT "status" FROM "sales_orders"
+          WHERE "id" = ${id} AND "tenant_id" = ${tenantId}
+          FOR UPDATE
+        `,
       );
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error
-          ? error.message
-          : 'Buyurtma summalarini hisoblab bo‘lmadi',
-      );
-    }
-    updateData.subtotalAmount = totals.subtotalAmount;
-    updateData.discountAmount = totals.discountAmount;
-    updateData.vatAmount = totals.vatAmount;
-    updateData.additionalChargeAmount = totals.additionalChargeAmount;
-    updateData.additionalChargeVatRate = additionalChargeVatRate;
-    updateData.additionalChargeVatAmount = totals.additionalChargeVatAmount;
-    updateData.totalAmount = totals.totalAmount;
+      if (!locked) throw new NotFoundException('Buyurtma topilmadi');
+      this.assertOrderEditable(locked.status);
 
-    if (dto.items?.length) {
-      const preparedItems = dto.items.map((item, index) => {
-        const amounts = calculateSalesLineAmounts(lineInputs[index]);
-        return {
-          productId: item.productId,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          discount: Number(item.discount ?? 0),
-          vatRate: lineInputs[index].vatRate,
-          vatAmount: amounts.vatAmount,
-          totalPrice: amounts.totalAmount,
-          reservedQty: 0,
-          readyQty: 0,
-          shippedQty: 0,
-        };
+      // Read the order under the lock: totals of a header-only edit are
+      // computed from the lines as they are now, not from a stale read.
+      const order = await tx.salesOrder.findFirst({
+        where: { id, tenantId },
+        include: { items: true },
       });
+      if (!order) throw new NotFoundException('Buyurtma topilmadi');
 
-      // Existing reservations reference the old order items and must not survive an edit.
-      await this.stockReservationService.releaseOrderReservations(tenantId, id);
-      await this.prisma.salesOrderItem.deleteMany({
-        where: { order: { tenantId }, orderId: id },
-      });
-      updateData.items = { create: preparedItems };
-    }
+      const currency = dto.currency ?? order.currency;
+      const exchangeRate =
+        dto.exchangeRate !== undefined
+          ? Number(dto.exchangeRate)
+          : Number(order.exchangeRate);
+      if (
+        !SUPPORTED_CURRENCIES.includes(
+          currency as (typeof SUPPORTED_CURRENCIES)[number],
+        )
+      ) {
+        throw new BadRequestException(
+          'Sotuv buyurtmasi valyutasi USD yoki UZS bo‘lishi kerak',
+        );
+      }
+      if (
+        currency !== 'UZS' &&
+        (!Number.isFinite(exchangeRate) || exchangeRate <= 0)
+      ) {
+        throw new BadRequestException(
+          'Xorijiy valyuta uchun 0 dan katta kursni kiriting',
+        );
+      }
 
-    const updated = await this.prisma.salesOrder.update({
-      where: { tenantId, id },
-      data: updateData,
-      include: this.buildOrderInclude(),
-    });
-
-    if (dto.items?.length) {
-      if (!updated.warehouseId) {
+      const replaceItems = Boolean(dto.items?.length);
+      const warehouseId =
+        dto.warehouseId !== undefined ? dto.warehouseId : order.warehouseId;
+      // Checked before any write (it used to throw after the lines were replaced).
+      if (replaceItems && !warehouseId) {
         throw new BadRequestException('Buyurtma uchun ombor tanlanishi shart');
       }
-      await this.stockReservationService.reserveStockForOrder(
-        tenantId,
-        id,
-        updated.warehouseId,
-        updated.items.map((item) => ({
-          orderItemId: item.id,
-          productId: item.productId,
-          quantity: Number(item.quantity),
-        })),
+
+      const updateData: Prisma.SalesOrderUncheckedUpdateInput = {
+        currency: dto.currency ?? undefined,
+        exchangeRate:
+          dto.exchangeRate !== undefined ? dto.exchangeRate : undefined,
+        paymentCondition: dto.paymentCondition
+          ? dto.paymentCondition
+          : undefined,
+        requiredPaymentPercent:
+          dto.paymentCondition === 'PARTIAL'
+            ? dto.requiredPaymentPercent
+            : dto.paymentCondition
+              ? null
+              : undefined,
+        deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
+        deliveryAddress: dto.deliveryAddress,
+        comment: dto.comment,
+        priceListId:
+          dto.priceListId !== undefined ? dto.priceListId : undefined,
+        warehouseId: dto.warehouseId,
+        assignedSellerId: dto.assignedSellerId,
+      };
+
+      const sourceItems = replaceItems && dto.items ? dto.items : order.items;
+      const products = await tx.product.findMany({
+        where: {
+          tenantId,
+          id: { in: sourceItems.map((item) => item.productId) },
+        },
+      });
+      const productMap = new Map(
+        products.map((product) => [product.id, product]),
       );
-    }
+      const lineInputs = sourceItems.map((item) => ({
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+        discountPercent: Number(item.discount ?? 0),
+        vatRate:
+          item.vatRate !== undefined
+            ? Number(item.vatRate)
+            : Number(productMap.get(item.productId)?.vatRate ?? 0),
+      }));
+      const additionalChargeAmount = Number(
+        dto.additionalChargeAmount ?? order.additionalChargeAmount ?? 0,
+      );
+      const additionalChargeVatRate = Number(
+        dto.additionalChargeVatRate ?? order.additionalChargeVatRate ?? 12,
+      );
+      let totals: ReturnType<typeof calculateSalesDocumentTotals>;
+      try {
+        totals = calculateSalesDocumentTotals(
+          lineInputs,
+          additionalChargeAmount,
+          additionalChargeVatRate,
+        );
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error
+            ? error.message
+            : 'Buyurtma summalarini hisoblab bo‘lmadi',
+        );
+      }
+      updateData.subtotalAmount = totals.subtotalAmount;
+      updateData.discountAmount = totals.discountAmount;
+      updateData.vatAmount = totals.vatAmount;
+      updateData.additionalChargeAmount = totals.additionalChargeAmount;
+      updateData.additionalChargeVatRate = additionalChargeVatRate;
+      updateData.additionalChargeVatAmount = totals.additionalChargeVatAmount;
+      updateData.totalAmount = totals.totalAmount;
+
+      if (replaceItems && dto.items) {
+        updateData.items = {
+          create: dto.items.map((item, index) => {
+            const amounts = calculateSalesLineAmounts(lineInputs[index]);
+            return {
+              productId: item.productId,
+              quantity: Number(item.quantity),
+              unitPrice: Number(item.unitPrice),
+              discount: Number(item.discount ?? 0),
+              vatRate: lineInputs[index].vatRate,
+              vatAmount: amounts.vatAmount,
+              totalPrice: amounts.totalAmount,
+              reservedQty: 0,
+              readyQty: 0,
+              shippedQty: 0,
+            };
+          }),
+        };
+        // Existing reservations reference the old order items and must not
+        // survive an edit; released and recreated in this same transaction.
+        await this.stockReservationService.releaseOrderReservations(
+          tenantId,
+          id,
+          tx,
+        );
+        await tx.salesOrderItem.deleteMany({
+          where: { order: { tenantId }, orderId: id },
+        });
+      }
+
+      const updated = await tx.salesOrder.update({
+        where: { tenantId, id },
+        data: updateData,
+        include: { items: true },
+      });
+
+      if (replaceItems && warehouseId) {
+        await this.stockReservationService.reserveStockForOrder(
+          tenantId,
+          id,
+          warehouseId,
+          updated.items.map((item) => ({
+            orderItemId: item.id,
+            productId: item.productId,
+            quantity: Number(item.quantity),
+          })),
+          tx,
+        );
+      }
+    });
 
     const refreshed = await this.prisma.salesOrder.findFirst({
       where: { id, tenantId },
       include: this.buildOrderInclude(),
     });
-    return this.enrichOrder(refreshed || updated);
+    if (!refreshed) throw new NotFoundException('Buyurtma topilmadi');
+    return this.enrichOrder(refreshed);
+  }
+
+  private assertOrderEditable(status: SalesOrderStatus) {
+    if (
+      status !== SalesOrderStatus.NEW &&
+      status !== SalesOrderStatus.PENDING_APPROVAL
+    ) {
+      throw new BadRequestException(
+        "Faqat 'Yangi' yoki 'Tasdiqlashda' statusidagi buyurtmani tahrirlash mumkin",
+      );
+    }
   }
 
   // ─── DELETE (only in NEW, PENDING_APPROVAL, or CANCELLED) ─────

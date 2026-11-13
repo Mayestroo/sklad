@@ -137,6 +137,8 @@ describe('SalesOrdersService', () => {
       warehouse: {
         findFirst: jest.fn().mockResolvedValue({ id: 'wh-1' }),
       },
+      // Row lock of the order edit (F9): the order is still editable.
+      $queryRaw: jest.fn().mockResolvedValue([{ status: 'NEW' }]),
       $transaction: jest.fn(async (callback) => callback(prisma)),
     };
 
