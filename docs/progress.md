@@ -156,7 +156,7 @@ account; react-hooks migration; visual verification; final verification.
 - [x] P4.5 registration enumeration (D3) — SKIPPED by the rule in the prompt (breaks registration UX), kept as owner decision D3
 - [x] P4.6 B13 reading (62c3c7c) + B6 opening-balance labelling (3ee02fc)
 - [x] P4.7 D2 purchase-return gap account setting
-- [ ] P5 react-hooks: shared data-loading + page migration
+- [~] P5 react-hooks: shared data-loading + page migration — PARTLY DONE (88bad69, acccfaa): 123 -> 110, 6 pages migrated, rest listed below
 - [ ] P6 visual verification on local Docker DB
 - [ ] P7 final verification, review, git hygiene
 
@@ -216,6 +216,47 @@ account; react-hooks migration; visual verification; final verification.
   amended out of the unpushed commit, file kept on disk. Staging explicit
   paths only from now on.
 
+## Phase 5 status (react-hooks)
+
+Approach: TanStack Query via `useApiQuery` / `useInvalidateApi`
+(docs/frontend-data-loading.md). Component tests: Vitest + jsdom +
+Testing Library, part of `npm test`.
+
+Migrated (each with a component test: single load, error, retry):
+accounting/accounts, accounting/journal, accounting/reports, sales/orders
+(was the only useApiData user; useApiData deleted), settings/security,
+purchases/suppliers. Lint 123 -> 110 (set-state-in-effect 70,
+exhaustive-deps 40); the 2 React Compiler memo errors are gone.
+
+NOT migrated in this run, by reason:
+
+1. Same simple "load() in an effect" pattern, low risk, not done for time
+   (recipe in the doc, ~15 min each incl. test): accounting/page,
+   analytics, inventory/page, inventory/documents, inventory/transfers,
+   products, purchases/page, purchases/[id], purchases/expenses,
+   purchases/expenses/[id], purchases/returns, purchases/returns/[id],
+   sales/page, sales/[id], sales/crm, sales/customers, sales/returns,
+   sales/orders/[id], sales/prices, services, settings/billing,
+   settings/branches, settings/sales, users, counterparties,
+   (superadmin) admin, admin/announcements, admin/billing,
+   admin/security, admin/tickets, admin/layout, [locale]/page (dashboard).
+2. Forms that copy props into state in effects (reset/prefill):
+   SalesInvoiceForm, SalesOrderForm, PurchaseDocumentForm,
+   purchases/expenses/new, products/new, opening-balances, finance page
+   drawer, CreateProductDrawer, CreateCounterpartyDrawer,
+   QuickAddProductModal, CreateReturnModal, CreateSalesReturnModal,
+   PartialDispatchModal, PayPurchaseModal, ServiceActDrawer,
+   AktSverkaDrawer, SupplierProfileDrawer. Reason: the fix is a `key`
+   remount plus lazy initial state; done blindly it can drop what a user
+   typed or prefill the wrong document. Needs a manual click-through per
+   form (not possible here: no visual check, see P6).
+3. Not data loading (UI state synced from props/route): Sidebar (open
+   groups from pathname), DatePicker (text from value), ThemeSwitcher
+   (mounted flag), AuthContext (session restore), useDocumentDropdowns
+   (uses lib/cache.ts; migrate together with SalesOrderForm). Reason:
+   each needs a different, component-specific fix (derived state or
+   useSyncExternalStore); out of the data-loading migration.
+
 ## Round 2 log
 - P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
   lint` clean, `--fix` changed nothing; frontend `npx tsc --noEmit` exit 0;
@@ -245,3 +286,8 @@ account; react-hooks migration; visual verification; final verification.
   (5 failed before the change); backend unit 51 suites / 483 tests;
   integration 12 suites / 35 tests (+3 Redis skipped without
   REDIS_URL_TEST); typecheck, eslint, nest build clean.
+- P5 88bad69 (batch 1) + acccfaa (batch 2): frontend node tests 120/120,
+  component tests 13/13 (error/retry cases fail on the old pages), tsc
+  clean, eslint 110 problems (all react-hooks, listed above), build OK.
+  Added deps (pinned): @tanstack/react-query 5.104.5; dev: vitest 4.1.12,
+  jsdom 30.1.3, @testing-library/react 16.3.3, @testing-library/dom 10.4.2.
