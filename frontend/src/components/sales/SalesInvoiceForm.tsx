@@ -38,7 +38,8 @@ import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDr
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
+import { initialDocumentCurrency } from '@/lib/sales-currency';
 import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
 import { unitLabel } from '@/lib/units';
 import { stockLabel } from '@/lib/stock-label';
@@ -117,7 +118,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
+  // New documents start in the tenant sales default, or blank (never a guessed USD).
+  const salesDefault = useSalesDefaultCurrency();
+  const defaultCurrency = initialDocumentCurrency(undefined, salesDefault);
   const router = useRouter();
   const confirm = useConfirm();
   const searchParams = useSearchParams();
@@ -143,11 +146,11 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [docDate, setDocDate] = useState(
     initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))
   );
-  const [currency, setCurrency] = useState(initialData?.currency || defaultCurrency);
+  const [currency, setCurrency] = useState(initialDocumentCurrency(initialData?.currency, salesDefault));
   const [exchangeRate, setExchangeRate] = useState<number | string>(
     initialData?.exchangeRate !== undefined
       ? Number(initialData.exchangeRate)
-      : (initialData?.currency || defaultCurrency) === 'UZS' ? 1 : '',
+      : initialDocumentCurrency(initialData?.currency, salesDefault) === 'UZS' ? 1 : '',
   );
   const [additionalChargeAmount, setAdditionalChargeAmount] = useState<number | string>(Number(initialData?.additionalChargeAmount || 0));
   const [additionalChargeVatRate, setAdditionalChargeVatRate] = useState<number | string>(Number(initialData?.additionalChargeVatRate ?? 12));

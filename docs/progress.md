@@ -462,7 +462,8 @@ frontend changed.
 | T1.4 create/update currency resolution | already done | 0bce6d3 | DTOs use IsValidCurrency; service resolves explicit → sales default, rejects unresolved nonzero price |
 | T1.5 product form currency | done | b2b3b3f | create mode now starts from the tenant sales default or blank (was: USD guess via useDefaultCurrency, UZS guess on products/new); component test |
 | T1.6 product checks | done | — | product spec 16/16, prisma validate OK, nest build OK |
-| T2.1 price-conversion tests | done (coverage) | (this commit) | 5 cases existed (0bce6d3); added the two-decimal round-trip case the plan asks for; passes on the existing code |
+| T2.1 price-conversion tests | done (coverage) | c05f5fc | 5 cases existed (0bce6d3); added the two-decimal round-trip case the plan asks for; passes on the existing code |
+| T2.2 forms: no price list, native price currency | done | (this commit) | price-list selector/auto-selection and native-currency conversion + repair error were already done (0bce6d3); new documents now start in the strict sales default or blank (see N2) |
 
 ## Round 4 decisions
 
@@ -501,3 +502,10 @@ frontend changed.
   and refuse receipts of goods shipped in a now-closed month, so the
   receipt is dated by `receivedAt` (effectively "now"). Alternative: let
   the user enter a receipt date on the receive action.
+- N2 (plan T2.2, conflict with ADR 0022) The plan says "initialize new
+  document currency with useDefaultCurrency()". That hook falls back to
+  USD when the tenant has no default, a silent fallback ADR 0022 forbids.
+  Followed the ADR: sales order/invoice forms start from
+  settings.sales.defaultCurrency or blank (the forms already refuse to
+  save without a currency). Owner: confirm, or set a sales default for
+  every tenant.

@@ -17,3 +17,15 @@ export function salesDefaultCurrency(settings: unknown): SalesCurrency | null {
   const value = (settings as { sales?: { defaultCurrency?: unknown } } | null | undefined)?.sales?.defaultCurrency;
   return isSalesCurrency(value) ? value : null;
 }
+
+/**
+ * The currency a sales order or invoice form starts with: the saved
+ * document's currency, else the tenant sales default, else blank (the form
+ * then asks for it). Never a guessed currency (ADR 0022).
+ */
+export function initialDocumentCurrency(
+  saved: string | null | undefined,
+  salesDefault: SalesCurrency | null,
+): string {
+  return saved || salesDefault || '';
+}
