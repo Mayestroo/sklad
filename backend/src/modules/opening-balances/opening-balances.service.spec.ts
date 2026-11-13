@@ -149,6 +149,18 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       const result = await service.create('tenant-1', 'user-1', dto);
 
       expect(result).toBeDefined();
+      // A cash/bank line's accountId is a CashAccount (kassa), not a chart
+      // of accounts row; every referenced id is checked against the tenant.
+      const { assertTenantOwned } = jest.requireMock<{
+        assertTenantOwned: jest.Mock;
+      }>('../../common/prisma/assert-tenant-owned');
+      expect(assertTenantOwned).toHaveBeenCalledWith(prisma, 'tenant-1', {
+        cashAccount: ['acc-cash', 'acc-bank', undefined, undefined, undefined],
+        product: [undefined, undefined, 'prod-1', undefined, undefined],
+        warehouse: [undefined, undefined, 'wh-1', undefined, undefined],
+        counterparty: [undefined, undefined, undefined, 'supp-1', undefined],
+        fixedAsset: [undefined, undefined, undefined, undefined, undefined],
+      });
       expect(prisma.openingBalanceDocument.create).toHaveBeenCalled();
       const callData =
         prisma.openingBalanceDocument.create.mock.calls[0][0].data;

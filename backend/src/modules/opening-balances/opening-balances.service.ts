@@ -89,7 +89,8 @@ export class OpeningBalancesService {
     }>,
   ) {
     return assertTenantOwned(this.prisma, tenantId, {
-      account: lines.map((l) => l.accountId),
+      // A cash/bank line's accountId is a kassa (CashAccount).
+      cashAccount: lines.map((l) => l.accountId),
       product: lines.map((l) => l.productId),
       warehouse: lines.map((l) => l.warehouseId),
       counterparty: lines.map((l) => l.counterpartyId),
