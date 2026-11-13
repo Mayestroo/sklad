@@ -474,10 +474,15 @@ frontend changed.
 | T3.6 returns from source line | done | 454d2c6 | backend already derived price/VAT from the source line and ignored the client price; added source discount to the returnable-items API and the stored return line; modal shows it; returns-page create form now totals with VAT (was VAT-free) |
 | T3.7 partial-dispatch and return regressions | done | d4a6266 | the tests failed: each shipment/return was rounded on its own (3x10.05 at 10%/12%: VAT 1.08+2.17=3.25 vs 3.26; three returns of 612.16/3 gave back 612.15). Shipments now bill cumulative-minus-previous line amounts, returns prorate cumulatively; both telescope to the source line. Applies to new documents only |
 | T3.8 sales specs + schema validation | done | — | invoice/order/return specs pass, prisma validate OK, frontend build OK (T3.6) |
-| T4.1 draft-edit tests | done | (this commit) | success without stock/ledger/settlement calls, 404, POSTED/CANCELLED refused, posted-after-read refused, rollback; int-spec on the local DB |
+| T4.1 draft-edit tests | done | b13b569 | success without stock/ledger/settlement calls, 404, POSTED/CANCELLED refused, posted-after-read refused, rollback; int-spec on the local DB |
 | T4.2 PATCH route | already done (see N3) | 0bce6d3 | route exists with sales:edit, full DTO |
-| T4.3 atomic draft replacement | done | (this commit) | status was checked before the transaction; now SELECT … FOR UPDATE and re-check DRAFT inside it |
+| T4.3 atomic draft replacement | done | b13b569 | status was checked before the transaction; now SELECT … FOR UPDATE and re-check DRAFT inside it |
 | T4.4 form save path | verified | — | SalesInvoiceForm saves drafts with PATCH /sales/invoices/:id; posted invoices keep explicit post/unpost |
+| T4.5 invoice checks | done | — | backend unit/int/typecheck/lint/build; frontend unchanged |
+| T5.1 profit currency tests | done (UZS convention, N4) | (this commit) | plan example as a UZS test (600,000 UZS = USD 50 at 12,000), UZS identity, VAT excluded |
+| T5.2 COGS conversion / line profit | partly: N4 | (this commit) | storage kept in UZS (N4). Fixed the ADR 0008 recalibration: additional-expense post/cancel set profit to totalPrice − COGS (VAT included, USD amount minus UZS COGS); now net of VAT in UZS like posting |
+| T5.3 summaries by currency | verified | — | no profit is labelled USD: sales summary/analytics return [{UZS}], customer profile and dashboard label UZS |
+| T5.4 checks | done | — | backend checks green; frontend unchanged |
 
 ## Round 4 decisions
 
@@ -535,3 +540,15 @@ frontend changed.
   Partial<CreateSalesInvoiceDto>; the route takes the full DTO (the form
   always sends the whole document; a partial body would silently merge
   missing fields). Owner: confirm.
+- N4 (plan T5, conflict with ADR 0023 and the stored data) The plan stores
+  gross profit in the document currency (USD profit for USD invoices).
+  Since 0bce6d3 profit is stored in UZS (net revenue converted at the
+  document rate minus FIFO COGS), its migration converted historical
+  posted invoices to UZS, and dashboard/analytics/customer profile sum
+  grossProfit across invoices and label it UZS. Switching only new rows
+  would put USD and UZS amounts in one column that those reports sum
+  (ADR 0023 forbids cross-currency sums); switching all rows rewrites
+  posted-invoice data on Neon. Kept UZS, explicitly labelled. Owner:
+  choose (a) keep UZS profit (current), or (b) document-currency profit:
+  a data migration for posted invoices (grossProfit / exchangeRate for
+  USD) plus per-currency grouping in every report.

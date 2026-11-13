@@ -568,7 +568,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
       ]);
       prisma.salesInvoice.findUnique.mockResolvedValue({
         id: 'inv-1',
+        currency: 'UZS',
+        exchangeRate: 1,
         totalAmount: 9000000,
+        vatAmount: 0,
       });
       prisma.additionalExpense.update.mockResolvedValue({
         ...mockExpense,
@@ -599,6 +602,89 @@ describe('AdditionalExpensesService Unit Tests', () => {
           totalCogs: 6600000,
           grossProfit: 2400000,
         },
+      });
+    });
+    it('recalibrates a USD sale with VAT as net revenue in UZS minus COGS (ADR 0008/0011)', async () => {
+      const mockExpense = {
+        id: 'exp-2',
+        tenantId,
+        docNumber: 'EXP-2026-0002',
+        docDate: new Date(),
+        status: PurchaseDocStatus.DRAFT,
+        amount: 1000000,
+        currency: 'UZS',
+        receiptId,
+        isPaid: false,
+        counterpartyId: 'carrier-1',
+        counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
+        items: [
+          {
+            id: 'ei-1',
+            productId: 'prod-iphone',
+            initialLandedCost: 1000000,
+            allocatedAmount: 1000000,
+            soldQuantity: 6,
+            remainingQuantity: 4,
+          },
+        ],
+      };
+      // 6 sold for 672 USD = 600 net + 72 VAT at 12,500 UZS/USD.
+      const invoice = {
+        id: 'inv-usd',
+        currency: 'USD',
+        exchangeRate: 12500,
+        totalAmount: 672,
+        vatAmount: 72,
+      };
+      prisma.additionalExpense.findFirst.mockResolvedValue(mockExpense);
+      prisma.productBatch.findFirst.mockResolvedValue({
+        id: 'batch-1',
+        productId: 'prod-iphone',
+        purchasePrice: 1000000,
+        landedCost: 1000000,
+        remainingQty: 4,
+        consumptions: [
+          {
+            id: 'cons-1',
+            quantity: 6,
+            unitCost: 1000000,
+            salesInvoiceItemId: 'inv-item-usd',
+            salesInvoiceItem: {
+              id: 'inv-item-usd',
+              invoiceId: 'inv-usd',
+              productId: 'prod-iphone',
+              quantity: 6,
+              unitPrice: 100,
+              totalPrice: 672,
+              vatAmount: 72,
+              unitCogs: 1000000,
+              lineCogs: 6000000,
+              lineGrossProfit: 1500000,
+              invoice,
+            },
+          },
+        ],
+      });
+      prisma.salesInvoiceItem.findMany.mockResolvedValue([
+        { id: 'inv-item-usd', lineCogs: 6600000 },
+      ]);
+      prisma.salesInvoice.findUnique.mockResolvedValue(invoice);
+      prisma.additionalExpense.update.mockResolvedValue({
+        ...mockExpense,
+        status: PurchaseDocStatus.POSTED,
+      });
+
+      await service.postExpense(tenantId, userId, 'exp-2');
+
+      // 600 USD x 12,500 = 7,500,000 UZS net revenue - 6,600,000 COGS.
+      expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lineGrossProfit: 900000 }),
+        }),
+      );
+      expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-123', id: 'inv-usd' },
+        data: { totalCogs: 6600000, grossProfit: 900000 },
       });
     });
   });
@@ -665,7 +751,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
       ]);
       prisma.salesInvoice.findUnique.mockResolvedValue({
         id: 'inv-1',
+        currency: 'UZS',
+        exchangeRate: 1,
         totalAmount: 9000000,
+        vatAmount: 0,
       });
       prisma.additionalExpense.update.mockResolvedValue({
         id: 'exp-1',
@@ -689,6 +778,77 @@ describe('AdditionalExpensesService Unit Tests', () => {
           lineCogs: 6000000,
           lineGrossProfit: 3000000,
         },
+      });
+    });
+
+    it('restores the profit of a USD sale with VAT as net revenue in UZS minus COGS on cancel', async () => {
+      prisma.additionalExpense.findFirst.mockResolvedValue({
+        id: 'exp-2',
+        status: PurchaseDocStatus.POSTED,
+        amount: 1000000,
+        receiptId,
+        isPaid: false,
+        counterpartyId: 'carrier-1',
+        items: [
+          {
+            id: 'ei-1',
+            productId: 'prod-iphone',
+            allocatedAmount: 1000000,
+            soldQuantity: 6,
+            remainingQuantity: 4,
+          },
+        ],
+      });
+      prisma.financeTransaction.findFirst.mockResolvedValue(null);
+      prisma.productBatch.findFirst.mockResolvedValue({
+        id: 'batch-1',
+        purchasePrice: 1000000,
+        landedCost: 1100000,
+        consumptions: [
+          {
+            id: 'cons-1',
+            quantity: 6,
+            salesInvoiceItemId: 'inv-item-usd',
+            salesInvoiceItem: {
+              id: 'inv-item-usd',
+              invoiceId: 'inv-usd',
+              totalPrice: 672,
+              vatAmount: 72,
+              unitCogs: 1100000,
+              lineCogs: 6600000,
+            },
+          },
+        ],
+      });
+      prisma.salesInvoiceItem.findMany.mockResolvedValue([
+        { id: 'inv-item-usd', lineCogs: 6600000 },
+      ]);
+      prisma.salesInvoice.findUnique.mockResolvedValue({
+        id: 'inv-usd',
+        currency: 'USD',
+        exchangeRate: 12500,
+        totalAmount: 672,
+        vatAmount: 72,
+      });
+      prisma.additionalExpense.update.mockResolvedValue({
+        id: 'exp-2',
+        status: PurchaseDocStatus.CANCELLED,
+      });
+
+      await service.cancelExpense(tenantId, userId, 'exp-2');
+
+      // 600 USD x 12,500 = 7,500,000 UZS - 6,000,000 restored COGS.
+      expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
+        where: { invoice: { tenantId: 'tenant-123' }, id: 'inv-item-usd' },
+        data: {
+          unitCogs: 1000000,
+          lineCogs: 6000000,
+          lineGrossProfit: 1500000,
+        },
+      });
+      expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-123', id: 'inv-usd' },
+        data: { totalCogs: 6000000, grossProfit: 1500000 },
       });
     });
   });

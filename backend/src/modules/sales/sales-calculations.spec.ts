@@ -211,3 +211,29 @@ describe('partial shipments and returns add up exactly (plan T3.7)', () => {
     expect(() => prorateSourceLine(source, 1, 2)).toThrow();
   });
 });
+
+describe('gross profit (plan T5.1, kept in UZS: see progress N4)', () => {
+  it('converts USD net revenue at the document rate before subtracting UZS COGS', () => {
+    // Net revenue USD 100 at 12,000 = 1,200,000 UZS; FIFO COGS 600,000 UZS.
+    // 600,000 UZS is the plan's USD 50 at the document rate.
+    expect(grossProfitInUzs(100, 'USD', 12_000, 600_000)).toBe(600_000);
+    expect(grossProfitInUzs(100, 'USD', 12_000, 600_000) / 12_000).toBe(50);
+  });
+
+  it('does not convert UZS documents', () => {
+    expect(grossProfitInUzs(1_000_000, 'UZS', 1, 600_000)).toBe(400_000);
+  });
+
+  it('excludes VAT: profit is taken on the net line amount', () => {
+    const line = calculateSalesLineAmounts({
+      quantity: 1,
+      unitPrice: 100,
+      discountPercent: 0,
+      vatRate: 12,
+    });
+    expect(line.totalAmount).toBe(112);
+    expect(grossProfitInUzs(line.netAmount, 'USD', 12_000, 600_000)).toBe(
+      600_000,
+    );
+  });
+});

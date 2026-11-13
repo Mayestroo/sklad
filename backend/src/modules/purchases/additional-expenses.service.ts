@@ -19,6 +19,7 @@ import {
 } from '@prisma/client';
 
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
+import { grossProfitInUzs } from '../sales/sales-calculations';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
 import {
   SUPPORTED_CURRENCIES,
@@ -731,8 +732,20 @@ export class AdditionalExpensesService {
               );
               const newUnitCogs = currentUnitCogs + allocatedPerUnit;
               const newLineCogs = currentLineCogs + lineCogsDelta;
-              const newGrossProfit =
-                Number(consumption.salesInvoiceItem.totalPrice) - newLineCogs;
+              const invoice = await tx.salesInvoice.findUnique({
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
+              });
+              if (!invoice) {
+                throw new BadRequestException(
+                  'Sotuv hujjati topilmadi (tannarxni qayta hisoblash)',
+                );
+              }
+              const newGrossProfit = salesProfitInUzs(
+                invoice,
+                Number(consumption.salesInvoiceItem.totalPrice) -
+                  Number(consumption.salesInvoiceItem.vatAmount || 0),
+                newLineCogs,
+              );
 
               await tx.salesInvoiceItem.update({
                 where: {
@@ -760,11 +773,11 @@ export class AdditionalExpensesService {
                 return s + Number(it.lineCogs || 0);
               }, 0);
 
-              const invoice = await tx.salesInvoice.findUnique({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-              });
-              const newInvoiceGrossProfit =
-                Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
+              const newInvoiceGrossProfit = salesProfitInUzs(
+                invoice,
+                Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
+                invoiceTotalCogs,
+              );
 
               await tx.salesInvoice.update({
                 where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
@@ -1086,9 +1099,20 @@ export class AdditionalExpensesService {
                 0,
                 currentLineCogs - lineCogsDelta,
               );
-              const restoredGrossProfit =
+              const invoice = await tx.salesInvoice.findUnique({
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
+              });
+              if (!invoice) {
+                throw new BadRequestException(
+                  'Sotuv hujjati topilmadi (tannarxni qayta hisoblash)',
+                );
+              }
+              const restoredGrossProfit = salesProfitInUzs(
+                invoice,
                 Number(consumption.salesInvoiceItem.totalPrice) -
-                restoredLineCogs;
+                  Number(consumption.salesInvoiceItem.vatAmount || 0),
+                restoredLineCogs,
+              );
 
               await tx.salesInvoiceItem.update({
                 where: {
@@ -1116,11 +1140,11 @@ export class AdditionalExpensesService {
                 return s + Number(it.lineCogs || 0);
               }, 0);
 
-              const invoice = await tx.salesInvoice.findUnique({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-              });
-              const newInvoiceGrossProfit =
-                Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
+              const newInvoiceGrossProfit = salesProfitInUzs(
+                invoice,
+                Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
+                invoiceTotalCogs,
+              );
 
               await tx.salesInvoice.update({
                 where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
@@ -1188,5 +1212,31 @@ export class AdditionalExpensesService {
 
       return cancelledExpense;
     });
+  }
+}
+
+/**
+ * Gross profit of a sales invoice (or line) after its COGS is recalibrated
+ * (ADR 0008): net revenue excluding VAT, converted to UZS at the invoice's
+ * rate, minus COGS in UZS (ADR 0011), the same rule as posting the invoice.
+ */
+function salesProfitInUzs(
+  invoice: { currency: string; exchangeRate: Prisma.Decimal | number },
+  netRevenue: number,
+  cogsInUzs: number,
+): number {
+  try {
+    return grossProfitInUzs(
+      netRevenue,
+      invoice.currency,
+      Number(invoice.exchangeRate),
+      cogsInUzs,
+    );
+  } catch (error) {
+    throw new BadRequestException(
+      error instanceof Error
+        ? error.message
+        : 'Yalpi foydani hisoblab bo‘lmadi',
+    );
   }
 }
