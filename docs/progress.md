@@ -34,9 +34,9 @@ so the work survives context compaction. Re-read this file, then
 - [x] B1..B13: fixed B1 B2 B4 B5 B8 B9 B10 B11 B12; B3 already fixed (verified by test); B7 not reproducible (guard int test); B6, B13 owner decisions (D6, D7); format decision D8
 
 ### Phase C — final verification
-- [ ] C1 Full suite (backend unit, frontend tests, typecheck, build, lint, int/e2e)
-- [ ] C2 Code review of branch diff vs main
-- [ ] C3 Clean git status, no secrets, no line-ending-only changes mixed in
+- [~] C1 Full suite — partly run at fadcd55 (stopped by Claude Code for low memory), see Log
+- [x] C2 Review: no secrets in diff; fixed F1 0f547b6, F2 aba7845 (+ API route contract test), F3 fadcd55
+- [x] C3 No CR-only changes (diff identical with --ignore-cr-at-eol), no CRLF in index; untracked: owner's files only (.claude/, plan note, muammolar.pdf)
 
 ## Decisions made (by me, during this run)
 
@@ -70,6 +70,14 @@ so the work survives context compaction. Re-read this file, then
   thousand in Uzbek/Russian notation; relevant to PDF item B2/B5.
 
 ## NOT RUN / skipped
+
+- C1 at the final commit fadcd55: backend lint, frontend tsc, frontend lint
+  and frontend build were NOT RUN. Claude Code stopped the background
+  suite because the machine was low on memory. Earlier evidence: backend lint
+  on all changed backend files was clean when each was committed; frontend
+  build passed at 19890ab; frontend lint was 123 problems at e40ce48 (all
+  skipped react-hooks rules). To finish: `cd backend && npm run lint`,
+  `cd frontend && npx tsc --noEmit && npm run lint && npm run build`.
 
 - A5 react-hooks/set-state-in-effect (76) and react-hooks/exhaustive-deps
   (45), plus 2 React-Compiler memo errors in `src/lib/useApiData.ts`.
@@ -120,3 +128,8 @@ so the work survives context compaction. Re-read this file, then
   unit 48 suites/437 tests pass.
 - Env note: in Git Bash, `timeout <cmd>` dropped DATABASE_URL_TEST; run
   `DATABASE_URL_TEST=... node node_modules/jest/bin/jest.js ...` directly.
+- C1 (fadcd55, partial): backend unit 49 suites / 439 tests pass;
+  typecheck clean; nest build OK (dist/backend/src/main.js); integration
+  11 suites / 30 tests pass; e2e 1 suite / 2 tests pass; frontend tests
+  66/66 pass. Backend lint, frontend tsc, lint and build: NOT RUN (see above).
+
