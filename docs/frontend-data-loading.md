@@ -36,6 +36,14 @@ if (accountsQuery.isPending) return <Loading />;
   focus, one retry except for 4xx. Override `staleTime` per query for
   reference data (e.g. 5 minutes for counterparties).
 - Errors are shown with `components/ui/LoadError.tsx` (message + retry).
+- **Typed filters** (search boxes): debounce the endpoint input with
+  `useDebouncedValue(filterString, 300)` from `lib/useDebouncedValue.ts`.
+  Debounce a string, not an object built during render.
+- **Keep the old numbers while a new period loads**: `{ keepPrevious: true }`
+  (TanStack `keepPreviousData`); `isPlaceholderData` is true meanwhile.
+- **Super-admin endpoints** (`/super-admin/...`) are not about one company:
+  `{ scope: 'platform' }` loads them with only a token and never sends the
+  selected company as `X-Tenant-Id`.
 
 ## After a write
 

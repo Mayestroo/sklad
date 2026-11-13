@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -17,30 +19,15 @@ export default function SuperAdminTicketsPage() {
   const isRu = locale === 'ru';
   const { token } = useAuth();
 
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [loading, setLoading] = useState(true);
+  const invalidateApi = useInvalidateApi();
+  const ticketsQuery = useApiQuery<SupportTicket[]>('/super-admin/tickets', { scope: 'platform' });
+  const tickets = ticketsQuery.data ?? [];
 
   // Reply modal
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [replyLoading, setReplyLoading] = useState(false);
 
-  const fetchTickets = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const res = await apiFetch<SupportTicket[]>('/super-admin/tickets', { token, locale });
-      setTickets(res);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки тикетов' : 'Xatolik yuz berdi'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTickets();
-  }, [token]);
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +44,7 @@ export default function SuperAdminTicketsPage() {
       toast.success(isRu ? 'Ответ успешно отправлен' : 'Javob muvaffaqiyatli yuborildi');
       setSelectedTicket(null);
       setReplyMessage('');
-      fetchTickets();
+      void invalidateApi('/super-admin/tickets');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки ответа' : 'Xatolik yuz berdi'));
     } finally {
@@ -82,7 +69,9 @@ export default function SuperAdminTicketsPage() {
           overflow: 'hidden',
         }}
       >
-        {loading ? (
+        {ticketsQuery.isError ? (
+          <LoadError error={ticketsQuery.error} onRetry={() => void ticketsQuery.refetch()} retrying={ticketsQuery.isFetching} />
+        ) : ticketsQuery.isPending ? (
           <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             Yuklanmoqda...
           </div>

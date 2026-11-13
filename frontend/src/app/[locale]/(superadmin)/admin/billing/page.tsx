@@ -1,44 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
-import { formatDate, errorMessage } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { toast } from '@/context/ToastContext';
-import { GlobalMetrics, TenantCompanySummary } from '@shared/types';
+import { TenantCompanySummary } from '@shared/types';
 
 export default function SuperAdminBillingPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token } = useAuth();
-
-  const [, setMetrics] = useState<GlobalMetrics | null>(null);
-  const [tenants, setTenants] = useState<TenantCompanySummary[]>([]);
-  const [, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const [m, t] = await Promise.all([
-        apiFetch<GlobalMetrics>('/super-admin/metrics', { token, locale }),
-        apiFetch<TenantCompanySummary[]>('/super-admin/tenants', { token, locale }),
-      ]);
-      setMetrics(m);
-      setTenants(t);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Xatolik yuz berdi'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [token]);
+  // The global metrics were loaded here too but never shown; the admin
+  // dashboard is where they are displayed.
+  const tenantsQuery = useApiQuery<TenantCompanySummary[]>('/super-admin/tenants', { scope: 'platform' });
+  const tenants = tenantsQuery.data ?? [];
 
   const planCounts = {
     STARTER: tenants.filter((t) => t.plan === 'STARTER').length,
@@ -171,6 +147,9 @@ export default function SuperAdminBillingPage() {
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
           {isRu ? 'Текущие активные подписки' : 'Mavjud obunalar holati'}
         </div>
+        {tenantsQuery.isError && (
+          <LoadError error={tenantsQuery.error} onRetry={() => void tenantsQuery.refetch()} retrying={tenantsQuery.isFetching} />
+        )}
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
             <thead>

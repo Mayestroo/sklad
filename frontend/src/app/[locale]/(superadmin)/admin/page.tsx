@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -32,9 +34,15 @@ export default function SuperAdminTenantsPage() {
   const isRu = locale === 'ru';
   const { token, startImpersonation } = useAuth();
 
-  const [metrics, setMetrics] = useState<GlobalMetrics | null>(null);
-  const [tenants, setTenants] = useState<TenantCompanySummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const invalidateApi = useInvalidateApi();
+  const metrics = useApiQuery<GlobalMetrics>('/super-admin/metrics', { scope: 'platform' }).data ?? null;
+  const tenantsQuery = useApiQuery<TenantCompanySummary[]>('/super-admin/tenants', { scope: 'platform' });
+  const tenants = tenantsQuery.data ?? [];
+  // A tenant change moves the metrics too (active/trial counts, MRR).
+  const refreshPlatform = () => {
+    void invalidateApi('/super-admin/tenants');
+    void invalidateApi('/super-admin/metrics');
+  };
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,26 +76,6 @@ export default function SuperAdminTenantsPage() {
   // Impersonation loading state
   const [impersonateLoadingId, setImpersonateLoadingId] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const [m, t] = await Promise.all([
-        apiFetch<GlobalMetrics>('/super-admin/metrics', { token, locale }),
-        apiFetch<TenantCompanySummary[]>('/super-admin/tenants', { token, locale }),
-      ]);
-      setMetrics(m);
-      setTenants(t);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Maʼlumotlarni yuklashda xatolik yuz berdi'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [token]);
 
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +108,7 @@ export default function SuperAdminTenantsPage() {
       );
       setCreateModalOpen(false);
       resetCreateForm();
-      fetchData();
+      refreshPlatform();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при создании' : 'Xatolik yuz berdi'));
     } finally {
@@ -165,7 +153,7 @@ export default function SuperAdminTenantsPage() {
         isRu ? 'Данные предприятия обновлены' : 'Korxona maʼlumotlari yangilandi',
       );
       setEditModalOpen(false);
-      fetchData();
+      refreshPlatform();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Xatolik yuz berdi'));
     } finally {
@@ -516,7 +504,9 @@ export default function SuperAdminTenantsPage() {
           overflow: 'hidden',
         }}
       >
-        {loading ? (
+        {tenantsQuery.isError ? (
+          <LoadError error={tenantsQuery.error} onRetry={() => void tenantsQuery.refetch()} retrying={tenantsQuery.isFetching} />
+        ) : tenantsQuery.isPending ? (
           <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             Yuklanmoqda...
           </div>
