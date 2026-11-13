@@ -185,7 +185,7 @@ account; react-hooks migration; visual verification; final verification.
 - P3: deleteEntriesForSource always issues the deleteMany (no-op when
   nothing matches) so existing spec assertions keep their meaning.
 - Tooling: typed backslash escapes are collapsed on the way into commands
-  and files (`\` -> `\`); scripts use chr(92) / String.fromCharCode.
+  and files (a double backslash arrives as one); scripts use chr(92) / String.fromCharCode.
 
 ## Round 2 log
 - P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
@@ -200,7 +200,7 @@ account; react-hooks migration; visual verification; final verification.
 - P3 d8a9128: migrations applied to local sklad_test only (migrate deploy
   via prisma.test.config.ts), both re-run cleanly (idempotent), migrate diff
   vs schema empty. Backend unit 50 suites / 468 tests; integration 12
-  suites / 35 tests (new accounting-periods.int-spec 5/5); e2e 1/2 tests
-  pass (2/2); typecheck clean; eslint on changed files clean; nest build
+  suites / 35 tests (new accounting-periods.int-spec 5/5); e2e 1 suite /
+  2 tests pass; typecheck clean; eslint on changed files clean; nest build
   OK. Guards: 17 lifecycle checks + journal-writer scan fail on the old
   services (git stash); A1 test fails on the old sales service.
