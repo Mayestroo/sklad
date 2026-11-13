@@ -59,6 +59,15 @@ so the work survives context compaction. Re-read this file, then
 
 ## Findings to fix later (found while typing the frontend)
 
+- F5 (round 2) Several automatic postings date their journal entry "now"
+  instead of the document date: JournalService.autoPostPayment /
+  autoPostInboundDoc / autoPost*Transfer / autoPostServiceAct, the
+  dispatch invoice entry in sales-orders.service.ts, and the sales-return
+  cancel reversal (`entryDate: new Date()`). CLAUDE.md says entries carry
+  the document date. Period closing is safe regardless (explicit
+  document-date checks); fixing the dates changes ledger history, so it
+  is left for a separate, reviewed change.
+
 - F1 Inventory documents have no currency column (totals are UZS batch
   cost) but the inventory documents page formats them in the tenant default
   currency (`inventory/documents/page.tsx`). Phase C.
@@ -142,7 +151,7 @@ account; react-hooks migration; visual verification; final verification.
 ## Round 2 task list
 - [x] P1 backend lint, frontend tsc, frontend lint, frontend build (at 0acf6e2)
 - [x] P2 shared money/quantity formatter (D8) + scan test — 15b05be
-- [ ] P3 accounting periods (D4) + A1 sales-return cancel
+- [x] P3 accounting periods (D4) + A1 sales-return cancel — d8a9128
 - [ ] P4.4 pluggable throttler storage (D5, REDIS_URL)
 - [ ] P4.5 registration enumeration (D3)
 - [ ] P4.6 B13 reading + B6 opening-balance labelling
@@ -166,6 +175,18 @@ account; react-hooks migration; visual verification; final verification.
 - Tooling: the shell/Write layer turns a typed ` ` escape into a raw
   NBSP; code builds it with `String.fromCharCode(0xa0)` instead.
 
+- P3: monthly UTC periods (no row = OPEN); reporting here is monthly and a
+  year close is 12 month closes. Closing a month that has not ended is
+  refused. Accountant may close, only company_admin reopens (safest
+  default; owner may widen). Close/reopen audit row written with the
+  transaction client (AuditService.logAction swallows errors, so it was
+  not used). Draft-only deletes and payments / inventory documents (no
+  document date, always "now") are not period-checked. No UI (API only).
+- P3: deleteEntriesForSource always issues the deleteMany (no-op when
+  nothing matches) so existing spec assertions keep their meaning.
+- Tooling: typed backslash escapes are collapsed on the way into commands
+  and files (`\` -> `\`); scripts use chr(92) / String.fromCharCode.
+
 ## Round 2 log
 - P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
   lint` clean, `--fix` changed nothing; frontend `npx tsc --noEmit` exit 0;
@@ -176,3 +197,10 @@ account; react-hooks migration; visual verification; final verification.
   typecheck clean; backend jest 49 suites / 440 tests; eslint on changed
   files clean except pre-existing react-hooks; frontend build OK; nest
   build OK. Scan test verified failing on the pre-change components.
+- P3 d8a9128: migrations applied to local sklad_test only (migrate deploy
+  via prisma.test.config.ts), both re-run cleanly (idempotent), migrate diff
+  vs schema empty. Backend unit 50 suites / 468 tests; integration 12
+  suites / 35 tests (new accounting-periods.int-spec 5/5); e2e 1/2 tests
+  pass (2/2); typecheck clean; eslint on changed files clean; nest build
+  OK. Guards: 17 lifecycle checks + journal-writer scan fail on the old
+  services (git stash); A1 test fails on the old sales service.
