@@ -1261,6 +1261,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         counterpartyId: 'cust-1',
         warehouseId: 'wh-1',
         currency: 'USD',
+        returnDate: '2026-03-15',
         items: [{ productId: 'prod-1', quantity: 2, unitPrice: 112 }],
       });
       expect(journal).toHaveLength(1);
@@ -1292,6 +1293,9 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(journal).toHaveLength(2);
       const reversal = journal[1];
       expect(reversal.sourceDocType).toBe('SalesReturnCancel');
+      // F5: the reversal is dated by the return, never by the cancel moment.
+      expect(reversal.entryDate).toEqual(journal[0].entryDate);
+      expect(reversal.entryDate).toEqual(new Date('2026-03-15'));
       expect(reversal.sourceDocId).toBe('sret-usd');
       expect(reversal.lines).toHaveLength(postingLines.length);
       postingLines.forEach((line: any, i: number) => {

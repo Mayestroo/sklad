@@ -122,6 +122,18 @@ branch**, never with `db push`. All are additive and idempotent.
       operating income (e.g. 9390), FX gain (9540), or a 2910 cost correction.
       No settings UI yet (API only).
 
+- [ ] **Accountant to review historical entries dated at posting time**
+      (F5, round 4). Until round 4 these automatic postings were dated the
+      moment they were posted instead of the document date: customer
+      payments, inbound inventory documents, transfer shipments and
+      receipts, service acts, order-dispatch invoices and sales-return
+      cancellations. New entries now carry the document date; existing
+      ledger rows were **not** rewritten. Find candidates with
+      `entry_date::date <> <document date>` per `source_doc_type`
+      (Payment, InventoryDocument, StockTransfer, ServiceAct, SalesInvoice
+      from dispatch, SalesReturnCancel) and decide whether any month needs
+      a correcting entry.
+
 ## Decisions needed from owner
 
 Each item below has a safe default already in place, so nothing is blocked.

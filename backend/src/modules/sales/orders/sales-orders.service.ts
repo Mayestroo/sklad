@@ -1978,6 +1978,7 @@ export class SalesOrdersService {
         await this.journalService.createJournalEntry(
           tenantId,
           {
+            entryDate: invoice.invoiceDate,
             description: `Buyurtma ${order.orderNumber} bo'yicha sotuv`,
             sourceDocType: 'SalesInvoice',
             sourceDocId: invoice.id,

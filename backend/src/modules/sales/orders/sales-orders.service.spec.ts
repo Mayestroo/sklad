@@ -777,9 +777,11 @@ describe('SalesOrdersService', () => {
           }),
         }),
       );
+      // F5: the dispatch invoice entry is dated by the invoice, not by now.
       expect(prisma.journalEntry.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            entryDate: new Date('2026-09-24T00:00:00.000Z'),
             lines: {
               create: expect.arrayContaining([
                 expect.objectContaining({

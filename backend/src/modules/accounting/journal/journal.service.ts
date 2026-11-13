@@ -18,6 +18,7 @@ import {
 interface CashPaymentForJournal {
   id: string;
   paymentNumber: string;
+  paymentDate: Date;
   method: PaymentMethod;
   amount: number | string | Prisma.Decimal;
   currency: string;
@@ -38,17 +39,23 @@ type Numeric = number | string | Prisma.Decimal;
 interface InboundDocForJournal {
   id: string;
   docNumber: string;
+  docDate: Date;
   totalAmount: Numeric;
 }
 
 interface TransferForJournal {
   id: string;
   transferNumber: string;
+  /** The transfer document's date: dates the shipment (Dt 2920 / Kt 2910). */
+  transferDate: Date;
+  /** Recorded when the target warehouse receives: dates Dt 2910 / Kt 2920. */
+  receivedAt: Date | null;
 }
 
 interface ServiceActForJournal {
   id: string;
   actNumber: string;
+  actDate: Date;
   type: string;
   currency: string;
   exchangeRate: Numeric | null;
@@ -69,8 +76,17 @@ export type JournalWriter = Pick<
 /**
  * A journal entry to post. `entryDate` is the business document's date; it
  * dates the entry and selects the yearly number series (JE-YYYY-NNNNN).
+ * Required: an automatic posting is never dated "now" (F5).
  */
-export type JournalEntryInput = CreateJournalEntryDto & { entryDate?: Date };
+export type JournalEntryInput = CreateJournalEntryDto & { entryDate: Date };
+
+/**
+ * A journal entry typed in by a user. It has no source document, so when the
+ * user gives no date it is dated when it is entered.
+ */
+export type ManualJournalEntryInput = CreateJournalEntryDto & {
+  entryDate?: Date;
+};
 
 @Injectable()
 export class JournalService {
@@ -90,7 +106,7 @@ export class JournalService {
    * Automatic postings resolve accounts by code within the tenant and call
    * createJournalEntry directly.
    */
-  async createManualEntry(tenantId: string, dto: JournalEntryInput) {
+  async createManualEntry(tenantId: string, dto: ManualJournalEntryInput) {
     await assertTenantOwned(this.prisma, tenantId, {
       account: (dto.lines ?? []).flatMap((line) => [
         line.debitAccountId,
@@ -100,7 +116,11 @@ export class JournalService {
     // In a transaction so the period lock taken by createJournalEntry is
     // held until the entry commits (a concurrent close waits for it).
     return this.prisma.$transaction((tx) =>
-      this.createJournalEntry(tenantId, dto, tx),
+      this.createJournalEntry(
+        tenantId,
+        { ...dto, entryDate: dto.entryDate ?? new Date() },
+        tx,
+      ),
     );
   }
 
@@ -115,7 +135,12 @@ export class JournalService {
       );
     }
 
-    const entryDate = dto.entryDate ?? new Date();
+    const entryDate = dto.entryDate;
+    if (!(entryDate instanceof Date) || Number.isNaN(entryDate.getTime())) {
+      throw new BadRequestException(
+        "Provodka sanasi ko'rsatilmagan (manba hujjat sanasi kerak)",
+      );
+    }
     // D4: no entry may be dated in a closed accounting period.
     await assertPeriodOpen(db, tenantId, entryDate, 'post');
     const entryNumber = await nextDocumentNumber(
@@ -283,6 +308,7 @@ export class JournalService {
     await this.createJournalEntry(
       tenantId,
       {
+        entryDate: payment.paymentDate,
         description: `Avtomatik provodka: To'lov kelib tushishi № ${payment.paymentNumber}${exchangeNote}`,
         sourceDocType: 'Payment',
         sourceDocId: payment.id,
@@ -313,6 +339,7 @@ export class JournalService {
       await this.createJournalEntry(
         tenantId,
         {
+          entryDate: doc.docDate,
           description: `Avtomatik provodka: Omborga tovar kirim qilish № ${doc.docNumber}`,
           sourceDocType: 'InventoryDocument',
           sourceDocId: doc.id,
@@ -351,6 +378,7 @@ export class JournalService {
     await this.createJournalEntry(
       tenantId,
       {
+        entryDate: transfer.transferDate,
         description: `Avtomatik provodka: Omborlararo tovar jo'natish № ${transfer.transferNumber}`,
         sourceDocType: 'StockTransfer',
         sourceDocId: transfer.id,
@@ -384,10 +412,16 @@ export class JournalService {
     const acc2920 = await this.accountsService.findByCode(tenantId, '2920');
 
     if (!acc2910 || !acc2920 || totalCostValue <= 0) return;
+    if (!transfer.receivedAt) {
+      throw new BadRequestException(
+        "Transfer qabul qilingan sana ko'rsatilmagan",
+      );
+    }
 
     await this.createJournalEntry(
       tenantId,
       {
+        entryDate: transfer.receivedAt,
         description: `Avtomatik provodka: Omborlararo tovar qabul qilish № ${transfer.transferNumber}`,
         sourceDocType: 'StockTransfer',
         sourceDocId: transfer.id,
@@ -507,6 +541,7 @@ export class JournalService {
       await this.createJournalEntry(
         tenantId,
         {
+          entryDate: act.actDate,
           description: `Avtomatik provodka: Xizmatlar dalolatnomasi № ${act.actNumber}`,
           sourceDocType: 'ServiceAct',
           sourceDocId: act.id,

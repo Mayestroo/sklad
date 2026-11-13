@@ -1,37 +1,44 @@
-# Progress log — refactor/quality-audit (autonomous run, 2026-11-13)
 
-Running log for the autonomous pass (Phases A–C). Updated after every commit
-so the work survives context compaction. Re-read this file, then
-`docs/pre-release-checklist.md`, then the phase list below, after a compaction.
+# Round 4 (2026-11-13) — F5, admin revenue card, sales-document plan
 
-## Environment
+Scope set by the owner: code work only; migrations on local Docker
+databases only; no push/merge/deploy, no secrets, no non-local DB writes.
+Checks after each commit (script): backend unit, typecheck, eslint (no
+--fix), nest build, integration on local `sklad_test` (+ Redis db 15);
+frontend node tests, component tests, tsc, eslint, `next build` when the
+frontend changed.
 
-- Docker Desktop is running; `sklad_postgres` (postgres:16-alpine) is up on
-  `127.0.0.1:5432` with an existing disposable database `sklad_test`.
-  DB-backed tests use, inline only (never written to `.env`):
-  `DATABASE_URL_TEST=postgresql://sklad_user:sklad_password@127.0.0.1:5432/sklad_test`
-- `backend/.env` points at Neon (real tenant data): never used for tests,
-  seeds or migrations in this run.
-- Disk: D: 25 GB free.
+## Round 4 status
 
-## Task list
+| Item | Status | Commit | Notes |
+|---|---|---|---|
+| 1a F5 journal entry dates | done | (this commit) | 6 patterns, test per pattern; see decisions |
 
-### Phase A — open items
-- [x] A1 Sales-return cancel in a closed period — SKIPPED: period closing is not implemented (no model, field, ADR or service). Recorded as owner decision D4.
-- [x] A2 Pre-release checklist entries + "Decisions needed from owner"
-- [x] A3 Second tenant sweep (ids from body/params/query, nested line ids),
-      `assertTenantOwned` helper + guard test, `docs/tenant-isolation-sweep.md` — 5eb0313
-- [x] A4a `/sales/purchases` page — removed page + GET /api/sales/purchases (e19cfdd)
-- [x] A4b Excel opening-balance template: asset-type / useful-life columns removed, sheet read by header (a27fa8c)
-- [~] A5 Frontend lint, by rule category — PARTLY DONE. no-explicit-any
-      430 -> 0 (44a8e05), no-unused-vars 181 -> 0 (19890ab), parse error and
-      1 of 3 compiler-memo errors fixed. SKIPPED: react-hooks
-      set-state-in-effect (76) and exhaustive-deps (45), see below.
-- [x] A6 Integration + e2e tests on local Docker Postgres — int 28/28, e2e 2/2 after fixes 72d8b7e, 1c9efeb
+## Round 4 decisions
 
-### Phase B — muammolar.pdf
-- [x] B0 Read every page (text + rasterized), `docs/muammolar-triage.md`
-- [x] B1..B13: fixed B1 B2 B4 B5 B8 B9 B10 B11 B12; B3 already fixed (verified by test); B7 not reproducible (guard int test); B6, B13 owner decisions (D6, D7); format decision D8
+- F5: `JournalEntryInput.entryDate` is now required (type) and checked at
+  runtime in `createJournalEntry` (no "now" fallback). Manual entries
+  (`createManualEntry`, typed by a user, no source document) are still
+  dated when entered if no date is given; that is the only "now".
+- F5: dates used: payment → `paymentDate`; inbound inventory document →
+  `docDate`; transfer shipment → `transferDate`; transfer receipt →
+  `receivedAt`; service act → `actDate`; dispatch invoice →
+  `invoiceDate`; sales-return cancel → the return's `returnDate` (the
+  cancel is already period-checked against `returnDate`, so the reversal
+  lands in the same period as what it reverses).
+- Existing journal rows untouched; checklist item "accountant to review
+  historical entries dated at posting time".
+
+## Needs owner decision (round 4)
+
+- N1 (F5) Transfer receipt date. The transfer has one document date
+  (`transferDate`); the receipt is a separate event recorded as
+  `receivedAt`, which the service sets to the moment of receiving. Dating
+  the receipt by `transferDate` would collapse the in-transit account 2920
+  and refuse receipts of goods shipped in a now-closed month, so the
+  receipt is dated by `receivedAt` (effectively "now"). Alternative: let
+  the user enter a receipt date on the receive action.
+y test); B7 not reproducible (guard int test); B6, B13 owner decisions (D6, D7); format decision D8
 
 ### Phase C — final verification
 - [~] C1 Full suite — partly run at fadcd55 (stopped by Claude Code for low memory), see Log

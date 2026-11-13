@@ -1654,7 +1654,7 @@ export class SalesInvoicesService {
         await this.journalService.createJournalEntry(
           tenantId,
           {
-            entryDate: new Date(),
+            entryDate: existing.returnDate,
             description: `Sotuv qaytarilishini bekor qilish № ${existing.returnNumber}`,
             sourceDocType: 'SalesReturnCancel',
             sourceDocId: existing.id,

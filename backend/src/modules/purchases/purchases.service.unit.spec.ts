@@ -1046,6 +1046,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         currency: 'UZS',
         exchangeRate: 1,
         returnNumber: 'RET-2026-0002',
+        returnDate: new Date('2026-02-01T00:00:00.000Z'),
         status: ReturnDocStatus.POSTED,
         totalAmount: 150000,
         items: [
