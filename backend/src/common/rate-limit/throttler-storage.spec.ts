@@ -159,6 +159,18 @@ describe('RedisThrottlerStorage', () => {
     );
   });
 
+  it('does not hang shutdown when Redis never answers QUIT (unreachable server)', async () => {
+    const disconnect = jest.fn();
+    const redis: RedisEvalClient = {
+      eval: jest.fn(),
+      quit: jest.fn(() => new Promise<never>(() => undefined)),
+      disconnect,
+    };
+    const storage = new RedisThrottlerStorage(redis, undefined, 'p', 50);
+    await storage.onApplicationShutdown();
+    expect(disconnect).toHaveBeenCalled();
+  });
+
   it('closes the Redis connection on shutdown', async () => {
     const redis = new FakeRedis();
     await new RedisThrottlerStorage(redis).onApplicationShutdown();

@@ -18,6 +18,7 @@ export interface RedisEvalClient {
     ...args: Array<string | number>
   ): Promise<unknown>;
   quit?(): Promise<unknown>;
+  disconnect?(): void;
 }
 
 /**
@@ -75,6 +76,8 @@ export class RedisThrottlerStorage
     /** Used while Redis is unreachable, so the API keeps answering. */
     private readonly fallback: ThrottlerStorage = new ThrottlerStorageService(),
     private readonly prefix = 'sklad:throttle',
+    /** How long shutdown waits for a graceful QUIT before dropping the socket. */
+    private readonly quitTimeoutMs = 1_000,
   ) {}
 
   async increment(
@@ -126,8 +129,29 @@ export class RedisThrottlerStorage
     }
   }
 
+  /**
+   * Shutdown must never depend on Redis: QUIT waits for a connection that an
+   * unreachable server never gives, so after `quitTimeoutMs` the socket is
+   * dropped instead (seen as a hanging app.close() in the e2e suite).
+   */
   async onApplicationShutdown(): Promise<void> {
-    await this.redis.quit?.().catch(() => undefined);
+    if (!this.redis.quit) {
+      this.redis.disconnect?.();
+      return;
+    }
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), this.quitTimeoutMs);
+    });
+    const outcome = await Promise.race([
+      this.redis.quit().then(
+        () => 'quit' as const,
+        () => 'failed' as const,
+      ),
+      timedOut,
+    ]);
+    clearTimeout(timer);
+    if (outcome !== 'quit') this.redis.disconnect?.();
   }
 }
 
