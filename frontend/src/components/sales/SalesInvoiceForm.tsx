@@ -41,6 +41,7 @@ import { toast } from '@/context/ToastContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
 import { unitLabel } from '@/lib/units';
+import { stockLabel } from '@/lib/stock-label';
 
 interface CounterpartyOption {
   id: string;
@@ -883,11 +884,11 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   }));
 
   const productOptions: SelectOption[] = products.map((p) => {
-    const stockInfo = warehouseStockMap[p.id];
-    const freeStock = stockInfo !== undefined ? stockInfo.free : p.stockQty;
+    // Free stock in the document's warehouse; a product without a row there has none.
+    const freeStock = warehouseId ? warehouseStockMap[p.id]?.free ?? 0 : p.stockQty;
     return {
       value: p.id,
-      label: `${getLocalizedName(p.name)} ${p.sku ? `(${p.sku})` : ''} · ${isRu ? 'Остаток' : 'Qoldiq'}: ${freeStock}`,
+      label: `${getLocalizedName(p.name)} ${p.sku ? `(${p.sku})` : ''} · ${stockLabel(freeStock, p.stockQty, locale)}`,
     };
   });
 

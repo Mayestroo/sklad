@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types src/lib/utils.spec.ts src/lib/localized-name.spec.ts src/lib/api.spec.ts src/lib/sales-pricing.spec.ts src/lib/sales-return.spec.ts src/lib/service-act.spec.ts src/lib/counterparty-form.spec.ts src/lib/inventory-cost.spec.ts src/lib/cash-account-policy.spec.ts src/lib/opening-balance-import.spec.ts src/lib/units.spec.ts src/lib/opening-balance-lines.spec.ts src/components/products/inventory-edit.spec.ts src/components/products/quick-create-wiring.spec.ts src/components/ui/select-keyboard.spec.ts src/components/sales/order-form/order-items-columns.spec.ts"
+    "test": "node --test --experimental-strip-types src/lib/utils.spec.ts src/lib/localized-name.spec.ts src/lib/api.spec.ts src/lib/sales-pricing.spec.ts src/lib/sales-return.spec.ts src/lib/service-act.spec.ts src/lib/counterparty-form.spec.ts src/lib/inventory-cost.spec.ts src/lib/cash-account-policy.spec.ts src/lib/opening-balance-import.spec.ts src/lib/units.spec.ts src/lib/opening-balance-lines.spec.ts src/lib/stock-label.spec.ts src/components/products/inventory-edit.spec.ts src/components/products/quick-create-wiring.spec.ts src/components/ui/select-keyboard.spec.ts src/components/sales/order-form/order-items-columns.spec.ts"
   },
   "dependencies": {
     "lucide-react": "^1.30.0",
