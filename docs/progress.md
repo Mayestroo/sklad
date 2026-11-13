@@ -23,7 +23,10 @@ so the work survives context compaction. Re-read this file, then
       `assertTenantOwned` helper + guard test, `docs/tenant-isolation-sweep.md` — 5eb0313
 - [x] A4a `/sales/purchases` page — removed page + GET /api/sales/purchases (e19cfdd)
 - [x] A4b Excel opening-balance template: asset-type / useful-life columns removed, sheet read by header (a27fa8c)
-- [ ] A5 Frontend lint, by rule category — IN PROGRESS: no-explicit-any done (44a8e05); next no-unused-vars, then react-hooks rules
+- [~] A5 Frontend lint, by rule category — PARTLY DONE. no-explicit-any
+      430 -> 0 (44a8e05), no-unused-vars 181 -> 0 (19890ab), parse error and
+      1 of 3 compiler-memo errors fixed. SKIPPED: react-hooks
+      set-state-in-effect (76) and exhaustive-deps (45), see below.
 - [ ] A6 Integration + e2e tests on local Docker Postgres
 
 ### Phase B — muammolar.pdf
@@ -67,6 +70,19 @@ so the work survives context compaction. Re-read this file, then
   thousand in Uzbek/Russian notation; relevant to PDF item B2/B5.
 
 ## NOT RUN / skipped
+
+- A5 react-hooks/set-state-in-effect (76) and react-hooks/exhaustive-deps
+  (45), plus 2 React-Compiler memo errors in `src/lib/useApiData.ts`.
+  Reason: these flag the app-wide data-loading pattern (an effect calls a
+  fetcher that does `setLoading(true)` synchronously, then sets results), and
+  "fixing" exhaustive-deps by adding dependencies can create refetch loops.
+  Neither can be changed mechanically without behaviour risk, and the task
+  forbids behaviour changes and blanket disables. A first attempt on
+  useApiData made the compiler errors worse and was reverted.
+  To finish: pick one data-loading primitive (extend `useApiData`, built on
+  `useSyncExternalStore` over `lib/cache.ts`, or adopt a query library),
+  migrate pages to it one module at a time with a manual check per page,
+  and reset modal forms by remounting with `key` instead of effects.
 
 ## Baseline (before any change in this run)
 
