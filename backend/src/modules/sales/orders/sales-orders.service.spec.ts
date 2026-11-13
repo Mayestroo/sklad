@@ -240,6 +240,65 @@ describe('SalesOrdersService', () => {
       });
     });
 
+    it('recalculates percentage discount and VAT the same way on a draft update (plan T3.3)', async () => {
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-draft',
+        tenantId: 'tenant-1',
+        status: 'NEW',
+        currency: 'UZS',
+        exchangeRate: 1,
+        additionalChargeAmount: 0,
+        additionalChargeVatRate: 12,
+        warehouseId: 'wh-1',
+        items: [],
+      });
+      prisma.product.findMany.mockResolvedValue([
+        { id: 'prod-1', vatRate: 12 },
+        { id: 'prod-2', vatRate: 0 },
+      ]);
+      prisma.salesOrder.update.mockImplementation(({ data }: any) => ({
+        id: 'order-draft',
+        ...data,
+        warehouseId: 'wh-1',
+        items: data.items.create.map((item: any, i: number) => ({
+          id: `item-${i}`,
+          ...item,
+        })),
+        payments: [],
+        salesInvoices: [],
+      }));
+
+      await service.update('tenant-1', 'user-1', 'order-draft', {
+        items: [
+          { productId: 'prod-1', quantity: 2, unitPrice: 100, discount: 10 },
+          { productId: 'prod-2', quantity: 1, unitPrice: 50, discount: 100 },
+        ],
+      });
+
+      const { data } = prisma.salesOrder.update.mock.calls[0][0];
+      // Line 1: 200 - 20 = 180 + 21.6 VAT = 201.6; line 2: fully discounted.
+      expect(data).toMatchObject({
+        subtotalAmount: 250,
+        discountAmount: 70,
+        vatAmount: 21.6,
+        totalAmount: 201.6,
+      });
+      expect(data.items.create).toEqual([
+        expect.objectContaining({
+          discount: 10,
+          vatRate: 12,
+          vatAmount: 21.6,
+          totalPrice: 201.6,
+        }),
+        expect.objectContaining({
+          discount: 100,
+          vatRate: 0,
+          vatAmount: 0,
+          totalPrice: 0,
+        }),
+      ]);
+    });
+
     it('should throw Error if items list is empty or invalid', async () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {

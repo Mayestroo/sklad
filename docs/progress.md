@@ -467,7 +467,8 @@ frontend changed.
 | T2.3 backend price resolution | done | 16ea3ab | saved-currency conversion existed; removed the last 'UZS' fallback (zero price, no currency on product or request → 400). Price-list endpoints kept; no form calls GET products/:id/price |
 | T2.4 sales checks | done | — | invoice/order specs pass; frontend build OK (after T2.2) |
 | T3.1 order/invoice calculation tests | done (coverage) | afe8f02 | 2x100/10%/12% = 201.6, zero VAT, 100% discount, header = sum of lines; pass on the shared calculator from 0bce6d3 |
-| T3.2 schema + DTO fields | done | (this commit) | order VAT / return VAT columns and order/invoice DTO 0–100 checks existed; added SalesReturnItem.discount (provenance, already applied in unitPrice) + idempotent migration 20261113000400; return DTO carries no discount/VAT (derived from the invoice line, T3.6) |
+| T3.2 schema + DTO fields | done | b3b0ead | order VAT / return VAT columns and order/invoice DTO 0–100 checks existed; added SalesReturnItem.discount (provenance, already applied in unitPrice) + idempotent migration 20261113000400; return DTO carries no discount/VAT (derived from the invoice line, T3.6) |
+| T3.3 order discount/VAT on create and draft update | done (coverage) | (this commit) | both paths use the shared calculator (0bce6d3); added the draft-update test (2 lines, 10% and 100% discount) |
 
 ## Round 4 decisions
 
@@ -496,6 +497,11 @@ frontend changed.
   it. Sales/product forms covered by the plan now use the strict
   useSalesDefaultCurrency() (null → blank). The other uses (purchases,
   finance, services, dashboards) are outside the plan; left as a finding.
+
+- F9 (found in T3.3) SalesOrdersService.update releases reservations,
+  deletes the order lines and updates the order as separate statements, not
+  in one transaction: a failure after deleteMany leaves an order without
+  lines. Not in the plan (T4 makes invoice drafts atomic); left as a finding.
 
 ## Needs owner decision (round 4)
 
