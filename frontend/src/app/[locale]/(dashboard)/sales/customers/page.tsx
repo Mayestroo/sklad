@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -49,8 +51,9 @@ export default function CustomersPage() {
   const isRu = locale === 'ru';
   const defaultCurrency = useDefaultCurrency();
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const customersQuery = useApiQuery<Customer[]>('/sales/counterparties?type=CUSTOMER');
+  const customers = customersQuery.data ?? [];
+  const loading = customersQuery.isPending;
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -60,18 +63,7 @@ export default function CustomersPage() {
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const fetchCustomers = () => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<Customer[]>('/sales/counterparties?type=CUSTOMER', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then(setCustomers)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
+  const fetchCustomers = () => void customersQuery.refetch();
 
   const handleDeleteCustomer = async () => {
     if (!deletingCustomer || !token || !company) return;
@@ -93,7 +85,6 @@ export default function CustomersPage() {
     }
   };
 
-  useEffect(() => { fetchCustomers(); }, [token, company, locale]);
 
   const handleViewProfile = async (customer: Customer) => {
     if (!token || !company) return;
@@ -215,7 +206,13 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {customersQuery.isError ? (
+                <tr>
+                  <td colSpan={6}>
+                    <LoadError error={customersQuery.error} onRetry={fetchCustomers} retrying={customersQuery.isFetching} />
+                  </td>
+                </tr>
+              ) : loading ? (
                 <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</td></tr>
               ) : filtered.length === 0 ? (
                 <tr>

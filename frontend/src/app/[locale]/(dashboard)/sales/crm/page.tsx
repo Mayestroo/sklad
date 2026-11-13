@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -46,13 +48,19 @@ export default function CrmKanbanPage() {
   const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
-  const [kanbanData, setKanbanData] = useState<Record<string, Deal[]>>({});
-  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const kanbanQuery = useApiQuery<Record<string, Deal[]>>('/sales/deals/kanban');
+  const counterpartiesQuery = useApiQuery<Counterparty[]>('/sales/counterparties');
+  const pageQueries = [kanbanQuery, counterpartiesQuery];
+  const kanbanData = kanbanQuery.data ?? {};
+  const counterparties = counterpartiesQuery.data ?? [];
+  const loading = pageQueries.some((q) => q.isPending);
+  const failedQuery = pageQueries.find((q) => q.isError);
 
   // New Deal Modal State
   const [showModal, setShowModal] = useState(false);
-  const [counterpartyId, setCounterpartyId] = useState('');
+  const [pickedCounterpartyId, setCounterpartyId] = useState('');
+  // The new-deal form starts on the first counterparty until one is picked.
+  const counterpartyId = pickedCounterpartyId || counterparties[0]?.id || '';
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState<number>(0);
   const [stage, setStage] = useState<string>('LEAD');
@@ -71,30 +79,9 @@ export default function CrmKanbanPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
 
-  const fetchData = async () => {
-    if (!token || !company) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const [board, countData] = await Promise.all([
-        apiFetch<Record<string, Deal[]>>('/sales/deals/kanban', { token, tenantId: company.id, locale }),
-        apiFetch<Counterparty[]>('/sales/counterparties', { token, tenantId: company.id, locale }),
-      ]);
-      setKanbanData(board);
-      setCounterparties(countData);
-      if (countData.length > 0) setCounterpartyId(countData[0].id);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const fetchData = () => {
+    pageQueries.forEach((q) => void q.refetch());
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [token, company]);
 
   const handleCreateDeal = async (e: FormEvent) => {
     e.preventDefault();
@@ -224,7 +211,13 @@ export default function CrmKanbanPage() {
       </div>
 
       {/* Kanban Board Layout */}
-      {loading ? (
+      {failedQuery ? (
+        <LoadError
+          error={failedQuery.error}
+          onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+          retrying={pageQueries.some((q) => q.isFetching)}
+        />
+      ) : loading ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {tCommon('loading')}
         </div>

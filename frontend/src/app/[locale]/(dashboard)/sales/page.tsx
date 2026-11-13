@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
@@ -42,16 +44,19 @@ interface WarehouseItem {
   name: LocalizedName;
 }
 
+/** GET /sales/invoices with the non-empty filters. */
+function invoicesEndpointFor(filters: Record<string, string>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) query.append(key, value);
+  }
+  return `/sales/invoices?${query.toString()}`;
+}
+
 export default function SalesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-
-  const [stats, setStats] = useState<SalesSummaryStats | null>(null);
-  const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [counterparties, setCounterparties] = useState<CounterpartyItem[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -61,6 +66,26 @@ export default function SalesPage() {
   const [paymentStatus, setPaymentStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Filters apply on the filter button (as before): the list follows this snapshot.
+  const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
+
+  const invoicesEndpoint = useMemo(() => invoicesEndpointFor(appliedFilters), [appliedFilters]);
+  const invoicesQuery = useApiQuery<SalesInvoice[]>(invoicesEndpoint);
+  const invoices = invoicesQuery.data ?? [];
+  const loading = invoicesQuery.isPending;
+  // Summary cards and dropdown lists are optional: a failure leaves them empty.
+  const statsQuery = useApiQuery<SalesSummaryStats>('/sales/summary');
+  const stats = statsQuery.data ?? null;
+  const counterpartiesQuery = useApiQuery<ListResponse<CounterpartyItem>>('/sales/counterparties');
+  const warehousesQuery = useApiQuery<ListResponse<WarehouseItem>>('/tenants/warehouses');
+  const counterparties = useMemo(
+    () => (counterpartiesQuery.data ? listOf(counterpartiesQuery.data) : []),
+    [counterpartiesQuery.data],
+  );
+  const warehouses = useMemo(
+    () => (warehousesQuery.data ? listOf(warehousesQuery.data) : []),
+    [warehousesQuery.data],
+  );
 
   // Modals
   const [payInvoice, setPayInvoice] = useState<SalesInvoice | null>(null);
@@ -74,39 +99,8 @@ export default function SalesPage() {
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
   };
 
-  const fetchStats = () => {
-    if (!token || !company) return;
-    apiFetch<SalesSummaryStats>('/sales/summary', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then(setStats)
-      .catch((err) => console.error(err));
-  };
-
-  const fetchInvoices = () => {
-    if (!token || !company) return;
-    setLoading(true);
-
-    const query = new URLSearchParams();
-    if (search) query.append('search', search);
-    if (counterpartyId) query.append('counterpartyId', counterpartyId);
-    if (warehouseId) query.append('warehouseId', warehouseId);
-    if (status) query.append('status', status);
-    if (paymentStatus) query.append('paymentStatus', paymentStatus);
-    if (dateFrom) query.append('dateFrom', dateFrom);
-    if (dateTo) query.append('dateTo', dateTo);
-
-    apiFetch<SalesInvoice[]>(`/sales/invoices?${query.toString()}`, {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setInvoices(res || []))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
+  const fetchStats = () => void statsQuery.refetch();
+  const fetchInvoices = () => void invoicesQuery.refetch();
 
   const handleDeleteInvoice = async () => {
     if (!deletingInvoice || !token || !company) return;
@@ -139,33 +133,11 @@ export default function SalesPage() {
     }
   };
 
-  useEffect(() => {
-    fetchStats();
-    fetchInvoices();
-  }, [token, company, locale]);
-
-  useEffect(() => {
-    if (!token || !company) return;
-
-    apiFetch<ListResponse<CounterpartyItem>>('/sales/counterparties', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setCounterparties(listOf(res)))
-      .catch((err) => console.error(err));
-
-    apiFetch<ListResponse<WarehouseItem>>('/tenants/warehouses', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setWarehouses(listOf(res)))
-      .catch((err) => console.error(err));
-  }, [token, company, locale]);
-
   const handleApplyFilter = () => {
-    fetchInvoices();
+    const next = { search, counterpartyId, warehouseId, status, paymentStatus, dateFrom, dateTo };
+    // Same filters again: reload; new filters: the new endpoint loads.
+    if (invoicesEndpointFor(next) === invoicesEndpoint) fetchInvoices();
+    else setAppliedFilters(next);
   };
 
   const handleResetFilters = () => {
@@ -176,9 +148,7 @@ export default function SalesPage() {
     setPaymentStatus('');
     setDateFrom('');
     setDateTo('');
-    setTimeout(() => {
-      fetchInvoices();
-    }, 0);
+    setAppliedFilters({});
   };
 
   const getDocStatusBadge = (st: string) => {
@@ -446,7 +416,9 @@ export default function SalesPage() {
 
       {/* Invoices Table */}
       <Card style={{ overflow: 'hidden' }}>
-        {loading ? (
+        {invoicesQuery.isError ? (
+          <LoadError error={invoicesQuery.error} onRetry={fetchInvoices} retrying={invoicesQuery.isFetching} />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
             <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
