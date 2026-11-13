@@ -178,6 +178,39 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       expect(callData.balanceDifference).toBe(0);
     });
 
+    it('B6: rejects a fixed asset whose accumulated depreciation exceeds its cost (no silent clamp to 0)', async () => {
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(null);
+      prisma.openingBalanceDocument.create.mockClear();
+      const fixedAsset = (accumulatedDepreciation: number) => ({
+        openingDate: '2026-10-01',
+        docNumber: 'OB-2026-0002',
+        lines: [
+          {
+            category: OpeningBalanceCategory.FIXED_ASSET,
+            amount: 1000000,
+            accumulatedDepreciation,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+        ],
+      });
+
+      await expect(
+        service.create('tenant-1', 'user-1', fixedAsset(1500000)),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.openingBalanceDocument.create).not.toHaveBeenCalled();
+
+      prisma.openingBalanceDocument.create.mockImplementation((args: any) => ({
+        id: 'doc-2',
+        ...args.data,
+      }));
+      await service.create('tenant-1', 'user-1', fixedAsset(400000));
+      const line =
+        prisma.openingBalanceDocument.create.mock.calls[0][0].data.lines
+          .create[0];
+      expect(line.netAmount).toBe(600000);
+    });
+
     it('rebalances a draft by replacing its equity line with the UZS base-currency difference', async () => {
       prisma.openingBalanceDocument.findFirst.mockResolvedValue({
         id: 'doc-1',

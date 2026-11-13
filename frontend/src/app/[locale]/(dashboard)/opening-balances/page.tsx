@@ -9,7 +9,7 @@ import {
   openingBalanceImportPaths,
   summarizeImportPreview,
 } from '@/lib/opening-balance-import';
-import { CURRENCY_OPTIONS, formatCurrency, errorMessage } from '@/lib/utils';
+import { CURRENCY_OPTIONS, formatCurrency, formatCurrencyIfAvailable, errorMessage } from '@/lib/utils';
 import { withProductCost } from '@/lib/opening-balance-lines';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -1214,6 +1214,15 @@ export default function OpeningBalancesPage() {
           onAdd={() => addLine('FIXED_ASSET')}
           addText={isRu ? 'Добавить объект' : 'Asosiy vosita qo‘shish'}
         >
+          {/* B6 / D6: depreciation is not computed by the system. */}
+          <p
+            data-testid="fixed-asset-depreciation-notice"
+            style={{ margin: '0 0 var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
+          >
+            {isRu
+              ? 'Амортизация не рассчитывается автоматически: введите накопленную амортизацию из ваших учётных данных. Основные средства из начальных остатков не амортизируются автоматически в следующих месяцах.'
+              : 'Eskirish tizimda avtomatik hisoblanmaydi: jamg‘arilgan eskirishni hisob ma’lumotlaringizdan qo‘lda kiriting. Boshlang‘ich qoldiqdagi asosiy vositalar keyingi oylarda avtomatik amortizatsiya qilinmaydi.'}
+          </p>
           <FixedAssetsTable
             lines={lines}
             isReadOnly={isReadOnly}
@@ -2283,6 +2292,8 @@ function FixedAssetsTable({
             const initCost = Number(line.amount || 0);
             const accDep = Number(line.accumulatedDepreciation || 0);
             const netBookValue = Math.max(0, initCost - accDep);
+            // Rejected by the server as well (B6): never clamp silently.
+            const overDepreciated = accDep > initCost;
 
             return (
               <tr
@@ -2372,8 +2383,14 @@ function FixedAssetsTable({
                     }}
                   />
                 </td>
-                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="tabular-nums">
-                  {formatCurrency(netBookValue, locale, currency || 'USD')}
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : '#10b981' }} className="tabular-nums">
+                  {overDepreciated ? (
+                    <span data-testid="fixed-asset-over-depreciated">
+                      {isRu ? 'Амортизация больше стоимости' : 'Eskirish qiymatdan katta'}
+                    </span>
+                  ) : (
+                    formatCurrencyIfAvailable(netBookValue, locale, line.currency, currency) ?? '—'
+                  )}
                 </td>
                 {!isReadOnly && (
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>

@@ -99,6 +99,28 @@ export class OpeningBalancesService {
     });
   }
 
+  /**
+   * B6: an opening-balance fixed asset carries its cost and the
+   * accumulated depreciation typed by the user; the system does not
+   * compute depreciation (owner decision D6). Depreciation above cost is
+   * rejected instead of being clamped to a net value of 0.
+   */
+  private validateFixedAssetLine(line: {
+    category: OpeningBalanceCategory;
+    amount?: number;
+    accumulatedDepreciation?: number;
+  }) {
+    if (line.category !== OpeningBalanceCategory.FIXED_ASSET) return;
+    const cost = Number(line.amount ?? 0);
+    const depreciation = Number(line.accumulatedDepreciation ?? 0);
+    if (depreciation > cost) {
+      throw new BadRequestException(
+        `Asosiy vosita: jamg'arilgan eskirish (${depreciation}) boshlang'ich qiymatdan (${cost}) katta bo'lishi mumkin emas. / ` +
+          `Основное средство: накопленная амортизация (${depreciation}) не может превышать первоначальную стоимость (${cost}).`,
+      );
+    }
+  }
+
   private validateLineCurrency(line: {
     currency?: string;
     exchangeRate?: number | string | Prisma.Decimal;
@@ -327,6 +349,7 @@ export class OpeningBalancesService {
         lines: {
           create: lines.map((l) => {
             this.validateLineCurrency(l);
+            this.validateFixedAssetLine(l);
             const amt = Number(l.amount || 0);
             const accDep = Number(l.accumulatedDepreciation || 0);
             const netAmt =
@@ -413,6 +436,7 @@ export class OpeningBalancesService {
         await tx.openingBalanceLine.createMany({
           data: lines.map((l) => {
             this.validateLineCurrency(l);
+            this.validateFixedAssetLine(l);
             const amt = Number(l.amount || 0);
             const accDep = Number(l.accumulatedDepreciation || 0);
             const netAmt =
