@@ -10,6 +10,7 @@ import {
   summarizeImportPreview,
 } from '@/lib/opening-balance-import';
 import { CURRENCY_OPTIONS, formatCurrency, errorMessage } from '@/lib/utils';
+import { withProductCost } from '@/lib/opening-balance-lines';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -588,10 +589,17 @@ export default function OpeningBalancesPage() {
     if (isReadOnly) return;
     setLines((prev) => {
       const updated = [...prev];
-      const target: OpeningBalanceDraftLine = { ...updated[index], [field]: value };
+      let target: OpeningBalanceDraftLine = { ...updated[index], [field]: value };
 
       if (field === 'currency') {
         target.exchangeRate = value === 'UZS' ? 1 : '';
+      }
+
+      // muammolar B2: a product picked on an inventory line brings its card
+      // cost and that cost's currency, unless a cost was already typed. A
+      // foreign-currency rate is never guessed (ADR 0022): the user enters it.
+      if (target.category === 'INVENTORY' && field === 'productId') {
+        target = withProductCost(target, products.find((p) => p.id === value));
       }
 
       if (target.category === 'INVENTORY' && (field === 'quantity' || field === 'unitCost')) {
@@ -1123,7 +1131,6 @@ export default function OpeningBalancesPage() {
             warehouses={warehouses}
             locale={locale}
             isRu={isRu}
-            currency={docCurrency}
             onUpdate={updateLineField}
             onRemove={removeLine}
           />
@@ -1716,11 +1723,10 @@ function InventoryTable({
   warehouses,
   locale,
   isRu,
-  currency,
   onUpdate,
   onRemove,
   onCreateProduct,
-}: SubledgerTableProps & { products: Product[]; warehouses: Warehouse[]; currency?: string; onCreateProduct: (index: number) => void }) {
+}: SubledgerTableProps & { products: Product[]; warehouses: Warehouse[]; onCreateProduct: (index: number) => void }) {
   const filtered = linesWhere(lines, (l) => l.category === 'INVENTORY');
 
   const getProductName = (p: Product | undefined) => {
@@ -1744,6 +1750,8 @@ function InventoryTable({
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px' }}>{isRu ? 'СКЛАД' : 'OMBOR'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '120px', textAlign: 'right' }}>{isRu ? 'КОЛИЧЕСТВО' : 'MIQDOR'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px', textAlign: 'right' }}>{isRu ? 'ТАННАРХ' : 'TANNARX'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '110px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '120px' }}>{isRu ? 'КУРС' : 'KURS'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px' }}>{isRu ? 'ПАРТИЯ' : 'PARTIYA №'}</th>
           {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
@@ -1752,7 +1760,7 @@ function InventoryTable({
       <tbody>
         {filtered.length === 0 ? (
           <tr>
-            <td colSpan={8} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <td colSpan={10} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Остатки товаров не добавлены' : 'Tovarlar qoldig‘i qo‘shilmagan'}
             </td>
           </tr>
@@ -1839,8 +1847,34 @@ function InventoryTable({
                   }}
                 />
               </td>
+              <td style={{ padding: '12px 16px' }}>
+                <Select
+                  options={CURRENCY_OPTIONS}
+                  value={line.currency || 'UZS'}
+                  disabled={isReadOnly}
+                  onChange={(value) => onUpdate(index, 'currency', value)}
+                  aria-label={isRu ? 'Валюта себестоимости' : 'Tannarx valyutasi'}
+                />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                {line.currency === 'UZS' || !line.currency ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                ) : (
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="any"
+                    value={line.exchangeRate ?? ''}
+                    disabled={isReadOnly}
+                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
+                    placeholder="UZS/USD"
+                    aria-label={isRu ? 'Курс валюты к UZS' : 'Valyutaning UZS kursi'}
+                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
+                  />
+                )}
+              </td>
               <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                {formatCurrency(Number(line.amount || 0), locale, currency || 'USD')}
+                {formatCurrency(Number(line.amount || 0), locale, line.currency || 'UZS')}
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <input

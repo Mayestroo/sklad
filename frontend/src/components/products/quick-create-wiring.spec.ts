@@ -33,3 +33,11 @@ test('B9: sales invoice product dropdown can create a product', () => {
   assert.match(salesInvoice, /onCreateNew=\{!isReadOnly \? \(\) => setQuickProductRow\(idx\) : undefined\}/);
   assert.match(salesInvoice, /<CreateProductDrawer/);
 });
+
+test('B2: inventory opening lines carry their own cost currency and rate', () => {
+  const inventoryTable = openingBalances.slice(openingBalances.indexOf('function InventoryTable('), openingBalances.indexOf('function CounterpartyTable('));
+  assert.match(inventoryTable, /onUpdate\(index, 'currency', value\)/);
+  assert.match(inventoryTable, /onUpdate\(index, 'exchangeRate', event\.target\.value\)/);
+  assert.match(inventoryTable, /formatCurrency\(Number\(line\.amount \|\| 0\), locale, line\.currency \|\| 'UZS'\)/);
+  assert.doesNotMatch(inventoryTable, /currency \|\| 'USD'/);
+});
