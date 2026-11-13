@@ -485,7 +485,8 @@ frontend changed.
 | T5.4 checks | done | — | backend checks green; frontend unchanged |
 | Fresh-DB check | done | — | new empty local DB sklad_round4: all migrations applied, re-run "No pending", migrate diff "No difference" |
 | P3 production page on TanStack Query | done | 5624300 | the only simple page left on the old pattern (hidden by a disable comment): one query per list, filters in the documents endpoint, debounced search, LoadError + retry, writes invalidate /production; component test (each list once, search reloads only documents, error/retry) |
-| P3 purchase-return modal language switch | done | (this commit) | rows were rebuilt (quantities and VAT reset) on every locale or receipt-object change; now only typed values are state, rows derive from the receipt, another receipt starts from zero; component test (language switch, same-receipt reload, another receipt + cap); lint 39 → 37 |
+| P3 purchase-return modal language switch | done | 65035eb | rows were rebuilt (quantities and VAT reset) on every locale or receipt-object change; now only typed values are state, rows derive from the receipt, another receipt starts from zero; component test (language switch, same-receipt reload, another receipt + cap); lint 39 → 37 |
+| e2e hang (final run) | done | 092087a | pg Pool, Redis socket and in-memory fallback timers outlived app.close(); fixed with tests, see "e2e hang" below |
 
 ## Round 4 decisions
 
@@ -555,3 +556,77 @@ frontend changed.
   choose (a) keep UZS profit (current), or (b) document-currency profit:
   a data migration for posted invoices (grossProfit / exchangeRate for
   USD) plus per-currency grouping in every report.
+
+## Round 4 final verification (at 092087a)
+
+- Backend: unit 53 suites / 539 tests; typecheck exit 0; eslint (no --fix)
+  exit 0; nest build exit 0; integration 17 suites / 46 tests (local sklad_test + Redis db 15);
+  e2e 2 suites / 4 tests, run alone, exits by itself in 10 s without
+  --forceExit (also passes with --runInBand --forceExit).
+- Frontend: node tests 131/131; component tests 51 files / 130 tests; tsc
+  exit 0; eslint 37 problems (30 set-state-in-effect, 7 exhaustive-deps, all
+  in the click-through forms; was 39 at the start of round 4); next build
+  exit 0.
+- Migrations: 20261113000300 and 20261113000400 applied to local Docker
+  databases only (sklad_test via migrate deploy; fresh sklad_round4 built
+  from empty, re-run clean, migrate diff "No difference"). Nothing applied
+  to Neon.
+- Git: 20 local commits on refactor/quality-audit (not pushed); all
+  changed files LF; no secrets in the diff; untracked: .claude/,
+  muammolar.pdf (owner's).
+
+## e2e hang (found in the final run)
+
+The first final e2e run never exited (tests passed, process alive for 30+
+min). --detectOpenHandles reported nothing (native sockets/timers), so a
+temporary probe listed process handles and active resources after each
+suite's app.close(). Three keepers, each fixed with a test:
+
+1. Postgres: PrismaService creates its own pg Pool for the driver adapter;
+   $disconnect() does not end a caller-created pool. onModuleDestroy now
+   ends it once (prisma.service.int-spec).
+2. Redis socket: the throttler storage was built inside the ThrottlerModule
+   options, not as a provider, so Nest never ran its shutdown hook. It is
+   now a provider (RATE_LIMIT_STORAGE) injected into ThrottlerModule
+   (rate-limit-shutdown.int-spec on a real Redis). With REDIS_URL=localhost
+   the client resolves ::1, where Docker Desktop accepts TCP but never
+   answers: the client stayed in 'connect', QUIT timed out and disconnect()
+   only half-closed the socket. Shutdown now destroys a socket left open
+   and runs once although Nest calls it twice (two tokens)
+   (throttler-storage.spec).
+3. Timers (the actual 30+ min hang): with Redis unreachable every hit is
+   counted in the in-memory fallback, which sets a timer per hit for the
+   throttler TTL, 1 hour for sign-up. The fallback is not a provider
+   either; the storage's shutdown now shuts it down (throttler-storage.spec,
+   fake timers).
+
+The same keepers would delay a production shutdown/redeploy by up to an
+hour whenever Redis is unreachable.
+
+## Round 4 NOT RUN / left for the owner
+
+- Local backend/.env REDIS_URL uses localhost, which resolves to ::1 and
+  never answers under Docker Desktop, so local runs count rate limits in
+  memory. Not changed (env is out of scope): set it to
+  redis://127.0.0.1:6379 yourself.
+
+- Not pushed, merged or deployed (hard stop).
+- Migrations 20261113000300 and 20261113000400 not applied to Neon:
+  checklist "Migrations to apply to Neon", in that order, after a backup.
+- No manual click-through or visual check of the changed screens (product
+  drawer, sales order/invoice currency start, return modal, returns page,
+  production page, super-admin MRR card); covered by component tests only.
+- Historical data not rewritten: journal entries dated at posting time
+  (checklist item for the accountant), cent drift on already posted partial
+  shipments/returns, gross profit of invoices recalibrated by additional
+  expenses before 02fa675 (still VAT-inclusive/unconverted; a recompute
+  script would be needed, owner decision).
+- Owner decisions N1-N4 above; findings F8 (useDefaultCurrency USD
+  fallback outside sales), F9 (order draft update not atomic).
+- Not migrated (modals/forms, outside the simple-page scope): the 14
+  click-through forms left in the round 3 table, plus QuickPaymentModal,
+  AllocateExpenseModal, PurchaseReturnDocumentForm, PaySalesInvoiceModal,
+  PaySalesOrderModal, CreateWarehouseDrawer (fetch in effects, not flagged
+  by lint); production page preview request still in an effect.
+- Local leftovers (disposable): Docker databases sklad_test, sklad_demo,
+  sklad_round3, sklad_round4; containers sklad_postgres, sklad_redis.
