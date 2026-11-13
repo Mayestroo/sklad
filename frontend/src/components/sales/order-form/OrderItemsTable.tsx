@@ -131,19 +131,6 @@ export function OrderItemsTable({
                     />
                   </td>
 
-                  {/* VAT Rate */}
-                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={item.vatRate}
-                      onChange={(event) => onItemChange(idx, 'vatRate', event.target.value)}
-                      disabled={isLocked}
-                      aria-label={`${isRu ? 'Ставка НДС' : 'QQS stavkasi'} ${idx + 1}`}
-                      style={{ width: 78, height: 36, padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', textAlign: 'right' }}
-                    />
-                  </td>
-
                   {/* Ready Qty (read-only display) */}
                   {orderStatus !== 'NEW' && (
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
@@ -181,6 +168,19 @@ export function OrderItemsTable({
                       max={100}
                       decimals={2}
                       aria-label={`${isRu ? 'Скидка для строки' : 'Chegirma %'} ${idx + 1}`}
+                    />
+                  </td>
+
+                  {/* VAT Rate */}
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={item.vatRate}
+                      onChange={(event) => onItemChange(idx, 'vatRate', event.target.value)}
+                      disabled={isLocked}
+                      aria-label={`${isRu ? 'Ставка НДС' : 'QQS stavkasi'} ${idx + 1}`}
+                      style={{ width: 78, height: 36, padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', textAlign: 'right' }}
                     />
                   </td>
 
