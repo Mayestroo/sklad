@@ -25,9 +25,7 @@ import {
   Search,
   RefreshCw,
   TrendingUp,
-  Users,
   Building2,
-  DollarSign,
   Trash2,
 } from 'lucide-react';
 import { SalesInvoice, SalesSummaryStats } from '@shared/types';

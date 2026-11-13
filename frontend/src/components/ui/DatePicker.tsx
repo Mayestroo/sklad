@@ -57,7 +57,7 @@ export function DatePicker({
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     locale = useLocale();
-  } catch (e) {
+  } catch {
     // fallback
   }
   const isRu = locale === 'ru';

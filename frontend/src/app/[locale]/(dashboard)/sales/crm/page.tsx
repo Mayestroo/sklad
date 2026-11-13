@@ -11,15 +11,9 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import {
-  Kanban,
   Plus,
   Building2,
-  DollarSign,
-  User,
-  ArrowRight,
   X,
-  CheckCircle2,
-  XCircle,
   Edit2,
   Trash2,
 } from 'lucide-react';
@@ -46,7 +40,6 @@ const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] 
 ];
 
 export default function CrmKanbanPage() {
-  const t = useTranslations('sales');
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';

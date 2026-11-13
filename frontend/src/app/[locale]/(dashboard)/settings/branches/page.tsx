@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
-import { GitBranch, Warehouse, Plus, Building2, MapPin, Phone, Edit2, Trash2 } from 'lucide-react';
+import { GitBranch, Warehouse, Building2, MapPin, Phone, Edit2, Trash2 } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
 
 /** GET /tenants/branches: branches with their warehouses. */

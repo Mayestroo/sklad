@@ -2,7 +2,7 @@
 
 import React, { useEffect, useId } from 'react';
 import { useLocale } from 'next-intl';
-import { AlertCircle, AlertTriangle, HelpCircle, Trash2, X } from 'lucide-react';
+import { AlertTriangle, HelpCircle, Trash2, X } from 'lucide-react';
 import { Button } from './Button';
 
 export type ConfirmVariant = 'danger' | 'warning' | 'info';

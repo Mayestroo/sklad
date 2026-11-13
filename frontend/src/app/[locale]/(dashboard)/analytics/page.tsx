@@ -11,18 +11,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import {
-  BarChart3,
   TrendingUp,
-  PieChart,
-  Package,
-  Calendar,
-  Download,
   Printer,
-  DollarSign,
   ArrowUpRight,
-  ArrowDownRight,
-  ShieldCheck,
-  Users,
 } from 'lucide-react';
 import {
   KpiSummary,

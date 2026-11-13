@@ -15,18 +15,11 @@ import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS, errorMessage, 
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
-  Plus,
   Trash2,
   Save,
   CheckCircle2,
-  RotateCcw,
   Printer,
-  Search,
   AlertCircle,
-  FileText,
-  Building2,
-  Warehouse as WarehouseIcon,
-  HelpCircle,
   XCircle,
 } from 'lucide-react';
 import { PurchaseReceipt, PurchaseReturn } from '@shared/types';
@@ -83,7 +76,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const isReadOnly = mode === 'view';
 
   // Form State
-  const [returnNumber, setReturnNumber] = useState(initialData?.returnNumber || '');
+  const [returnNumber] = useState(initialData?.returnNumber || '');
   const [returnDate, setReturnDate] = useState(
     initialData?.returnDate
       ? new Date(initialData.returnDate).toISOString().split('T')[0]
@@ -130,7 +123,6 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null);
 
   // Modals & loading
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [isActModalOpen, setIsActModalOpen] = useState(false);
@@ -444,7 +436,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         })),
       };
 
-      const result = await apiFetch<PurchaseReturn>('/purchases/returns', {
+      await apiFetch<PurchaseReturn>('/purchases/returns', {
         token: token || undefined,
         tenantId: company?.id || undefined,
         locale,

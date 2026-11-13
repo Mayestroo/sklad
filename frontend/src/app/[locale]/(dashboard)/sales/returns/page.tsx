@@ -21,14 +21,12 @@ import {
   AlertTriangle,
   Barcode,
   CheckCircle2,
-  ExternalLink,
   Eye,
   ShieldCheck,
   XCircle,
   Search,
   Filter,
   PackageCheck,
-  AlertCircle,
 } from 'lucide-react';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';

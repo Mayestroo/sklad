@@ -9,7 +9,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Building2, UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
 
 /** The fields of a counterparty this drawer edits (callers pass list rows of several shapes). */

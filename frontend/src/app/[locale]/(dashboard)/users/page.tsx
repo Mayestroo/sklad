@@ -10,15 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
 import {
-  Users as UsersIcon,
   UserPlus,
-  Shield,
-  CheckCircle,
-  XCircle,
-  Mail,
-  Lock,
-  User,
-  Globe,
   AlertCircle,
   X,
   Pencil,
@@ -39,7 +31,6 @@ interface StaffUser {
 }
 
 export default function UsersPage() {
-  const t = useTranslations('nav');
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';

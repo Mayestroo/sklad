@@ -20,9 +20,6 @@ import {
   QrCode,
   FileText,
   ArrowRightLeft,
-  CheckCircle2,
-  Tag,
-  Warehouse,
   Building2,
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';

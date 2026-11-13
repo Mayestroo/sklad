@@ -6,7 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { BookOpen, ShieldCheck } from 'lucide-react';
 import { Account } from '@shared/types';
 
 export default function ChartOfAccountsPage() {

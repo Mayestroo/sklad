@@ -74,7 +74,6 @@ export function ServiceActDetailsModal({
 
   const isDraft = act.status === 'DRAFT';
   const isPosted = act.status === 'POSTED';
-  const isCancelled = act.status === 'CANCELLED';
   const isProvided = act.type === 'PROVIDED';
 
   // Handle Post

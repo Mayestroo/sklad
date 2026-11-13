@@ -10,8 +10,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
-import { formatCurrency, errorMessage } from '@/lib/utils';
-import { Truck, AlertCircle, CheckCircle, Warehouse as WarehouseIcon, Package } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+import { Truck, AlertCircle, Warehouse as WarehouseIcon } from 'lucide-react';
 
 interface PartialDispatchModalProps {
   isOpen: boolean;
@@ -162,7 +162,7 @@ export function PartialDispatchModal({
 
     try {
       const itemsPayload = Object.entries(dispatchQuantities)
-        .filter(([_, qty]) => qty > 0)
+        .filter(([, qty]) => qty > 0)
         .map(([orderItemId, quantity]) => ({
           orderItemId,
           quantity,

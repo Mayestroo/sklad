@@ -28,7 +28,6 @@ import {
   AlertCircle,
   AlertTriangle,
   Pencil,
-  PackagePlus,
   TrendingUp,
 } from 'lucide-react';
 import { SalesInvoice } from '@shared/types';

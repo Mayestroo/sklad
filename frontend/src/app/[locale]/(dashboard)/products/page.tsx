@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
-import { Link } from '@/i18n/navigation';
+import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, errorMessage } from '@/lib/utils';
@@ -30,8 +29,6 @@ import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { toast } from '@/context/ToastContext';
 
 export default function ProductsPage() {
-  const t = useTranslations('inventory');
-  const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();

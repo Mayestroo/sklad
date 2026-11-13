@@ -122,7 +122,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     const charLen = displayValue ? displayValue.length : (placeholder ? placeholder.length : 5);
     const dynamicCh = autoWidth ? Math.max(minWidthCh, charLen + 4) : Math.max(0, charLen + 3);
 
-    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    const handleFocus = () => {
       setIsFocused(true);
       const formatted = formatCurrencyValue(value, decimals);
       setTextValue(formatted);
@@ -143,7 +143,6 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
-      const oldVal = textValue;
       const cursorPos = e.target.selectionStart || 0;
 
       const { formatted, rawNumber } = formatNumberWithCommas(raw, decimals);

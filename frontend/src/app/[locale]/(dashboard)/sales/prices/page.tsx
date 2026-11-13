@@ -42,7 +42,7 @@ export default function PricesPage() {
 
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [selectedPLId, setSelectedPLId] = useState<string | null>(null);
 
   const [showCreatePL, setShowCreatePL] = useState(false);

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { ArrowRightLeft, Send, CheckCircle, Plus, Warehouse, Package, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Send, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { StockTransfer, Product } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';

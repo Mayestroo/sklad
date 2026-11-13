@@ -17,15 +17,9 @@ import {
   Clock,
   Printer,
   Trash2,
-  FileText,
-  Truck,
-  Building2,
   ExternalLink,
-  Layers,
   AlertTriangle,
-  History,
   TrendingDown,
-  BookOpen,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -42,14 +36,14 @@ export default function ExpenseDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
-  const { token, company, user } = useAuth();
+  const { token, company } = useAuth();
   const confirm = useConfirm();
 
   const [expense, setExpense] = useState<ExpenseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [, setErrorMsg] = useState<string | null>(null);
 
   const fetchExpense = () => {
     if (!token || !company || !id) return;

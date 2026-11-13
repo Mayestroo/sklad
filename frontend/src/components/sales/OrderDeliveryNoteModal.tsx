@@ -76,7 +76,6 @@ export function OrderDeliveryNoteModal({
   const invoiceDocNo = linkedInvoice?.invoiceNumber || `INV-${order.orderNumber}`;
 
   const totalAmountNum = Number(order.totalAmount || 0);
-  const subtotalNum = Number(order.subtotalAmount || totalAmountNum);
   const discountNum = Number(order.discountAmount || 0);
 
   const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);

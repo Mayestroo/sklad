@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -13,14 +13,10 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import {
   RotateCcw,
-  Building2,
-  Package,
   Plus,
   Search,
   Printer,
-  FileText,
   Download,
-  Filter,
   CheckCircle2,
   XCircle,
   Eye,
@@ -28,7 +24,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { PurchaseReturn } from '@shared/types';
-import { Link, useRouter } from '@/i18n/navigation';
+import { Link } from '@/i18n/navigation';
 import { ReturnActModal } from '@/components/purchases/ReturnActModal';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
@@ -36,7 +32,6 @@ import { toast } from '@/context/ToastContext';
 export default function ReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const router = useRouter();
   const { token, company } = useAuth();
   const confirm = useConfirm();
   const defaultCurrency = useDefaultCurrency();
@@ -48,8 +43,8 @@ export default function ReturnsPage() {
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate] = useState('');
+  const [endDate] = useState('');
 
   // Modals state
   const [selectedReturnForAct, setSelectedReturnForAct] = useState<PurchaseReturn | null>(null);

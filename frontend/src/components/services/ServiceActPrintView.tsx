@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Printer, X } from 'lucide-react';

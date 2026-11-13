@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
+import { useLocale } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -12,12 +12,10 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
-import { ArrowLeft, Save, Package, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
 import { Category } from '@shared/types';
 
 export default function NewProductPage() {
-  const t = useTranslations('inventory');
-  const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const router = useRouter();
@@ -35,8 +33,8 @@ export default function NewProductPage() {
   // Form Fields
   const [nameUz, setNameUz] = useState('');
   const [nameRu, setNameRu] = useState('');
-  const [descUz, setDescUz] = useState('');
-  const [descRu, setDescRu] = useState('');
+  const [descUz] = useState('');
+  const [descRu] = useState('');
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
   const [categoryId, setCategoryId] = useState('');

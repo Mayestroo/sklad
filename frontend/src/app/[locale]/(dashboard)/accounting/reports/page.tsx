@@ -8,7 +8,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { PieChart, ShieldCheck, Printer, FileText } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import type { FinancialStatements } from '@shared/types';
 
 export default function FinancialReportsPage() {

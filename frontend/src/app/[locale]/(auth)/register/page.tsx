@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Button } from '@/components/ui/Button';
-import { Building2, Mail, Lock, User, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
 import type { AuthResponse } from '@shared/types';
 

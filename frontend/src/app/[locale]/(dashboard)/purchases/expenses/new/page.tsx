@@ -21,21 +21,13 @@ import {
   Receipt,
   Truck,
   Calculator,
-  Layers,
   AlertCircle,
-  Building2,
-  Wallet,
   Coins,
   Scale,
   Boxes,
-  Percent,
   Check,
-  TrendingUp,
-  Sparkles,
   RefreshCw,
-  HelpCircle,
   FileSpreadsheet,
-  ChevronRight,
   ShieldCheck,
   Info,
 } from 'lucide-react';
@@ -67,13 +59,13 @@ export default function NewExpensePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const router = useRouter();
-  const { token, company, user } = useAuth();
+  const { token, company } = useAuth();
 
   // Reference data
   const [receipts, setReceipts] = useState<PurchaseReceipt[]>([]);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
-  const [loadingRefs, setLoadingRefs] = useState(true);
+  const [, setLoadingRefs] = useState(true);
 
   // Form State
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
@@ -277,7 +269,6 @@ export default function NewExpensePage() {
   // Step Completion Checks
   const isStep1Done = Boolean(docDate && expenseType && counterpartyId && amount && Number(amount) > 0);
   const isStep2Done = Boolean(receiptId && allocationMethod);
-  const isStep3Done = Boolean(selectedItemIds.length > 0 && previewResult);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', width: '100%', paddingBottom: 'var(--space-8)' }}>
@@ -1000,7 +991,7 @@ export default function NewExpensePage() {
                 </tr>
               </thead>
               <tbody>
-                {selectedReceipt.items?.map((item, idx) => {
+                {selectedReceipt.items?.map((item) => {
                   const isSelected = selectedItemIds.includes(item.id);
                   const preview = previewResult?.items.find((p) => p.receiptItemId === item.id);
 

@@ -11,12 +11,9 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import {
   BookOpen,
-  ListFilter,
   FileText,
   PieChart,
   ShieldCheck,
-  TrendingUp,
-  Building2,
 } from 'lucide-react';
 import { TrialBalanceReport } from '@shared/types';
 

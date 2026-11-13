@@ -11,11 +11,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import {
-  CreditCard,
   CheckCircle,
-  ShieldCheck,
   Zap,
-  Clock,
   Sparkles,
   ExternalLink,
   ArrowRight,

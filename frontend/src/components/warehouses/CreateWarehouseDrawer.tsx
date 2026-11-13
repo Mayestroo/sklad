@@ -8,7 +8,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Warehouse, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { errorMessage, type LocalizedName } from '@/lib/utils';
 
 /** The saved warehouse handed back to the caller (the API returns more). */

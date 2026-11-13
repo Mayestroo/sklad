@@ -16,7 +16,7 @@
  * // ❌ XATO — "1 500 000 UZS UZS" (ikki marta!)
  * {formatCurrency(amount, locale, currency)} {currency}
  */
-export function formatCurrency(amount: number | string, locale: string = 'uz', currency: string): string {
+export function formatCurrency(amount: number | string, _locale: string = 'uz', currency: string): string {
   const numericAmount =
     typeof amount === 'string' && amount.trim() !== ''
       ? Number(amount)
@@ -73,8 +73,6 @@ export const CURRENCY_OPTIONS = [
   { value: 'USD', label: 'USD' },
 ];
 
-const UZ_MONTHS_SHORT = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
-const RU_MONTHS_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
 export function formatDate(date: string | Date | null | undefined, _locale?: string): string {
   if (!date) return '—';

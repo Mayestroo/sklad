@@ -15,9 +15,9 @@ export default function SuperAdminBillingPage() {
   const isRu = locale === 'ru';
   const { token } = useAuth();
 
-  const [metrics, setMetrics] = useState<GlobalMetrics | null>(null);
+  const [, setMetrics] = useState<GlobalMetrics | null>(null);
   const [tenants, setTenants] = useState<TenantCompanySummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const fetchData = async () => {
     if (!token) return;

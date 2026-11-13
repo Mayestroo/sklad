@@ -31,9 +31,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Pencil,
-  UserPlus,
   PackagePlus,
-  Sparkles,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { PurchaseReceipt } from '@shared/types';

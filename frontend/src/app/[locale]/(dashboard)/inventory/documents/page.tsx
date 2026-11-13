@@ -13,13 +13,8 @@ import { Select } from '@/components/ui/Select';
 import {
   FileText,
   Plus,
-  ArrowRightLeft,
-  Package,
-  Building2,
-  AlertCircle,
   X,
   Printer,
-  CheckCircle2,
 } from 'lucide-react';
 import { InventoryDocument, Product, Warehouse } from '@shared/types';
 

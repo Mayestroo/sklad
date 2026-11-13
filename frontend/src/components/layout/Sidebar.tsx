@@ -27,7 +27,6 @@ import {
   CreditCard,
   Briefcase,
   Scale,
-  Building2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 

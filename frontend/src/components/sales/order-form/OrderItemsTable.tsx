@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -47,7 +46,6 @@ export function OrderItemsTable({
   orderStatus,
   isPriceOverrideAllowed,
   items,
-  products,
   productOptions,
   onItemChange,
   onAddItem,

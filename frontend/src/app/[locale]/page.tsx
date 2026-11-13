@@ -21,18 +21,13 @@ import { formatDate, formatCurrency } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import type { FullDashboard, DashboardPeriod, CashFlowPoint } from '@shared/types';
 import {
   TrendingUp,
   TrendingDown,
   Wallet,
   ShoppingCart,
-  ClipboardList,
-  Factory,
-  Truck,
   BarChart3,
-  Users,
   Building2,
   ArrowRight,
   ArrowUpRight,
@@ -303,7 +298,7 @@ interface KpiCardProps {
   currency?: string;
 }
 
-function KpiCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, trend, currency }: KpiCardProps) {
+function KpiCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, currency }: KpiCardProps) {
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>

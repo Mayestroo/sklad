@@ -8,7 +8,7 @@ import { formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Megaphone, Plus, Bell, Calendar } from 'lucide-react';
+import { Plus, Bell, Calendar } from 'lucide-react';
 import { toast } from '@/context/ToastContext';
 
 interface SystemAnnouncement {

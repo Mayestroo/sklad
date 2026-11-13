@@ -18,18 +18,14 @@ import {
   Plus,
   Building2,
   TrendingUp,
-  Search,
   FileText,
   CheckCircle2,
   XCircle,
   Clock,
-  ExternalLink,
   Eye,
   Pencil,
   Trash2,
-  Filter,
   BarChart3,
-  Layers,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';

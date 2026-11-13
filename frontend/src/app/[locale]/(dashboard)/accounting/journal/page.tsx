@@ -7,8 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { FileText, ArrowRightLeft } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { JournalEntry } from '@shared/types';
 
 export default function JournalPage() {

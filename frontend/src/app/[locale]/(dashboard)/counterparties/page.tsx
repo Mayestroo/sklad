@@ -156,18 +156,16 @@ export default function CounterpartiesPage() {
   const [editingCounterparty, setEditingCounterparty] = useState<Counterparty | null>(null);
   const [deletingCounterparty, setDeletingCounterparty] = useState<Counterparty | null>(null);
   const [deleteCounterpartyLoading, setDeleteCounterpartyLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<'CUSTOMER' | 'SUPPLIER' | 'BOTH'>('CUSTOMER');
+  const [, setFormName] = useState('');
+  const [, setFormType] = useState<'CUSTOMER' | 'SUPPLIER' | 'BOTH'>('CUSTOMER');
   const [formFolderId, setFormFolderId] = useState<string>('');
-  const [formInn, setFormInn] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formEmail, setFormEmail] = useState('');
-  const [formAddress, setFormAddress] = useState('');
-  const [formBankName, setFormBankName] = useState('');
-  const [formBankAccount, setFormBankAccount] = useState('');
-  const [formMfo, setFormMfo] = useState('');
+  const [, setFormInn] = useState('');
+  const [, setFormPhone] = useState('');
+  const [, setFormEmail] = useState('');
+  const [, setFormAddress] = useState('');
+  const [, setFormBankName] = useState('');
+  const [, setFormBankAccount] = useState('');
+  const [, setFormMfo] = useState('');
 
   // Folder Modal state
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
@@ -309,48 +307,6 @@ export default function CounterpartiesPage() {
     setIsCreateOpen(true);
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim()) {
-      setFormError(isRu ? 'Введите наименование' : 'Kontragent nomini kiriting');
-      return;
-    }
-
-    setSubmitting(true);
-    setFormError('');
-
-    try {
-      await apiFetch('/sales/counterparties', {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: company?.id,
-        locale,
-        body: JSON.stringify({
-          name: formName,
-          type: formType,
-          folderId: formFolderId || undefined,
-          inn: formInn || undefined,
-          phone: formPhone || undefined,
-          email: formEmail || undefined,
-          address: formAddress || undefined,
-          bankName: formBankName || undefined,
-          bankAccount: formBankAccount || undefined,
-          mfo: formMfo || undefined,
-        }),
-      });
-
-      setIsCreateOpen(false);
-      resetForm();
-      fetchFolders();
-      fetchSummary();
-      fetchCounterparties();
-    } catch (err) {
-      setFormError(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const resetForm = () => {
     setFormName('');
     setFormType('CUSTOMER');
@@ -362,7 +318,6 @@ export default function CounterpartiesPage() {
     setFormBankName('');
     setFormBankAccount('');
     setFormMfo('');
-    setFormError('');
   };
 
   // Folder modal handlers

@@ -12,7 +12,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { formatCurrency, errorMessage } from '@/lib/utils';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
-import { CreditCard, DollarSign, Calendar, FileText } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 
 interface PayPurchaseModalProps {
   isOpen: boolean;

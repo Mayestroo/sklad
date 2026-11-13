@@ -9,13 +9,11 @@ import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Badge } from '@/components/ui/Badge';
 import {
-  ShoppingCart,
   Layers,
   Save,
   CheckCircle2,
   AlertCircle,
   HelpCircle,
-  Sliders,
 } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
 

@@ -90,7 +90,6 @@ function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
 function AccountNetRows({
   items,
   locale,
-  isRu,
 }: {
   items: FinanceAccountFlow[];
   locale: 'uz' | 'ru';
@@ -185,7 +184,7 @@ export default function FinancePage() {
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [txTypes, setTxTypes] = useState<TransactionType[]>([]);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
   // Filters
@@ -194,7 +193,6 @@ export default function FinancePage() {
   const [dateTo, setDateTo] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
   const [counterpartyFilter, setCounterpartyFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
 
   // Modals & Drawers
   const [drawerMode, setDrawerMode] = useState<

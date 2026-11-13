@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';

@@ -15,7 +15,6 @@ import {
   Building2,
   Users,
   DollarSign,
-  TrendingUp,
   Plus,
   Search,
   LogIn,

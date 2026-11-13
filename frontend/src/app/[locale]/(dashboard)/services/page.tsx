@@ -28,8 +28,6 @@ import {
   Printer,
   Trash2,
   Edit2,
-  Filter,
-  Briefcase,
   RotateCcw,
   ChevronLeft,
   ChevronRight,

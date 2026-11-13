@@ -19,7 +19,6 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { toast } from '@/context/ToastContext';
 import {
-  Scale,
   Plus,
   Save,
   CheckCircle2,
@@ -87,7 +86,7 @@ export default function OpeningBalancesPage() {
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [currentDoc, setCurrentDoc] = useState<OpeningBalanceDocument | null>(null);
   const docCurrency = 'UZS';
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('cash');
 
@@ -1836,7 +1835,6 @@ function CounterpartyTable({
   lines,
   isReadOnly,
   counterparties,
-  locale,
   isRu,
   onUpdate,
   onRemove,
@@ -2006,7 +2004,6 @@ function AdvancesTable({
   lines,
   isReadOnly,
   counterparties,
-  locale,
   isRu,
   onUpdate,
   onRemove,
@@ -2163,7 +2160,6 @@ function AdvancesTable({
 function FixedAssetsTable({
   lines,
   isReadOnly,
-  fixedAssets,
   locale,
   isRu,
   currency,
@@ -2317,7 +2313,6 @@ function FixedAssetsTable({
 function OtherTable({
   lines,
   isReadOnly,
-  locale,
   isRu,
   onUpdate,
   onRemove,
