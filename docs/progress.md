@@ -27,7 +27,7 @@ so the work survives context compaction. Re-read this file, then
       430 -> 0 (44a8e05), no-unused-vars 181 -> 0 (19890ab), parse error and
       1 of 3 compiler-memo errors fixed. SKIPPED: react-hooks
       set-state-in-effect (76) and exhaustive-deps (45), see below.
-- [ ] A6 Integration + e2e tests on local Docker Postgres
+- [x] A6 Integration + e2e tests on local Docker Postgres — int 28/28, e2e 2/2 after fixes 72d8b7e, 1c9efeb
 
 ### Phase B — muammolar.pdf
 - [ ] B0 Read every page, write `docs/muammolar-triage.md`
@@ -111,3 +111,12 @@ so the work survives context compaction. Re-read this file, then
   (df61fdf); untracked again in a follow-up commit, file kept on disk.
 - Tooling note: never pipe `< /dev/null` into `python - <<EOF` (starts a
   REPL); run edit scripts from files in the scratchpad.
+- A6: sklad_test dropped/recreated (local Docker, disposable), `prisma migrate
+  deploy --config prisma.test.config.ts`, then migrate diff vs schema: no
+  drift. First run: int 27/28 (USD purchase return journal 20 instead of
+  252,000 -> 72d8b7e), e2e 0/2 (API could not boot: BillingModule missing
+  RateLimitModule -> 1c9efeb, plus app.module.spec.ts DI guard in the unit
+  suite). After fixes: int 10 suites/28 tests pass, e2e 2/2 pass, backend
+  unit 48 suites/437 tests pass.
+- Env note: in Git Bash, `timeout <cmd>` dropped DATABASE_URL_TEST; run
+  `DATABASE_URL_TEST=... node node_modules/jest/bin/jest.js ...` directly.
