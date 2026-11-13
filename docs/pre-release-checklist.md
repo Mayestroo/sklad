@@ -126,6 +126,22 @@ branch**, never with `db push`. All are additive and idempotent.
       adds `sales_return_items.discount` (default 0, CHECK 0–100). No
       existing amount changes.
 
+Round 5 (F8/F9) added **no** migration; the list above is unchanged.
+
+## Deploy backend and frontend together (round 5)
+
+- [ ] **API contract changes, ship both sides in one release.**
+      `GET /purchases/additional-expenses` now returns `stats` as one amount
+      per currency (`transport/customs/broker/all: [{ currency, amount }]`)
+      instead of summed scalars; an old frontend shows empty KPI cards.
+      `POST /purchases/expenses` now **requires** `currency` (USD/UZS); the
+      current frontend already sends it, other API clients must too.
+- [ ] **Manual check of the changed forms** (covered by tests only): product
+      drawer / new product page / quick-add (cost currency starts blank),
+      purchase document line prefill, opening-balance lines (blank currency,
+      save/post message), finance income/expense form, additional-expense
+      KPI cards, sales order edit (one transaction).
+
 ## Accounting decisions
 
 - [ ] **Purchase returns: configure the gap account** (D2, code path done in

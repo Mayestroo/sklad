@@ -630,3 +630,148 @@ hour whenever Redis is unreachable.
   by lint); production page preview request still in an effect.
 - Local leftovers (disposable): Docker databases sklad_test, sklad_demo,
   sklad_round3, sklad_round4; containers sklad_postgres, sklad_redis.
+
+# Round 5 (2026-11-13): F8 currency guesses, F9 atomic edits
+
+Scope: code only; no push/merge/deploy, no Neon, no env/secrets. Owner
+decisions kept as they were: N1 open (accountant), N2 and N3 accepted as
+implemented, N4 stays UZS.
+
+## Part 1: F8, silent currency guesses
+
+Line numbers are as at the start of round 5 (a86affd). "Writes" = the guess
+could end up in a created/changed document, price, payment or stored amount.
+
+### Fixed (the guess could be stored, or labelled a wrong-currency total)
+
+| file:line (a86affd) | what happened when the currency was missing | decision / commit |
+|---|---|---|
+| components/products/CreateProductDrawer.tsx:75, :124, :133, :282 | cost-price currency preselected UZS (also on reset, and on edit when unset); a USD cost saved untouched was stored as UZS; an edited USD cost without rate assumed 1 | needs explicit choice: starts blank, nonzero cost refuses to save ("Xarid tannarxi valyutasini tanlang" / "Укажите валюту себестоимости") — a333b31 |
+| app/.../products/new/page.tsx:45 | same (UZS preselected) | needs explicit choice — a333b31 |
+| components/purchases/QuickAddProductModal.tsx:50 | same (UZS preselected) | needs explicit choice — a333b31 |
+| components/purchases/PurchaseDocumentForm.tsx:201-203, :300-302, :342-344 | picking a product with no document currency yet prefilled its cost as a UZS price (`currency \|\| 'UZS'`, `costPriceCurrency \|\| 'UZS'`, rate `\|\| 1`); the number stayed when the user then chose USD and was saved as a USD price | price left empty until the document and cost currencies and needed rates are known (`documentUnitPriceFromProductCost`); submit already required a currency — 5d62738 |
+| app/.../opening-balances/page.tsx:556 (addLine), :1868, :2020, :2179 (selects), :1652 (badge `\|\| 'USD'`), :1892 | every new line was UZS; a USD debt/stock line saved untouched was stored as UZS; selects showed UZS for a blank line | cash, inventory, debt and advance lines start blank; save and post list the rows without a currency ("Har bir qatorda valyutani tanlang (qatorlar: …)" / "Выберите валюту в каждой строке (строки: …)") — 9c7d2f6 |
+| app/.../finance/page.tsx:1602, :1612, body `fromAccount ? fromAccount.currency : currency` | income/expense form started from useDefaultCurrency() (USD when unset); with no resolved account the guess could be sent | currency = settlement or chosen cash account; submit requires the account and always sends its currency — d2027f0 |
+| app/.../sales/prices/page.tsx:75 | price-list edit state initialised from the guessing hook (overwritten on open; dead guess) | starts '' — d2027f0 |
+| backend dto/create-purchase-expense.dto.ts:34-36 | `currency` optional → `purchase_expenses.currency` DB default UZS | required, `@IsValidCurrency()`; the only caller (AllocateExpenseModal) already sends it — bdb7332 |
+| backend additional-expenses.service.ts:499 + app/.../purchases/expenses/page.tsx:183 | KPI totals summed USD and UZS and were labelled with the first expense's currency, or 'USD' (backend) / tenant default (frontend) | one amount per currency (`stats.transport/customs/broker/all: [{currency, amount}]`), a dash when none — 4ead0b9. API shape change of `GET /purchases/additional-expenses` (only consumer is that page) |
+| app/.../inventory/page.tsx:317, :395; app/.../products/page.tsx:497, :601 | a legacy sale price without a currency (nullable) was labelled with the tenant default (USD when unset) | `formatPriceOrUnset`: number + "(valyuta tanlanmagan / валюта не выбрана)" — f5b2b3b |
+| app/.../products/page.tsx:425 | margin compared cost vs `salePriceCurrency \|\| default` | margin only when both currencies are set and equal — f5b2b3b |
+| app/.../accounting/journal/page.tsx:89 | journal lines have no currency column; amounts (always UZS, ADR 0006) were labelled with the tenant default | `LEDGER_CURRENCY` ('UZS', defined, not a fallback) — f5b2b3b |
+
+### Left on purpose (display only)
+
+Listed with a reason in `frontend/src/lib/currency-guess-scan.spec.ts`
+(per-file count; a new match or a stale entry fails the scan).
+
+| file (current) | why it can stay |
+|---|---|
+| hooks/useDefaultCurrency.ts | the hook itself, now documented DISPLAY ONLY |
+| accounting/page.tsx (5), accounting/reports/page.tsx (1) | OSV/statements currency is always UZS from the API (ADR 0006) |
+| analytics/page.tsx (literal + hook) | KPI response always carries `currency` |
+| finance/page.tsx literals (9) | `accountCurrencies` always set by the API |
+| finance/page.tsx, counterparties, purchases/suppliers, sales/customers (hook); purchases/page, sales/page, app/[locale]/page.tsx (literals) | fallback label of a zero amount in MultiCurrencyValue when there is no row in any currency; dashboard chart currency pick |
+| inventory/page, products/page `costPriceCurrency \|\| 'UZS'`; SalesInvoiceForm:259 | `products.cost_price_currency` is NOT NULL |
+| purchases/expenses/new (8), expenses/page (2), expenses/[id] (5) | receipt/expense `currency` columns are NOT NULL |
+| sales/prices (hook) | selected price list's currency (NOT NULL) |
+| sales/returns (hook) | rendered only with a selected invoice |
+| OrderDeliveryNoteModal:66 | `sales_orders.currency` NOT NULL (print view) |
+| lib/opening-balance-lines.ts `currency: 'UZS'` | fixed-asset register is UZS (D6), defined |
+| opening-balances `docCurrency = 'UZS'`, equity/fixed-asset new lines | document totals and those tables are in the UZS base currency (no choice offered) |
+| purchases/returns, services, sales/crm (hook), SupplierProfileDrawer:88 | display only, but **finding F10** below |
+| backend products.service.ts:68 `costPriceCurrency ?? 'UZS'` | only for a zero cost (a nonzero cost without currency is refused above it) |
+| backend billing/super-admin subscriptions `currency: 'UZS'` | plan prices are defined in UZS |
+| backend `@default("UZS")` columns | every create DTO requires the currency (`@IsValidCurrency()`) after bdb7332; update DTOs keep the stored value |
+
+Tests: component (CreateProductDrawer: blank start, blank blocks submit,
+chosen submits; expenses page per-currency KPIs), node specs
+(documentUnitPriceFromProductCost, newOpeningBalanceLine /
+linesMissingCurrency, formatPriceOrUnset), backend (purchase-expense DTO,
+expense stats), scan test (5420680). Each new test was run red first.
+
+## Part 2: F9, editing a sales order
+
+### Writes before the fix (SalesOrdersService.update, a86affd), in order
+
+1. read order + items (no lock), status check NEW/PENDING_APPROVAL
+2. warehouse/tenant ownership checks; currency/rate checks
+3. read products, compute totals from `dto.items` or the stale `order.items`
+4. `releaseOrderReservations` (own statements: stock_levels.reserved_quantity
+   decrement, delete stock_reservations, reset item reservedQty)
+5. `salesOrderItem.deleteMany`
+6. `salesOrder.update` (header, totals, nested create of new items)
+7. warehouse check (`Buyurtma uchun ombor tanlanishi shart`) — after 4-6
+8. `reserveStockForOrder` (per line: create reservation, upsert
+   stock_levels.reserved_quantity, update item reservedQty)
+9. re-read for the response
+
+Each statement was its own implicit transaction. Reproduced on local
+Postgres (`sales-order-edit.int-spec.ts`, 4 of 6 red on the old code):
+injected failure in step 8 left new lines without reservations; an order
+without a warehouse lost its lines; an approval committed after step 1 was
+edited anyway; two concurrent edits left two line sets, both reserved.
+
+### Fix (2ad75ed)
+
+Status pre-check stays for a fast clear error; then ONE `$transaction`
+(PrismaService default `timeout: 30_000`, the posting setting):
+`SELECT status FROM sales_orders WHERE id AND tenant_id FOR UPDATE` (as T4),
+re-check editable, read order+items under the lock, validate
+currency/rate and warehouse **before** any write, release reservations,
+delete lines, update order + create lines, reserve stock — all with `tx`.
+Tenant filter on every query. Period closing: the order edit path has no
+period check (orders post nothing to the ledger), so there was none to
+keep and none was added. Tests: success result unchanged (totals,
+reservations, stock level == sum of reservations), rollback on injected
+failure, warehouse missing → nothing changed, approval committed meanwhile
+→ refused, two concurrent edits → both succeed in sequence, consistent,
+other tenant → 404 unchanged; unit spec mock got `$queryRaw`.
+
+### Other document edit paths (step 5)
+
+| path | state before | action |
+|---|---|---|
+| SalesInvoicesService.updateInvoice (draft) | one tx + FOR UPDATE + re-check (T4) | none |
+| PurchasesService.updateReceipt (draft) | one tx, status checked before it, no lock | **fixed** 26f4b8f (lockDocumentStatus + re-check) |
+| AdditionalExpensesService.updateDraft | same | **fixed** 26f4b8f |
+| ServicesService.update (draft act) | same | **fixed** 26f4b8f |
+| OpeningBalancesService.updateLines | same (refuses POSTED) | **fixed** 26f4b8f |
+| ProductionService.updateActualMaterials | one tx, status read inside it but no row lock | finding F13 |
+| FinanceService.updateTransaction | single statement (comment/type only) | none |
+| purchase returns, sales returns, transfers, inventory documents | no edit route (create / post / cancel only) | none |
+| SalesOrdersService.create | order create, audit log and reservations are separate statements | finding F12 (create, not edit) |
+
+`document-edit-lock.int-spec.ts` posts each document just before the edit's
+transaction starts (4 of 7 red on the old code), plus lock ordering and
+other-tenant lookup of the helper.
+
+## Round 5 findings (not changed)
+
+- F10 Cross-currency totals labelled with one currency (ADR 0023, display):
+  purchase returns page totals (`returns[0].currency`), services page KPIs
+  (`acts[0].currency`), CRM column totals (tenant default), customer
+  profile totals, SupplierProfileDrawer KPIs (backend supplier metrics sum
+  receipts/payments across currencies). Fix like the additional-expense
+  KPIs (one amount per currency).
+- F11 Legacy `POST /purchases/expenses` (PurchaseExpense): allocation sums
+  all expenses of a receipt across currencies with no exchange rate, and
+  allocates them on receipt prices in the receipt currency. Now at least
+  the currency is explicit (bdb7332).
+- F12 SalesOrdersService.create is not one transaction (order, audit log,
+  reservations).
+- F13 ProductionService.updateActualMaterials reads the status inside its
+  transaction without FOR UPDATE.
+- F14 Post paths (receipt, expense, act, opening balance, invoice) do not
+  lock the document row before reading its lines; an edit holding the new
+  lock while a post runs can still let the post read the old lines. Lock at
+  the start of each post (same helper).
+- F15 Opening-balance import, sheet 2_Tovar has no currency column; costs
+  are stored as UZS by the template's definition, but the header does not
+  say so ("Birlik tannarxi"). Suggest "(UZS)" in the header or a currency
+  column.
+
+## Part 3
+
+- No new migration in round 5 (API/DTO and code only).
+- Checklist: added the API contract changes (purchase expense currency
+  required; additional-expense stats shape).
