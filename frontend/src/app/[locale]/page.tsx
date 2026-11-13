@@ -336,7 +336,7 @@ export default function DashboardPage() {
 
   const [period, setPeriod] = useState<DashboardPeriod>('this_month');
   const [data, setData] = useState<FullDashboard | null>(null);
-  const [orderStats, setOrderStats] = useState<any>(null);
+  const [orderStats, setOrderStats] = useState<{ pipeline?: Partial<Record<string, number>> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [cashFlowGranularity, setCashFlowGranularity] = useState<'day' | 'week' | 'month'>('day');
 
@@ -349,7 +349,7 @@ export default function DashboardPage() {
     try {
       const [result, orders] = await Promise.all([
         apiFetch<FullDashboard>(`/dashboard?${params}`, { token, tenantId: company.id, locale }),
-        apiFetch<any>('/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
+        apiFetch<{ pipeline?: Partial<Record<string, number>> }>('/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
       ]);
       setData(result);
       setOrderStats(orders);
@@ -634,9 +634,9 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
               <MultiCurrencyValue
-                items={(data?.debts?.receivable as any)?.byCurrency}
+                items={data?.debts?.receivable?.byCurrency}
                 fallbackAmount={data?.debts?.receivable?.total ?? 0}
-                fallbackCurrency={(data?.debts?.receivable as any)?.byCurrency?.[0]?.currency || 'UZS'}
+                fallbackCurrency={data?.debts?.receivable?.byCurrency?.[0]?.currency || 'UZS'}
                 locale={locale}
                 color="var(--color-success-600)"
               />
@@ -651,7 +651,7 @@ export default function DashboardPage() {
           {data?.debts?.receivable?.topDebtors?.slice(0, 3).map((d) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{d.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, (d as any).currency || 'UZS')}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, (d as { currency?: string } | null | undefined)?.currency || 'UZS')}</span>
             </div>
           ))}
         </Card>
@@ -664,9 +664,9 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
               <MultiCurrencyValue
-                items={(data?.debts?.payable as any)?.byCurrency}
+                items={data?.debts?.payable?.byCurrency}
                 fallbackAmount={data?.debts?.payable?.total ?? 0}
-                fallbackCurrency={(data?.debts?.payable as any)?.byCurrency?.[0]?.currency || 'UZS'}
+                fallbackCurrency={data?.debts?.payable?.byCurrency?.[0]?.currency || 'UZS'}
                 locale={locale}
                 color="var(--color-error-600)"
               />
@@ -681,7 +681,7 @@ export default function DashboardPage() {
           {data?.debts?.payable?.topCreditors?.slice(0, 3).map((c) => (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{c.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, (c as any).currency || 'UZS')}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, (c as { currency?: string } | null | undefined)?.currency || 'UZS')}</span>
             </div>
           ))}
         </Card>
@@ -794,10 +794,10 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
-                        {tx.counterparty?.name ?? (tx.account?.name as any)?.[locale] ?? (isRu ? 'Операция' : 'Operatsiya')}
+                        {tx.counterparty?.name ?? tx.account?.name?.[locale] ?? (isRu ? 'Операция' : 'Operatsiya')}
                       </div>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                        {formatDate(tx.transactionDate, locale)} · {(tx.account?.name as any)?.[locale] ?? ''}
+                        {formatDate(tx.transactionDate, locale)} · {tx.account?.name?.[locale] ?? ''}
                       </div>
                     </div>
                   </div>

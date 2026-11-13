@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { CURRENCY_OPTIONS } from '@/lib/utils';
+import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { ArrowLeft, Save, Package, AlertCircle } from 'lucide-react';
 import { Category } from '@shared/types';
@@ -127,8 +127,8 @@ export default function NewProductPage() {
       });
 
       router.push('/products');
-    } catch (err: any) {
-      setError(err.message || (isRu ? 'Ошибка создания товара' : 'Tovar yaratishda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка создания товара' : 'Tovar yaratishda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -220,7 +220,7 @@ export default function NewProductPage() {
               id="prod-type"
               label={isRu ? 'Тип позиции' : 'Pozitsiya turi'}
               value={type}
-              onChange={(val) => setType(val as any)}
+              onChange={(val) => setType(val as typeof type)}
               options={typeOptions}
             />
 
@@ -248,7 +248,7 @@ export default function NewProductPage() {
               id="prod-unit"
               label={isRu ? 'Единица измерения' : 'O\'lchov birligi'}
               value={unitOfMeasure}
-              onChange={(val) => setUnitOfMeasure(val as any)}
+              onChange={(val) => setUnitOfMeasure(val as typeof unitOfMeasure)}
               options={unitOptions}
             />
 

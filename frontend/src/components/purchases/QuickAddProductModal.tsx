@@ -98,7 +98,7 @@ export function QuickAddProductModal({
     setError(null);
 
     try {
-      const created = await apiFetch<any>('/inventory/products', {
+      const created = await apiFetch<Parameters<QuickAddProductModalProps['onSuccess']>[0]>('/inventory/products', {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,

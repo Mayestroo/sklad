@@ -4,9 +4,10 @@ import React from 'react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Printer, X } from 'lucide-react';
+import type { ServiceActDetail } from '@/lib/service-act';
 
 interface ServiceActPrintViewProps {
-  act: any;
+  act: ServiceActDetail;
   companyName?: string;
   onClose: () => void;
   locale?: string;
@@ -131,7 +132,7 @@ export function ServiceActPrintView({
               </tr>
             </thead>
             <tbody>
-              {act.items?.map((item: any, idx: number) => (
+              {act.items?.map((item, idx: number) => (
                 <tr key={item.id || idx}>
                   <td className="border border-gray-300 p-2 text-center">{idx + 1}</td>
                   <td className="border border-gray-300 p-2">

@@ -8,6 +8,8 @@ import { apiFetch } from '@/lib/api';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Button } from '@/components/ui/Button';
 import { Building2, Mail, Lock, User, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+import type { AuthResponse } from '@shared/types';
 
 export default function RegisterPage() {
   const t = useTranslations('auth');
@@ -39,7 +41,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await apiFetch<any>('/auth/register', {
+      const response = await apiFetch<AuthResponse>('/auth/register', {
         method: 'POST',
         locale,
         body: JSON.stringify({
@@ -58,8 +60,8 @@ export default function RegisterPage() {
       });
 
       login(response);
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
+    } catch (err) {
+      setError(errorMessage(err) || 'Registration failed');
     } finally {
       setLoading(false);
     }

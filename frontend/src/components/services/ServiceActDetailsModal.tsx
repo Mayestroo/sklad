@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -25,14 +25,16 @@ import {
   ArrowUpRight,
   Wallet,
 } from 'lucide-react';
+import type { ServiceActDetail } from '@/lib/service-act';
+import type { CashAccount } from '@shared/types';
 
 interface ServiceActDetailsModalProps {
-  act: any;
+  act: ServiceActDetail;
   isOpen: boolean;
   onClose: () => void;
   onRefresh: () => void;
-  onEdit: (act: any) => void;
-  onPrint: (act: any) => void;
+  onEdit: (act: ServiceActDetail) => void;
+  onPrint: (act: ServiceActDetail) => void;
 }
 
 export function ServiceActDetailsModal({
@@ -53,7 +55,7 @@ export function ServiceActDetailsModal({
 
   // Quick Finance Payment Modal state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentComment, setPaymentComment] = useState('');
@@ -98,8 +100,8 @@ export function ServiceActDetailsModal({
       toast.success(isRu ? 'Акт успешно проведен' : 'Akt muvaffaqiyatli tasdiqlandi');
       onRefresh();
       onClose();
-    } catch (err: any) {
-      const msg = err.message || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik yuz berdi');
+    } catch (err) {
+      const msg = errorMessage(err) || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik yuz berdi');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -132,8 +134,8 @@ export function ServiceActDetailsModal({
       toast.success(isRu ? 'Акт успешно отменен' : 'Akt muvaffaqiyatli bekor qilindi');
       onRefresh();
       onClose();
-    } catch (err: any) {
-      const msg = err.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi');
+    } catch (err) {
+      const msg = errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -157,7 +159,7 @@ export function ServiceActDetailsModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch<any>(`/services/${act.id}/unpost`, {
+      const res = await apiFetch<ServiceActDetail>(`/services/${act.id}/unpost`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
@@ -167,8 +169,8 @@ export function ServiceActDetailsModal({
       onRefresh();
       onClose();
       onEdit(res || { ...act, status: 'DRAFT' });
-    } catch (err: any) {
-      const msg = err.message || (isRu ? 'Ошибка отмены проведения' : 'O‘tkazmani bekor qilishda xatolik yuz berdi');
+    } catch (err) {
+      const msg = errorMessage(err) || (isRu ? 'Ошибка отмены проведения' : 'O‘tkazmani bekor qilishda xatolik yuz berdi');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -213,8 +215,8 @@ export function ServiceActDetailsModal({
       toast.success(isRu ? 'Акт успешно удален' : 'Akt muvaffaqiyatli o‘chirildi');
       onRefresh();
       onClose();
-    } catch (err: any) {
-      const msg = err.message || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik yuz berdi');
+    } catch (err) {
+      const msg = errorMessage(err) || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik yuz berdi');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -234,7 +236,7 @@ export function ServiceActDetailsModal({
     setIsPaymentModalOpen(true);
 
     try {
-      const res = await apiFetch<any[]>('/finance/accounts', {
+      const res = await apiFetch<CashAccount[]>('/finance/accounts', {
         token: token || undefined,
         tenantId: company?.id,
         locale,
@@ -296,8 +298,8 @@ export function ServiceActDetailsModal({
       setIsPaymentModalOpen(false);
       onRefresh();
       onClose();
-    } catch (err: any) {
-      setPaymentError(err.message || 'To\'lovni kiritishda xatolik');
+    } catch (err) {
+      setPaymentError(errorMessage(err) || 'To\'lovni kiritishda xatolik');
     } finally {
       setPaymentLoading(false);
     }
@@ -458,7 +460,7 @@ export function ServiceActDetailsModal({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {act.items?.map((item: any, idx: number) => (
+                  {act.items?.map((item, idx: number) => (
                     <tr key={item.id || idx} className="hover:bg-gray-50/50">
                       <td className="p-2.5 text-center text-gray-500">{idx + 1}</td>
                       <td className="p-2.5">
@@ -529,7 +531,7 @@ export function ServiceActDetailsModal({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {act.payments.map((p: any) => (
+                    {act.payments.map((p) => (
                       <tr key={p.id}>
                         <td className="p-2">{formatDate(p.transactionDate, locale)}</td>
                         <td className="p-2 font-medium">

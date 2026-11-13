@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { PurchaseDocumentForm } from '@/components/purchases/PurchaseDocumentForm';
 import { Card } from '@/components/ui/Card';
 import { PurchaseReceipt } from '@shared/types';
+import { errorMessage } from '@/lib/utils';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -38,9 +39,9 @@ export default function PurchaseDetailPage({ params }: PageProps) {
           setError(isRu ? 'Документ не найден' : 'Hujjat topilmadi');
         }
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error(err);
-        setError(err.message || (isRu ? 'Ошибка загрузки документа' : 'Hujjatni yuklashda xatolik'));
+        setError(errorMessage(err) || (isRu ? 'Ошибка загрузки документа' : 'Hujjatni yuklashda xatolik'));
       })
       .finally(() => setLoading(false));
   }, [token, company, id, locale]);

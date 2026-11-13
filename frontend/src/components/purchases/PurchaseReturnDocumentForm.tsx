@@ -11,7 +11,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -135,7 +135,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [error, setError] = useState('');
   const [isActModalOpen, setIsActModalOpen] = useState(false);
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -167,7 +167,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     apiFetch<CounterpartyOption[]>('/counterparties', { token, tenantId: company.id, locale })
       .then((res) => {
         const suppliers = (res || []).filter(
-          (c: any) => c.type === 'SUPPLIER' || c.type === 'BOTH',
+          (c) => c.type === 'SUPPLIER' || c.type === 'BOTH',
         );
         setCounterparties(suppliers);
       })
@@ -179,11 +179,11 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       .catch((err) => console.error(err));
 
     // Products (Filter only PRODUCT and RAW_MATERIAL)
-    apiFetch<any>('/inventory/products', { token, tenantId: company.id, locale })
+    apiFetch<ProductOption[] | { data?: ProductOption[]; items?: ProductOption[] }>('/inventory/products', { token, tenantId: company.id, locale })
       .then((res) => {
         const list = Array.isArray(res) ? res : res?.data || res?.items || [];
         const eligible = list.filter(
-          (p: any) => p.type === 'PRODUCT' || p.type === 'RAW_MATERIAL' || !p.type,
+          (p) => p.type === 'PRODUCT' || p.type === 'RAW_MATERIAL' || !p.type,
         );
         setProducts(eligible);
       })
@@ -194,7 +194,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   useEffect(() => {
     if (!token || !company || !counterpartyId) return;
 
-    apiFetch<any>('/purchases/receipts', {
+    apiFetch<PurchaseReceipt[] | { data?: PurchaseReceipt[]; items?: PurchaseReceipt[] }>('/purchases/receipts', {
       token,
       tenantId: company.id,
       locale,
@@ -245,8 +245,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       // Pre-fill items from receipt
       if (found.items && found.items.length > 0) {
         const prefilled: ItemRow[] = found.items
-          .filter((i: any) => i.product?.type !== 'SERVICE' && i.product?.type !== 'BUNDLE')
-          .map((i: any) => {
+          .filter((i) => i.product?.type !== 'SERVICE' && i.product?.type !== 'BUNDLE')
+          .map((i) => {
             const unreturned = Math.max(
               0,
               Number(i.quantity) - Number(i.returnedQuantity || 0),
@@ -453,8 +453,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       });
 
       router.push('/purchases/returns');
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка при сохранении возврата' : 'Qaytarishni saqlashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка при сохранении возврата' : 'Qaytarishni saqlashda xatolik'));
     } finally {
       setSaving(false);
     }
@@ -474,8 +474,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       });
       setStatus('POSTED');
       router.push('/purchases/returns');
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка при утверждении' : 'Tasdiqlashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка при утверждении' : 'Tasdiqlashda xatolik'));
     } finally {
       setSaving(false);
     }
@@ -507,8 +507,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       setStatus('CANCELLED');
       toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       router.push('/purchases/returns');
-    } catch (err: any) {
-      const msg = err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik');
+    } catch (err) {
+      const msg = errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -1020,7 +1020,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               actNumber,
               reason,
               comment,
-              status: status as any,
+              status: status as PurchaseReturn['status'],
               totalAmount,
               createdAt: new Date().toISOString(),
               counterparty: selectedSupplier,

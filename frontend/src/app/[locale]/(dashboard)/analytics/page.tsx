@@ -32,6 +32,15 @@ import {
   FinancialRatios,
 } from '@shared/types';
 
+/** GET /analytics/top-clients */
+interface TopClient {
+  counterpartyId: string;
+  name: string;
+  inn?: string | null;
+  invoiceCount: number;
+  totalSpent: number;
+}
+
 export default function AnalyticsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
@@ -44,11 +53,11 @@ export default function AnalyticsPage() {
   const [trend, setTrend] = useState<SalesTrendDataPoint[]>([]);
   const [categories, setCategories] = useState<CategoryBreakdownItem[]>([]);
   const [topProducts, setTopProducts] = useState<TopProductItem[]>([]);
-  const [topClients, setTopClients] = useState<any[]>([]);
+  const [topClients, setTopClients] = useState<TopClient[]>([]);
   const [ratios, setRatios] = useState<FinancialRatios | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const reportCurrency = (kpi as any)?.currency || defaultCurrency || 'USD';
+  const reportCurrency = (kpi as { currency?: string } | null | undefined)?.currency || defaultCurrency || 'USD';
 
   const fetchData = async () => {
     if (!token || !company) return;
@@ -60,7 +69,7 @@ export default function AnalyticsPage() {
         apiFetch<SalesTrendDataPoint[]>(`/analytics/sales-trend?range=${timeRange}`, opts),
         apiFetch<CategoryBreakdownItem[]>(`/analytics/category-breakdown?range=${timeRange}`, opts),
         apiFetch<TopProductItem[]>(`/analytics/top-products?range=${timeRange}&limit=10`, opts),
-        apiFetch<any[]>(`/analytics/top-clients?range=${timeRange}&limit=5`, opts).catch(() => []),
+        apiFetch<TopClient[]>(`/analytics/top-clients?range=${timeRange}&limit=5`, opts).catch(() => []),
         apiFetch<FinancialRatios>(`/analytics/financial-ratios`, opts),
       ]);
       setKpi(k);

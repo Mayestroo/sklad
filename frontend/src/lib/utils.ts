@@ -117,8 +117,24 @@ export function formatDateTime(date: string | Date | null | undefined, _locale?:
 /**
  * Extracts the localized string from a name that might be an object { uz: string, ru: string } or a plain string.
  */
-export function getLocalizedName(name: any, locale: string = 'uz'): string {
+export type LocalizedName = string | { uz?: string; ru?: string };
+
+export function getLocalizedName(name: LocalizedName | null | undefined, locale: string = 'uz'): string {
   if (!name) return '—';
   if (typeof name === 'string') return name;
-  return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
+  const byLocale = name as Record<string, string | undefined>;
+  return byLocale[locale] || name.ru || name.uz || Object.values(byLocale)[0] || '—';
+}
+
+/**
+ * The message of a caught error, or `undefined` when the thrown value has no
+ * string `message` (callers keep their own fallback text). Use in
+ * `catch (err)` blocks instead of typing the error as `any`.
+ */
+export function errorMessage(err: unknown): string | undefined {
+  if (err !== null && typeof err === 'object' && 'message' in err) {
+    const { message } = err as { message: unknown };
+    return typeof message === 'string' ? message : undefined;
+  }
+  return undefined;
 }

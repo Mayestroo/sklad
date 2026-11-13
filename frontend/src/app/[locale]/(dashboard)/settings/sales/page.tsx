@@ -17,6 +17,10 @@ import {
   HelpCircle,
   Sliders,
 } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+
+/** GET/PATCH /tenants/settings */
+type CompanySettings = NonNullable<ReturnType<typeof useAuth>['company']>['settings'];
 
 export default function SalesSettingsPage() {
   const { token, company, updateCompanySettings } = useAuth();
@@ -35,7 +39,7 @@ export default function SalesSettingsPage() {
   useEffect(() => {
     if (!token || !company) return;
     setLoading(true);
-    apiFetch<any>('/tenants/settings', {
+    apiFetch<CompanySettings>('/tenants/settings', {
       token,
       tenantId: company.id,
       locale,
@@ -60,7 +64,7 @@ export default function SalesSettingsPage() {
     setSaveSuccess(false);
 
     try {
-      const updated = await apiFetch<any>('/tenants/settings', {
+      const updated = await apiFetch<CompanySettings>('/tenants/settings', {
         method: 'PATCH',
         token,
         tenantId: company.id,
@@ -78,9 +82,9 @@ export default function SalesSettingsPage() {
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Save failed:', err);
-      setError(err.message || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
+      setError(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setSaving(false);
     }

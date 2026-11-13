@@ -3,13 +3,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
-import { apiDownload, apiFetch } from '@/lib/api';
+import { apiDownload, apiFetch, listOf, type ListResponse } from '@/lib/api';
 import {
   IMPORT_CATEGORY_LABELS,
   openingBalanceImportPaths,
   summarizeImportPreview,
 } from '@/lib/opening-balance-import';
-import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { CURRENCY_OPTIONS, formatCurrency, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -51,9 +51,30 @@ import type {
   ImportValidationResult,
 } from '@shared/types/opening-balances';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
+import type { CashAccount } from '@shared/types/finance';
+import type { Product } from '@shared/types/inventory';
+import type { Counterparty } from '@shared/types/sales';
+import type { Warehouse } from '@shared/types/tenant';
+import type { FixedAsset } from '@shared/types/fixed-assets';
 
 type TabKey = 'cash' | 'inventory' | 'customers' | 'suppliers' | 'advances' | 'fixed-assets' | 'other';
 type OpeningBalanceDraftLine = Omit<Partial<OpeningBalanceLine>, 'exchangeRate'> & { exchangeRate?: number | string };
+type LineValue = OpeningBalanceDraftLine[keyof OpeningBalanceDraftLine];
+type IndexedLine = { line: OpeningBalanceDraftLine; index: number };
+
+interface SubledgerTableProps {
+  lines: OpeningBalanceDraftLine[];
+  isReadOnly: boolean;
+  locale: 'uz' | 'ru';
+  isRu: boolean;
+  onUpdate: (index: number, field: keyof OpeningBalanceLine, value: LineValue) => void;
+  onRemove: (index: number) => void;
+}
+
+/** The lines of one category, with their position in the full list. */
+function linesWhere(lines: OpeningBalanceDraftLine[], keep: (line: OpeningBalanceDraftLine) => boolean): IndexedLine[] {
+  return lines.flatMap((line, index) => (keep(line) ? [{ line, index }] : []));
+}
 
 export default function OpeningBalancesPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -71,11 +92,11 @@ export default function OpeningBalancesPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('cash');
 
   // Lookups
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [counterparties, setCounterparties] = useState<any[]>([]);
-  const [fixedAssets, setFixedAssets] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<CashAccount[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+  const [fixedAssets, setFixedAssets] = useState<FixedAsset[]>([]);
 
   // Working Document Lines & State
   const [lines, setLines] = useState<OpeningBalanceDraftLine[]>([]);
@@ -105,17 +126,17 @@ export default function OpeningBalancesPage() {
     const fetchLookups = async () => {
       try {
         const [accs, whs, prods, cps, fas] = await Promise.all([
-          apiFetch<any[]>('/finance/accounts', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
-          apiFetch<any>('/tenants/warehouses', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => res?.data || (Array.isArray(res) ? res : []))
+          apiFetch<CashAccount[]>('/finance/accounts', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
+          apiFetch<ListResponse<Warehouse>>('/tenants/warehouses', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => listOf(res))
             .catch(() => []),
-          apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => res?.data || (Array.isArray(res) ? res : []))
+          apiFetch<ListResponse<Product>>('/inventory/products', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => listOf(res))
             .catch(() => []),
-          apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => res?.data || (Array.isArray(res) ? res : []))
+          apiFetch<ListResponse<Counterparty>>('/sales/counterparties', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => listOf(res))
             .catch(() => []),
-          apiFetch<any[]>('/fixed-assets', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
+          apiFetch<FixedAsset[]>('/fixed-assets', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
         ]);
 
         setAccounts(Array.isArray(accs) ? accs : []);
@@ -151,8 +172,8 @@ export default function OpeningBalancesPage() {
         setCurrentDoc(null);
         setLines([]);
       }
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка при загрузке документов' : 'Hujjatlarni yuklashda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка при загрузке документов' : 'Hujjatlarni yuklashda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -177,8 +198,8 @@ export default function OpeningBalancesPage() {
         setLines(doc.lines || []);
         setOpeningDate(doc.openingDate ? doc.openingDate.slice(0, 10) : '2026-10-01');
         setNotes(doc.notes || '');
-      } catch (e: any) {
-        toast.error(e?.message || (isRu ? 'Ошибка загрузки документа' : 'Hujjat tafsilotlarini yuklashda xatolik'));
+      } catch (e) {
+        toast.error(errorMessage(e) || (isRu ? 'Ошибка загрузки документа' : 'Hujjat tafsilotlarini yuklashda xatolik'));
       }
     },
     [token, companyId, locale, isRu],
@@ -289,8 +310,8 @@ export default function OpeningBalancesPage() {
       });
       toast.success(isRu ? 'Изменения успешно сохранены' : 'Boshlang‘ich qoldiqlar muvaffaqiyatli saqlandi');
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setActionLoading(false);
     }
@@ -326,8 +347,8 @@ export default function OpeningBalancesPage() {
       );
       loadDocuments();
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -353,8 +374,8 @@ export default function OpeningBalancesPage() {
       );
       loadDocuments();
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка переоткрытия' : 'Hujjatni qayta ochishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка переоткрытия' : 'Hujjatni qayta ochishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -376,8 +397,8 @@ export default function OpeningBalancesPage() {
           : 'Balans ustav kapitali orqali avtomatik tenglashtirildi',
       );
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка балансировки' : 'Balansni tenglashtirishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка балансировки' : 'Balansni tenglashtirishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -396,8 +417,8 @@ export default function OpeningBalancesPage() {
       toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
       setSelectedDocId('');
       loadDocuments();
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -425,8 +446,8 @@ export default function OpeningBalancesPage() {
       toast.success(isRu ? 'Новый документ остатков создан' : 'Yangi boshlang‘ich qoldiq hujjati yaratildi');
       await loadDocuments();
       setSelectedDocId(created.id);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка создания' : 'Yaratishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка создания' : 'Yaratishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -536,7 +557,7 @@ export default function OpeningBalancesPage() {
     setLines((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: any) => {
+  const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: LineValue) => {
     if (isReadOnly) return;
     setLines((prev) => {
       const updated = [...prev];
@@ -1483,12 +1504,10 @@ function CashTable({
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === 'CASH' || l.category === 'BANK' ? { line: l, index: i } : null))
-    .filter(Boolean);
+}: SubledgerTableProps & { accounts: CashAccount[] }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'CASH' || l.category === 'BANK');
 
-  const getAccountName = (acc: any) => {
+  const getAccountName = (acc: CashAccount | undefined) => {
     if (!acc) return '—';
     if (typeof acc.name === 'string') return acc.name;
     return acc.name?.[locale] || acc.name?.uz || acc.name?.ru || 'Kassa';
@@ -1515,7 +1534,7 @@ function CashTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -1525,7 +1544,7 @@ function CashTable({
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
                 {(() => {
-                  const compatibleAccounts = accounts.filter((account: any) =>
+                  const compatibleAccounts = accounts.filter((account) =>
                     isCashAccountCurrencyValid(account) &&
                     (line.category === 'BANK'
                       ? account.accountType === 'BANK'
@@ -1536,7 +1555,7 @@ function CashTable({
                   value={line.accountId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => {
-                    const account = accounts.find((item: any) => item.id === value);
+                    const account = accounts.find((item) => item.id === value);
                     onUpdate(index, 'accountId', value);
                     if (account) {
                        onUpdate(index, 'currency', account.currency);
@@ -1546,7 +1565,7 @@ function CashTable({
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
-                    ...compatibleAccounts.map((account: any) => ({
+                    ...compatibleAccounts.map((account) => ({
                       value: account.id,
                       label: `${getAccountName(account)} (${account.accountType}, ${account.currency})`,
                     })),
@@ -1650,18 +1669,16 @@ function InventoryTable({
   currency,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === 'INVENTORY' ? { line: l, index: i } : null))
-    .filter(Boolean);
+}: SubledgerTableProps & { products: Product[]; warehouses: Warehouse[]; currency?: string }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'INVENTORY');
 
-  const getProductName = (p: any) => {
+  const getProductName = (p: Product | undefined) => {
     if (!p) return '—';
     if (typeof p.name === 'string') return p.name;
     return p.name?.[locale] || p.name?.uz || p.name?.ru || 'Tovar';
   };
 
-  const getWarehouseName = (w: any) => {
+  const getWarehouseName = (w: Warehouse | undefined) => {
     if (!w) return '—';
     if (typeof w.name === 'string') return w.name;
     return w.name?.[locale] || w.name?.uz || w.name?.ru || 'Ombor';
@@ -1689,7 +1706,7 @@ function InventoryTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -1705,7 +1722,7 @@ function InventoryTable({
                   style={{ width: '100%' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите товар' : 'Tovarni tanlang' },
-                    ...products.map((product: any) => ({
+                    ...products.map((product) => ({
                       value: product.id,
                       label: `${product.sku ? `[${product.sku}] ` : ''}${getProductName(product)}`,
                     })),
@@ -1720,7 +1737,7 @@ function InventoryTable({
                   style={{ width: '100%' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите склад' : 'Omborni tanlang' },
-                    ...warehouses.map((warehouse: any) => ({
+                    ...warehouses.map((warehouse) => ({
                       value: warehouse.id,
                       label: getWarehouseName(warehouse),
                     })),
@@ -1823,10 +1840,8 @@ function CounterpartyTable({
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === category ? { line: l, index: i } : null))
-    .filter(Boolean);
+}: SubledgerTableProps & { category: OpeningBalanceCategory; counterparties: Counterparty[] }) {
+  const filtered = linesWhere(lines, (l) => l.category === category);
 
   const isCustomer = category === 'CUSTOMER_DEBT';
 
@@ -1856,7 +1871,7 @@ function CounterpartyTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -1872,7 +1887,7 @@ function CounterpartyTable({
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
-                    ...counterparties.map((counterparty: any) => ({
+                    ...counterparties.map((counterparty) => ({
                       value: counterparty.id,
                       label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
                     })),
@@ -1995,12 +2010,8 @@ function AdvancesTable({
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) =>
-      l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE' ? { line: l, index: i } : null,
-    )
-    .filter(Boolean);
+}: SubledgerTableProps & { counterparties: Counterparty[] }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE');
 
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
@@ -2024,7 +2035,7 @@ function AdvancesTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -2034,7 +2045,7 @@ function AdvancesTable({
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
                 <Select
-                  value={line.category}
+                  value={line.category ?? ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'category', value)}
                   style={{ width: '100%' }}
@@ -2052,7 +2063,7 @@ function AdvancesTable({
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
-                    ...counterparties.map((counterparty: any) => ({
+                    ...counterparties.map((counterparty) => ({
                       value: counterparty.id,
                       label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
                     })),
@@ -2158,10 +2169,8 @@ function FixedAssetsTable({
   currency,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === 'FIXED_ASSET' ? { line: l, index: i } : null))
-    .filter(Boolean);
+}: SubledgerTableProps & { fixedAssets: FixedAsset[]; currency?: string }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'FIXED_ASSET');
 
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
@@ -2184,7 +2193,7 @@ function FixedAssetsTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => {
+          filtered.map(({ line, index }: IndexedLine, pos: number) => {
             const initCost = Number(line.amount || 0);
             const accDep = Number(line.accumulatedDepreciation || 0);
             const netBookValue = Math.max(0, initCost - accDep);
@@ -2312,14 +2321,11 @@ function OtherTable({
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) =>
-      l.category === 'EQUITY' || l.category === 'OTHER_ASSET' || l.category === 'OTHER_LIABILITY'
-        ? { line: l, index: i }
-        : null,
-    )
-    .filter(Boolean);
+}: SubledgerTableProps) {
+  const filtered = linesWhere(
+    lines,
+    (l) => l.category === 'EQUITY' || l.category === 'OTHER_ASSET' || l.category === 'OTHER_LIABILITY',
+  );
 
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
@@ -2340,7 +2346,7 @@ function OtherTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -2350,7 +2356,7 @@ function OtherTable({
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
                 <Select
-                  value={line.category}
+                  value={line.category ?? ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'category', value)}
                   style={{ width: '100%' }}

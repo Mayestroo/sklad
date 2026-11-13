@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, listOf, type ListResponse } from '@/lib/api';
 import { getApiCache, setApiCache } from '@/lib/cache';
+import { errorMessage } from '@/lib/utils';
 
 export interface CounterpartyDropdownItem {
   id: string;
@@ -98,30 +99,30 @@ export function useDocumentDropdowns({ token, tenantId, locale = 'uz' }: UseDocu
 
     try {
       const [cpRes, prdRes, usrRes, whRes, plRes] = await Promise.all([
-        apiFetch<any>('/sales/counterparties', { token, tenantId, locale }).catch((err) => {
+        apiFetch<ListResponse<CounterpartyDropdownItem>>('/sales/counterparties', { token, tenantId, locale }).catch((err) => {
           console.error('Failed to load counterparties:', err);
           return null;
         }),
-        apiFetch<any>('/inventory/products', { token, tenantId, locale }).catch((err) => {
+        apiFetch<ListResponse<ProductDropdownItem>>('/inventory/products', { token, tenantId, locale }).catch((err) => {
           console.error('Failed to load products:', err);
           return null;
         }),
-        apiFetch<any>('/users', { token, tenantId, locale }).catch(() => null),
-        apiFetch<any>('/tenants/warehouses', { token, tenantId, locale }).catch((err) => {
+        apiFetch<ListResponse<UserDropdownItem>>('/users', { token, tenantId, locale }).catch(() => null),
+        apiFetch<ListResponse<WarehouseDropdownItem>>('/tenants/warehouses', { token, tenantId, locale }).catch((err) => {
           console.error('Failed to load warehouses:', err);
           return null;
         }),
-        apiFetch<any>('/sales/price-lists', { token, tenantId, locale }).catch((err) => {
+        apiFetch<ListResponse<PriceListDropdownItem>>('/sales/price-lists', { token, tenantId, locale }).catch((err) => {
           console.error('Failed to load price lists:', err);
           return null;
         }),
       ]);
 
-      const cpList: CounterpartyDropdownItem[] = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
-      const prdList: ProductDropdownItem[] = prdRes?.data || (Array.isArray(prdRes) ? prdRes : []);
-      const usrList: UserDropdownItem[] = usrRes?.data || (Array.isArray(usrRes) ? usrRes : []);
-      const whList: WarehouseDropdownItem[] = whRes?.data || (Array.isArray(whRes) ? whRes : []);
-      const plList: PriceListDropdownItem[] = plRes?.data || (Array.isArray(plRes) ? plRes : []);
+      const cpList: CounterpartyDropdownItem[] = listOf(cpRes);
+      const prdList: ProductDropdownItem[] = listOf(prdRes);
+      const usrList: UserDropdownItem[] = listOf(usrRes);
+      const whList: WarehouseDropdownItem[] = listOf(whRes);
+      const plList: PriceListDropdownItem[] = listOf(plRes);
 
       setCounterparties(cpList);
       setProducts(prdList);
@@ -136,8 +137,8 @@ export function useDocumentDropdowns({ token, tenantId, locale = 'uz' }: UseDocu
         warehouses: whList,
         priceLists: plList,
       });
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load options');
+    } catch (err) {
+      setError(errorMessage(err) || 'Failed to load options');
     } finally {
       setIsLoading(false);
     }

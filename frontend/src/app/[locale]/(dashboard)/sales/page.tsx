@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { apiFetch, listOf, type ListResponse } from '@/lib/api';
+import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -41,7 +41,7 @@ interface CounterpartyItem {
 
 interface WarehouseItem {
   id: string;
-  name: any;
+  name: LocalizedName;
 }
 
 export default function SalesPage() {
@@ -70,7 +70,7 @@ export default function SalesPage() {
   const [deletingInvoice, setDeletingInvoice] = useState<SalesInvoice | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const getLocalizedName = (name: any) => {
+  const getLocalizedName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -134,8 +134,8 @@ export default function SalesPage() {
       toast.success(isRu ? 'Накладная успешно удалена' : 'Nukladnoy muvaffaqiyatli o‘chirildi');
       fetchStats();
       fetchInvoices();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении накладной' : 'Nukladnoyni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении накладной' : 'Nukladnoyni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -149,20 +149,20 @@ export default function SalesPage() {
   useEffect(() => {
     if (!token || !company) return;
 
-    apiFetch<any>('/sales/counterparties', {
+    apiFetch<ListResponse<CounterpartyItem>>('/sales/counterparties', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
-      .then((res) => setCounterparties(res?.data || (Array.isArray(res) ? res : [])))
+      .then((res) => setCounterparties(listOf(res)))
       .catch((err) => console.error(err));
 
-    apiFetch<any>('/tenants/warehouses', {
+    apiFetch<ListResponse<WarehouseItem>>('/tenants/warehouses', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
-      .then((res) => setWarehouses(res?.data || (Array.isArray(res) ? res : [])))
+      .then((res) => setWarehouses(listOf(res)))
       .catch((err) => console.error(err));
   }, [token, company, locale]);
 
@@ -505,7 +505,7 @@ export default function SalesPage() {
                   >
                     <td style={{ padding: '12px 16px' }}>
                       <Link href={`/sales/${inv.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
-                        {inv.invoiceNumber || (inv as any).docNumber}
+                        {inv.invoiceNumber || (inv as { docNumber?: string } | null | undefined)?.docNumber}
                       </Link>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
                         {formatDate(inv.invoiceDate || inv.createdAt)}
@@ -639,11 +639,11 @@ export default function SalesPage() {
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {deletingInvoice.status === 'POSTED'
                 ? isRu
-                  ? `Накладная продажи ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?`
-                  : `${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} raqamli sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?`
+                  ? `Накладная продажи ${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber} уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?`
+                  : `${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber} raqamli sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?`
                 : isRu
-                ? `Вы действительно хотите удалить накладную ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber}? Это действие необратимо.`
-                : `Haqiqatan ham ${deletingInvoice.invoiceNumber || (deletingInvoice as any).docNumber} raqamli sotuv hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+                ? `Вы действительно хотите удалить накладную ${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber}? Это действие необратимо.`
+                : `Haqiqatan ham ${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber} raqamli sotuv hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
               <Button

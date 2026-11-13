@@ -24,6 +24,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
 
 interface StaffUser {
   id: string;
@@ -83,8 +84,8 @@ export default function UsersPage() {
         locale,
       });
       setUsers(data || []);
-    } catch (err: any) {
-      setError(err.message || (isRu ? 'Ошибка загрузки пользователей' : 'Foydalanuvchilarni yuklashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка загрузки пользователей' : 'Foydalanuvchilarni yuklashda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -122,8 +123,8 @@ export default function UsersPage() {
       setFirstName('');
       setLastName('');
       fetchUsers();
-    } catch (err: any) {
-      setCreateError(err.message || (isRu ? 'Ошибка создания сотрудника' : 'Xodim qo‘shishda xatolik'));
+    } catch (err) {
+      setCreateError(errorMessage(err) || (isRu ? 'Ошибка создания сотрудника' : 'Xodim qo‘shishda xatolik'));
     } finally {
       setCreateLoading(false);
     }
@@ -159,8 +160,8 @@ export default function UsersPage() {
       setEditingUser(null);
       fetchUsers();
       toast.success(isRu ? 'Пользователь успешно обновлен' : 'Foydalanuvchi muvaffaqiyatli yangilandi');
-    } catch (err: any) {
-      setEditError(err.message || (isRu ? 'Ошибка обновления' : 'Yangilashda xatolik'));
+    } catch (err) {
+      setEditError(errorMessage(err) || (isRu ? 'Ошибка обновления' : 'Yangilashda xatolik'));
     } finally {
       setEditLoading(false);
     }
@@ -180,8 +181,8 @@ export default function UsersPage() {
       setDeletingUser(null);
       fetchUsers();
       toast.success(isRu ? 'Пользователь успешно удален' : 'Foydalanuvchi muvaffaqiyatli o‘chirildi');
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления' : "O'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления' : "O'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
@@ -203,8 +204,8 @@ export default function UsersPage() {
       toast.success(
         isRu ? 'Статус пользователя успешно изменен' : 'Foydalanuvchi holati muvaffaqiyatli o‘zgartirildi'
       );
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка обновления статуса' : 'Status update failed'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления статуса' : 'Status update failed'));
     }
   };
 
@@ -465,7 +466,7 @@ export default function UsersPage() {
                     { value: 'ru', label: 'Русский (RU)' },
                   ]}
                   value={preferredLanguage}
-                  onChange={(val) => setPreferredLanguage(val as any)}
+                  onChange={(val) => setPreferredLanguage(val as typeof preferredLanguage)}
                 />
               </div>
 
@@ -585,7 +586,7 @@ export default function UsersPage() {
                     { value: 'ru', label: 'Русский (RU)' },
                   ]}
                   value={editPreferredLanguage}
-                  onChange={(val) => setEditPreferredLanguage(val as any)}
+                  onChange={(val) => setEditPreferredLanguage(val as typeof editPreferredLanguage)}
                 />
               </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { type ComponentProps, useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { SelectOption } from '@/components/ui/Select';
-import { formatCurrency, getLocalizedName } from '@/lib/utils';
+import { formatCurrency, getLocalizedName, errorMessage } from '@/lib/utils';
 import {
   ORDER_STATUS_LABELS,
 } from '@/lib/constants/statuses';
@@ -40,6 +40,7 @@ import { useDocumentDropdowns, CounterpartyDropdownItem, WarehouseDropdownItem }
 import { OrderGeneralInfo } from './order-form/OrderGeneralInfo';
 import { OrderItemsTable, OrderItemRow } from './order-form/OrderItemsTable';
 import { OrderTotalsSummary } from './order-form/OrderTotalsSummary';
+import type { SalesOrderDetail } from './order-form/types';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
@@ -49,7 +50,7 @@ import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
 export { ORDER_STATUS_LABELS };
 
 export interface SalesOrderFormProps {
-  initialData?: any | null;
+  initialData?: SalesOrderDetail | null;
   mode: 'create' | 'edit';
 }
 
@@ -122,7 +123,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   // Line items
   const [items, setItems] = useState<OrderItemRow[]>(
     initialData?.items && initialData.items.length > 0
-      ? initialData.items.map((i: any) => ({
+      ? initialData.items.map((i) => ({
           productId: i.productId,
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
@@ -136,7 +137,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const [additionalChargeVatRate, setAdditionalChargeVatRate] = useState<number | string>(Number(initialData?.additionalChargeVatRate ?? 12));
 
   // States
-  const [currentOrderData, setCurrentOrderData] = useState<any | null>(initialData || null);
+  const [currentOrderData, setCurrentOrderData] = useState<SalesOrderDetail | null>(initialData || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -280,7 +281,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const handleCounterpartySelect = (cpId: string) => {
     markDirty();
     setCounterpartyId(cpId);
-    const cp: any = counterparties.find((c: any) => c.id === cpId);
+    const cp = counterparties.find((c) => c.id === cpId);
     if (cp) {
       const custDiscount = Number(cp.discountPercent || 0);
 
@@ -299,7 +300,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     }
   };
 
-  const handleItemChange = (index: number, field: keyof OrderItemRow, val: any) => {
+  const handleItemChange = (index: number, field: keyof OrderItemRow, val: OrderItemRow[keyof OrderItemRow]) => {
     markDirty();
     if (field === 'productId') {
       const selected = products.find((product) => product.id === val);
@@ -314,8 +315,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       updated[index] = { ...updated[index], [field]: val };
       if (field === 'productId') {
         const selectedProduct = products.find((product) => product.id === val);
-        const unitPrice = getProductPriceInDocumentCurrency(val);
-        const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+        const unitPrice = getProductPriceInDocumentCurrency(String(val));
+        const cp = counterparties.find((c) => c.id === counterpartyId);
         const custDiscount = Number(cp?.discountPercent || 0);
         updated[index].unitPrice = unitPrice ?? 0;
         updated[index].vatRate = Number(selectedProduct?.vatRate ?? 0);
@@ -330,7 +331,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const addItemRow = (productId = '') => {
     markDirty();
     const unitPrice = productId ? getProductPriceInDocumentCurrency(productId) ?? 0 : 0;
-    const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+    const cp = counterparties.find((c) => c.id === counterpartyId);
     const custDiscount = Number(cp?.discountPercent || 0);
     setItems((prev) => [
       ...prev,
@@ -423,7 +424,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       };
 
       if (mode === 'create' || !orderId) {
-        const res = await apiFetch<any>('/sales/orders', {
+        const res = await apiFetch<{ id: string }>('/sales/orders', {
           method: 'POST',
           token: token || undefined,
           tenantId: company?.id,
@@ -437,7 +438,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           router.push(`/sales/orders/${res.id}`);
         }
       } else {
-        const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}`, {
+        const res = await apiFetch<SalesOrderDetail>(`/sales/orders/${orderId}`, {
           method: 'PATCH',
           token: token || undefined,
           tenantId: company?.id,
@@ -466,7 +467,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     setError(null);
 
     try {
-      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/transition`, {
+      const res = await apiFetch<SalesOrderDetail>(`/sales/orders/${orderId}/transition`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
@@ -495,7 +496,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     setError(null);
 
     try {
-      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/complete`, {
+      const res = await apiFetch<SalesOrderDetail>(`/sales/orders/${orderId}/complete`, {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
@@ -522,7 +523,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     setError(null);
 
     try {
-      const res = await apiFetch<{ id: string; status: string }>(`/sales/orders/${orderId}/status`, {
+      const res = await apiFetch<SalesOrderDetail>(`/sales/orders/${orderId}/status`, {
         method: 'PATCH',
         token: token || undefined,
         tenantId: company?.id,
@@ -623,8 +624,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
       setIsDirty(false);
       toast.success(isRu ? 'Заказ успешно удален' : 'Buyurtma muvaffaqiyatli o‘chirildi');
       router.push('/sales/orders');
-    } catch (err: any) {
-      const msg = err.message || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik");
+    } catch (err) {
+      const msg = errorMessage(err) || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik");
       setError(msg);
       toast.error(msg);
       setLoading(false);
@@ -694,7 +695,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                     : 'Yangi Xaridor Buyurtmasi'
                   : `${isRu ? 'Заказ покупателя' : 'Xaridor buyurtmasi'} ${orderNumber}`}
               </h1>
-              <Badge variant={statusMeta.variant as any}>
+              <Badge variant={statusMeta.variant as ComponentProps<typeof Badge>['variant']}>
                 {isRu ? statusMeta.ru : statusMeta.uz}
               </Badge>
             </div>
@@ -985,7 +986,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             order={currentOrderData}
             onSuccess={() => {
               if (orderId) {
-                apiFetch<any>(`/sales/orders/${orderId}`, { token: token || undefined, tenantId: company?.id, locale }).then((res) => {
+                apiFetch<SalesOrderDetail>(`/sales/orders/${orderId}`, { token: token || undefined, tenantId: company?.id, locale }).then((res) => {
                   if (res) setCurrentOrderData(res);
                 });
               }
@@ -998,7 +999,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             order={currentOrderData}
             onSuccess={() => {
               if (orderId) {
-                apiFetch<any>(`/sales/orders/${orderId}`, { token: token || undefined, tenantId: company?.id, locale }).then((res) => {
+                apiFetch<SalesOrderDetail>(`/sales/orders/${orderId}`, { token: token || undefined, tenantId: company?.id, locale }).then((res) => {
                   if (res) {
                     setCurrentOrderData(res);
                     setOrderStatus(res.status);

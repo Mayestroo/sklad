@@ -92,7 +92,7 @@ export default function JournalPage() {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                       {(entry.lines || []).map((line, idx) => (
-                        <div key={idx}>{formatCurrency(Number(line.amount), locale, (line as any).currency || (entry as any)?.currency || defaultCurrency)}</div>
+                        <div key={idx}>{formatCurrency(Number(line.amount), locale, (line as { currency?: string } | null | undefined)?.currency || (entry as { currency?: string } | null | undefined)?.currency || defaultCurrency)}</div>
                       ))}
                     </td>
                   </tr>

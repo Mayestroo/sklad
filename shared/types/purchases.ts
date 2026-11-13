@@ -32,6 +32,7 @@ export interface PurchaseReceiptItem {
     sku: string;
     unitOfMeasure: string;
     weight?: number;
+    type?: string;
   };
 }
 

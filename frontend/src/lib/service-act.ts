@@ -107,3 +107,47 @@ export function buildServiceActPayload(
     },
   };
 }
+
+/** A service act as the /services endpoints return it (list rows and detail). */
+export interface ServiceActDetail {
+  id: string;
+  actNumber: string;
+  type: 'PROVIDED' | 'RECEIVED';
+  status: string;
+  paymentStatus: string;
+  actDate: string;
+  counterpartyId: string;
+  counterparty?: { id?: string; name: string; inn?: string | null; phone?: string | null } | null;
+  currency: string;
+  exchangeRate?: number | string | null;
+  externalNumber?: string | null;
+  externalDate?: string | null;
+  notes?: string | null;
+  subtotal?: number | string;
+  vatAmount?: number | string;
+  totalAmount: number | string;
+  paidAmount: number | string;
+  items?: ServiceActItemDetail[];
+  payments?: Array<{
+    id: string;
+    amount: number | string;
+    currency: string;
+    comment?: string | null;
+    transactionDate: string;
+    account?: { name: { uz?: string; ru?: string } | string } | null;
+  }>;
+}
+
+export interface ServiceActItemDetail {
+  id: string;
+  productId?: string | null;
+  serviceName: string;
+  description?: string | null;
+  unit: string;
+  quantity: number | string;
+  unitPrice: number | string;
+  vatRate: number | string;
+  vatAmount?: number | string;
+  lineTotal: number | string;
+}
+

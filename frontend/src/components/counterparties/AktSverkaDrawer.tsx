@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, type LocalizedName } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import {
@@ -42,7 +42,7 @@ interface StatementData {
       netBalance: number;
     }>;
     folder?: { name: string; color?: string } | null;
-    priceList?: { name: any } | null;
+    priceList?: { name: LocalizedName } | null;
   };
   summary: {
     balancesByCurrency: StatementData['counterparty']['balancesByCurrency'];
@@ -59,7 +59,7 @@ interface AktSverkaDrawerProps {
   isOpen: boolean;
   counterpartyId: string | null;
   onClose: () => void;
-  onOpenPayment?: (counterparty: any, side: 'CUSTOMER' | 'SUPPLIER', currency: string) => void;
+  onOpenPayment?: (counterparty: StatementData['counterparty'], side: 'CUSTOMER' | 'SUPPLIER', currency: string) => void;
 }
 
 export function AktSverkaDrawer({

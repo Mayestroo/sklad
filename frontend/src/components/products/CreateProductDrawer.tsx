@@ -9,18 +9,43 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { CURRENCY_OPTIONS } from '@/lib/utils';
+import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { toast } from '@/context/ToastContext';
 import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import type { Category } from '@shared/types';
+
+/** The saved product handed back to the caller (the API returns more). */
+interface CreatedProduct {
+  id: string;
+  name: string | { uz?: string; ru?: string };
+  sku: string;
+}
+
+/** The fields of a product this drawer edits (callers pass list rows of several shapes). */
+interface EditableProduct {
+  id: string;
+  name: string | { uz?: string; ru?: string };
+  sku?: string | null;
+  barcode?: string | null;
+  categoryId?: string | null;
+  type?: string | null;
+  unitOfMeasure?: string | null;
+  costPrice?: number | string | null;
+  costPriceCurrency?: string | null;
+  costPriceExchangeRate?: number | string | null;
+  salePrice?: number | string | null;
+  salePriceCurrency?: string | null;
+  minStockAlert?: number | string | null;
+}
 
 export interface CreateProductDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  productToEdit?: any | null;
+  productToEdit?: EditableProduct | null;
   initialSkuOrBarcode?: string;
   initialType?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE';
-  onSuccess?: (createdProduct: any, initialQuantity?: number) => void;
+  onSuccess?(createdProduct: CreatedProduct, initialQuantity?: number): void;
 }
 
 export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
@@ -51,7 +76,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [salePriceCurrency, setSalePriceCurrency] = useState('');
 
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryNameUz, setNewCategoryNameUz] = useState('');
   const [newCategoryNameRu, setNewCategoryNameRu] = useState('');
@@ -76,7 +101,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
   useEffect(() => {
     if (!token || !company?.id || !isOpen) return;
-    apiFetch<any[]>('/inventory/categories', { token, tenantId: company.id, locale })
+    apiFetch<Category[]>('/inventory/categories', { token, tenantId: company.id, locale })
       .then((cats) => setCategories(cats || []))
       .catch(console.error);
   }, [token, company, locale, isOpen]);
@@ -93,7 +118,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setSku(productToEdit.sku || '');
         setBarcode(productToEdit.barcode || '');
         setCategoryId(productToEdit.categoryId || '');
-        setItemType(productToEdit.type || 'PRODUCT');
+        setItemType((productToEdit.type || 'PRODUCT') as typeof itemType);
         setUnitOfMeasure(productToEdit.unitOfMeasure || 'piece');
         setCostPrice(productToEdit.costPrice !== undefined ? String(productToEdit.costPrice) : '');
         setCostPriceCurrency(productToEdit.costPriceCurrency || 'UZS');
@@ -124,7 +149,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     if (!token || !company?.id || !newCategoryNameUz.trim()) return;
     setCreatingCategory(true);
     try {
-      const created = await apiFetch<any>('/inventory/categories', {
+      const created = await apiFetch<Category>('/inventory/categories', {
         method: 'POST',
         token,
         tenantId: company.id,
@@ -180,7 +205,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         ? unitOfMeasure
         : (customMatch?.baseUnit || 'piece');
 
-      let res: any;
+      let res: CreatedProduct;
       if (productToEdit) {
         const payload = {
           name: {
@@ -238,8 +263,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       resetForm();
       if (onSuccess) onSuccess(res, savedQuantity);
       onClose();
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка сохранения позиции' : 'Pozitsiyani saqlashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка сохранения позиции' : 'Pozitsiyani saqlashda xatolik'));
     } finally {
       setLoading(false);
     }

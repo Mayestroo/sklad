@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +36,20 @@ import {
   ArrowUpRight,
   FileText,
 } from 'lucide-react';
+
+/** GET /sales/orders/by-counterparty/:id */
+interface CustomerOrdersData {
+  summary: { totalOrders: number; totalAmount: number; currency?: string };
+  orders: Array<{
+    id: string;
+    orderNumber: string;
+    status: string;
+    currency: string;
+    totalAmount: number | string;
+    paidAmount: number | string;
+    paymentPercent?: number;
+  }>;
+}
 
 interface CounterpartyFolder {
   id: string;
@@ -71,6 +85,9 @@ interface Counterparty {
   }>;
   createdAt: string;
 }
+
+/** What the quick payment modal needs to know about a counterparty. */
+type PaymentCounterparty = Pick<Counterparty, 'id' | 'name' | 'type' | 'balancesByCurrency'>;
 
 interface CounterpartySummary {
   total_customers: number;
@@ -129,7 +146,7 @@ export default function CounterpartiesPage() {
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'receivables' | 'payables' | 'settled'>('all');
 
   // Quick Payment & Akt Sverka Drawer states
-  const [paymentCounterparty, setPaymentCounterparty] = useState<Counterparty | null>(null);
+  const [paymentCounterparty, setPaymentCounterparty] = useState<PaymentCounterparty | null>(null);
   const [paymentSide, setPaymentSide] = useState<'CUSTOMER' | 'SUPPLIER' | undefined>();
   const [paymentCurrency, setPaymentCurrency] = useState<string | undefined>();
   const [statementCounterpartyId, setStatementCounterpartyId] = useState<string | null>(null);
@@ -172,7 +189,7 @@ export default function CounterpartiesPage() {
 
   // Detail Modal state
   const [detailItem, setDetailItem] = useState<Counterparty | null>(null);
-  const [customerOrdersData, setCustomerOrdersData] = useState<any>(null);
+  const [customerOrdersData, setCustomerOrdersData] = useState<CustomerOrdersData | null>(null);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
   useEffect(() => {
@@ -181,7 +198,7 @@ export default function CounterpartiesPage() {
       return;
     }
     setOrdersLoading(true);
-    apiFetch<any>(`/sales/orders/by-counterparty/${detailItem.id}`, {
+    apiFetch<CustomerOrdersData>(`/sales/orders/by-counterparty/${detailItem.id}`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
@@ -273,8 +290,8 @@ export default function CounterpartiesPage() {
       fetchSummary();
       fetchFolders();
       toast.success(isRu ? 'Контрагент успешно удален' : 'Kontragent muvaffaqiyatli o‘chirildi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении контрагента' : 'Kontragentni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении контрагента' : 'Kontragentni o‘chirishda xatolik'));
     } finally {
       setDeleteCounterpartyLoading(false);
     }
@@ -327,8 +344,8 @@ export default function CounterpartiesPage() {
       fetchFolders();
       fetchSummary();
       fetchCounterparties();
-    } catch (err: any) {
-      setFormError(err?.message || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
+    } catch (err) {
+      setFormError(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setSubmitting(false);
     }
@@ -400,8 +417,8 @@ export default function CounterpartiesPage() {
       setIsFolderModalOpen(false);
       fetchFolders();
       fetchCounterparties();
-    } catch (err: any) {
-      setFolderError(err?.message || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
+    } catch (err) {
+      setFolderError(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setFolderSubmitting(false);
     }
@@ -425,7 +442,7 @@ export default function CounterpartiesPage() {
       setDeleteFolderId(null);
       fetchFolders();
       fetchCounterparties();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
     } finally {
       setDeleteSubmitting(false);
@@ -453,7 +470,7 @@ export default function CounterpartiesPage() {
       fetchFolders();
       fetchSummary();
       fetchCounterparties();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
     } finally {
       setMoveSubmitting(false);
@@ -476,7 +493,7 @@ export default function CounterpartiesPage() {
   const totalCustomers = items.filter((i) => i.type === 'CUSTOMER' || i.type === 'BOTH').length;
   const totalSuppliers = items.filter((i) => i.type === 'SUPPLIER' || i.type === 'BOTH').length;
   const openQuickPayment = (
-    counterparty: Counterparty,
+    counterparty: PaymentCounterparty,
     side?: 'CUSTOMER' | 'SUPPLIER',
     currency?: string,
   ) => {
@@ -875,7 +892,7 @@ export default function CounterpartiesPage() {
                 <button
                   key={tab.id}
                   id={`balance-filter-${tab.id}`}
-                  onClick={() => setBalanceFilter(tab.id as any)}
+                  onClick={() => setBalanceFilter(tab.id as typeof balanceFilter)}
                   style={{
                     padding: '7px 16px',
                     borderRadius: 'var(--radius-md, 7px)',
@@ -1405,7 +1422,7 @@ export default function CounterpartiesPage() {
                 </h4>
                 {customerOrdersData?.summary && (
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale, (customerOrdersData.summary as any)?.currency || (detailItem as any)?.currency || defaultCurrency)}</strong>
+                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale, customerOrdersData.summary.currency || (detailItem as { currency?: string } | null | undefined)?.currency || defaultCurrency)}</strong>
                   </span>
                 )}
               </div>
@@ -1430,7 +1447,7 @@ export default function CounterpartiesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {customerOrdersData.orders.map((ord: any) => (
+                      {customerOrdersData.orders.map((ord) => (
                         <tr key={ord.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                           <td style={{ padding: '6px 8px', fontWeight: 600 }}>{ord.orderNumber}</td>
                           <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.totalAmount), locale, ord.currency)}</td>

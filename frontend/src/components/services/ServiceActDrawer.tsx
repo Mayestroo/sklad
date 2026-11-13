@@ -5,18 +5,20 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { buildServiceActPayload } from '@/lib/service-act';
-import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { CURRENCY_OPTIONS, formatCurrency, errorMessage } from '@/lib/utils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
+import type { ServiceActDetail } from '@/lib/service-act';
+import type { Counterparty, Product } from '@shared/types';
 
 interface ServiceActDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  initialData?: any;
+  initialData?: ServiceActDetail | null;
   defaultType?: 'PROVIDED' | 'RECEIVED';
 }
 
@@ -73,8 +75,8 @@ export function ServiceActDrawer({
     },
   ]);
 
-  const [counterparties, setCounterparties] = useState<any[]>([]);
-  const [servicesCatalog, setServicesCatalog] = useState<any[]>([]);
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+  const [servicesCatalog, setServicesCatalog] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +84,7 @@ export function ServiceActDrawer({
     if (!isOpen) return;
 
     // Both endpoints return plain arrays
-    apiFetch<any[]>('/sales/counterparties', {
+    apiFetch<Counterparty[]>('/sales/counterparties', {
       token: token || undefined,
       tenantId: company?.id,
       locale,
@@ -91,7 +93,7 @@ export function ServiceActDrawer({
       .catch((err: Error) => setError(err.message));
 
     // Catalog services (products of type SERVICE)
-    apiFetch<any[]>('/inventory/products?type=SERVICE', {
+    apiFetch<Product[]>('/inventory/products?type=SERVICE', {
       token: token || undefined,
       tenantId: company?.id,
       locale,
@@ -120,7 +122,7 @@ export function ServiceActDrawer({
 
       if (initialData.items && initialData.items.length > 0) {
         setItems(
-          initialData.items.map((i: any) => ({
+          initialData.items.map((i) => ({
             productId: i.productId || undefined,
             serviceName: i.serviceName || '',
             description: i.description || '',
@@ -173,7 +175,7 @@ export function ServiceActDrawer({
     setItems(items.filter((_, i) => i !== idx));
   };
 
-  const handleItemChange = (idx: number, field: keyof FormItem, value: any) => {
+  const handleItemChange = (idx: number, field: keyof FormItem, value: FormItem[keyof FormItem]) => {
     const updated = [...items];
     updated[idx] = { ...updated[idx], [field]: value };
 
@@ -245,8 +247,8 @@ export function ServiceActDrawer({
       }
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Xatolik yuz berdi');
+    } catch (err) {
+      setError(errorMessage(err) || 'Xatolik yuz berdi');
     } finally {
       setLoading(false);
     }

@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useApiData } from '@/lib/useApiData';
-import { formatCurrency, formatDate, getLocalizedName } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -39,6 +39,7 @@ import { invalidateApiCache } from '@/lib/cache';
 import { apiFetch } from '@/lib/api';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import type { SalesOrderDetail } from '@/components/sales/order-form/types';
 
 const ORDERS_PAGE_SIZE = 50;
 
@@ -105,8 +106,8 @@ export default function SalesOrdersPage() {
 
   // Modals
   const [payOrder, setPayOrder] = useState<OrderItemSummary | null>(null);
-  const [pickListOrder, setPickListOrder] = useState<any | null>(null);
-  const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<any | null>(null);
+  const [pickListOrder, setPickListOrder] = useState<SalesOrderDetail | null>(null);
+  const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<SalesOrderDetail | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
@@ -129,8 +130,8 @@ export default function SalesOrdersPage() {
       setDeleteConfirmOrder(null);
       fetchStats();
       fetchOrders();
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
@@ -162,8 +163,8 @@ export default function SalesOrdersPage() {
       toast.success(isRu ? 'Статус заказа обновлен' : 'Buyurtma statusi yangilandi');
       fetchOrders();
       fetchStats();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
     } finally {
       setUpdatingOrderId(null);
     }

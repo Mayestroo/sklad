@@ -10,6 +10,30 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Building2, UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+
+/** The fields of a counterparty this drawer edits (callers pass list rows of several shapes). */
+/** The saved counterparty handed back to the caller (the API returns more). */
+interface CreatedCounterparty {
+  id: string;
+  name: string;
+  type: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
+}
+
+interface EditableCounterparty {
+  id: string;
+  name: string;
+  type: string;
+  folderId?: string | null;
+  discountPercent?: number | string | null;
+  inn?: string | null;
+  mfo?: string | null;
+  bankAccount?: string | null;
+  bankName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+}
 
 interface CounterpartyFolder {
   id: string;
@@ -19,11 +43,11 @@ interface CounterpartyFolder {
 export interface CreateCounterpartyDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  counterpartyToEdit?: any | null;
+  counterpartyToEdit?: EditableCounterparty | null;
   defaultType?: 'CUSTOMER' | 'SUPPLIER' | 'BOTH';
   defaultFolderId?: string;
   folders?: CounterpartyFolder[];
-  onSuccess?: (createdCounterparty: any) => void;
+  onSuccess?(createdCounterparty: CreatedCounterparty): void;
 }
 
 export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> = ({
@@ -59,7 +83,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
     if (isOpen) {
       if (counterpartyToEdit) {
         setName(counterpartyToEdit.name || '');
-        setType(counterpartyToEdit.type || defaultType);
+        setType((counterpartyToEdit.type || defaultType) as typeof type);
         setFolderId(counterpartyToEdit.folderId || '');
         setDiscountPercent(String(counterpartyToEdit.discountPercent ?? 0));
         setInn(counterpartyToEdit.inn || '');
@@ -103,7 +127,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
         name, type, folderId, discountPercent, inn, phone, email, address, bankName, bankAccount, mfo,
       });
 
-      let res: any;
+      let res: CreatedCounterparty;
       if (isEdit && counterpartyToEdit?.id) {
         res = await apiFetch(`/sales/counterparties/${counterpartyToEdit.id}`, {
           method: 'PATCH',
@@ -125,8 +149,8 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
       resetForm();
       if (onSuccess) onSuccess(res);
       onClose();
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -251,7 +275,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
             <Select
               options={typeOptions}
               value={type}
-              onChange={(val) => setType(val as any)}
+              onChange={(val) => setType(val as typeof type)}
             />
           </div>
 

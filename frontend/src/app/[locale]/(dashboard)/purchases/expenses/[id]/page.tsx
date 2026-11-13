@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -31,6 +31,11 @@ import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 
+/** GET /purchases/additional-expenses/:id, with the COGS impact on sales already made. */
+type ExpenseDetail = AdditionalExpense & {
+  retroactiveSalesImpact?: Array<{ invoiceId: string; invoiceNumber: string; customerName: string; totalDeltaCogs: number }>;
+};
+
 export default function ExpenseDetailPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -40,7 +45,7 @@ export default function ExpenseDetailPage() {
   const { token, company, user } = useAuth();
   const confirm = useConfirm();
 
-  const [expense, setExpense] = useState<any | null>(null);
+  const [expense, setExpense] = useState<ExpenseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -49,7 +54,7 @@ export default function ExpenseDetailPage() {
   const fetchExpense = () => {
     if (!token || !company || !id) return;
     setLoading(true);
-    apiFetch<any>(`/purchases/additional-expenses/${id}`, {
+    apiFetch<ExpenseDetail>(`/purchases/additional-expenses/${id}`, {
       token: token || undefined,
       tenantId: company?.id || undefined,
       locale,
@@ -89,8 +94,8 @@ export default function ExpenseDetailPage() {
       });
       toast.success(isRu ? 'Расход успешно проведен' : 'Xarajat muvaffaqiyatli tasdiqlandi');
       fetchExpense();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -108,8 +113,8 @@ export default function ExpenseDetailPage() {
       setCancelModalOpen(false);
       toast.success(isRu ? 'Расход успешно отменен' : 'Xarajat muvaffaqiyatli bekor qilindi');
       fetchExpense();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -152,8 +157,8 @@ export default function ExpenseDetailPage() {
       });
       toast.success(isRu ? 'Расход успешно удален' : 'Xarajat muvaffaqiyatli o‘chirildi');
       router.push(`/${locale}/purchases/expenses`);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
       setActionLoading(false);
     }
   };
@@ -296,7 +301,7 @@ export default function ExpenseDetailPage() {
               <strong>{isRu ? 'Поставщик товара:' : 'Tovar yetkazib beruvchi:'}</strong> {expense.receipt?.counterparty?.name}
             </div>
             <div style={{ marginTop: '4px' }}>
-              <strong>{isRu ? 'Склад назначения:' : 'Qabul ombori:'}</strong> {(expense.receipt?.warehouse?.name as any)?.uz || expense.receipt?.warehouse?.name}
+              <strong>{isRu ? 'Склад назначения:' : 'Qabul ombori:'}</strong> {getLocalizedName(expense.receipt?.warehouse?.name, 'uz')}
             </div>
           </div>
         </Card>
@@ -361,7 +366,7 @@ export default function ExpenseDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {expense.items?.map((item: any) => {
+              {expense.items?.map((item) => {
                 const totalQty = Number(item.soldQuantity) + Number(item.remainingQuantity) || 1;
                 const perUnit = Number(item.allocatedAmount) / totalQty;
                 const oldCost = Number(item.initialLandedCost);
@@ -371,7 +376,7 @@ export default function ExpenseDetailPage() {
                 return (
                   <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
                     <td style={{ padding: '8px 12px', fontWeight: 'var(--font-medium)' }}>
-                      {(item.product?.name as any)?.[locale] || (item.product?.name as any)?.uz || item.product?.name || '—'}
+                      {(item.product?.name ? getLocalizedName(item.product?.name, locale) : '—')}
                       <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
@@ -429,7 +434,7 @@ export default function ExpenseDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {expense.retroactiveSalesImpact.map((impact: any) => (
+                {expense.retroactiveSalesImpact.map((impact) => (
                   <tr key={impact.invoiceId} style={{ borderBottom: '1px solid var(--color-warning-200)' }}>
                     <td style={{ padding: '6px 10px', fontWeight: 'var(--font-medium)' }}>
                       <a href={`/${locale}/sales/invoices/${impact.invoiceId}`} style={{ color: 'var(--color-primary-700)', textDecoration: 'none' }}>

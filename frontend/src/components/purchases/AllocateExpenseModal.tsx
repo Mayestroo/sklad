@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { CURRENCY_OPTIONS } from '@/lib/utils';
+import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -88,8 +88,8 @@ export function AllocateExpenseModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка распределения расхода' : 'Xarajatni taqsimlashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка распределения расхода' : 'Xarajatni taqsimlashda xatolik'));
     } finally {
       setLoading(false);
     }

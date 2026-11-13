@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -71,8 +71,8 @@ export default function SuppliersPage() {
       setDeletingSupplier(null);
       toast.success(isRu ? 'Поставщик успешно удален' : 'Yetkazib beruvchi muvaffaqiyatli o‘chirildi');
       fetchSuppliers();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при удалении поставщика' : 'Yetkazib beruvchini o‘chirishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении поставщика' : 'Yetkazib beruvchini o‘chirishda xatolik yuz berdi'));
     } finally {
       setDeleteLoading(false);
     }

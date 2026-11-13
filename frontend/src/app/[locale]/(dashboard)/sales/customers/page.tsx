@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -38,9 +38,9 @@ interface CustomerProfile {
     totalCogs: number;
     grossProfit: number;
   };
-  invoices: any[];
-  returns: any[];
-  payments: any[];
+  invoices: Array<{ id: string; invoiceNumber: string; invoiceDate: string; status: string; currency: string; totalAmount: number | string }>;
+  returns: unknown[];
+  payments: unknown[];
 }
 
 export default function CustomersPage() {
@@ -86,8 +86,8 @@ export default function CustomersPage() {
       setDeletingCustomer(null);
       toast.success(isRu ? 'Клиент успешно удален' : 'Mijoz muvaffaqiyatli o‘chirildi');
       fetchCustomers();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
     } finally {
       setDeleteLoading(false);
     }
@@ -285,7 +285,7 @@ export default function CustomersPage() {
 
       {/* Customer Profile Modal */}
       {selectedCustomer && (() => {
-        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || defaultCurrency;
+        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as { currency?: string } | null | undefined)?.currency || defaultCurrency;
         const formatByCurrency = (items: Array<{ currency: string; amount: number }>) =>
           items.length > 0
             ? items.map((item) => formatCurrency(item.amount, locale, item.currency)).join(' · ')
@@ -327,7 +327,7 @@ export default function CustomersPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {profile.invoices.slice(0, 8).map((inv: any) => (
+                          {profile.invoices.slice(0, 8).map((inv) => (
                             <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                               <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{inv.invoiceNumber}</td>
                               <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate, locale)}</td>

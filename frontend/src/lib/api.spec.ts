@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { apiDownload, apiFetch, ApiError } from './api.ts';
+import { apiDownload, apiFetch, ApiError, listOf } from './api.ts';
 
 const storage = new Map<string, string>();
 const events: string[] = [];
@@ -93,4 +93,12 @@ test('apiDownload surfaces server errors as ApiError', async () => {
     apiDownload('/opening-balances/template', { token: 't' }),
     (err: unknown) => err instanceof ApiError && err.status === 403 && err.message === 'Ruxsat yo‘q',
   );
+});
+
+test('listOf reads a list answered as an array or as { data: [...] }', () => {
+  assert.deepEqual(listOf([1, 2]), [1, 2]);
+  assert.deepEqual(listOf({ data: [3] }), [3]);
+  assert.deepEqual(listOf({}), []);
+  assert.deepEqual(listOf(null), []);
+  assert.deepEqual(listOf(undefined), []);
 });

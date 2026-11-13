@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -26,6 +26,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { CreatedTenantSummary, GlobalMetrics, TenantCompanySummary } from '@shared/types';
+import type { AuthResponse } from '@shared/types';
 
 export default function SuperAdminTenantsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -78,8 +79,8 @@ export default function SuperAdminTenantsPage() {
       ]);
       setMetrics(m);
       setTenants(t);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка загрузки данных' : 'Maʼlumotlarni yuklashda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Maʼlumotlarni yuklashda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -121,8 +122,8 @@ export default function SuperAdminTenantsPage() {
       setCreateModalOpen(false);
       resetCreateForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при создании' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при создании' : 'Xatolik yuz berdi'));
     } finally {
       setCreateLoading(false);
     }
@@ -166,8 +167,8 @@ export default function SuperAdminTenantsPage() {
       );
       setEditModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка сохранения' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Xatolik yuz berdi'));
     } finally {
       setEditLoading(false);
     }
@@ -177,7 +178,7 @@ export default function SuperAdminTenantsPage() {
     if (!token) return;
     setImpersonateLoadingId(t.id);
     try {
-      const res = await apiFetch<any>(`/super-admin/impersonate/${t.id}`, {
+      const res = await apiFetch<AuthResponse>(`/super-admin/impersonate/${t.id}`, {
         token,
         locale,
         method: 'POST',
@@ -190,8 +191,8 @@ export default function SuperAdminTenantsPage() {
       );
 
       startImpersonation(res);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка входа в кабинет' : 'Kabinetga kirishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка входа в кабинет' : 'Kabinetga kirishda xatolik yuz berdi'));
     } finally {
       setImpersonateLoadingId(null);
     }
@@ -366,7 +367,7 @@ export default function SuperAdminTenantsPage() {
             </div>
           </div>
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
-            {metrics ? formatCurrency(metrics.totalMrr, locale, (metrics as any)?.currency || 'USD') : '—'}
+            {metrics ? formatCurrency(metrics.totalMrr, locale, (metrics as { currency?: string } | null | undefined)?.currency || 'USD') : '—'}
           </div>
         </Card>
 

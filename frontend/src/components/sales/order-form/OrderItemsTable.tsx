@@ -26,7 +26,7 @@ export interface OrderItemsTableProps {
   items: OrderItemRow[];
   products: ProductDropdownItem[];
   productOptions: SelectOption[];
-  onItemChange: (index: number, field: keyof OrderItemRow, value: any) => void;
+  onItemChange: (index: number, field: keyof OrderItemRow, value: OrderItemRow[keyof OrderItemRow]) => void;
   onAddItem: () => void;
   onRemoveItem: (index: number) => void;
 }

@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +26,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
+import type { Warehouse as WarehouseRow } from '@shared/types';
 
 export default function InventoryPage() {
   const t = useTranslations('inventory');
@@ -36,7 +37,7 @@ export default function InventoryPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([]);
   const [lowStockAlerts, setLowStockAlerts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -69,7 +70,7 @@ export default function InventoryPage() {
           tenantId: company.id,
           locale,
         }),
-        apiFetch<any[]>('/tenants/warehouses', {
+        apiFetch<WarehouseRow[]>('/tenants/warehouses', {
           token,
           tenantId: company.id,
           locale,
@@ -107,8 +108,8 @@ export default function InventoryPage() {
         locale,
       });
       setScanResult(res);
-    } catch (err: any) {
-      setScanError(err.message || 'Product not found');
+    } catch (err) {
+      setScanError(errorMessage(err) || 'Product not found');
     }
   };
 
@@ -117,13 +118,14 @@ export default function InventoryPage() {
   const safeCategories = Array.isArray(categories) ? categories : [];
 
   const filteredProducts = filterLowStockOnly
-    ? safeProducts.filter((p) => (p as any).isLowStock)
+    ? safeProducts.filter((p) => p.isLowStock)
     : safeProducts;
 
   const isRu = locale === 'ru';
 
-  const getLocalizedName = (name: any) => {
+  const getLocalizedName = (name: LocalizedName | null | undefined) => {
     if (!name) return '';
+    if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || '';
   };
 
@@ -298,7 +300,7 @@ export default function InventoryPage() {
               </thead>
               <tbody>
                 {filteredProducts.map((product) => {
-                  const isLow = (product as any).isLowStock;
+                  const isLow = product.isLowStock;
                   return (
                     <tr key={product.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                       <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)' }}>
@@ -318,7 +320,7 @@ export default function InventoryPage() {
                         )}
                       </td>
                       <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                        {t(`units.${product.unitOfMeasure}` as any) || product.unitOfMeasure}
+                        {t(`units.${product.unitOfMeasure}`) || product.unitOfMeasure}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency || 'UZS')}
@@ -327,7 +329,7 @@ export default function InventoryPage() {
                         {formatCurrency(Number(product.salePrice), locale, product.salePriceCurrency || defaultCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {(product as any).totalStock || 0} {t(`units.${product.unitOfMeasure}` as any)}
+                        {product.totalStock || 0} {t(`units.${product.unitOfMeasure}`)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         {isLow ? (

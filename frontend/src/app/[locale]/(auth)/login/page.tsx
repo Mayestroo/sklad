@@ -7,6 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+import type { AuthResponse } from '@shared/types';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -25,15 +27,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await apiFetch<any>('/auth/login', {
+      const response = await apiFetch<AuthResponse>('/auth/login', {
         method: 'POST',
         locale,
         body: JSON.stringify({ email, password }),
       });
 
       login(response);
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err) {
+      setError(errorMessage(err) || 'Login failed');
     } finally {
       setLoading(false);
     }

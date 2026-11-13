@@ -29,6 +29,7 @@ import {
   Scale,
   Building2,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export function Sidebar() {
   const t = useTranslations('nav');
@@ -91,7 +92,7 @@ export function Sidebar() {
     transition: 'all var(--transition-fast)',
   };
 
-  const renderNavLink = (href: string, label: string, Icon: any, exact = false) => {
+  const renderNavLink = (href: string, label: string, Icon: LucideIcon, exact = false) => {
     const isActive = exact ? pathname === href : pathname === href || (href !== '/' && pathname.startsWith(href));
 
     return (

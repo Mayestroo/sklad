@@ -116,7 +116,7 @@ export function OrderGeneralInfo({
               { value: 'CREDIT', label: isRu ? 'В кредит (Без предоплаты)' : 'Nasiya / Kreditga' },
             ]}
             value={paymentCondition}
-            onChange={(val) => onPaymentConditionChange(val as any)}
+            onChange={(val) => onPaymentConditionChange(val as 'PREPAID_100' | 'PARTIAL' | 'CREDIT')}
             disabled={isLocked}
           />
         </div>

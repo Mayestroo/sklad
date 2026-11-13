@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDate, errorMessage } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { HardDrive, ShieldCheck } from 'lucide-react';
 import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '@shared/types';
@@ -40,8 +40,8 @@ export default function SuperAdminSecurityPage() {
     try {
       const l = await apiFetch<AuditLogEntry[]>('/super-admin/audit-logs', { token, locale });
       setLogs(l);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка загрузки данных' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }

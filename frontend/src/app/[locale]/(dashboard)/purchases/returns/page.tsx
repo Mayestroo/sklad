@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -73,8 +73,8 @@ export default function ReturnsPage() {
       });
       setDeleteConfirmReturn(null);
       fetchReturns();
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
@@ -108,7 +108,7 @@ export default function ReturnsPage() {
     fetchReturns();
   };
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -128,8 +128,8 @@ export default function ReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно утвержден' : 'Qaytarish muvaffaqiyatli tasdiqlandi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при утверждении возврата' : 'Tasdiqlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при утверждении возврата' : 'Tasdiqlashda xatolik'));
     } finally {
       setActionLoadingId(null);
     }
@@ -158,8 +158,8 @@ export default function ReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при отмене возврата' : 'Bekor qilishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при отмене возврата' : 'Bekor qilishda xatolik'));
     } finally {
       setActionLoadingId(null);
     }

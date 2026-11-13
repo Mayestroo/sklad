@@ -10,20 +10,31 @@ import { Badge } from '@/components/ui/Badge';
 import { Database, Activity } from 'lucide-react';
 import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '@shared/types';
 
+/** GET /audit-logs */
+interface AuditLogRow {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  ipAddress: string | null;
+  createdAt: string;
+  user?: { firstName: string; lastName: string } | null;
+}
+
 export default function SecurityPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchSecurityData = async () => {
     if (!token || !company) return;
     setLoading(true);
     try {
-      const logs = await apiFetch<any[]>('/audit-logs', { token, tenantId: company.id, locale });
+      const logs = await apiFetch<AuditLogRow[]>('/audit-logs', { token, tenantId: company.id, locale });
       setAuditLogs(logs);
     } catch (err) {
       console.error(err);

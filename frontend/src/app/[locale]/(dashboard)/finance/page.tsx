@@ -5,7 +5,18 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { apiFetch } from '@/lib/api';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatDate, formatCurrency, errorMessage, getLocalizedName } from '@/lib/utils';
+
+/** An open (not fully paid) sales invoice or purchase receipt to settle against. */
+interface OpenDocument {
+  id: string;
+  docNumber?: string;
+  invoiceNumber?: string;
+  currency: string;
+  exchangeRate?: number | string | null;
+  totalAmount: number | string;
+  paidAmount: number | string;
+}
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +33,7 @@ import type {
   FinanceDashboardMetrics,
   FinanceAccountFlow,
   TransactionType,
+  Counterparty,
 } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import {
@@ -172,7 +184,7 @@ export default function FinancePage() {
   const [journal, setJournal] = useState<TransactionJournal | null>(null);
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
   const [txTypes, setTxTypes] = useState<TransactionType[]>([]);
-  const [counterparties, setCounterparties] = useState<any[]>([]);
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
@@ -248,7 +260,7 @@ export default function FinancePage() {
         ),
         apiFetch<CashAccount[]>('/finance/accounts', opts),
         apiFetch<TransactionType[]>('/finance/transaction-types', opts),
-        apiFetch<any[]>('/sales/counterparties', opts),
+        apiFetch<Counterparty[]>('/sales/counterparties', opts),
       ]);
       setDashboardMetrics(metrics);
       setJournal(jour);
@@ -297,8 +309,8 @@ export default function FinancePage() {
       setEditingTx(null);
       fetchData();
       toast.success(isRu ? 'Операция сохранена' : 'Operatsiya muvaffaqiyatli saqlandi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik'));
     } finally {
       setSavingEdit(false);
     }
@@ -326,8 +338,8 @@ export default function FinancePage() {
           ? 'Операция успешно аннулирована (Сторно)'
           : 'Operatsiya muvaffaqiyatli bekor qilindi (Storno)',
       );
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при аннулировании' : 'Bekor qilishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при аннулировании' : 'Bekor qilishda xatolik'));
     } finally {
       setStornoLoading(false);
     }
@@ -647,7 +659,7 @@ export default function FinancePage() {
             <button
               key={tab.id}
               onClick={() => {
-                setActiveTab(tab.id as any);
+                setActiveTab(tab.id as typeof activeTab);
                 setPage(1);
               }}
               style={{
@@ -880,7 +892,7 @@ export default function FinancePage() {
                   { value: '', label: isRu ? 'Все кассы' : 'Barcha kassalar' },
                   ...accounts.map((a) => ({
                     value: a.id,
-                    label: `${(a.name as any)[locale] || a.name} (${a.currency})`,
+                    label: `${getLocalizedName(a.name, locale)} (${a.currency})`,
                   })),
                 ]}
                 value={accountFilter}
@@ -1128,7 +1140,7 @@ export default function FinancePage() {
                 .filter((t) => t.direction === editingTx.direction)
                 .map((t) => ({
                   value: t.id,
-                  label: (t.name as any)[locale] || t.name,
+                  label: getLocalizedName(t.name, locale),
                 }))}
               value={editTypeId}
               onChange={(val) => setEditTypeId(val)}
@@ -1398,13 +1410,12 @@ function TransactionsTable({
                 <td style={{ padding: '12px' }}>
                   <div>
                     <span style={{ fontWeight: 500 }}>
-                      {(tx.account?.name as any)?.[locale] || tx.account?.name || '—'}
+                      {getLocalizedName(tx.account?.name, locale)}
                     </span>
                     {tx.transferToAccount && (
                       <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
                         {' → '}
-                        {(tx.transferToAccount?.name as any)?.[locale] ||
-                          tx.transferToAccount?.name}
+                        {getLocalizedName(tx.transferToAccount?.name, locale)}
                       </span>
                     )}
                   </div>
@@ -1469,9 +1480,11 @@ function TransactionsTable({
 
                 <td style={{ padding: '12px' }}>
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {(tx.transactionType?.name as any)?.[locale] ||
-                      tx.transactionType?.name ||
-                      (tx.comment ? tx.comment.slice(0, 30) : '—')}
+                    {tx.transactionType?.name
+                      ? getLocalizedName(tx.transactionType.name, locale)
+                      : tx.comment
+                        ? tx.comment.slice(0, 30)
+                        : '—'}
                   </span>
                 </td>
 
@@ -1575,7 +1588,7 @@ function FinanceTransactionDrawer({
   prefilledSettlement?: { side: 'CUSTOMER' | 'SUPPLIER'; currency: string } | null;
   accounts: CashAccount[];
   txTypes: TransactionType[];
-  counterparties: any[];
+  counterparties: Counterparty[];
   locale: string;
   isRu: boolean;
   token: string | null;
@@ -1608,7 +1621,7 @@ function FinanceTransactionDrawer({
 
   // Document linking fields
   const [sourceDocId, setSourceDocId] = useState<string>('');
-  const [openDocuments, setOpenDocuments] = useState<any[]>([]);
+  const [openDocuments, setOpenDocuments] = useState<OpenDocument[]>([]);
 
   const fromAccount = accounts.find((a) => a.id === accountId);
   const toAccount = accounts.find((a) => a.id === toAccountId);
@@ -1654,7 +1667,7 @@ function FinanceTransactionDrawer({
       try {
         if (mode === 'income') {
           // Fetch open sales invoices
-          const invoices = await apiFetch<any[]>(
+          const invoices = await apiFetch<OpenDocument[]>(
             `/sales/invoices?counterpartyId=${counterpartyId}&status=POSTED`,
             { token, tenantId: companyId, locale },
           );
@@ -1665,7 +1678,7 @@ function FinanceTransactionDrawer({
           );
         } else if (mode === 'expense') {
           // Fetch open purchase receipts
-          const receipts = await apiFetch<any[]>(
+          const receipts = await apiFetch<OpenDocument[]>(
             `/purchases/receipts?counterpartyId=${counterpartyId}&status=POSTED`,
             { token, tenantId: companyId, locale },
           );
@@ -1751,7 +1764,7 @@ function FinanceTransactionDrawer({
           ? '/finance/expense'
           : '/finance/transfer';
 
-      const body: any = {
+      const body: Record<string, string | number | undefined> = {
         amount: Number(amount),
         currency: fromAccount ? fromAccount.currency : currency,
         comment: comment.trim() || undefined,
@@ -1791,8 +1804,8 @@ function FinanceTransactionDrawer({
 
       onSuccess();
       onClose();
-    } catch (e: any) {
-      setError(e.message || (isRu ? 'Произошла ошибка' : 'Xatolik yuz berdi'));
+    } catch (e) {
+      setError(errorMessage(e) || (isRu ? 'Произошла ошибка' : 'Xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -1882,7 +1895,7 @@ function FinanceTransactionDrawer({
           }
           options={availableAccounts.map((a) => ({
             value: a.id,
-            label: `${(a.name as any)[locale] || a.name} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
+            label: `${getLocalizedName(a.name, locale)} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
           }))}
            value={accountId}
            onChange={(val) => {
@@ -1908,7 +1921,7 @@ function FinanceTransactionDrawer({
               .filter((a) => a.id !== accountId)
               .map((a) => ({
                 value: a.id,
-                label: `${(a.name as any)[locale] || a.name} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
+                label: `${getLocalizedName(a.name, locale)} — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
               }))}
             value={toAccountId}
             onChange={(val) => {
@@ -2115,7 +2128,7 @@ function FinanceTransactionDrawer({
                   .filter((t) => (mode === 'income' ? t.direction === 'INCOME' : t.direction === 'EXPENSE'))
                   .map((t) => ({
                     value: t.id,
-                    label: (t.name as any)[locale] || t.name,
+                    label: getLocalizedName(t.name, locale),
                   })),
               ]}
               value={typeId}

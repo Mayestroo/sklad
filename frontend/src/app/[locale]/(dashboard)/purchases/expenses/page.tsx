@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -92,7 +92,7 @@ export default function ExpensesPage() {
     fetchExpenses();
   }, [token, company, locale, search, statusFilter, typeFilter, page]);
 
-  const handleDeleteDraft = async (item: any, e: React.MouseEvent) => {
+  const handleDeleteDraft = async (item: AdditionalExpense, e: React.MouseEvent) => {
     e.stopPropagation();
     const isPosted = item.status === 'POSTED';
     const confirmed = await confirm({
@@ -129,8 +129,8 @@ export default function ExpensesPage() {
       });
       toast.success(isRu ? 'Расход успешно удален' : 'Xarajat muvaffaqiyatli o‘chirildi');
       fetchExpenses();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
     }
   };
 
@@ -194,7 +194,7 @@ export default function ExpensesPage() {
 
       {/* KPI Cards */}
       {(() => {
-        const expenseCurrency = (data?.stats as any)?.currency || data?.items?.[0]?.currency || defaultCurrency;
+        const expenseCurrency = (data?.stats as { currency?: string } | null | undefined)?.currency || data?.items?.[0]?.currency || defaultCurrency;
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
             <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>

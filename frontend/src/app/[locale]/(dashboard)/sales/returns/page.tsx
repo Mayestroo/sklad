@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { salesReturnHeaderFromInvoice } from '@/lib/sales-return';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -41,8 +41,8 @@ interface SalesReturnRow {
   warehouseId: string;
   defectWarehouseId?: string;
   counterparty?: { id: string; name: string };
-  warehouse?: { id: string; name: any };
-  defectWarehouse?: { id: string; name: any };
+  warehouse?: { id: string; name: LocalizedName };
+  defectWarehouse?: { id: string; name: LocalizedName };
   invoice?: { id: string; invoiceNumber: string; totalAmount: number };
   totalAmount: number;
   totalCogs: number;
@@ -57,7 +57,7 @@ interface SalesReturnRow {
     totalPrice: number;
     unitCogs?: number;
     isDefective?: boolean;
-    product?: { name: any; sku: string; barcode?: string };
+    product?: { name: LocalizedName; sku: string; barcode?: string };
   }>;
   createdBy?: { id: string; firstName: string; lastName: string };
 }
@@ -69,7 +69,7 @@ interface CounterpartyItem {
 
 interface WarehouseItem {
   id: string;
-  name: any;
+  name: LocalizedName;
   isDefect?: boolean;
 }
 
@@ -84,7 +84,7 @@ interface InvoiceItem {
 
 interface ReturnableItemRow {
   productId: string;
-  productName: any;
+  productName: LocalizedName;
   sku?: string;
   barcode?: string;
   unit?: string;
@@ -158,14 +158,14 @@ export default function SalesReturnsPage() {
       });
       setDeleteConfirmReturn(null);
       fetchReturns();
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  const getLocalizedName = (name: any) => {
+  const getLocalizedName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -232,7 +232,7 @@ export default function SalesReturnsPage() {
 
     setLoadingItems(true);
     setFormError(null);
-    apiFetch<any[]>(`/sales/invoices/${invoiceId}/returnable-items`, {
+    apiFetch<Omit<ReturnableItemRow, 'quantity' | 'isDefective'>[]>(`/sales/invoices/${invoiceId}/returnable-items`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
@@ -240,7 +240,7 @@ export default function SalesReturnsPage() {
       .then((res) => {
         if (res && res.length > 0) {
           setItems(
-            res.map((i: any) => ({
+            res.map((i) => ({
               productId: i.productId,
               productName: i.productName,
               sku: i.sku,
@@ -368,8 +368,8 @@ export default function SalesReturnsPage() {
       setReason('');
       setInvoiceId('');
       fetchReturns();
-    } catch (err: any) {
-      setFormError(err?.message || (isRu ? 'Произошла ошибка при создании' : 'Qaytarishni yaratishda xatolik yuz berdi'));
+    } catch (err) {
+      setFormError(errorMessage(err) || (isRu ? 'Произошла ошибка при создании' : 'Qaytarishni yaratishda xatolik yuz berdi'));
     } finally {
       setFormLoading(false);
     }
@@ -388,8 +388,8 @@ export default function SalesReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно подтвержден' : 'Qaytarish muvaffaqiyatli tasdiqlandi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при подтверждении' : 'Tasdiqlashda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при подтверждении' : 'Tasdiqlashda xatolik yuz berdi'));
     } finally {
       setActionLoadingId(null);
     }
@@ -420,8 +420,8 @@ export default function SalesReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi'));
     } finally {
       setActionLoadingId(null);
     }

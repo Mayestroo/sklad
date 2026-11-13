@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from '@/i18n/navigation';
-import { AuthResponse } from '../../../shared/types';
+import { AuthResponse, TranslatableField } from '../../../shared/types';
 
 interface AuthUser {
   id: string;
@@ -17,7 +17,7 @@ interface AuthUser {
 
 interface AuthCompany {
   id: string;
-  name: any;
+  name: TranslatableField | string;
   slug: string;
   status: string;
   defaultLanguage: string;
@@ -27,7 +27,7 @@ interface AuthCompany {
       allowSellerPriceOverride?: boolean;
       defaultCurrency?: string;
     };
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -44,7 +44,7 @@ interface AuthContextType {
   exitImpersonation: () => void;
   hasPermission: (permissionSlug: string) => boolean;
   hasRole: (roleSlug: string) => boolean;
-  updateCompanySettings: (settings: any) => void;
+  updateCompanySettings: (settings: AuthCompany['settings']) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -192,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user.roles.includes(roleSlug);
   };
 
-  const updateCompanySettings = (newSettings: any) => {
+  const updateCompanySettings = (newSettings: AuthCompany['settings']) => {
     setCompany((prev) => {
       if (!prev) return prev;
       const updated = {

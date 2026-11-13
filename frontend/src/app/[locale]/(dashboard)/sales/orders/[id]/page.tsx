@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { SalesOrderForm } from '@/components/sales/SalesOrderForm';
 import { Card } from '@/components/ui/Card';
+import { errorMessage } from '@/lib/utils';
+import type { SalesOrderDetail } from '@/components/sales/order-form/types';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -17,7 +19,7 @@ export default function SalesOrderDetailPage({ params }: PageProps) {
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
-  const [order, setOrder] = useState<any | null>(null);
+  const [order, setOrder] = useState<SalesOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +27,7 @@ export default function SalesOrderDetailPage({ params }: PageProps) {
     if (!token || !company || !id) return;
     setLoading(true);
 
-    apiFetch<any>(`/sales/orders/${id}`, {
+    apiFetch<SalesOrderDetail>(`/sales/orders/${id}`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
@@ -37,9 +39,9 @@ export default function SalesOrderDetailPage({ params }: PageProps) {
           setError(isRu ? 'Заказ не найден' : 'Buyurtma topilmadi');
         }
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error(err);
-        setError(err.message || (isRu ? 'Ошибка загрузки заказа' : 'Buyurtmani yuklashda xatolik'));
+        setError(errorMessage(err) || (isRu ? 'Ошибка загрузки заказа' : 'Buyurtmani yuklashda xatolik'));
       })
       .finally(() => setLoading(false));
   }, [token, company, id, locale]);

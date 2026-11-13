@@ -120,3 +120,13 @@ export async function apiDownload(endpoint: string, options: RequestOptions = {}
   }
   return response.blob();
 }
+
+/** Some list endpoints answer an array, others `{ data: [...] }` (paginated). */
+export type ListResponse<T> = T[] | { data?: T[] | null } | null | undefined;
+
+/** The rows of a list response, whichever shape it has; `[]` when empty. */
+export function listOf<T>(res: ListResponse<T>): T[] {
+  if (Array.isArray(res)) return res;
+  return res?.data || [];
+}
+

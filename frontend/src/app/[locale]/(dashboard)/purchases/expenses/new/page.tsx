@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrency, formatDate, CURRENCY_OPTIONS, errorMessage, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -56,7 +56,7 @@ interface Counterparty {
 
 interface CashAccount {
   id: string;
-  name: any;
+  name: LocalizedName;
   accountType: 'UZS_CASH' | 'USD_CASH' | 'BANK';
   currency: string;
   balance: number;
@@ -235,7 +235,7 @@ export default function NewExpensePage() {
     setSubmitting(true);
     try {
       // 1. Create Draft
-      const draft = await apiFetch<any>('/purchases/additional-expenses', {
+      const draft = await apiFetch<{ id: string }>('/purchases/additional-expenses', {
         token: token || undefined,
         tenantId: company?.id || undefined,
         method: 'POST',
@@ -267,8 +267,8 @@ export default function NewExpensePage() {
       }
 
       router.push(`/${locale}/purchases/expenses/${draft.id}`);
-    } catch (err: any) {
-      setErrorMsg(err.message || (isRu ? 'Произошла ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
+    } catch (err) {
+      setErrorMsg(errorMessage(err) || (isRu ? 'Произошла ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setSubmitting(false);
     }
@@ -636,7 +636,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Склад назначения' : 'Ombor'}
                 </span>
                 <strong style={{ color: 'var(--color-text-primary)' }}>
-                  {(selectedReceipt.warehouse?.name as any)?.[locale] || (selectedReceipt.warehouse?.name as any)?.uz || selectedReceipt.warehouse?.name || 'Asosiy ombor'}
+                  {(selectedReceipt.warehouse?.name ? getLocalizedName(selectedReceipt.warehouse?.name, locale) : 'Asosiy ombor')}
                 </strong>
               </div>
               <div>
@@ -1023,7 +1023,7 @@ export default function NewExpensePage() {
                       </td>
                       <td style={{ padding: '10px 12px' }}>
                         <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                          {(item.product?.name as any)?.[locale] || (item.product?.name as any)?.uz || item.product?.name || '—'}
+                          {(item.product?.name ? getLocalizedName(item.product?.name, locale) : '—')}
                         </div>
                         {item.product?.sku && (
                           <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>

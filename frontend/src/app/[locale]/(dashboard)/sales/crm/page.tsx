@@ -4,7 +4,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -26,7 +26,15 @@ import {
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import { Counterparty } from '@shared/types';
-type Deal = any;
+interface Deal {
+  id: string;
+  title: string;
+  stage: string;
+  amount: number | string;
+  currency?: string;
+  counterpartyId: string;
+  counterparty?: { name: string } | null;
+}
 
 const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] = [
   { slug: 'LEAD', nameUz: 'Lidlar (Yangi)', nameRu: 'Лиды (Новые)', color: 'var(--color-primary-600)' },
@@ -101,7 +109,7 @@ export default function CrmKanbanPage() {
     setCreateLoading(true);
 
     try {
-      await apiFetch<any>('/sales/deals', {
+      await apiFetch<Deal>('/sales/deals', {
         method: 'POST',
         token,
         tenantId: company.id,
@@ -138,7 +146,7 @@ export default function CrmKanbanPage() {
     if (!token || !company || !editingDeal) return;
     setEditLoading(true);
     try {
-      await apiFetch<any>(`/sales/deals/${editingDeal.id}`, {
+      await apiFetch<Deal>(`/sales/deals/${editingDeal.id}`, {
         method: 'PATCH',
         token,
         tenantId: company.id,
@@ -153,8 +161,8 @@ export default function CrmKanbanPage() {
       setEditingDeal(null);
       toast.success(isRu ? 'Сделка успешно обновлена' : 'Bitim muvaffaqiyatli yangilandi');
       fetchData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при обновлении сделки' : 'Bitimni yangilashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при обновлении сделки' : 'Bitimni yangilashda xatolik'));
     } finally {
       setEditLoading(false);
     }
@@ -164,7 +172,7 @@ export default function CrmKanbanPage() {
     if (!token || !company || !deletingDeal) return;
     setDeleteLoading(true);
     try {
-      await apiFetch<any>(`/sales/deals/${deletingDeal.id}`, {
+      await apiFetch<unknown>(`/sales/deals/${deletingDeal.id}`, {
         method: 'DELETE',
         token,
         tenantId: company.id,
@@ -173,8 +181,8 @@ export default function CrmKanbanPage() {
       setDeletingDeal(null);
       toast.success(isRu ? 'Сделка успешно удалена' : 'Bitim muvaffaqiyatli o‘chirildi');
       fetchData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении сделки' : 'Bitimni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении сделки' : 'Bitimni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -183,7 +191,7 @@ export default function CrmKanbanPage() {
   const handleMoveStage = async (dealId: string, newStage: string) => {
     if (!token || !company) return;
     try {
-      await apiFetch<any>(`/sales/deals/${dealId}/stage`, {
+      await apiFetch<Deal>(`/sales/deals/${dealId}/stage`, {
         method: 'PATCH',
         token,
         tenantId: company.id,

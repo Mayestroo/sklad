@@ -9,8 +9,23 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { formatCurrency } from '@/lib/utils';
-import { SalesInvoice } from '@shared/types';
+import { formatCurrency, errorMessage, type LocalizedName } from '@/lib/utils';
+import { SalesInvoice, SalesInvoiceItem } from '@shared/types';
+
+/** GET /sales/invoices/:id/returnable-items */
+interface ReturnableItemRow {
+  productId: string;
+  productName: LocalizedName;
+  sku?: string;
+  barcode?: string;
+  unit?: string;
+  soldQuantity: number | string;
+  returnedQuantity: number | string;
+  returnableQuantity: number | string;
+  unitPrice: number | string;
+  unitVatAmount?: number | string | null;
+  vatRate?: number | string | null;
+}
 import { RotateCcw, AlertCircle, Barcode, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface CreateSalesReturnModalProps {
@@ -38,7 +53,7 @@ interface ReturnableItemState {
 
 interface WarehouseItem {
   id: string;
-  name: any;
+  name: LocalizedName;
   isDefect?: boolean;
 }
 
@@ -66,7 +81,7 @@ export function CreateSalesReturnModal({
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -98,7 +113,7 @@ export function CreateSalesReturnModal({
 
     setFetchLoading(true);
     setError('');
-    apiFetch<any[]>(`/sales/invoices/${invoice.id}/returnable-items`, {
+    apiFetch<ReturnableItemRow[]>(`/sales/invoices/${invoice.id}/returnable-items`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
@@ -106,7 +121,7 @@ export function CreateSalesReturnModal({
       .then((items) => {
         if (items && items.length > 0) {
           setReturnItems(
-            items.map((i: any) => ({
+            items.map((i) => ({
               productId: i.productId,
               name: getProductName(i.productName),
               sku: i.sku,
@@ -124,11 +139,11 @@ export function CreateSalesReturnModal({
           );
         } else if (invoice.items) {
           setReturnItems(
-            invoice.items.map((i: any) => ({
+            invoice.items.map((i: SalesInvoiceItem & { name?: LocalizedName }) => ({
               productId: i.productId,
               name: getProductName(i.product?.name || i.name),
               sku: i.product?.sku,
-              barcode: i.product?.barcode,
+              barcode: i.product?.barcode ?? undefined,
               unit: i.product?.unitOfMeasure,
               soldQty: Number(i.quantity),
               returnedQty: 0,
@@ -145,11 +160,11 @@ export function CreateSalesReturnModal({
       .catch(() => {
         if (invoice.items) {
           setReturnItems(
-            invoice.items.map((i: any) => ({
+            invoice.items.map((i: SalesInvoiceItem & { name?: LocalizedName }) => ({
               productId: i.productId,
               name: getProductName(i.product?.name || i.name),
               sku: i.product?.sku,
-              barcode: i.product?.barcode,
+              barcode: i.product?.barcode ?? undefined,
               unit: i.product?.unitOfMeasure,
               soldQty: Number(i.quantity),
               returnedQty: 0,
@@ -262,9 +277,9 @@ export function CreateSalesReturnModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка при оформлении возврата' : 'Qaytaruvni rasmiylashtirishda xatolik yuz berdi'));
+      setError(errorMessage(err) || (isRu ? 'Ошибка при оформлении возврата' : 'Qaytaruvni rasmiylashtirishda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -281,7 +296,7 @@ export function CreateSalesReturnModal({
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      title={isRu ? `Возврат товара от покупателя — ${invoice.invoiceNumber || (invoice as any).docNumber || ''}` : `Mijozdan tovar qaytarish — ${invoice.invoiceNumber || (invoice as any).docNumber || ''}`}
+      title={isRu ? `Возврат товара от покупателя — ${invoice.invoiceNumber || (invoice as { docNumber?: string } | null | undefined)?.docNumber || ''}` : `Mijozdan tovar qaytarish — ${invoice.invoiceNumber || (invoice as { docNumber?: string } | null | undefined)?.docNumber || ''}`}
       description={isRu ? 'Оформление возврата по счет-фактуре с защитой от перерасхода' : 'Sotuv hujjati bo\'yicha tovar qaytarish (qoldiq chegarasi bilan)'}
       icon={<RotateCcw size={20} />}
       size="lg"

@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Printer } from 'lucide-react';
-import { formatCurrency, formatDate, getLocalizedName } from '@/lib/utils';
+import { formatCurrency, formatDate, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { PurchaseReturn } from '@shared/types';
 
 interface ReturnActModalProps {
@@ -27,7 +27,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
     window.print();
   };
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';

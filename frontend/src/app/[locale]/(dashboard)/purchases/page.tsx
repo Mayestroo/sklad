@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
@@ -40,7 +40,7 @@ interface CounterpartyItem {
 
 interface WarehouseItem {
   id: string;
-  name: any;
+  name: LocalizedName;
 }
 
 export default function PurchasesPage() {
@@ -130,8 +130,8 @@ export default function PurchasesPage() {
       toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
       fetchStats();
       fetchReceipts();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -216,7 +216,7 @@ export default function PurchasesPage() {
     }
   };
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';

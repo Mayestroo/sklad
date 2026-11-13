@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -22,13 +22,27 @@ import {
 } from 'lucide-react';
 import { PricingPlan, SubscriptionPayment } from '@shared/types';
 
+/** GET /billing/status */
+interface SubscriptionStatusView {
+  plan: string;
+  status: string;
+  daysRemaining?: number | null;
+  nextBillingAt?: string | null;
+}
+
+/** POST /billing/checkout */
+interface CheckoutResult {
+  paymentNumber: string;
+  checkoutUrl: string;
+}
+
 export default function BillingSettingsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const { token, company } = useAuth();
 
   const [plans, setPlans] = useState<PricingPlan[]>([]);
-  const [subStatus, setSubStatus] = useState<any | null>(null);
+  const [subStatus, setSubStatus] = useState<SubscriptionStatusView | null>(null);
   const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +50,7 @@ export default function BillingSettingsPage() {
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE'>('PROFESSIONAL');
   const [paymentMethod, setPaymentMethod] = useState<'CLICK' | 'PAYME' | 'BANK_TRANSFER'>('CLICK');
-  const [checkoutResult, setCheckoutResult] = useState<any | null>(null);
+  const [checkoutResult, setCheckoutResult] = useState<CheckoutResult | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const fetchBillingData = async () => {
@@ -45,7 +59,7 @@ export default function BillingSettingsPage() {
     try {
       const [plansData, statusData, historyData] = await Promise.all([
         apiFetch<PricingPlan[]>('/billing/plans', { token, tenantId: company.id, locale }),
-        apiFetch<any>('/billing/status', { token, tenantId: company.id, locale }),
+        apiFetch<SubscriptionStatusView>('/billing/status', { token, tenantId: company.id, locale }),
         apiFetch<SubscriptionPayment[]>('/billing/history', { token, tenantId: company.id, locale }),
       ]);
 
@@ -73,7 +87,7 @@ export default function BillingSettingsPage() {
     if (!token || !company) return;
     setCheckoutLoading(true);
     try {
-      const res = await apiFetch<any>('/billing/checkout', {
+      const res = await apiFetch<CheckoutResult>('/billing/checkout', {
         token,
         tenantId: company.id,
         locale,
@@ -86,8 +100,8 @@ export default function BillingSettingsPage() {
 
       setCheckoutResult(res);
       toast.success(locale === 'ru' ? 'Счет на оплату сформирован' : 'To‘lov hisobi muvaffaqiyatli shakllantirildi');
-    } catch (err: any) {
-      toast.error(err.message || (locale === 'ru' ? 'Ошибка оформления подписки' : 'Obunani rasmiylashtirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (locale === 'ru' ? 'Ошибка оформления подписки' : 'Obunani rasmiylashtirishda xatolik'));
     } finally {
       setCheckoutLoading(false);
     }

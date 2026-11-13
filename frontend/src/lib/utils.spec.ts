@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { formatCurrency, formatCurrencyIfAvailable } from './utils.ts';
+import { errorMessage, formatCurrency, formatCurrencyIfAvailable } from './utils.ts';
 
 describe('formatCurrency - Zero-Tolerance Invariants', () => {
   test('should format valid amount, locale, and currency correctly', () => {
@@ -16,11 +16,11 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
 
   test('should throw TypeError when amount is null or undefined', () => {
     assert.throws(() => {
-      formatCurrency(null as any, 'uz', 'UZS');
+      formatCurrency(null as unknown as number, 'uz', 'UZS');
     }, TypeError);
 
     assert.throws(() => {
-      formatCurrency(undefined as any, 'uz', 'UZS');
+      formatCurrency(undefined as unknown as number, 'uz', 'UZS');
     }, TypeError);
   });
 
@@ -40,11 +40,11 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
 
   test('should throw TypeError when currency is null, undefined, or empty', () => {
     assert.throws(() => {
-      formatCurrency(100, 'uz', null as any);
+      formatCurrency(100, 'uz', null as unknown as string);
     }, TypeError);
 
     assert.throws(() => {
-      formatCurrency(100, 'uz', undefined as any);
+      formatCurrency(100, 'uz', undefined as unknown as string);
     }, TypeError);
 
     assert.throws(() => {
@@ -58,7 +58,7 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
 
   test('should throw TypeError when currency is omitted', () => {
     assert.throws(() => {
-      (formatCurrency as any)(100, 'uz');
+      (formatCurrency as (amount: number, locale: string) => string)(100, 'uz');
     }, TypeError);
   });
 
@@ -96,5 +96,18 @@ describe('formatCurrencyIfAvailable - Optional Display Currency', () => {
 
   test('should preserve strict amount validation when a currency is available', () => {
     assert.throws(() => formatCurrencyIfAvailable(NaN, 'uz', 'UZS'), /amount must be a valid finite number/);
+  });
+});
+
+describe('errorMessage', () => {
+  test('returns the message of an Error or of any object carrying a string message', () => {
+    assert.strictEqual(errorMessage(new Error('boom')), 'boom');
+    assert.strictEqual(errorMessage({ message: 'api said no' }), 'api said no');
+  });
+
+  test('returns undefined for anything without a string message, so callers keep their fallback', () => {
+    for (const value of [undefined, null, 'text', 42, {}, { message: 7 }]) {
+      assert.strictEqual(errorMessage(value), undefined);
+    }
   });
 });

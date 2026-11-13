@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, listOf, type ListResponse } from '@/lib/api';
 import { useRouter } from '@/i18n/navigation';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
@@ -12,7 +12,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrency, CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -72,6 +72,32 @@ interface ProductOption {
   currency?: string;
 }
 
+/** A product row as GET /inventory/products returns it. */
+interface ProductApiRow {
+  id: string;
+  name: string | Record<string, string>;
+  sku: string;
+  barcode?: string;
+  salePrice?: number | string | null;
+  salePriceCurrency?: 'USD' | 'UZS' | null;
+  costPrice?: number | string | null;
+  costPriceCurrency?: 'USD' | 'UZS' | null;
+  costPriceExchangeRate?: number | string | null;
+  vatRate?: number | string | null;
+  unitOfMeasure?: string | null;
+  totalStock?: number | null;
+  stockQuantity?: number | null;
+  quantity?: number | null;
+  stockLevels?: StockLevelRow[];
+}
+
+/** A stock level row (per product and warehouse). */
+interface StockLevelRow {
+  productId: string;
+  quantity?: number | string | null;
+  reservedQuantity?: number | string | null;
+}
+
 interface ItemRow {
   productId: string;
   quantity: number;
@@ -106,7 +132,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
   // Document Form State
   const [invoiceId, setInvoiceId] = useState<string | null>(initialData?.id || null);
-  const [docNumber, setDocNumber] = useState<string>(initialData?.invoiceNumber || (initialData as any)?.docNumber || '');
+  const [docNumber, setDocNumber] = useState<string>(initialData?.invoiceNumber || (initialData as { docNumber?: string } | null | undefined)?.docNumber || '');
   const [docStatus, setDocStatus] = useState<string>(initialData?.status || 'DRAFT');
   const [paymentStatus, setPaymentStatus] = useState<string>(initialData?.paymentStatus || 'UNPAID');
 
@@ -133,7 +159,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   // Line items
   const [items, setItems] = useState<ItemRow[]>(
     initialData?.items && initialData.items.length > 0
-      ? initialData.items.map((i: any) => ({
+      ? initialData.items.map((i) => ({
           productId: i.productId,
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
@@ -175,7 +201,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   };
 
   // Helper name resolver
-  const getLocalizedName = (name: any) => {
+  const getLocalizedName = (name: string | Record<string, string> | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -187,35 +213,35 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
     try {
       const [cpRes, whRes, prdRes] = await Promise.all([
-        apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+        apiFetch<ListResponse<CounterpartyOption>>('/sales/counterparties', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
           console.error('Failed to load counterparties:', err);
           return null;
         }),
-        apiFetch<any>('/tenants/warehouses', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+        apiFetch<ListResponse<WarehouseOption>>('/tenants/warehouses', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
           console.error('Failed to load warehouses:', err);
           return null;
         }),
-        apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
+        apiFetch<ListResponse<ProductApiRow>>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }).catch((err) => {
           console.error('Failed to load products:', err);
           return null;
         }),
       ]);
 
-      const cpList = cpRes?.data || (Array.isArray(cpRes) ? cpRes : []);
+      const cpList = listOf(cpRes);
       setCounterparties(cpList);
       if (!counterpartyId && cpList.length > 0 && mode === 'create') {
         const defaultCp = cpList[0];
         setCounterpartyId(defaultCp.id);
       }
 
-      const whList = whRes?.data || (Array.isArray(whRes) ? whRes : []);
+      const whList = listOf(whRes);
       setWarehouses(whList);
       if (!warehouseId && whList.length > 0 && mode === 'create') {
         setWarehouseId(whList[0].id);
       }
 
-      const rawProducts = prdRes?.data || (Array.isArray(prdRes) ? prdRes : []);
-      const prdList = rawProducts.map((p: any) => ({
+      const rawProducts = listOf(prdRes);
+      const prdList: ProductOption[] = rawProducts.map((p) => ({
         id: p.id,
         name: p.name,
         sku: p.sku,
@@ -233,10 +259,10 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       // Pre-populate stock map if stockLevels exist on product objects
       const initialStockMap: Record<string, { physical: number; reserved: number; free: number }> = {};
-      rawProducts.forEach((p: any) => {
+      rawProducts.forEach((p) => {
         if (p.stockLevels && Array.isArray(p.stockLevels)) {
-          const physical = p.stockLevels.reduce((acc: number, sl: any) => acc + Number(sl.quantity || 0), 0);
-          const reserved = p.stockLevels.reduce((acc: number, sl: any) => acc + Number(sl.reservedQuantity || 0), 0);
+          const physical = p.stockLevels.reduce((acc: number, sl) => acc + Number(sl.quantity || 0), 0);
+          const reserved = p.stockLevels.reduce((acc: number, sl) => acc + Number(sl.reservedQuantity || 0), 0);
           initialStockMap[p.id] = {
             physical,
             reserved,
@@ -260,15 +286,15 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   useEffect(() => {
     if (!token || !company || !warehouseId) return;
 
-    apiFetch<any>(`/inventory/products/stock-levels?warehouseId=${warehouseId}`, {
+    apiFetch<ListResponse<StockLevelRow>>(`/inventory/products/stock-levels?warehouseId=${warehouseId}`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data || [];
+        const list = listOf(res);
         const map: Record<string, { physical: number; reserved: number; free: number }> = {};
-        list.forEach((sl: any) => {
+        list.forEach((sl) => {
           const physical = Number(sl.quantity || 0);
           const reserved = Number(sl.reservedQuantity || 0);
           map[sl.productId] = {
@@ -404,7 +430,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const handleCounterpartySelect = (cpId: string) => {
     markDirty();
     setCounterpartyId(cpId);
-    const cp: any = counterparties.find((c: any) => c.id === cpId);
+    const cp = counterparties.find((c) => c.id === cpId);
     if (cp) {
       const custDiscount = Number(cp.discountPercent || 0);
 
@@ -423,7 +449,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
   };
 
-  const handleItemChange = (index: number, field: keyof ItemRow, val: any) => {
+  const handleItemChange = (index: number, field: keyof ItemRow, val: ItemRow[keyof ItemRow]) => {
     markDirty();
     if (field === 'productId') {
       const selected = products.find((product) => product.id === val);
@@ -438,8 +464,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       updated[index] = { ...updated[index], [field]: val };
       if (field === 'productId') {
         const selectedProduct = products.find((product) => product.id === val);
-        const unitPrice = getProductPriceInDocumentCurrency(val);
-        const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+        const unitPrice = getProductPriceInDocumentCurrency(String(val));
+        const cp = counterparties.find((c) => c.id === counterpartyId);
         const custDiscount = Number(cp?.discountPercent || 0);
         updated[index].unitPrice = unitPrice ?? 0;
         updated[index].vatRate = Number(selectedProduct?.vatRate ?? 0);
@@ -454,7 +480,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const addItemRow = (productId = '') => {
     markDirty();
     const unitPrice = productId ? getProductPriceInDocumentCurrency(productId) ?? 0 : 0;
-    const cp: any = counterparties.find((c: any) => c.id === counterpartyId);
+    const cp = counterparties.find((c) => c.id === counterpartyId);
     const custDiscount = Number(cp?.discountPercent || 0);
     setItems((prev) => [
       ...prev,
@@ -614,16 +640,16 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       if (saved && saved.id) {
         setInvoiceId(saved.id);
-        setDocNumber(saved.invoiceNumber || (saved as any).docNumber);
+        setDocNumber(saved.invoiceNumber || (saved as { docNumber?: string }).docNumber || '');
         setDocStatus(saved.status);
         setPaymentStatus(saved.paymentStatus || 'UNPAID');
         setCurrentInvoiceData(saved);
         setIsDirty(false);
       }
       return saved;
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка сохранения документа' : 'Hujjatni saqlashda xatolik yuz berdi'));
+      setError(errorMessage(err) || (isRu ? 'Ошибка сохранения документа' : 'Hujjatni saqlashda xatolik yuz berdi'));
       return null;
     } finally {
       setLoading(false);
@@ -656,9 +682,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       setIsDirty(false);
 
       router.push('/sales');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || (isRu ? 'Ошибка проведения документа' : 'Hujjatni tasdiqlashda xatolik yuz berdi'));
+      setError(errorMessage(err) || (isRu ? 'Ошибка проведения документа' : 'Hujjatni tasdiqlashda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -680,9 +706,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setCurrentInvoiceData(res);
         setIsDirty(false);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi'));
+      setError(errorMessage(err) || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi'));
     } finally {
       setLoading(false);
     }
@@ -716,9 +742,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setIsDirty(true);
       }
       toast.success(isRu ? 'Накладная переведена в черновик' : 'Nukladnoy qoralamaga qaytarildi');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      const msg = err.message || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi');
+      const msg = errorMessage(err) || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -763,9 +789,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       setIsDirty(false);
       toast.success(isRu ? 'Накладная успешно удалена' : 'Nukladnoy muvaffaqiyatli o‘chirildi');
       router.push('/sales');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      const msg = err.message || (isRu ? 'Не удалось удалить документ' : 'Hujjatni o‘chirib bo‘lmadi');
+      const msg = errorMessage(err) || (isRu ? 'Не удалось удалить документ' : 'Hujjatni o‘chirib bo‘lmadi');
       setError(msg);
       toast.error(msg);
       setLoading(false);

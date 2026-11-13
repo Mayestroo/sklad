@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { PieChart, ShieldCheck, Printer, FileText } from 'lucide-react';
+import type { FinancialStatements } from '@shared/types';
 
 export default function FinancialReportsPage() {
   const tCommon = useTranslations('common');
@@ -16,19 +17,19 @@ export default function FinancialReportsPage() {
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
-  const [statements, setStatements] = useState<any | null>(null);
+  const [statements, setStatements] = useState<FinancialStatements | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!token || !company) return;
     setLoading(true);
-    apiFetch<any>('/accounting/reports/statements', { token, tenantId: company.id, locale })
+    apiFetch<FinancialStatements>('/accounting/reports/statements', { token, tenantId: company.id, locale })
       .then(setStatements)
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, [token, company]);
 
-  const reportCurrency = (statements as any)?.currency || 'UZS';
+  const reportCurrency = (statements as { currency?: string } | null | undefined)?.currency || 'UZS';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>

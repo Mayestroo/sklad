@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { PurchaseReceipt } from '@shared/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, errorMessage, type LocalizedName } from '@/lib/utils';
 
 interface CreateReturnModalProps {
   isOpen: boolean;
@@ -38,7 +38,7 @@ export function CreateReturnModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -51,7 +51,7 @@ export function CreateReturnModal({
   useEffect(() => {
     if (receipt && receipt.items) {
       setReturnItems(
-        receipt.items.map((i: any) => {
+        receipt.items.map((i) => {
           const unreturned = Math.max(0, Number(i.quantity) - Number(i.returnedQuantity || 0));
           const landedUnit = Number(i.quantity) > 0 && Number(i.landedCost) > 0 ? Number(i.landedCost) / Number(i.quantity) : Number(i.unitPrice);
           return {
@@ -133,8 +133,8 @@ export function CreateReturnModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка при оформлении возврата' : 'Qaytarishni rasmiylashtirishda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка при оформлении возврата' : 'Qaytarishni rasmiylashtirishda xatolik'));
     } finally {
       setLoading(false);
     }

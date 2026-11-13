@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -99,8 +99,8 @@ export default function ProductsPage() {
       setDeletingProduct(null);
       toast.success(isRu ? 'Товар успешно удален' : 'Tovar muvaffaqiyatli o‘chirildi');
       fetchCatalogData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении товара' : 'Tovarni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении товара' : 'Tovarni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -124,8 +124,8 @@ export default function ProductsPage() {
       setNewCatNameRu('');
       toast.success(isRu ? 'Категория успешно создана' : 'Kategoriya muvaffaqiyatli yaratildi');
       fetchCatalogData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при создании категории' : 'Kategoriya yaratishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при создании категории' : 'Kategoriya yaratishda xatolik'));
     } finally {
       setCreateCatLoading(false);
     }
@@ -156,8 +156,8 @@ export default function ProductsPage() {
       setEditingCategory(null);
       toast.success(isRu ? 'Категория успешно обновлена' : 'Kategoriya muvaffaqiyatli yangilandi');
       fetchCatalogData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при обновлении категории' : 'Kategoriyani tahrirlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при обновлении категории' : 'Kategoriyani tahrirlashda xatolik'));
     } finally {
       setEditCatLoading(false);
     }
@@ -176,8 +176,8 @@ export default function ProductsPage() {
       setDeletingCategory(null);
       toast.success(isRu ? 'Категория успешно удалена' : 'Kategoriya muvaffaqiyatli o‘chirildi');
       fetchCatalogData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении категории' : 'Kategoriyani o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении категории' : 'Kategoriyani o‘chirishda xatolik'));
     } finally {
       setDeleteCatLoading(false);
     }

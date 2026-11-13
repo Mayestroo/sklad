@@ -31,7 +31,14 @@ interface SupplierProfileData {
   };
   receipts: PurchaseReceipt[];
   returns: PurchaseReturn[];
-  payments: any[];
+  payments: Array<{
+    id: string;
+    transactionDate: string;
+    amount: number | string;
+    currency: string;
+    comment?: string | null;
+    account?: { name: string | { uz?: string; ru?: string } } | null;
+  }>;
 }
 
 interface SupplierProfileDrawerProps {
