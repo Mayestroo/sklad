@@ -23,4 +23,13 @@ describe('convertSalePriceToDocumentCurrency', () => {
     assert.strictEqual(convertSalePriceToDocumentCurrency(100, 'EUR', 'USD', 12800), null);
     assert.strictEqual(convertSalePriceToDocumentCurrency(100, 'UZS', 'USD', 0), null);
   });
+
+  test('round-trips USD -> UZS -> USD within the stored two-decimal precision', () => {
+    for (const [price, rate] of [[12.34, 12650], [0.07, 12800.5], [999.99, 11999]] as const) {
+      const uzs = convertSalePriceToDocumentCurrency(price, 'USD', 'UZS', rate);
+      assert.notStrictEqual(uzs, null);
+      const back = convertSalePriceToDocumentCurrency(uzs as number, 'UZS', 'USD', rate);
+      assert.ok(Math.abs((back as number) - price) <= 0.01, `${price} @ ${rate} came back as ${back}`);
+    }
+  });
 });

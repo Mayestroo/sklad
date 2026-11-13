@@ -460,7 +460,9 @@ frontend changed.
 | T1.2 run focused product test | done | — | 16/16 |
 | T1.3 schema + backfill migration | done | 992d187 | column/CHECK were in the baseline; production was built with db push, so the backfill gets its own idempotent migration 20261113000300, int-spec runs it twice |
 | T1.4 create/update currency resolution | already done | 0bce6d3 | DTOs use IsValidCurrency; service resolves explicit → sales default, rejects unresolved nonzero price |
-| T1.5 product form currency | done | (this commit) | create mode now starts from the tenant sales default or blank (was: USD guess via useDefaultCurrency, UZS guess on products/new); component test |
+| T1.5 product form currency | done | b2b3b3f | create mode now starts from the tenant sales default or blank (was: USD guess via useDefaultCurrency, UZS guess on products/new); component test |
+| T1.6 product checks | done | — | product spec 16/16, prisma validate OK, nest build OK |
+| T2.1 price-conversion tests | done (coverage) | (this commit) | 5 cases existed (0bce6d3); added the two-decimal round-trip case the plan asks for; passes on the existing code |
 
 ## Round 4 decisions
 
