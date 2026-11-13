@@ -121,6 +121,91 @@ export class OpeningBalancesService {
     }
   }
 
+  /**
+   * D6 (owner, option 2): an opening fixed-asset line opens an asset that
+   * already exists in the fixed-asset register. The register is the one
+   * source of truth for the asset's cost and accumulated depreciation, so
+   * the line must carry the same values (in UZS, the register's currency);
+   * nothing is depreciated here. An asset is opened once: not twice in one
+   * document and not by another posted opening-balance document.
+   */
+  private async assertFixedAssetLinks(
+    tenantId: string,
+    documentId: string,
+    lines: Array<{
+      category: OpeningBalanceCategory;
+      fixedAssetId: string | null;
+      amount: Prisma.Decimal | number;
+      accumulatedDepreciation: Prisma.Decimal | number | null;
+      currency: string;
+    }>,
+  ) {
+    const assetLines = lines.filter(
+      (l) => l.category === OpeningBalanceCategory.FIXED_ASSET,
+    );
+    if (assetLines.length === 0) return;
+
+    for (const line of assetLines) {
+      if (!line.fixedAssetId) {
+        throw new BadRequestException(
+          "Asosiy vosita qatorini asosiy vositalar reyestridagi vositaga bog'lang (avval vositani reyestrga qo'shing). / " +
+            'Привяжите строку основного средства к средству из реестра основных средств (сначала добавьте его в реестр).',
+        );
+      }
+      if (line.currency !== 'UZS') {
+        throw new BadRequestException(
+          "Asosiy vosita qoldig'i UZS da kiritiladi (reyestr UZS da yuritiladi). / " +
+            'Остаток основного средства вводится в UZS (реестр ведётся в UZS).',
+        );
+      }
+    }
+
+    const ids = assetLines.map((l) => l.fixedAssetId as string);
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException(
+        "Har bir asosiy vosita hujjatda faqat bir marta bo'lishi mumkin. / " +
+          'Каждое основное средство может быть в документе только один раз.',
+      );
+    }
+
+    const assets = await this.prisma.fixedAsset.findMany({
+      where: { tenantId, id: { in: ids } },
+    });
+    const byId = new Map(assets.map((a) => [a.id, a]));
+    const cents = (v: Prisma.Decimal | number | null | undefined) =>
+      Math.round(Number(v ?? 0) * 100);
+    for (const line of assetLines) {
+      const asset = byId.get(line.fixedAssetId as string);
+      if (!asset) throw new NotFoundException('Asosiy vosita topilmadi');
+      if (
+        cents(line.amount) !== cents(asset.initialCost) ||
+        cents(line.accumulatedDepreciation) !==
+          cents(asset.accumulatedDepreciation)
+      ) {
+        throw new BadRequestException(
+          `"${asset.name}": qator qiymati reyestrdagidan farq qiladi (boshlang'ich qiymat ${Number(asset.initialCost)}, eskirish ${Number(asset.accumulatedDepreciation)}). / ` +
+            `"${asset.name}": значения строки отличаются от реестра (первоначальная стоимость ${Number(asset.initialCost)}, амортизация ${Number(asset.accumulatedDepreciation)}).`,
+        );
+      }
+    }
+
+    const opened = await this.prisma.openingBalanceLine.findFirst({
+      where: {
+        tenantId,
+        fixedAssetId: { in: ids },
+        documentId: { not: documentId },
+        document: { status: OpeningBalanceStatus.POSTED },
+      },
+      include: { document: { select: { docNumber: true } } },
+    });
+    if (opened) {
+      throw new BadRequestException(
+        `Bu asosiy vosita ${opened.document.docNumber} hujjatida allaqachon ochilgan. / ` +
+          `Это основное средство уже введено документом ${opened.document.docNumber}.`,
+      );
+    }
+  }
+
   private validateLineCurrency(line: {
     currency?: string;
     exchangeRate?: number | string | Prisma.Decimal;
@@ -585,6 +670,7 @@ export class OpeningBalancesService {
     }
 
     doc.lines.forEach((line) => this.validateLineCurrency(line));
+    await this.assertFixedAssetLinks(tenantId, doc.id, doc.lines);
 
     // Verify balance equality
     const metrics = this.calculateMetrics(

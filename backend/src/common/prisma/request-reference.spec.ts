@@ -64,6 +64,8 @@ const ALLOWLIST: Record<string, string> = {
   'ReconciliationService.buildProjection': INTERNAL,
   'ReconciliationService.findProjectionDifferences': INTERNAL,
   'SettlementAllocationService.reverseAllocation': INTERNAL,
+  'OpeningBalancesService.assertFixedAssetLinks':
+    'D6: reads fixedAssetId from lines of a document loaded with tenantId (ids checked by assertTenantOwned when saved); assets are loaded with findMany({ tenantId, id: { in } })',
   'SettlementAllocationService.assertSameAllocation':
     'Compares a stored allocation with a replayed one; writes nothing',
 };

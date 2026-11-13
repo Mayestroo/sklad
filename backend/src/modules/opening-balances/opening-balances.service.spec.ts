@@ -517,6 +517,128 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
     });
   });
 
+  describe('D6: opening fixed assets are linked to register assets', () => {
+    const asset = {
+      id: 'fa-1',
+      tenantId: 'tenant-1',
+      initialCost: 1000000,
+      accumulatedDepreciation: 400000,
+    };
+    const faLine = (over: Record<string, unknown> = {}) => ({
+      id: 'line-fa',
+      category: OpeningBalanceCategory.FIXED_ASSET,
+      fixedAssetId: 'fa-1',
+      amount: 1000000,
+      accumulatedDepreciation: 400000,
+      netAmount: 600000,
+      currency: 'UZS',
+      exchangeRate: 1,
+      ...over,
+    });
+    const equity = {
+      id: 'line-eq',
+      category: OpeningBalanceCategory.EQUITY,
+      amount: 600000,
+      netAmount: 0,
+      currency: 'UZS',
+      exchangeRate: 1,
+    };
+    const docWith = (lines: unknown[]) => ({
+      id: 'doc-fa',
+      tenantId: 'tenant-1',
+      docNumber: 'OB-FA',
+      status: OpeningBalanceStatus.DRAFT,
+      lines,
+    });
+
+    beforeEach(() => {
+      prisma.fixedAsset.findMany = jest.fn().mockResolvedValue([asset]);
+      prisma.openingBalanceLine.findFirst = jest.fn().mockResolvedValue(null);
+      prisma.$transaction.mockResolvedValueOnce({
+        id: 'doc-fa',
+        status: 'POSTED',
+      });
+    });
+
+    const rejects = async (lines: unknown[], message: RegExp) => {
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(docWith(lines));
+      await expect(
+        service.post('tenant-1', 'user-1', 'doc-fa'),
+      ).rejects.toThrow(message);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    };
+
+    it('refuses to post a fixed-asset line that is not linked to a register asset', async () => {
+      await rejects(
+        [faLine({ fixedAssetId: null }), equity],
+        /reyestr|реестр/i,
+      );
+    });
+
+    it('refuses the same register asset on two lines', async () => {
+      await rejects(
+        [faLine(), faLine({ id: 'line-fa-2' }), { ...equity, amount: 1200000 }],
+        /bir marta|один раз/i,
+      );
+    });
+
+    it('refuses an asset already opened by another posted opening-balance document', async () => {
+      prisma.openingBalanceLine.findFirst.mockResolvedValue({
+        id: 'other-line',
+        fixedAssetId: 'fa-1',
+        document: { docNumber: 'OB-OLD' },
+      });
+      await rejects([faLine(), equity], /OB-OLD/);
+      expect(prisma.openingBalanceLine.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: 'tenant-1',
+            fixedAssetId: { in: ['fa-1'] },
+            documentId: { not: 'doc-fa' },
+            document: { status: OpeningBalanceStatus.POSTED },
+          }),
+        }),
+      );
+    });
+
+    it('refuses values that differ from the register (the register is the source of truth)', async () => {
+      await rejects(
+        [
+          faLine({ amount: 900000, netAmount: 500000 }),
+          { ...equity, amount: 500000 },
+        ],
+        /reyestr|реестр/i,
+      );
+      await rejects(
+        [
+          faLine({ accumulatedDepreciation: 300000, netAmount: 700000 }),
+          { ...equity, amount: 700000 },
+        ],
+        /reyestr|реестр/i,
+      );
+    });
+
+    it('refuses a fixed-asset line in a currency other than UZS (the register is kept in UZS)', async () => {
+      await rejects(
+        [faLine({ currency: 'USD', exchangeRate: 12500 }), equity],
+        /UZS/,
+      );
+    });
+
+    it('looks the assets up within the tenant and posts a matching line', async () => {
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(
+        docWith([faLine(), equity]),
+      );
+      await service.post('tenant-1', 'user-1', 'doc-fa');
+      expect(prisma.fixedAsset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 'tenant-1', id: { in: ['fa-1'] } },
+        }),
+      );
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+  });
+
   describe('Unpost & The Rollback Invariant', () => {
     it('should block reopening if inventory batch has been consumed (Rollback Invariant)', async () => {
       prisma.openingBalanceDocument.findFirst.mockResolvedValue({

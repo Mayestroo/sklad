@@ -32,3 +32,14 @@ test('the net value uses the line currency, never a USD fallback (ADR 0022)', ()
   assert.doesNotMatch(body, /currency \|\| 'USD'/);
   assert.match(body, /formatCurrencyIfAvailable\(netBookValue, locale, line\.currency, currency\)/);
 });
+
+test('D6: each line picks an asset from the register; cost and depreciation come from it (read-only)', () => {
+  const body = table.slice(0, table.indexOf('\nfunction ', 10));
+  assert.match(body, /data-testid="fixed-asset-register-select"/);
+  assert.match(body, /value=\{line\.fixedAssetId \|\| ''\}/);
+  assert.match(body, /onUpdate\(index, 'fixedAssetId', value\)/);
+  assert.match(body, /fixedAssets\.map\(/);
+  // Values come from the register: not typed on a linked line.
+  assert.equal((body.match(/disabled=\{isReadOnly \|\| Boolean\(line\.fixedAssetId\)\}/g) ?? []).length, 2);
+  assert.match(page, /withRegisterAsset\(target, fixedAssets\.find\(/);
+});

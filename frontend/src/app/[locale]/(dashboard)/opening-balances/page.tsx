@@ -10,7 +10,7 @@ import {
   summarizeImportPreview,
 } from '@/lib/opening-balance-import';
 import { CURRENCY_OPTIONS, formatCurrency, formatCurrencyIfAvailable, errorMessage } from '@/lib/utils';
-import { withProductCost } from '@/lib/opening-balance-lines';
+import { withProductCost, withRegisterAsset } from '@/lib/opening-balance-lines';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -606,6 +606,12 @@ export default function OpeningBalancesPage() {
         const q = Number(field === 'quantity' ? value : target.quantity || 0);
         const c = Number(field === 'unitCost' ? value : target.unitCost || 0);
         target.amount = Math.round(q * c * 100) / 100;
+      }
+
+      // D6: a fixed-asset line opens an asset from the register and takes
+      // its cost and depreciation from it (the server checks they match).
+      if (target.category === 'FIXED_ASSET' && field === 'fixedAssetId') {
+        target = withRegisterAsset(target, fixedAssets.find((a) => a.id === value));
       }
 
       if (target.category === 'FIXED_ASSET' && (field === 'amount' || field === 'accumulatedDepreciation')) {
@@ -1220,8 +1226,8 @@ export default function OpeningBalancesPage() {
             style={{ margin: '0 0 var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
           >
             {isRu
-              ? 'Амортизация не рассчитывается автоматически: введите накопленную амортизацию из ваших учётных данных. Основные средства из начальных остатков не амортизируются автоматически в следующих месяцах.'
-              : 'Eskirish tizimda avtomatik hisoblanmaydi: jamg‘arilgan eskirishni hisob ma’lumotlaringizdan qo‘lda kiriting. Boshlang‘ich qoldiqdagi asosiy vositalar keyingi oylarda avtomatik amortizatsiya qilinmaydi.'}
+              ? 'Амортизация не рассчитывается автоматически. Сначала добавьте средство в реестр основных средств (первоначальная стоимость и накопленная амортизация в UZS), затем выберите его здесь: значения берутся из реестра.'
+              : 'Eskirish tizimda avtomatik hisoblanmaydi. Avval vositani asosiy vositalar reyestriga qo‘shing (boshlang‘ich qiymat va jamg‘arilgan eskirish UZS da), so‘ng shu yerda tanlang: qiymatlar reyestrdan olinadi.'}
           </p>
           <FixedAssetsTable
             lines={lines}
@@ -2262,6 +2268,7 @@ function FixedAssetsTable({
   locale,
   isRu,
   currency,
+  fixedAssets,
   onUpdate,
   onRemove,
 }: SubledgerTableProps & { fixedAssets: FixedAsset[]; currency?: string }) {
@@ -2304,49 +2311,35 @@ function FixedAssetsTable({
               >
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
                 <td style={{ padding: '12px 16px' }}>
-                  <input
-                    type="text"
-                    value={line.notes || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-                    placeholder={isRu ? 'Название станка, оборудования...' : 'Stanok, texnika, bino nomi...'}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      color: 'var(--color-text-primary)',
-                      width: '100%',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  />
+                  <div data-testid="fixed-asset-register-select">
+                    <Select
+                      value={line.fixedAssetId || ''}
+                      disabled={isReadOnly}
+                      onChange={(value) => onUpdate(index, 'fixedAssetId', value)}
+                      searchable
+                      style={{ width: '100%' }}
+                      options={[
+                        { value: '', label: isRu ? 'Выберите средство из реестра' : 'Reyestrdan vositani tanlang' },
+                        ...fixedAssets.map((asset) => ({
+                          value: asset.id,
+                          label: asset.name,
+                          description: asset.inventoryNumber,
+                        })),
+                      ]}
+                    />
+                  </div>
                 </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <input
-                    type="text"
-                    value={line.contractNumber || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'contractNumber', e.target.value)}
-                    placeholder="INV-001"
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      color: 'var(--color-text-primary)',
-                      width: '100%',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  />
+                <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
+                  {line.contractNumber || '—'}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                   <CurrencyInput
                     value={line.amount || ''}
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || Boolean(line.fixedAssetId)}
                     onChange={(value) => onUpdate(index, 'amount', value)}
                     min={0}
                     decimals={2}
-                    placeholder="0.00"
+                    placeholder="0"
                     className="tabular-nums"
                     style={{
                       padding: '8px 12px',
@@ -2364,11 +2357,11 @@ function FixedAssetsTable({
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                   <CurrencyInput
                     value={line.accumulatedDepreciation || ''}
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || Boolean(line.fixedAssetId)}
                     onChange={(value) => onUpdate(index, 'accumulatedDepreciation', value)}
                     min={0}
                     decimals={2}
-                    placeholder="0.00"
+                    placeholder="0"
                     className="tabular-nums"
                     style={{
                       padding: '8px 12px',
