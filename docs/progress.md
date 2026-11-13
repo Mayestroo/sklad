@@ -30,8 +30,8 @@ so the work survives context compaction. Re-read this file, then
 - [x] A6 Integration + e2e tests on local Docker Postgres — int 28/28, e2e 2/2 after fixes 72d8b7e, 1c9efeb
 
 ### Phase B — muammolar.pdf
-- [ ] B0 Read every page, write `docs/muammolar-triage.md`
-- [ ] B1..B13 fix each problem (see triage file)
+- [x] B0 Read every page (text + rasterized), `docs/muammolar-triage.md`
+- [x] B1..B13: fixed B1 B2 B4 B5 B8 B9 B10 B11 B12; B3 already fixed (verified by test); B7 not reproducible (guard int test); B6, B13 owner decisions (D6, D7); format decision D8
 
 ### Phase C — final verification
 - [ ] C1 Full suite (backend unit, frontend tests, typecheck, build, lint, int/e2e)
