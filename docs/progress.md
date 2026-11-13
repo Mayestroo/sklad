@@ -23,7 +23,7 @@ so the work survives context compaction. Re-read this file, then
       `assertTenantOwned` helper + guard test, `docs/tenant-isolation-sweep.md` — 5eb0313
 - [x] A4a `/sales/purchases` page — removed page + GET /api/sales/purchases (e19cfdd)
 - [x] A4b Excel opening-balance template: asset-type / useful-life columns removed, sheet read by header (a27fa8c)
-- [ ] A5 Frontend lint, by rule category
+- [ ] A5 Frontend lint, by rule category — IN PROGRESS: no-explicit-any done (44a8e05); next no-unused-vars, then react-hooks rules
 - [ ] A6 Integration + e2e tests on local Docker Postgres
 
 ### Phase B — muammolar.pdf
@@ -54,6 +54,18 @@ so the work survives context compaction. Re-read this file, then
   is a product feature, not a fix, so A1 is skipped and listed as owner
   decision D4 in `docs/pre-release-checklist.md`.
 
+## Findings to fix later (found while typing the frontend)
+
+- F1 Inventory documents have no currency column (totals are UZS batch
+  cost) but the inventory documents page formats them in the tenant default
+  currency (`inventory/documents/page.tsx`). Phase C.
+- F2 `PurchaseReturnDocumentForm` loads suppliers from `/counterparties`;
+  the route is `/sales/counterparties`, so the supplier list is empty.
+- F3 Counterparty orders summary (`/sales/orders/by-counterparty/:id`)
+  sums totals across currencies (ADR 0023). Phase C.
+- F4 `formatCurrency` prints 3 decimals ("8.000 UZS"), which reads as eight
+  thousand in Uzbek/Russian notation; relevant to PDF item B2/B5.
+
 ## NOT RUN / skipped
 
 ## Baseline (before any change in this run)
@@ -75,3 +87,11 @@ so the work survives context compaction. Re-read this file, then
   the A3 check used the ledger Account model. Fixed with a pinning test.
 - A4a e19cfdd, A4b a27fa8c. (A staging slip had put the A4a deletions into
   the d7d5496 commit; the three local commits were redone so each builds.)
+- 2868e9c: fix(ui) company name rendered as object (4 sites), found via
+  typing AuthContext. Not visually verified; helper pinned by spec.
+- 44a8e05: frontend no-explicit-any 430 -> 0. Frontend tests 50/50, next
+  build OK (after clearing stale generated .next/dev/types).
+- Slip: a broad `git add docs` had committed the owner's untracked plan note
+  (df61fdf); untracked again in a follow-up commit, file kept on disk.
+- Tooling note: never pipe `< /dev/null` into `python - <<EOF` (starts a
+  REPL); run edit scripts from files in the scratchpad.
