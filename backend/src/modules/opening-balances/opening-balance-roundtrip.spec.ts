@@ -46,4 +46,30 @@ describe('opening balance document round trip', () => {
     const errors = await validate(dto, { whitelist: true });
     expect(errors).toEqual([]);
   });
+
+  it('accepts a fixed-asset line saved back after loading (muammolar B3)', async () => {
+    // A FIXED_ASSET line as Prisma returns it: Decimal amounts. When they
+    // reached the client as strings, saving the document back failed with
+    // "lines.0.amount must be a number conforming to the specified constraints".
+    const fixedAssetLine = {
+      ...persistedLine,
+      category: 'FIXED_ASSET',
+      productId: null,
+      warehouseId: null,
+      quantity: null,
+      unitCost: null,
+      amount: new Prisma.Decimal('1000000.00'),
+      accumulatedDepreciation: new Prisma.Decimal('0.00'),
+      netAmount: new Prisma.Decimal('1000000.00'),
+      contractNumber: '121',
+      notes: 'laserli kesadigan stanok',
+    };
+    const body = JSON.parse(JSON.stringify({ lines: [fixedAssetLine] })) as {
+      lines: Array<Record<string, unknown>>;
+    };
+    expect(typeof body.lines[0].amount).toBe('number');
+
+    const dto = plainToInstance(UpdateOpeningBalanceLinesDto, body);
+    expect(await validate(dto, { whitelist: true })).toEqual([]);
+  });
 });
