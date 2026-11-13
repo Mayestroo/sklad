@@ -1357,7 +1357,10 @@ model SalesReturnItem {
   returnId    String      @map("return_id")
   productId   String      @map("product_id")
   quantity    Decimal     @db.Decimal(15, 3)
+  /// Source invoice line's discounted unit price, excluding VAT.
   unitPrice   Decimal     @db.Decimal(15, 2) @map("unit_price")
+  /// Source invoice line's discount percentage (0-100), already applied in unitPrice.
+  discount    Decimal     @default(0) @db.Decimal(15, 2)
   vatRate     Decimal     @default(0) @db.Decimal(5, 2) @map("vat_rate")
   vatAmount   Decimal     @default(0) @db.Decimal(15, 2) @map("vat_amount")
   totalPrice  Decimal     @db.Decimal(15, 2) @map("total_price")

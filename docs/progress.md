@@ -466,7 +466,8 @@ frontend changed.
 | T2.2 forms: no price list, native price currency | done | b58f5ee | price-list selector/auto-selection and native-currency conversion + repair error were already done (0bce6d3); new documents now start in the strict sales default or blank (see N2) |
 | T2.3 backend price resolution | done | 16ea3ab | saved-currency conversion existed; removed the last 'UZS' fallback (zero price, no currency on product or request → 400). Price-list endpoints kept; no form calls GET products/:id/price |
 | T2.4 sales checks | done | — | invoice/order specs pass; frontend build OK (after T2.2) |
-| T3.1 order/invoice calculation tests | done (coverage) | (this commit) | 2x100/10%/12% = 201.6, zero VAT, 100% discount, header = sum of lines; pass on the shared calculator from 0bce6d3 |
+| T3.1 order/invoice calculation tests | done (coverage) | afe8f02 | 2x100/10%/12% = 201.6, zero VAT, 100% discount, header = sum of lines; pass on the shared calculator from 0bce6d3 |
+| T3.2 schema + DTO fields | done | (this commit) | order VAT / return VAT columns and order/invoice DTO 0–100 checks existed; added SalesReturnItem.discount (provenance, already applied in unitPrice) + idempotent migration 20261113000400; return DTO carries no discount/VAT (derived from the invoice line, T3.6) |
 
 ## Round 4 decisions
 

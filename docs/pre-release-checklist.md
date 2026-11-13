@@ -119,6 +119,13 @@ branch**, never with `db push`. All are additive and idempotent.
       in a `NOTICE` (tenant/id:sku); those prices must get a currency in the
       product form before they can be sold.
 
+- [ ] `20261113000400_sales_vat_and_return_discount` — round 4, sales
+      plan Task 3 Step 2. **Apply to Neon later, in this order** (after
+      `20261113000300`). Additive and idempotent: guards the order/return VAT
+      columns with `IF NOT EXISTS` (production was built with `db push`) and
+      adds `sales_return_items.discount` (default 0, CHECK 0–100). No
+      existing amount changes.
+
 ## Accounting decisions
 
 - [ ] **Purchase returns: configure the gap account** (D2, code path done in
