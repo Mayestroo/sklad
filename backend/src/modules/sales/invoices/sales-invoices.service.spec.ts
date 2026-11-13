@@ -1071,6 +1071,87 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(prisma.journalEntry.create).not.toHaveBeenCalled();
     });
 
+    it('lists each returnable line with its source discount and VAT rates (plan T3.6)', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 2,
+            unitPrice: 100,
+            discount: 10,
+            vatRate: 12,
+            vatAmount: 21.6,
+            totalPrice: 201.6,
+            unitCogs: 40,
+            product: { name: { uz: 'M1' }, sku: 'S1', unitOfMeasure: 'piece' },
+          },
+        ],
+        returns: [],
+      });
+
+      const [item] = await service.getInvoiceReturnableItems(
+        'tenant-1',
+        'inv-1',
+      );
+
+      expect(item).toMatchObject({
+        discount: 10,
+        vatRate: 12,
+        unitPrice: 90,
+        unitVatAmount: 10.8,
+        unitTotalPrice: 100.8,
+      });
+    });
+
+    it('derives a return line from the source line, keeps its discount and ignores the client price (plan T3.6)', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesDocStatus.POSTED,
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 2,
+            unitPrice: 100,
+            discount: 10,
+            vatRate: 12,
+            vatAmount: 21.6,
+            totalPrice: 201.6,
+            unitCogs: 40,
+          },
+        ],
+        returns: [],
+      });
+      prisma.salesReturn.count.mockResolvedValue(0);
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-draft',
+        ...data,
+      }));
+
+      await service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesReturnDocStatus.DRAFT,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 9999 }],
+      });
+
+      const { data } = prisma.salesReturn.create.mock.calls[0][0];
+      expect(data.items.create[0]).toMatchObject({
+        unitPrice: 90,
+        discount: 10,
+        vatRate: 12,
+        vatAmount: 10.8,
+        totalPrice: 100.8,
+      });
+      expect(data.totalAmount).toBe(100.8);
+    });
+
     it('should route defective items to defect warehouse on confirm', async () => {
       prisma.salesReturn.update.mockImplementation(({ where, data }: any) => ({
         id: where.id,

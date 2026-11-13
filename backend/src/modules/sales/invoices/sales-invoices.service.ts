@@ -919,6 +919,7 @@ export class SalesInvoicesService {
           (Number(item.totalPrice) - Number(item.vatAmount || 0)) /
           soldQuantity,
         unitVatAmount: Number(item.vatAmount) / soldQuantity,
+        discount: Number(item.discount ?? 0),
         vatRate: Number(item.vatRate),
         unitTotalPrice: Number(item.totalPrice) / soldQuantity,
         unitCogs: Number(item.unitCogs || 0),
@@ -995,6 +996,7 @@ export class SalesInvoicesService {
       productId: string;
       quantity: number;
       unitPrice: number;
+      discount: number;
       vatRate: number;
       vatAmount: number;
       totalPrice: number;
@@ -1058,6 +1060,8 @@ export class SalesInvoicesService {
         productId: i.productId,
         quantity: i.quantity,
         unitPrice,
+        // Provenance: already applied in unitPrice (the source line net price).
+        discount: Number(origItem.discount ?? 0),
         vatRate: Number(origItem.vatRate || 0),
         vatAmount: lineVatAmount,
         totalPrice: lineTotal,
@@ -1139,6 +1143,7 @@ export class SalesInvoicesService {
         productId: string;
         quantity: number;
         unitPrice: number;
+        discount: number;
         vatRate: number;
         vatAmount: number;
         totalPrice: number;
@@ -1462,6 +1467,7 @@ export class SalesInvoicesService {
       productId: i.productId,
       quantity: Number(i.quantity),
       unitPrice: Number(i.unitPrice),
+      discount: Number(i.discount ?? 0),
       vatRate: Number(i.vatRate || 0),
       vatAmount: Number(i.vatAmount || 0),
       totalPrice: Number(i.totalPrice),

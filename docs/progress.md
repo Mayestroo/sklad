@@ -468,7 +468,10 @@ frontend changed.
 | T2.4 sales checks | done | — | invoice/order specs pass; frontend build OK (after T2.2) |
 | T3.1 order/invoice calculation tests | done (coverage) | afe8f02 | 2x100/10%/12% = 201.6, zero VAT, 100% discount, header = sum of lines; pass on the shared calculator from 0bce6d3 |
 | T3.2 schema + DTO fields | done | b3b0ead | order VAT / return VAT columns and order/invoice DTO 0–100 checks existed; added SalesReturnItem.discount (provenance, already applied in unitPrice) + idempotent migration 20261113000400; return DTO carries no discount/VAT (derived from the invoice line, T3.6) |
-| T3.3 order discount/VAT on create and draft update | done (coverage) | (this commit) | both paths use the shared calculator (0bce6d3); added the draft-update test (2 lines, 10% and 100% discount) |
+| T3.3 order discount/VAT on create and draft update | done (coverage) | b620bcd | both paths use the shared calculator (0bce6d3); added the draft-update test (2 lines, 10% and 100% discount) |
+| T3.4 VAT through partial dispatch | already done | 0bce6d3 | dispatch copies discount/VAT rates per line, sets header VAT, settles the VAT-inclusive total (existing dispatch test); exact-sum check in T3.7 |
+| T3.5 invoice discount/VAT | already done | 0bce6d3 | createInvoice/draft update use the shared calculator; existing draft-invoice tests |
+| T3.6 returns from source line | done | (this commit) | backend already derived price/VAT from the source line and ignored the client price; added source discount to the returnable-items API and the stored return line; modal shows it; returns-page create form now totals with VAT (was VAT-free) |
 
 ## Round 4 decisions
 

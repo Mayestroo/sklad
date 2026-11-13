@@ -7,7 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { salesReturnHeaderFromInvoice } from '@/lib/sales-return';
-import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatDate, formatPercent, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -92,7 +92,12 @@ interface ReturnableItemRow {
   returnedQuantity: number;
   returnableQuantity: number;
   quantity: number;
+  /** Source line net unit price (after discount, before VAT). */
   unitPrice: number;
+  /** Source line discount percentage, already applied in unitPrice. */
+  discount: number;
+  /** Net price plus VAT per unit: what the customer is credited. */
+  unitTotalPrice: number;
   isDefective: boolean;
 }
 
@@ -200,7 +205,7 @@ export default function SalesReturnsPage() {
     }
 
     setLoadingItems(true);
-    apiFetch<Omit<ReturnableItemRow, 'quantity' | 'isDefective'>[]>(`/sales/invoices/${nextInvoiceId}/returnable-items`, {
+    apiFetch<Array<Omit<ReturnableItemRow, 'quantity' | 'isDefective' | 'discount'> & { discount?: number }>>(`/sales/invoices/${nextInvoiceId}/returnable-items`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
@@ -220,6 +225,8 @@ export default function SalesReturnsPage() {
               returnableQuantity: Number(i.returnableQuantity),
               quantity: 0,
               unitPrice: Number(i.unitPrice),
+              discount: Number(i.discount ?? 0),
+              unitTotalPrice: Number(i.unitTotalPrice),
               isDefective: false,
             }))
           );
@@ -296,7 +303,8 @@ export default function SalesReturnsPage() {
     setBarcodeInput('');
   };
 
-  const totalReturnAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  // VAT-inclusive, like the posted return (plan T3.6).
+  const totalReturnAmount = items.reduce((s, i) => s + i.quantity * i.unitTotalPrice, 0);
   const hasDefectiveItems = items.some((i) => i.isDefective && i.quantity > 0);
 
   const handleSubmit = async (submitStatus: 'DRAFT' | 'POSTED') => {
@@ -859,9 +867,12 @@ export default function SalesReturnsPage() {
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }} className="tabular-nums">
                             {formatCurrency(item.unitPrice, locale, activeReturnCurrency)}
+                            {item.discount > 0 && (
+                              <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>-{formatPercent(item.discount)}</div>
+                            )}
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }} className="tabular-nums">
-                            {formatCurrency(item.quantity * item.unitPrice, locale, activeReturnCurrency)}
+                            {formatCurrency(item.quantity * item.unitTotalPrice, locale, activeReturnCurrency)}
                           </td>
                         </tr>
                       );
