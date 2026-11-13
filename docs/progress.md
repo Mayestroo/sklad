@@ -227,7 +227,7 @@ account; react-hooks migration; visual verification; final verification.
   amended out of the unpushed commit, file kept on disk. Staging explicit
   paths only from now on.
 
-## Phase 5 status (react-hooks)
+## Phase 5 status (react-hooks) — superseded by "Round 3" below
 
 Approach: TanStack Query via `useApiQuery` / `useInvalidateApi`
 (docs/frontend-data-loading.md). Component tests: Vitest + jsdom +
@@ -331,3 +331,111 @@ NOT migrated in this run, by reason:
   CRLF in the index for changed files; untracked: .claude/, the plan
   note, muammolar.pdf (owner's). Local leftovers (disposable): Docker
   databases sklad_test, sklad_demo; sklad_redis container running.
+
+# Round 3 (2026-11-13) — owner decisions, Phase 5 completion
+
+Scope set by the owner: code work only. Nothing production-related was
+touched or configured (payment providers, Neon, env values/secrets, Redis
+setup, backups, hosting, legal); those items stay in
+`docs/pre-release-checklist.md` as they were, to be gone through together
+before production.
+
+## Round 3 decisions (owner)
+
+- D3 (a) email-confirmation sign-up, console mail transport only: d7a5dab.
+- D6 option 2, opening fixed-asset lines link a register asset, no
+  depreciation there: 8f73fc0 (existing column, no migration).
+- D7 B13 reading confirmed (no change). D9 (b) trailing zeros: ab01952.
+- Period reopen: company admin only, as implemented (no change).
+- D1, D2, D10 stay under "Decisions needed from owner". The decided items
+  moved to "Decided by owner" in the checklist.
+
+## Round 3 task list
+
+- [x] R3.1 D3 / D6 / D9 code (d7a5dab, 8f73fc0, ab01952).
+- [x] R3.2 simple pages on TanStack Query, component test per page, no
+      disable comments: batches 3–7 (bd5a8b7, 8af5d0e, fcad9ba, 8965e80,
+      ef4899a), batch 8 (e032d96: sales returns, prices, counterparties),
+      batch 9 (c51792b: dashboard, super-admin pages + layout guard).
+- [x] R3.3 forms/modals and non-data components listed below with the
+      manual click-through; the safe ones migrated in 3dc53e0.
+- [x] R3.4 migrations: only D3 adds one (`20261113000200_pending_registrations`),
+      built and tested on the local Docker database only, listed in the
+      checklist as "apply to Neon later". Not applied anywhere else.
+
+New in the data-loading toolkit (docs/frontend-data-loading.md):
+`useApiQuery` options `scope: 'platform'` (super-admin endpoints, no
+company needed, never sends `X-Tenant-Id`) and `keepPrevious`; the
+`useDebouncedValue` hook for typed filters.
+
+## Phase 5 — left for a manual click-through
+
+Lint at the start of round 3: 70 problems (set-state-in-effect 52,
+exhaustive-deps 18). Now: **39** (31 + 8), all in the files below. No
+disable comments were added.
+
+Why these were not migrated: each copies props or a loaded document into
+state the user then edits (or is shared UI every form depends on). The fix
+is a `key` remount plus lazy initial state, or deriving the value; done
+without clicking through it can drop what a user typed, prefill the wrong
+document, or reset a form on a background reload. A visual check is not
+possible in this environment (see P6).
+
+### Forms and modals (15 files left; 2 migrated)
+
+| File | What the effect does | Manual click-through must check |
+|---|---|---|
+| `components/sales/SalesOrderForm.tsx` | Copies dropdown lists from props once; sets currency/rate from the company default until the form is dirty; picks the first customer in create mode. | New order: default currency and rate appear, typing a rate is kept when the company settings finish loading; first customer preselected and changeable; edit an existing order: nothing is overwritten on open or after saving a line. Migrate together with `useDocumentDropdowns`. |
+| `components/sales/SalesInvoiceForm.tsx` | Same default-currency sync; loads dropdowns in an effect; opens "unpost to edit" when the page is opened with `?edit=true` on a posted invoice. | New invoice: currency/rate default and typed rate kept; warehouse stock column fills; open a posted invoice with `?edit=true`: the unpost prompt appears once (not twice, not on every save). |
+| `components/purchases/PurchaseDocumentForm.tsx` | "Unpost to edit" prompt for `?edit=true` on a posted receipt. | Posted receipt with `?edit=true`: prompt appears once; cancelling leaves the receipt posted; confirming unposts and keeps the lines. |
+| `components/sales/CreateSalesReturnModal.tsx` | Loads warehouses (defect warehouse default) and the invoice's returnable items into editable rows when opened. | Open for an invoice: rows appear with 0 quantities; type quantities, wait 20 s (background reload), quantities stay; close and open for another invoice: rows belong to the new invoice. |
+| `components/sales/PartialDispatchModal.tsx` | Resets dispatch quantities to the unshipped rest on opening; picks the order's warehouse. (Stock lookup migrated in 3dc53e0.) | Open: quantities = unshipped rest; change a quantity and the warehouse: the typed quantity stays, stock column reloads; close/open: quantities reset to the rest. |
+| `components/purchases/CreateReturnModal.tsx` | Builds return rows from the receipt (landed unit cost, unreturned quantity) whenever the receipt or locale changes. | Open from a receipt: max quantities = unreturned; type quantities, switch language: typed quantities stay (today they reset). |
+| `components/purchases/PayPurchaseModal.tsx` | On opening: amount = remaining, clears rate/note, loads cash accounts and picks the first account in the receipt currency. | Open for a USD receipt: amount = remaining, a USD kassa is preselected; change the amount, wait for accounts to load: amount stays. |
+| `components/services/ServiceActDrawer.tsx` | On opening: loads the service catalog; fills the form from `initialData` or resets it. | New act: empty form with one line; edit an act: all fields and lines filled; typing then a parent re-render (e.g. list refresh) does not reset the form. |
+| `components/counterparties/CreateCounterpartyDrawer.tsx` | On opening: fills from `counterpartyToEdit` or resets to defaults (type, folder). | Create from a folder: folder preselected; edit: all fields filled; type a name, the list behind refreshes: the name stays. |
+| `components/products/CreateProductDrawer.tsx` | Reads custom units from localStorage; on opening fills from `productToEdit` or resets. | Edit a product: name in the current language, prices and currencies filled; custom units appear in the unit select; create: empty form. |
+| `components/purchases/QuickAddProductModal.tsx` | On opening: item type from `initialType` (service forces unit "piece"). | Open from a service line: type = service, unit = piece; from a product line: type = product; the scanned SKU/barcode is prefilled. |
+| `app/[locale]/(dashboard)/products/new/page.tsx` | While the sale price is 0, the sale-price currency follows the company default. | Company default USD: currency USD until a price is typed; type a price, then the default loads late: currency is not switched under the typed price. |
+| `app/[locale]/(dashboard)/purchases/expenses/new/page.tsx` | Loads posted receipts/accounts in an effect; selecting a receipt selects all its lines; recalculates the allocation preview on every change. | Pick a receipt: all lines ticked, preview appears; untick a line, change the amount: preview recalculates once per change, ticks stay. |
+| `app/[locale]/(dashboard)/finance/page.tsx` | List load in an effect (page, dates, tab, account, counterparty filters); drawer: currency follows the chosen account, open documents load per counterparty. | List: each filter change loads once, paging keeps filters; drawer: choose a USD kassa, currency = USD; choose a customer: open invoices listed, choosing another customer clears the chosen document. |
+| `app/[locale]/(dashboard)/opening-balances/page.tsx` | Loads documents and the selected document's lines into editable state. | Open a draft: lines editable; type an amount, switch to another document and back: no stale lines from the other document; posted documents read-only. |
+| `components/counterparties/AktSverkaDrawer.tsx` | Migrated (3dc53e0): read-only statement query. | — |
+| `components/purchases/SupplierProfileDrawer.tsx` | Migrated (3dc53e0): read-only profile query. | — |
+
+### Not data loading (3 left; 2 migrated)
+
+| File | What the effect does | Manual click-through must check |
+|---|---|---|
+| `components/ui/DatePicker.tsx` | `mounted` flag for the portal; calendar month follows an external value change; view resets to days on opening. Used by every form. | In any form: open the picker, it shows the selected month; set the date from outside (e.g. "today" button / document load): the calendar follows; year view → close → reopen shows days. |
+| `context/AuthContext.tsx` | Restores the session from localStorage on mount; listens for `crm_unauthorized`. | Reload while signed in: no flash of the login page, company kept; an expired token signs out once; super-admin impersonation survives a reload. Needs `useSyncExternalStore` or a server-provided session; touches every page. |
+| `hooks/useDocumentDropdowns.ts` | Loads counterparties/warehouses/products (via `lib/cache.ts`) in an effect. | Migrate together with SalesOrderForm (it feeds that form). Check: dropdowns fill once per form opening, a created counterparty appears without reload. |
+| `components/layout/Sidebar.tsx` | Migrated (3dc53e0): group open state adjusted during render. | — |
+| `components/ui/ThemeSwitcher.tsx` | Migrated (3dc53e0): `useSyncExternalStore`. | — |
+
+## Round 3 log
+
+- R3.2 e032d96 (batch 8): sales returns, prices, counterparties.
+  Counterparties requested the list twice on every load (now once);
+  typed filters debounced through `useDebouncedValue`. Frontend node tests
+  124/124, component tests 34 files / 80 tests, tsc 0, eslint on changed
+  files clean.
+- R3.2 c51792b (batch 9): dashboard (keepPrevious keeps numbers during a
+  period switch; the test fails without it), five super-admin pages as
+  platform queries (no `X-Tenant-Id`), layout guard deps. Component tests
+  42 files / 101 tests; frontend lint 46; `next build` exit 0.
+- R3.3 3dc53e0: statement and supplier drawers (old statement drawer
+  showed the previous counterparty while loading the next), dispatch stock
+  lookup, sidebar, theme (two switchers drifted apart after a toggle).
+  Component tests 47 files / 115 tests; frontend lint 39.
+- R3.4 (verification only, no commit): Docker Desktop started locally;
+  new empty database `sklad_round3` on the local Docker Postgres; all
+  migrations applied (`migrate deploy` via prisma.test.config.ts), re-run
+  "No pending migrations", `migrate diff` "No difference detected".
+  Backend unit 53 suites / 499 tests; typecheck 0; eslint (no --fix) 0;
+  nest build 0; integration 13 suites / 38 tests (incl. Redis on
+  127.0.0.1:6379/15); e2e 2 suites / 4 tests (incl. sign-up → email →
+  confirm). Nothing applied to Neon.
+- Local leftovers (disposable): Docker databases `sklad_round3`,
+  `sklad_test`, `sklad_demo`; containers `sklad_postgres`, `sklad_redis`
+  running.
