@@ -1684,23 +1684,15 @@ export class PurchasesService {
         data: { quantity: { decrement: qty } },
       });
 
-      // 2. Batch deduction & Landed cost calculation (UZS per unit)
-      let unitLandedCost = unitPrice * exchangeRate;
-      // FIFO returns carry the exact allocated cost; never re-multiply a rounded average.
-      let fifoLineCost: number | null = null;
+      // 2. Batch deduction. Goods leave at the landed cost of the batches
+      // actually consumed (UZS per unit). A receipt line's own landedCost is
+      // in the receipt's currency, so it is never used as a UZS cost.
+      let lineLandedCost: number;
 
       if (receiptId && receipt) {
         const receiptItem = receipt.items.find(
           (ri) => ri.productId === item.productId,
         );
-
-        if (
-          receiptItem &&
-          Number(receiptItem.quantity) > 0 &&
-          Number(receiptItem.landedCost) > 0
-        ) {
-          unitLandedCost = Number(receiptItem.landedCost);
-        }
 
         if (receiptItem) {
           await tx.purchaseReceiptItem.update({
@@ -1716,7 +1708,7 @@ export class PurchasesService {
           (b) =>
             b.productId === item.productId && b.warehouseId === warehouseId,
         );
-        await consumeFifoBatches(tx, {
+        const allocation = await consumeFifoBatches(tx, {
           tenantId,
           warehouseId,
           productId: item.productId,
@@ -1725,6 +1717,7 @@ export class PurchasesService {
           // Stored return lines always have an id; prepared lines are only a fallback.
           source: { purchaseReturnItemId: item.id as string },
         });
+        lineLandedCost = allocation.totalCost;
       } else {
         // Standalone return: FIFO batch consumption from warehouse
         const allocation = await consumeFifoBatches(tx, {
@@ -1735,11 +1728,9 @@ export class PurchasesService {
           // Stored return lines always have an id; prepared lines are only a fallback.
           source: { purchaseReturnItemId: item.id as string },
         });
-        unitLandedCost = allocation.unitCost;
-        fifoLineCost = allocation.totalCost;
+        lineLandedCost = allocation.totalCost;
       }
 
-      const lineLandedCost = fifoLineCost ?? qty * unitLandedCost;
       if (itemType === 'RAW_MATERIAL') {
         rawMaterialLandedCostTotal += lineLandedCost;
       } else {
