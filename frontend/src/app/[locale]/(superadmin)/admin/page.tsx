@@ -29,6 +29,57 @@ import {
 import { CreatedTenantSummary, GlobalMetrics, TenantCompanySummary } from '@shared/types';
 import type { AuthResponse } from '@shared/types';
 
+type MrrState =
+  | { kind: 'rows'; rows: Array<{ currency: string; amount: number }> }
+  | { kind: 'empty' }
+  | { kind: 'missing-currency' };
+
+/**
+ * MRR rows as the API sent them. A row without a currency (or an old
+ * response without rows) is an error, never shown as USD or UZS (ADR 0022);
+ * currencies are listed apart, never summed (ADR 0023).
+ */
+function readMrr(metrics: GlobalMetrics): MrrState {
+  const rows: unknown = (metrics as { mrrByCurrency?: unknown }).mrrByCurrency;
+  if (!Array.isArray(rows)) return { kind: 'missing-currency' };
+  if (rows.length === 0) return { kind: 'empty' };
+  const valid = rows.every(
+    (row) =>
+      typeof row?.currency === 'string' &&
+      row.currency.trim() !== '' &&
+      typeof row.amount === 'number' &&
+      Number.isFinite(row.amount),
+  );
+  return valid ? { kind: 'rows', rows } : { kind: 'missing-currency' };
+}
+
+function MrrValue({ metrics, locale }: { metrics: GlobalMetrics | null; locale: 'uz' | 'ru' }) {
+  const isRu = locale === 'ru';
+  if (!metrics) return <>—</>;
+  const state = readMrr(metrics);
+  if (state.kind === 'missing-currency') {
+    return (
+      <span role="alert" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-danger-600)' }}>
+        {isRu ? 'Валюта не указана — сумму показать нельзя' : "Valyuta ko'rsatilmagan — summani ko'rsatib bo'lmaydi"}
+      </span>
+    );
+  }
+  if (state.kind === 'empty') {
+    return (
+      <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+        {isRu ? 'Нет активных подписок' : "Faol obuna yo'q"}
+      </span>
+    );
+  }
+  return (
+    <>
+      {state.rows.map((row) => (
+        <div key={row.currency}>{formatCurrency(row.amount, locale, row.currency)}</div>
+      ))}
+    </>
+  );
+}
+
 export default function SuperAdminTenantsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -334,6 +385,7 @@ export default function SuperAdminTenantsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
         {/* Card 1: Total MRR */}
         <Card>
+          <div data-mrr-card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
               {isRu ? 'Месячный доход (MRR)' : 'Oylik daromad (MRR)'}
@@ -354,7 +406,8 @@ export default function SuperAdminTenantsPage() {
             </div>
           </div>
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
-            {metrics ? formatCurrency(metrics.totalMrr, locale, (metrics as { currency?: string } | null | undefined)?.currency || 'USD') : '—'}
+            <MrrValue metrics={metrics} locale={locale} />
+          </div>
           </div>
         </Card>
 

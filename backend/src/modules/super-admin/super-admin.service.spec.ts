@@ -334,4 +334,37 @@ describe('SuperAdminService', () => {
       expect(service.getBackupHistory()).toEqual([]);
     });
   });
+
+  describe('getGlobalMetrics', () => {
+    beforeEach(() => {
+      prisma.company.findMany.mockResolvedValue([
+        { status: 'ACTIVE' },
+        { status: 'TRIAL' },
+      ]);
+      prisma.user.count.mockResolvedValue(5);
+    });
+
+    it('reports MRR per currency and never sums currencies (ADR 0023)', async () => {
+      prisma.subscription.findMany.mockResolvedValue([
+        { amount: 100000, currency: 'UZS' },
+        { amount: 250000, currency: 'UZS' },
+        { amount: 30, currency: 'USD' },
+      ]);
+
+      const metrics = await service.getGlobalMetrics();
+
+      expect(metrics.mrrByCurrency).toEqual([
+        { currency: 'UZS', amount: 350000 },
+        { currency: 'USD', amount: 30 },
+      ]);
+      expect(metrics).not.toHaveProperty('totalMrr');
+      expect(metrics.activeTenantsCount).toBe(1);
+      expect(metrics.trialTenantsCount).toBe(1);
+    });
+
+    it('returns no MRR rows when nothing is subscribed', async () => {
+      prisma.subscription.findMany.mockResolvedValue([]);
+      expect((await service.getGlobalMetrics()).mrrByCurrency).toEqual([]);
+    });
+  });
 });

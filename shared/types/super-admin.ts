@@ -1,7 +1,8 @@
 import { TranslatableField } from './i18n';
 
 export interface GlobalMetrics {
-  totalMrr: number;            // in UZS
+  /** Monthly recurring revenue, one row per subscription currency (ADR 0023). */
+  mrrByCurrency: Array<{ currency: string; amount: number }>;
   activeTenantsCount: number;
   trialTenantsCount: number;
   totalUsersCount: number;

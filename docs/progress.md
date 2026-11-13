@@ -12,7 +12,8 @@ frontend changed.
 
 | Item | Status | Commit | Notes |
 |---|---|---|---|
-| 1a F5 journal entry dates | done | (this commit) | 6 patterns, test per pattern; see decisions |
+| 1a F5 journal entry dates | done | e6cb885 | 6 patterns, test per pattern; see decisions |
+| 1b Super-admin MRR card currency | done | (this commit) | API returns MRR per currency; card shows rows / error / empty |
 
 ## Round 4 decisions
 
@@ -28,6 +29,13 @@ frontend changed.
   lands in the same period as what it reverses).
 - Existing journal rows untouched; checklist item "accountant to review
   historical entries dated at posting time".
+
+- 1b: the MRR card assumed USD and the API summed subscription amounts
+  across currencies (ADR 0023).  now returns
+   instead of  (only
+  consumer is this card); the card lists one amount per currency, shows
+  an explicit error (role=alert) when the rows or a row's currency are
+  missing, and "no active subscriptions" when there are none.
 
 ## Needs owner decision (round 4)
 
