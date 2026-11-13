@@ -28,6 +28,7 @@ import {
 import { JournalService } from '../accounting/journal/journal.service';
 import { JournalLineDto } from '../accounting/dto';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 @Injectable()
 export class OpeningBalancesService {
@@ -983,6 +984,8 @@ export class OpeningBalancesService {
 
     // Execute safe atomic rollback
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, doc.openingDate, 'unpost');
       // 1. Revert Cash & Bank
       for (const line of doc.lines) {
         if (
@@ -1064,19 +1067,13 @@ export class OpeningBalancesService {
       }
 
       // 4. Delete Journal Entries
-      const je = await tx.journalEntry.findFirst({
-        where: {
-          tenantId,
-          sourceDocType: 'OpeningBalanceDocument',
-          sourceDocId: doc.id,
-        },
-      });
-      if (je) {
-        await tx.journalLine.deleteMany({
-          where: { entry: { tenantId }, entryId: je.id },
-        });
-        await tx.journalEntry.delete({ where: { tenantId, id: je.id } });
-      }
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'OpeningBalanceDocument',
+        doc.id,
+        'unpost',
+      );
 
       // 6. Reset document status to DRAFT
       return tx.openingBalanceDocument.update({

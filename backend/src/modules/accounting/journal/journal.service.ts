@@ -10,6 +10,10 @@ import {
 } from '../../../common/utils/transaction-exchange-rate';
 import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
+import {
+  assertPeriodOpen,
+  PeriodAction,
+} from '../../../common/accounting-period/period-lock';
 
 interface CashPaymentForJournal {
   id: string;
@@ -59,7 +63,7 @@ interface ServiceActForJournal {
  */
 export type JournalWriter = Pick<
   Prisma.TransactionClient,
-  'journalEntry' | '$queryRaw'
+  'journalEntry' | '$queryRaw' | '$executeRaw' | 'accountingPeriod'
 >;
 
 /**
@@ -93,7 +97,11 @@ export class JournalService {
         line.creditAccountId,
       ]),
     });
-    return this.createJournalEntry(tenantId, dto);
+    // In a transaction so the period lock taken by createJournalEntry is
+    // held until the entry commits (a concurrent close waits for it).
+    return this.prisma.$transaction((tx) =>
+      this.createJournalEntry(tenantId, dto, tx),
+    );
   }
 
   async createJournalEntry(
@@ -108,6 +116,8 @@ export class JournalService {
     }
 
     const entryDate = dto.entryDate ?? new Date();
+    // D4: no entry may be dated in a closed accounting period.
+    await assertPeriodOpen(db, tenantId, entryDate, 'post');
     const entryNumber = await nextDocumentNumber(
       db,
       tenantId,
@@ -141,6 +151,35 @@ export class JournalService {
         },
       },
     });
+  }
+
+  /**
+   * Removes the journal entries of one source document (unposting,
+   * cancelling or deleting it). The only way entries are deleted, so the
+   * closed-period rule (D4) is checked here for the dates of the entries
+   * being removed. Lines go with their entry (ON DELETE CASCADE).
+   */
+  async deleteEntriesForSource(
+    db: JournalWriter,
+    tenantId: string,
+    sourceDocType: string,
+    sourceDocId: string,
+    action: PeriodAction,
+  ): Promise<void> {
+    const where = { tenantId, sourceDocType, sourceDocId };
+    const entries = await db.journalEntry.findMany({
+      where,
+      select: { entryDate: true },
+    });
+    if (entries.length > 0) {
+      await assertPeriodOpen(
+        db,
+        tenantId,
+        entries.map((entry) => entry.entryDate),
+        action,
+      );
+    }
+    await db.journalEntry.deleteMany({ where });
   }
 
   /**

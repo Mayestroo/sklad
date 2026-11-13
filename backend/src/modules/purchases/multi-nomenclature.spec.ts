@@ -15,6 +15,7 @@ import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
 jest.mock('../../common/prisma/assert-tenant-owned');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Suite', () => {
   let service: PurchasesService;
@@ -89,6 +90,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         findFirst: jest.fn(),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         deleteMany: jest.fn(),

@@ -6,6 +6,7 @@ import { StockTransfersService } from './transfers/stock-transfers.service';
 
 jest.mock('../../common/sequences/document-sequence');
 jest.mock('../../common/prisma/assert-tenant-owned');
+jest.mock('../../common/accounting-period/period-lock');
 
 /**
  * ADR 0006: stock movements and their automatic journal entries commit together.

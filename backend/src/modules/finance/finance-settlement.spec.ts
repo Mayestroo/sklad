@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('FinanceService Settlement Unit Test Suite', () => {
   let service: FinanceService;

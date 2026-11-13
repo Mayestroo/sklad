@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma';
 import { ProductionService } from './production.service';
 
 jest.mock('../../common/sequences/document-sequence');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('ProductionService', () => {
   const tenantId = 'tenant-1';

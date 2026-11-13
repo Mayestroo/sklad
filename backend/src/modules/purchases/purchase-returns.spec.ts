@@ -16,6 +16,7 @@ import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
 jest.mock('../../common/prisma/assert-tenant-owned');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invariant Test Suite (#108)', () => {
   let service: PurchasesService;
@@ -91,6 +92,7 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
         findFirst: jest.fn(),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         deleteMany: jest.fn(),

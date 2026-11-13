@@ -44,6 +44,7 @@ import {
 } from '../inventory/fifo/fifo-batches';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { formatMoney } from '../../../../shared/format/money';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -827,6 +828,8 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, receipt.docDate, 'unpost');
       // 1. Decrement stock levels & delete batches
       for (const item of receipt.items) {
         const itemType = item.product?.type || 'PRODUCT';
@@ -881,9 +884,13 @@ export class PurchasesService {
       });
 
       // 3. Remove journal entries
-      await tx.journalEntry.deleteMany({
-        where: { tenantId, sourceDocType: 'PurchaseReceipt', sourceDocId: id },
-      });
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'PurchaseReceipt',
+        id,
+        'unpost',
+      );
 
       // 4. Audit Log
       await tx.auditLog.create({
@@ -2006,6 +2013,10 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      if (pReturn.status === ReturnDocStatus.POSTED) {
+        await assertPeriodOpen(tx, tenantId, pReturn.returnDate, 'cancel');
+      }
       // If the document was POSTED, reverse stock, batch, debt, journal entries and receipt items
       if (pReturn.status === ReturnDocStatus.POSTED) {
         let basePurchaseTotal = 0;
@@ -2094,13 +2105,13 @@ export class PurchasesService {
         }
 
         // 5. Delete journal entries created for this return
-        await tx.journalEntry.deleteMany({
-          where: {
-            tenantId,
-            sourceDocType: 'PurchaseReturn',
-            sourceDocId: returnId,
-          },
-        });
+        await this.journalService.deleteEntriesForSource(
+          tx,
+          tenantId,
+          'PurchaseReturn',
+          returnId,
+          'cancel',
+        );
       }
 
       // Update status to CANCELLED

@@ -35,6 +35,7 @@ import { JournalService } from '../accounting/journal/journal.service';
 import type { JournalLineDto } from '../accounting/dto';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { formatMoney } from '../../../../shared/format/money';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 /** A posted sales invoice whose COGS a posted expense changed retroactively. */
 export interface RetroactiveSalesImpact {
@@ -1021,6 +1022,8 @@ export class AdditionalExpensesService {
     const totalAmount = Number(expense.amount);
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, expense.docDate, 'cancel');
       // 1. Revert ProductBatch landed cost & Retroactive COGS
       for (const item of expense.items) {
         const allocatedAmount = Number(item.allocatedAmount);
@@ -1156,13 +1159,13 @@ export class AdditionalExpensesService {
       }
 
       // 3. Delete or void linked journal entries
-      await tx.journalEntry.deleteMany({
-        where: {
-          tenantId,
-          sourceDocType: 'AdditionalExpense',
-          sourceDocId: id,
-        },
-      });
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'AdditionalExpense',
+        id,
+        'cancel',
+      );
 
       // 4. Update status to CANCELLED
       const cancelledExpense = await tx.additionalExpense.update({

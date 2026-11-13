@@ -4,7 +4,8 @@ import type { PermissionAction } from '@prisma/client';
  * The single list of permissions that exist. Seeders create exactly these
  * `<module>:<action>` slugs, and every @RequirePermissions() must use one of
  * them (enforced by permission-catalog.spec.ts). Document lifecycle changes
- * such as post / unpost / cancel use `<module>:edit`.
+ * such as post / unpost / cancel use `<module>:edit`. Closing and reopening
+ * an accounting period use `accounting:close` / `accounting:reopen`.
  */
 export const PERMISSION_DESCRIPTIONS: Readonly<
   Record<string, Partial<Record<PermissionAction, { uz: string; ru: string }>>>
@@ -55,6 +56,13 @@ export const PERMISSION_DESCRIPTIONS: Readonly<
     DELETE: {
       uz: "Buxgalteriya yozuvlarini o'chirish",
       ru: 'Удаление бухгалтерских записей',
+    },
+    // D4 period closing. Also inserted for existing databases by migration
+    // 20261113000100_accounting_period_permissions (keep the texts in sync).
+    CLOSE: { uz: 'Hisobot davrini yopish', ru: 'Закрытие отчётного периода' },
+    REOPEN: {
+      uz: 'Yopilgan davrni qayta ochish',
+      ru: 'Повторное открытие закрытого периода',
     },
   },
   analytics: {
@@ -156,7 +164,9 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     slug: 'accountant',
     name: { uz: 'Buxgalter', ru: 'Бухгалтер' },
     grants: (p) =>
-      ['accounting', 'dashboard', 'analytics'].includes(p.module) ||
+      // Reopening a closed period is left to the company admin.
+      (p.module === 'accounting' && p.action !== 'REOPEN') ||
+      ['dashboard', 'analytics'].includes(p.module) ||
       (p.module === 'inventory' && p.action === 'VIEW') ||
       (p.module === 'sales' && p.action === 'VIEW'),
   },

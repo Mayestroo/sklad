@@ -34,6 +34,7 @@ import type {
 } from '../../../../shared/types/finance';
 import { readCompanySettings } from '../../common/utils/company-settings';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 interface FinanceSettlementContext {
   side: CounterpartySettlementSide | null;
@@ -820,6 +821,13 @@ export class FinanceService {
     });
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(
+        tx,
+        tenantId,
+        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+        'post',
+      );
       const settlement = await this.resolveSettlementContext(
         tx,
         tenantId,
@@ -955,6 +963,13 @@ export class FinanceService {
     });
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(
+        tx,
+        tenantId,
+        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+        'post',
+      );
       const settlement = await this.resolveSettlementContext(
         tx,
         tenantId,
@@ -1835,6 +1850,13 @@ export class FinanceService {
     );
 
     const tx = await this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(
+        tx,
+        tenantId,
+        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+        'post',
+      );
       const transaction = await tx.financeTransaction.create({
         data: {
           tenantId,
@@ -2077,6 +2099,14 @@ export class FinanceService {
     cancelledById: string | undefined,
     isDeleted: boolean,
   ) {
+    // D4: nothing dated in a closed accounting period may change.
+    await assertPeriodOpen(
+      tx,
+      tenantId,
+      existing.transactionDate,
+      isDeleted ? 'delete' : 'cancel',
+    );
+
     const amount = Number(existing.amount);
 
     if (existing.direction === TransactionDirection.INCOME) {

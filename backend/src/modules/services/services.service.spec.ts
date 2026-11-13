@@ -12,6 +12,7 @@ import {
 import { BadRequestException } from '@nestjs/common';
 
 jest.mock('../../common/sequences/document-sequence');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('ServicesService Unit Tests', () => {
   let service: ServicesService;
@@ -48,6 +49,7 @@ describe('ServicesService Unit Tests', () => {
         findMany: jest.fn(),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn(),
       },
       openingBalanceDocument: {
@@ -58,6 +60,17 @@ describe('ServicesService Unit Tests', () => {
 
     journalService = {
       autoPostServiceAct: jest.fn().mockResolvedValue(undefined),
+      deleteEntriesForSource: jest.fn(
+        (
+          db: typeof prisma,
+          tenantId: string,
+          sourceDocType: string,
+          sourceDocId: string,
+        ) =>
+          db.journalEntry.deleteMany({
+            where: { tenantId, sourceDocType, sourceDocId },
+          }),
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({

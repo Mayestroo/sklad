@@ -20,6 +20,7 @@ import {
   UpdateActualMaterialsDto,
 } from './dto/create-production-document.dto';
 import { consumeFifoBatches } from '../inventory/fifo/fifo-batches';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 const recipeInclude = {
   product: true,
@@ -624,6 +625,8 @@ export class ProductionService {
       if (!document)
         throw new NotFoundException('Ishlab chiqarish hujjati topilmadi');
       this.requireStatus(document.status, ManufacturingStatus.READY);
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, document.docDate, 'post');
       if (document.materials.some((line) => line.actualQuantity == null)) {
         throw new BadRequestException(
           'Haqiqiy sarf kiritilmagan xomashyo mavjud',
@@ -727,6 +730,9 @@ export class ProductionService {
         );
       }
       const previousStatus = document.status;
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, document.docDate, 'cancel');
+
       const claimed = await tx.productionDocument.updateMany({
         where: { id, tenantId, status: previousStatus },
         data: { status: ManufacturingStatus.CANCELLED },

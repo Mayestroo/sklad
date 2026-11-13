@@ -58,6 +58,13 @@ enum PermissionAction {
   CREATE
   EDIT
   DELETE
+  CLOSE
+  REOPEN
+}
+
+enum AccountingPeriodStatus {
+  OPEN
+  CLOSED
 }
 
 enum AuditAction {
@@ -307,6 +314,7 @@ model Company {
   stockTransfers     StockTransfer[]
   counterparties     Counterparty[]
   documentSequences  DocumentSequence[]
+  accountingPeriods  AccountingPeriod[]
   salesOrders        SalesOrder[]
   salesInvoices      SalesInvoice[]
   purchaseOrders     PurchaseOrder[]
@@ -2139,4 +2147,28 @@ model DocumentSequence {
 
   @@id([tenantId, key])
   @@map("document_sequences")
+}
+
+/// A calendar month of a tenant's books (D4). No row means OPEN. While a
+/// period is CLOSED nothing dated in it may be posted, unposted or
+/// cancelled, and no journal entry dated in it may be created or deleted.
+/// Month boundaries are UTC calendar months (document dates are stored as
+/// UTC midnight of the chosen day).
+model AccountingPeriod {
+  id           String                 @id @default(uuid())
+  tenantId     String                 @map("tenant_id")
+  year         Int
+  month        Int
+  status       AccountingPeriodStatus @default(OPEN)
+  closedAt     DateTime?              @map("closed_at")
+  closedById   String?                @map("closed_by_id")
+  reopenedAt   DateTime?              @map("reopened_at")
+  reopenedById String?                @map("reopened_by_id")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, year, month])
+  @@map("accounting_periods")
 }

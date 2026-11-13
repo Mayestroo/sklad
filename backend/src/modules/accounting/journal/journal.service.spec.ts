@@ -3,6 +3,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { JournalService } from './journal.service';
 
 jest.mock('../../../common/sequences/document-sequence');
+jest.mock('../../../common/accounting-period/period-lock');
 
 const cashAccountLedgerCases: Array<[string, string, string, number]> = [
   ['UZS_CASH', 'UZS', '5010', 25],

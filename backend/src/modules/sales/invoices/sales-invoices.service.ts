@@ -36,6 +36,7 @@ import {
 import { originalSaleUnitCost } from './sales-return-cost';
 import { readCompanySettings } from '../../../common/utils/company-settings';
 import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../../common/accounting-period/period-lock';
 
 @Injectable()
 export class SalesInvoicesService {
@@ -752,6 +753,8 @@ export class SalesInvoicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, invoice.invoiceDate, 'unpost');
       // Restore stock levels
       for (const item of invoice.items) {
         const stockLevel = await tx.stockLevel.findUnique({
@@ -803,9 +806,13 @@ export class SalesInvoicesService {
       });
 
       // Remove journal entries
-      await tx.journalEntry.deleteMany({
-        where: { tenantId, sourceDocType: 'SalesInvoice', sourceDocId: id },
-      });
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'SalesInvoice',
+        id,
+        'unpost',
+      );
 
       // Reset COGS fields
       await tx.salesInvoiceItem.updateMany({
@@ -1522,6 +1529,10 @@ export class SalesInvoicesService {
 
     // If POSTED, execute rollback guardrail and reversals
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      // The reversal entry is dated today, so the journal check alone
+      // would not see the return's own (closed) month (A1).
+      await assertPeriodOpen(tx, tenantId, existing.returnDate, 'cancel');
       // Check stock availability in target warehouses
       for (const item of existing.items) {
         const targetWarehouseId =

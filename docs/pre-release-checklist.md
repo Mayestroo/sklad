@@ -79,6 +79,17 @@ tenants use the system. Tick each one off in the PR that resolves it.
       to 5 registrations per hour per IP. A real fix changes the sign-up flow
       (see "Decisions needed from owner").
 
+## Migrations to apply to Neon (after owner approval, in this order)
+
+Built and tested on the local Docker database only. Apply with
+`npx prisma migrate deploy` against production **after a Neon backup /
+branch**, never with `db push`. All are additive and idempotent.
+
+- [ ] `20261113000000_accounting_periods` — `accounting_periods` table,
+      `PermissionAction` values `CLOSE`, `REOPEN` (D4).
+- [ ] `20261113000100_accounting_period_permissions` — `accounting:close` /
+      `accounting:reopen` permission rows and system-role grants (D4).
+
 ## Accounting decisions
 
 - [ ] **Purchase returns: where the gap goes when landed cost is below the
@@ -104,7 +115,7 @@ The owner should confirm the default or choose the alternative.
 | D1 | **ZRU-547 hosting**: may tenant personal data stay on Neon (Singapore)? | Nothing changed; hosting stays on Neon `ap-southeast-1`. The false "stored in Uzbekistan" claim was removed from the tenant UI. | Move the whole database to a host in Uzbekistan (e.g. a local cloud/DC Postgres), or split personal data into a local store. | Changing hosting is a legal/commercial decision and was explicitly out of scope. Needs a lawyer's answer before real tenants onboard. |
 | D2 | **Purchase-return gap account** (landed cost below base price) | Gap stays unbooked; 6010 is debited only with the landed cost (current behaviour, documented in the code). | Book the gain to other operating income (9390), to an FX gain account (9540), or as a correction of 2910 cost. | An accounting policy choice; coding a guess would create entries the accountant may have to reverse. |
 | D3 | **Registration email enumeration** | Registration still returns 409 for a taken email; the route is limited to 5/hour per IP. | (a) Email-confirmation sign-up: always answer "check your inbox", create the tenant only after the link is clicked; (b) answer 201 for both, and email the existing owner instead. | Both alternatives change the onboarding UX and need an email provider, which the project does not have yet. |
-| D4 | **Accounting period closing** | Not implemented: any document date can be posted, unposted or cancelled, including cancelling a posted sales return dated in a month that is already reported. | Add a per-tenant "books closed up to" date; reject posting, unposting, cancelling and editing of documents dated on or before it (sales-return cancel was the requested first user). | A closing date is a product feature (who may close/reopen, which documents it covers), not a bug fix; see `docs/progress.md` A1. |
+| D4 | **Accounting period closing** | **Done in round 2** (ADR 0024): monthly periods, `accounting:close` (admin, accountant) / `accounting:reopen` (admin only), audit log. API only, no UI yet. | Yearly periods; let the accountant reopen too; a closing UI. | Owner asked for a minimal safe version. |
 | D5 | **Rate-limit storage** | In-memory, per process. | Redis-backed throttler storage. | Single instance today; Redis storage is only needed before scaling out. |
 | D6 | **Opening-balance fixed assets and depreciation** (muammolar B6) | Accumulated depreciation typed per line; OB fixed-asset lines do not enter the fixed-asset register, so they do not depreciate afterwards. | Create a register asset per line at posting (useful life, start date, method per line), or link each line to an existing register asset, or a calculation helper only. | Accounting policy and a feature; see `docs/muammolar-triage.md` O1. |
 | D7 | **Additional expenses under Sales** (muammolar B13) | No Sales menu entry; additional expenses exist only as purchase landed cost. | A selling-expense document (9410 group), or a Sales shortcut to Finance → Expense with a selling category. Do not reuse landed cost (it would capitalise selling costs into inventory). | Account choice and margin treatment; see triage O2. |

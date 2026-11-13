@@ -8,6 +8,7 @@ import { AccountsService } from '../accounting/accounts/accounts.service';
 import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('Additional Expenses & Landed Cost Invariant Tests', () => {
   let service: AdditionalExpensesService;
@@ -86,6 +87,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         }),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),

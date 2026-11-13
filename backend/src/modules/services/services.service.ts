@@ -26,6 +26,7 @@ import {
 } from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 @Injectable()
 export class ServicesService {
@@ -446,6 +447,8 @@ export class ServicesService {
     await this.checkCutoffDate(tenantId, act.actDate);
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, act.actDate, 'post');
       const updated = await tx.serviceAct.update({
         where: { tenantId, id },
         data: { status: ServiceActStatus.POSTED },
@@ -518,6 +521,10 @@ export class ServicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      if (act.status === ServiceActStatus.POSTED) {
+        await assertPeriodOpen(tx, tenantId, act.actDate, 'cancel');
+      }
       // If was POSTED, reverse counterparty debt and remove journal entry
       if (
         act.status === ServiceActStatus.POSTED &&
@@ -539,13 +546,13 @@ export class ServicesService {
           idempotencyKey: `ServiceAct:${act.id}:CANCELLED`,
         });
 
-        await tx.journalEntry.deleteMany({
-          where: {
-            tenantId,
-            sourceDocType: 'ServiceAct',
-            sourceDocId: id,
-          },
-        });
+        await this.journalService.deleteEntriesForSource(
+          tx,
+          tenantId,
+          'ServiceAct',
+          id,
+          'cancel',
+        );
       }
 
       return tx.serviceAct.update({
@@ -599,6 +606,8 @@ export class ServicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, act.actDate, 'unpost');
       // Reverse counterparty debt
       if (Number(act.totalAmount) > 0) {
         await this.settlementService.recordMovement(tx, {
@@ -619,13 +628,13 @@ export class ServicesService {
       }
 
       // Delete linked BHMS journal entry
-      await tx.journalEntry.deleteMany({
-        where: {
-          tenantId,
-          sourceDocType: 'ServiceAct',
-          sourceDocId: id,
-        },
-      });
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'ServiceAct',
+        id,
+        'unpost',
+      );
 
       return tx.serviceAct.update({
         where: { tenantId, id },

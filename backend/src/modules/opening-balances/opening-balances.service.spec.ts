@@ -15,6 +15,7 @@ import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
 jest.mock('../../common/prisma/assert-tenant-owned');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
   let service: OpeningBalancesService;
@@ -67,9 +68,11 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         create: jest.fn(),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn(),
         findFirst: jest.fn(),
         delete: jest.fn(),
+        deleteMany: jest.fn(),
       },
       journalLine: {
         create: jest.fn(),
@@ -608,6 +611,11 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       });
       // Batch deleted
       expect(prisma.productBatch.deleteMany).toHaveBeenCalled();
+      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          sourceDocType: 'OpeningBalanceDocument',
+        }),
+      });
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({

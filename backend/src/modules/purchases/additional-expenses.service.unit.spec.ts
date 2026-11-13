@@ -14,6 +14,7 @@ import { JournalService } from '../accounting/journal/journal.service';
 
 jest.mock('../../common/sequences/document-sequence');
 jest.mock('../../common/prisma/assert-tenant-owned');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('AdditionalExpensesService Unit Tests', () => {
   let service: AdditionalExpensesService;
@@ -183,6 +184,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         }),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),

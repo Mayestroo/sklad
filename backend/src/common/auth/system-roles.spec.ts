@@ -14,7 +14,9 @@ const MATRIX: Record<string, string[]> = {
   company_admin: PERMISSIONS.map((p) => p.slug).filter(
     (slug) => slug !== 'billing:edit',
   ),
+  // D4: the accountant may close a period; only company_admin reopens one.
   accountant: [
+    'accounting:close',
     'accounting:create',
     'accounting:delete',
     'accounting:edit',

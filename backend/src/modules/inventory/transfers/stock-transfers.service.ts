@@ -10,6 +10,7 @@ import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreateStockTransferDto } from '../dto';
 import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../../common/accounting-period/period-lock';
 
 @Injectable()
 export class StockTransfersService {
@@ -95,6 +96,8 @@ export class StockTransfersService {
 
     // Atomic transaction: deduct source stock
     const updated = await this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, transfer.transferDate, 'post');
       for (const item of transfer.items) {
         const stock = await tx.stockLevel.findUnique({
           where: {
@@ -210,6 +213,8 @@ export class StockTransfersService {
 
     // Atomic transaction: add target stock
     const updated = await this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, transfer.transferDate, 'post');
       for (const item of transfer.items) {
         const requestedQty = Number(item.quantity);
 
