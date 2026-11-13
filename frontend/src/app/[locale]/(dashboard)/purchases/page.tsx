@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
@@ -30,7 +30,9 @@ import {
   Trash2,
   Truck
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { PurchaseSummaryStats, PurchaseReceipt } from '@shared/types';
 
 interface CounterpartyItem {
@@ -40,17 +42,22 @@ interface CounterpartyItem {
 
 interface WarehouseItem {
   id: string;
-  name: any;
+  name: LocalizedName;
+}
+
+/** GET /purchases/receipts with the non-empty filters. */
+function receiptsEndpointFor(filters: Record<string, string>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) query.append(key, value);
+  }
+  return `/purchases/receipts?${query.toString()}`;
 }
 
 export default function PurchasesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-
-  const [stats, setStats] = useState<PurchaseSummaryStats | null>(null);
-  const [receipts, setReceipts] = useState<PurchaseReceipt[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -60,10 +67,18 @@ export default function PurchasesPage() {
   const [currency, setCurrency] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Filters apply on the filter button (as before): the list follows this snapshot.
+  const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
 
-  // Dropdown reference lists
-  const [counterparties, setCounterparties] = useState<CounterpartyItem[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
+  const receiptsEndpoint = useMemo(() => receiptsEndpointFor(appliedFilters), [appliedFilters]);
+  const receiptsQuery = useApiQuery<PurchaseReceipt[]>(receiptsEndpoint);
+  const receipts = receiptsQuery.data ?? [];
+  const loading = receiptsQuery.isPending;
+  // Summary cards and dropdown lists are optional: a failure leaves them empty.
+  const statsQuery = useApiQuery<PurchaseSummaryStats>('/purchases/summary');
+  const stats = statsQuery.data ?? null;
+  const counterparties = useApiQuery<CounterpartyItem[]>('/sales/counterparties').data ?? [];
+  const warehouses = useApiQuery<WarehouseItem[]>('/tenants/warehouses').data ?? [];
 
   // Modals state
   const [expenseReceipt, setExpenseReceipt] = useState<PurchaseReceipt | null>(null);
@@ -72,39 +87,8 @@ export default function PurchasesPage() {
   const [deletingReceipt, setDeletingReceipt] = useState<PurchaseReceipt | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const fetchStats = () => {
-    if (!token || !company) return;
-    apiFetch<PurchaseSummaryStats>('/purchases/summary', {
-      token: token || undefined,
-      tenantId: company?.id ? company.id : undefined,
-      locale,
-    })
-      .then(setStats)
-      .catch((err) => console.error(err));
-  };
-
-  const fetchReceipts = () => {
-    if (!token || !company) return;
-    setLoading(true);
-
-    const query = new URLSearchParams();
-    if (search) query.append('search', search);
-    if (counterpartyId) query.append('counterpartyId', counterpartyId);
-    if (warehouseId) query.append('warehouseId', warehouseId);
-    if (status) query.append('status', status);
-    if (currency) query.append('currency', currency);
-    if (dateFrom) query.append('dateFrom', dateFrom);
-    if (dateTo) query.append('dateTo', dateTo);
-
-    apiFetch<PurchaseReceipt[]>(`/purchases/receipts?${query.toString()}`, {
-      token: token || undefined,
-      tenantId: company?.id ? company.id : undefined,
-      locale,
-    })
-      .then((res) => setReceipts(res || []))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
+  const fetchStats = () => void statsQuery.refetch();
+  const fetchReceipts = () => void receiptsQuery.refetch();
 
   const handleDeleteReceipt = async () => {
     if (!deletingReceipt || !token || !company) return;
@@ -130,40 +114,18 @@ export default function PurchasesPage() {
       toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
       fetchStats();
       fetchReceipts();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении документа' : 'Hujjatni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchStats();
-    fetchReceipts();
-  }, [token, company, locale]);
-
-  useEffect(() => {
-    if (!token || !company) return;
-
-    apiFetch<CounterpartyItem[]>('/sales/counterparties', {
-      token: token || undefined,
-      tenantId: company?.id ? company.id : undefined,
-      locale,
-    })
-      .then((res) => setCounterparties(res || []))
-      .catch((err) => console.error(err));
-
-    apiFetch<WarehouseItem[]>('/tenants/warehouses', {
-      token: token || undefined,
-      tenantId: company?.id ? company.id : undefined,
-      locale,
-    })
-      .then((res) => setWarehouses(res || []))
-      .catch((err) => console.error(err));
-  }, [token, company, locale]);
-
   const handleApplyFilter = () => {
-    fetchReceipts();
+    const next = { search, counterpartyId, warehouseId, status, currency, dateFrom, dateTo };
+    // Same filters again: reload; new filters: the new endpoint loads.
+    if (receiptsEndpointFor(next) === receiptsEndpoint) fetchReceipts();
+    else setAppliedFilters(next);
   };
 
   const handleResetFilters = () => {
@@ -174,9 +136,7 @@ export default function PurchasesPage() {
     setCurrency('');
     setDateFrom('');
     setDateTo('');
-    setTimeout(() => {
-      fetchReceipts();
-    }, 0);
+    setAppliedFilters({});
   };
 
   const getDocStatusBadge = (st: string) => {
@@ -216,7 +176,7 @@ export default function PurchasesPage() {
     }
   };
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -440,7 +400,9 @@ export default function PurchasesPage() {
 
       {/* Receipts Table */}
       <Card style={{ overflow: 'hidden' }}>
-        {loading ? (
+        {receiptsQuery.isError ? (
+          <LoadError error={receiptsQuery.error} onRetry={fetchReceipts} retrying={receiptsQuery.isFetching} />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
             <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>

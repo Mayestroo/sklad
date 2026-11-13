@@ -1,4 +1,4 @@
-﻿import { IsBoolean, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+﻿import { IsBoolean, IsNotEmpty, IsObject, IsOptional } from 'class-validator';
 import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class CreatePriceListDto {

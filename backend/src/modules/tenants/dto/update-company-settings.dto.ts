@@ -1,5 +1,12 @@
-import { IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  Matches,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
+import type { Prisma } from '@prisma/client';
 
 export class SalesSettingsDto {
   @IsOptional()
@@ -15,6 +22,20 @@ export class SalesSettingsDto {
   defaultCurrency?: string;
 }
 
+/** `Company.settings.accounting` (see common/settings/accounting-settings.ts). */
+export class AccountingSettingsDto {
+  /**
+   * D2: account (chart-of-accounts code) for the gap when returned goods
+   * leave at a landed cost below their base price. Null clears it.
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[0-9]{4}$/, {
+    message: 'purchaseReturnGainAccountCode must be a 4-digit account code',
+  })
+  purchaseReturnGainAccountCode?: string | null;
+}
+
 export class UpdateCompanySettingsDto {
   @IsOptional()
   @ValidateNested()
@@ -22,8 +43,10 @@ export class UpdateCompanySettingsDto {
   sales?: SalesSettingsDto;
 
   @IsOptional()
-  inventory?: Record<string, any>;
+  inventory?: Prisma.InputJsonObject;
 
   @IsOptional()
-  accounting?: Record<string, any>;
+  @ValidateNested()
+  @Type(() => AccountingSettingsDto)
+  accounting?: AccountingSettingsDto;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
+import { useLocale } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -11,7 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { formatCurrency } from '@/lib/utils';
-import { Palette, Layers, Type, Sun, Moon, Sparkles, CheckCircle2, Building, Package } from 'lucide-react';
+import { Palette, Layers, Type, Sparkles, Building, Package } from 'lucide-react';
 
 export default function DesignSystemPage() {
   const locale = useLocale() as 'uz' | 'ru';

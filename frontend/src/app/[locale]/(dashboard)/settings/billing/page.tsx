@@ -1,67 +1,61 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import {
-  CreditCard,
   CheckCircle,
-  ShieldCheck,
   Zap,
-  Clock,
   Sparkles,
   ExternalLink,
   ArrowRight,
 } from 'lucide-react';
 import { PricingPlan, SubscriptionPayment } from '@shared/types';
 
+/** GET /billing/status */
+interface SubscriptionStatusView {
+  plan: string;
+  status: string;
+  daysRemaining?: number | null;
+  nextBillingAt?: string | null;
+}
+
+/** POST /billing/checkout */
+interface CheckoutResult {
+  paymentNumber: string;
+  checkoutUrl: string;
+}
+
 export default function BillingSettingsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const { token, company } = useAuth();
 
-  const [plans, setPlans] = useState<PricingPlan[]>([]);
-  const [subStatus, setSubStatus] = useState<any | null>(null);
-  const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const plansQuery = useApiQuery<PricingPlan[]>('/billing/plans');
+  const statusQuery = useApiQuery<SubscriptionStatusView>('/billing/status');
+  const historyQuery = useApiQuery<SubscriptionPayment[]>('/billing/history');
+  const billingQueries = [plansQuery, statusQuery, historyQuery];
+  const plans = plansQuery.data ?? [];
+  const subStatus = statusQuery.data ?? null;
+  const payments = historyQuery.data ?? [];
+  const loading = billingQueries.some((q) => q.isPending);
+  const failedQuery = billingQueries.find((q) => q.isError);
 
   // Checkout modal
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE'>('PROFESSIONAL');
   const [paymentMethod, setPaymentMethod] = useState<'CLICK' | 'PAYME' | 'BANK_TRANSFER'>('CLICK');
-  const [checkoutResult, setCheckoutResult] = useState<any | null>(null);
+  const [checkoutResult, setCheckoutResult] = useState<CheckoutResult | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-
-  const fetchBillingData = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const [plansData, statusData, historyData] = await Promise.all([
-        apiFetch<PricingPlan[]>('/billing/plans', { token, tenantId: company.id, locale }),
-        apiFetch<any>('/billing/status', { token, tenantId: company.id, locale }),
-        apiFetch<SubscriptionPayment[]>('/billing/history', { token, tenantId: company.id, locale }),
-      ]);
-
-      setPlans(plansData);
-      setSubStatus(statusData);
-      setPayments(historyData);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBillingData();
-  }, [token, company]);
 
   const handleStartCheckout = (planId: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE') => {
     setSelectedPlanId(planId);
@@ -73,7 +67,7 @@ export default function BillingSettingsPage() {
     if (!token || !company) return;
     setCheckoutLoading(true);
     try {
-      const res = await apiFetch<any>('/billing/checkout', {
+      const res = await apiFetch<CheckoutResult>('/billing/checkout', {
         token,
         tenantId: company.id,
         locale,
@@ -86,8 +80,8 @@ export default function BillingSettingsPage() {
 
       setCheckoutResult(res);
       toast.success(locale === 'ru' ? 'Счет на оплату сформирован' : 'To‘lov hisobi muvaffaqiyatli shakllantirildi');
-    } catch (err: any) {
-      toast.error(err.message || (locale === 'ru' ? 'Ошибка оформления подписки' : 'Obunani rasmiylashtirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (locale === 'ru' ? 'Ошибка оформления подписки' : 'Obunani rasmiylashtirishda xatolik'));
     } finally {
       setCheckoutLoading(false);
     }
@@ -102,7 +96,13 @@ export default function BillingSettingsPage() {
         </h1>
       </div>
 
-      {loading ? (
+      {failedQuery ? (
+        <LoadError
+          error={failedQuery.error}
+          onRetry={() => billingQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+          retrying={billingQueries.some((q) => q.isFetching)}
+        />
+      ) : loading ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {tCommon('loading')}
         </div>

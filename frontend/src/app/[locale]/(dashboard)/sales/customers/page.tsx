@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -38,9 +40,9 @@ interface CustomerProfile {
     totalCogs: number;
     grossProfit: number;
   };
-  invoices: any[];
-  returns: any[];
-  payments: any[];
+  invoices: Array<{ id: string; invoiceNumber: string; invoiceDate: string; status: string; currency: string; totalAmount: number | string }>;
+  returns: unknown[];
+  payments: unknown[];
 }
 
 export default function CustomersPage() {
@@ -49,8 +51,9 @@ export default function CustomersPage() {
   const isRu = locale === 'ru';
   const defaultCurrency = useDefaultCurrency();
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const customersQuery = useApiQuery<Customer[]>('/sales/counterparties?type=CUSTOMER');
+  const customers = customersQuery.data ?? [];
+  const loading = customersQuery.isPending;
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -60,18 +63,7 @@ export default function CustomersPage() {
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const fetchCustomers = () => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<Customer[]>('/sales/counterparties?type=CUSTOMER', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then(setCustomers)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
+  const fetchCustomers = () => void customersQuery.refetch();
 
   const handleDeleteCustomer = async () => {
     if (!deletingCustomer || !token || !company) return;
@@ -86,14 +78,13 @@ export default function CustomersPage() {
       setDeletingCustomer(null);
       toast.success(isRu ? 'Клиент успешно удален' : 'Mijoz muvaffaqiyatli o‘chirildi');
       fetchCustomers();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  useEffect(() => { fetchCustomers(); }, [token, company, locale]);
 
   const handleViewProfile = async (customer: Customer) => {
     if (!token || !company) return;
@@ -215,7 +206,13 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {customersQuery.isError ? (
+                <tr>
+                  <td colSpan={6}>
+                    <LoadError error={customersQuery.error} onRetry={fetchCustomers} retrying={customersQuery.isFetching} />
+                  </td>
+                </tr>
+              ) : loading ? (
                 <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</td></tr>
               ) : filtered.length === 0 ? (
                 <tr>
@@ -285,7 +282,7 @@ export default function CustomersPage() {
 
       {/* Customer Profile Modal */}
       {selectedCustomer && (() => {
-        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as any)?.currency || defaultCurrency;
+        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as { currency?: string } | null | undefined)?.currency || defaultCurrency;
         const formatByCurrency = (items: Array<{ currency: string; amount: number }>) =>
           items.length > 0
             ? items.map((item) => formatCurrency(item.amount, locale, item.currency)).join(' · ')
@@ -327,7 +324,7 @@ export default function CustomersPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {profile.invoices.slice(0, 8).map((inv: any) => (
+                          {profile.invoices.slice(0, 8).map((inv) => (
                             <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                               <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{inv.invoiceNumber}</td>
                               <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate, locale)}</td>

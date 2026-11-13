@@ -25,21 +25,23 @@ export class CreateIncomeDto {
   currency: string;
 
   @IsOptional()
-  @Transform(({ value }) => value === '' || value === null ? undefined : Number(value))
+  @Transform(({ value }: { value: unknown }) =>
+    value === '' || value === null ? undefined : Number(value),
+  )
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
   exchangeRate?: number;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsDateString()
   transactionDate?: string;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsString()
@@ -50,35 +52,35 @@ export class CreateIncomeDto {
   settlementSide?: CounterpartySettlementSide;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsString()
   transactionTypeId?: string;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsString()
   comment?: string;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsString()
   sourceDocType?: string;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsString()
   sourceDocId?: string;
 
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsString()

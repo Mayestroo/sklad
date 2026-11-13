@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { X, Building2, Phone, Mail, FileText, MapPin } from 'lucide-react';
+import { X, Building2 } from 'lucide-react';
 
 interface QuickAddSupplierModalProps {
   isOpen: boolean;

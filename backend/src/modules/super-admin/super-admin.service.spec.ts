@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  NotImplementedException,
+} from '@nestjs/common';
+import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '../../../../shared/types';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { SuperAdminService } from './super-admin.service';
@@ -53,6 +58,7 @@ describe('SuperAdminService', () => {
     };
     const mockConfigService = {
       get: jest.fn((key: string, defaultVal: any) => defaultVal),
+      getOrThrow: jest.fn((key: string) => `test-${key}`),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -79,24 +85,41 @@ describe('SuperAdminService', () => {
     };
 
     it('should throw ConflictException if company slug already exists', async () => {
-      prisma.company.findUnique.mockResolvedValue({ id: 'existing-id', slug: 'yangi-korxona' });
+      prisma.company.findUnique.mockResolvedValue({
+        id: 'existing-id',
+        slug: 'yangi-korxona',
+      });
 
-      await expect(service.createTenant(validDto)).rejects.toThrow(ConflictException);
-      await expect(service.createTenant(validDto)).rejects.toThrow('Company with this slug already exists');
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        ConflictException,
+      );
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        'Company with this slug already exists',
+      );
     });
 
     it('should throw ConflictException if admin email already exists', async () => {
       prisma.company.findUnique.mockResolvedValue(null);
-      prisma.user.findFirst.mockResolvedValue({ id: 'existing-user-id', email: 'admin@yangi.uz' });
+      prisma.user.findFirst.mockResolvedValue({
+        id: 'existing-user-id',
+        email: 'admin@yangi.uz',
+      });
 
-      await expect(service.createTenant(validDto)).rejects.toThrow(ConflictException);
-      await expect(service.createTenant(validDto)).rejects.toThrow('User with this email already exists');
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        ConflictException,
+      );
+      await expect(service.createTenant(validDto)).rejects.toThrow(
+        'User with this email already exists',
+      );
     });
 
     it('should atomically create company, admin user, main branch, main warehouse, and subscription', async () => {
       prisma.company.findUnique.mockResolvedValue(null);
       prisma.user.findFirst.mockResolvedValue(null);
-      prisma.role.findFirst.mockResolvedValue({ id: 'role-company-admin-id', slug: 'company_admin' });
+      prisma.role.findFirst.mockResolvedValue({
+        id: 'role-company-admin-id',
+        slug: 'company_admin',
+      });
 
       const createdCompany = {
         id: 'new-company-id',
@@ -114,7 +137,10 @@ describe('SuperAdminService', () => {
         firstName: validDto.adminFirstName,
         lastName: validDto.adminLastName,
       });
-      prisma.branch.create.mockResolvedValue({ id: 'new-branch-id', isMain: true });
+      prisma.branch.create.mockResolvedValue({
+        id: 'new-branch-id',
+        isMain: true,
+      });
       prisma.warehouse.create.mockResolvedValue({ id: 'new-warehouse-id' });
       prisma.subscription.create.mockResolvedValue({
         id: 'new-sub-id',
@@ -131,20 +157,81 @@ describe('SuperAdminService', () => {
       });
       expect(prisma.branch.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ isMain: true, tenantId: 'new-company-id' }),
+          data: expect.objectContaining({
+            isMain: true,
+            tenantId: 'new-company-id',
+          }),
         }),
       );
       expect(prisma.warehouse.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ branchId: 'new-branch-id', tenantId: 'new-company-id' }),
+          data: expect.objectContaining({
+            branchId: 'new-branch-id',
+            tenantId: 'new-company-id',
+          }),
         }),
       );
       expect(prisma.subscription.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ plan: 'PROFESSIONAL', tenantId: 'new-company-id' }),
+          data: expect.objectContaining({
+            plan: 'PROFESSIONAL',
+            tenantId: 'new-company-id',
+          }),
         }),
       );
       expect(result.slug).toBe('yangi-korxona');
+      // A password chosen by the operator is never echoed back.
+      expect(result.generatedAdminPassword).toBeUndefined();
+    });
+
+    type MockDb = Record<string, Record<string, jest.Mock>>;
+    const db = () => prisma as MockDb;
+    const storedPasswordHash = (call = 0): string => {
+      const calls = db().user.create.mock.calls as [
+        { data: { passwordHash: string } },
+      ][];
+      return calls[call][0].data.passwordHash;
+    };
+
+    const mockSuccessfulCreate = () => {
+      db().company.findUnique.mockResolvedValue(null);
+      db().user.findFirst.mockResolvedValue(null);
+      db().role.findFirst.mockResolvedValue({ id: 'role-id' });
+      db().company.create.mockResolvedValue({
+        id: 'c1',
+        name: validDto.name,
+        slug: validDto.slug,
+        status: 'ACTIVE',
+        createdAt: new Date(),
+        trialEndsAt: null,
+      });
+      db().user.create.mockResolvedValue({ id: 'u1' });
+      db().branch.create.mockResolvedValue({ id: 'b1' });
+    };
+
+    it('never falls back to a shared default password; generates one and returns it once', async () => {
+      mockSuccessfulCreate();
+      const withoutPassword = { ...validDto, adminPassword: undefined };
+
+      const first = await service.createTenant(withoutPassword);
+      const second = await service.createTenant(withoutPassword);
+
+      const password = first.generatedAdminPassword ?? '';
+      expect(password.length).toBeGreaterThanOrEqual(16);
+      expect(password).not.toBe('Admin123!');
+      expect(second.generatedAdminPassword).not.toBe(password);
+      expect(await bcrypt.compare(password, storedPasswordHash())).toBe(true);
+      expect(await bcrypt.compare('Admin123!', storedPasswordHash())).toBe(
+        false,
+      );
+    });
+
+    it('hashes the operator-chosen password', async () => {
+      mockSuccessfulCreate();
+      await service.createTenant(validDto);
+      expect(await bcrypt.compare('Password123!', storedPasswordHash())).toBe(
+        true,
+      );
     });
   });
 
@@ -161,7 +248,10 @@ describe('SuperAdminService', () => {
     });
 
     it('should throw NotFoundException if company has no active users', async () => {
-      prisma.company.findUnique.mockResolvedValue({ id: 'comp-1', name: 'Test' });
+      prisma.company.findUnique.mockResolvedValue({
+        id: 'comp-1',
+        name: 'Test',
+      });
       prisma.user.findMany.mockResolvedValue([]);
 
       await expect(
@@ -212,6 +302,36 @@ describe('SuperAdminService', () => {
       expect(result.tokens.accessToken).toBeDefined();
       expect(result.user.email).toBe('admin@test.uz');
       expect((result as any).isImpersonated).toBe(true);
+    });
+  });
+
+  describe('backups', () => {
+    // Backups come from Neon (PITR, branch snapshots). The app must never
+    // claim it took one.
+    it.each(['uz', 'ru'] as const)(
+      'trigger answers 501 and never reports COMPLETED (%s)',
+      (locale) => {
+        let thrown: unknown;
+        let returned: unknown;
+        try {
+          returned = service.triggerBackup(locale);
+        } catch (err) {
+          thrown = err;
+        }
+
+        expect(returned).toBeUndefined();
+        expect(thrown).toBeInstanceOf(NotImplementedException);
+        const exception = thrown as NotImplementedException;
+        expect(exception.getStatus()).toBe(501);
+        expect(exception.message).toBe(BACKUPS_MANAGED_BY_NEON_MESSAGE[locale]);
+        expect(JSON.stringify(exception.getResponse())).not.toContain(
+          'COMPLETED',
+        );
+      },
+    );
+
+    it('history lists no backup files', () => {
+      expect(service.getBackupHistory()).toEqual([]);
     });
   });
 });

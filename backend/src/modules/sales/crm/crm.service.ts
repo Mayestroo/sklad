@@ -2,12 +2,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { CreateDealDto } from '../dto';
 import { DealStageSlug } from '@prisma/client';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class CrmService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createDeal(tenantId: string, dto: CreateDealDto) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      user: dto.assignedUserId,
+    });
     return this.prisma.deal.create({
       data: {
         tenantId,
@@ -67,7 +72,7 @@ export class CrmService {
     }
 
     return this.prisma.deal.update({
-      where: { id: dealId },
+      where: { tenantId, id: dealId },
       data: { stage },
       include: {
         counterparty: true,
@@ -95,14 +100,23 @@ export class CrmService {
       throw new NotFoundException('Deal not found');
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      user: dto.assignedUserId,
+    });
+
     return this.prisma.deal.update({
-      where: { id: dealId },
+      where: { tenantId, id: dealId },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.amount !== undefined && { amount: Number(dto.amount) }),
-        ...(dto.counterpartyId !== undefined && { counterpartyId: dto.counterpartyId }),
+        ...(dto.counterpartyId !== undefined && {
+          counterpartyId: dto.counterpartyId,
+        }),
         ...(dto.stage !== undefined && { stage: dto.stage }),
-        ...(dto.assignedUserId !== undefined && { assignedUserId: dto.assignedUserId }),
+        ...(dto.assignedUserId !== undefined && {
+          assignedUserId: dto.assignedUserId,
+        }),
       },
       include: {
         counterparty: true,
@@ -121,10 +135,9 @@ export class CrmService {
     }
 
     await this.prisma.deal.delete({
-      where: { id: dealId },
+      where: { tenantId, id: dealId },
     });
 
     return { success: true, message: 'Deal deleted successfully' };
   }
 }
-

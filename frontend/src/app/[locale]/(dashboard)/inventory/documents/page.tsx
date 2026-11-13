@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -13,32 +14,36 @@ import { Select } from '@/components/ui/Select';
 import {
   FileText,
   Plus,
-  ArrowRightLeft,
-  Package,
-  Building2,
-  AlertCircle,
   X,
   Printer,
-  CheckCircle2,
 } from 'lucide-react';
-import { InventoryDocument, Product } from '@shared/types';
+import { InventoryDocument, Product, Warehouse } from '@shared/types';
+
+/** Inventory documents have no currency: their prices are FIFO batch cost, kept in UZS. */
+const INVENTORY_COST_CURRENCY = 'UZS';
 
 export default function InventoryDocumentsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
 
-  const [documents, setDocuments] = useState<InventoryDocument[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const documentsQuery = useApiQuery<InventoryDocument[]>('/inventory/documents');
+  const productsQuery = useApiQuery<Product[]>('/inventory/products');
+  const warehousesQuery = useApiQuery<Warehouse[]>('/tenants/warehouses');
+  const pageQueries = [documentsQuery, productsQuery, warehousesQuery];
+  const documents = documentsQuery.data ?? [];
+  const products = productsQuery.data ?? [];
+  const warehouses = warehousesQuery.data ?? [];
+  const loading = pageQueries.some((q) => q.isPending);
+  const failedQuery = pageQueries.find((q) => q.isError);
 
   // Document Modal State
   const [showModal, setShowModal] = useState(false);
   const [docType, setDocType] = useState<'INBOUND' | 'OUTBOUND' | 'STOCKTAKING'>('INBOUND');
-  const [warehouseId, setWarehouseId] = useState('');
+  const [pickedWarehouseId, setWarehouseId] = useState('');
+  // The document form starts on the first warehouse until one is picked.
+  const warehouseId = pickedWarehouseId || warehouses[0]?.id || '';
   const [comment, setComment] = useState('');
 
   // Line Item Entry
@@ -53,32 +58,9 @@ export default function InventoryDocumentsPage() {
   // Print Preview
   const [printDoc, setPrintDoc] = useState<InventoryDocument | null>(null);
 
-  const fetchData = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-
-    try {
-      const [docs, prods, whs] = await Promise.all([
-        apiFetch<InventoryDocument[]>('/inventory/documents', { token, tenantId: company.id, locale }),
-        apiFetch<Product[]>('/inventory/products', { token, tenantId: company.id, locale }),
-        apiFetch<any[]>('/tenants/warehouses', { token, tenantId: company.id, locale }),
-      ]);
-      setDocuments(docs || []);
-      setProducts(prods || []);
-      setWarehouses(whs || []);
-      if (whs && whs.length > 0 && !warehouseId) {
-        setWarehouseId(whs[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to load inventory docs:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetchData = () => {
+    pageQueries.forEach((q) => void q.refetch());
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [token, company, locale]);
 
   const handleAddItem = () => {
     if (!selectedProductId || quantity <= 0) return;
@@ -133,8 +115,8 @@ export default function InventoryDocumentsPage() {
       setItems([]);
       setComment('');
       fetchData();
-    } catch (err: any) {
-      setCreateError(err.message || (isRu ? 'Ошибка создания документа' : 'Failed to post inventory document'));
+    } catch (err) {
+      setCreateError(errorMessage(err) || (isRu ? 'Ошибка создания документа' : 'Failed to post inventory document'));
     } finally {
       setCreateLoading(false);
     }
@@ -191,7 +173,13 @@ export default function InventoryDocumentsPage() {
 
       {/* Document History Table */}
       <Card>
-        {loading ? (
+        {failedQuery ? (
+          <LoadError
+            error={failedQuery.error}
+            onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+            retrying={pageQueries.some((q) => q.isFetching)}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>
@@ -222,13 +210,13 @@ export default function InventoryDocumentsPage() {
                     </td>
                     <td style={{ padding: '12px' }}>{getDocTypeBadge(doc.docType)}</td>
                     <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {(doc as any).warehouse?.name?.[locale] || (doc as any).warehouse?.name?.ru || (doc as any).warehouse?.name?.uz || 'Ombor'}
+                      {doc.warehouse?.name?.[locale] || doc.warehouse?.name?.ru || doc.warehouse?.name?.uz || 'Ombor'}
                     </td>
                     <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
                       {formatDate(doc.docDate, locale)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {formatCurrency(Number(doc.totalAmount), locale, (doc as any).currency || defaultCurrency)}
+                      {formatCurrency(Number(doc.totalAmount), locale, INVENTORY_COST_CURRENCY)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center' }}>
                       <Badge variant="success">{isRu ? 'Проведён' : 'O\'tkazilgan'}</Badge>
@@ -274,7 +262,7 @@ export default function InventoryDocumentsPage() {
                     { value: 'STOCKTAKING', label: isRu ? 'Инвентаризация (Корректировка)' : 'Inventarizatsiya (Tuzatish)' },
                   ]}
                   value={docType}
-                  onChange={(val) => setDocType(val as any)}
+                  onChange={(val) => setDocType(val as typeof docType)}
                 />
 
                 <Select
@@ -346,9 +334,9 @@ export default function InventoryDocumentsPage() {
                         <tr key={idx} style={{ borderTop: '1px solid var(--color-border-light)' }}>
                           <td style={{ padding: '8px' }}>{item.productName}</td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity}</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, defaultCurrency)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, INVENTORY_COST_CURRENCY)}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
-                            {formatCurrency(item.quantity * item.unitPrice, locale, defaultCurrency)}
+                            {formatCurrency(item.quantity * item.unitPrice, locale, INVENTORY_COST_CURRENCY)}
                           </td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             <button type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-600)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
@@ -405,11 +393,11 @@ export default function InventoryDocumentsPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)', fontSize: 'var(--text-xs)' }}>
               <div>
-                <strong>{isRu ? 'Организация:' : 'Tashkilot:'}</strong> {(company as any)?.name?.[locale] || (company as any)?.name?.ru || (company as any)?.name?.uz || 'Demo Company'}<br />
-                <strong>{isRu ? 'Склад:' : 'Omborxona:'}</strong> {(printDoc as any)?.warehouse?.name?.[locale] || (printDoc as any)?.warehouse?.name?.ru || (printDoc as any)?.warehouse?.name?.uz || 'Asosiy Ombor'}
+                <strong>{isRu ? 'Организация:' : 'Tashkilot:'}</strong> {getLocalizedName(company?.name, locale) === '—' ? 'Demo Company' : getLocalizedName(company?.name, locale)}<br />
+                <strong>{isRu ? 'Склад:' : 'Omborxona:'}</strong> {printDoc?.warehouse?.name?.[locale] || printDoc?.warehouse?.name?.ru || printDoc?.warehouse?.name?.uz || 'Asosiy Ombor'}
               </div>
               <div>
-                <strong>{isRu ? 'Составитель:' : 'Tuzuvchi:'}</strong> {(printDoc as any)?.createdBy?.firstName} {(printDoc as any)?.createdBy?.lastName}<br />
+                <strong>{isRu ? 'Составитель:' : 'Tuzuvchi:'}</strong> {printDoc?.createdBy?.firstName} {printDoc?.createdBy?.lastName}<br />
                 <strong>{isRu ? 'Статус:' : 'Holati:'}</strong> {isRu ? 'Проведён (POSTED)' : 'Tasdiqlangan / O\'tkazilgan (POSTED)'}
               </div>
             </div>
@@ -430,11 +418,11 @@ export default function InventoryDocumentsPage() {
                 {(printDoc.items || []).map((item, i) => (
                   <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '8px' }}>{i + 1}</td>
-                    <td style={{ padding: '8px', fontWeight: 'bold' }}>{(item.product as any)?.name?.[locale] || (item.product as any)?.name?.ru || (item.product as any)?.name?.uz}</td>
-                    <td style={{ padding: '8px' }}>{(item.product as any)?.sku}</td>
+                    <td style={{ padding: '8px', fontWeight: 'bold' }}>{item.product?.name?.[locale] || item.product?.name?.ru || item.product?.name?.uz}</td>
+                    <td style={{ padding: '8px' }}>{item.product?.sku}</td>
                     <td style={{ padding: '8px', textAlign: 'right' }}>{Number(item.quantity)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(Number(item.unitPrice), locale, (printDoc as any).currency || defaultCurrency)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(Number(item.totalPrice), locale, (printDoc as any).currency || defaultCurrency)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(Number(item.unitPrice), locale, INVENTORY_COST_CURRENCY)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(Number(item.totalPrice), locale, INVENTORY_COST_CURRENCY)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -443,7 +431,7 @@ export default function InventoryDocumentsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #000', paddingTop: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: '#666' }}>{isRu ? 'Подпись:' : 'Imzo:'} _________________________</div>
               <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}>
-                {isRu ? 'Итого:' : 'Jami:'} {formatCurrency(Number(printDoc.totalAmount), locale, (printDoc as any).currency || defaultCurrency)}
+                {isRu ? 'Итого:' : 'Jami:'} {formatCurrency(Number(printDoc.totalAmount), locale, INVENTORY_COST_CURRENCY)}
               </div>
             </div>
           </div>

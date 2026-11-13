@@ -4,18 +4,21 @@ import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { buildServiceActPayload } from '@/lib/service-act';
+import { CURRENCY_OPTIONS, formatCurrency, errorMessage } from '@/lib/utils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
+import type { ServiceActDetail } from '@/lib/service-act';
+import type { Counterparty, Product } from '@shared/types';
 
 interface ServiceActDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  initialData?: any;
+  initialData?: ServiceActDetail | null;
   defaultType?: 'PROVIDED' | 'RECEIVED';
 }
 
@@ -55,7 +58,8 @@ export function ServiceActDrawer({
   const [counterpartyId, setCounterpartyId] = useState('');
   const [actDate, setActDate] = useState(new Date().toISOString().split('T')[0]);
   const [currency, setCurrency] = useState(initialData?.currency || '');
-  const [exchangeRate, setExchangeRate] = useState(1.0);
+  // Empty until the user enters a rate: a foreign-currency act must never default to 1
+  const [exchangeRate, setExchangeRate] = useState<number | ''>('');
   const [externalNumber, setExternalNumber] = useState('');
   const [externalDate, setExternalDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -71,39 +75,31 @@ export function ServiceActDrawer({
     },
   ]);
 
-  const [counterparties, setCounterparties] = useState<any[]>([]);
-  const [servicesCatalog, setServicesCatalog] = useState<any[]>([]);
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+  const [servicesCatalog, setServicesCatalog] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    // Fetch counterparties
-    apiFetch<{ items: any[] }>('/sales/counterparties', {
+    // Both endpoints return plain arrays
+    apiFetch<Counterparty[]>('/sales/counterparties', {
       token: token || undefined,
       tenantId: company?.id,
       locale,
     })
-      .then((res) => {
-        if (res && res.items) {
-          setCounterparties(res.items);
-        }
-      })
-      .catch(() => {});
+      .then((res) => setCounterparties(res))
+      .catch((err: Error) => setError(err.message));
 
-    // Fetch catalog services (Product with type SERVICE)
-    apiFetch<{ items: any[] }>('/inventory/products?type=SERVICE&limit=100', {
+    // Catalog services (products of type SERVICE)
+    apiFetch<Product[]>('/inventory/products?type=SERVICE', {
       token: token || undefined,
       tenantId: company?.id,
       locale,
     })
-      .then((res) => {
-        if (res && res.items) {
-          setServicesCatalog(res.items);
-        }
-      })
-      .catch(() => {});
+      .then((res) => setServicesCatalog(res))
+      .catch((err: Error) => setError(err.message));
 
     // Reset or populate initial data
     if (initialData) {
@@ -115,7 +111,7 @@ export function ServiceActDrawer({
           : new Date().toISOString().split('T')[0],
       );
       setCurrency(initialData.currency || '');
-      setExchangeRate(Number(initialData.exchangeRate) || 1.0);
+      setExchangeRate(initialData.exchangeRate != null ? Number(initialData.exchangeRate) : '');
       setExternalNumber(initialData.externalNumber || '');
       setExternalDate(
         initialData.externalDate
@@ -126,7 +122,7 @@ export function ServiceActDrawer({
 
       if (initialData.items && initialData.items.length > 0) {
         setItems(
-          initialData.items.map((i: any) => ({
+          initialData.items.map((i) => ({
             productId: i.productId || undefined,
             serviceName: i.serviceName || '',
             description: i.description || '',
@@ -142,7 +138,7 @@ export function ServiceActDrawer({
       setCounterpartyId('');
       setActDate(new Date().toISOString().split('T')[0]);
       setCurrency('');
-      setExchangeRate(1.0);
+      setExchangeRate('');
       setExternalNumber('');
       setExternalDate('');
       setNotes('');
@@ -179,7 +175,7 @@ export function ServiceActDrawer({
     setItems(items.filter((_, i) => i !== idx));
   };
 
-  const handleItemChange = (idx: number, field: keyof FormItem, value: any) => {
+  const handleItemChange = (idx: number, field: keyof FormItem, value: FormItem[keyof FormItem]) => {
     const updated = [...items];
     updated[idx] = { ...updated[idx], [field]: value };
 
@@ -217,44 +213,19 @@ export function ServiceActDrawer({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!counterpartyId) {
-      setError(isRu ? 'Пожалуйста, выберите контрагента' : 'Iltimos, kontragentni tanlang');
+    const built = buildServiceActPayload(
+      { type, counterpartyId, actDate, currency, exchangeRate, externalNumber, externalDate, notes, items },
+      locale,
+    );
+    if (!built.ok) {
+      setError(built.error);
       return;
     }
-    if (!currency) {
-      setError(isRu ? 'Пожалуйста, выберите валюту' : 'Iltimos, valyutani tanlang');
-      return;
-    }
-
-    for (const it of items) {
-      if (!it.serviceName.trim()) {
-        setError(isRu ? 'Наименование услуги обязательно для всех строк' : 'Barcha qatorlarda xizmat nomi kiritilishi shart');
-        return;
-      }
-    }
+    const payload = built.payload;
 
     setLoading(true);
     setError(null);
 
-    const payload = {
-      type,
-      counterpartyId,
-      actDate,
-      currency,
-      exchangeRate: Number(exchangeRate) || 1.0,
-      externalNumber: externalNumber.trim() || undefined,
-      externalDate: externalDate || undefined,
-      notes: notes.trim() || undefined,
-      items: items.map((it) => ({
-        productId: it.productId || undefined,
-        serviceName: it.serviceName.trim(),
-        description: it.description?.trim() || undefined,
-        unit: it.unit || 'piece',
-        quantity: Number(it.quantity) || 1,
-        unitPrice: Number(it.unitPrice) || 0,
-        vatRate: Number(it.vatRate) || 0,
-      })),
-    };
 
     try {
       if (initialData?.id) {
@@ -276,8 +247,8 @@ export function ServiceActDrawer({
       }
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Xatolik yuz berdi');
+    } catch (err) {
+      setError(errorMessage(err) || 'Xatolik yuz berdi');
     } finally {
       setLoading(false);
     }
@@ -410,7 +381,7 @@ export function ServiceActDrawer({
                 step="0.0001"
                 min="0.0001"
                 value={exchangeRate}
-                onChange={(e) => setExchangeRate(Number(e.target.value))}
+                onChange={(e) => setExchangeRate(e.target.value === '' ? '' : Number(e.target.value))}
               />
             </div>
           )}

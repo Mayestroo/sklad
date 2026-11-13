@@ -12,8 +12,8 @@ export function useDefaultCurrency(): string {
   const { company } = useAuth();
   return (
     company?.settings?.sales?.defaultCurrency ||
-    (company?.settings as any)?.accounting?.defaultCurrency ||
-    (company?.settings as any)?.currency ||
+    (company?.settings?.accounting as { defaultCurrency?: string } | undefined)?.defaultCurrency ||
+    (company?.settings as { currency?: string } | null | undefined)?.currency ||
     'USD'
   );
 }

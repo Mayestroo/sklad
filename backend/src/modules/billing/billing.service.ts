@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { PrismaService } from '../../common/prisma';
 import { PricingPlan } from '../../../../shared/types';
 
@@ -147,7 +148,13 @@ export class BillingService {
       throw new BadRequestException('Invalid subscription plan');
     }
 
-    const paymentNumber = `BILL-${Date.now().toString().slice(-6)}`;
+    const provider = providerConfig(method);
+
+    const paymentNumber = await nextDocumentNumber(
+      this.prisma,
+      tenantId,
+      'SUBSCRIPTION_PAYMENT',
+    );
     const amount = selectedPlan.priceMonthly;
 
     // Create Subscription record
@@ -181,14 +188,11 @@ export class BillingService {
 
     // Generate Click / Payme checkout payload
     let checkoutUrl = '';
-    const merchantId = process.env.CLICK_MERCHANT_ID || '12345';
-    const serviceId = process.env.CLICK_SERVICE_ID || '67890';
-
     if (method === 'CLICK') {
-      checkoutUrl = `https://my.click.uz/services/pay?service_id=${serviceId}&merchant_id=${merchantId}&amount=${amount}&transaction_param=${payment.id}`;
+      checkoutUrl = `https://my.click.uz/services/pay?service_id=${provider.CLICK_SERVICE_ID}&merchant_id=${provider.CLICK_MERCHANT_ID}&amount=${amount}&transaction_param=${payment.id}`;
     } else if (method === 'PAYME') {
       const base64Data = Buffer.from(
-        `m=${process.env.PAYME_MERCHANT_ID || 'test_merchant'};ac.payment_id=${payment.id};a=${amount * 100}`,
+        `m=${provider.PAYME_MERCHANT_ID};ac.payment_id=${payment.id};a=${amount * 100}`,
       ).toString('base64');
       checkoutUrl = `https://checkout.paycom.uz/${base64Data}`;
     } else {
@@ -210,48 +214,29 @@ export class BillingService {
       orderBy: { createdAt: 'desc' },
     });
   }
+}
 
-  async processWebhook(provider: 'CLICK' | 'PAYME', payload: any) {
-    const paymentId = payload.paymentId || payload.transaction_param;
-    if (!paymentId) {
-      return { status: 'error', message: 'Missing payment identifier' };
-    }
+const PROVIDER_ENV = {
+  CLICK: ['CLICK_MERCHANT_ID', 'CLICK_SERVICE_ID'],
+  PAYME: ['PAYME_MERCHANT_ID'],
+  BANK_TRANSFER: [],
+} as const;
 
-    const payment = await this.prisma.subscriptionPayment.findUnique({
-      where: { id: paymentId },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Subscription payment not found');
-    }
-
-    // Update payment & subscription to ACTIVE
-    await this.prisma.subscriptionPayment.update({
-      where: { id: paymentId },
-      data: {
-        status: 'PAID',
-        paidAt: new Date(),
-        transactionId:
-          payload.trans_id || payload.payme_trans_id || `TX-${Date.now()}`,
-      },
-    });
-
-    if (payment.subscriptionId) {
-      await this.prisma.subscription.update({
-        where: { id: payment.subscriptionId },
-        data: {
-          status: 'ACTIVE',
-        },
-      });
-    }
-
-    await this.prisma.company.update({
-      where: { id: payment.tenantId },
-      data: {
-        status: 'ACTIVE',
-      },
-    });
-
-    return { status: 'success', paymentId, activated: true };
+/** The provider's merchant ids; a checkout for an unconfigured provider is refused. */
+function providerConfig(
+  method: keyof typeof PROVIDER_ENV,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const key of PROVIDER_ENV[method]) {
+    const value = process.env[key]?.trim();
+    if (value) out[key] = value;
+    else missing.push(key);
   }
+  if (missing.length > 0) {
+    throw new BadRequestException(
+      `${method} payments are not configured on this server (${missing.join(', ')})`,
+    );
+  }
+  return out;
 }

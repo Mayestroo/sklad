@@ -4,7 +4,10 @@ import { ReconciliationService } from './reconciliation.service';
 describe('ReconciliationService', () => {
   let service: ReconciliationService;
   let prisma: any;
-  let settlementService: { recordMovement: jest.Mock; rebuildBalances: jest.Mock };
+  let settlementService: {
+    recordMovement: jest.Mock;
+    rebuildBalances: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -18,7 +21,9 @@ describe('ReconciliationService', () => {
       serviceAct: { findMany: jest.fn().mockResolvedValue([]) },
       financeTransaction: { findMany: jest.fn().mockResolvedValue([]) },
       payment: { findMany: jest.fn().mockResolvedValue([]) },
-      counterpartySettlementEntry: { findMany: jest.fn().mockResolvedValue([]) },
+      counterpartySettlementEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       settlementAllocation: {
         findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -169,8 +174,12 @@ describe('ReconciliationService', () => {
       },
     ]);
 
-    const result = await service.reconcileCounterpartyLedger('tenant-1', { apply: false });
-    const movementById = new Map(result.plannedEntries.map((entry) => [entry.sourceDocId, entry]));
+    const result = await service.reconcileCounterpartyLedger('tenant-1', {
+      apply: false,
+    });
+    const movementById = new Map(
+      result.plannedEntries.map((entry) => [entry.sourceDocId, entry]),
+    );
 
     expect(movementById.get('opening-customer-debt')).toMatchObject({
       side: CounterpartySettlementSide.CUSTOMER,
@@ -184,21 +193,29 @@ describe('ReconciliationService', () => {
     });
     expect(movementById.get('invoice-1')?.amount).toBe(200);
     expect(movementById.get('sales-return-1')?.amount).toBe(-10);
-    expect(movementById.get('receipt-1')?.side).toBe(CounterpartySettlementSide.SUPPLIER);
+    expect(movementById.get('receipt-1')?.side).toBe(
+      CounterpartySettlementSide.SUPPLIER,
+    );
     expect(movementById.get('purchase-return-1')?.amount).toBe(-30);
     expect(movementById.get('expense-unpaid')?.amount).toBe(44);
     expect(movementById.has('expense-paid')).toBe(false);
-    expect(movementById.get('service-customer')?.side).toBe(CounterpartySettlementSide.CUSTOMER);
-    expect(movementById.get('service-supplier')?.side).toBe(CounterpartySettlementSide.SUPPLIER);
+    expect(movementById.get('service-customer')?.side).toBe(
+      CounterpartySettlementSide.CUSTOMER,
+    );
+    expect(movementById.get('service-supplier')?.side).toBe(
+      CounterpartySettlementSide.SUPPLIER,
+    );
     expect(movementById.get('payment-tx')).toMatchObject({
       sourceDocType: 'FinanceTransaction',
       amount: -25,
       side: CounterpartySettlementSide.CUSTOMER,
     });
-    expect(result.exceptions).toContainEqual(expect.objectContaining({
-      sourceType: 'FinanceTransaction',
-      sourceId: 'ambiguous-finance-tx',
-    }));
+    expect(result.exceptions).toContainEqual(
+      expect.objectContaining({
+        sourceType: 'FinanceTransaction',
+        sourceId: 'ambiguous-finance-tx',
+      }),
+    );
     expect(result.entriesCreated).toBe(0);
     expect(settlementService.recordMovement).not.toHaveBeenCalled();
     expect(prisma.settlementAllocation.createMany).not.toHaveBeenCalled();
@@ -242,9 +259,13 @@ describe('ReconciliationService', () => {
       },
     ]);
 
-    const result = await service.reconcileCounterpartyLedger('tenant-1', { apply: false });
+    const result = await service.reconcileCounterpartyLedger('tenant-1', {
+      apply: false,
+    });
 
-    const paymentMovements = result.plannedEntries.filter((entry) => entry.sourceDocType === 'FinanceTransaction');
+    const paymentMovements = result.plannedEntries.filter(
+      (entry) => entry.sourceDocType === 'FinanceTransaction',
+    );
     expect(paymentMovements).toHaveLength(1);
     expect(paymentMovements[0]).toMatchObject({
       sourceDocType: 'FinanceTransaction',
@@ -277,13 +298,23 @@ describe('ReconciliationService', () => {
       { id: 'cp-orphan', debtBalance: 500, customerDebt: 500, supplierDebt: 0 },
     ]);
 
-    const result = await service.reconcileCounterpartyLedger('tenant-1', { apply: true });
+    const result = await service.reconcileCounterpartyLedger('tenant-1', {
+      apply: true,
+    });
 
     expect(result.plannedEntries).toHaveLength(0);
-    expect(result.exceptions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceType: 'SalesInvoice', sourceId: 'invoice-eur' }),
-      expect.objectContaining({ sourceType: 'Counterparty', sourceId: 'cp-orphan' }),
-    ]));
+    expect(result.exceptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: 'SalesInvoice',
+          sourceId: 'invoice-eur',
+        }),
+        expect.objectContaining({
+          sourceType: 'Counterparty',
+          sourceId: 'cp-orphan',
+        }),
+      ]),
+    );
     expect(settlementService.recordMovement).not.toHaveBeenCalled();
     expect(settlementService.rebuildBalances).not.toHaveBeenCalled();
   });
@@ -300,12 +331,16 @@ describe('ReconciliationService', () => {
       },
     ]);
 
-    const result = await service.reconcileCounterpartyLedger('tenant-1', { apply: true });
+    const result = await service.reconcileCounterpartyLedger('tenant-1', {
+      apply: true,
+    });
 
-    expect(result.exceptions).toContainEqual(expect.objectContaining({
-      sourceType: 'SALES_INVOICE',
-      sourceId: 'invoice-unexplained-paid',
-    }));
+    expect(result.exceptions).toContainEqual(
+      expect.objectContaining({
+        sourceType: 'SALES_INVOICE',
+        sourceId: 'invoice-unexplained-paid',
+      }),
+    );
     expect(result.entriesCreated).toBe(0);
     expect(settlementService.recordMovement).not.toHaveBeenCalled();
     expect(settlementService.rebuildBalances).not.toHaveBeenCalled();
@@ -336,23 +371,35 @@ describe('ReconciliationService', () => {
       },
     ]);
     settlementService.rebuildBalances.mockResolvedValue([
-      { counterpartyId: 'cp-1', currency: 'USD', customerDebt: 200, supplierDebt: 0 },
+      {
+        counterpartyId: 'cp-1',
+        currency: 'USD',
+        customerDebt: 200,
+        supplierDebt: 0,
+      },
     ]);
 
-    const result = await service.reconcileCounterpartyLedger('tenant-1', { apply: true });
+    const result = await service.reconcileCounterpartyLedger('tenant-1', {
+      apply: true,
+    });
 
     expect(settlementService.recordMovement).toHaveBeenCalledTimes(2);
     expect(prisma.settlementAllocation.createMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({
-        tenantId: 'tenant-1',
-        financeTransactionId: 'finance-1',
-        targetType: 'SALES_INVOICE',
-        targetId: 'invoice-1',
-        amount: 100,
-      })],
+      data: [
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          financeTransactionId: 'finance-1',
+          targetType: 'SALES_INVOICE',
+          targetId: 'invoice-1',
+          amount: 100,
+        }),
+      ],
       skipDuplicates: true,
     });
-    expect(settlementService.rebuildBalances).toHaveBeenCalledWith(prisma, 'tenant-1');
+    expect(settlementService.rebuildBalances).toHaveBeenCalledWith(
+      prisma,
+      'tenant-1',
+    );
     expect(result.entriesCreated).toBe(2);
     expect(result.allocationsCreated).toBe(1);
     expect(result.balanceRowsRebuilt).toBe(1);

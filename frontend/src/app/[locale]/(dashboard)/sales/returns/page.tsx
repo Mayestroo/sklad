@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { salesReturnHeaderFromInvoice } from '@/lib/sales-return';
+import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -20,14 +21,12 @@ import {
   AlertTriangle,
   Barcode,
   CheckCircle2,
-  ExternalLink,
   Eye,
   ShieldCheck,
   XCircle,
   Search,
   Filter,
   PackageCheck,
-  AlertCircle,
 } from 'lucide-react';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
@@ -40,8 +39,8 @@ interface SalesReturnRow {
   warehouseId: string;
   defectWarehouseId?: string;
   counterparty?: { id: string; name: string };
-  warehouse?: { id: string; name: any };
-  defectWarehouse?: { id: string; name: any };
+  warehouse?: { id: string; name: LocalizedName };
+  defectWarehouse?: { id: string; name: LocalizedName };
   invoice?: { id: string; invoiceNumber: string; totalAmount: number };
   totalAmount: number;
   totalCogs: number;
@@ -56,7 +55,7 @@ interface SalesReturnRow {
     totalPrice: number;
     unitCogs?: number;
     isDefective?: boolean;
-    product?: { name: any; sku: string; barcode?: string };
+    product?: { name: LocalizedName; sku: string; barcode?: string };
   }>;
   createdBy?: { id: string; firstName: string; lastName: string };
 }
@@ -68,7 +67,7 @@ interface CounterpartyItem {
 
 interface WarehouseItem {
   id: string;
-  name: any;
+  name: LocalizedName;
   isDefect?: boolean;
 }
 
@@ -76,13 +75,14 @@ interface InvoiceItem {
   id: string;
   invoiceNumber: string;
   counterpartyId: string;
+  warehouseId: string;
   totalAmount: number;
   currency: string;
 }
 
 interface ReturnableItemRow {
   productId: string;
-  productName: any;
+  productName: LocalizedName;
   sku?: string;
   barcode?: string;
   unit?: string;
@@ -114,10 +114,11 @@ export default function SalesReturnsPage() {
   // Create Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [counterpartyId, setCounterpartyId] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
   const [defectWarehouseId, setDefectWarehouseId] = useState('');
   const [invoiceId, setInvoiceId] = useState('');
-  const activeReturnCurrency = invoices.find((inv) => inv.id === invoiceId)?.currency || defaultCurrency;
+  // A return is booked in the invoice's own warehouse and currency
+  const selectedInvoice = invoices.find((inv) => inv.id === invoiceId);
+  const activeReturnCurrency = selectedInvoice?.currency || defaultCurrency;
   const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState('');
   const [items, setItems] = useState<ReturnableItemRow[]>([]);
@@ -155,14 +156,14 @@ export default function SalesReturnsPage() {
       });
       setDeleteConfirmReturn(null);
       fetchReturns();
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  const getLocalizedName = (name: any) => {
+  const getLocalizedName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -205,7 +206,6 @@ export default function SalesReturnsPage() {
       .then((res) => {
         const list = res || [];
         setWarehouses(list);
-        if (list.length > 0 && !warehouseId) setWarehouseId(list[0].id);
         const defWh = list.find((w) => w.isDefect || (typeof w.name === 'string' && w.name.toLowerCase().includes('brak')));
         if (defWh) setDefectWarehouseId(defWh.id);
         else if (list.length > 1) setDefectWarehouseId(list[1].id);
@@ -230,7 +230,7 @@ export default function SalesReturnsPage() {
 
     setLoadingItems(true);
     setFormError(null);
-    apiFetch<any[]>(`/sales/invoices/${invoiceId}/returnable-items`, {
+    apiFetch<Omit<ReturnableItemRow, 'quantity' | 'isDefective'>[]>(`/sales/invoices/${invoiceId}/returnable-items`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
@@ -238,7 +238,7 @@ export default function SalesReturnsPage() {
       .then((res) => {
         if (res && res.length > 0) {
           setItems(
-            res.map((i: any) => ({
+            res.map((i) => ({
               productId: i.productId,
               productName: i.productName,
               sku: i.sku,
@@ -329,8 +329,7 @@ export default function SalesReturnsPage() {
   const handleSubmit = async (submitStatus: 'DRAFT' | 'POSTED') => {
     if (!token || !company) return;
     if (!counterpartyId) { setFormError(isRu ? 'Выберите клиента' : 'Mijozni tanlang'); return; }
-    if (!warehouseId) { setFormError(isRu ? 'Выберите склад' : 'Ombor tanlang'); return; }
-    if (!invoiceId) { setFormError(isRu ? 'Выберите исходную продажу' : 'Asl sotuv fakturasini tanlang'); return; }
+    if (!selectedInvoice) { setFormError(isRu ? 'Выберите исходную продажу' : 'Asl sotuv fakturasini tanlang'); return; }
 
     const activeItems = items.filter((i) => i.quantity > 0);
     if (activeItems.length === 0) {
@@ -348,14 +347,11 @@ export default function SalesReturnsPage() {
         tenantId: company.id,
         locale,
         body: JSON.stringify({
-          counterpartyId,
-          warehouseId,
+          ...salesReturnHeaderFromInvoice(selectedInvoice),
           defectWarehouseId: hasDefectiveItems ? defectWarehouseId : undefined,
-          invoiceId,
           returnDate,
           reason: reason || undefined,
           status: submitStatus,
-          currency: 'UZS',
           items: activeItems.map((i) => ({
             productId: i.productId,
             quantity: Number(i.quantity),
@@ -370,8 +366,8 @@ export default function SalesReturnsPage() {
       setReason('');
       setInvoiceId('');
       fetchReturns();
-    } catch (err: any) {
-      setFormError(err?.message || (isRu ? 'Произошла ошибка при создании' : 'Qaytarishni yaratishda xatolik yuz berdi'));
+    } catch (err) {
+      setFormError(errorMessage(err) || (isRu ? 'Произошла ошибка при создании' : 'Qaytarishni yaratishda xatolik yuz berdi'));
     } finally {
       setFormLoading(false);
     }
@@ -390,8 +386,8 @@ export default function SalesReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно подтвержден' : 'Qaytarish muvaffaqiyatli tasdiqlandi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при подтверждении' : 'Tasdiqlashda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при подтверждении' : 'Tasdiqlashda xatolik yuz berdi'));
     } finally {
       setActionLoadingId(null);
     }
@@ -422,8 +418,8 @@ export default function SalesReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi'));
     } finally {
       setActionLoadingId(null);
     }
@@ -725,7 +721,7 @@ export default function SalesReturnsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
             <Select id="ret-counterparty" label={isRu ? 'Клиент *' : 'Mijoz *'} value={counterpartyId} onChange={handleCounterpartyChange} options={cpOptions} />
             <Select id="ret-invoice" label={isRu ? 'Исходная продажа *' : 'Asl sotuv hujjati *'} value={invoiceId} onChange={(val) => setInvoiceId(val)} options={invoiceOptions} />
-            <Select id="ret-warehouse" label={isRu ? 'Основной склад *' : 'Asosiy ombor *'} value={warehouseId} onChange={(val) => setWarehouseId(val)} options={whOptions} />
+            <Select id="ret-warehouse" label={isRu ? 'Склад (из продажи)' : 'Ombor (sotuvdagi)'} value={selectedInvoice?.warehouseId ?? ''} onChange={() => {}} options={whOptions} disabled />
             {hasDefectiveItems && (
               <Select id="ret-defect-warehouse" label={isRu ? 'Склад брака *' : 'Brak ombori *'} value={defectWarehouseId} onChange={(val) => setDefectWarehouseId(val)} options={whOptions} />
             )}

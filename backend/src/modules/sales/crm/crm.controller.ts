@@ -15,7 +15,7 @@ import { TenantGuard } from '../../../common/guards/tenant.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
-import { DealStageSlug } from '@prisma/client';
+import { UpdateDealDto, UpdateDealStageDto } from './dto/update-deal.dto';
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/sales/deals')
@@ -39,9 +39,9 @@ export class CrmController {
   updateStage(
     @CurrentTenant() tenantId: string,
     @Param('id') dealId: string,
-    @Body('stage') stage: DealStageSlug,
+    @Body() body: UpdateDealStageDto,
   ) {
-    return this.crmService.updateDealStage(tenantId, dealId, stage);
+    return this.crmService.updateDealStage(tenantId, dealId, body.stage);
   }
 
   @Patch(':id')
@@ -49,25 +49,14 @@ export class CrmController {
   update(
     @CurrentTenant() tenantId: string,
     @Param('id') dealId: string,
-    @Body()
-    dto: {
-      title?: string;
-      amount?: number;
-      counterpartyId?: string;
-      stage?: DealStageSlug;
-      assignedUserId?: string | null;
-    },
+    @Body() dto: UpdateDealDto,
   ) {
     return this.crmService.updateDeal(tenantId, dealId, dto);
   }
 
   @Delete(':id')
   @RequirePermissions('sales:delete')
-  delete(
-    @CurrentTenant() tenantId: string,
-    @Param('id') dealId: string,
-  ) {
+  delete(@CurrentTenant() tenantId: string, @Param('id') dealId: string) {
     return this.crmService.deleteDeal(tenantId, dealId);
   }
 }
-

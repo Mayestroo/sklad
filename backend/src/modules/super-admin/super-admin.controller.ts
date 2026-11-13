@@ -6,9 +6,16 @@ import {
   Param,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
-import { SuperAdminService, CreateTenantDto } from './super-admin.service';
+import { SuperAdminService } from './super-admin.service';
+import {
+  CreateAnnouncementDto,
+  CreateTenantDto,
+  ReplyTicketDto,
+  UpdateTenantDto,
+} from './dto/super-admin.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -34,14 +41,7 @@ export class SuperAdminController {
   }
 
   @Put('tenants/:id')
-  updateTenant(
-    @Param('id') id: string,
-    @Body()
-    body: {
-      status?: 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'BLOCKED';
-      plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
-    },
-  ) {
+  updateTenant(@Param('id') id: string, @Body() body: UpdateTenantDto) {
     return this.superAdminService.updateTenant(id, body.status, body.plan);
   }
 
@@ -59,13 +59,7 @@ export class SuperAdminController {
   }
 
   @Post('announcements')
-  createAnnouncement(
-    @Body()
-    body: {
-      title: { uz: string; ru: string };
-      message: { uz: string; ru: string };
-    },
-  ) {
+  createAnnouncement(@Body() body: CreateAnnouncementDto) {
     return this.superAdminService.createAnnouncement(body.title, body.message);
   }
 
@@ -75,13 +69,13 @@ export class SuperAdminController {
   }
 
   @Post('tickets/:id/reply')
-  replyTicket(@Param('id') id: string, @Body() body: { message: string }) {
+  replyTicket(@Param('id') id: string, @Body() body: ReplyTicketDto) {
     return this.superAdminService.replyTicket(id, body.message);
   }
 
   @Post('backups/trigger')
-  triggerBackup() {
-    return this.superAdminService.triggerBackup();
+  triggerBackup(@Req() req: { locale?: string }) {
+    return this.superAdminService.triggerBackup(req.locale ?? 'uz');
   }
 
   @Get('backups/history')

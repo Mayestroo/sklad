@@ -18,6 +18,15 @@ export interface TenantCompanySummary {
   trialEndsAt: string | null;
 }
 
+/** Result of creating a tenant. */
+export interface CreatedTenantSummary extends TenantCompanySummary {
+  /**
+   * Present only when the operator left the admin password empty: the
+   * generated password, returned exactly once and never stored in plain text.
+   */
+  generatedAdminPassword?: string;
+}
+
 export interface SystemAnnouncement {
   id: string;
   title: TranslatableField;
@@ -45,6 +54,15 @@ export interface SupportTicket {
   createdAt: string;
   messages?: TicketMessage[];
 }
+
+/**
+ * The application does not take database backups. The database runs on Neon,
+ * whose point-in-time restore and branch snapshots are the backup mechanism.
+ */
+export const BACKUPS_MANAGED_BY_NEON_MESSAGE = {
+  uz: "Ma'lumotlar bazasi zaxirasi ilova tomonidan olinmaydi. Zaxiralash Neon platformasida: vaqt nuqtasiga tiklash (point-in-time restore) va branch snapshotlari orqali amalga oshiriladi.",
+  ru: 'Приложение не создаёт резервные копии базы данных. Резервное копирование выполняется в Neon: восстановление на момент времени (point-in-time restore) и снапшоты веток (branch snapshots).',
+} as const;
 
 export interface BackupMetadata {
   filename: string;

@@ -44,13 +44,17 @@ describe('SuperAdminGuard', () => {
     });
 
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
-    expect(() => guard.canActivate(context)).toThrow('Superadmin privileges required');
+    expect(() => guard.canActivate(context)).toThrow(
+      'Superadmin privileges required',
+    );
   });
 
   it('should throw ForbiddenException when user context is missing', () => {
     const context = createMockContext(undefined);
 
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
-    expect(() => guard.canActivate(context)).toThrow('User authentication context missing');
+    expect(() => guard.canActivate(context)).toThrow(
+      'User authentication context missing',
+    );
   });
 });

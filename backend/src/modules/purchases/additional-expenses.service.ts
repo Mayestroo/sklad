@@ -18,9 +18,12 @@ import {
   CounterpartySettlementSide,
 } from '@prisma/client';
 
-import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
-import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
 import {
@@ -28,6 +31,27 @@ import {
   ledgerAccountCodeForCashAccount,
 } from '../../../../shared/types/cash-account-policy';
 import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
+import { JournalService } from '../accounting/journal/journal.service';
+import type { JournalLineDto } from '../accounting/dto';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { formatMoney } from '../../../../shared/format/money';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+
+/** A posted sales invoice whose COGS a posted expense changed retroactively. */
+export interface RetroactiveSalesImpact {
+  invoiceId: string;
+  invoiceNumber: string | undefined;
+  invoiceDate: Date | undefined;
+  customerName: string | undefined;
+  totalDeltaCogs: number;
+  items: {
+    productId: string;
+    productName: Prisma.JsonValue | undefined;
+    quantity: number;
+    unitDelta: number;
+    cogsDelta: number;
+  }[];
+}
 
 @Injectable()
 export class AdditionalExpensesService {
@@ -35,16 +59,13 @@ export class AdditionalExpensesService {
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly accountsService: AccountsService,
+    private readonly journalService: JournalService,
   ) {}
 
   // ─── DOCUMENT NUMBER GENERATOR ──────────────────────────────
 
   private async generateDocNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('EXP', (prefix) =>
-      this.prisma.additionalExpense.count({
-        where: { tenantId, docNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'ADDITIONAL_EXPENSE');
   }
 
   // ─── ALLOCATION CALCULATION ENGINE ──────────────────────────
@@ -86,10 +107,10 @@ export class AdditionalExpensesService {
     const totalAmount = Number(dto.amount);
 
     return ExpenseAllocationEngine.allocateExpense(
-      targetItems as any,
+      targetItems,
       totalAmount,
       allocationMethod,
-      receipt.batches as any,
+      receipt.batches,
     );
   }
 
@@ -100,7 +121,7 @@ export class AdditionalExpensesService {
     userId: string,
     dto: CreateAdditionalExpenseDto,
   ) {
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -120,11 +141,20 @@ export class AdditionalExpensesService {
       exchangeRate = Number(dto.exchangeRate);
     }
 
-    if (dto.amount == null || isNaN(Number(dto.amount)) || Number(dto.amount) <= 0) {
+    if (
+      dto.amount == null ||
+      isNaN(Number(dto.amount)) ||
+      Number(dto.amount) <= 0
+    ) {
       throw new BadRequestException(
         "Xarajat summasi (amount) 0 dan katta bo'lishi shart",
       );
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      cashAccount: dto.cashAccountId,
+    });
 
     const docNumber = await this.generateDocNumber(tenantId);
     const allocation = await this.calculateAllocationPreview(tenantId, {
@@ -225,8 +255,14 @@ export class AdditionalExpensesService {
       );
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      cashAccount: dto.cashAccountId,
+    });
+
     const receiptId = dto.receiptId || existing.receiptId;
-    const amount = dto.amount !== undefined ? Number(dto.amount) : Number(existing.amount);
+    const amount =
+      dto.amount !== undefined ? Number(dto.amount) : Number(existing.amount);
     if (amount <= 0 || isNaN(amount)) {
       throw new BadRequestException(
         "Xarajat summasi (amount) 0 dan katta bo'lishi shart",
@@ -234,7 +270,7 @@ export class AdditionalExpensesService {
     }
 
     const targetCurrency = dto.currency || existing.currency;
-    if (!SUPPORTED_CURRENCIES.includes(targetCurrency as any)) {
+    if (!isSupportedCurrency(targetCurrency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -243,7 +279,9 @@ export class AdditionalExpensesService {
     let exchangeRate = Number(existing.exchangeRate);
     if (targetCurrency !== 'UZS') {
       const rateToCheck =
-        dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : exchangeRate;
+        dto.exchangeRate !== undefined
+          ? Number(dto.exchangeRate)
+          : exchangeRate;
       if (isNaN(rateToCheck) || rateToCheck <= 0) {
         throw new BadRequestException(
           "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
@@ -254,8 +292,7 @@ export class AdditionalExpensesService {
       exchangeRate = 1;
     }
 
-    const allocationMethod =
-      dto.allocationMethod || existing.allocationMethod;
+    const allocationMethod = dto.allocationMethod || existing.allocationMethod;
 
     const allocation = await this.calculateAllocationPreview(tenantId, {
       receiptId,
@@ -266,16 +303,15 @@ export class AdditionalExpensesService {
 
     const vatRate =
       dto.vatRate !== undefined ? dto.vatRate : Number(existing.vatRate);
-    const vatAmount =
-      vatRate > 0 ? (amount * vatRate) / (100 + vatRate) : 0;
+    const vatAmount = vatRate > 0 ? (amount * vatRate) / (100 + vatRate) : 0;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.additionalExpenseItem.deleteMany({
-        where: { expenseId: id },
+        where: { expense: { tenantId }, expenseId: id },
       });
 
       const updated = await tx.additionalExpense.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           docDate: dto.docDate ? new Date(dto.docDate) : existing.docDate,
           expenseType: dto.expenseType || existing.expenseType,
@@ -349,10 +385,10 @@ export class AdditionalExpensesService {
     }
 
     await this.prisma.additionalExpenseItem.deleteMany({
-      where: { expenseId: id },
+      where: { expense: { tenantId }, expenseId: id },
     });
 
-    await this.prisma.additionalExpense.delete({ where: { id } });
+    await this.prisma.additionalExpense.delete({ where: { tenantId, id } });
 
     return {
       success: true,
@@ -459,7 +495,7 @@ export class AdditionalExpensesService {
         totalCustoms,
         totalBroker,
         totalAll,
-        currency: allPosted[0]?.currency || (items[0] as any)?.currency || 'USD',
+        currency: allPosted[0]?.currency || items[0]?.currency || 'USD',
       },
     };
   }
@@ -493,7 +529,7 @@ export class AdditionalExpensesService {
     }
 
     // Query retroactive sales impact if posted
-    let retroactiveSalesImpact: any[] = [];
+    let retroactiveSalesImpact: RetroactiveSalesImpact[] = [];
     if (expense.status === PurchaseDocStatus.POSTED) {
       const productIds = expense.items.map((i) => i.productId);
       const batches = await this.prisma.productBatch.findMany({
@@ -518,7 +554,7 @@ export class AdditionalExpensesService {
         },
       });
 
-      const impactMap = new Map<string, any>();
+      const impactMap = new Map<string, RetroactiveSalesImpact>();
       for (const batch of batches) {
         const itemExpense = expense.items.find(
           (i) => i.productId === batch.productId,
@@ -537,7 +573,8 @@ export class AdditionalExpensesService {
           const consumedQty = Number(c.quantity);
           const cogsDelta = consumedQty * unitExpense;
 
-          if (!impactMap.has(key)) {
+          const existing = impactMap.get(key);
+          if (!existing) {
             impactMap.set(key, {
               invoiceId: invItem.invoiceId,
               invoiceNumber: invItem.invoice?.invoiceNumber,
@@ -555,7 +592,6 @@ export class AdditionalExpensesService {
               ],
             });
           } else {
-            const existing = impactMap.get(key);
             existing.totalDeltaCogs += cogsDelta;
             existing.items.push({
               productId: invItem.productId,
@@ -600,7 +636,9 @@ export class AdditionalExpensesService {
     }
     const paidCashAccountId = expense.cashAccountId;
     if (expense.isPaid && !paidCashAccountId) {
-      throw new BadRequestException('To‘langan qo‘shimcha xarajat uchun kassa yoki bank hisobini tanlang');
+      throw new BadRequestException(
+        'To‘langan qo‘shimcha xarajat uchun kassa yoki bank hisobini tanlang',
+      );
     }
 
     await this.accountsService.ensureDefaultAccounts(tenantId);
@@ -614,12 +652,12 @@ export class AdditionalExpensesService {
     const capitalizedTotal = totalAmount * capitalizationRate;
 
     return this.prisma.$transaction(async (tx) => {
-      let totalStockAdjustment = 0;
       let totalCogsAdjustment = 0;
 
       // 1. Update ProductBatch landed cost & Retroactive COGS
       for (const item of expense.items) {
-        const allocatedAmount = Number(item.allocatedAmount) * capitalizationRate;
+        const allocatedAmount =
+          Number(item.allocatedAmount) * capitalizationRate;
         const itemQty =
           Number(item.soldQuantity) + Number(item.remainingQuantity) || 1;
         const allocatedPerUnit = allocatedAmount / itemQty;
@@ -646,7 +684,7 @@ export class AdditionalExpensesService {
           const newBatchLandedCost = currentBatchLandedCost + allocatedPerUnit;
 
           await tx.productBatch.update({
-            where: { id: batch.id },
+            where: { tenantId, id: batch.id },
             data: { landedCost: newBatchLandedCost },
           });
 
@@ -654,20 +692,21 @@ export class AdditionalExpensesService {
           // Keep it synchronized with the revalued batch cost.
           const receiptItem = await tx.purchaseReceiptItem.findFirst({
             where: {
+              receipt: { tenantId },
               receiptId: expense.receiptId,
               productId: item.productId,
             },
           });
           if (receiptItem) {
             await tx.purchaseReceiptItem.update({
-              where: { id: receiptItem.id },
+              where: { receipt: { tenantId }, id: receiptItem.id },
               data: { landedCost: newBatchLandedCost },
             });
           }
 
           // Sync Product catalog costPrice (ADR 0007)
           await tx.product.update({
-            where: { id: item.productId },
+            where: { tenantId, id: item.productId },
             data: {
               costPrice: newBatchLandedCost,
               costPriceCurrency: 'UZS',
@@ -679,9 +718,11 @@ export class AdditionalExpensesService {
           for (const consumption of batch.consumptions) {
             const consumedQty = Number(consumption.quantity);
             const lineCogsDelta = consumedQty * allocatedPerUnit;
-            totalCogsAdjustment += lineCogsDelta;
 
+            // Only sales consumptions are COGS; goods returned to the supplier
+            // (purchase-return consumptions) are not.
             if (consumption.salesInvoiceItem) {
+              totalCogsAdjustment += lineCogsDelta;
               const currentUnitCogs = Number(
                 consumption.salesInvoiceItem.unitCogs || 0,
               );
@@ -694,7 +735,10 @@ export class AdditionalExpensesService {
                 Number(consumption.salesInvoiceItem.totalPrice) - newLineCogs;
 
               await tx.salesInvoiceItem.update({
-                where: { id: consumption.salesInvoiceItemId },
+                where: {
+                  invoice: { tenantId },
+                  id: consumption.salesInvoiceItem.id,
+                },
                 data: {
                   unitCogs: newUnitCogs,
                   lineCogs: newLineCogs,
@@ -704,7 +748,10 @@ export class AdditionalExpensesService {
 
               // Recalculate parent sales invoice total cogs & gross profit
               const allInvoiceItems = await tx.salesInvoiceItem.findMany({
-                where: { invoiceId: consumption.salesInvoiceItem.invoiceId },
+                where: {
+                  invoice: { tenantId },
+                  invoiceId: consumption.salesInvoiceItem.invoiceId,
+                },
               });
               const invoiceTotalCogs = allInvoiceItems.reduce((s, it) => {
                 if (it.id === consumption.salesInvoiceItemId) {
@@ -714,13 +761,13 @@ export class AdditionalExpensesService {
               }, 0);
 
               const invoice = await tx.salesInvoice.findUnique({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
               });
               const newInvoiceGrossProfit =
                 Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
 
               await tx.salesInvoice.update({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
                 data: {
                   totalCogs: invoiceTotalCogs,
                   grossProfit: newInvoiceGrossProfit,
@@ -731,16 +778,8 @@ export class AdditionalExpensesService {
         }
 
         // Update item fields
-        const stockPortion =
-          Math.max(
-            0,
-            allocatedAmount -
-              (Number(item.soldQuantity) / itemQty) * allocatedAmount,
-          );
-        totalStockAdjustment += stockPortion;
-
         await tx.additionalExpenseItem.update({
-          where: { id: item.id },
+          where: { expense: { tenantId }, id: item.id },
           data: {
             newLandedCost: Number(item.initialLandedCost) + allocatedPerUnit,
             cogsAdjustment:
@@ -751,14 +790,15 @@ export class AdditionalExpensesService {
 
       // Update PurchaseReceipt total additional expenses
       await tx.purchaseReceipt.update({
-        where: { id: expense.receiptId },
+        where: { tenantId, id: expense.receiptId },
         data: {
           additionalExpensesTotal: { increment: capitalizedTotal },
         },
       });
 
       // 2. Financial Settlements
-      let paidCashAccount: { accountType: string; currency: string } | null = null;
+      let paidCashAccount: { accountType: string; currency: string } | null =
+        null;
       if (expense.isPaid && paidCashAccountId) {
         const cashAcc = await tx.cashAccount.findFirst({
           where: { id: paidCashAccountId, tenantId, isActive: true },
@@ -767,7 +807,10 @@ export class AdditionalExpensesService {
         if (!cashAcc) {
           throw new NotFoundException('Kassa hisobi topilmadi');
         }
-        if (!isCashAccountCurrencyValid(cashAcc) || cashAcc.currency !== expense.currency) {
+        if (
+          !isCashAccountCurrencyValid(cashAcc) ||
+          cashAcc.currency !== expense.currency
+        ) {
           throw new BadRequestException(
             `Tanlangan kassa turi/valyutasi xarajat valyutasiga (${expense.currency}) mos kelmaydi`,
           );
@@ -776,21 +819,22 @@ export class AdditionalExpensesService {
 
         if (Number(cashAcc.balance) < totalAmount) {
           throw new BadRequestException(
-            `Kassada mablag' yetarli emas. Mavjud: ${cashAcc.balance} ${cashAcc.currency}, Xarajat: ${totalAmount} ${expense.currency}`,
+            `Kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(cashAcc.balance), cashAcc.currency)}, Xarajat: ${formatMoney(totalAmount, expense.currency)}`,
           );
         }
 
         // Decrement cash balance
         await tx.cashAccount.update({
-          where: { id: paidCashAccountId },
+          where: { tenantId, id: paidCashAccountId },
           data: { balance: { decrement: totalAmount } },
         });
 
         // Create FinanceTransaction EXPENSE
-        const txCount = await tx.financeTransaction.count({
-          where: { tenantId },
-        });
-        const txNumber = `FT-${new Date().getFullYear()}-${(txCount + 1).toString().padStart(5, '0')}`;
+        const txNumber = await nextDocumentNumber(
+          tx,
+          tenantId,
+          'FINANCE_TRANSACTION',
+        );
 
         await tx.financeTransaction.create({
           data: {
@@ -828,7 +872,7 @@ export class AdditionalExpensesService {
       }
 
       // 3. Automated BHMS / NAS Double-Entry Journal Postings (ADR 0006)
-      // Debit 2910 (Inventory / Ombor tovarlari): totalStockAdjustment
+      // Debit 2910 (Inventory / Ombor tovarlari): netStock
       // Debit 9110 (COGS / Sotilgan tovarlar tannarxi): totalCogsAdjustment
       // Debit 4410 (Input VAT / Kiruvchi QQS): vatAmount (if any)
       // Credit 6010 / 5010 (Accounts Payable / Cash): totalAmount
@@ -845,17 +889,21 @@ export class AdditionalExpensesService {
         ? ledgerAccountCodeForCashAccount(paidCashAccount)
         : null;
       const creditAcc = expense.isPaid
-        ? await tx.account.findFirst({ where: { tenantId, code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__' } })
+        ? await tx.account.findFirst({
+            where: {
+              tenantId,
+              code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__',
+            },
+          })
         : await tx.account.findFirst({ where: { tenantId, code: '6010' } });
 
       if (creditAcc) {
-        const jeCount = await tx.journalEntry.count({ where: { tenantId } });
-        const jeNumber = `JE-${new Date().getFullYear()}-${(jeCount + 1).toString().padStart(5, '0')}`;
-
-        const journalLines: any[] = [];
+        const journalLines: JournalLineDto[] = [];
         const netStock = Math.max(
           0,
-          capitalizedTotal - totalCogsAdjustment - Number(expense.vatAmount || 0) * capitalizationRate,
+          capitalizedTotal -
+            totalCogsAdjustment -
+            Number(expense.vatAmount || 0) * capitalizationRate,
         );
 
         if (inventoryAcc && netStock > 0) {
@@ -863,7 +911,8 @@ export class AdditionalExpensesService {
             debitAccountId: inventoryAcc.id,
             creditAccountId: creditAcc.id,
             amount: netStock,
-            description: 'Ombordagi tovarlar tannarxiga xarajat kapitalizatsiyasi',
+            description:
+              'Ombordagi tovarlar tannarxiga xarajat kapitalizatsiyasi',
           });
         }
 
@@ -887,25 +936,23 @@ export class AdditionalExpensesService {
         }
 
         if (journalLines.length > 0) {
-          await tx.journalEntry.create({
-            data: {
-              tenantId,
-              entryNumber: jeNumber,
+          await this.journalService.createJournalEntry(
+            tenantId,
+            {
               entryDate: expense.docDate,
               description: `Qo‘shimcha xarajat: ${expense.docNumber} — ${expense.counterparty.name}`,
               sourceDocType: 'AdditionalExpense',
               sourceDocId: expense.id,
-              lines: {
-                create: journalLines,
-              },
+              lines: journalLines,
             },
-          });
+            tx,
+          );
         }
       }
 
       // 4. Update status to POSTED
       const updatedExpense = await tx.additionalExpense.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: PurchaseDocStatus.POSTED,
           postedById: userId,
@@ -975,6 +1022,8 @@ export class AdditionalExpensesService {
     const totalAmount = Number(expense.amount);
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, expense.docDate, 'cancel');
       // 1. Revert ProductBatch landed cost & Retroactive COGS
       for (const item of expense.items) {
         const allocatedAmount = Number(item.allocatedAmount);
@@ -1003,13 +1052,13 @@ export class AdditionalExpensesService {
           );
 
           await tx.productBatch.update({
-            where: { id: batch.id },
+            where: { tenantId, id: batch.id },
             data: { landedCost: restoredBatchLandedCost },
           });
 
           // Sync catalog cost price
           await tx.product.update({
-            where: { id: item.productId },
+            where: { tenantId, id: item.productId },
             data: {
               costPrice: restoredBatchLandedCost,
               costPriceCurrency: 'UZS',
@@ -1042,7 +1091,10 @@ export class AdditionalExpensesService {
                 restoredLineCogs;
 
               await tx.salesInvoiceItem.update({
-                where: { id: consumption.salesInvoiceItemId },
+                where: {
+                  invoice: { tenantId },
+                  id: consumption.salesInvoiceItem.id,
+                },
                 data: {
                   unitCogs: restoredUnitCogs,
                   lineCogs: restoredLineCogs,
@@ -1052,7 +1104,10 @@ export class AdditionalExpensesService {
 
               // Recalculate parent invoice
               const allInvoiceItems = await tx.salesInvoiceItem.findMany({
-                where: { invoiceId: consumption.salesInvoiceItem.invoiceId },
+                where: {
+                  invoice: { tenantId },
+                  invoiceId: consumption.salesInvoiceItem.invoiceId,
+                },
               });
               const invoiceTotalCogs = allInvoiceItems.reduce((s, it) => {
                 if (it.id === consumption.salesInvoiceItemId) {
@@ -1062,13 +1117,13 @@ export class AdditionalExpensesService {
               }, 0);
 
               const invoice = await tx.salesInvoice.findUnique({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
               });
               const newInvoiceGrossProfit =
                 Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
 
               await tx.salesInvoice.update({
-                where: { id: consumption.salesInvoiceItem.invoiceId },
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
                 data: {
                   totalCogs: invoiceTotalCogs,
                   grossProfit: newInvoiceGrossProfit,
@@ -1081,7 +1136,7 @@ export class AdditionalExpensesService {
 
       // Revert PurchaseReceipt additionalExpensesTotal
       await tx.purchaseReceipt.update({
-        where: { id: expense.receiptId },
+        where: { tenantId, id: expense.receiptId },
         data: {
           additionalExpensesTotal: { decrement: totalAmount },
         },
@@ -1104,17 +1159,17 @@ export class AdditionalExpensesService {
       }
 
       // 3. Delete or void linked journal entries
-      await tx.journalEntry.deleteMany({
-        where: {
-          tenantId,
-          sourceDocType: 'AdditionalExpense',
-          sourceDocId: id,
-        },
-      });
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'AdditionalExpense',
+        id,
+        'cancel',
+      );
 
       // 4. Update status to CANCELLED
       const cancelledExpense = await tx.additionalExpense.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: PurchaseDocStatus.CANCELLED },
       });
 

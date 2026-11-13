@@ -16,7 +16,7 @@ import {
 import {
   isCashAccountCompatibleWithSalesPayment,
   isCashAccountCurrencyValid,
-} from '@/lib/cash-account-policy';
+} from '@shared/types/cash-account-policy';
 import { CreditCard, AlertCircle } from 'lucide-react';
 
 type CashAccountListResponse = CashAccount[] | { data?: CashAccount[] };

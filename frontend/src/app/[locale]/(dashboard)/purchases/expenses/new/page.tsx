@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrency, formatPercent, formatDate, CURRENCY_OPTIONS, errorMessage, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -21,21 +21,13 @@ import {
   Receipt,
   Truck,
   Calculator,
-  Layers,
   AlertCircle,
-  Building2,
-  Wallet,
   Coins,
   Scale,
   Boxes,
-  Percent,
   Check,
-  TrendingUp,
-  Sparkles,
   RefreshCw,
-  HelpCircle,
   FileSpreadsheet,
-  ChevronRight,
   ShieldCheck,
   Info,
 } from 'lucide-react';
@@ -45,7 +37,8 @@ import {
   ExpenseAllocationMethod,
   AllocationPreviewResult,
 } from '@shared/types';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
+import { unitLabel } from '@/lib/units';
 
 interface Counterparty {
   id: string;
@@ -56,7 +49,7 @@ interface Counterparty {
 
 interface CashAccount {
   id: string;
-  name: any;
+  name: LocalizedName;
   accountType: 'UZS_CASH' | 'USD_CASH' | 'BANK';
   currency: string;
   balance: number;
@@ -67,13 +60,13 @@ export default function NewExpensePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const router = useRouter();
-  const { token, company, user } = useAuth();
+  const { token, company } = useAuth();
 
   // Reference data
   const [receipts, setReceipts] = useState<PurchaseReceipt[]>([]);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
-  const [loadingRefs, setLoadingRefs] = useState(true);
+  const [, setLoadingRefs] = useState(true);
 
   // Form State
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
@@ -235,7 +228,7 @@ export default function NewExpensePage() {
     setSubmitting(true);
     try {
       // 1. Create Draft
-      const draft = await apiFetch<any>('/purchases/additional-expenses', {
+      const draft = await apiFetch<{ id: string }>('/purchases/additional-expenses', {
         token: token || undefined,
         tenantId: company?.id || undefined,
         method: 'POST',
@@ -267,8 +260,8 @@ export default function NewExpensePage() {
       }
 
       router.push(`/${locale}/purchases/expenses/${draft.id}`);
-    } catch (err: any) {
-      setErrorMsg(err.message || (isRu ? 'Произошла ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
+    } catch (err) {
+      setErrorMsg(errorMessage(err) || (isRu ? 'Произошла ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setSubmitting(false);
     }
@@ -277,7 +270,6 @@ export default function NewExpensePage() {
   // Step Completion Checks
   const isStep1Done = Boolean(docDate && expenseType && counterpartyId && amount && Number(amount) > 0);
   const isStep2Done = Boolean(receiptId && allocationMethod);
-  const isStep3Done = Boolean(selectedItemIds.length > 0 && previewResult);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', width: '100%', paddingBottom: 'var(--space-8)' }}>
@@ -636,7 +628,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Склад назначения' : 'Ombor'}
                 </span>
                 <strong style={{ color: 'var(--color-text-primary)' }}>
-                  {(selectedReceipt.warehouse?.name as any)?.[locale] || (selectedReceipt.warehouse?.name as any)?.uz || selectedReceipt.warehouse?.name || 'Asosiy ombor'}
+                  {(selectedReceipt.warehouse?.name ? getLocalizedName(selectedReceipt.warehouse?.name, locale) : 'Asosiy ombor')}
                 </strong>
               </div>
               <div>
@@ -1000,7 +992,7 @@ export default function NewExpensePage() {
                 </tr>
               </thead>
               <tbody>
-                {selectedReceipt.items?.map((item, idx) => {
+                {selectedReceipt.items?.map((item) => {
                   const isSelected = selectedItemIds.includes(item.id);
                   const preview = previewResult?.items.find((p) => p.receiptItemId === item.id);
 
@@ -1023,7 +1015,7 @@ export default function NewExpensePage() {
                       </td>
                       <td style={{ padding: '10px 12px' }}>
                         <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                          {(item.product?.name as any)?.[locale] || (item.product?.name as any)?.uz || item.product?.name || '—'}
+                          {(item.product?.name ? getLocalizedName(item.product?.name, locale) : '—')}
                         </div>
                         {item.product?.sku && (
                           <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '1px' }}>
@@ -1032,7 +1024,7 @@ export default function NewExpensePage() {
                         )}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {Number(item.quantity) || 0} {item.product?.unitOfMeasure || 'dona'}
+                        {Number(item.quantity) || 0} {unitLabel(item.product?.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
                         {formatCurrency(Number(item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
@@ -1065,7 +1057,7 @@ export default function NewExpensePage() {
                               border: '1px solid var(--color-warning-100)',
                             }}
                           >
-                            +{preview.costIncreasePercent.toFixed(1)}%
+                            +{formatPercent(preview.costIncreasePercent)}
                           </span>
                         ) : (
                           <span style={{ color: 'var(--color-text-tertiary)', fontSize: '11px' }}>0%</span>

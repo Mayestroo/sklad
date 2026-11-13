@@ -1,10 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreatePaymentDto } from '../dto';
 import { SalesOrdersService } from '../orders/sales-orders.service';
-import { CounterpartySettlementSide, SettlementAllocationTarget } from '@prisma/client';
+import {
+  CounterpartySettlementSide,
+  SalesPaymentStatus,
+  SettlementAllocationTarget,
+} from '@prisma/client';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import {
@@ -37,29 +46,54 @@ export class PaymentsService {
       throw new NotFoundException('Mijoz topilmadi');
     }
     if (Boolean(dto.invoiceId) === Boolean(dto.orderId)) {
-      throw new BadRequestException("To'lov aynan bitta hujjatga: invoice yoki buyurtmaga biriktirilishi kerak");
+      throw new BadRequestException(
+        "To'lov aynan bitta hujjatga: invoice yoki buyurtmaga biriktirilishi kerak",
+      );
     }
 
     if (dto.invoiceId) {
       const invoice = await this.prisma.salesInvoice.findFirst({
-        where: { id: dto.invoiceId, tenantId, counterpartyId: dto.counterpartyId, status: 'POSTED' },
+        where: {
+          id: dto.invoiceId,
+          tenantId,
+          counterpartyId: dto.counterpartyId,
+          status: 'POSTED',
+        },
       });
       if (!invoice || invoice.currency !== dto.currency) {
-        throw new BadRequestException("Sotuv hujjati topilmadi yoki to'lov valyutasi mos emas");
+        throw new BadRequestException(
+          "Sotuv hujjati topilmadi yoki to'lov valyutasi mos emas",
+        );
       }
-      if (Number(invoice.paidAmount) + Number(dto.amount) > Number(invoice.totalAmount)) {
-        throw new BadRequestException("To'lov sotuv hujjatining qolgan qarzidan oshishi mumkin emas");
+      if (
+        Number(invoice.paidAmount) + Number(dto.amount) >
+        Number(invoice.totalAmount)
+      ) {
+        throw new BadRequestException(
+          "To'lov sotuv hujjatining qolgan qarzidan oshishi mumkin emas",
+        );
       }
     }
     if (dto.orderId) {
       const order = await this.prisma.salesOrder.findFirst({
-        where: { id: dto.orderId, tenantId, counterpartyId: dto.counterpartyId },
+        where: {
+          id: dto.orderId,
+          tenantId,
+          counterpartyId: dto.counterpartyId,
+        },
       });
       if (!order || order.currency !== dto.currency) {
-        throw new BadRequestException("Buyurtma topilmadi yoki to'lov valyutasi mos emas");
+        throw new BadRequestException(
+          "Buyurtma topilmadi yoki to'lov valyutasi mos emas",
+        );
       }
-      if (Number(order.paidAmount) + Number(dto.amount) > Number(order.totalAmount)) {
-        throw new BadRequestException("To'lov buyurtmaning qolgan summasidan oshishi mumkin emas");
+      if (
+        Number(order.paidAmount) + Number(dto.amount) >
+        Number(order.totalAmount)
+      ) {
+        throw new BadRequestException(
+          "To'lov buyurtmaning qolgan summasidan oshishi mumkin emas",
+        );
       }
     }
 
@@ -116,7 +150,7 @@ export class PaymentsService {
 
       // 2. Record cash and the customer-side settlement movement once.
       await tx.cashAccount.update({
-        where: { id: cashAccountId },
+        where: { tenantId, id: cashAccountId },
         data: { balance: { increment: dto.amount } },
       });
 
@@ -162,29 +196,40 @@ export class PaymentsService {
           idempotencyKey: `FinanceTransaction:${financeTransaction.id}:SalesInvoice:${dto.invoiceId}`,
         });
         const invoice = await tx.salesInvoice.findFirst({
-          where: { id: dto.invoiceId, tenantId, counterpartyId: dto.counterpartyId },
+          where: {
+            id: dto.invoiceId,
+            tenantId,
+            counterpartyId: dto.counterpartyId,
+          },
         });
 
         if (invoice) {
           const newPaidAmount = Number(invoice.paidAmount) + dto.amount;
           const totalAmount = Number(invoice.totalAmount);
-          const newPaymentStatus =
+          const newPaymentStatus: SalesPaymentStatus =
             newPaidAmount >= totalAmount ? 'PAID' : 'PARTIALLY_PAID';
 
           await tx.salesInvoice.update({
-            where: { id: dto.invoiceId },
+            where: { tenantId, id: dto.invoiceId },
             data: {
               paidAmount: newPaidAmount,
-              paymentStatus: newPaymentStatus as any,
+              paymentStatus: newPaymentStatus,
             },
           });
         }
       } else if (dto.orderId) {
         await tx.salesOrder.update({
-          where: { id: dto.orderId },
+          where: { tenantId, id: dto.orderId },
           data: { paidAmount: { increment: dto.amount } },
         });
       }
+
+      // 5. Automatic double-entry posting (Dt 5010/5020/5110/5210 / Kt 4010) commits with the payment.
+      await this.journalService.autoPostPayment(
+        tenantId,
+        { ...payment, currency: dto.currency, exchangeRate },
+        tx,
+      );
 
       return payment;
     });
@@ -192,21 +237,14 @@ export class PaymentsService {
     // 5. If linked to a Sales Order, trigger dispatch gate evaluation
     if (dto.orderId) {
       try {
-        await this.salesOrdersService.onPaymentRegistered(tenantId, userId, dto.orderId);
+        await this.salesOrdersService.onPaymentRegistered(
+          tenantId,
+          userId,
+          dto.orderId,
+        );
       } catch (err) {
         console.error('Failed to evaluate order payment gate:', err);
       }
-    }
-
-    // 6. Module 4 Integration: Auto-post Payment NAS double-entry journal (Dt 5110/5010 / Kt 4010)
-    try {
-      await this.journalService.autoPostPayment(tenantId, {
-        ...result,
-        currency: dto.currency,
-        exchangeRate,
-      });
-    } catch (err) {
-      console.error('Failed to auto-post journal entry for payment:', err);
     }
 
     // Audit Log
@@ -242,8 +280,6 @@ export class PaymentsService {
   }
 
   private async generatePaymentNumber(tenantId: string): Promise<string> {
-    const count = await this.prisma.payment.count({ where: { tenantId } });
-    const nextSeq = (count + 1).toString().padStart(6, '0');
-    return `PAY-${nextSeq}`;
+    return nextDocumentNumber(this.prisma, tenantId, 'PAYMENT');
   }
 }

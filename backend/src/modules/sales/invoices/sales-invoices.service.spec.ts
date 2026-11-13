@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { PrismaService } from '../../../common/prisma';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import {
   SalesDocStatus,
@@ -9,6 +9,12 @@ import {
   SalesReturnStatus,
   SalesReturnDocStatus,
 } from '@prisma/client';
+import { AccountsService } from '../../accounting/accounts/accounts.service';
+import { JournalService } from '../../accounting/journal/journal.service';
+
+jest.mock('../../../common/sequences/document-sequence');
+jest.mock('../../../common/prisma/assert-tenant-owned');
+jest.mock('../../../common/accounting-period/period-lock');
 
 describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
   let service: SalesInvoicesService;
@@ -43,6 +49,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         aggregate: jest.fn(),
       },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn(),
         update: jest.fn(),
         create: jest.fn(),
@@ -71,6 +78,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         findFirst: jest.fn(),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn(),
         create: jest.fn(),
         deleteMany: jest.fn(),
@@ -104,6 +112,8 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
+        { provide: AccountsService, useValue: {} },
         SalesInvoicesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
@@ -192,7 +202,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(result.totalAmount).toBe(201600);
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inv-draft' },
+          where: { id: 'inv-draft', tenantId: 'tenant-1' },
           data: expect.objectContaining({
             subtotalAmount: 200000,
             discountAmount: 20000,
@@ -340,6 +350,8 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         id: 'inv-1',
         tenantId: 'tenant-1',
         warehouseId: 'wh-1',
+        currency: 'UZS',
+        exchangeRate: 1,
         status: SalesDocStatus.DRAFT,
         items: [
           {
@@ -359,7 +371,34 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       await expect(
         service.postInvoice('tenant-1', 'user-1', 'inv-1'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('"LED Lamp" uchun omborda yetarli miqdor');
+    });
+
+    it('names a product with only a Russian name in the insufficient-stock error', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        exchangeRate: 1,
+        status: SalesDocStatus.DRAFT,
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 10,
+            product: { name: { ru: 'Цемент М400' } },
+          },
+        ],
+      });
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 5,
+      });
+
+      await expect(
+        service.postInvoice('tenant-1', 'user-1', 'inv-1'),
+      ).rejects.toThrow('"Цемент М400" uchun');
     });
 
     it('should consume batches via FIFO, calculate accurate COGS and economic gross profit, and post journal entries', async () => {
@@ -401,12 +440,14 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
           remainingQty: 6,
           landedCost: 300000,
           purchasePrice: 280000,
         },
         {
           id: 'batch-2',
+          createdAt: new Date('2026-01-01T00:00:02Z'),
           remainingQty: 8,
           landedCost: 400000,
           purchasePrice: 380000,
@@ -428,12 +469,20 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       // Expected COGS: (6 * 300,000) + (4 * 400,000) = 1,800,000 + 1,600,000 = 3,400,000 UZS
       // Gross Profit: 5,000,000 - 3,400,000 = 1,600,000 UZS
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-1' },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: {
+          tenantId: 'tenant-1',
+          id: 'batch-1',
+          remainingQty: { gte: 6 },
+        },
         data: { remainingQty: { decrement: 6 } },
       });
-      expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-2' },
+      expect(prisma.productBatch.updateMany).toHaveBeenCalledWith({
+        where: {
+          tenantId: 'tenant-1',
+          id: 'batch-2',
+          remainingQty: { gte: 4 },
+        },
         data: { remainingQty: { decrement: 4 } },
       });
 
@@ -522,6 +571,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-usd-cost',
+          createdAt: new Date('2026-01-01T00:00:03Z'),
           remainingQty: 1,
           landedCost: 1_000_000,
           purchasePrice: 1_000_000,
@@ -638,15 +688,15 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       const res = await service.unpostInvoice('tenant-1', 'user-1', 'inv-1');
 
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-1' },
+        where: { tenantId: 'tenant-1', id: 'stock-1' },
         data: { quantity: { increment: 10 } },
       });
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-1' },
+        where: { tenantId: 'tenant-1', id: 'batch-1' },
         data: { remainingQty: { increment: 6 } },
       });
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
-        where: { id: 'batch-2' },
+        where: { tenantId: 'tenant-1', id: 'batch-2' },
         data: { remainingQty: { increment: 4 } },
       });
       expect(prisma.batchConsumption.deleteMany).toHaveBeenCalled();
@@ -770,9 +820,122 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
 
       // Parent invoice updated to PARTIALLY_RETURNED
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
+        where: { tenantId: 'tenant-1', id: 'inv-1' },
         data: { returnStatus: SalesReturnStatus.PARTIALLY_RETURNED },
       });
+    });
+
+    const postedInvoiceFor = (items: any[]) => ({
+      id: 'inv-1',
+      tenantId: 'tenant-1',
+      counterpartyId: 'cust-1',
+      warehouseId: 'wh-1',
+      currency: 'UZS',
+      exchangeRate: 1,
+      status: SalesDocStatus.POSTED,
+      totalAmount: 5000000,
+      items,
+      returns: [],
+    });
+    const returnTwoOfProd1 = () =>
+      service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 500000 }],
+      });
+
+    it('restocks at the FIFO cost of the batches the sale consumed', async () => {
+      const invoice = postedInvoiceFor([
+        {
+          productId: 'prod-1',
+          quantity: 10,
+          totalPrice: 5000000,
+          vatAmount: 0,
+          unitCogs: 999999, // stale; the recorded consumptions are exact
+          batchConsumptions: [
+            { quantity: 4, unitCost: 300000 },
+            { quantity: 6, unitCost: 350000 },
+          ],
+        },
+      ]);
+      prisma.salesInvoice.findFirst.mockResolvedValue(invoice);
+      prisma.account.findFirst.mockResolvedValue(null);
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 0 });
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-1',
+        ...data,
+      }));
+
+      const res = await returnTwoOfProd1();
+
+      // (4*300,000 + 6*350,000) / 10 = 330,000 per unit
+      expect(res.totalCogs).toBe(660000);
+      expect(prisma.productBatch.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ landedCost: 330000 }),
+      });
+      // The consumptions are read through the tenant-scoped invoice only.
+      expect(prisma.salesInvoice.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-1' }),
+          include: expect.objectContaining({
+            items: {
+              include: {
+                batchConsumptions: expect.objectContaining({
+                  where: { tenantId: 'tenant-1' },
+                }),
+              },
+            },
+          }),
+        }),
+      );
+    });
+
+    it("never reads a product's catalog cost, so another tenant's product cannot leak into a return", async () => {
+      // The sale posted 0 COGS for this line and recorded no consumptions.
+      // The old code then read product.costPrice by id alone (no tenantId).
+      const otherTenantProduct = {
+        id: 'prod-1',
+        tenantId: 'tenant-OTHER',
+        costPrice: 777000,
+        costPriceExchangeRate: 1,
+      };
+      prisma.product.findUnique.mockResolvedValue(otherTenantProduct);
+      prisma.product.findFirst.mockResolvedValue(otherTenantProduct);
+      prisma.salesInvoice.findFirst.mockResolvedValue(
+        postedInvoiceFor([
+          {
+            productId: 'prod-1',
+            quantity: 10,
+            totalPrice: 5000000,
+            vatAmount: 0,
+            unitCogs: 0,
+            batchConsumptions: [],
+          },
+        ]),
+      );
+      prisma.account.findFirst.mockResolvedValue(null);
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 0 });
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-1',
+        ...data,
+      }));
+
+      const res = await returnTwoOfProd1();
+
+      expect(prisma.product.findUnique).not.toHaveBeenCalled();
+      expect(prisma.product.findFirst).not.toHaveBeenCalled();
+      // Reverses exactly what the sale expensed: nothing.
+      expect(res.totalCogs).toBe(0);
+      expect(prisma.productBatch.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ landedCost: 0, purchasePrice: 0 }),
+      });
+      // Every invoice read during posting is tenant-scoped.
+      expect(prisma.salesInvoice.findUnique).not.toHaveBeenCalled();
+      for (const [args] of prisma.salesInvoice.findFirst.mock.calls) {
+        expect(args.where.tenantId).toBe('tenant-1');
+      }
     });
 
     it('should calculate returnable items accurately and respect previous returns', async () => {
@@ -1043,6 +1206,122 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       ).rejects.toThrow('Rollback Guardrail');
     });
 
+    it('cancelling a posted USD return with VAT reverses the posting in UZS, line by line', async () => {
+      // In-memory journal so post + cancel can be checked as a ledger.
+      const journal: any[] = [];
+      prisma.journalEntry.create.mockImplementation(({ data }: any) => {
+        const entry = {
+          id: `je-${journal.length + 1}`,
+          ...data,
+          lines: data.lines.create,
+        };
+        journal.push(entry);
+        return entry;
+      });
+      prisma.journalEntry.findMany = jest.fn(({ where }: any) =>
+        journal.filter(
+          (e) =>
+            e.tenantId === where.tenantId &&
+            e.sourceDocType === where.sourceDocType &&
+            e.sourceDocId === where.sourceDocId,
+        ),
+      );
+      prisma.productBatch.findFirst = jest.fn().mockResolvedValue(null);
+      prisma.productBatch.delete = jest.fn();
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `acc-${where.code}`,
+        code: where.code,
+      }));
+
+      // 10 units sold for 1,120 USD incl. 120 USD VAT at 12,500 UZS/USD.
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        ...postedInvoiceFor([
+          {
+            productId: 'prod-1',
+            quantity: 10,
+            totalPrice: 1120,
+            vatRate: 12,
+            vatAmount: 120,
+            unitCogs: 1000000,
+          },
+        ]),
+        currency: 'USD',
+        exchangeRate: 12500,
+        totalAmount: 1120,
+      });
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 0 });
+      let posted: any;
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => {
+        posted = { id: 'sret-usd', ...data, items: data.items.create };
+        return posted;
+      });
+
+      await service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'USD',
+        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 112 }],
+      });
+      expect(journal).toHaveLength(1);
+      const postingLines = journal[0].lines;
+      // 200 USD net + 24 USD VAT at 12,500; COGS 2 x 1,000,000 UZS.
+      expect(postingLines).toEqual([
+        expect.objectContaining({
+          debitAccountId: 'acc-9010',
+          creditAccountId: 'acc-4010',
+          amount: 2500000,
+        }),
+        expect.objectContaining({
+          debitAccountId: 'acc-6410',
+          creditAccountId: 'acc-4010',
+          amount: 300000,
+        }),
+        expect.objectContaining({
+          debitAccountId: 'acc-2910',
+          creditAccountId: 'acc-9110',
+          amount: 2000000,
+        }),
+      ]);
+
+      // Cancel: the restocked goods are still there.
+      prisma.salesReturn.findFirst.mockResolvedValue(posted);
+      prisma.stockLevel.findUnique.mockResolvedValue({ id: 's', quantity: 2 });
+      await service.cancelReturn('tenant-1', 'user-1', 'sret-usd');
+
+      expect(journal).toHaveLength(2);
+      const reversal = journal[1];
+      expect(reversal.sourceDocType).toBe('SalesReturnCancel');
+      expect(reversal.sourceDocId).toBe('sret-usd');
+      expect(reversal.lines).toHaveLength(postingLines.length);
+      postingLines.forEach((line: any, i: number) => {
+        expect(reversal.lines[i]).toEqual(
+          expect.objectContaining({
+            debitAccountId: line.creditAccountId,
+            creditAccountId: line.debitAccountId,
+            amount: line.amount,
+          }),
+        );
+      });
+
+      const balance = new Map<string, number>();
+      for (const entry of journal) {
+        for (const l of entry.lines) {
+          balance.set(
+            l.debitAccountId,
+            (balance.get(l.debitAccountId) ?? 0) + l.amount,
+          );
+          balance.set(
+            l.creditAccountId,
+            (balance.get(l.creditAccountId) ?? 0) - l.amount,
+          );
+        }
+      }
+      for (const [account, net] of balance) {
+        expect([account, net]).toEqual([account, 0]);
+      }
+    });
+
     it('should reject cancellation of a return with an active refund allocation', async () => {
       prisma.salesReturn.findFirst.mockResolvedValue({
         id: 'sret-posted-1',
@@ -1110,12 +1389,17 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           id: 'pp-1',
           price: 150000,
         });
+        // Both products are the tenant's own.
+        prisma.product.count = jest.fn().mockResolvedValue(2);
 
         const res = await service.bulkSetPrices('tenant-1', 'pl-1', [
           { productId: 'prod-1', price: 150000 },
           { productId: 'prod-2', price: 250000 },
         ]);
 
+        expect(prisma.product.count).toHaveBeenCalledWith({
+          where: { tenantId: 'tenant-1', id: { in: ['prod-1', 'prod-2'] } },
+        });
         expect(prisma.productPrice.upsert).toHaveBeenCalledTimes(2);
         expect(res.length).toBe(2);
       });
@@ -1140,7 +1424,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           data: { isDefault: false },
         });
         expect(prisma.priceList.update).toHaveBeenCalledWith({
-          where: { id: 'pl-2' },
+          where: { tenantId: 'tenant-1', id: 'pl-2' },
           data: expect.objectContaining({ isDefault: true }),
         });
       });
@@ -1161,7 +1445,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         await service.deletePriceList('tenant-1', 'pl-1');
 
         expect(prisma.priceList.update).toHaveBeenCalledWith({
-          where: { id: 'pl-1' },
+          where: { tenantId: 'tenant-1', id: 'pl-1' },
           data: { isActive: false },
         });
       });
@@ -1177,7 +1461,10 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         await service.deletePriceList('tenant-1', 'pl-unused');
 
         expect(prisma.priceList.delete).toHaveBeenCalledWith({
-          where: { id: 'pl-unused' },
+          where: {
+            tenantId: 'tenant-1',
+            id: 'pl-unused',
+          },
         });
       });
     });

@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { FileText } from 'lucide-react';
+import type { SalesOrderInvoiceRef } from './types';
 
 export interface OrderCalculations {
   subtotal: number;
@@ -25,7 +25,7 @@ export interface OrderTotalsSummaryProps {
   calculations: OrderCalculations;
   paymentCondition: 'PREPAID_100' | 'PARTIAL' | 'CREDIT';
   requiredPaymentPercent: number;
-  salesInvoices?: any[];
+  salesInvoices?: SalesOrderInvoiceRef[];
 }
 
 export function OrderTotalsSummary({
@@ -120,7 +120,7 @@ export function OrderTotalsSummary({
               {isRu ? 'Накладные отгрузки' : 'Chiqim fakturalari'} ({salesInvoices.length})
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {salesInvoices.map((inv: any) => (
+              {salesInvoices.map((inv) => (
                 <div
                   key={inv.id}
                   style={{

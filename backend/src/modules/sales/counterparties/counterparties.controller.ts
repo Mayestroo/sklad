@@ -131,4 +131,3 @@ export class CounterpartiesController {
     return this.counterpartiesService.delete(tenantId, id);
   }
 }
-

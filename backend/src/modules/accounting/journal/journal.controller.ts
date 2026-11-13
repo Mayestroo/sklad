@@ -24,6 +24,6 @@ export class JournalController {
     @CurrentTenant() tenantId: string,
     @Body() dto: CreateJournalEntryDto,
   ) {
-    return this.journalService.createJournalEntry(tenantId, dto);
+    return this.journalService.createManualEntry(tenantId, dto);
   }
 }

@@ -26,8 +26,15 @@ import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
+import { formatMoney } from '../../../../shared/format/money';
 import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
-import type { FinanceAccountFlow, FinanceSummaryByAccount } from '../../../../shared/types/finance';
+import type {
+  FinanceAccountFlow,
+  FinanceSummaryByAccount,
+} from '../../../../shared/types/finance';
+import { readCompanySettings } from '../../common/utils/company-settings';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 interface FinanceSettlementContext {
   side: CounterpartySettlementSide | null;
@@ -100,18 +107,18 @@ export class FinanceService {
     tenantId: string,
     filters: { date_from?: string; date_to?: string; currency?: string },
   ) {
-    const where: any = {
+    const where: Prisma.FinanceTransactionWhereInput = {
       tenantId,
       isDeleted: false,
       status: TransactionStatus.POSTED,
     };
 
     if (filters.date_from || filters.date_to) {
-      where.transactionDate = {};
-      if (filters.date_from)
-        where.transactionDate.gte = new Date(filters.date_from);
+      const transactionDate: Prisma.DateTimeFilter = {};
+      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
       if (filters.date_to)
-        where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+      where.transactionDate = transactionDate;
     }
 
     if (filters.currency) {
@@ -128,10 +135,14 @@ export class FinanceService {
       where,
       select: {
         accountId: true,
-        account: { select: { id: true, accountType: true, name: true, currency: true } },
+        account: {
+          select: { id: true, accountType: true, name: true, currency: true },
+        },
         transferToId: true,
         transferToAmount: true,
-        transferToAccount: { select: { id: true, accountType: true, name: true, currency: true } },
+        transferToAccount: {
+          select: { id: true, accountType: true, name: true, currency: true },
+        },
         direction: true,
         amount: true,
         currency: true,
@@ -143,9 +154,14 @@ export class FinanceService {
 
     const getAccountSummary = (
       accountId: string,
-      account: { id: string; accountType: CashAccountType; name: Prisma.JsonValue; currency: string },
+      account: {
+        id: string;
+        accountType: CashAccountType;
+        name: Prisma.JsonValue;
+        currency: string;
+      },
     ) => {
-      let summary = byAccount.get(accountId);
+      const summary = byAccount.get(accountId);
       if (!summary) {
         const newSummary: FinanceSummaryByAccount = {
           accountId,
@@ -166,31 +182,52 @@ export class FinanceService {
 
     for (const tx of transactions) {
       if (!tx.accountId || !tx.account) {
-        throw new BadRequestException('Finance transaction is missing its source cash/bank account');
+        throw new BadRequestException(
+          'Finance transaction is missing its source cash/bank account',
+        );
       }
       if (tx.account.currency !== tx.currency) {
-        throw new BadRequestException('Finance transaction currency does not match its source cash/bank account');
+        throw new BadRequestException(
+          'Finance transaction currency does not match its source cash/bank account',
+        );
       }
       const transactionAmount = Number(tx.amount);
       if (!Number.isFinite(transactionAmount) || transactionAmount <= 0) {
-        throw new BadRequestException('Finance transaction amount must be a positive finite value');
+        throw new BadRequestException(
+          'Finance transaction amount must be a positive finite value',
+        );
       }
-      const sourceSummary = !filters.currency || tx.account.currency === filters.currency
-        ? getAccountSummary(tx.accountId, tx.account)
-        : undefined;
+      const sourceSummary =
+        !filters.currency || tx.account.currency === filters.currency
+          ? getAccountSummary(tx.accountId, tx.account)
+          : undefined;
       if (tx.direction === TransactionDirection.TRANSFER) {
         if (sourceSummary) sourceSummary.transferOut += transactionAmount;
         const targetAccountId = tx.transferToId;
         if (!targetAccountId) {
-          throw new BadRequestException('Finance transfer is missing its destination cash/bank account');
+          throw new BadRequestException(
+            'Finance transfer is missing its destination cash/bank account',
+          );
         }
         if (!tx.transferToAccount) {
-          throw new BadRequestException('Finance transfer is missing its destination cash/bank account');
+          throw new BadRequestException(
+            'Finance transfer is missing its destination cash/bank account',
+          );
         }
-        const targetSummary = getAccountSummary(targetAccountId, tx.transferToAccount);
-        const includeTarget = !filters.currency || targetSummary.currency === filters.currency;
-        if (tx.transferToAmount == null || !Number.isFinite(Number(tx.transferToAmount)) || Number(tx.transferToAmount) <= 0) {
-          throw new BadRequestException('Finance transfer destination amount must be a positive finite value');
+        const targetSummary = getAccountSummary(
+          targetAccountId,
+          tx.transferToAccount,
+        );
+        const includeTarget =
+          !filters.currency || targetSummary.currency === filters.currency;
+        if (
+          tx.transferToAmount == null ||
+          !Number.isFinite(Number(tx.transferToAmount)) ||
+          Number(tx.transferToAmount) <= 0
+        ) {
+          throw new BadRequestException(
+            'Finance transfer destination amount must be a positive finite value',
+          );
         }
         if (includeTarget) {
           targetSummary.transferIn += Number(tx.transferToAmount);
@@ -200,7 +237,8 @@ export class FinanceService {
 
       if (!byCurrency[tx.currency])
         byCurrency[tx.currency] = { income: 0, expense: 0 };
-      const transactionAccountSummary = sourceSummary ?? getAccountSummary(tx.accountId, tx.account);
+      const transactionAccountSummary =
+        sourceSummary ?? getAccountSummary(tx.accountId, tx.account);
       if (tx.direction === TransactionDirection.INCOME) {
         byCurrency[tx.currency].income += transactionAmount;
         transactionAccountSummary.totalIncome += transactionAmount;
@@ -223,28 +261,42 @@ export class FinanceService {
     const reportingAccounts = filters.currency
       ? accounts.filter((account) => account.currency === filters.currency)
       : accounts;
-    const summaryByAccount: FinanceSummaryByAccount[] = reportingAccounts.map((account) => {
-      const totals = byAccount.get(account.id);
-      const totalIncome = totals?.totalIncome ?? 0;
-      const totalExpense = totals?.totalExpense ?? 0;
-      return {
-        accountId: account.id,
-        accountType: account.accountType,
-        name: account.name as { uz: string; ru: string },
-        currency: account.currency,
-        totalIncome,
-        totalExpense,
-        transferIn: totals?.transferIn ?? 0,
-        transferOut: totals?.transferOut ?? 0,
-        netCashFlow: totalIncome + (totals?.transferIn ?? 0) - totalExpense - (totals?.transferOut ?? 0),
-      };
-    });
-    for (const [key, totals] of byAccount) {
-      if (totals.accountId && reportingAccounts.some((account) => account.id === totals.accountId)) continue;
+    const summaryByAccount: FinanceSummaryByAccount[] = reportingAccounts.map(
+      (account) => {
+        const totals = byAccount.get(account.id);
+        const totalIncome = totals?.totalIncome ?? 0;
+        const totalExpense = totals?.totalExpense ?? 0;
+        return {
+          accountId: account.id,
+          accountType: account.accountType,
+          name: account.name as { uz: string; ru: string },
+          currency: account.currency,
+          totalIncome,
+          totalExpense,
+          transferIn: totals?.transferIn ?? 0,
+          transferOut: totals?.transferOut ?? 0,
+          netCashFlow:
+            totalIncome +
+            (totals?.transferIn ?? 0) -
+            totalExpense -
+            (totals?.transferOut ?? 0),
+        };
+      },
+    );
+    for (const totals of byAccount.values()) {
+      if (
+        totals.accountId &&
+        reportingAccounts.some((account) => account.id === totals.accountId)
+      )
+        continue;
       if (filters.currency && totals.currency !== filters.currency) continue;
       summaryByAccount.push({
         ...totals,
-        netCashFlow: totals.totalIncome + totals.transferIn - totals.totalExpense - totals.transferOut,
+        netCashFlow:
+          totals.totalIncome +
+          totals.transferIn -
+          totals.totalExpense -
+          totals.transferOut,
       });
     }
 
@@ -265,7 +317,11 @@ export class FinanceService {
 
   async getDashboardMetrics(tenantId: string) {
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Accounts
@@ -292,7 +348,10 @@ export class FinanceService {
         hisobRaqam += bal;
         accountCurrencies.hisobRaqam = acc.currency;
       }
-      liquidByCurrency.set(acc.currency, (liquidByCurrency.get(acc.currency) ?? 0) + bal);
+      liquidByCurrency.set(
+        acc.currency,
+        (liquidByCurrency.get(acc.currency) ?? 0) + bal,
+      );
     }
     const totalLiquidByCurrency = Array.from(liquidByCurrency)
       .sort(([left], [right]) => left.localeCompare(right))
@@ -335,26 +394,34 @@ export class FinanceService {
 
     const todayTotals = new Map<string, { income: number; expense: number }>();
     const monthTotals = new Map<string, { income: number; expense: number }>();
-    const createAccountFlows = () => new Map<string, FinanceAccountFlow>(
-      accounts.map((account) => [account.id, {
-        accountId: account.id,
-        accountType: account.accountType,
-        name: account.name as { uz: string; ru: string },
-        currency: account.currency,
-        income: 0,
-        expense: 0,
-        transferIn: 0,
-        transferOut: 0,
-        netCashFlow: 0,
-      }]),
-    );
+    const createAccountFlows = () =>
+      new Map<string, FinanceAccountFlow>(
+        accounts.map((account) => [
+          account.id,
+          {
+            accountId: account.id,
+            accountType: account.accountType,
+            name: account.name as { uz: string; ru: string },
+            currency: account.currency,
+            income: 0,
+            expense: 0,
+            transferIn: 0,
+            transferOut: 0,
+            netCashFlow: 0,
+          },
+        ]),
+      );
     const todayAccountTotals = createAccountFlows();
     const monthAccountTotals = createAccountFlows();
 
     const accountFlowFor = (
       totals: Map<string, FinanceAccountFlow>,
       accountId: string,
-      account: { accountType: CashAccountType; name: Prisma.JsonValue; currency: string },
+      account: {
+        accountType: CashAccountType;
+        name: Prisma.JsonValue;
+        currency: string;
+      },
     ) => {
       let flow = totals.get(accountId);
       if (!flow) {
@@ -376,11 +443,15 @@ export class FinanceService {
 
     for (const tx of txs) {
       if (!tx.accountId || !tx.account || tx.account.currency !== tx.currency) {
-        throw new BadRequestException('Finance transaction is missing its source cash/bank account or has a mismatched currency');
+        throw new BadRequestException(
+          'Finance transaction is missing its source cash/bank account or has a mismatched currency',
+        );
       }
       const amt = Number(tx.amount);
       if (!Number.isFinite(amt) || amt <= 0) {
-        throw new BadRequestException('Finance transaction amount must be a positive finite value');
+        throw new BadRequestException(
+          'Finance transaction amount must be a positive finite value',
+        );
       }
       const isToday = new Date(tx.transactionDate) >= startOfToday;
       if (tx.direction !== TransactionDirection.TRANSFER) {
@@ -397,10 +468,19 @@ export class FinanceService {
         if (isToday) todayTotals.set(tx.currency, today);
       }
 
-      const monthlySourceFlow = accountFlowFor(monthAccountTotals, tx.accountId, tx.account);
-      const dailySourceFlow = accountFlowFor(todayAccountTotals, tx.accountId, tx.account);
+      const monthlySourceFlow = accountFlowFor(
+        monthAccountTotals,
+        tx.accountId,
+        tx.account,
+      );
+      const dailySourceFlow = accountFlowFor(
+        todayAccountTotals,
+        tx.accountId,
+        tx.account,
+      );
       const recalculate = (flow: FinanceAccountFlow) => {
-        flow.netCashFlow = flow.income + flow.transferIn - flow.expense - flow.transferOut;
+        flow.netCashFlow =
+          flow.income + flow.transferIn - flow.expense - flow.transferOut;
       };
 
       if (tx.direction === TransactionDirection.TRANSFER) {
@@ -412,11 +492,15 @@ export class FinanceService {
         }
 
         if (!tx.transferToId || !tx.transferToAccount) {
-          throw new BadRequestException('Finance transfer is missing its destination cash/bank account');
+          throw new BadRequestException(
+            'Finance transfer is missing its destination cash/bank account',
+          );
         }
         const targetAmount = Number(tx.transferToAmount);
         if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
-          throw new BadRequestException('Finance transfer destination amount must be a positive finite value');
+          throw new BadRequestException(
+            'Finance transfer destination amount must be a positive finite value',
+          );
         }
         const monthlyTargetFlow = accountFlowFor(
           monthAccountTotals,
@@ -449,7 +533,9 @@ export class FinanceService {
       if (isToday) recalculate(dailySourceFlow);
     }
 
-    const formatFlowTotals = (totals: Map<string, { income: number; expense: number }>) =>
+    const formatFlowTotals = (
+      totals: Map<string, { income: number; expense: number }>,
+    ) =>
       Array.from(totals)
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([currency, values]) => ({
@@ -462,17 +548,26 @@ export class FinanceService {
     const monthByCurrency = formatFlowTotals(monthTotals);
     const formatAccountFlows = (totals: Map<string, FinanceAccountFlow>) =>
       Array.from(totals.values()).sort((left, right) => {
-        const order: Record<string, number> = { UZS_CASH: 0, USD_CASH: 1, BANK: 2 };
-        return (order[left.accountType ?? ''] ?? 3) - (order[right.accountType ?? ''] ?? 3)
-          || left.currency.localeCompare(right.currency)
-          || (left.accountId ?? '').localeCompare(right.accountId ?? '');
+        const order: Record<string, number> = {
+          UZS_CASH: 0,
+          USD_CASH: 1,
+          BANK: 2,
+        };
+        return (
+          (order[left.accountType ?? ''] ?? 3) -
+            (order[right.accountType ?? ''] ?? 3) ||
+          left.currency.localeCompare(right.currency) ||
+          (left.accountId ?? '').localeCompare(right.accountId ?? '')
+        );
       });
-    const todayOnly = todayByCurrency.length === 1
-      ? todayByCurrency[0]
-      : { income: 0, expense: 0, netCashFlow: 0 };
-    const monthOnly = monthByCurrency.length === 1
-      ? monthByCurrency[0]
-      : { income: 0, expense: 0, netCashFlow: 0 };
+    const todayOnly =
+      todayByCurrency.length === 1
+        ? todayByCurrency[0]
+        : { income: 0, expense: 0, netCashFlow: 0 };
+    const monthOnly =
+      monthByCurrency.length === 1
+        ? monthByCurrency[0]
+        : { income: 0, expense: 0, netCashFlow: 0 };
 
     // Counterparty Debts
     const [settlementBalances, company] = await Promise.all([
@@ -490,9 +585,11 @@ export class FinanceService {
       }),
     ]);
 
-    const reportCurrency = monthByCurrency.length === 1
-      ? monthByCurrency[0].currency
-      : (company?.settings as any)?.sales?.defaultCurrency || 'UZS';
+    const reportCurrency =
+      monthByCurrency.length === 1
+        ? monthByCurrency[0].currency
+        : readCompanySettings(company?.settings).sales?.defaultCurrency ||
+          'UZS';
 
     let totalCustomerDebt = 0; // Receivables (Kutilayotgan tushumlar)
     let totalSupplierDebt = 0; // Payables (To'lanishi kerak bo'lgan qarzlar)
@@ -506,24 +603,40 @@ export class FinanceService {
       const supplierDebt = Number(balance.supplierDebt);
       const netBalance = customerDebt - supplierDebt;
       if (netBalance > 0) {
-        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + netBalance;
+        receivablesByCurr[balance.currency] =
+          (receivablesByCurr[balance.currency] || 0) + netBalance;
       } else if (netBalance < 0) {
-        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + Math.abs(netBalance);
+        payablesByCurr[balance.currency] =
+          (payablesByCurr[balance.currency] || 0) + Math.abs(netBalance);
       }
       if (customerDebt < 0) {
-        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
+        customerAdvancesByCurr[balance.currency] =
+          (customerAdvancesByCurr[balance.currency] || 0) +
+          Math.abs(customerDebt);
       }
       if (supplierDebt < 0) {
-        supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
+        supplierAdvancesByCurr[balance.currency] =
+          (supplierAdvancesByCurr[balance.currency] || 0) +
+          Math.abs(supplierDebt);
       }
     }
 
-    const receivablesByCurrency = Object.entries(receivablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    const payablesByCurrency = Object.entries(payablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    const customerAdvancesByCurrency = Object.entries(customerAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    const supplierAdvancesByCurrency = Object.entries(supplierAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    if (receivablesByCurrency.length === 1) totalCustomerDebt = receivablesByCurrency[0].amount;
-    if (payablesByCurrency.length === 1) totalSupplierDebt = payablesByCurrency[0].amount;
+    const receivablesByCurrency = Object.entries(receivablesByCurr).map(
+      ([curr, amount]) => ({ currency: curr, amount }),
+    );
+    const payablesByCurrency = Object.entries(payablesByCurr).map(
+      ([curr, amount]) => ({ currency: curr, amount }),
+    );
+    const customerAdvancesByCurrency = Object.entries(
+      customerAdvancesByCurr,
+    ).map(([curr, amount]) => ({ currency: curr, amount }));
+    const supplierAdvancesByCurrency = Object.entries(
+      supplierAdvancesByCurr,
+    ).map(([curr, amount]) => ({ currency: curr, amount }));
+    if (receivablesByCurrency.length === 1)
+      totalCustomerDebt = receivablesByCurrency[0].amount;
+    if (payablesByCurrency.length === 1)
+      totalSupplierDebt = payablesByCurrency[0].amount;
 
     return {
       currency: reportCurrency,
@@ -533,7 +646,9 @@ export class FinanceService {
         hisobRaqam,
         accountCurrencies,
         totalLiquidByCurrency,
-        totalLiquidUZSEquivalent: totalLiquidByCurrency.find((item) => item.currency === 'UZS')?.amount ?? 0,
+        totalLiquidUZSEquivalent:
+          totalLiquidByCurrency.find((item) => item.currency === 'UZS')
+            ?.amount ?? 0,
       },
       today: {
         ...todayOnly,
@@ -569,7 +684,10 @@ export class FinanceService {
     return this.listTransactions(tenantId, filters, false);
   }
 
-  async getDeletedTransactions(tenantId: string, filters: FilterTransactionsDto) {
+  async getDeletedTransactions(
+    tenantId: string,
+    filters: FilterTransactionsDto,
+  ) {
     return this.listTransactions(tenantId, filters, true);
   }
 
@@ -582,19 +700,19 @@ export class FinanceService {
     const limit = Math.min(filters.limit ?? 50, 100);
     const skip = (page - 1) * limit;
 
-    const where: any = {
+    const where: Prisma.FinanceTransactionWhereInput = {
       tenantId,
       isDeleted,
     };
 
     if (filters.date_from || filters.date_to) {
-      where.transactionDate = {};
-      if (filters.date_from)
-        where.transactionDate.gte = new Date(filters.date_from);
+      const transactionDate: Prisma.DateTimeFilter = {};
+      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
       if (filters.date_to)
-        where.transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+      where.transactionDate = transactionDate;
     }
-    const ledgerFilters: any[] = [];
+    const ledgerFilters: Prisma.FinanceTransactionWhereInput[] = [];
     if (filters.accountId) {
       ledgerFilters.push({
         OR: [
@@ -626,9 +744,20 @@ export class FinanceService {
       if (filters.accountId) {
         ledgerFilters.push({
           OR: [
-            { direction: { not: TransactionDirection.TRANSFER }, amount: amountFilter },
-            { direction: TransactionDirection.TRANSFER, accountId: filters.accountId, amount: amountFilter },
-            { direction: TransactionDirection.TRANSFER, transferToId: filters.accountId, transferToAmount: amountFilter },
+            {
+              direction: { not: TransactionDirection.TRANSFER },
+              amount: amountFilter,
+            },
+            {
+              direction: TransactionDirection.TRANSFER,
+              accountId: filters.accountId,
+              amount: amountFilter,
+            },
+            {
+              direction: TransactionDirection.TRANSFER,
+              transferToId: filters.accountId,
+              transferToAmount: amountFilter,
+            },
           ],
         });
       } else {
@@ -667,7 +796,10 @@ export class FinanceService {
     dto: CreateIncomeDto,
     createdById?: string,
   ) {
-    const exchangeRate = requireExchangeRateForCurrency(dto.currency, dto.exchangeRate);
+    const exchangeRate = requireExchangeRateForCurrency(
+      dto.currency,
+      dto.exchangeRate,
+    );
     const account = await this.prisma.cashAccount.findFirst({
       where: { id: dto.accountId, tenantId, isActive: true },
     });
@@ -683,7 +815,19 @@ export class FinanceService {
       );
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      transactionType: dto.transactionTypeId,
+      user: dto.responsibleUserId,
+    });
+
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(
+        tx,
+        tenantId,
+        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+        'post',
+      );
       const settlement = await this.resolveSettlementContext(
         tx,
         tenantId,
@@ -699,7 +843,9 @@ export class FinanceService {
           amount: dto.amount,
           currency: dto.currency,
           exchangeRate,
-          transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+          transactionDate: dto.transactionDate
+            ? new Date(dto.transactionDate)
+            : new Date(),
           counterpartyId: dto.counterpartyId,
           settlementSide: settlement?.side ?? null,
           transactionTypeId: dto.transactionTypeId,
@@ -713,7 +859,7 @@ export class FinanceService {
       });
 
       await tx.cashAccount.update({
-        where: { id: dto.accountId },
+        where: { tenantId, id: dto.accountId },
         data: { balance: { increment: dto.amount } },
       });
 
@@ -727,10 +873,33 @@ export class FinanceService {
             dto.counterpartyId!,
             dto.amount,
           );
-        } else if (!dto.sourceDocId && settlement.side === CounterpartySettlementSide.CUSTOMER) {
-          await this.allocateIncomeFifo(tx, tenantId, transaction, dto.counterpartyId!, dto.amount, dto.currency);
-        } else if (this.settlementMovementAmount(TransactionDirection.INCOME, settlement.side, dto.amount) > 0) {
-          await this.assertCreditAvailable(tx, dto.counterpartyId!, dto.currency, settlement.side, dto.amount);
+        } else if (
+          !dto.sourceDocId &&
+          settlement.side === CounterpartySettlementSide.CUSTOMER
+        ) {
+          await this.allocateIncomeFifo(
+            tx,
+            tenantId,
+            transaction,
+            dto.counterpartyId!,
+            dto.amount,
+            dto.currency,
+          );
+        } else if (
+          this.settlementMovementAmount(
+            TransactionDirection.INCOME,
+            settlement.side,
+            dto.amount,
+          ) > 0
+        ) {
+          await this.assertCreditAvailable(
+            tx,
+            tenantId,
+            dto.counterpartyId!,
+            dto.currency,
+            settlement.side,
+            dto.amount,
+          );
         }
 
         await this.settlementService.recordMovement(tx, {
@@ -738,7 +907,11 @@ export class FinanceService {
           counterpartyId: dto.counterpartyId!,
           currency: dto.currency,
           side: settlement.side,
-          amount: this.settlementMovementAmount(TransactionDirection.INCOME, settlement.side, dto.amount),
+          amount: this.settlementMovementAmount(
+            TransactionDirection.INCOME,
+            settlement.side,
+            dto.amount,
+          ),
           entryType: 'FINANCE_SETTLEMENT',
           effectiveAt: transaction.transactionDate,
           sourceDocType: 'FinanceTransaction',
@@ -758,7 +931,10 @@ export class FinanceService {
     dto: CreateExpenseDto,
     createdById?: string,
   ) {
-    const exchangeRate = requireExchangeRateForCurrency(dto.currency, dto.exchangeRate);
+    const exchangeRate = requireExchangeRateForCurrency(
+      dto.currency,
+      dto.exchangeRate,
+    );
     const account = await this.prisma.cashAccount.findFirst({
       where: { id: dto.accountId, tenantId, isActive: true },
     });
@@ -777,11 +953,23 @@ export class FinanceService {
     // Invariant: Cash account cannot go negative
     if (Number(account.balance) < Number(dto.amount)) {
       throw new BadRequestException(
-        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${account.balance} ${account.currency}, so'ralgan: ${dto.amount} ${dto.currency}`,
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(account.balance), account.currency)}, so'ralgan: ${formatMoney(dto.amount, dto.currency)}`,
       );
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      transactionType: dto.transactionTypeId,
+      user: dto.responsibleUserId,
+    });
+
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(
+        tx,
+        tenantId,
+        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+        'post',
+      );
       const settlement = await this.resolveSettlementContext(
         tx,
         tenantId,
@@ -797,7 +985,9 @@ export class FinanceService {
           amount: dto.amount,
           currency: dto.currency,
           exchangeRate,
-          transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+          transactionDate: dto.transactionDate
+            ? new Date(dto.transactionDate)
+            : new Date(),
           counterpartyId: dto.counterpartyId,
           settlementSide: settlement?.side ?? null,
           transactionTypeId: dto.transactionTypeId,
@@ -811,7 +1001,7 @@ export class FinanceService {
       });
 
       await tx.cashAccount.update({
-        where: { id: dto.accountId },
+        where: { tenantId, id: dto.accountId },
         data: { balance: { decrement: dto.amount } },
       });
 
@@ -825,10 +1015,33 @@ export class FinanceService {
             dto.counterpartyId!,
             dto.amount,
           );
-        } else if (!dto.sourceDocId && settlement.side === CounterpartySettlementSide.SUPPLIER) {
-          await this.allocateExpenseFifo(tx, tenantId, transaction, dto.counterpartyId!, dto.amount, dto.currency);
-        } else if (this.settlementMovementAmount(TransactionDirection.EXPENSE, settlement.side, dto.amount) > 0) {
-          await this.assertCreditAvailable(tx, dto.counterpartyId!, dto.currency, settlement.side, dto.amount);
+        } else if (
+          !dto.sourceDocId &&
+          settlement.side === CounterpartySettlementSide.SUPPLIER
+        ) {
+          await this.allocateExpenseFifo(
+            tx,
+            tenantId,
+            transaction,
+            dto.counterpartyId!,
+            dto.amount,
+            dto.currency,
+          );
+        } else if (
+          this.settlementMovementAmount(
+            TransactionDirection.EXPENSE,
+            settlement.side,
+            dto.amount,
+          ) > 0
+        ) {
+          await this.assertCreditAvailable(
+            tx,
+            tenantId,
+            dto.counterpartyId!,
+            dto.currency,
+            settlement.side,
+            dto.amount,
+          );
         }
 
         await this.settlementService.recordMovement(tx, {
@@ -836,7 +1049,11 @@ export class FinanceService {
           counterpartyId: dto.counterpartyId!,
           currency: dto.currency,
           side: settlement.side,
-          amount: this.settlementMovementAmount(TransactionDirection.EXPENSE, settlement.side, dto.amount),
+          amount: this.settlementMovementAmount(
+            TransactionDirection.EXPENSE,
+            settlement.side,
+            dto.amount,
+          ),
           entryType: 'FINANCE_SETTLEMENT',
           effectiveAt: transaction.transactionDate,
           sourceDocType: 'FinanceTransaction',
@@ -857,66 +1074,119 @@ export class FinanceService {
     tenantId: string,
   ) {
     if (targetType === SettlementAllocationTarget.SALES_INVOICE) {
-      const invoice = await tx.salesInvoice.findFirst({ where: { id: targetId, tenantId } });
-      if (!invoice) throw new NotFoundException('Sales invoice settlement target not found');
+      const invoice = await tx.salesInvoice.findFirst({
+        where: { id: targetId, tenantId },
+      });
+      if (!invoice)
+        throw new NotFoundException(
+          'Sales invoice settlement target not found',
+        );
       const paidAmount = Math.max(0, Number(invoice.paidAmount) + amount);
-      const paymentStatus = paidAmount >= Number(invoice.totalAmount)
-        ? SalesPaymentStatus.PAID
-        : paidAmount > 0 ? SalesPaymentStatus.PARTIALLY_PAID : SalesPaymentStatus.UNPAID;
-      await tx.salesInvoice.update({ where: { id: targetId }, data: { paidAmount, paymentStatus } });
+      const paymentStatus =
+        paidAmount >= Number(invoice.totalAmount)
+          ? SalesPaymentStatus.PAID
+          : paidAmount > 0
+            ? SalesPaymentStatus.PARTIALLY_PAID
+            : SalesPaymentStatus.UNPAID;
+      await tx.salesInvoice.update({
+        where: { tenantId, id: targetId },
+        data: { paidAmount, paymentStatus },
+      });
       return;
     }
 
     if (targetType === SettlementAllocationTarget.SALES_ORDER) {
-      const order = await tx.salesOrder.findFirst({ where: { id: targetId, tenantId } });
-      if (!order) throw new NotFoundException('Sales order settlement target not found');
+      const order = await tx.salesOrder.findFirst({
+        where: { id: targetId, tenantId },
+      });
+      if (!order)
+        throw new NotFoundException('Sales order settlement target not found');
       const paidAmount = Number(order.paidAmount) + amount;
       let status = order.status;
       if (status === 'AWAITING_PAYMENT') {
-        if (order.paymentCondition === 'PREPAID_100' && paidAmount >= Number(order.totalAmount)) {
+        if (
+          order.paymentCondition === 'PREPAID_100' &&
+          paidAmount >= Number(order.totalAmount)
+        ) {
           status = 'PAYMENT_CONFIRMED';
         } else if (order.paymentCondition === 'PARTIAL') {
           const required = Number(order.requiredPaymentPercent) || 0;
-          if (paidAmount >= Number(order.totalAmount) * required / 100) status = 'PAYMENT_CONFIRMED';
+          if (paidAmount >= (Number(order.totalAmount) * required) / 100)
+            status = 'PAYMENT_CONFIRMED';
         }
       }
-      await tx.salesOrder.update({ where: { id: targetId }, data: { paidAmount, status } });
+      await tx.salesOrder.update({
+        where: { tenantId, id: targetId },
+        data: { paidAmount, status },
+      });
       return;
     }
 
     if (targetType === SettlementAllocationTarget.PURCHASE_RECEIPT) {
-      const receipt = await tx.purchaseReceipt.findFirst({ where: { id: targetId, tenantId } });
-      if (!receipt) throw new NotFoundException('Purchase receipt settlement target not found');
+      const receipt = await tx.purchaseReceipt.findFirst({
+        where: { id: targetId, tenantId },
+      });
+      if (!receipt)
+        throw new NotFoundException(
+          'Purchase receipt settlement target not found',
+        );
       const paidAmount = Number(receipt.paidAmount) + amount;
-      const paymentStatus = paidAmount >= Number(receipt.totalAmount)
-        ? PurchasePaymentStatus.PAID
-        : paidAmount > 0 ? PurchasePaymentStatus.PARTIALLY_PAID : PurchasePaymentStatus.UNPAID;
-      await tx.purchaseReceipt.update({ where: { id: targetId }, data: { paidAmount, paymentStatus } });
+      const paymentStatus =
+        paidAmount >= Number(receipt.totalAmount)
+          ? PurchasePaymentStatus.PAID
+          : paidAmount > 0
+            ? PurchasePaymentStatus.PARTIALLY_PAID
+            : PurchasePaymentStatus.UNPAID;
+      await tx.purchaseReceipt.update({
+        where: { tenantId, id: targetId },
+        data: { paidAmount, paymentStatus },
+      });
       return;
     }
 
     if (targetType === SettlementAllocationTarget.SERVICE_ACT) {
-      const act = await tx.serviceAct.findFirst({ where: { id: targetId, tenantId } });
-      if (!act) throw new NotFoundException('Service act settlement target not found');
+      const act = await tx.serviceAct.findFirst({
+        where: { id: targetId, tenantId },
+      });
+      if (!act)
+        throw new NotFoundException('Service act settlement target not found');
       const paidAmount = Number(act.paidAmount) + amount;
-      const paymentStatus = paidAmount >= Number(act.totalAmount)
-        ? ServicePaymentStatus.PAID
-        : paidAmount > 0 ? ServicePaymentStatus.PARTIALLY_PAID : ServicePaymentStatus.UNPAID;
-      await tx.serviceAct.update({ where: { id: targetId }, data: { paidAmount, paymentStatus } });
+      const paymentStatus =
+        paidAmount >= Number(act.totalAmount)
+          ? ServicePaymentStatus.PAID
+          : paidAmount > 0
+            ? ServicePaymentStatus.PARTIALLY_PAID
+            : ServicePaymentStatus.UNPAID;
+      await tx.serviceAct.update({
+        where: { tenantId, id: targetId },
+        data: { paidAmount, paymentStatus },
+      });
       return;
     }
 
     if (targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE) {
-      const expense = await tx.additionalExpense.findFirst({ where: { id: targetId, tenantId } });
-      if (!expense) throw new NotFoundException('Additional expense settlement target not found');
+      const expense = await tx.additionalExpense.findFirst({
+        where: { id: targetId, tenantId },
+      });
+      if (!expense)
+        throw new NotFoundException(
+          'Additional expense settlement target not found',
+        );
       const allocations = await tx.settlementAllocation.findMany({
-        where: { targetType, targetId },
+        where: { tenantId, targetType, targetId },
         select: { amount: true },
       });
-      const allocatedAmount = allocations.reduce((sum, item) => sum + Number(item.amount), 0);
-      const isPaid = allocatedAmount >= Number(expense.amount) + Number(expense.vatAmount);
+      const allocatedAmount = allocations.reduce(
+        (sum, item) => sum + Number(item.amount),
+        0,
+      );
+      const isPaid =
+        allocatedAmount >= Number(expense.amount) + Number(expense.vatAmount);
       if (expense.isPaid !== isPaid) {
-        await tx.additionalExpense.update({ where: { id: targetId }, data: { isPaid } });
+        await tx.additionalExpense.update({
+          where: { tenantId, id: targetId },
+          data: { isPaid },
+        });
       }
     }
   }
@@ -927,8 +1197,10 @@ export class FinanceService {
     amount: number,
   ) {
     const reducesObligation =
-      (direction === TransactionDirection.INCOME && side === CounterpartySettlementSide.CUSTOMER) ||
-      (direction === TransactionDirection.EXPENSE && side === CounterpartySettlementSide.SUPPLIER);
+      (direction === TransactionDirection.INCOME &&
+        side === CounterpartySettlementSide.CUSTOMER) ||
+      (direction === TransactionDirection.EXPENSE &&
+        side === CounterpartySettlementSide.SUPPLIER);
     return reducesObligation ? -Number(amount) : Number(amount);
   }
 
@@ -939,7 +1211,10 @@ export class FinanceService {
     direction: SettlementDirection,
   ): Promise<FinanceSettlementContext | null> {
     if (!dto.counterpartyId) {
-      if (dto.settlementSide) throw new BadRequestException('Settlement side requires a counterparty');
+      if (dto.settlementSide)
+        throw new BadRequestException(
+          'Settlement side requires a counterparty',
+        );
       return null;
     }
     const counterparty = await tx.counterparty.findFirst({
@@ -952,94 +1227,165 @@ export class FinanceService {
     const sourceType = dto.sourceDocType;
     let side: CounterpartySettlementSide | undefined;
     let targetType: SettlementAllocationTarget | undefined;
-    const ensureSource = (source: { counterpartyId: string; currency: string; status: string } | null, label: string) => {
-      if (!source || source.counterpartyId !== dto.counterpartyId || source.currency !== dto.currency) {
-        throw new BadRequestException(`${label} settlement source counterparty or currency does not match`);
+    const ensureSource = (
+      source: {
+        counterpartyId: string;
+        currency: string;
+        status: string;
+      } | null,
+      label: string,
+    ) => {
+      if (
+        !source ||
+        source.counterpartyId !== dto.counterpartyId ||
+        source.currency !== dto.currency
+      ) {
+        throw new BadRequestException(
+          `${label} settlement source counterparty or currency does not match`,
+        );
       }
-      if (source.status !== 'POSTED') throw new BadRequestException(`${label} must be posted before settlement`);
+      if (source.status !== 'POSTED')
+        throw new BadRequestException(
+          `${label} must be posted before settlement`,
+        );
     };
 
     if (sourceType === 'SalesInvoice' && sourceId) {
-      const source = await tx.salesInvoice.findFirst({ where: { id: sourceId, tenantId } });
+      const source = await tx.salesInvoice.findFirst({
+        where: { id: sourceId, tenantId },
+      });
       ensureSource(source, 'Sales invoice');
-      if (direction !== TransactionDirection.INCOME) throw new BadRequestException('Sales invoice requires customer income');
+      if (direction !== TransactionDirection.INCOME)
+        throw new BadRequestException('Sales invoice requires customer income');
       side = CounterpartySettlementSide.CUSTOMER;
       targetType = SettlementAllocationTarget.SALES_INVOICE;
     } else if (sourceType === 'SalesOrder' && sourceId) {
-      const source = await tx.salesOrder.findFirst({ where: { id: sourceId, tenantId } });
-      if (!source || source.counterpartyId !== dto.counterpartyId || source.currency !== dto.currency || source.status === 'CANCELLED') {
-        throw new BadRequestException('Sales order settlement source counterparty or currency does not match');
+      const source = await tx.salesOrder.findFirst({
+        where: { id: sourceId, tenantId },
+      });
+      if (
+        !source ||
+        source.counterpartyId !== dto.counterpartyId ||
+        source.currency !== dto.currency ||
+        source.status === 'CANCELLED'
+      ) {
+        throw new BadRequestException(
+          'Sales order settlement source counterparty or currency does not match',
+        );
       }
-      if (direction !== TransactionDirection.INCOME) throw new BadRequestException('Sales order requires customer income');
+      if (direction !== TransactionDirection.INCOME)
+        throw new BadRequestException('Sales order requires customer income');
       side = CounterpartySettlementSide.CUSTOMER;
       targetType = SettlementAllocationTarget.SALES_ORDER;
     } else if (sourceType === 'SalesReturn' && sourceId) {
-      const source = await tx.salesReturn.findFirst({ where: { id: sourceId, tenantId } });
+      const source = await tx.salesReturn.findFirst({
+        where: { id: sourceId, tenantId },
+      });
       ensureSource(source, 'Sales return');
-      if (direction !== TransactionDirection.EXPENSE) throw new BadRequestException('Sales return refund requires customer expense');
+      if (direction !== TransactionDirection.EXPENSE)
+        throw new BadRequestException(
+          'Sales return refund requires customer expense',
+        );
       side = CounterpartySettlementSide.CUSTOMER;
       targetType = SettlementAllocationTarget.SALES_RETURN;
     } else if (sourceType === 'PurchaseReceipt' && sourceId) {
-      const source = await tx.purchaseReceipt.findFirst({ where: { id: sourceId, tenantId } });
+      const source = await tx.purchaseReceipt.findFirst({
+        where: { id: sourceId, tenantId },
+      });
       ensureSource(source, 'Purchase receipt');
-      if (direction !== TransactionDirection.EXPENSE) throw new BadRequestException('Purchase receipt requires supplier expense');
+      if (direction !== TransactionDirection.EXPENSE)
+        throw new BadRequestException(
+          'Purchase receipt requires supplier expense',
+        );
       side = CounterpartySettlementSide.SUPPLIER;
       targetType = SettlementAllocationTarget.PURCHASE_RECEIPT;
     } else if (sourceType === 'PurchaseReturn' && sourceId) {
-      const source = await tx.purchaseReturn.findFirst({ where: { id: sourceId, tenantId } });
+      const source = await tx.purchaseReturn.findFirst({
+        where: { id: sourceId, tenantId },
+      });
       ensureSource(source, 'Purchase return');
-      if (direction !== TransactionDirection.INCOME) throw new BadRequestException('Purchase return refund requires supplier income');
+      if (direction !== TransactionDirection.INCOME)
+        throw new BadRequestException(
+          'Purchase return refund requires supplier income',
+        );
       side = CounterpartySettlementSide.SUPPLIER;
       targetType = SettlementAllocationTarget.PURCHASE_RETURN;
     } else if (sourceType === 'ServiceAct' && sourceId) {
-      const source = await tx.serviceAct.findFirst({ where: { id: sourceId, tenantId } });
-      if (!source) throw new NotFoundException('Service act settlement source not found');
+      const source = await tx.serviceAct.findFirst({
+        where: { id: sourceId, tenantId },
+      });
+      if (!source)
+        throw new NotFoundException('Service act settlement source not found');
       ensureSource(source, 'Service act');
-      side = source.type === 'PROVIDED'
-        ? CounterpartySettlementSide.CUSTOMER
-        : CounterpartySettlementSide.SUPPLIER;
-      const expectedDirection = source.type === 'PROVIDED'
-        ? TransactionDirection.INCOME
-        : TransactionDirection.EXPENSE;
-      if (direction !== expectedDirection) throw new BadRequestException('Service act settlement direction does not match its type');
+      side =
+        source.type === 'PROVIDED'
+          ? CounterpartySettlementSide.CUSTOMER
+          : CounterpartySettlementSide.SUPPLIER;
+      const expectedDirection =
+        source.type === 'PROVIDED'
+          ? TransactionDirection.INCOME
+          : TransactionDirection.EXPENSE;
+      if (direction !== expectedDirection)
+        throw new BadRequestException(
+          'Service act settlement direction does not match its type',
+        );
       targetType = SettlementAllocationTarget.SERVICE_ACT;
     } else if (sourceType === 'AdditionalExpense' && sourceId) {
-      const source = await tx.additionalExpense.findFirst({ where: { id: sourceId, tenantId } });
-      if (!source) throw new NotFoundException('Additional expense settlement source not found');
+      const source = await tx.additionalExpense.findFirst({
+        where: { id: sourceId, tenantId },
+      });
+      if (!source)
+        throw new NotFoundException(
+          'Additional expense settlement source not found',
+        );
       ensureSource(source, 'Additional expense');
       if (source.isPaid || direction !== TransactionDirection.EXPENSE) {
-        throw new BadRequestException('Additional expense is already paid or transaction direction is invalid');
+        throw new BadRequestException(
+          'Additional expense is already paid or transaction direction is invalid',
+        );
       }
       side = CounterpartySettlementSide.SUPPLIER;
       targetType = SettlementAllocationTarget.ADDITIONAL_EXPENSE;
     }
 
     if (side && dto.settlementSide && dto.settlementSide !== side) {
-      throw new BadRequestException('Settlement side conflicts with the linked source document');
+      throw new BadRequestException(
+        'Settlement side conflicts with the linked source document',
+      );
     }
     side ??= dto.settlementSide;
     if (!side || !Object.values(CounterpartySettlementSide).includes(side)) {
-      throw new BadRequestException('Choose whether this transaction settles a customer or supplier balance');
+      throw new BadRequestException(
+        'Choose whether this transaction settles a customer or supplier balance',
+      );
     }
     return { side, targetType, targetId: targetType ? sourceId : undefined };
   }
 
   private async assertCreditAvailable(
     tx: Prisma.TransactionClient,
+    tenantId: string,
     counterpartyId: string,
     currency: string,
     side: CounterpartySettlementSide,
     amount: number,
   ) {
     const balance = await tx.counterpartyBalance.findUnique({
-      where: { counterpartyId_currency: { counterpartyId, currency } },
+      where: {
+        tenantId,
+        counterpartyId_currency: { counterpartyId, currency },
+      },
       select: { customerDebt: true, supplierDebt: true },
     });
-    const current = Number(side === CounterpartySettlementSide.CUSTOMER
-      ? balance?.customerDebt ?? 0
-      : balance?.supplierDebt ?? 0);
+    const current = Number(
+      side === CounterpartySettlementSide.CUSTOMER
+        ? (balance?.customerDebt ?? 0)
+        : (balance?.supplierDebt ?? 0),
+    );
     if (current > -Number(amount) + 0.000001) {
-      throw new BadRequestException('Refund exceeds the available counterparty advance in this currency');
+      throw new BadRequestException(
+        'Refund exceeds the available counterparty advance in this currency',
+      );
     }
   }
 
@@ -1051,7 +1397,8 @@ export class FinanceService {
     counterpartyId: string,
     amount: number,
   ) {
-    if (!settlement.side || !settlement.targetType || !settlement.targetId) return;
+    if (!settlement.side || !settlement.targetType || !settlement.targetId)
+      return;
     await this.settlementAllocationService.recordAllocation(tx, {
       tenantId,
       counterpartyId,
@@ -1063,56 +1410,120 @@ export class FinanceService {
     });
 
     if (settlement.targetType === SettlementAllocationTarget.SALES_INVOICE) {
-      const invoice = await tx.salesInvoice.findFirst({ where: { id: settlement.targetId, tenantId } });
-      if (!invoice) throw new NotFoundException('Sales invoice settlement target not found');
+      const invoice = await tx.salesInvoice.findFirst({
+        where: { id: settlement.targetId, tenantId },
+      });
+      if (!invoice)
+        throw new NotFoundException(
+          'Sales invoice settlement target not found',
+        );
       const paidAmount = Number(invoice.paidAmount) + amount;
-      const paymentStatus = paidAmount >= Number(invoice.totalAmount)
-        ? SalesPaymentStatus.PAID
-        : paidAmount > 0 ? SalesPaymentStatus.PARTIALLY_PAID : SalesPaymentStatus.UNPAID;
-      await tx.salesInvoice.update({ where: { id: invoice.id }, data: { paidAmount, paymentStatus } });
-    } else if (settlement.targetType === SettlementAllocationTarget.SALES_ORDER) {
-      const order = await tx.salesOrder.findFirst({ where: { id: settlement.targetId, tenantId } });
-      if (!order) throw new NotFoundException('Sales order settlement target not found');
+      const paymentStatus =
+        paidAmount >= Number(invoice.totalAmount)
+          ? SalesPaymentStatus.PAID
+          : paidAmount > 0
+            ? SalesPaymentStatus.PARTIALLY_PAID
+            : SalesPaymentStatus.UNPAID;
+      await tx.salesInvoice.update({
+        where: { tenantId, id: invoice.id },
+        data: { paidAmount, paymentStatus },
+      });
+    } else if (
+      settlement.targetType === SettlementAllocationTarget.SALES_ORDER
+    ) {
+      const order = await tx.salesOrder.findFirst({
+        where: { id: settlement.targetId, tenantId },
+      });
+      if (!order)
+        throw new NotFoundException('Sales order settlement target not found');
       const paidAmount = Math.max(0, Number(order.paidAmount) + amount);
       let status = order.status;
       const total = Number(order.totalAmount);
-      const requiredAmount = order.paymentCondition === 'PREPAID_100'
-        ? total
-        : order.paymentCondition === 'PARTIAL'
-          ? total * Number(order.requiredPaymentPercent ?? 0) / 100
-          : 0;
+      const requiredAmount =
+        order.paymentCondition === 'PREPAID_100'
+          ? total
+          : order.paymentCondition === 'PARTIAL'
+            ? (total * Number(order.requiredPaymentPercent ?? 0)) / 100
+            : 0;
       if (status === 'AWAITING_PAYMENT' && paidAmount >= requiredAmount) {
         status = 'PAYMENT_CONFIRMED';
-      } else if (status === 'PAYMENT_CONFIRMED' && paidAmount < requiredAmount) {
+      } else if (
+        status === 'PAYMENT_CONFIRMED' &&
+        paidAmount < requiredAmount
+      ) {
         status = 'AWAITING_PAYMENT';
       }
-      await tx.salesOrder.update({ where: { id: order.id }, data: { paidAmount, status } });
-    } else if (settlement.targetType === SettlementAllocationTarget.PURCHASE_RECEIPT) {
-      const receipt = await tx.purchaseReceipt.findFirst({ where: { id: settlement.targetId, tenantId } });
-      if (!receipt) throw new NotFoundException('Purchase receipt settlement target not found');
+      await tx.salesOrder.update({
+        where: { tenantId, id: order.id },
+        data: { paidAmount, status },
+      });
+    } else if (
+      settlement.targetType === SettlementAllocationTarget.PURCHASE_RECEIPT
+    ) {
+      const receipt = await tx.purchaseReceipt.findFirst({
+        where: { id: settlement.targetId, tenantId },
+      });
+      if (!receipt)
+        throw new NotFoundException(
+          'Purchase receipt settlement target not found',
+        );
       const paidAmount = Math.max(0, Number(receipt.paidAmount) + amount);
-      const paymentStatus = paidAmount >= Number(receipt.totalAmount)
-        ? PurchasePaymentStatus.PAID
-        : paidAmount > 0 ? PurchasePaymentStatus.PARTIALLY_PAID : PurchasePaymentStatus.UNPAID;
-      await tx.purchaseReceipt.update({ where: { id: receipt.id }, data: { paidAmount, paymentStatus } });
-    } else if (settlement.targetType === SettlementAllocationTarget.SERVICE_ACT) {
-      const act = await tx.serviceAct.findFirst({ where: { id: settlement.targetId, tenantId } });
-      if (!act) throw new NotFoundException('Service act settlement target not found');
+      const paymentStatus =
+        paidAmount >= Number(receipt.totalAmount)
+          ? PurchasePaymentStatus.PAID
+          : paidAmount > 0
+            ? PurchasePaymentStatus.PARTIALLY_PAID
+            : PurchasePaymentStatus.UNPAID;
+      await tx.purchaseReceipt.update({
+        where: { tenantId, id: receipt.id },
+        data: { paidAmount, paymentStatus },
+      });
+    } else if (
+      settlement.targetType === SettlementAllocationTarget.SERVICE_ACT
+    ) {
+      const act = await tx.serviceAct.findFirst({
+        where: { id: settlement.targetId, tenantId },
+      });
+      if (!act)
+        throw new NotFoundException('Service act settlement target not found');
       const paidAmount = Math.max(0, Number(act.paidAmount) + amount);
-      const paymentStatus = paidAmount >= Number(act.totalAmount)
-        ? ServicePaymentStatus.PAID
-        : paidAmount > 0 ? ServicePaymentStatus.PARTIALLY_PAID : ServicePaymentStatus.UNPAID;
-      await tx.serviceAct.update({ where: { id: act.id }, data: { paidAmount, paymentStatus } });
-    } else if (settlement.targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE) {
-      const expense = await tx.additionalExpense.findFirst({ where: { id: settlement.targetId, tenantId } });
-      if (!expense) throw new NotFoundException('Additional expense settlement target not found');
+      const paymentStatus =
+        paidAmount >= Number(act.totalAmount)
+          ? ServicePaymentStatus.PAID
+          : paidAmount > 0
+            ? ServicePaymentStatus.PARTIALLY_PAID
+            : ServicePaymentStatus.UNPAID;
+      await tx.serviceAct.update({
+        where: { tenantId, id: act.id },
+        data: { paidAmount, paymentStatus },
+      });
+    } else if (
+      settlement.targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE
+    ) {
+      const expense = await tx.additionalExpense.findFirst({
+        where: { id: settlement.targetId, tenantId },
+      });
+      if (!expense)
+        throw new NotFoundException(
+          'Additional expense settlement target not found',
+        );
       const allocations = await tx.settlementAllocation.findMany({
-        where: { targetType: settlement.targetType, targetId: settlement.targetId },
+        where: {
+          tenantId,
+          targetType: settlement.targetType,
+          targetId: settlement.targetId,
+        },
         select: { amount: true },
       });
-      const paidAmount = allocations.reduce((sum, item) => sum + Number(item.amount), 0);
+      const paidAmount = allocations.reduce(
+        (sum, item) => sum + Number(item.amount),
+        0,
+      );
       if (paidAmount >= Number(expense.amount) + Number(expense.vatAmount)) {
-        await tx.additionalExpense.update({ where: { id: expense.id }, data: { isPaid: true } });
+        await tx.additionalExpense.update({
+          where: { tenantId, id: expense.id },
+          data: { isPaid: true },
+        });
       }
     }
   }
@@ -1127,11 +1538,31 @@ export class FinanceService {
   ) {
     const [invoices, acts] = await Promise.all([
       tx.salesInvoice.findMany({
-        where: { tenantId, counterpartyId, currency, status: SalesDocStatus.POSTED, paymentStatus: { in: [SalesPaymentStatus.UNPAID, SalesPaymentStatus.PARTIALLY_PAID] } },
+        where: {
+          tenantId,
+          counterpartyId,
+          currency,
+          status: SalesDocStatus.POSTED,
+          paymentStatus: {
+            in: [SalesPaymentStatus.UNPAID, SalesPaymentStatus.PARTIALLY_PAID],
+          },
+        },
         orderBy: { invoiceDate: 'asc' },
       }),
       tx.serviceAct.findMany({
-        where: { tenantId, counterpartyId, currency, status: 'POSTED', type: ServiceActType.PROVIDED, paymentStatus: { in: [ServicePaymentStatus.UNPAID, ServicePaymentStatus.PARTIALLY_PAID] } },
+        where: {
+          tenantId,
+          counterpartyId,
+          currency,
+          status: 'POSTED',
+          type: ServiceActType.PROVIDED,
+          paymentStatus: {
+            in: [
+              ServicePaymentStatus.UNPAID,
+              ServicePaymentStatus.PARTIALLY_PAID,
+            ],
+          },
+        },
         orderBy: { actDate: 'asc' },
       }),
     ]);
@@ -1141,17 +1572,32 @@ export class FinanceService {
         targetId: invoice.id,
         side: CounterpartySettlementSide.CUSTOMER,
         effectiveAt: invoice.invoiceDate,
-        openAmount: Math.max(0, Number(invoice.totalAmount) - Number(invoice.paidAmount)),
+        openAmount: Math.max(
+          0,
+          Number(invoice.totalAmount) - Number(invoice.paidAmount),
+        ),
       })),
       ...acts.map((act) => ({
         targetType: SettlementAllocationTarget.SERVICE_ACT,
         targetId: act.id,
         side: CounterpartySettlementSide.CUSTOMER,
         effectiveAt: act.actDate,
-        openAmount: Math.max(0, Number(act.totalAmount) - Number(act.paidAmount)),
+        openAmount: Math.max(
+          0,
+          Number(act.totalAmount) - Number(act.paidAmount),
+        ),
       })),
-    ].sort((left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime());
-    await this.allocateFifoTargets(tx, tenantId, transaction, counterpartyId, amount, targets);
+    ].sort(
+      (left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime(),
+    );
+    await this.allocateFifoTargets(
+      tx,
+      tenantId,
+      transaction,
+      counterpartyId,
+      amount,
+      targets,
+    );
   }
 
   private async allocateExpenseFifo(
@@ -1164,15 +1610,44 @@ export class FinanceService {
   ) {
     const [receipts, acts, expenses] = await Promise.all([
       tx.purchaseReceipt.findMany({
-        where: { tenantId, counterpartyId, currency, status: PurchaseDocStatus.POSTED, paymentStatus: { in: [PurchasePaymentStatus.UNPAID, PurchasePaymentStatus.PARTIALLY_PAID] } },
+        where: {
+          tenantId,
+          counterpartyId,
+          currency,
+          status: PurchaseDocStatus.POSTED,
+          paymentStatus: {
+            in: [
+              PurchasePaymentStatus.UNPAID,
+              PurchasePaymentStatus.PARTIALLY_PAID,
+            ],
+          },
+        },
         orderBy: { docDate: 'asc' },
       }),
       tx.serviceAct.findMany({
-        where: { tenantId, counterpartyId, currency, status: 'POSTED', type: ServiceActType.RECEIVED, paymentStatus: { in: [ServicePaymentStatus.UNPAID, ServicePaymentStatus.PARTIALLY_PAID] } },
+        where: {
+          tenantId,
+          counterpartyId,
+          currency,
+          status: 'POSTED',
+          type: ServiceActType.RECEIVED,
+          paymentStatus: {
+            in: [
+              ServicePaymentStatus.UNPAID,
+              ServicePaymentStatus.PARTIALLY_PAID,
+            ],
+          },
+        },
         orderBy: { actDate: 'asc' },
       }),
       tx.additionalExpense.findMany({
-        where: { tenantId, counterpartyId, currency, status: PurchaseDocStatus.POSTED, isPaid: false },
+        where: {
+          tenantId,
+          counterpartyId,
+          currency,
+          status: PurchaseDocStatus.POSTED,
+          isPaid: false,
+        },
         orderBy: { docDate: 'asc' },
       }),
     ]);
@@ -1182,24 +1657,42 @@ export class FinanceService {
         targetId: receipt.id,
         side: CounterpartySettlementSide.SUPPLIER,
         effectiveAt: receipt.docDate,
-        openAmount: Math.max(0, Number(receipt.totalAmount) - Number(receipt.paidAmount)),
+        openAmount: Math.max(
+          0,
+          Number(receipt.totalAmount) - Number(receipt.paidAmount),
+        ),
       })),
       ...acts.map((act) => ({
         targetType: SettlementAllocationTarget.SERVICE_ACT,
         targetId: act.id,
         side: CounterpartySettlementSide.SUPPLIER,
         effectiveAt: act.actDate,
-        openAmount: Math.max(0, Number(act.totalAmount) - Number(act.paidAmount)),
+        openAmount: Math.max(
+          0,
+          Number(act.totalAmount) - Number(act.paidAmount),
+        ),
       })),
       ...expenses.map((expense) => ({
         targetType: SettlementAllocationTarget.ADDITIONAL_EXPENSE,
         targetId: expense.id,
         side: CounterpartySettlementSide.SUPPLIER,
         effectiveAt: expense.docDate,
-        openAmount: Math.max(0, Number(expense.amount) + Number(expense.vatAmount)),
+        openAmount: Math.max(
+          0,
+          Number(expense.amount) + Number(expense.vatAmount),
+        ),
       })),
-    ].sort((left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime());
-    await this.allocateFifoTargets(tx, tenantId, transaction, counterpartyId, amount, targets);
+    ].sort(
+      (left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime(),
+    );
+    await this.allocateFifoTargets(
+      tx,
+      tenantId,
+      transaction,
+      counterpartyId,
+      amount,
+      targets,
+    );
   }
 
   private async allocateFifoTargets(
@@ -1215,11 +1708,18 @@ export class FinanceService {
       if (remaining <= 0) break;
       const allocate = Math.min(target.openAmount, remaining);
       if (allocate <= 0) continue;
-      await this.allocateAndUpdateTarget(tx, transaction, {
-        side: target.side,
-        targetType: target.targetType,
-        targetId: target.targetId,
-      }, tenantId, counterpartyId, allocate);
+      await this.allocateAndUpdateTarget(
+        tx,
+        transaction,
+        {
+          side: target.side,
+          targetType: target.targetType,
+          targetId: target.targetId,
+        },
+        tenantId,
+        counterpartyId,
+        allocate,
+      );
       remaining -= allocate;
     }
   }
@@ -1250,8 +1750,13 @@ export class FinanceService {
       throw new NotFoundException('Chiquvchi kassa hisobi topilmadi');
     if (!toAccount)
       throw new NotFoundException('Qabul qiluvchi kassa hisobi topilmadi');
-    if (!isCashAccountCurrencyValid(fromAccount) || !isCashAccountCurrencyValid(toAccount)) {
-      throw new BadRequestException('O‘tkazmadagi har ikkala hisobning turi va valyutasi mos bo‘lishi shart');
+    if (
+      !isCashAccountCurrencyValid(fromAccount) ||
+      !isCashAccountCurrencyValid(toAccount)
+    ) {
+      throw new BadRequestException(
+        'O‘tkazmadagi har ikkala hisobning turi va valyutasi mos bo‘lishi shart',
+      );
     }
     if (dto.currency !== fromAccount.currency) {
       throw new BadRequestException(
@@ -1266,7 +1771,7 @@ export class FinanceService {
 
     if (Number(fromAccount.balance) < fromAmount) {
       throw new BadRequestException(
-        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${fromAccount.balance} ${fromAccount.currency}`,
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(fromAccount.balance), fromAccount.currency)}`,
       );
     }
 
@@ -1280,9 +1785,10 @@ export class FinanceService {
     if (fromCurrency !== toCurrency) {
       const targetAmount = Number(dto.targetAmount);
       const rawExchangeRate = Number(dto.exchangeRate);
-      const exchangeRate = Number.isFinite(rawExchangeRate) && rawExchangeRate > 0
-        ? Math.round(rawExchangeRate * 10000) / 10000
-        : rawExchangeRate;
+      const exchangeRate =
+        Number.isFinite(rawExchangeRate) && rawExchangeRate > 0
+          ? Math.round(rawExchangeRate * 10000) / 10000
+          : rawExchangeRate;
       const hasTargetAmount = Number.isFinite(targetAmount) && targetAmount > 0;
       const hasExchangeRate = Number.isFinite(exchangeRate) && exchangeRate > 0;
       if (!hasTargetAmount && !hasExchangeRate) {
@@ -1293,39 +1799,64 @@ export class FinanceService {
 
       const rateAmount = hasExchangeRate
         ? Math.round(
-            (fromCurrency === 'USD' ? fromAmount * exchangeRate : fromAmount / exchangeRate) * 100,
+            (fromCurrency === 'USD'
+              ? fromAmount * exchangeRate
+              : fromAmount / exchangeRate) * 100,
           ) / 100
         : undefined;
-      if (hasTargetAmount && rateAmount !== undefined && Math.abs(targetAmount - rateAmount) > 0.01) {
-        throw new BadRequestException('Konvertatsiya kursi va yakuniy summa bir-biriga mos kelmaydi');
+      if (
+        hasTargetAmount &&
+        rateAmount !== undefined &&
+        Math.abs(targetAmount - rateAmount) > 0.01
+      ) {
+        throw new BadRequestException(
+          'Konvertatsiya kursi va yakuniy summa bir-biriga mos kelmaydi',
+        );
       }
-      toAmount = Math.round((hasTargetAmount ? targetAmount : rateAmount!) * 100) / 100;
-      const usdToUzsRateRaw = fromCurrency === 'USD'
-        ? toAmount / fromAmount
-        : fromAmount / toAmount;
+      toAmount =
+        Math.round((hasTargetAmount ? targetAmount : rateAmount!) * 100) / 100;
+      const usdToUzsRateRaw =
+        fromCurrency === 'USD' ? toAmount / fromAmount : fromAmount / toAmount;
       const usdToUzsRate = Math.round(usdToUzsRateRaw * 10000) / 10000;
       transferExchangeRate = hasExchangeRate ? exchangeRate : usdToUzsRate;
-      const amountAtRecordedRate = Math.round(
-        (fromCurrency === 'USD'
-          ? fromAmount * transferExchangeRate
-          : fromAmount / transferExchangeRate) * 100,
-      ) / 100;
+      const amountAtRecordedRate =
+        Math.round(
+          (fromCurrency === 'USD'
+            ? fromAmount * transferExchangeRate
+            : fromAmount / transferExchangeRate) * 100,
+        ) / 100;
       if (Math.abs(amountAtRecordedRate - toAmount) > 0.01) {
-        throw new BadRequestException('Qabul summasi qayd etilgan valyuta kursiga mos kelmaydi');
+        throw new BadRequestException(
+          'Qabul summasi qayd etilgan valyuta kursiga mos kelmaydi',
+        );
       }
       const conversionNote = `Konvertatsiya: ${fromAmount} ${fromCurrency} -> ${toAmount} ${toCurrency} (1 USD = ${usdToUzsRate} UZS)`;
       autoComment = autoComment
         ? `${autoComment} | ${conversionNote}`
         : conversionNote;
-    } else if (dto.targetAmount !== undefined && Number(dto.targetAmount) !== fromAmount) {
-      throw new BadRequestException('Bir xil valyutadagi o‘tkazmada manba va qabul summasi teng bo‘lishi shart');
+    } else if (
+      dto.targetAmount !== undefined &&
+      Number(dto.targetAmount) !== fromAmount
+    ) {
+      throw new BadRequestException(
+        'Bir xil valyutadagi o‘tkazmada manba va qabul summasi teng bo‘lishi shart',
+      );
     }
     const transactionExchangeRate = requireExchangeRateForCurrency(
       fromCurrency,
-      fromCurrency === 'USD' ? transferExchangeRate ?? dto.exchangeRate : undefined,
+      fromCurrency === 'USD'
+        ? (transferExchangeRate ?? dto.exchangeRate)
+        : undefined,
     );
 
     const tx = await this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(
+        tx,
+        tenantId,
+        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
+        'post',
+      );
       const transaction = await tx.financeTransaction.create({
         data: {
           tenantId,
@@ -1349,13 +1880,13 @@ export class FinanceService {
 
       // Deduct from source
       await tx.cashAccount.update({
-        where: { id: dto.fromAccountId },
+        where: { tenantId, id: dto.fromAccountId },
         data: { balance: { decrement: fromAmount } },
       });
 
       // Add to destination
       await tx.cashAccount.update({
-        where: { id: dto.toAccountId },
+        where: { tenantId, id: dto.toAccountId },
         data: { balance: { increment: toAmount } },
       });
 
@@ -1374,10 +1905,16 @@ export class FinanceService {
     cancelledById?: string,
   ) {
     const existing = await this.prisma.financeTransaction.findFirst({
-      where: { id, tenantId, isDeleted: false, status: TransactionStatus.POSTED },
+      where: {
+        id,
+        tenantId,
+        isDeleted: false,
+        status: TransactionStatus.POSTED,
+      },
       include: { account: true, transferToAccount: true },
     });
-    if (!existing) throw new NotFoundException('Transaction not found or already cancelled');
+    if (!existing)
+      throw new NotFoundException('Transaction not found or already cancelled');
 
     return this.prisma.$transaction((tx) =>
       this.reversePostedTransaction(
@@ -1403,14 +1940,21 @@ export class FinanceService {
     if (!transaction.counterpartyId) return;
     if (!transaction.settlementSide) {
       if (transaction.sourceDocType === 'AdditionalExpense') return;
-      throw new BadRequestException('Finance transaction settlement side is missing; reconcile it before reversal');
+      throw new BadRequestException(
+        'Finance transaction settlement side is missing; reconcile it before reversal',
+      );
     }
 
     const originalEntry = await tx.counterpartySettlementEntry.findUnique({
-      where: { idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT` },
+      where: {
+        tenantId,
+        idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT`,
+      },
     });
     if (!originalEntry) {
-      throw new BadRequestException('Finance transaction has no settlement ledger entry; reconcile it before reversal');
+      throw new BadRequestException(
+        'Finance transaction has no settlement ledger entry; reconcile it before reversal',
+      );
     }
     const eventName = isDeleted ? 'DELETED' : 'CANCELLED';
     const inverseAmount = -this.settlementMovementAmount(
@@ -1433,7 +1977,7 @@ export class FinanceService {
     });
 
     const allocations = await tx.settlementAllocation.findMany({
-      where: { financeTransactionId: transaction.id },
+      where: { tenantId, financeTransactionId: transaction.id },
       select: {
         id: true,
         amount: true,
@@ -1445,10 +1989,15 @@ export class FinanceService {
     const reversedAllocationIds = new Set(
       allocations
         .map((allocation) => allocation.reversesAllocationId)
-        .filter((allocationId): allocationId is string => allocationId !== null),
+        .filter(
+          (allocationId): allocationId is string => allocationId !== null,
+        ),
     );
     const activeAllocations = allocations.filter(
-      (allocation) => Number(allocation.amount) > 0 && !allocation.reversesAllocationId && !reversedAllocationIds.has(allocation.id),
+      (allocation) =>
+        Number(allocation.amount) > 0 &&
+        !allocation.reversesAllocationId &&
+        !reversedAllocationIds.has(allocation.id),
     );
 
     for (const allocation of activeAllocations) {
@@ -1467,7 +2016,12 @@ export class FinanceService {
     }
 
     if (activeAllocations.length === 0) {
-      await this.reverseLegacyDocumentAllocation(tx, tenantId, transaction, amount);
+      await this.reverseLegacyDocumentAllocation(
+        tx,
+        tenantId,
+        transaction,
+        amount,
+      );
     }
 
     // Pre-dispatch payments remain linked to their SalesOrder even after the
@@ -1498,7 +2052,9 @@ export class FinanceService {
     amount: number,
   ) {
     if (!transaction.sourceDocType || !transaction.sourceDocId) return;
-    const targetTypeBySource: Partial<Record<string, SettlementAllocationTarget>> = {
+    const targetTypeBySource: Partial<
+      Record<string, SettlementAllocationTarget>
+    > = {
       SalesInvoice: SettlementAllocationTarget.SALES_INVOICE,
       SalesOrder: SettlementAllocationTarget.SALES_ORDER,
       PurchaseReceipt: SettlementAllocationTarget.PURCHASE_RECEIPT,
@@ -1543,41 +2099,61 @@ export class FinanceService {
     cancelledById: string | undefined,
     isDeleted: boolean,
   ) {
+    // D4: nothing dated in a closed accounting period may change.
+    await assertPeriodOpen(
+      tx,
+      tenantId,
+      existing.transactionDate,
+      isDeleted ? 'delete' : 'cancel',
+    );
+
     const amount = Number(existing.amount);
 
     if (existing.direction === TransactionDirection.INCOME) {
       // Safe check: Account balance cannot go negative
       if (existing.accountId) {
         const acc = await tx.cashAccount.findUnique({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
         });
         if (!acc || Number(acc.balance) < amount) {
           throw new BadRequestException(
-            "Kirimni bekor qilish imkonsiz: kassada yetarli qoldiq mavjud emas (manfiy qoldiq yuzaga keladi)",
+            'Kirimni bekor qilish imkonsiz: kassada yetarli qoldiq mavjud emas (manfiy qoldiq yuzaga keladi)',
           );
         }
         await tx.cashAccount.update({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
           data: { balance: { decrement: amount } },
         });
       }
 
-      await this.reverseCounterpartySettlement(tx, tenantId, existing, amount, isDeleted);
+      await this.reverseCounterpartySettlement(
+        tx,
+        tenantId,
+        existing,
+        amount,
+        isDeleted,
+      );
     } else if (existing.direction === TransactionDirection.EXPENSE) {
       // Return money to account
       if (existing.accountId) {
         await tx.cashAccount.update({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
           data: { balance: { increment: amount } },
         });
       }
 
-      await this.reverseCounterpartySettlement(tx, tenantId, existing, amount, isDeleted);
+      await this.reverseCounterpartySettlement(
+        tx,
+        tenantId,
+        existing,
+        amount,
+        isDeleted,
+      );
     } else if (existing.direction === TransactionDirection.TRANSFER) {
       const destinationAmount = Number(existing.transferToAmount ?? amount);
       if (existing.transferToId) {
         const toAcc = await tx.cashAccount.findUnique({
-          where: { id: existing.transferToId },
+          where: { tenantId, id: existing.transferToId },
         });
         if (!toAcc || Number(toAcc.balance) < destinationAmount) {
           throw new BadRequestException(
@@ -1585,13 +2161,13 @@ export class FinanceService {
           );
         }
         await tx.cashAccount.update({
-          where: { id: existing.transferToId },
+          where: { tenantId, id: existing.transferToId },
           data: { balance: { decrement: destinationAmount } },
         });
       }
       if (existing.accountId) {
         await tx.cashAccount.update({
-          where: { id: existing.accountId },
+          where: { tenantId, id: existing.accountId },
           data: { balance: { increment: amount } },
         });
       }
@@ -1625,7 +2201,11 @@ export class FinanceService {
       };
     }
 
-    return { success: true, id: existing.id, status: TransactionStatus.CANCELLED };
+    return {
+      success: true,
+      id: existing.id,
+      status: TransactionStatus.CANCELLED,
+    };
   }
 
   // ─── Edit Transaction ─────────────────────────────────────────
@@ -1639,9 +2219,12 @@ export class FinanceService {
       where: { id, tenantId, isDeleted: false },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
+    await assertTenantOwned(this.prisma, tenantId, {
+      transactionType: data.transactionTypeId,
+    });
 
     return this.prisma.financeTransaction.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
         comment: data.comment,
         transactionTypeId: data.transactionTypeId,
@@ -1652,11 +2235,7 @@ export class FinanceService {
 
   // ─── Delete Transaction (Soft-delete fallback) ────────────────
 
-  async deleteTransaction(
-    tenantId: string,
-    id: string,
-    deletedById?: string,
-  ) {
+  async deleteTransaction(tenantId: string, id: string, deletedById?: string) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.financeTransaction.findFirst({
         where: { id, tenantId, isDeleted: false },
@@ -1676,7 +2255,7 @@ export class FinanceService {
       }
 
       await tx.financeTransaction.update({
-        where: { id },
+        where: { tenantId, id },
         data: { isDeleted: true },
       });
       return {
@@ -1695,7 +2274,7 @@ export class FinanceService {
     if (!existing) throw new NotFoundException('Transaction not found');
 
     return this.prisma.financeTransaction.update({
-      where: { id },
+      where: { tenantId, id },
       data: { isDeleted: false },
     });
   }

@@ -60,7 +60,7 @@ export class CounterpartySettlementService {
     });
 
     const entry = await tx.counterpartySettlementEntry.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (!entry) {
       throw new ConflictException('Settlement entry was not created');
@@ -70,6 +70,7 @@ export class CounterpartySettlementService {
       this.assertSameMovement(entry, input);
       const balance = await tx.counterpartyBalance.findUnique({
         where: {
+          tenantId: input.tenantId,
           counterpartyId_currency: {
             counterpartyId: input.counterpartyId,
             currency: input.currency,
@@ -79,14 +80,15 @@ export class CounterpartySettlementService {
       return { entry, balance, created: false };
     }
 
-    const balanceField = input.side === CounterpartySettlementSide.CUSTOMER
-      ? 'customerDebt'
-      : 'supplierDebt';
-    const otherBalanceField = balanceField === 'customerDebt'
-      ? 'supplierDebt'
-      : 'customerDebt';
+    const balanceField =
+      input.side === CounterpartySettlementSide.CUSTOMER
+        ? 'customerDebt'
+        : 'supplierDebt';
+    const otherBalanceField =
+      balanceField === 'customerDebt' ? 'supplierDebt' : 'customerDebt';
     const balance = await tx.counterpartyBalance.upsert({
       where: {
+        tenantId: input.tenantId,
         counterpartyId_currency: {
           counterpartyId: input.counterpartyId,
           currency: input.currency,
@@ -109,7 +111,9 @@ export class CounterpartySettlementService {
 
   async rebuildBalances(tx: Prisma.TransactionClient, tenantId: string) {
     if (!tenantId?.trim()) {
-      throw new BadRequestException('Tenant is required to rebuild counterparty balances');
+      throw new BadRequestException(
+        'Tenant is required to rebuild counterparty balances',
+      );
     }
 
     const entries = await tx.counterpartySettlementEntry.findMany({
@@ -122,12 +126,15 @@ export class CounterpartySettlementService {
       },
     });
 
-    const grouped = new Map<string, {
-      counterpartyId: string;
-      currency: string;
-      customerDebt: Prisma.Decimal;
-      supplierDebt: Prisma.Decimal;
-    }>();
+    const grouped = new Map<
+      string,
+      {
+        counterpartyId: string;
+        currency: string;
+        customerDebt: Prisma.Decimal;
+        supplierDebt: Prisma.Decimal;
+      }
+    >();
 
     for (const entry of entries) {
       const key = `${entry.counterpartyId}\u0000${entry.currency}`;
@@ -164,20 +171,33 @@ export class CounterpartySettlementService {
 
   private validateInput(input: RecordSettlementMovementInput) {
     if (!input.tenantId?.trim() || !input.counterpartyId?.trim()) {
-      throw new BadRequestException('Tenant and counterparty are required for a settlement movement');
+      throw new BadRequestException(
+        'Tenant and counterparty are required for a settlement movement',
+      );
     }
-    if (!SUPPORTED_CURRENCIES.includes(input.currency as (typeof SUPPORTED_CURRENCIES)[number])) {
+    if (
+      !SUPPORTED_CURRENCIES.includes(
+        input.currency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
+    ) {
       throw new BadRequestException(
         `Settlement currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
     }
     if (!Object.values(CounterpartySettlementSide).includes(input.side)) {
-      throw new BadRequestException('Settlement side must be CUSTOMER or SUPPLIER');
+      throw new BadRequestException(
+        'Settlement side must be CUSTOMER or SUPPLIER',
+      );
     }
     if (!Number.isFinite(Number(input.amount)) || Number(input.amount) === 0) {
-      throw new BadRequestException('Settlement amount must be a finite, non-zero number');
+      throw new BadRequestException(
+        'Settlement amount must be a finite, non-zero number',
+      );
     }
-    if (!(input.effectiveAt instanceof Date) || !Number.isFinite(input.effectiveAt.getTime())) {
+    if (
+      !(input.effectiveAt instanceof Date) ||
+      !Number.isFinite(input.effectiveAt.getTime())
+    ) {
       throw new BadRequestException('Settlement effective date must be valid');
     }
     if (
@@ -186,7 +206,9 @@ export class CounterpartySettlementService {
       !input.sourceDocId?.trim() ||
       !input.idempotencyKey?.trim()
     ) {
-      throw new BadRequestException('Settlement source and idempotency key are required');
+      throw new BadRequestException(
+        'Settlement source and idempotency key are required',
+      );
     }
   }
 
@@ -220,7 +242,9 @@ export class CounterpartySettlementService {
       entry.reversesEntryId === (input.reversesEntryId ?? null);
 
     if (!matches) {
-      throw new ConflictException('Settlement idempotency key already describes a different movement');
+      throw new ConflictException(
+        'Settlement idempotency key already describes a different movement',
+      );
     }
   }
 }

@@ -1,16 +1,52 @@
 import {
+  Inject,
   Injectable,
   ConflictException,
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { createHash, randomBytes } from 'crypto';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
+import type { Company, User } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { asJson } from '../../common/utils/json-column';
 import { PrismaService } from '../../common/prisma';
 import { AuditService } from '../audit/audit.service';
 import { RegisterCompanyDto, LoginDto, RefreshTokenDto } from './dto';
-import { JwtPayload, AuthResponse } from '../../../../shared/types';
+import {
+  JwtPayload,
+  AuthResponse,
+  RegistrationPendingResponse,
+} from '../../../../shared/types';
+import {
+  MAIL_TRANSPORT,
+  type MailTransport,
+} from '../../common/mail/mail-transport';
+import {
+  accountExistsEmail,
+  confirmRegistrationEmail,
+  slugTakenEmail,
+} from './registration-emails';
+
+/** bcrypt hash (cost 10) of a random string no one knows; never matches. */
+const UNKNOWN_USER_HASH =
+  '$2b$10$kK0JChVph55J8KIdDDCEYu70ALxn7Spg0LmvSJ99XUsHwGbYGlGpi';
+
+/** How long an emailed sign-up link stays valid. */
+const REGISTRATION_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Sign-up form fields kept on a pending registration until it is confirmed. */
+interface PendingRegistrationData {
+  companyName: { uz: string; ru: string };
+  defaultLanguage: 'uz' | 'ru';
+  adminFirstName: string;
+  adminLastName: string;
+  adminPreferredLanguage: 'uz' | 'ru';
+}
+
+const hashToken = (token: string) =>
+  createHash('sha256').update(token).digest('hex');
 
 @Injectable()
 export class AuthService {
@@ -19,121 +55,203 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    @Inject(MAIL_TRANSPORT) private readonly mail: MailTransport,
   ) {}
 
   /**
-   * Atomic Company Sign-Up:
-   * Creates Company (14-day trial) + Admin User + Default Main Branch + Default Warehouse
+   * Company sign-up, step 1 (D3): store a pending registration and email a
+   * one-time confirmation link. The answer is the same whether the email
+   * or the company address is free or taken, so this route cannot be used
+   * to find out who has an account; the difference goes into the email
+   * (to the address's owner). Every path hashes the password, so they cost
+   * about the same time.
    */
-  async registerCompany(dto: RegisterCompanyDto): Promise<AuthResponse> {
-    // 1. Check existing company slug
-    const existingCompany = await this.prisma.company.findUnique({
-      where: { slug: dto.companySlug },
+  async registerCompany(
+    dto: RegisterCompanyDto,
+  ): Promise<RegistrationPendingResponse> {
+    const email = dto.adminEmail.trim().toLowerCase();
+    const language = dto.adminPreferredLanguage ?? dto.defaultLanguage ?? 'uz';
+    const passwordHash = await bcrypt.hash(dto.adminPassword, 10);
+    const frontendUrl = this.frontendUrl();
+    const answer: RegistrationPendingResponse = { status: 'CONFIRMATION_SENT' };
+
+    await this.prisma.pendingRegistration.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
     });
-    if (existingCompany) {
-      throw new ConflictException('Company with this slug already exists');
+
+    if (await this.emailTaken(this.prisma, email)) {
+      await this.mail.send(accountExistsEmail(email, language, frontendUrl));
+      return answer;
+    }
+    if (await this.slugTaken(this.prisma, dto.companySlug)) {
+      await this.mail.send(
+        slugTakenEmail(email, language, frontendUrl, dto.companySlug),
+      );
+      return answer;
     }
 
-    // 2. Check existing admin email (global check)
-    const existingUser = await this.prisma.user.findFirst({
-      where: { email: dto.adminEmail },
+    const token = randomBytes(32).toString('base64url');
+    const data: PendingRegistrationData = {
+      companyName: dto.companyName,
+      defaultLanguage: dto.defaultLanguage ?? 'uz',
+      adminFirstName: dto.adminFirstName,
+      adminLastName: dto.adminLastName,
+      adminPreferredLanguage: language,
+    };
+    await this.prisma.pendingRegistration.create({
+      data: {
+        email,
+        companySlug: dto.companySlug,
+        tokenHash: hashToken(token),
+        passwordHash,
+        data: asJson(data),
+        expiresAt: new Date(Date.now() + REGISTRATION_LINK_TTL_MS),
+      },
     });
-    if (existingUser) {
-      throw new ConflictException(
-        'A user with this email address already exists',
+    await this.mail.send(
+      confirmRegistrationEmail(email, language, frontendUrl, token),
+    );
+    return answer;
+  }
+
+  /**
+   * Company sign-up, step 2 (D3): the emailed link was opened. Creates the
+   * company (14-day trial), its admin user, main branch and warehouse in
+   * one transaction and signs the admin in. The link works once; every
+   * pending sign-up for the same email is used up.
+   */
+  async confirmRegistration(token: string): Promise<AuthResponse> {
+    const pending = await this.prisma.pendingRegistration.findUnique({
+      where: { tokenHash: hashToken(token) },
+    });
+    if (!pending || pending.expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException(
+        "Tasdiqlash havolasi noto'g'ri yoki muddati o'tgan. Qaytadan ro'yxatdan o'ting. / " +
+          'Ссылка подтверждения недействительна или устарела. Зарегистрируйтесь заново.',
       );
     }
+    const data = pending.data as unknown as PendingRegistrationData;
 
-    // 3. Find system role "company_admin"
     const companyAdminRole = await this.prisma.role.findFirst({
       where: { slug: 'company_admin', tenantId: null },
     });
-
     if (!companyAdminRole) {
       throw new BadRequestException(
         'System role company_admin not found. Run database seed first.',
       );
     }
 
-    // 4. Hash admin password
-    const passwordHash = await bcrypt.hash(dto.adminPassword, 10);
-
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-    // 5. Atomic Prisma Transaction
     const result = await this.prisma.$transaction(async (tx) => {
-      // Create Company
+      if (await this.emailTaken(tx, pending.email)) {
+        throw new ConflictException(
+          'Bu email bilan hisob allaqachon mavjud. Tizimga kiring. / ' +
+            'Аккаунт с этим email уже существует. Войдите в систему.',
+        );
+      }
+      if (await this.slugTaken(tx, pending.companySlug)) {
+        throw new ConflictException(
+          `"${pending.companySlug}" manzili band. Boshqa manzil bilan qaytadan ro'yxatdan o'ting. / ` +
+            `Адрес "${pending.companySlug}" занят. Зарегистрируйтесь заново с другим адресом.`,
+        );
+      }
+
       const company = await tx.company.create({
         data: {
-          name: dto.companyName as any,
-          slug: dto.companySlug,
-          defaultLanguage: dto.defaultLanguage || 'uz',
+          name: asJson(data.companyName),
+          slug: pending.companySlug,
+          defaultLanguage: data.defaultLanguage,
           status: 'TRIAL',
           trialEndsAt,
         },
       });
 
-      // Create Admin User
       const user = await tx.user.create({
         data: {
           tenantId: company.id,
-          email: dto.adminEmail,
-          passwordHash,
-          firstName: dto.adminFirstName,
-          lastName: dto.adminLastName,
-          preferredLanguage:
-            dto.adminPreferredLanguage || dto.defaultLanguage || 'uz',
+          email: pending.email,
+          passwordHash: pending.passwordHash,
+          firstName: data.adminFirstName,
+          lastName: data.adminLastName,
+          preferredLanguage: data.adminPreferredLanguage,
           isActive: true,
         },
       });
 
-      // Assign Company Admin Role
       await tx.userRole.create({
-        data: {
-          userId: user.id,
-          roleId: companyAdminRole.id,
-        },
+        data: { userId: user.id, roleId: companyAdminRole.id },
       });
 
-      // Create Default Main Branch
       const branch = await tx.branch.create({
         data: {
           tenantId: company.id,
-          name: { uz: 'Asosiy filial', ru: 'Главный филиал' } as any,
+          name: { uz: 'Asosiy filial', ru: 'Главный филиал' },
           isMain: true,
         },
       });
 
-      // Create Default Warehouse
       await tx.warehouse.create({
         data: {
           tenantId: company.id,
           branchId: branch.id,
-          name: { uz: 'Asosiy ombor', ru: 'Главный склад' } as any,
+          name: { uz: 'Asosiy ombor', ru: 'Главный склад' },
         },
+      });
+
+      await tx.pendingRegistration.deleteMany({
+        where: { email: pending.email },
       });
 
       return { company, user };
     });
 
-    // 6. Record Audit Log
     await this.auditService.logAction({
       tenantId: result.company.id,
       userId: result.user.id,
       entityType: 'Company',
       entityId: result.company.id,
       action: 'CREATE',
-      newValue: { name: dto.companyName, slug: dto.companySlug },
+      newValue: { name: data.companyName, slug: pending.companySlug },
     });
 
-    // 7. Generate Tokens and Return Response
     return this.buildAuthResponse(
       result.user,
       result.company,
       ['company_admin'],
       ['*'],
     );
+  }
+
+  /** Emails are unique across tenants, compared without case. */
+  private async emailTaken(
+    db: Pick<PrismaService, 'user'>,
+    email: string,
+  ): Promise<boolean> {
+    const user = await db.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    return Boolean(user);
+  }
+
+  private async slugTaken(
+    db: Pick<PrismaService, 'company'>,
+    slug: string,
+  ): Promise<boolean> {
+    const company = await db.company.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    return Boolean(company);
+  }
+
+  /** Base URL of the web app, for links in emails (also the CORS origin). */
+  private frontendUrl(): string {
+    return this.configService
+      .get<string>('FRONTEND_URL', 'http://localhost:3000')
+      .replace(/\/+$/, '');
   }
 
   /**
@@ -159,40 +277,23 @@ export class AuthService {
       },
     });
 
-    console.log(
-      `[LOGIN_ATTEMPT] CleanEmail: "${cleanEmail}" (raw: "${dto.email}")`,
-    );
-
-    if (!user) {
-      const totalUsers = await this.prisma.user.count();
-      console.log(
-        `[LOGIN_FAILED] No user found with email: "${cleanEmail}". Total users in DB: ${totalUsers}`,
-      );
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    console.log(
-      `[LOGIN_USER_FOUND] User ID: ${user.id}, email: ${user.email}, isActive: ${user.isActive}`,
-    );
-
+    // Compare against a dummy hash when the email is unknown, so both cases
+    // cost one bcrypt round and fail with the same error.
     const isPasswordValid = await bcrypt.compare(
       dto.password,
-      user.passwordHash,
+      user?.passwordHash ?? UNKNOWN_USER_HASH,
     );
-    if (!isPasswordValid) {
-      console.log(
-        `[LOGIN_FAILED] Password comparison failed for user: "${cleanEmail}"`,
-      );
+    if (!user || !isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Reached only with the correct password, so these reveal nothing to a
+    // guesser.
     if (!user.isActive) {
-      console.log(`[LOGIN_FAILED] User account inactive: "${cleanEmail}"`);
       throw new UnauthorizedException('User account is deactivated');
     }
 
     if (user.company && user.company.status === 'BLOCKED') {
-      console.log(`[LOGIN_FAILED] Company blocked for user: "${cleanEmail}"`);
       throw new UnauthorizedException(
         'Company account is suspended or blocked',
       );
@@ -241,11 +342,8 @@ export class AuthService {
     dto: RefreshTokenDto,
   ): Promise<{ accessToken: string; expiresIn: number }> {
     try {
-      const payload = this.jwtService.verify(dto.refreshToken, {
-        secret: this.configService.get(
-          'JWT_REFRESH_SECRET',
-          'dev-jwt-refresh-secret-change-me-in-production',
-        ),
+      const payload = this.jwtService.verify<JwtPayload>(dto.refreshToken, {
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
 
       const user = await this.prisma.user.findUnique({
@@ -292,7 +390,7 @@ export class AuthService {
         '1d',
       );
       const accessToken = this.jwtService.sign(newPayload, {
-        expiresIn: jwtExpiration as any,
+        expiresIn: jwtExpiration as JwtSignOptions['expiresIn'],
       });
 
       return {
@@ -364,12 +462,12 @@ export class AuthService {
   }
 
   private buildAuthResponse(
-    user: any,
-    company: any,
+    user: User,
+    company: Company | null,
     roles: string[],
     permissions: string[],
   ): AuthResponse {
-    const payload: any = {
+    const payload: JwtPayload = {
       sub: user.id,
       tenantId: company ? company.id : null,
       email: user.email,
@@ -383,14 +481,11 @@ export class AuthService {
       '1d',
     );
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: jwtExpiration as any,
+      expiresIn: jwtExpiration as JwtSignOptions['expiresIn'],
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get(
-        'JWT_REFRESH_SECRET',
-        'dev-jwt-refresh-secret-change-me-in-production',
-      ),
+      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
 
@@ -413,7 +508,7 @@ export class AuthService {
             status: company.status,
             defaultLanguage: company.defaultLanguage,
           }
-        : (null as any),
+        : null,
       tokens: {
         accessToken,
         refreshToken,

@@ -1,11 +1,11 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { validateRequiredEnv } from './common/config/required-env';
 
 // Common
 import { PrismaModule } from './common/prisma';
 import { I18nMiddleware } from './common/middleware/i18n.middleware';
-import { EventsModule } from './common/websockets/events.module';
+import { RateLimitModule } from './common/rate-limit/rate-limit';
 
 // Feature modules
 import { HealthModule } from './modules/health/health.module';
@@ -33,20 +33,15 @@ import { ProductionModule } from './modules/production/production.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validate: validateRequiredEnv,
     }),
 
-    // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    // Rate limiting (global guard; strict limits on auth and webhooks)
+    RateLimitModule,
 
-    // Database & Audit & Real-time WebSockets
+    // Database & Audit
     PrismaModule,
     AuditModule,
-    EventsModule,
 
     // Feature modules
     HealthModule,

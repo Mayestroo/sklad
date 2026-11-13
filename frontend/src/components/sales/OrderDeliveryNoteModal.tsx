@@ -2,7 +2,7 @@
 
 import { useLocale } from 'next-intl';
 import { Button } from '@/components/ui/Button';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatQuantity } from '@/lib/utils';
 import { Printer, X, FileText } from 'lucide-react';
 
 interface DeliveryNoteItem {
@@ -76,7 +76,6 @@ export function OrderDeliveryNoteModal({
   const invoiceDocNo = linkedInvoice?.invoiceNumber || `INV-${order.orderNumber}`;
 
   const totalAmountNum = Number(order.totalAmount || 0);
-  const subtotalNum = Number(order.subtotalAmount || totalAmountNum);
   const discountNum = Number(order.discountAmount || 0);
 
   const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
@@ -191,7 +190,7 @@ export function OrderDeliveryNoteModal({
                       <td className="border border-gray-300 p-1.5 font-medium text-gray-900">{productName}</td>
                       <td className="border border-gray-300 p-1.5 text-center text-gray-600">{uom}</td>
                       <td className="border border-gray-300 p-1.5 text-right font-semibold text-gray-900">
-                        {qty.toLocaleString()}
+                        {formatQuantity(qty)}
                       </td>
                       <td className="border border-gray-300 p-1.5 text-right text-gray-700">
                         {formatCurrency(price, locale, currency)}
@@ -212,7 +211,7 @@ export function OrderDeliveryNoteModal({
                     {isRu ? 'Итого:' : 'Jami:'}
                   </td>
                   <td className="border border-gray-300 p-2 text-right font-bold">
-                    {totalQty.toLocaleString()}
+                    {formatQuantity(totalQty)}
                   </td>
                   <td colSpan={2} className="border border-gray-300 p-2 text-right text-gray-600">
                     {discountNum > 0 && `${isRu ? 'Скидка:' : 'Chegirma:'} ${formatCurrency(discountNum, locale, currency)}`}

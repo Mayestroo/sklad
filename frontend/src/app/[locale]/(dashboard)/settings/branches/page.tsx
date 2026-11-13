@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -12,15 +14,35 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
-import { GitBranch, Warehouse, Plus, Building2, MapPin, Phone, Edit2, Trash2 } from 'lucide-react';
+import { GitBranch, Warehouse, Building2, MapPin, Phone, Edit2, Trash2 } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+
+/** GET /tenants/branches: branches with their warehouses. */
+interface WarehouseRow {
+  id: string;
+  branchId: string | null;
+  name: { uz: string; ru: string };
+  address?: string | null;
+  phone?: string | null;
+  isMain?: boolean;
+}
+
+interface BranchRow {
+  id: string;
+  name: { uz: string; ru: string };
+  address: string | null;
+  isMain: boolean;
+  warehouses: WarehouseRow[];
+}
 
 export default function BranchesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [branches, setBranches] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const branchesQuery = useApiQuery<BranchRow[]>('/tenants/branches');
+  const branches = branchesQuery.data ?? [];
+  const loading = branchesQuery.isPending;
 
   // Modals state
   const [branchModalOpen, setBranchModalOpen] = useState(false);
@@ -33,14 +55,16 @@ export default function BranchesPage() {
   const [branchIsMain, setBranchIsMain] = useState(false);
 
   // Warehouse form
-  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [pickedBranchId, setSelectedBranchId] = useState('');
+  // The new-warehouse form starts on the first branch until one is picked.
+  const selectedBranchId = pickedBranchId || branches[0]?.id || '';
   const [warehouseNameUz, setWarehouseNameUz] = useState('');
   const [warehouseNameRu, setWarehouseNameRu] = useState('');
   const [warehouseAddress, setWarehouseAddress] = useState('');
   const [warehousePhone, setWarehousePhone] = useState('');
 
   // Edit Branch state
-  const [editingBranch, setEditingBranch] = useState<any | null>(null);
+  const [editingBranch, setEditingBranch] = useState<BranchRow | null>(null);
   const [editBranchNameUz, setEditBranchNameUz] = useState('');
   const [editBranchNameRu, setEditBranchNameRu] = useState('');
   const [editBranchAddress, setEditBranchAddress] = useState('');
@@ -48,11 +72,11 @@ export default function BranchesPage() {
   const [editBranchLoading, setEditBranchLoading] = useState(false);
 
   // Delete Branch state
-  const [deletingBranch, setDeletingBranch] = useState<any | null>(null);
+  const [deletingBranch, setDeletingBranch] = useState<BranchRow | null>(null);
   const [deleteBranchLoading, setDeleteBranchLoading] = useState(false);
 
   // Edit Warehouse state
-  const [editingWarehouse, setEditingWarehouse] = useState<any | null>(null);
+  const [editingWarehouse, setEditingWarehouse] = useState<WarehouseRow | null>(null);
   const [editWarehouseBranchId, setEditWarehouseBranchId] = useState('');
   const [editWarehouseNameUz, setEditWarehouseNameUz] = useState('');
   const [editWarehouseNameRu, setEditWarehouseNameRu] = useState('');
@@ -61,28 +85,10 @@ export default function BranchesPage() {
   const [editWarehouseLoading, setEditWarehouseLoading] = useState(false);
 
   // Delete Warehouse state
-  const [deletingWarehouse, setDeletingWarehouse] = useState<any | null>(null);
+  const [deletingWarehouse, setDeletingWarehouse] = useState<WarehouseRow | null>(null);
   const [deleteWarehouseLoading, setDeleteWarehouseLoading] = useState(false);
 
-  const fetchBranches = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const data = await apiFetch<any[]>('/tenants/branches', { token, tenantId: company.id, locale });
-      setBranches(data || []);
-      if (data && data.length > 0 && !selectedBranchId) {
-        setSelectedBranchId(data[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to load branches:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBranches();
-  }, [token, company, locale]);
+  const fetchBranches = () => void branchesQuery.refetch();
 
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,12 +112,12 @@ export default function BranchesPage() {
       setBranchIsMain(false);
       fetchBranches();
       toast.success(isRu ? 'Филиал успешно создан' : 'Filial muvaffaqiyatli yaratildi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik'));
     }
   };
 
-  const handleOpenEditBranch = (branch: any) => {
+  const handleOpenEditBranch = (branch: BranchRow) => {
     setEditingBranch(branch);
     const uz = typeof branch.name === 'object' ? (branch.name.uz || '') : branch.name || '';
     const ru = typeof branch.name === 'object' ? (branch.name.ru || '') : branch.name || '';
@@ -140,8 +146,8 @@ export default function BranchesPage() {
       setEditingBranch(null);
       fetchBranches();
       toast.success(isRu ? 'Филиал успешно обновлен' : 'Filial muvaffaqiyatli yangilandi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка обновления филиала' : 'Filialni tahrirlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления филиала' : 'Filialni tahrirlashda xatolik'));
     } finally {
       setEditBranchLoading(false);
     }
@@ -160,8 +166,8 @@ export default function BranchesPage() {
       setDeletingBranch(null);
       fetchBranches();
       toast.success(isRu ? 'Филиал успешно удален' : 'Filial muvaffaqiyatli o‘chirildi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении филиала' : 'Filialni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении филиала' : 'Filialni o‘chirishda xatolik'));
     } finally {
       setDeleteBranchLoading(false);
     }
@@ -190,12 +196,12 @@ export default function BranchesPage() {
       setWarehousePhone('');
       fetchBranches();
       toast.success(isRu ? 'Склад успешно создан' : 'Omborxona muvaffaqiyatli yaratildi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik'));
     }
   };
 
-  const handleOpenEditWarehouse = (wh: any) => {
+  const handleOpenEditWarehouse = (wh: WarehouseRow) => {
     setEditingWarehouse(wh);
     setEditWarehouseBranchId(wh.branchId || selectedBranchId || '');
     const uz = typeof wh.name === 'object' ? (wh.name.uz || '') : wh.name || '';
@@ -226,8 +232,8 @@ export default function BranchesPage() {
       setEditingWarehouse(null);
       fetchBranches();
       toast.success(isRu ? 'Склад успешно обновлен' : 'Omborxona muvaffaqiyatli yangilandi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка обновления склада' : 'Omborxonani tahrirlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления склада' : 'Omborxonani tahrirlashda xatolik'));
     } finally {
       setEditWarehouseLoading(false);
     }
@@ -246,8 +252,8 @@ export default function BranchesPage() {
       setDeletingWarehouse(null);
       fetchBranches();
       toast.success(isRu ? 'Склад успешно удален' : 'Omborxona muvaffaqiyatli o‘chirildi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении склада' : 'Omborxonani o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении склада' : 'Omborxonani o‘chirishda xatolik'));
     } finally {
       setDeleteWarehouseLoading(false);
     }
@@ -279,7 +285,11 @@ export default function BranchesPage() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {branchesQuery.isError ? (
+        <Card>
+          <LoadError error={branchesQuery.error} onRetry={fetchBranches} retrying={branchesQuery.isFetching} />
+        </Card>
+      ) : loading ? (
         <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {isRu ? 'Загрузка структуры...' : 'Filiallar yuklanmoqda...'}
         </Card>
@@ -337,7 +347,7 @@ export default function BranchesPage() {
                 </h4>
                 {branch.warehouses && branch.warehouses.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                    {branch.warehouses.map((wh: any) => (
+                    {branch.warehouses.map((wh) => (
                       <div key={wh.id} style={{ padding: 'var(--space-2) var(--space-3)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>

@@ -6,7 +6,15 @@ import { SettlementAllocationService } from './settlement-allocation.service';
 
 @Module({
   imports: [PrismaModule],
-  providers: [CounterpartySettlementService, SettlementAllocationService, ReconciliationService],
-  exports: [CounterpartySettlementService, SettlementAllocationService, ReconciliationService],
+  providers: [
+    CounterpartySettlementService,
+    SettlementAllocationService,
+    ReconciliationService,
+  ],
+  exports: [
+    CounterpartySettlementService,
+    SettlementAllocationService,
+    ReconciliationService,
+  ],
 })
 export class SettlementsModule {}

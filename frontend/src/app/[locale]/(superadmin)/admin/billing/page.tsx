@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
@@ -15,9 +15,9 @@ export default function SuperAdminBillingPage() {
   const isRu = locale === 'ru';
   const { token } = useAuth();
 
-  const [metrics, setMetrics] = useState<GlobalMetrics | null>(null);
+  const [, setMetrics] = useState<GlobalMetrics | null>(null);
   const [tenants, setTenants] = useState<TenantCompanySummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const fetchData = async () => {
     if (!token) return;
@@ -29,8 +29,8 @@ export default function SuperAdminBillingPage() {
       ]);
       setMetrics(m);
       setTenants(t);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка загрузки данных' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }

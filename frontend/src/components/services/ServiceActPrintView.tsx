@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Printer, X } from 'lucide-react';
+import type { ServiceActDetail } from '@/lib/service-act';
+import { unitLabel } from '@/lib/units';
 
 interface ServiceActPrintViewProps {
-  act: any;
+  act: ServiceActDetail;
   companyName?: string;
   onClose: () => void;
   locale?: string;
@@ -131,7 +132,7 @@ export function ServiceActPrintView({
               </tr>
             </thead>
             <tbody>
-              {act.items?.map((item: any, idx: number) => (
+              {act.items?.map((item, idx: number) => (
                 <tr key={item.id || idx}>
                   <td className="border border-gray-300 p-2 text-center">{idx + 1}</td>
                   <td className="border border-gray-300 p-2">
@@ -140,7 +141,7 @@ export function ServiceActPrintView({
                       <p className="text-gray-500 text-[11px] mt-0.5">{item.description}</p>
                     )}
                   </td>
-                  <td className="border border-gray-300 p-2 text-center">{item.unit || 'dona'}</td>
+                  <td className="border border-gray-300 p-2 text-center">{unitLabel(item.unit, locale)}</td>
                   <td className="border border-gray-300 p-2 text-right">{Number(item.quantity)}</td>
                   <td className="border border-gray-300 p-2 text-right">
                     {formatCurrency(Number(item.unitPrice), locale, act.currency)}

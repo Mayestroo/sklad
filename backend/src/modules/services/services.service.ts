@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { PrismaService } from '../../common/prisma';
 import { JournalService } from '../accounting/journal/journal.service';
 import {
@@ -19,8 +20,13 @@ import {
 } from './dto/create-service-act.dto';
 import { UpdateServiceActDto } from './dto/update-service-act.dto';
 import { FilterServiceActsDto } from './dto/filter-service-acts.dto';
-import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 @Injectable()
 export class ServicesService {
@@ -39,7 +45,10 @@ export class ServicesService {
       orderBy: { openingDate: 'asc' },
     });
 
-    if (postedDoc && new Date(transactionDate) < new Date(postedDoc.openingDate)) {
+    if (
+      postedDoc &&
+      new Date(transactionDate) < new Date(postedDoc.openingDate)
+    ) {
       throw new BadRequestException(
         `Hujjat sanasi korxonaning boshlang‘ich qoldiq sanasidan (${postedDoc.openingDate.toISOString().slice(0, 10)}) oldin bo‘lishi mumkin emas`,
       );
@@ -52,16 +61,22 @@ export class ServicesService {
   private calculateItem(item: CreateServiceActItemDto) {
     const qty = Number(item.quantity);
     if (item.quantity == null || isNaN(qty) || qty <= 0) {
-      throw new BadRequestException("Xizmat qatorida miqdor (quantity) 0 dan katta bo'lishi shart");
+      throw new BadRequestException(
+        "Xizmat qatorida miqdor (quantity) 0 dan katta bo'lishi shart",
+      );
     }
     const price = Number(item.unitPrice);
     if (item.unitPrice == null || isNaN(price) || price < 0) {
-      throw new BadRequestException("Xizmat qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart");
+      throw new BadRequestException(
+        "Xizmat qatorida narx (unitPrice) 0 yoki undan katta bo'lishi shart",
+      );
     }
     const subtotal = qty * price;
     const vatRate = item.vatRate != null ? Number(item.vatRate) : 0;
     if (isNaN(vatRate) || vatRate < 0) {
-      throw new BadRequestException("QQS stavkasi (vatRate) 0 yoki undan katta bo'lishi shart");
+      throw new BadRequestException(
+        "QQS stavkasi (vatRate) 0 yoki undan katta bo'lishi shart",
+      );
     }
     const vatAmount = (subtotal * vatRate) / 100;
     const lineTotal = subtotal + vatAmount;
@@ -86,16 +101,7 @@ export class ServicesService {
    * Generate sequential act number: ACT-YYYY-XXXX
    */
   async generateActNumber(tenantId: string): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `ACT-${year}-`;
-    const count = await this.prisma.serviceAct.count({
-      where: {
-        tenantId,
-        actNumber: { startsWith: prefix },
-      },
-    });
-    const nextSeq = (count + 1).toString().padStart(4, '0');
-    return `${prefix}${nextSeq}`;
+    return nextDocumentNumber(this.prisma, tenantId, 'SERVICE_ACT');
   }
 
   /**
@@ -107,10 +113,12 @@ export class ServicesService {
     createdById?: string,
   ) {
     if (!dto.items || dto.items.length === 0) {
-      throw new BadRequestException("Kamida bitta xizmat qatori kiritilishi shart");
+      throw new BadRequestException(
+        'Kamida bitta xizmat qatori kiritilishi shart',
+      );
     }
 
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -131,6 +139,9 @@ export class ServicesService {
     }
 
     const calculatedItems = dto.items.map((item) => this.calculateItem(item));
+    await assertTenantOwned(this.prisma, tenantId, {
+      product: dto.items.map((item) => item.productId),
+    });
 
     const counterparty = await this.prisma.counterparty.findFirst({
       where: { id: dto.counterpartyId, tenantId },
@@ -143,7 +154,10 @@ export class ServicesService {
     await this.checkCutoffDate(tenantId, actDate);
 
     const subtotal = calculatedItems.reduce((s, i) => s + i.subtotalNumber, 0);
-    const vatAmount = calculatedItems.reduce((s, i) => s + i.vatAmountNumber, 0);
+    const vatAmount = calculatedItems.reduce(
+      (s, i) => s + i.vatAmountNumber,
+      0,
+    );
     const totalAmount = calculatedItems.reduce((s, i) => s + i.totalNumber, 0);
 
     const actNumber = await this.generateActNumber(tenantId);
@@ -248,7 +262,13 @@ export class ServicesService {
         orderBy: { actDate: 'desc' },
         include: {
           counterparty: {
-            select: { id: true, name: true, inn: true, phone: true, type: true },
+            select: {
+              id: true,
+              name: true,
+              inn: true,
+              phone: true,
+              type: true,
+            },
           },
           items: true,
         },
@@ -315,7 +335,7 @@ export class ServicesService {
 
     if (act.status !== ServiceActStatus.DRAFT) {
       throw new BadRequestException(
-        "Faqat qoralama (DRAFT) holatidagi aktni tahrirlash mumkin",
+        'Faqat qoralama (DRAFT) holatidagi aktni tahrirlash mumkin',
       );
     }
 
@@ -339,9 +359,14 @@ export class ServicesService {
 
     if (dto.items) {
       if (dto.items.length === 0) {
-        throw new BadRequestException("Kamida bitta xizmat qatori kiritilishi shart");
+        throw new BadRequestException(
+          'Kamida bitta xizmat qatori kiritilishi shart',
+        );
       }
       calculatedItems = dto.items.map((item) => this.calculateItem(item));
+      await assertTenantOwned(this.prisma, tenantId, {
+        product: dto.items.map((item) => item.productId),
+      });
       subtotal = calculatedItems.reduce((s, i) => s + i.subtotalNumber, 0);
       vatAmount = calculatedItems.reduce((s, i) => s + i.vatAmountNumber, 0);
       totalAmount = calculatedItems.reduce((s, i) => s + i.totalNumber, 0);
@@ -349,7 +374,7 @@ export class ServicesService {
 
     return this.prisma.$transaction(async (tx) => {
       if (calculatedItems) {
-        await tx.serviceActItem.deleteMany({ where: { actId: id } });
+        await tx.serviceActItem.deleteMany({ where: { tenantId, actId: id } });
         await tx.serviceActItem.createMany({
           data: calculatedItems.map((item) => ({
             tenantId,
@@ -368,15 +393,22 @@ export class ServicesService {
       }
 
       return tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           type: dto.type ?? act.type,
           counterpartyId: dto.counterpartyId ?? act.counterpartyId,
           actDate: dto.actDate ? new Date(dto.actDate) : act.actDate,
           currency: dto.currency ?? act.currency,
-          exchangeRate: dto.exchangeRate ? new Prisma.Decimal(dto.exchangeRate) : act.exchangeRate,
-          externalNumber: dto.externalNumber !== undefined ? dto.externalNumber : act.externalNumber,
-          externalDate: dto.externalDate ? new Date(dto.externalDate) : act.externalDate,
+          exchangeRate: dto.exchangeRate
+            ? new Prisma.Decimal(dto.exchangeRate)
+            : act.exchangeRate,
+          externalNumber:
+            dto.externalNumber !== undefined
+              ? dto.externalNumber
+              : act.externalNumber,
+          externalDate: dto.externalDate
+            ? new Date(dto.externalDate)
+            : act.externalDate,
           subtotal: new Prisma.Decimal(subtotal),
           vatAmount: new Prisma.Decimal(vatAmount),
           totalAmount: new Prisma.Decimal(totalAmount),
@@ -407,14 +439,18 @@ export class ServicesService {
     }
 
     if (act.status !== ServiceActStatus.DRAFT) {
-      throw new BadRequestException("Faqat qoralama (DRAFT) holatidagi akt tasdiqlanishi mumkin");
+      throw new BadRequestException(
+        'Faqat qoralama (DRAFT) holatidagi akt tasdiqlanishi mumkin',
+      );
     }
 
     await this.checkCutoffDate(tenantId, act.actDate);
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, act.actDate, 'post');
       const updated = await tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: ServiceActStatus.POSTED },
         include: { counterparty: true, items: true },
       });
@@ -425,9 +461,10 @@ export class ServicesService {
           tenantId,
           counterpartyId: act.counterpartyId,
           currency: act.currency,
-          side: act.type === ServiceActType.PROVIDED
-            ? CounterpartySettlementSide.CUSTOMER
-            : CounterpartySettlementSide.SUPPLIER,
+          side:
+            act.type === ServiceActType.PROVIDED
+              ? CounterpartySettlementSide.CUSTOMER
+              : CounterpartySettlementSide.SUPPLIER,
           amount: Number(act.totalAmount),
           entryType: 'SERVICE_ACT_POSTED',
           effectiveAt: act.actDate,
@@ -438,7 +475,7 @@ export class ServicesService {
       }
 
       // Create automated BHMS double-entry journal postings
-      await this.journalService.autoPostServiceAct(tenantId, updated);
+      await this.journalService.autoPostServiceAct(tenantId, updated, tx);
 
       return updated;
     });
@@ -484,15 +521,23 @@ export class ServicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      if (act.status === ServiceActStatus.POSTED) {
+        await assertPeriodOpen(tx, tenantId, act.actDate, 'cancel');
+      }
       // If was POSTED, reverse counterparty debt and remove journal entry
-      if (act.status === ServiceActStatus.POSTED && Number(act.totalAmount) > 0) {
+      if (
+        act.status === ServiceActStatus.POSTED &&
+        Number(act.totalAmount) > 0
+      ) {
         await this.settlementService.recordMovement(tx, {
           tenantId,
           counterpartyId: act.counterpartyId,
           currency: act.currency,
-          side: act.type === ServiceActType.PROVIDED
-            ? CounterpartySettlementSide.CUSTOMER
-            : CounterpartySettlementSide.SUPPLIER,
+          side:
+            act.type === ServiceActType.PROVIDED
+              ? CounterpartySettlementSide.CUSTOMER
+              : CounterpartySettlementSide.SUPPLIER,
           amount: -Number(act.totalAmount),
           entryType: 'SERVICE_ACT_CANCELLED',
           effectiveAt: act.actDate,
@@ -501,17 +546,17 @@ export class ServicesService {
           idempotencyKey: `ServiceAct:${act.id}:CANCELLED`,
         });
 
-        await tx.journalEntry.deleteMany({
-          where: {
-            tenantId,
-            sourceDocType: 'ServiceAct',
-            sourceDocId: id,
-          },
-        });
+        await this.journalService.deleteEntriesForSource(
+          tx,
+          tenantId,
+          'ServiceAct',
+          id,
+          'cancel',
+        );
       }
 
       return tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: ServiceActStatus.CANCELLED },
         include: { counterparty: true, items: true },
       });
@@ -533,7 +578,9 @@ export class ServicesService {
     }
 
     if (act.status !== ServiceActStatus.POSTED) {
-      throw new BadRequestException('Faqat tasdiqlangan (POSTED) akt o‘tkazmasini bekor qilish mumkin');
+      throw new BadRequestException(
+        'Faqat tasdiqlangan (POSTED) akt o‘tkazmasini bekor qilish mumkin',
+      );
     }
 
     // Check Rollback Invariant: Cannot unpost if any payments were received/made
@@ -559,15 +606,18 @@ export class ServicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, act.actDate, 'unpost');
       // Reverse counterparty debt
       if (Number(act.totalAmount) > 0) {
         await this.settlementService.recordMovement(tx, {
           tenantId,
           counterpartyId: act.counterpartyId,
           currency: act.currency,
-          side: act.type === ServiceActType.PROVIDED
-            ? CounterpartySettlementSide.CUSTOMER
-            : CounterpartySettlementSide.SUPPLIER,
+          side:
+            act.type === ServiceActType.PROVIDED
+              ? CounterpartySettlementSide.CUSTOMER
+              : CounterpartySettlementSide.SUPPLIER,
           amount: -Number(act.totalAmount),
           entryType: 'SERVICE_ACT_UNPOSTED',
           effectiveAt: act.actDate,
@@ -578,16 +628,16 @@ export class ServicesService {
       }
 
       // Delete linked BHMS journal entry
-      await tx.journalEntry.deleteMany({
-        where: {
-          tenantId,
-          sourceDocType: 'ServiceAct',
-          sourceDocId: id,
-        },
-      });
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'ServiceAct',
+        id,
+        'unpost',
+      );
 
       return tx.serviceAct.update({
-        where: { id },
+        where: { tenantId, id },
         data: { status: ServiceActStatus.DRAFT },
         include: { counterparty: true, items: true },
       });
@@ -617,11 +667,11 @@ export class ServicesService {
 
     return this.prisma.$transaction(async (tx) => {
       await tx.serviceActItem.deleteMany({
-        where: { actId: id },
+        where: { tenantId, actId: id },
       });
 
       return tx.serviceAct.delete({
-        where: { id },
+        where: { tenantId, id },
       });
     });
   }

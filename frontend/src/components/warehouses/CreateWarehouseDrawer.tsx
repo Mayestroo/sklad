@@ -8,17 +8,24 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Warehouse, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { errorMessage, type LocalizedName } from '@/lib/utils';
+
+/** The saved warehouse handed back to the caller (the API returns more). */
+interface CreatedWarehouse {
+  id: string;
+  name: string | { uz?: string; ru?: string };
+}
 
 interface BranchOption {
   id: string;
-  name: any;
+  name: LocalizedName;
 }
 
 export interface CreateWarehouseDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (createdWarehouse: any) => void;
+  onSuccess?(createdWarehouse: CreatedWarehouse): void;
 }
 
 export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
@@ -71,7 +78,7 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
         phone: phone.trim() || undefined,
       };
 
-      const res = await apiFetch('/tenants/warehouses', {
+      const res = await apiFetch<CreatedWarehouse>('/tenants/warehouses', {
         method: 'POST',
         token: token || undefined,
         tenantId: company?.id,
@@ -82,8 +89,8 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
       resetForm();
       if (onSuccess) onSuccess(res);
       onClose();
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка сохранения склада' : 'Omborni saqlashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка сохранения склада' : 'Omborni saqlashda xatolik'));
     } finally {
       setLoading(false);
     }

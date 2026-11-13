@@ -1,20 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { ArrowRightLeft, Send, CheckCircle, Plus, Warehouse, Package, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Send, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { StockTransfer, Product } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import type { Warehouse as WarehouseRow } from '@shared/types';
 
 export default function StockTransfersPage() {
   const tCommon = useTranslations('common');
@@ -23,10 +26,15 @@ export default function StockTransfersPage() {
   const { token, company } = useAuth();
   const confirm = useConfirm();
 
-  const [transfers, setTransfers] = useState<StockTransfer[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const transfersQuery = useApiQuery<StockTransfer[]>('/inventory/transfers');
+  const warehousesQuery = useApiQuery<WarehouseRow[]>('/tenants/warehouses');
+  const productsQuery = useApiQuery<Product[]>('/inventory/products');
+  const pageQueries = [transfersQuery, warehousesQuery, productsQuery];
+  const transfers = transfersQuery.data ?? [];
+  const warehouses = warehousesQuery.data ?? [];
+  const products = productsQuery.data ?? [];
+  const loading = pageQueries.some((q) => q.isPending);
+  const failedQuery = pageQueries.find((q) => q.isError);
 
   // Transfer creation modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -55,35 +63,16 @@ export default function StockTransfersPage() {
       });
       setDeleteConfirmTransfer(null);
       fetchTransfers();
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления перемещения' : "O'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления перемещения' : "O'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  const fetchTransfers = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const [transData, whData, prodData] = await Promise.all([
-        apiFetch<StockTransfer[]>('/inventory/transfers', { token, tenantId: company.id, locale }),
-        apiFetch<any[]>('/tenants/warehouses', { token, tenantId: company.id, locale }),
-        apiFetch<Product[]>('/inventory/products', { token, tenantId: company.id, locale }),
-      ]);
-      setTransfers(transData || []);
-      setWarehouses(whData || []);
-      setProducts(prodData || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const fetchTransfers = () => {
+    pageQueries.forEach((q) => void q.refetch());
   };
-
-  useEffect(() => {
-    fetchTransfers();
-  }, [token, company, locale]);
 
   const handleAddItem = () => {
     if (!selectedProductId || quantity <= 0) return;
@@ -129,8 +118,8 @@ export default function StockTransfersPage() {
       setComment('');
       toast.success(isRu ? 'Перемещение успешно создано' : 'O‘tkazma muvaffaqiyatli yaratildi');
       fetchTransfers();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка создания перевода' : 'Error creating transfer'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка создания перевода' : 'Error creating transfer'));
     }
   };
 
@@ -154,8 +143,8 @@ export default function StockTransfersPage() {
       });
       toast.success(isRu ? 'Товары успешно отправлены' : 'Tovarlar jo‘natildi');
       fetchTransfers();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка отправки' : 'Error shipping transfer'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки' : 'Error shipping transfer'));
     }
   };
 
@@ -179,8 +168,8 @@ export default function StockTransfersPage() {
       });
       toast.success(isRu ? 'Товары успешно приняты на склад' : 'Tovarlar omborga qabul qilindi');
       fetchTransfers();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка приёмки' : 'Error receiving transfer'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка приёмки' : 'Error receiving transfer'));
     }
   };
 
@@ -223,7 +212,13 @@ export default function StockTransfersPage() {
       </div>
 
       <Card>
-        {loading ? (
+        {failedQuery ? (
+          <LoadError
+            error={failedQuery.error}
+            onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+            retrying={pageQueries.some((q) => q.isFetching)}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>

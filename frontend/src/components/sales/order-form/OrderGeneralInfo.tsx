@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
@@ -17,6 +16,10 @@ export interface OrderGeneralInfoProps {
   onCounterpartyChange: (id: string) => void;
   customerOptions: SelectOption[];
   onQuickCustomerOpen?: () => void;
+  warehouseId: string;
+  onWarehouseChange: (id: string) => void;
+  warehouseOptions: SelectOption[];
+  onQuickWarehouseOpen?: () => void;
   paymentCondition: 'PREPAID_100' | 'PARTIAL' | 'CREDIT';
   onPaymentConditionChange: (cond: 'PREPAID_100' | 'PARTIAL' | 'CREDIT') => void;
   requiredPaymentPercent: number;
@@ -43,6 +46,10 @@ export function OrderGeneralInfo({
   onCounterpartyChange,
   customerOptions,
   onQuickCustomerOpen,
+  warehouseId,
+  onWarehouseChange,
+  warehouseOptions,
+  onQuickWarehouseOpen,
   paymentCondition,
   onPaymentConditionChange,
   requiredPaymentPercent,
@@ -84,6 +91,20 @@ export function OrderGeneralInfo({
           />
         </div>
 
+        {/* Warehouse: stock is reserved and shipped from here */}
+        <div style={{ minWidth: '150px', flex: '1.5 1 170px' }}>
+          <Select
+            label={isRu ? 'Склад отгрузки *' : 'Jo‘natish ombori *'}
+            options={warehouseOptions}
+            value={warehouseId}
+            onChange={onWarehouseChange}
+            placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
+            disabled={isLocked}
+            onCreateNew={!isLocked ? onQuickWarehouseOpen : undefined}
+            createNewLabel={isRu ? 'Создать новый склад' : 'Yangi ombor qo‘shish'}
+          />
+        </div>
+
         {/* Payment Condition */}
         <div style={{ minWidth: '160px', flex: '1.5 1 180px' }}>
           <Select
@@ -94,7 +115,7 @@ export function OrderGeneralInfo({
               { value: 'CREDIT', label: isRu ? 'В кредит (Без предоплаты)' : 'Nasiya / Kreditga' },
             ]}
             value={paymentCondition}
-            onChange={(val) => onPaymentConditionChange(val as any)}
+            onChange={(val) => onPaymentConditionChange(val as 'PREPAID_100' | 'PARTIAL' | 'CREDIT')}
             disabled={isLocked}
           />
         </div>

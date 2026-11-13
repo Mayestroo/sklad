@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { formatCurrency } from '@/lib/utils';
 import { Plus, Trash2 } from 'lucide-react';
 import { ProductDropdownItem } from '@/hooks/useDocumentDropdowns';
 
@@ -26,18 +26,11 @@ export interface OrderItemsTableProps {
   items: OrderItemRow[];
   products: ProductDropdownItem[];
   productOptions: SelectOption[];
-  onItemChange: (index: number, field: keyof OrderItemRow, value: any) => void;
+  onItemChange: (index: number, field: keyof OrderItemRow, value: OrderItemRow[keyof OrderItemRow]) => void;
   onAddItem: () => void;
   onRemoveItem: (index: number) => void;
 }
 
-/** Format a number as 1,234,567.000 */
-function formatNum(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
-  }).format(value || 0);
-}
 
 
 export function OrderItemsTable({
@@ -47,7 +40,6 @@ export function OrderItemsTable({
   orderStatus,
   isPriceOverrideAllowed,
   items,
-  products,
   productOptions,
   onItemChange,
   onAddItem,
@@ -133,19 +125,6 @@ export function OrderItemsTable({
                     />
                   </td>
 
-                  {/* VAT Rate */}
-                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={item.vatRate}
-                      onChange={(event) => onItemChange(idx, 'vatRate', event.target.value)}
-                      disabled={isLocked}
-                      aria-label={`${isRu ? 'Ставка НДС' : 'QQS stavkasi'} ${idx + 1}`}
-                      style={{ width: 78, height: 36, padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', textAlign: 'right' }}
-                    />
-                  </td>
-
                   {/* Ready Qty (read-only display) */}
                   {orderStatus !== 'NEW' && (
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
@@ -186,9 +165,22 @@ export function OrderItemsTable({
                     />
                   </td>
 
+                  {/* VAT Rate */}
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={item.vatRate}
+                      onChange={(event) => onItemChange(idx, 'vatRate', event.target.value)}
+                      disabled={isLocked}
+                      aria-label={`${isRu ? 'Ставка НДС' : 'QQS stavkasi'} ${idx + 1}`}
+                      style={{ width: 78, height: 36, padding: '6px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', textAlign: 'right' }}
+                    />
+                  </td>
+
                   {/* Line Total */}
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                    {currency ? `${formatNum(lineTotal)} ${currency.toUpperCase()}` : '—'}
+                    {currency ? formatCurrency(lineTotal, locale, currency) : '—'}
                   </td>
 
                   {/* Delete */}

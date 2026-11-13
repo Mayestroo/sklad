@@ -99,4 +99,3 @@ export class DashboardController {
     return this.dashboardService.getSalesOrderStats(tenantId);
   }
 }
-

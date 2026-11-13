@@ -68,4 +68,3 @@ export class CreateSalesReturnDto {
   @Type(() => SalesReturnItemDto)
   items: SalesReturnItemDto[];
 }
-

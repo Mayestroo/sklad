@@ -46,9 +46,9 @@ export class CreateSalesOrderDto {
   @IsNotEmpty()
   counterpartyId: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  warehouseId?: string;
+  warehouseId: string;
 
   @IsValidCurrency()
   currency: string;
@@ -61,7 +61,7 @@ export class CreateSalesOrderDto {
   @IsEnum(['PREPAID_100', 'PARTIAL', 'CREDIT'])
   paymentCondition: 'PREPAID_100' | 'PARTIAL' | 'CREDIT';
 
-  @ValidateIf((o) => o.paymentCondition === 'PARTIAL')
+  @ValidateIf((o: CreateSalesOrderDto) => o.paymentCondition === 'PARTIAL')
   @IsNumber()
   @Min(1)
   @Max(100)

@@ -1,16 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { asJson } from '../../../common/utils/json-column';
 import { PrismaService } from '../../../common/prisma';
 import { CreateCategoryDto, UpdateCategoryDto } from '../dto';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(tenantId: string, dto: CreateCategoryDto) {
+    await assertTenantOwned(this.prisma, tenantId, { category: dto.parentId });
     return this.prisma.category.create({
       data: {
         tenantId,
-        name: dto.name as any,
+        name: asJson(dto.name),
         parentId: dto.parentId || null,
       },
     });
@@ -47,11 +50,12 @@ export class CategoriesService {
     if (!category) {
       throw new NotFoundException('Category not found');
     }
+    await assertTenantOwned(this.prisma, tenantId, { category: dto.parentId });
 
     return this.prisma.category.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
-        name: dto.name ? (dto.name as any) : undefined,
+        name: dto.name ? asJson(dto.name) : undefined,
         parentId: dto.parentId !== undefined ? dto.parentId : undefined,
       },
       include: {
@@ -74,21 +78,20 @@ export class CategoriesService {
 
     // Unassign products from this category before deleting
     await this.prisma.product.updateMany({
-      where: { categoryId: id },
+      where: { tenantId, categoryId: id },
       data: { categoryId: null },
     });
 
     // Unassign child categories
     await this.prisma.category.updateMany({
-      where: { parentId: id },
+      where: { tenantId, parentId: id },
       data: { parentId: null },
     });
 
     await this.prisma.category.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     return { success: true, message: 'Kategoriya muvaffaqiyatli o‘chirildi' };
   }
 }
-

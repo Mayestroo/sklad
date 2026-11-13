@@ -42,44 +42,56 @@ export class AnalyticsService {
 
     const revenueByCurrencyMap: Record<string, number> = {};
     let totalNetRevenueUzs = 0;
-    let totalCogs = 0;
     let grossProfit = 0;
     for (const invoice of invoices) {
       const invoiceCurrency = invoice.currency;
       const rate = invoiceCurrency === 'UZS' ? 1 : Number(invoice.exchangeRate);
       if (!Number.isFinite(rate) || rate <= 0) {
-        throw new BadRequestException(`Posted sales invoice has an invalid ${invoiceCurrency} exchange rate`);
+        throw new BadRequestException(
+          `Posted sales invoice has an invalid ${invoiceCurrency} exchange rate`,
+        );
       }
       const amount = Number(invoice.totalAmount);
       const netRevenue = amount - Number(invoice.vatAmount || 0);
-      revenueByCurrencyMap[invoiceCurrency] = (revenueByCurrencyMap[invoiceCurrency] || 0) + amount;
+      revenueByCurrencyMap[invoiceCurrency] =
+        (revenueByCurrencyMap[invoiceCurrency] || 0) + amount;
       totalNetRevenueUzs += netRevenue * rate;
-      totalCogs += Number(invoice.totalCogs || 0);
       grossProfit += Number(invoice.grossProfit || 0);
     }
     for (const salesReturn of returns) {
       const currency = salesReturn.currency;
-      const rate = currency === 'UZS' ? 1 : Number(salesReturn.invoice?.exchangeRate);
+      const rate =
+        currency === 'UZS' ? 1 : Number(salesReturn.invoice?.exchangeRate);
       if (!Number.isFinite(rate) || rate <= 0) {
-        throw new BadRequestException(`Posted sales return has an invalid ${currency} exchange rate`);
+        throw new BadRequestException(
+          `Posted sales return has an invalid ${currency} exchange rate`,
+        );
       }
       const amount = Number(salesReturn.totalAmount);
-      const vat = salesReturn.items.reduce((sum, item) => sum + Number(item.vatAmount || 0), 0);
+      const vat = salesReturn.items.reduce(
+        (sum, item) => sum + Number(item.vatAmount || 0),
+        0,
+      );
       const netRevenue = amount - vat;
       const cogs = Number(salesReturn.totalCogs || 0);
-      revenueByCurrencyMap[currency] = (revenueByCurrencyMap[currency] || 0) - amount;
+      revenueByCurrencyMap[currency] =
+        (revenueByCurrencyMap[currency] || 0) - amount;
       totalNetRevenueUzs -= netRevenue * rate;
-      totalCogs -= cogs;
       grossProfit -= netRevenue * rate - cogs;
     }
     const totalRevenueByCurrency = Object.entries(revenueByCurrencyMap)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([currency, amount]) => ({ currency, amount }));
-    const totalRevenue = totalRevenueByCurrency.length === 1 ? totalRevenueByCurrency[0].amount : 0;
-    const grossProfitByCurrency = invoices.length > 0 || returns.length > 0
-      ? [{ currency: 'UZS', amount: Math.round(grossProfit * 100) / 100 }]
-      : [];
-    const netProfitMargin = totalNetRevenueUzs > 0 ? (grossProfit / totalNetRevenueUzs) * 100 : 0;
+    const totalRevenue =
+      totalRevenueByCurrency.length === 1
+        ? totalRevenueByCurrency[0].amount
+        : 0;
+    const grossProfitByCurrency =
+      invoices.length > 0 || returns.length > 0
+        ? [{ currency: 'UZS', amount: Math.round(grossProfit * 100) / 100 }]
+        : [];
+    const netProfitMargin =
+      totalNetRevenueUzs > 0 ? (grossProfit / totalNetRevenueUzs) * 100 : 0;
 
     let totalAccountsReceivable = 0;
     let totalAccountsPayable = 0;
@@ -93,29 +105,53 @@ export class AnalyticsService {
       const supplierDebt = Number(balance.supplierDebt);
       const netBalance = customerDebt - supplierDebt;
       if (netBalance > 0) {
-        receivablesByCurr[balance.currency] = (receivablesByCurr[balance.currency] || 0) + netBalance;
+        receivablesByCurr[balance.currency] =
+          (receivablesByCurr[balance.currency] || 0) + netBalance;
       } else if (netBalance < 0) {
-        payablesByCurr[balance.currency] = (payablesByCurr[balance.currency] || 0) + Math.abs(netBalance);
+        payablesByCurr[balance.currency] =
+          (payablesByCurr[balance.currency] || 0) + Math.abs(netBalance);
       }
       if (customerDebt < 0) {
-        customerAdvancesByCurr[balance.currency] = (customerAdvancesByCurr[balance.currency] || 0) + Math.abs(customerDebt);
+        customerAdvancesByCurr[balance.currency] =
+          (customerAdvancesByCurr[balance.currency] || 0) +
+          Math.abs(customerDebt);
       }
       if (supplierDebt < 0) {
-        supplierAdvancesByCurr[balance.currency] = (supplierAdvancesByCurr[balance.currency] || 0) + Math.abs(supplierDebt);
+        supplierAdvancesByCurr[balance.currency] =
+          (supplierAdvancesByCurr[balance.currency] || 0) +
+          Math.abs(supplierDebt);
       }
     });
 
-    const receivablesByCurrency = Object.entries(receivablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    const payablesByCurrency = Object.entries(payablesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    const customerAdvancesByCurrency = Object.entries(customerAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    const supplierAdvancesByCurrency = Object.entries(supplierAdvancesByCurr).map(([curr, amount]) => ({ currency: curr, amount }));
-    if (receivablesByCurrency.length === 1) totalAccountsReceivable = receivablesByCurrency[0].amount;
-    if (payablesByCurrency.length === 1) totalAccountsPayable = payablesByCurrency[0].amount;
+    const receivablesByCurrency = Object.entries(receivablesByCurr).map(
+      ([curr, amount]) => ({ currency: curr, amount }),
+    );
+    const payablesByCurrency = Object.entries(payablesByCurr).map(
+      ([curr, amount]) => ({ currency: curr, amount }),
+    );
+    const customerAdvancesByCurrency = Object.entries(
+      customerAdvancesByCurr,
+    ).map(([curr, amount]) => ({ currency: curr, amount }));
+    const supplierAdvancesByCurrency = Object.entries(
+      supplierAdvancesByCurr,
+    ).map(([curr, amount]) => ({ currency: curr, amount }));
+    if (receivablesByCurrency.length === 1)
+      totalAccountsReceivable = receivablesByCurrency[0].amount;
+    if (payablesByCurrency.length === 1)
+      totalAccountsPayable = payablesByCurrency[0].amount;
 
-    const inventoryValuation = stockLevels.reduce((sum, stock) =>
-      sum + Number(stock.quantity) * Number(stock.product?.costPrice || 0) * Number(stock.product?.costPriceExchangeRate || 1),
-    0);
-    const reportCurrency = totalRevenueByCurrency.length === 1 ? totalRevenueByCurrency[0].currency : 'UZS';
+    const inventoryValuation = stockLevels.reduce(
+      (sum, stock) =>
+        sum +
+        Number(stock.quantity) *
+          Number(stock.product?.costPrice || 0) *
+          Number(stock.product?.costPriceExchangeRate || 1),
+      0,
+    );
+    const reportCurrency =
+      totalRevenueByCurrency.length === 1
+        ? totalRevenueByCurrency[0].currency
+        : 'UZS';
 
     return {
       currency: reportCurrency,

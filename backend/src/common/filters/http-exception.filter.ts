@@ -41,7 +41,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request & { locale?: string }>();
 
-    const locale = (request as any).locale || 'uz';
+    const locale = request.locale || 'uz';
 
     const status =
       exception instanceof HttpException
@@ -61,10 +61,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exception instanceof HttpException ? exception.getResponse() : null;
 
     let message: string;
-    let details: any = null;
+    let details: string[] | null = null;
 
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-      const resp = exceptionResponse as any;
+      const resp = exceptionResponse as { message?: string | string[] };
       // Handle class-validator errors
       if (Array.isArray(resp.message)) {
         message = resp.message.join('; ');

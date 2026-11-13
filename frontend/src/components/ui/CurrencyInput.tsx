@@ -19,11 +19,16 @@ export interface CurrencyInputProps {
   title?: string;
 }
 
+/**
+ * Text of a number in an input: comma groups, dot decimal, at most
+ * `decimals` places and no trailing zeros (D9: `1`, not `1.000`, which reads
+ * as one thousand in Uzbek/Russian notation).
+ */
 export function formatCurrencyValue(val: number | string | null | undefined, decimals = 3): string {
   const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/,/g, ''));
-  if (isNaN(num)) return `0.${'0'.repeat(decimals)}`;
+  if (isNaN(num)) return '0';
   return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: decimals,
+    minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   }).format(num);
 }
@@ -93,7 +98,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       value,
       onChange,
       decimals = 3,
-      placeholder = '0.000',
+      placeholder = '0',
       disabled = false,
       min = 0,
       max,
@@ -122,7 +127,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     const charLen = displayValue ? displayValue.length : (placeholder ? placeholder.length : 5);
     const dynamicCh = autoWidth ? Math.max(minWidthCh, charLen + 4) : Math.max(0, charLen + 3);
 
-    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    const handleFocus = () => {
       setIsFocused(true);
       const formatted = formatCurrencyValue(value, decimals);
       setTextValue(formatted);
@@ -143,7 +148,6 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
-      const oldVal = textValue;
       const cursorPos = e.target.selectionStart || 0;
 
       const { formatted, rawNumber } = formatNumberWithCommas(raw, decimals);

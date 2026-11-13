@@ -1,32 +1,36 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import {
-  Kanban,
   Plus,
   Building2,
-  DollarSign,
-  User,
-  ArrowRight,
   X,
-  CheckCircle2,
-  XCircle,
   Edit2,
   Trash2,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import { Counterparty } from '@shared/types';
-type Deal = any;
+interface Deal {
+  id: string;
+  title: string;
+  stage: string;
+  amount: number | string;
+  currency?: string;
+  counterpartyId: string;
+  counterparty?: { name: string } | null;
+}
 
 const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] = [
   { slug: 'LEAD', nameUz: 'Lidlar (Yangi)', nameRu: 'Лиды (Новые)', color: 'var(--color-primary-600)' },
@@ -38,20 +42,25 @@ const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] 
 ];
 
 export default function CrmKanbanPage() {
-  const t = useTranslations('sales');
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
-  const [kanbanData, setKanbanData] = useState<Record<string, Deal[]>>({});
-  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const kanbanQuery = useApiQuery<Record<string, Deal[]>>('/sales/deals/kanban');
+  const counterpartiesQuery = useApiQuery<Counterparty[]>('/sales/counterparties');
+  const pageQueries = [kanbanQuery, counterpartiesQuery];
+  const kanbanData = kanbanQuery.data ?? {};
+  const counterparties = counterpartiesQuery.data ?? [];
+  const loading = pageQueries.some((q) => q.isPending);
+  const failedQuery = pageQueries.find((q) => q.isError);
 
   // New Deal Modal State
   const [showModal, setShowModal] = useState(false);
-  const [counterpartyId, setCounterpartyId] = useState('');
+  const [pickedCounterpartyId, setCounterpartyId] = useState('');
+  // The new-deal form starts on the first counterparty until one is picked.
+  const counterpartyId = pickedCounterpartyId || counterparties[0]?.id || '';
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState<number>(0);
   const [stage, setStage] = useState<string>('LEAD');
@@ -70,30 +79,9 @@ export default function CrmKanbanPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
 
-  const fetchData = async () => {
-    if (!token || !company) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const [board, countData] = await Promise.all([
-        apiFetch<Record<string, Deal[]>>('/sales/deals/kanban', { token, tenantId: company.id, locale }),
-        apiFetch<Counterparty[]>('/sales/counterparties', { token, tenantId: company.id, locale }),
-      ]);
-      setKanbanData(board);
-      setCounterparties(countData);
-      if (countData.length > 0) setCounterpartyId(countData[0].id);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const fetchData = () => {
+    pageQueries.forEach((q) => void q.refetch());
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [token, company]);
 
   const handleCreateDeal = async (e: FormEvent) => {
     e.preventDefault();
@@ -101,7 +89,7 @@ export default function CrmKanbanPage() {
     setCreateLoading(true);
 
     try {
-      await apiFetch<any>('/sales/deals', {
+      await apiFetch<Deal>('/sales/deals', {
         method: 'POST',
         token,
         tenantId: company.id,
@@ -138,7 +126,7 @@ export default function CrmKanbanPage() {
     if (!token || !company || !editingDeal) return;
     setEditLoading(true);
     try {
-      await apiFetch<any>(`/sales/deals/${editingDeal.id}`, {
+      await apiFetch<Deal>(`/sales/deals/${editingDeal.id}`, {
         method: 'PATCH',
         token,
         tenantId: company.id,
@@ -153,8 +141,8 @@ export default function CrmKanbanPage() {
       setEditingDeal(null);
       toast.success(isRu ? 'Сделка успешно обновлена' : 'Bitim muvaffaqiyatli yangilandi');
       fetchData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при обновлении сделки' : 'Bitimni yangilashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при обновлении сделки' : 'Bitimni yangilashda xatolik'));
     } finally {
       setEditLoading(false);
     }
@@ -164,7 +152,7 @@ export default function CrmKanbanPage() {
     if (!token || !company || !deletingDeal) return;
     setDeleteLoading(true);
     try {
-      await apiFetch<any>(`/sales/deals/${deletingDeal.id}`, {
+      await apiFetch<unknown>(`/sales/deals/${deletingDeal.id}`, {
         method: 'DELETE',
         token,
         tenantId: company.id,
@@ -173,8 +161,8 @@ export default function CrmKanbanPage() {
       setDeletingDeal(null);
       toast.success(isRu ? 'Сделка успешно удалена' : 'Bitim muvaffaqiyatli o‘chirildi');
       fetchData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при удалении сделки' : 'Bitimni o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении сделки' : 'Bitimni o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -183,7 +171,7 @@ export default function CrmKanbanPage() {
   const handleMoveStage = async (dealId: string, newStage: string) => {
     if (!token || !company) return;
     try {
-      await apiFetch<any>(`/sales/deals/${dealId}/stage`, {
+      await apiFetch<Deal>(`/sales/deals/${dealId}/stage`, {
         method: 'PATCH',
         token,
         tenantId: company.id,
@@ -223,7 +211,13 @@ export default function CrmKanbanPage() {
       </div>
 
       {/* Kanban Board Layout */}
-      {loading ? (
+      {failedQuery ? (
+        <LoadError
+          error={failedQuery.error}
+          onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+          retrying={pageQueries.some((q) => q.isFetching)}
+        />
+      ) : loading ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {tCommon('loading')}
         </div>

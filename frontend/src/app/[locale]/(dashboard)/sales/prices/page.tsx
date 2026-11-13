@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrency, formatPercent, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -23,12 +23,12 @@ interface PriceList {
   currency: string;
   isDefault: boolean;
   isActive: boolean;
-  prices?: { id: string; productId: string; price: number; product?: { id: string; name: any; sku: string } }[];
+  prices?: { id: string; productId: string; price: number; product?: { id: string; name: LocalizedName; sku: string } }[];
 }
 
 interface Product {
   id: string;
-  name: any;
+  name: LocalizedName;
   sku: string;
   salePrice: number;
   costPrice: number;
@@ -42,7 +42,7 @@ export default function PricesPage() {
 
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [selectedPLId, setSelectedPLId] = useState<string | null>(null);
 
   const [showCreatePL, setShowCreatePL] = useState(false);
@@ -142,8 +142,8 @@ export default function PricesPage() {
       toast.success(isRu ? 'Прайс-лист успешно создан' : 'Narx jadvali muvaffaqiyatli yaratildi');
       fetchData();
       if (created) selectPriceList(created.id);
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
     } finally {
       setCreateLoading(false);
     }
@@ -179,8 +179,8 @@ export default function PricesPage() {
       setShowEditPL(false);
       toast.success(isRu ? 'Прайс-лист успешно обновлен' : 'Narx jadvali muvaffaqiyatli yangilandi');
       fetchData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка обновления прайс-листа' : 'Narx jadvalini tahrirlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления прайс-листа' : 'Narx jadvalini tahrirlashda xatolik'));
     } finally {
       setEditLoading(false);
     }
@@ -199,8 +199,8 @@ export default function PricesPage() {
       setDeletingPL(null);
       toast.success(isRu ? 'Прайс-лист успешно удален' : 'Narx jadvali muvaffaqiyatli o‘chirildi');
       fetchData();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка удаления прайс-листа' : 'Narx jadvalini o‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка удаления прайс-листа' : 'Narx jadvalini o‘chirishda xatolik'));
     } finally {
       setDeleteLoading(false);
     }
@@ -246,7 +246,7 @@ export default function PricesPage() {
           if (pl.id !== targetPLId) return pl;
           const oldPrices = pl.prices || [];
           const existingIdx = oldPrices.findIndex((p) => p.productId === productId);
-          let newPrices: any[];
+          let newPrices: NonNullable<PriceList['prices']>;
           if (existingIdx >= 0) {
             newPrices = [...oldPrices];
             newPrices[existingIdx] = { ...newPrices[existingIdx], price: Number(priceVal) };
@@ -265,8 +265,8 @@ export default function PricesPage() {
 
       fetchData();
       toast.success(isRu ? 'Цена успешно сохранена' : 'Narx muvaffaqiyatli saqlandi');
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка сохранения цены' : 'Narxni saqlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка сохранения цены' : 'Narxni saqlashda xatolik'));
     } finally {
       setSavingPrice(null);
     }
@@ -400,11 +400,11 @@ export default function PricesPage() {
                     let discountBadge = null;
                     if (listPrice > 0 && basePrice > 0) {
                       if (listPrice < basePrice) {
-                        const disc = (((basePrice - listPrice) / basePrice) * 100).toFixed(1);
-                        discountBadge = <Badge variant="success">-{disc}% {isRu ? 'скидка' : 'chegirma'}</Badge>;
+                        const disc = formatPercent(((basePrice - listPrice) / basePrice) * 100);
+                        discountBadge = <Badge variant="success">-{disc} {isRu ? 'скидка' : 'chegirma'}</Badge>;
                       } else if (listPrice > basePrice) {
-                        const markup = (((listPrice - basePrice) / basePrice) * 100).toFixed(1);
-                        discountBadge = <Badge variant="warning">+{markup}% {isRu ? 'наценка' : 'ustama'}</Badge>;
+                        const markup = formatPercent(((listPrice - basePrice) / basePrice) * 100);
+                        discountBadge = <Badge variant="warning">+{markup} {isRu ? 'наценка' : 'ustama'}</Badge>;
                       } else {
                         discountBadge = <Badge variant="neutral">0%</Badge>;
                       }
@@ -415,7 +415,7 @@ export default function PricesPage() {
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', fontWeight: 500 }}>{getProductName(prod)}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{prod.sku || '—'}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)' }}>
-                          {formatCurrency(basePrice, locale, (prod as any).currency || selectedPL?.currency || defaultCurrency)}
+                          {formatCurrency(basePrice, locale, (prod as { currency?: string } | null | undefined)?.currency || selectedPL?.currency || defaultCurrency)}
                         </td>
                         <td style={{ padding: '10px 14px' }}>
                           {isEditing ? (

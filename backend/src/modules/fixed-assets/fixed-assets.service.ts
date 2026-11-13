@@ -3,15 +3,20 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { CreateFixedAssetDto, UpdateFixedAssetDto } from './dto/fixed-asset.dto';
+import {
+  CreateFixedAssetDto,
+  UpdateFixedAssetDto,
+} from './dto/fixed-asset.dto';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class FixedAssetsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(tenantId: string, search?: string) {
-    const where: any = { tenantId };
+    const where: Prisma.FixedAssetWhereInput = { tenantId };
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -53,6 +58,9 @@ export class FixedAssetsService {
   }
 
   async create(tenantId: string, dto: CreateFixedAssetDto) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      user: dto.custodianUserId,
+    });
     const existing = await this.prisma.fixedAsset.findFirst({
       where: { tenantId, inventoryNumber: dto.inventoryNumber },
     });
@@ -89,13 +97,21 @@ export class FixedAssetsService {
 
   async update(tenantId: string, id: string, dto: UpdateFixedAssetDto) {
     await this.findOne(tenantId, id);
+    await assertTenantOwned(this.prisma, tenantId, {
+      user: dto.custodianUserId,
+    });
 
-    const data: any = { ...dto };
+    const data: Prisma.FixedAssetUncheckedUpdateInput = { ...dto };
     if (dto.acquisitionDate) {
       data.acquisitionDate = new Date(dto.acquisitionDate);
     }
-    if (dto.initialCost !== undefined || dto.accumulatedDepreciation !== undefined) {
-      const current = await this.prisma.fixedAsset.findUnique({ where: { id } });
+    if (
+      dto.initialCost !== undefined ||
+      dto.accumulatedDepreciation !== undefined
+    ) {
+      const current = await this.prisma.fixedAsset.findUnique({
+        where: { tenantId, id },
+      });
       const initCost =
         dto.initialCost !== undefined
           ? Number(dto.initialCost)
@@ -108,13 +124,13 @@ export class FixedAssetsService {
     }
 
     return this.prisma.fixedAsset.update({
-      where: { id },
+      where: { tenantId, id },
       data,
     });
   }
 
   async delete(tenantId: string, id: string) {
     await this.findOne(tenantId, id);
-    return this.prisma.fixedAsset.delete({ where: { id } });
+    return this.prisma.fixedAsset.delete({ where: { tenantId, id } });
   }
 }

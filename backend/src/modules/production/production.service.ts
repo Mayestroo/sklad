@@ -6,7 +6,7 @@ import {
 import { ManufacturingStatus, Prisma, ProductType } from '@prisma/client';
 import { PrismaService } from '../../common/prisma';
 import { AuditService } from '../audit/audit.service';
-import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import {
   allocateFifoCost,
   FifoBatchInput,
@@ -19,6 +19,8 @@ import {
   FilterProductionDocumentsDto,
   UpdateActualMaterialsDto,
 } from './dto/create-production-document.dto';
+import { consumeFifoBatches } from '../inventory/fifo/fifo-batches';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 
 const recipeInclude = {
   product: true,
@@ -149,7 +151,7 @@ export class ProductionService {
 
     const replacement = await this.createRecipe(tenantId, userId, dto);
     await this.prisma.productionRecipe.update({
-      where: { id: current.id },
+      where: { tenantId, id: current.id },
       data: { isActive: false },
     });
     await this.auditService.logAction({
@@ -255,10 +257,10 @@ export class ProductionService {
     );
     if (dto.responsibleId)
       await this.requireTenantUser(tenantId, dto.responsibleId);
-    const docNumber = await generateDocumentSequence('PRD', (prefix) =>
-      this.prisma.productionDocument.count({
-        where: { tenantId, docNumber: { startsWith: prefix } },
-      }),
+    const docNumber = await nextDocumentNumber(
+      this.prisma,
+      tenantId,
+      'PRODUCTION',
     );
 
     const document = await this.prisma.productionDocument.create({
@@ -524,7 +526,7 @@ export class ProductionService {
         }
 
         const allocations = await tx.productionMaterialBatch.findMany({
-          where: { lineId: line.id },
+          where: { batch: { tenantId }, lineId: line.id },
         });
         const quantity = allocations.reduce(
           (sum, allocation) => sum + Number(allocation.quantity),
@@ -538,7 +540,7 @@ export class ProductionService {
           ),
         );
         await tx.productionMaterialLine.update({
-          where: { id: line.id },
+          where: { productionDocument: { tenantId }, id: line.id },
           data: {
             actualQuantity: desiredQuantity,
             unitCost: quantity > 0 ? roundMoney(totalCost / quantity) : 0,
@@ -553,13 +555,13 @@ export class ProductionService {
       }
 
       const updatedLines = await tx.productionMaterialLine.findMany({
-        where: { productionDocumentId: id },
+        where: { productionDocument: { tenantId }, productionDocumentId: id },
       });
       const actualMaterialCost = roundMoney(
         updatedLines.reduce((sum, line) => sum + Number(line.totalCost), 0),
       );
       const updatedDocument = await tx.productionDocument.update({
-        where: { id },
+        where: { tenantId, id },
         data: { actualMaterialCost },
         include: documentInclude,
       });
@@ -595,7 +597,7 @@ export class ProductionService {
       );
     }
     const result = await this.prisma.productionDocument.update({
-      where: { id },
+      where: { tenantId, id },
       data: { status: ManufacturingStatus.READY },
       include: documentInclude,
     });
@@ -623,6 +625,8 @@ export class ProductionService {
       if (!document)
         throw new NotFoundException('Ishlab chiqarish hujjati topilmadi');
       this.requireStatus(document.status, ManufacturingStatus.READY);
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, document.docDate, 'post');
       if (document.materials.some((line) => line.actualQuantity == null)) {
         throw new BadRequestException(
           'Haqiqiy sarf kiritilmagan xomashyo mavjud',
@@ -672,7 +676,7 @@ export class ProductionService {
         },
       });
       await tx.product.update({
-        where: { id: document.productId },
+        where: { tenantId, id: document.productId },
         data: {
           costPrice: unitCost,
           costPriceCurrency: 'UZS',
@@ -680,7 +684,7 @@ export class ProductionService {
         },
       });
       return tx.productionDocument.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           producedQuantity,
           actualMaterialCost,
@@ -726,6 +730,9 @@ export class ProductionService {
         );
       }
       const previousStatus = document.status;
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, document.docDate, 'cancel');
+
       const claimed = await tx.productionDocument.updateMany({
         where: { id, tenantId, status: previousStatus },
         data: { status: ManufacturingStatus.CANCELLED },
@@ -796,36 +803,21 @@ export class ProductionService {
       );
     }
 
-    const batches = await tx.productBatch.findMany({
-      where: {
-        tenantId,
-        warehouseId,
-        productId: line.productId,
-        remainingQty: { gt: 0 },
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    // Shared FIFO consumer: guarded decrements, all or nothing. Production keeps
+    // its own per-batch records (material batches + movements) below.
+    const allocation = await consumeFifoBatches(tx, {
+      tenantId,
+      warehouseId,
+      productId: line.productId,
+      quantity,
     });
-    let allocation;
-    try {
-      allocation = allocateFifoCost(quantity, toFifoBatchInputs(batches));
-    } catch {
-      throw new BadRequestException(
-        'Xomashyo partiyalaridagi qoldiq ombor qoldig‘iga mos emas yoki tannarx ma’lumoti yo‘q',
-      );
-    }
 
     for (const item of allocation.batches) {
-      const changed = await tx.productBatch.updateMany({
-        where: { id: item.batchId, remainingQty: { gte: item.quantity } },
-        data: { remainingQty: { decrement: item.quantity } },
-      });
-      if (changed.count !== 1) {
-        throw new BadRequestException(
-          'Xomashyo partiyasi qoldig‘i o‘zgardi. Hujjatni qayta yuklab tekshiring',
-        );
-      }
       await tx.productionMaterialBatch.upsert({
-        where: { lineId_batchId: { lineId: line.id, batchId: item.batchId } },
+        where: {
+          batch: { tenantId },
+          lineId_batchId: { lineId: line.id, batchId: item.batchId },
+        },
         update: { quantity: { increment: item.quantity } },
         create: {
           lineId: line.id,
@@ -849,7 +841,7 @@ export class ProductionService {
     }
 
     const changedStock = await tx.stockLevel.updateMany({
-      where: { id: stock.id, quantity: { gte: quantity } },
+      where: { tenantId, id: stock.id, quantity: { gte: quantity } },
       data: { quantity: { decrement: quantity } },
     });
     if (changedStock.count !== 1) {
@@ -881,7 +873,7 @@ export class ProductionService {
       const allocatedQuantity = Number(allocation.quantity);
       const restoreQuantity = Math.min(allocatedQuantity, remaining);
       await tx.productBatch.update({
-        where: { id: allocation.batchId },
+        where: { tenantId, id: allocation.batchId },
         data: { remainingQty: { increment: restoreQuantity } },
       });
       await tx.stockLevel.update({
@@ -908,11 +900,11 @@ export class ProductionService {
       });
       if (restoreQuantity + 0.0005 >= allocatedQuantity) {
         await tx.productionMaterialBatch.delete({
-          where: { id: allocation.id },
+          where: { batch: { tenantId }, id: allocation.id },
         });
       } else {
         await tx.productionMaterialBatch.update({
-          where: { id: allocation.id },
+          where: { batch: { tenantId }, id: allocation.id },
           data: { quantity: { decrement: restoreQuantity } },
         });
       }

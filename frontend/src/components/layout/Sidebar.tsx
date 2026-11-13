@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { SALES_EXPENSE_HREF } from '@/lib/finance-quick-action';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -27,8 +28,8 @@ import {
   CreditCard,
   Briefcase,
   Scale,
-  Building2,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export function Sidebar() {
   const t = useTranslations('nav');
@@ -73,6 +74,9 @@ export function Sidebar() {
     { href: '/sales', label: t('salesOverview'), icon: ShoppingCart },
     { href: '/sales/returns', label: t('salesReturns'), icon: RotateCcw },
     { href: '/sales/customers', label: t('customers'), icon: UserCheck },
+    // B13: selling expenses are period expenses booked in Finance, not
+    // purchase landed cost.
+    { href: SALES_EXPENSE_HREF, label: t('salesExpenses'), icon: Receipt },
   ];
 
   // Sub-items for Settings
@@ -91,7 +95,7 @@ export function Sidebar() {
     transition: 'all var(--transition-fast)',
   };
 
-  const renderNavLink = (href: string, label: string, Icon: any, exact = false) => {
+  const renderNavLink = (href: string, label: string, Icon: LucideIcon, exact = false) => {
     const isActive = exact ? pathname === href : pathname === href || (href !== '/' && pathname.startsWith(href));
 
     return (

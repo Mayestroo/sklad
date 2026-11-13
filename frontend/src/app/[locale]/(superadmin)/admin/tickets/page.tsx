@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
+import { formatDate, errorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -32,8 +31,8 @@ export default function SuperAdminTicketsPage() {
     try {
       const res = await apiFetch<SupportTicket[]>('/super-admin/tickets', { token, locale });
       setTickets(res);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка загрузки тикетов' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки тикетов' : 'Xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -59,8 +58,8 @@ export default function SuperAdminTicketsPage() {
       setSelectedTicket(null);
       setReplyMessage('');
       fetchTickets();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка отправки ответа' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки ответа' : 'Xatolik yuz berdi'));
     } finally {
       setReplyLoading(false);
     }
@@ -133,7 +132,7 @@ export default function SuperAdminTicketsPage() {
                       )}
                     </td>
                     <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>
-                      {(ticket as any).company?.name?.uz || (ticket as any).company?.slug || 'Korxona'}
+                      {(ticket as { company?: { name?: { uz?: string }; slug?: string } }).company?.name?.uz || (ticket as { company?: { slug?: string } }).company?.slug || 'Korxona'}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       {ticket.status === 'RESOLVED' ? (

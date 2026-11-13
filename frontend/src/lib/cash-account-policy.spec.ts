@@ -4,7 +4,7 @@ import {
   isCashAccountCompatibleWithSalesPayment,
   isCashAccountCurrencyValid,
   requiredAccountTypeForSalesPayment,
-} from './cash-account-policy.ts';
+} from '../../../shared/types/cash-account-policy.ts';
 
 describe('cash account isolation policy', () => {
   test('keeps UZS and USD cash tills fixed to their native currency', () => {

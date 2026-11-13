@@ -40,16 +40,25 @@ export interface TopDebtor {
   amount: number;
 }
 
+export interface CurrencyAmount {
+  currency: string;
+  amount: number;
+}
+
 export interface DashboardDebts {
   receivable: {
     total: number;
     count: number;
     topDebtors: TopDebtor[];
+    byCurrency?: CurrencyAmount[];
+    advancesByCurrency?: CurrencyAmount[];
   };
   payable: {
     total: number;
     count: number;
     topCreditors: TopDebtor[];
+    byCurrency?: CurrencyAmount[];
+    advancesByCurrency?: CurrencyAmount[];
   };
 }
 

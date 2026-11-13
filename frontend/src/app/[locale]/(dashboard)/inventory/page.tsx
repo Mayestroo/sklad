@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -20,27 +22,27 @@ import {
   QrCode,
   FileText,
   ArrowRightLeft,
-  CheckCircle2,
-  Tag,
-  Warehouse,
   Building2,
+  Pencil,
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
+import type { Warehouse as WarehouseRow } from '@shared/types';
+import { unitLabel } from '@/lib/units';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 
 export default function InventoryPage() {
   const t = useTranslations('inventory');
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const { token, company, hasPermission } = useAuth();
+  const canEditProducts = hasPermission('inventory:edit');
+  // muammolar B10: the nomenclature list can open a product for editing.
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const defaultCurrency = useDefaultCurrency();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [lowStockAlerts, setLowStockAlerts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [search, setSearch] = useState('');
+  // The typed search applies on Enter / the filter button, as before.
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
@@ -51,50 +53,28 @@ export default function InventoryPage() {
   const [scanResult, setScanResult] = useState<Product | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    if (!token || !company) {
-      setLoading(false);
+  const productsQuery = useApiQuery<Product[]>(
+    `/inventory/products?${appliedSearch ? `search=${encodeURIComponent(appliedSearch)}` : ''}${selectedCategory ? `&category=${encodeURIComponent(selectedCategory)}` : ''}`,
+  );
+  const categoriesQuery = useApiQuery<Category[]>('/inventory/categories');
+  const warehousesQuery = useApiQuery<WarehouseRow[]>('/tenants/warehouses');
+  const lowStockQuery = useApiQuery<Product[]>('/inventory/products/low-stock');
+  const inventoryQueries = [productsQuery, categoriesQuery, warehousesQuery, lowStockQuery];
+  const products = productsQuery.data;
+  const categories = categoriesQuery.data;
+  const warehouses = warehousesQuery.data;
+  const lowStockAlerts = Array.isArray(lowStockQuery.data) ? lowStockQuery.data : [];
+  const loading = inventoryQueries.some((q) => q.isPending);
+  const failedQuery = inventoryQueries.find((q) => q.isError);
+
+  /** Enter / filter button: apply the typed search, or reload when it is unchanged. */
+  const fetchData = () => {
+    if (search !== appliedSearch) {
+      setAppliedSearch(search);
       return;
     }
-    setLoading(true);
-    try {
-      const [prodsData, catsData, whData, alertData] = await Promise.all([
-        apiFetch<Product[]>(`/inventory/products?${search ? `search=${search}` : ''}${selectedCategory ? `&category=${selectedCategory}` : ''}`, {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-        apiFetch<Category[]>('/inventory/categories', {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-        apiFetch<any[]>('/tenants/warehouses', {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-        apiFetch<Product[]>('/inventory/products/low-stock', {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-      ]);
-
-      setProducts(Array.isArray(prodsData) ? prodsData : []);
-      setCategories(Array.isArray(catsData) ? catsData : []);
-      setWarehouses(Array.isArray(whData) ? whData : []);
-      setLowStockAlerts(Array.isArray(alertData) ? alertData : []);
-    } catch (err) {
-      console.error('Failed to load inventory data:', err);
-    } finally {
-      setLoading(false);
-    }
+    inventoryQueries.forEach((q) => void q.refetch());
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [token, company, selectedCategory]);
 
   const handleBarcodeSearch = async () => {
     if (!scannedBarcode || !token || !company) return;
@@ -107,8 +87,8 @@ export default function InventoryPage() {
         locale,
       });
       setScanResult(res);
-    } catch (err: any) {
-      setScanError(err.message || 'Product not found');
+    } catch (err) {
+      setScanError(errorMessage(err) || 'Product not found');
     }
   };
 
@@ -117,13 +97,14 @@ export default function InventoryPage() {
   const safeCategories = Array.isArray(categories) ? categories : [];
 
   const filteredProducts = filterLowStockOnly
-    ? safeProducts.filter((p) => (p as any).isLowStock)
+    ? safeProducts.filter((p) => p.isLowStock)
     : safeProducts;
 
   const isRu = locale === 'ru';
 
-  const getLocalizedName = (name: any) => {
+  const getLocalizedName = (name: LocalizedName | null | undefined) => {
     if (!name) return '';
+    if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || '';
   };
 
@@ -271,7 +252,13 @@ export default function InventoryPage() {
 
       {/* Product Catalog Table */}
       <Card>
-        {loading ? (
+        {failedQuery ? (
+          <LoadError
+            error={failedQuery.error}
+            onRetry={() => inventoryQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+            retrying={inventoryQueries.some((q) => q.isFetching)}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>
@@ -294,11 +281,14 @@ export default function InventoryPage() {
                   <th style={{ padding: '12px', textAlign: 'right' }}>SOTUV NARXI</th>
                   <th style={{ padding: '12px', textAlign: 'right' }}>JAMI QOLDIQ</th>
                   <th style={{ padding: '12px', textAlign: 'center' }}>HOLAT</th>
+                  {canEditProducts && (
+                    <th style={{ padding: '12px', textAlign: 'center' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {filteredProducts.map((product) => {
-                  const isLow = (product as any).isLowStock;
+                  const isLow = product.isLowStock;
                   return (
                     <tr key={product.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                       <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)' }}>
@@ -318,7 +308,7 @@ export default function InventoryPage() {
                         )}
                       </td>
                       <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                        {t(`units.${product.unitOfMeasure}` as any) || product.unitOfMeasure}
+                        {unitLabel(product.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency || 'UZS')}
@@ -327,7 +317,7 @@ export default function InventoryPage() {
                         {formatCurrency(Number(product.salePrice), locale, product.salePriceCurrency || defaultCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {(product as any).totalStock || 0} {t(`units.${product.unitOfMeasure}` as any)}
+                        {formatQuantity(Number(product.totalStock ?? 0))} {unitLabel(product.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         {isLow ? (
@@ -336,6 +326,19 @@ export default function InventoryPage() {
                           <Badge variant="success">Normal</Badge>
                         )}
                       </td>
+                      {canEditProducts && (
+                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingProduct(product)}
+                            aria-label={`${isRu ? 'Редактировать' : 'Tahrirlash'}: ${getLocalizedName(product.name)}`}
+                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                          >
+                            <Pencil size={16} />
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -344,6 +347,18 @@ export default function InventoryPage() {
           </div>
         )}
       </Card>
+
+      {editingProduct && (
+        <CreateProductDrawer
+          isOpen={Boolean(editingProduct)}
+          productToEdit={editingProduct}
+          onClose={() => setEditingProduct(null)}
+          onSuccess={() => {
+            setEditingProduct(null);
+            fetchData();
+          }}
+        />
+      )}
 
       {/* Barcode Scanner Modal */}
       {showScanner && (

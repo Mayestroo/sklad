@@ -6,8 +6,22 @@ describe('DashboardService debt projection', () => {
     const prisma: any = {
       salesInvoice: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'uzs-invoice', invoiceDate: date, totalAmount: 2000000, status: 'POSTED', currency: 'UZS', exchangeRate: 1 },
-          { id: 'usd-invoice', invoiceDate: date, totalAmount: 100, status: 'POSTED', currency: 'USD', exchangeRate: 12800 },
+          {
+            id: 'uzs-invoice',
+            invoiceDate: date,
+            totalAmount: 2000000,
+            status: 'POSTED',
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'usd-invoice',
+            invoiceDate: date,
+            totalAmount: 100,
+            status: 'POSTED',
+            currency: 'USD',
+            exchangeRate: 12800,
+          },
         ]),
       },
     };
@@ -26,13 +40,19 @@ describe('DashboardService debt projection', () => {
   });
 
   it('keeps gross profit KPIs in UZS and excludes unposted invoices', async () => {
-    const date = new Date('2026-10-09T10:00:00.000Z');
     const prisma: any = {
       financeTransaction: { findMany: jest.fn().mockResolvedValue([]) },
       cashAccount: { findMany: jest.fn().mockResolvedValue([]) },
       salesInvoice: {
         findMany: jest.fn().mockResolvedValue([
-          { totalAmount: 110, vatAmount: 10, totalCogs: 600000, grossProfit: 600000, currency: 'USD', exchangeRate: 12000 },
+          {
+            totalAmount: 110,
+            vatAmount: 10,
+            totalCogs: 600000,
+            grossProfit: 600000,
+            currency: 'USD',
+            exchangeRate: 12000,
+          },
         ]),
       },
     };
@@ -40,9 +60,11 @@ describe('DashboardService debt projection', () => {
 
     const result = await service.getFinanceKPIs('tenant-1', {});
 
-    expect(prisma.salesInvoice.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ status: 'POSTED' }),
-    }));
+    expect(prisma.salesInvoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'POSTED' }),
+      }),
+    );
     expect(result.profit).toEqual({
       grossProfit: 600000,
       netProfit: 600000,
@@ -96,7 +118,9 @@ describe('DashboardService debt projection', () => {
       total: 200000,
       byCurrency: [{ currency: 'UZS', amount: 200000 }],
       advancesByCurrency: [{ currency: 'USD', amount: 40 }],
-      topCreditors: [{ id: 'cp-2', name: 'Supplier Two', amount: 200000, currency: 'UZS' }],
+      topCreditors: [
+        { id: 'cp-2', name: 'Supplier Two', amount: 200000, currency: 'UZS' },
+      ],
     });
   });
 
@@ -160,19 +184,34 @@ describe('DashboardService debt projection', () => {
 
     expect(result.summaryByAccount).toEqual([
       expect.objectContaining({
-        accountId: 'uzs-cash', currency: 'UZS', transferOut: 128000, netCashFlow: -128000,
+        accountId: 'uzs-cash',
+        currency: 'UZS',
+        transferOut: 128000,
+        netCashFlow: -128000,
       }),
       expect.objectContaining({
-        accountId: 'usd-bank', currency: 'USD', transferIn: 10, netCashFlow: 10,
+        accountId: 'usd-bank',
+        currency: 'USD',
+        transferIn: 10,
+        netCashFlow: 10,
       }),
       expect.objectContaining({
-        accountId: 'uzs-bank', currency: 'UZS', totalExpense: 100000, netCashFlow: -100000,
+        accountId: 'uzs-bank',
+        currency: 'UZS',
+        totalExpense: 100000,
+        netCashFlow: -100000,
       }),
     ]);
 
-    const usdResult = await service.getFinanceKPIs('tenant-1', { currency: 'USD' });
+    const usdResult = await service.getFinanceKPIs('tenant-1', {
+      currency: 'USD',
+    });
     expect(usdResult.summaryByAccount).toEqual([
-      expect.objectContaining({ accountId: 'usd-bank', currency: 'USD', transferIn: 10 }),
+      expect.objectContaining({
+        accountId: 'usd-bank',
+        currency: 'USD',
+        transferIn: 10,
+      }),
     ]);
   });
 });

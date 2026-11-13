@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -28,13 +30,12 @@ import {
   Printer,
   Trash2,
   Edit2,
-  Filter,
-  Briefcase,
   RotateCcw,
   ChevronLeft,
   ChevronRight,
   FileText,
 } from 'lucide-react';
+import type { ServiceActDetail } from '@/lib/service-act';
 
 export default function ServicesPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -53,54 +54,34 @@ export default function ServicesPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  // Data
-  const [acts, setActs] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
 
   // Modal / Drawer states
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [editingAct, setEditingAct] = useState<any | null>(null);
+  const [editingAct, setEditingAct] = useState<ServiceActDetail | null>(null);
 
-  const [selectedAct, setSelectedAct] = useState<any | null>(null);
+  const [selectedAct, setSelectedAct] = useState<ServiceActDetail | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-  const [printAct, setPrintAct] = useState<any | null>(null);
+  const [printAct, setPrintAct] = useState<ServiceActDetail | null>(null);
 
-  // Fetch Acts
-  const fetchActs = useCallback(async () => {
-    if (!token && !company?.id) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('type', activeType);
-      params.append('page', String(page));
-      params.append('limit', String(pageSize));
-      if (search.trim()) params.append('search', search.trim());
-      if (statusFilter) params.append('status', statusFilter);
-      if (paymentStatusFilter) params.append('paymentStatus', paymentStatusFilter);
-
-      const res = await apiFetch<{ items: any[]; total: number }>(`/services?${params.toString()}`, {
-        token: token || undefined,
-        tenantId: company?.id,
-        locale,
-      });
-
-      if (res) {
-        setActs(res.items || []);
-        setTotal(res.total || 0);
-      }
-    } catch {
-      setActs([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeType, search, statusFilter, paymentStatusFilter, page, token, company?.id, locale]);
-
-  useEffect(() => {
-    fetchActs();
-  }, [fetchActs]);
+  // Data: the filters and page are the endpoint (= query key).
+  const actsEndpoint = useMemo(() => {
+    const params = new URLSearchParams();
+    params.append('type', activeType);
+    params.append('page', String(page));
+    params.append('limit', String(pageSize));
+    if (search.trim()) params.append('search', search.trim());
+    if (statusFilter) params.append('status', statusFilter);
+    if (paymentStatusFilter) params.append('paymentStatus', paymentStatusFilter);
+    return `/services?${params.toString()}`;
+  }, [activeType, page, search, statusFilter, paymentStatusFilter]);
+  const actsQuery = useApiQuery<{ items: ServiceActDetail[]; total: number }>(actsEndpoint);
+  const acts = useMemo(() => actsQuery.data?.items ?? [], [actsQuery.data]);
+  const total = actsQuery.data?.total ?? 0;
+  const loading = actsQuery.isPending;
+  const fetchActs = async () => {
+    await actsQuery.refetch();
+  };
 
   // Aggregate Metrics for Active Tab
   const { totalAmountSum, totalPaidSum, totalDebtSum, totalPages } = useMemo(() => {
@@ -123,14 +104,14 @@ export default function ServicesPage() {
     setIsDrawerOpen(true);
   };
 
-  const handleOpenEdit = (act: any) => {
+  const handleOpenEdit = (act: ServiceActDetail) => {
     setEditingAct(act);
     setIsDrawerOpen(true);
   };
 
-  const handleOpenDetails = async (act: any) => {
+  const handleOpenDetails = async (act: ServiceActDetail) => {
     try {
-      const detailed = await apiFetch(`/services/${act.id}`, {
+      const detailed = await apiFetch<ServiceActDetail>(`/services/${act.id}`, {
         token: token || undefined,
         tenantId: company?.id,
         locale,
@@ -143,7 +124,7 @@ export default function ServicesPage() {
     }
   };
 
-  const handleEditAct = async (act: any, e?: React.MouseEvent) => {
+  const handleEditAct = async (act: ServiceActDetail, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (act.status === 'POSTED') {
       const confirmUnpost = await confirm({
@@ -158,7 +139,7 @@ export default function ServicesPage() {
       if (!confirmUnpost) return;
 
       try {
-        const unposted = await apiFetch<any>(`/services/${act.id}/unpost`, {
+        const unposted = await apiFetch<ServiceActDetail>(`/services/${act.id}/unpost`, {
           method: 'POST',
           token: token || undefined,
           tenantId: company?.id,
@@ -168,8 +149,8 @@ export default function ServicesPage() {
         toast.success(isRu ? 'Проведение акта отменено' : 'Akt o‘tkazmasi bekor qilindi');
         setEditingAct(unposted || { ...act, status: 'DRAFT' });
         setIsDrawerOpen(true);
-      } catch (err: any) {
-        toast.error(err.message || (isRu ? 'Ошибка отмены проведения' : 'O‘tkazmani bekor qilishda xatolik'));
+      } catch (err) {
+        toast.error(errorMessage(err) || (isRu ? 'Ошибка отмены проведения' : 'O‘tkazmani bekor qilishda xatolik'));
       }
     } else {
       setEditingAct(act);
@@ -177,7 +158,7 @@ export default function ServicesPage() {
     }
   };
 
-  const handleDeleteAct = async (act: any, e: React.MouseEvent) => {
+  const handleDeleteAct = async (act: ServiceActDetail, e: React.MouseEvent) => {
     e.stopPropagation();
     const isPosted = act.status === 'POSTED';
     const confirmed = await confirm({
@@ -215,8 +196,8 @@ export default function ServicesPage() {
       });
       toast.success(isRu ? 'Акт успешно удален' : 'Akt muvaffaqiyatli o‘chirildi');
       fetchActs();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik yuz berdi'));
     }
   };
 
@@ -633,7 +614,13 @@ export default function ServicesPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {actsQuery.isError ? (
+                <tr>
+                  <td colSpan={8}>
+                    <LoadError error={actsQuery.error} onRetry={() => void fetchActs()} retrying={actsQuery.isFetching} />
+                  </td>
+                </tr>
+              ) : loading ? (
                 <tr>
                   <td colSpan={8} style={{ padding: '48px', textAlign: 'center' }}>
                     <div className="inline-block animate-spin rounded-full h-7 w-7 border-2 border-blue-600 border-t-transparent"></div>
@@ -930,7 +917,7 @@ export default function ServicesPage() {
       {printAct && (
         <ServiceActPrintView
           act={printAct}
-          companyName={company?.name || 'KORXONA'}
+          companyName={company?.name ? getLocalizedName(company.name, locale) : 'KORXONA'}
           onClose={() => setPrintAct(null)}
           locale={locale}
         />

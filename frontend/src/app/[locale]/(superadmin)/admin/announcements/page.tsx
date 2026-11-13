@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Megaphone, Plus, Bell, Calendar } from 'lucide-react';
+import { Plus, Bell, Calendar } from 'lucide-react';
 import { toast } from '@/context/ToastContext';
 
 interface SystemAnnouncement {
@@ -41,8 +41,8 @@ export default function SuperAdminAnnouncementsPage() {
     try {
       const res = await apiFetch<SystemAnnouncement[]>('/super-admin/announcements', { token, locale });
       setAnnouncements(res);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка загрузки оповещений' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки оповещений' : 'Xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -74,8 +74,8 @@ export default function SuperAdminAnnouncementsPage() {
       setMsgUz('');
       setMsgRu('');
       fetchAnnouncements();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при публикации' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при публикации' : 'Xatolik yuz berdi'));
     } finally {
       setSubmitLoading(false);
     }

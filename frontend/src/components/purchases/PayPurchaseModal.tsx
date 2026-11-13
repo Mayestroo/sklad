@@ -9,10 +9,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, errorMessage } from '@/lib/utils';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
-import { CreditCard, DollarSign, Calendar, FileText } from 'lucide-react';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
+import { CreditCard } from 'lucide-react';
 
 interface PayPurchaseModalProps {
   isOpen: boolean;
@@ -160,9 +160,9 @@ export function PayPurchaseModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       setError(
-        err?.message || (isRu ? 'Ошибка при проведении оплаты' : 'To‘lovni amalga oshirishda xatolik')
+        errorMessage(err) || (isRu ? 'Ошибка при проведении оплаты' : 'To‘lovni amalga oshirishda xatolik')
       );
     } finally {
       setLoading(false);

@@ -58,43 +58,6 @@ export class StockReservationService {
   }
 
   /**
-   * Get free stock for multiple products in a warehouse
-   */
-  async getWarehouseStockAvailability(
-    tenantId: string,
-    warehouseId: string,
-    productIds?: string[],
-  ): Promise<Record<string, StockAvailability>> {
-    const where: Prisma.StockLevelWhereInput = {
-      tenantId,
-      warehouseId,
-    };
-
-    if (productIds && productIds.length > 0) {
-      where.productId = { in: productIds };
-    }
-
-    const stockLevels = await this.prisma.stockLevel.findMany({
-      where,
-    });
-
-    const result: Record<string, StockAvailability> = {};
-    for (const sl of stockLevels) {
-      const physical = Number(sl.quantity || 0);
-      const reserved = Number(sl.reservedQuantity || 0);
-      result[sl.productId] = {
-        productId: sl.productId,
-        warehouseId: sl.warehouseId,
-        physicalStock: physical,
-        reservedStock: reserved,
-        freeStock: Math.max(0, physical - reserved),
-      };
-    }
-
-    return result;
-  }
-
-  /**
    * Auto-reserve stock for a confirmed Sales Order
    * Reserves available free stock up to requested quantity and returns remaining gap for production.
    */
@@ -109,7 +72,12 @@ export class StockReservationService {
     const results: ReservationResult[] = [];
 
     for (const item of items) {
-      const availability = await this.getFreeStock(tenantId, warehouseId, item.productId, client);
+      const availability = await this.getFreeStock(
+        tenantId,
+        warehouseId,
+        item.productId,
+        client,
+      );
       const toReserve = Math.min(availability.freeStock, item.quantity);
       const remainingGap = Math.max(0, item.quantity - toReserve);
 
@@ -150,7 +118,7 @@ export class StockReservationService {
 
         // Update SalesOrderItem reservedQty
         await client.salesOrderItem.update({
-          where: { id: item.orderItemId },
+          where: { order: { tenantId }, id: item.orderItemId },
           data: {
             reservedQty: toReserve,
           },
@@ -206,7 +174,7 @@ export class StockReservationService {
     });
 
     await client.salesOrderItem.updateMany({
-      where: { orderId },
+      where: { order: { tenantId }, orderId },
       data: {
         reservedQty: 0,
       },
@@ -256,11 +224,11 @@ export class StockReservationService {
 
         if (currentResQty <= consumedQty) {
           await client.stockReservation.delete({
-            where: { id: reservation.id },
+            where: { tenantId, id: reservation.id },
           });
         } else {
           await client.stockReservation.update({
-            where: { id: reservation.id },
+            where: { tenantId, id: reservation.id },
             data: {
               quantity: {
                 decrement: consumedQty,

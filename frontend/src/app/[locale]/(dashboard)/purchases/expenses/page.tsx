@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -18,18 +20,14 @@ import {
   Plus,
   Building2,
   TrendingUp,
-  Search,
   FileText,
   CheckCircle2,
   XCircle,
   Clock,
-  ExternalLink,
   Eye,
   Pencil,
   Trash2,
-  Filter,
   BarChart3,
-  Layers,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -58,8 +56,6 @@ export default function ExpensesPage() {
   const defaultCurrency = useDefaultCurrency();
 
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
-  const [data, setData] = useState<ExpensesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -67,32 +63,22 @@ export default function ExpensesPage() {
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [page, setPage] = useState(1);
 
-  const fetchExpenses = () => {
-    if (!token || !company) return;
-    setLoading(true);
-
+  // The filters and page are the endpoint (= query key).
+  const expensesEndpoint = useMemo(() => {
     const queryParams = new URLSearchParams();
     if (search) queryParams.set('search', search);
     if (statusFilter !== 'ALL') queryParams.set('status', statusFilter);
     if (typeFilter !== 'ALL') queryParams.set('expenseType', typeFilter);
     queryParams.set('page', page.toString());
     queryParams.set('limit', '20');
+    return `/purchases/additional-expenses?${queryParams.toString()}`;
+  }, [search, statusFilter, typeFilter, page]);
+  const expensesQuery = useApiQuery<ExpensesResponse>(expensesEndpoint);
+  const data = expensesQuery.data ?? null;
+  const loading = expensesQuery.isPending;
+  const fetchExpenses = () => void expensesQuery.refetch();
 
-    apiFetch<ExpensesResponse>(`/purchases/additional-expenses?${queryParams.toString()}`, {
-      token: token || undefined,
-      tenantId: company?.id || undefined,
-      locale,
-    })
-      .then((res) => setData(res))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchExpenses();
-  }, [token, company, locale, search, statusFilter, typeFilter, page]);
-
-  const handleDeleteDraft = async (item: any, e: React.MouseEvent) => {
+  const handleDeleteDraft = async (item: AdditionalExpense, e: React.MouseEvent) => {
     e.stopPropagation();
     const isPosted = item.status === 'POSTED';
     const confirmed = await confirm({
@@ -129,8 +115,8 @@ export default function ExpensesPage() {
       });
       toast.success(isRu ? 'Расход успешно удален' : 'Xarajat muvaffaqiyatli o‘chirildi');
       fetchExpenses();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
     }
   };
 
@@ -194,7 +180,7 @@ export default function ExpensesPage() {
 
       {/* KPI Cards */}
       {(() => {
-        const expenseCurrency = (data?.stats as any)?.currency || data?.items?.[0]?.currency || defaultCurrency;
+        const expenseCurrency = (data?.stats as { currency?: string } | null | undefined)?.currency || data?.items?.[0]?.currency || defaultCurrency;
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
             <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -363,7 +349,13 @@ export default function ExpensesPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {expensesQuery.isError ? (
+                  <tr>
+                    <td colSpan={9}>
+                      <LoadError error={expensesQuery.error} onRetry={fetchExpenses} retrying={expensesQuery.isFetching} />
+                    </td>
+                  </tr>
+                ) : loading ? (
                   <tr>
                     <td colSpan={9} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                       {isRu ? 'Загрузка данных...' : 'Ma’lumotlar yuklanmoqda...'}

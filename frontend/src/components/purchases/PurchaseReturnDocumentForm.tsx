@@ -11,22 +11,16 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
+import { roundTo } from '@/lib/round';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
-  Plus,
   Trash2,
   Save,
   CheckCircle2,
-  RotateCcw,
   Printer,
-  Search,
   AlertCircle,
-  FileText,
-  Building2,
-  Warehouse as WarehouseIcon,
-  HelpCircle,
   XCircle,
 } from 'lucide-react';
 import { PurchaseReceipt, PurchaseReturn } from '@shared/types';
@@ -83,7 +77,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const isReadOnly = mode === 'view';
 
   // Form State
-  const [returnNumber, setReturnNumber] = useState(initialData?.returnNumber || '');
+  const [returnNumber] = useState(initialData?.returnNumber || '');
   const [returnDate, setReturnDate] = useState(
     initialData?.returnDate
       ? new Date(initialData.returnDate).toISOString().split('T')[0]
@@ -93,6 +87,9 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [receiptId, setReceiptId] = useState<string>(initialData?.receiptId || '');
   const [currency, setCurrency] = useState(initialData?.currency?.trim() || '');
+  const [exchangeRate, setExchangeRate] = useState(
+    initialData?.exchangeRate != null && initialData.currency !== 'UZS' ? String(initialData.exchangeRate) : '',
+  );
   const [actNumber, setActNumber] = useState(initialData?.actNumber || '');
   const [reason, setReason] = useState(initialData?.reason || '');
   const [comment, setComment] = useState(initialData?.comment || '');
@@ -127,12 +124,11 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null);
 
   // Modals & loading
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [isActModalOpen, setIsActModalOpen] = useState(false);
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -161,10 +157,10 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     if (!token || !company) return;
 
     // Counterparties
-    apiFetch<CounterpartyOption[]>('/counterparties', { token, tenantId: company.id, locale })
+    apiFetch<CounterpartyOption[]>('/sales/counterparties?type=SUPPLIER', { token, tenantId: company.id, locale })
       .then((res) => {
         const suppliers = (res || []).filter(
-          (c: any) => c.type === 'SUPPLIER' || c.type === 'BOTH',
+          (c) => c.type === 'SUPPLIER' || c.type === 'BOTH',
         );
         setCounterparties(suppliers);
       })
@@ -176,11 +172,11 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       .catch((err) => console.error(err));
 
     // Products (Filter only PRODUCT and RAW_MATERIAL)
-    apiFetch<any>('/inventory/products', { token, tenantId: company.id, locale })
+    apiFetch<ProductOption[] | { data?: ProductOption[]; items?: ProductOption[] }>('/inventory/products', { token, tenantId: company.id, locale })
       .then((res) => {
         const list = Array.isArray(res) ? res : res?.data || res?.items || [];
         const eligible = list.filter(
-          (p: any) => p.type === 'PRODUCT' || p.type === 'RAW_MATERIAL' || !p.type,
+          (p) => p.type === 'PRODUCT' || p.type === 'RAW_MATERIAL' || !p.type,
         );
         setProducts(eligible);
       })
@@ -191,7 +187,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   useEffect(() => {
     if (!token || !company || !counterpartyId) return;
 
-    apiFetch<any>('/purchases/receipts', {
+    apiFetch<PurchaseReceipt[] | { data?: PurchaseReceipt[]; items?: PurchaseReceipt[] }>('/purchases/receipts', {
       token,
       tenantId: company.id,
       locale,
@@ -242,18 +238,16 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       // Pre-fill items from receipt
       if (found.items && found.items.length > 0) {
         const prefilled: ItemRow[] = found.items
-          .filter((i: any) => i.product?.type !== 'SERVICE' && i.product?.type !== 'BUNDLE')
-          .map((i: any) => {
+          .filter((i) => i.product?.type !== 'SERVICE' && i.product?.type !== 'BUNDLE')
+          .map((i) => {
             const unreturned = Math.max(
               0,
               Number(i.quantity) - Number(i.returnedQuantity || 0),
             );
             const unitPrice = Number(i.unitPrice);
             const vatRate = Number(i.vatRate || 0);
-            const vatAmount = Number(
-              ((unreturned * unitPrice * vatRate) / 100).toFixed(2),
-            );
-            const totalPrice = Number((unreturned * unitPrice + vatAmount).toFixed(2));
+            const vatAmount = roundTo((unreturned * unitPrice * vatRate) / 100, 2);
+            const totalPrice = roundTo(unreturned * unitPrice + vatAmount, 2);
 
             return {
               productId: i.productId,
@@ -344,8 +338,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
       // Recalculate
       const baseTotal = row.quantity * row.unitPrice;
-      row.vatAmount = Number(((baseTotal * row.vatRate) / 100).toFixed(2));
-      row.totalPrice = Number((baseTotal + row.vatAmount).toFixed(2));
+      row.vatAmount = roundTo((baseTotal * row.vatRate) / 100, 2);
+      row.totalPrice = roundTo(baseTotal + row.vatAmount, 2);
 
       updated[index] = row;
       return updated;
@@ -366,7 +360,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     [items],
   );
   const totalAmount = useMemo(
-    () => Number((subtotal + totalVat).toFixed(2)),
+    () => roundTo(subtotal + totalVat, 2),
     [subtotal, totalVat],
   );
 
@@ -388,6 +382,12 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     }
     if (!currency.trim()) {
       setError(isRu ? 'Выберите валюту' : 'Valyutani tanlang');
+      return;
+    }
+    // A linked return reverses at the receipt's rate; a standalone one needs its own.
+    const needsExchangeRate = currency.trim() !== 'UZS' && !receiptId;
+    if (needsExchangeRate && !(Number(exchangeRate) > 0)) {
+      setError(isRu ? 'Укажите курс валюты (больше 0)' : 'Valyuta kursini kiriting (0 dan katta)');
       return;
     }
     if (items.length === 0) {
@@ -421,6 +421,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         warehouseId,
         returnDate,
         currency: currency.trim(),
+        exchangeRate: needsExchangeRate ? Number(exchangeRate) : undefined,
         actNumber: actNumber || undefined,
         reason: reason || undefined,
         comment: comment || undefined,
@@ -434,7 +435,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         })),
       };
 
-      const result = await apiFetch<PurchaseReturn>('/purchases/returns', {
+      await apiFetch<PurchaseReturn>('/purchases/returns', {
         token: token || undefined,
         tenantId: company?.id || undefined,
         locale,
@@ -443,8 +444,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       });
 
       router.push('/purchases/returns');
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка при сохранении возврата' : 'Qaytarishni saqlashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка при сохранении возврата' : 'Qaytarishni saqlashda xatolik'));
     } finally {
       setSaving(false);
     }
@@ -464,8 +465,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       });
       setStatus('POSTED');
       router.push('/purchases/returns');
-    } catch (err: any) {
-      setError(err?.message || (isRu ? 'Ошибка при утверждении' : 'Tasdiqlashda xatolik'));
+    } catch (err) {
+      setError(errorMessage(err) || (isRu ? 'Ошибка при утверждении' : 'Tasdiqlashda xatolik'));
     } finally {
       setSaving(false);
     }
@@ -497,8 +498,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       setStatus('CANCELLED');
       toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       router.push('/purchases/returns');
-    } catch (err: any) {
-      const msg = err?.message || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik');
+    } catch (err) {
+      const msg = errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -721,6 +722,21 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               disabled={isReadOnly}
             />
           </div>
+
+          {currency && currency !== 'UZS' && !receiptId && (
+            <div>
+              <Input
+                label={isRu ? `Курс (UZS за 1 ${currency}) *` : `Kurs (1 ${currency} uchun UZS) *`}
+                type="number"
+                min="0"
+                step="0.0001"
+                value={exchangeRate}
+                onChange={(e) => setExchangeRate(e.target.value)}
+                disabled={isReadOnly}
+                placeholder={isRu ? 'Напр: 12650' : 'Masalan: 12650'}
+              />
+            </div>
+          )}
         </div>
 
         <div>
@@ -991,10 +1007,11 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               counterpartyId,
               warehouseId,
               currency,
+              exchangeRate: currency === 'UZS' ? 1 : Number(exchangeRate),
               actNumber,
               reason,
               comment,
-              status: status as any,
+              status: status as PurchaseReturn['status'],
               totalAmount,
               createdAt: new Date().toISOString(),
               counterparty: selectedSupplier,

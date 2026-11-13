@@ -1,5 +1,8 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { CounterpartySettlementSide, SettlementAllocationTarget } from '@prisma/client';
+import {
+  CounterpartySettlementSide,
+  SettlementAllocationTarget,
+} from '@prisma/client';
 import { SettlementAllocationService } from './settlement-allocation.service';
 
 describe('SettlementAllocationService', () => {
@@ -69,16 +72,18 @@ describe('SettlementAllocationService', () => {
 
     expect(result.created).toBe(true);
     expect(tx.settlementAllocation.createMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({
-        tenantId: 'tenant-1',
-        counterpartyId: 'counterparty-1',
-        financeTransactionId: 'finance-1',
-        side: CounterpartySettlementSide.CUSTOMER,
-        currency: 'USD',
-        targetType: SettlementAllocationTarget.SALES_INVOICE,
-        targetId: 'invoice-1',
-        amount: 100,
-      })],
+      data: [
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'counterparty-1',
+          financeTransactionId: 'finance-1',
+          side: CounterpartySettlementSide.CUSTOMER,
+          currency: 'USD',
+          targetType: SettlementAllocationTarget.SALES_INVOICE,
+          targetId: 'invoice-1',
+          amount: 100,
+        }),
+      ],
       skipDuplicates: true,
     });
   });
@@ -94,7 +99,9 @@ describe('SettlementAllocationService', () => {
       paidAmount: 100,
     });
 
-    await expect(service.recordAllocation(tx, allocation())).rejects.toThrow(BadRequestException);
+    await expect(service.recordAllocation(tx, allocation())).rejects.toThrow(
+      BadRequestException,
+    );
     expect(tx.settlementAllocation.createMany).not.toHaveBeenCalled();
   });
 
@@ -155,7 +162,9 @@ describe('SettlementAllocationService', () => {
       reversesAllocationId: null,
     });
 
-    await expect(service.recordAllocation(tx, allocation())).rejects.toThrow(ConflictException);
+    await expect(service.recordAllocation(tx, allocation())).rejects.toThrow(
+      ConflictException,
+    );
   });
 
   it('reverses an allocation by appending an equal negative event', async () => {
@@ -184,7 +193,8 @@ describe('SettlementAllocationService', () => {
       idempotencyKey: 'allocation-1:reversal',
     });
 
-    const reversalData = tx.settlementAllocation.createMany.mock.calls[0][0].data[0];
+    const reversalData =
+      tx.settlementAllocation.createMany.mock.calls[0][0].data[0];
     expect(Number(reversalData.amount)).toBe(-100);
     expect(reversalData.reversesAllocationId).toBe('allocation-1');
     expect(reversalData.idempotencyKey).toBe('allocation-1:reversal');

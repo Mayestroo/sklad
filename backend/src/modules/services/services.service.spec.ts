@@ -9,7 +9,10 @@ import {
   ServicePaymentStatus,
   ServiceActType,
 } from '@prisma/client';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
+
+jest.mock('../../common/sequences/document-sequence');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('ServicesService Unit Tests', () => {
   let service: ServicesService;
@@ -21,7 +24,9 @@ describe('ServicesService Unit Tests', () => {
   const counterpartyId = 'test-cp-uuid';
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       serviceAct: {
         count: jest.fn(),
@@ -44,6 +49,7 @@ describe('ServicesService Unit Tests', () => {
         findMany: jest.fn(),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         deleteMany: jest.fn(),
       },
       openingBalanceDocument: {
@@ -54,6 +60,17 @@ describe('ServicesService Unit Tests', () => {
 
     journalService = {
       autoPostServiceAct: jest.fn().mockResolvedValue(undefined),
+      deleteEntriesForSource: jest.fn(
+        (
+          db: typeof prisma,
+          tenantId: string,
+          sourceDocType: string,
+          sourceDocId: string,
+        ) =>
+          db.journalEntry.deleteMany({
+            where: { tenantId, sourceDocType, sourceDocId },
+          }),
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -74,9 +91,10 @@ describe('ServicesService Unit Tests', () => {
         service.create(tenantId, {
           type: ServiceActType.PROVIDED,
           counterpartyId,
+          currency: 'UZS',
           items: [],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('Kamida bitta xizmat qatori');
     });
 
     it('should calculate line subtotal, VAT, and total correctly on create', async () => {
@@ -198,24 +216,27 @@ describe('ServicesService Unit Tests', () => {
         totalAmount: 1000000,
       });
 
-      const res = await service.post(tenantId, 'act-1');
+      await service.post(tenantId, 'act-1');
 
       expect(prisma.serviceAct.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'act-1' },
+          where: { id: 'act-1', tenantId: 'test-tenant-uuid' },
           data: { status: ServiceActStatus.POSTED },
         }),
       );
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: 1000000,
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: 1000000,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-1',
+        }),
+      );
 
       // Verify double-entry journal posting was called
       expect(journalService.autoPostServiceAct).toHaveBeenCalled();
@@ -242,15 +263,18 @@ describe('ServicesService Unit Tests', () => {
 
       await service.post(tenantId, 'act-2');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'USD',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 500000,
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-2',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'USD',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 500000,
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-2',
+        }),
+      );
     });
 
     it('should throw BadRequestException if posting an already posted act', async () => {
@@ -334,16 +358,19 @@ describe('ServicesService Unit Tests', () => {
 
       await service.cancel(tenantId, 'act-1');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: -1000000,
-        entryType: 'SERVICE_ACT_CANCELLED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: -1000000,
+          entryType: 'SERVICE_ACT_CANCELLED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-1',
+        }),
+      );
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
         where: {
@@ -379,16 +406,19 @@ describe('ServicesService Unit Tests', () => {
 
       await service.cancel(tenantId, 'act-2');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'USD',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -500000,
-        entryType: 'SERVICE_ACT_CANCELLED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-2',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'USD',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -500000,
+          entryType: 'SERVICE_ACT_CANCELLED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-2',
+        }),
+      );
     });
   });
 
@@ -413,7 +443,10 @@ describe('ServicesService Unit Tests', () => {
 
       await service.remove(tenantId, 'act-1');
       expect(prisma.serviceAct.delete).toHaveBeenCalledWith({
-        where: { id: 'act-1' },
+        where: {
+          tenantId: 'test-tenant-uuid',
+          id: 'act-1',
+        },
       });
     });
 
@@ -426,7 +459,10 @@ describe('ServicesService Unit Tests', () => {
 
       await service.remove(tenantId, 'act-1');
       expect(prisma.serviceAct.delete).toHaveBeenCalledWith({
-        where: { id: 'act-1' },
+        where: {
+          tenantId: 'test-tenant-uuid',
+          id: 'act-1',
+        },
       });
     });
   });
@@ -464,16 +500,19 @@ describe('ServicesService Unit Tests', () => {
 
       const res = await service.unpost(tenantId, 'act-1');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.CUSTOMER,
-        amount: -1000000,
-        entryType: 'SERVICE_ACT_UNPOSTED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.CUSTOMER,
+          amount: -1000000,
+          entryType: 'SERVICE_ACT_UNPOSTED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-1',
+        }),
+      );
 
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
         where: {
@@ -511,16 +550,19 @@ describe('ServicesService Unit Tests', () => {
 
       await service.unpost(tenantId, 'act-2');
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'USD',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -500000,
-        entryType: 'SERVICE_ACT_UNPOSTED',
-        sourceDocType: 'ServiceAct',
-        sourceDocId: 'act-2',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'USD',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -500000,
+          entryType: 'SERVICE_ACT_UNPOSTED',
+          sourceDocType: 'ServiceAct',
+          sourceDocId: 'act-2',
+        }),
+      );
     });
   });
 });

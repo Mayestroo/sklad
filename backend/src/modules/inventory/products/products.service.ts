@@ -5,65 +5,99 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import type { Prisma, ProductType } from '@prisma/client';
+import { asJson } from '../../../common/utils/json-column';
 import { PrismaService } from '../../../common/prisma';
 import { CreateProductDto, UpdateProductDto } from '../dto';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
+import { readCompanySettings } from '../../../common/utils/company-settings';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(tenantId: string, dto: CreateProductDto) {
+    await assertTenantOwned(this.prisma, tenantId, {
+      category: dto.categoryId,
+    });
     const sku = dto.sku?.trim() || this.generateSku(dto.type);
     const existingSku = await this.prisma.product.findFirst({
       where: { tenantId, sku },
     });
 
     if (existingSku) {
-      throw new ConflictException(
-        `Product with SKU '${sku}' already exists`,
-      );
+      throw new ConflictException(`Product with SKU '${sku}' already exists`);
     }
 
     const company = await this.prisma.company.findUnique({
       where: { id: tenantId },
       select: { settings: true },
     });
-    const salesDefaultCurrency = (company?.settings as any)?.sales?.defaultCurrency;
-    const salePriceCurrency = dto.salePriceCurrency ?? (
-      SUPPORTED_CURRENCIES.includes(salesDefaultCurrency as (typeof SUPPORTED_CURRENCIES)[number])
+    const salesDefaultCurrency = readCompanySettings(company?.settings).sales
+      ?.defaultCurrency;
+    const salePriceCurrency =
+      dto.salePriceCurrency ??
+      (SUPPORTED_CURRENCIES.includes(
+        salesDefaultCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
         ? salesDefaultCurrency
-        : null
-    );
+        : null);
     if (
       salePriceCurrency !== null &&
-      !SUPPORTED_CURRENCIES.includes(salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])
+      !SUPPORTED_CURRENCIES.includes(
+        salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
     ) {
-      throw new BadRequestException('Product sale-price currency must be USD or UZS');
+      throw new BadRequestException(
+        'Product sale-price currency must be USD or UZS',
+      );
     }
     if (Number(dto.salePrice ?? 0) > 0 && !salePriceCurrency) {
-      throw new BadRequestException('Set a supported sale-price currency before saving a nonzero product price');
+      throw new BadRequestException(
+        'Set a supported sale-price currency before saving a nonzero product price',
+      );
     }
 
+    if (Number(dto.costPrice ?? 0) > 0 && !dto.costPriceCurrency) {
+      throw new BadRequestException(
+        'Set a cost-price currency before saving a nonzero cost price',
+      );
+    }
+    // A zero cost carries no currency; the column default labels it.
     const costPriceCurrency = dto.costPriceCurrency ?? 'UZS';
     const costPriceExchangeRateInput = Number(dto.costPriceExchangeRate);
-    const costPriceExchangeRate = costPriceCurrency === 'UZS'
-      ? 1
-      : Number(dto.costPrice ?? 0) === 0 && (!Number.isFinite(costPriceExchangeRateInput) || costPriceExchangeRateInput <= 0)
+    const costPriceExchangeRate =
+      costPriceCurrency === 'UZS'
         ? 1
-        : costPriceExchangeRateInput;
-    if (!SUPPORTED_CURRENCIES.includes(costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])) {
-      throw new BadRequestException('Product cost-price currency must be USD or UZS');
+        : Number(dto.costPrice ?? 0) === 0 &&
+            (!Number.isFinite(costPriceExchangeRateInput) ||
+              costPriceExchangeRateInput <= 0)
+          ? 1
+          : costPriceExchangeRateInput;
+    if (
+      !SUPPORTED_CURRENCIES.includes(
+        costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Product cost-price currency must be USD or UZS',
+      );
     }
-    if (Number(dto.costPrice ?? 0) > 0 && (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)) {
-      throw new BadRequestException('Enter a positive exchange rate for a foreign-currency cost price');
+    if (
+      Number(dto.costPrice ?? 0) > 0 &&
+      (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)
+    ) {
+      throw new BadRequestException(
+        'Enter a positive exchange rate for a foreign-currency cost price',
+      );
     }
 
     return this.prisma.product.create({
       data: {
         tenantId,
-        name: dto.name as any,
-        description: dto.description ? (dto.description as any) : undefined,
+        name: asJson(dto.name),
+        description: dto.description ? asJson(dto.description) : undefined,
         categoryId: dto.categoryId || null,
         type: dto.type || 'PRODUCT',
         sku,
@@ -85,7 +119,8 @@ export class ProductsService {
   }
 
   private generateSku(type?: CreateProductDto['type']): string {
-    const prefix = type === 'RAW_MATERIAL' ? 'RAW' : type === 'SERVICE' ? 'SRV' : 'PRD';
+    const prefix =
+      type === 'RAW_MATERIAL' ? 'RAW' : type === 'SERVICE' ? 'SRV' : 'PRD';
     return `${prefix}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
   }
 
@@ -95,14 +130,14 @@ export class ProductsService {
     search?: string,
     type?: string,
   ) {
-    const where: any = { tenantId, isActive: true };
+    const where: Prisma.ProductWhereInput = { tenantId, isActive: true };
 
     if (categoryId) {
       where.categoryId = categoryId;
     }
 
     if (type && type !== 'ALL') {
-      where.type = type as any;
+      where.type = type as ProductType;
     }
 
     let products = await this.prisma.product.findMany({
@@ -242,7 +277,7 @@ export class ProductsService {
   }
 
   async findStockLevels(tenantId: string, warehouseId?: string) {
-    const where: any = { tenantId };
+    const where: Prisma.StockLevelWhereInput = { tenantId };
     if (warehouseId) {
       where.warehouseId = warehouseId;
     }
@@ -263,31 +298,61 @@ export class ProductsService {
     if (!product) {
       throw new NotFoundException('Product not found');
     }
+    await assertTenantOwned(this.prisma, tenantId, {
+      category: dto.categoryId,
+    });
 
-    const costPriceCurrency = dto.costPriceCurrency ?? product.costPriceCurrency ?? 'UZS';
-    const nextCostPrice = dto.costPrice !== undefined ? Number(dto.costPrice) : Number(product.costPrice);
-    const costPriceExchangeRateInput = dto.costPriceExchangeRate !== undefined
-      ? Number(dto.costPriceExchangeRate)
-      : Number(product.costPriceExchangeRate);
-    const costPriceExchangeRate = costPriceCurrency === 'UZS'
-      ? 1
-      : nextCostPrice === 0 && (!Number.isFinite(costPriceExchangeRateInput) || costPriceExchangeRateInput <= 0)
+    const costPriceCurrency =
+      dto.costPriceCurrency ?? product.costPriceCurrency;
+    const nextCostPrice =
+      dto.costPrice !== undefined
+        ? Number(dto.costPrice)
+        : Number(product.costPrice);
+    const costPriceExchangeRateInput =
+      dto.costPriceExchangeRate !== undefined
+        ? Number(dto.costPriceExchangeRate)
+        : Number(product.costPriceExchangeRate);
+    const costPriceExchangeRate =
+      costPriceCurrency === 'UZS'
         ? 1
-        : costPriceExchangeRateInput;
-    if (!SUPPORTED_CURRENCIES.includes(costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])) {
-      throw new BadRequestException('Product cost-price currency must be USD or UZS');
+        : nextCostPrice === 0 &&
+            (!Number.isFinite(costPriceExchangeRateInput) ||
+              costPriceExchangeRateInput <= 0)
+          ? 1
+          : costPriceExchangeRateInput;
+    if (
+      !SUPPORTED_CURRENCIES.includes(
+        costPriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Product cost-price currency must be USD or UZS',
+      );
     }
-    if (nextCostPrice > 0 && (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)) {
-      throw new BadRequestException('Enter a positive exchange rate for a foreign-currency cost price');
+    if (
+      nextCostPrice > 0 &&
+      (!Number.isFinite(costPriceExchangeRate) || costPriceExchangeRate <= 0)
+    ) {
+      throw new BadRequestException(
+        'Enter a positive exchange rate for a foreign-currency cost price',
+      );
     }
 
-    const nextSalePrice = dto.salePrice !== undefined ? Number(dto.salePrice) : Number(product.salePrice);
-    const salePriceCurrency = dto.salePriceCurrency ?? product.salePriceCurrency;
+    const nextSalePrice =
+      dto.salePrice !== undefined
+        ? Number(dto.salePrice)
+        : Number(product.salePrice);
+    const salePriceCurrency =
+      dto.salePriceCurrency ?? product.salePriceCurrency;
     if (
       salePriceCurrency != null &&
-      !SUPPORTED_CURRENCIES.includes(salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number])
+      !SUPPORTED_CURRENCIES.includes(
+        salePriceCurrency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
     ) {
-      throw new BadRequestException('Product sale-price currency must be USD or UZS');
+      throw new BadRequestException(
+        'Product sale-price currency must be USD or UZS',
+      );
     }
     if (
       dto.salePrice !== undefined &&
@@ -295,7 +360,9 @@ export class ProductsService {
       nextSalePrice > 0 &&
       !salePriceCurrency
     ) {
-      throw new BadRequestException('Choose a sale-price currency before changing an unresolved product price');
+      throw new BadRequestException(
+        'Choose a sale-price currency before changing an unresolved product price',
+      );
     }
 
     if (dto.sku && dto.sku !== product.sku) {
@@ -310,15 +377,12 @@ export class ProductsService {
     }
 
     return this.prisma.product.update({
-      where: { id },
+      where: { tenantId, id },
       data: {
-        name: dto.name ? (dto.name as any) : undefined,
+        name: dto.name ? asJson(dto.name) : undefined,
         description:
-          dto.description !== undefined
-            ? (dto.description as any)
-            : undefined,
-        categoryId:
-          dto.categoryId !== undefined ? dto.categoryId : undefined,
+          dto.description !== undefined ? asJson(dto.description) : undefined,
+        categoryId: dto.categoryId !== undefined ? dto.categoryId : undefined,
         type: dto.type ?? undefined,
         sku: dto.sku ?? undefined,
         barcode: dto.barcode !== undefined ? dto.barcode : undefined,
@@ -358,9 +422,13 @@ export class ProductsService {
 
     // Check if product has transaction references
     const [receiptItems, invoiceItems, batches] = await Promise.all([
-      this.prisma.purchaseReceiptItem.count({ where: { productId: id } }),
-      this.prisma.salesInvoiceItem.count({ where: { productId: id } }),
-      this.prisma.productBatch.count({ where: { productId: id } }),
+      this.prisma.purchaseReceiptItem.count({
+        where: { receipt: { tenantId }, productId: id },
+      }),
+      this.prisma.salesInvoiceItem.count({
+        where: { invoice: { tenantId }, productId: id },
+      }),
+      this.prisma.productBatch.count({ where: { tenantId, productId: id } }),
     ]);
 
     const hasTransactions = receiptItems > 0 || invoiceItems > 0 || batches > 0;
@@ -368,7 +436,7 @@ export class ProductsService {
     if (hasTransactions) {
       // Soft-delete (archive) to preserve accounting and batch invariants
       await this.prisma.product.update({
-        where: { id },
+        where: { tenantId, id },
         data: { isActive: false },
       });
       return {
@@ -379,9 +447,13 @@ export class ProductsService {
     }
 
     // Safe to hard-delete if no transactional history
-    await this.prisma.stockLevel.deleteMany({ where: { productId: id } });
-    await this.prisma.productPrice.deleteMany({ where: { productId: id } });
-    await this.prisma.product.delete({ where: { id } });
+    await this.prisma.stockLevel.deleteMany({
+      where: { tenantId, productId: id },
+    });
+    await this.prisma.productPrice.deleteMany({
+      where: { priceList: { tenantId }, productId: id },
+    });
+    await this.prisma.product.delete({ where: { tenantId, id } });
 
     return {
       success: true,

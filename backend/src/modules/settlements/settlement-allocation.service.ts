@@ -54,14 +54,18 @@ export class SettlementAllocationService {
     this.validateInput(input);
 
     const existing = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (existing) {
       this.assertSameAllocation(existing, input);
       return { allocation: existing, created: false };
     }
 
-    await this.lockFinanceTransaction(tx, input.tenantId, input.financeTransactionId);
+    await this.lockFinanceTransaction(
+      tx,
+      input.tenantId,
+      input.financeTransactionId,
+    );
     const financeTransaction = await tx.financeTransaction.findFirst({
       where: {
         id: input.financeTransactionId,
@@ -80,20 +84,36 @@ export class SettlementAllocationService {
       },
     });
     if (!financeTransaction) {
-      throw new NotFoundException('Posted settlement Finance transaction not found');
+      throw new NotFoundException(
+        'Posted settlement Finance transaction not found',
+      );
     }
-    if (!financeTransaction.counterpartyId || !financeTransaction.settlementSide) {
-      throw new BadRequestException('Finance transaction is not classified as a counterparty settlement');
+    if (
+      !financeTransaction.counterpartyId ||
+      !financeTransaction.settlementSide
+    ) {
+      throw new BadRequestException(
+        'Finance transaction is not classified as a counterparty settlement',
+      );
     }
     if (
       financeTransaction.counterpartyId !== input.counterpartyId ||
-      !SUPPORTED_CURRENCIES.includes(financeTransaction.currency as (typeof SUPPORTED_CURRENCIES)[number])
+      !SUPPORTED_CURRENCIES.includes(
+        financeTransaction.currency as (typeof SUPPORTED_CURRENCIES)[number],
+      )
     ) {
-      throw new BadRequestException('Finance transaction counterparty or currency is invalid');
+      throw new BadRequestException(
+        'Finance transaction counterparty or currency is invalid',
+      );
     }
 
     await this.lockTarget(tx, input.tenantId, input.targetType, input.targetId);
-    const target = await this.loadTarget(tx, input.tenantId, input.targetType, input.targetId);
+    const target = await this.loadTarget(
+      tx,
+      input.tenantId,
+      input.targetType,
+      input.targetId,
+    );
     if (!target) {
       throw new NotFoundException('Settlement target document not found');
     }
@@ -103,18 +123,29 @@ export class SettlementAllocationService {
       target.side !== financeTransaction.settlementSide ||
       target.expectedDirection !== financeTransaction.direction
     ) {
-      throw new BadRequestException('Settlement target counterparty, side, direction, or currency does not match');
+      throw new BadRequestException(
+        'Settlement target counterparty, side, direction, or currency does not match',
+      );
     }
 
     const existingPaymentAllocations = await tx.settlementAllocation.findMany({
-      where: { financeTransactionId: input.financeTransactionId },
+      where: {
+        tenantId: input.tenantId,
+        financeTransactionId: input.financeTransactionId,
+      },
       select: { amount: true },
     });
-    const alreadyAllocated = this.sumAmounts(existingPaymentAllocations.map((item) => item.amount));
-    const paymentRemaining = new Prisma.Decimal(financeTransaction.amount).minus(alreadyAllocated);
+    const alreadyAllocated = this.sumAmounts(
+      existingPaymentAllocations.map((item) => item.amount),
+    );
+    const paymentRemaining = new Prisma.Decimal(
+      financeTransaction.amount,
+    ).minus(alreadyAllocated);
     const requestedAmount = new Prisma.Decimal(input.amount);
     if (requestedAmount.gt(paymentRemaining)) {
-      throw new BadRequestException('Allocation exceeds the Finance transaction unapplied amount');
+      throw new BadRequestException(
+        'Allocation exceeds the Finance transaction unapplied amount',
+      );
     }
 
     const targetOpenAmount = await this.getTargetOpenAmount(
@@ -124,7 +155,9 @@ export class SettlementAllocationService {
       input.targetId,
     );
     if (requestedAmount.gt(targetOpenAmount)) {
-      throw new BadRequestException('Allocation exceeds the target document open amount');
+      throw new BadRequestException(
+        'Allocation exceeds the target document open amount',
+      );
     }
 
     const createResult = await tx.settlementAllocation.createMany({
@@ -144,7 +177,7 @@ export class SettlementAllocationService {
       skipDuplicates: true,
     });
     const allocation = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (!allocation) {
       throw new ConflictException('Settlement allocation was not created');
@@ -160,16 +193,24 @@ export class SettlementAllocationService {
     tx: Prisma.TransactionClient,
     input: { tenantId: string; allocationId: string; idempotencyKey: string },
   ) {
-    if (!input.tenantId?.trim() || !input.allocationId?.trim() || !input.idempotencyKey?.trim()) {
-      throw new BadRequestException('Tenant, allocation, and idempotency key are required');
+    if (
+      !input.tenantId?.trim() ||
+      !input.allocationId?.trim() ||
+      !input.idempotencyKey?.trim()
+    ) {
+      throw new BadRequestException(
+        'Tenant, allocation, and idempotency key are required',
+      );
     }
 
     const existingReversal = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (existingReversal) {
       if (existingReversal.reversesAllocationId !== input.allocationId) {
-        throw new ConflictException('Settlement allocation reversal key already describes another event');
+        throw new ConflictException(
+          'Settlement allocation reversal key already describes another event',
+        );
       }
       return { allocation: existingReversal, created: false };
     }
@@ -177,11 +218,26 @@ export class SettlementAllocationService {
     const original = await tx.settlementAllocation.findFirst({
       where: { id: input.allocationId, tenantId: input.tenantId },
     });
-    if (!original || Number(original.amount) <= 0 || original.reversesAllocationId) {
-      throw new BadRequestException('Only an active positive settlement allocation can be reversed');
+    if (
+      !original ||
+      Number(original.amount) <= 0 ||
+      original.reversesAllocationId
+    ) {
+      throw new BadRequestException(
+        'Only an active positive settlement allocation can be reversed',
+      );
     }
-    await this.lockFinanceTransaction(tx, input.tenantId, original.financeTransactionId);
-    await this.lockTarget(tx, input.tenantId, original.targetType, original.targetId);
+    await this.lockFinanceTransaction(
+      tx,
+      input.tenantId,
+      original.financeTransactionId,
+    );
+    await this.lockTarget(
+      tx,
+      input.tenantId,
+      original.targetType,
+      original.targetId,
+    );
 
     const createResult = await tx.settlementAllocation.createMany({
       data: [
@@ -201,10 +257,12 @@ export class SettlementAllocationService {
       skipDuplicates: true,
     });
     const reversal = await tx.settlementAllocation.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
+      where: { tenantId: input.tenantId, idempotencyKey: input.idempotencyKey },
     });
     if (!reversal) {
-      throw new ConflictException('Settlement allocation reversal was not created');
+      throw new ConflictException(
+        'Settlement allocation reversal was not created',
+      );
     }
     return { allocation: reversal, created: createResult.count === 1 };
   }
@@ -217,13 +275,17 @@ export class SettlementAllocationService {
       !input.targetId?.trim() ||
       !input.idempotencyKey?.trim()
     ) {
-      throw new BadRequestException('Settlement allocation source and target are required');
+      throw new BadRequestException(
+        'Settlement allocation source and target are required',
+      );
     }
     if (!Object.values(SettlementAllocationTarget).includes(input.targetType)) {
       throw new BadRequestException('Settlement target type is invalid');
     }
     if (!Number.isFinite(Number(input.amount)) || Number(input.amount) <= 0) {
-      throw new BadRequestException('Settlement allocation amount must be greater than zero');
+      throw new BadRequestException(
+        'Settlement allocation amount must be greater than zero',
+      );
     }
   }
 
@@ -263,7 +325,15 @@ export class SettlementAllocationService {
       case SettlementAllocationTarget.SALES_INVOICE: {
         const invoice = await tx.salesInvoice.findFirst({
           where: { id: targetId, tenantId },
-          select: { id: true, tenantId: true, counterpartyId: true, currency: true, status: true, totalAmount: true, paidAmount: true },
+          select: {
+            id: true,
+            tenantId: true,
+            counterpartyId: true,
+            currency: true,
+            status: true,
+            totalAmount: true,
+            paidAmount: true,
+          },
         });
         return invoice
           ? {
@@ -276,7 +346,15 @@ export class SettlementAllocationService {
       case SettlementAllocationTarget.SALES_ORDER: {
         const order = await tx.salesOrder.findFirst({
           where: { id: targetId, tenantId },
-          select: { id: true, tenantId: true, counterpartyId: true, currency: true, status: true, totalAmount: true, paidAmount: true },
+          select: {
+            id: true,
+            tenantId: true,
+            counterpartyId: true,
+            currency: true,
+            status: true,
+            totalAmount: true,
+            paidAmount: true,
+          },
         });
         return order
           ? {
@@ -289,7 +367,14 @@ export class SettlementAllocationService {
       case SettlementAllocationTarget.SALES_RETURN: {
         const salesReturn = await tx.salesReturn.findFirst({
           where: { id: targetId, tenantId },
-          select: { id: true, tenantId: true, counterpartyId: true, currency: true, status: true, totalAmount: true },
+          select: {
+            id: true,
+            tenantId: true,
+            counterpartyId: true,
+            currency: true,
+            status: true,
+            totalAmount: true,
+          },
         });
         return salesReturn
           ? {
@@ -302,7 +387,15 @@ export class SettlementAllocationService {
       case SettlementAllocationTarget.PURCHASE_RECEIPT: {
         const receipt = await tx.purchaseReceipt.findFirst({
           where: { id: targetId, tenantId },
-          select: { id: true, tenantId: true, counterpartyId: true, currency: true, status: true, totalAmount: true, paidAmount: true },
+          select: {
+            id: true,
+            tenantId: true,
+            counterpartyId: true,
+            currency: true,
+            status: true,
+            totalAmount: true,
+            paidAmount: true,
+          },
         });
         return receipt
           ? {
@@ -315,7 +408,14 @@ export class SettlementAllocationService {
       case SettlementAllocationTarget.PURCHASE_RETURN: {
         const purchaseReturn = await tx.purchaseReturn.findFirst({
           where: { id: targetId, tenantId },
-          select: { id: true, tenantId: true, counterpartyId: true, currency: true, status: true, totalAmount: true },
+          select: {
+            id: true,
+            tenantId: true,
+            counterpartyId: true,
+            currency: true,
+            status: true,
+            totalAmount: true,
+          },
         });
         return purchaseReturn
           ? {
@@ -328,12 +428,23 @@ export class SettlementAllocationService {
       case SettlementAllocationTarget.ADDITIONAL_EXPENSE: {
         const expense = await tx.additionalExpense.findFirst({
           where: { id: targetId, tenantId },
-          select: { id: true, tenantId: true, counterpartyId: true, currency: true, status: true, amount: true, vatAmount: true, isPaid: true },
+          select: {
+            id: true,
+            tenantId: true,
+            counterpartyId: true,
+            currency: true,
+            status: true,
+            amount: true,
+            vatAmount: true,
+            isPaid: true,
+          },
         });
         return expense
           ? {
               ...expense,
-              totalAmount: new Prisma.Decimal(expense.amount).plus(expense.vatAmount),
+              totalAmount: new Prisma.Decimal(expense.amount).plus(
+                expense.vatAmount,
+              ),
               side: CounterpartySettlementSide.SUPPLIER,
               expectedDirection: TransactionDirection.EXPENSE,
             }
@@ -342,17 +453,28 @@ export class SettlementAllocationService {
       case SettlementAllocationTarget.SERVICE_ACT: {
         const serviceAct = await tx.serviceAct.findFirst({
           where: { id: targetId, tenantId },
-          select: { id: true, tenantId: true, counterpartyId: true, currency: true, status: true, totalAmount: true, paidAmount: true, type: true },
+          select: {
+            id: true,
+            tenantId: true,
+            counterpartyId: true,
+            currency: true,
+            status: true,
+            totalAmount: true,
+            paidAmount: true,
+            type: true,
+          },
         });
         if (!serviceAct) return null;
         return {
           ...serviceAct,
-          side: serviceAct.type === 'PROVIDED'
-            ? CounterpartySettlementSide.CUSTOMER
-            : CounterpartySettlementSide.SUPPLIER,
-          expectedDirection: serviceAct.type === 'PROVIDED'
-            ? TransactionDirection.INCOME
-            : TransactionDirection.EXPENSE,
+          side:
+            serviceAct.type === 'PROVIDED'
+              ? CounterpartySettlementSide.CUSTOMER
+              : CounterpartySettlementSide.SUPPLIER,
+          expectedDirection:
+            serviceAct.type === 'PROVIDED'
+              ? TransactionDirection.INCOME
+              : TransactionDirection.EXPENSE,
         };
       }
     }
@@ -365,7 +487,8 @@ export class SettlementAllocationService {
     targetId: string,
   ) {
     const salesInvoiceBeingPosted =
-      targetType === SettlementAllocationTarget.SALES_INVOICE && target.status === 'DRAFT';
+      targetType === SettlementAllocationTarget.SALES_INVOICE &&
+      target.status === 'DRAFT';
     if (
       target.status !== 'POSTED' &&
       targetType !== SettlementAllocationTarget.SALES_ORDER &&
@@ -373,10 +496,16 @@ export class SettlementAllocationService {
     ) {
       return new Prisma.Decimal(0);
     }
-    if (targetType === SettlementAllocationTarget.SALES_ORDER && target.status === 'CANCELLED') {
+    if (
+      targetType === SettlementAllocationTarget.SALES_ORDER &&
+      target.status === 'CANCELLED'
+    ) {
       return new Prisma.Decimal(0);
     }
-    if (targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE && target.isPaid) {
+    if (
+      targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE &&
+      target.isPaid
+    ) {
       return new Prisma.Decimal(0);
     }
 
@@ -386,7 +515,7 @@ export class SettlementAllocationService {
       targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE
     ) {
       const allocations = await tx.settlementAllocation.findMany({
-        where: { targetType, targetId },
+        where: { tenantId: target.tenantId, targetType, targetId },
         select: { amount: true },
       });
       const allocated = this.sumAmounts(allocations.map((item) => item.amount));
@@ -400,6 +529,7 @@ export class SettlementAllocationService {
       ) {
         const balance = await tx.counterpartyBalance.findUnique({
           where: {
+            tenantId: target.tenantId,
             counterpartyId_currency: {
               counterpartyId: target.counterpartyId,
               currency: target.currency,
@@ -407,10 +537,14 @@ export class SettlementAllocationService {
           },
           select: { customerDebt: true, supplierDebt: true },
         });
-        const sideBalance = target.side === CounterpartySettlementSide.CUSTOMER
-          ? new Prisma.Decimal(balance?.customerDebt ?? 0)
-          : new Prisma.Decimal(balance?.supplierDebt ?? 0);
-        const availableAdvance = Prisma.Decimal.max(new Prisma.Decimal(0), sideBalance.negated());
+        const sideBalance =
+          target.side === CounterpartySettlementSide.CUSTOMER
+            ? new Prisma.Decimal(balance?.customerDebt ?? 0)
+            : new Prisma.Decimal(balance?.supplierDebt ?? 0);
+        const availableAdvance = Prisma.Decimal.max(
+          new Prisma.Decimal(0),
+          sideBalance.negated(),
+        );
         return Prisma.Decimal.min(documentOpenAmount, availableAdvance);
       }
       return documentOpenAmount;
@@ -452,7 +586,9 @@ export class SettlementAllocationService {
       Number(allocation.amount) === Number(input.amount) &&
       allocation.reversesAllocationId === null;
     if (!matches) {
-      throw new ConflictException('Settlement allocation idempotency key already describes a different event');
+      throw new ConflictException(
+        'Settlement allocation idempotency key already describes a different event',
+      );
     }
   }
 }

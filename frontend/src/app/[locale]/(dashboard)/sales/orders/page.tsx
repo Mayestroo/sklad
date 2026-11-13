@@ -4,8 +4,9 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { useApiData } from '@/lib/useApiData';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -17,16 +18,12 @@ import {
   Eye,
   Pencil,
   CreditCard,
-  RotateCcw,
   Filter,
   Search,
   RefreshCw,
   Factory,
   Truck,
   CheckCircle,
-  Clock,
-  Layers,
-  ShoppingBag,
   PackageCheck,
   Printer,
   Trash2,
@@ -39,6 +36,9 @@ import { invalidateApiCache } from '@/lib/cache';
 import { apiFetch } from '@/lib/api';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import type { SalesOrderDetail } from '@/components/sales/order-form/types';
+
+const ORDERS_PAGE_SIZE = 50;
 
 interface CounterpartyItem {
   id: string;
@@ -95,6 +95,7 @@ export default function SalesOrdersPage() {
   const [search, setSearch] = useState('');
   const [counterpartyId, setCounterpartyId] = useState('');
   const [status, setStatus] = useState('');
+  const [pageSize, setPageSize] = useState(ORDERS_PAGE_SIZE);
   const [paymentStatus, setPaymentStatus] = useState('');
   const [assignedSellerId, setAssignedSellerId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -102,8 +103,8 @@ export default function SalesOrdersPage() {
 
   // Modals
   const [payOrder, setPayOrder] = useState<OrderItemSummary | null>(null);
-  const [pickListOrder, setPickListOrder] = useState<any | null>(null);
-  const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<any | null>(null);
+  const [pickListOrder, setPickListOrder] = useState<SalesOrderDetail | null>(null);
+  const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<SalesOrderDetail | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
@@ -126,8 +127,8 @@ export default function SalesOrdersPage() {
       setDeleteConfirmOrder(null);
       fetchStats();
       fetchOrders();
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
@@ -157,10 +158,10 @@ export default function SalesOrdersPage() {
       });
       invalidateApiCache('/sales/orders*');
       toast.success(isRu ? 'Статус заказа обновлен' : 'Buyurtma statusi yangilandi');
-      fetchOrders();
-      fetchStats();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
+      // Refreshes the order list and the stats (both under /sales/orders).
+      void invalidateApi('/sales/orders');
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
     } finally {
       setUpdatingOrderId(null);
     }
@@ -206,10 +207,11 @@ export default function SalesOrdersPage() {
     }
   };
 
-  // SWR Cached Reference Data (5 min fresh time)
-  const { data: rawCp } = useApiData<CounterpartyItem[] | { data: CounterpartyItem[] }>(
-    token && company ? '/sales/counterparties' : null,
-    { staleTime: 5 * 60 * 1000, token: token || undefined, tenantId: company?.id, locale }
+  // Reference data, fresh for 5 minutes (TanStack Query, see docs/frontend-data-loading.md)
+  const invalidateApi = useInvalidateApi();
+  const { data: rawCp } = useApiQuery<CounterpartyItem[] | { data: CounterpartyItem[] }>(
+    '/sales/counterparties',
+    { staleTime: 5 * 60 * 1000 },
   );
   const counterparties: CounterpartyItem[] = useMemo(() => {
     if (!rawCp) return [];
@@ -217,10 +219,9 @@ export default function SalesOrdersPage() {
     return (rawCp as { data: CounterpartyItem[] }).data || [];
   }, [rawCp]);
 
-  const { data: rawUsers } = useApiData<SellerItem[] | { data: SellerItem[] }>(
-    token && company ? '/users' : null,
-    { staleTime: 5 * 60 * 1000, token: token || undefined, tenantId: company?.id, locale }
-  );
+  const { data: rawUsers } = useApiQuery<SellerItem[] | { data: SellerItem[] }>('/users', {
+    staleTime: 5 * 60 * 1000,
+  });
   const sellers: SellerItem[] = useMemo(() => {
     if (!rawUsers) return [];
     const list = Array.isArray(rawUsers) ? rawUsers : (rawUsers as { data: SellerItem[] }).data || [];
@@ -231,15 +232,13 @@ export default function SalesOrdersPage() {
     }));
   }, [rawUsers]);
 
-  // SWR Cached Stats
-  const { data: stats, refetch: fetchStats } = useApiData<OrderStatsSummary>(
-    token && company ? '/sales/orders/stats' : null,
-    { staleTime: 15000, token: token || undefined, tenantId: company?.id, locale }
-  );
+  const statsQuery = useApiQuery<OrderStatsSummary>('/sales/orders/stats');
+  const stats = statsQuery.data ?? null;
+  const fetchStats = () => void statsQuery.refetch();
 
-  // SWR Cached Orders with Active Filters
+  // The endpoint string carries the filters: a new filter is a new query,
+  // the same filters reuse the cache (no refetch loop).
   const ordersEndpoint = useMemo(() => {
-    if (!token || !company) return null;
     const query = new URLSearchParams();
     if (search) query.append('search', search);
     if (counterpartyId) query.append('counterpartyId', counterpartyId);
@@ -248,25 +247,20 @@ export default function SalesOrdersPage() {
     if (assignedSellerId) query.append('assignedSellerId', assignedSellerId);
     if (dateFrom) query.append('dateFrom', dateFrom);
     if (dateTo) query.append('dateTo', dateTo);
+    query.append('take', String(pageSize));
     return `/sales/orders?${query.toString()}`;
-  }, [token, company, search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo]);
+  }, [search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo, pageSize]);
 
-  const {
-    data: rawOrders,
-    loading,
-    refetch: fetchOrders,
-  } = useApiData<OrderItemSummary[] | { data: OrderItemSummary[] }>(ordersEndpoint, {
+  const ordersQuery = useApiQuery<{ data: OrderItemSummary[]; total: number }>(ordersEndpoint, {
     staleTime: 10000,
-    token: token || undefined,
-    tenantId: company?.id,
-    locale,
   });
+  const rawOrders = ordersQuery.data;
+  const loading = ordersQuery.isPending;
+  const fetchOrders = () => void ordersQuery.refetch();
 
-  const orders: OrderItemSummary[] = useMemo(() => {
-    if (!rawOrders) return [];
-    if (Array.isArray(rawOrders)) return rawOrders;
-    return (rawOrders as { data: OrderItemSummary[] }).data || [];
-  }, [rawOrders]);
+  // GET /sales/orders returns { data, total, page, pageSize }
+  const orders: OrderItemSummary[] = rawOrders?.data ?? [];
+  const totalOrders = rawOrders?.total ?? 0;
 
   const handleApplyFilter = () => {
     fetchOrders();
@@ -492,7 +486,13 @@ export default function SalesOrdersPage() {
 
       {/* Orders Table */}
       <Card style={{ overflow: 'hidden' }}>
-        {loading ? (
+        {ordersQuery.isError ? (
+          <LoadError
+            error={ordersQuery.error}
+            onRetry={fetchOrders}
+            retrying={ordersQuery.isFetching}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
             <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
@@ -737,6 +737,16 @@ export default function SalesOrdersPage() {
                 })}
               </tbody>
             </table>
+            {orders.length < totalOrders && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? `Показано ${orders.length} из ${totalOrders}` : `${totalOrders} tadan ${orders.length} tasi ko‘rsatilmoqda`}
+                </span>
+                <Button variant="secondary" size="sm" onClick={() => setPageSize((n) => n + ORDERS_PAGE_SIZE)}>
+                  {isRu ? 'Показать ещё' : 'Yana ko‘rsatish'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -774,7 +784,7 @@ export default function SalesOrdersPage() {
         <OrderDeliveryNoteModal
           isOpen={Boolean(deliveryNoteOrder)}
           onClose={() => setDeliveryNoteOrder(null)}
-          companyName={company?.name}
+          companyName={company?.name ? getLocalizedName(company.name, locale) : undefined}
           order={deliveryNoteOrder}
         />
       )}

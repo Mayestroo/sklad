@@ -1,57 +1,69 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Badge } from '@/components/ui/Badge';
 import {
-  ShoppingCart,
   Layers,
   Save,
   CheckCircle2,
   AlertCircle,
   HelpCircle,
-  Sliders,
 } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+
+/** GET/PATCH /tenants/settings */
+type CompanySettings = NonNullable<ReturnType<typeof useAuth>['company']>['settings'];
 
 export default function SalesSettingsPage() {
+  const locale = useLocale() as 'uz' | 'ru';
+  const isRu = locale === 'ru';
+  const settingsQuery = useApiQuery<CompanySettings>('/tenants/settings');
+
+  if (settingsQuery.isError) {
+    return (
+      <LoadError
+        error={settingsQuery.error}
+        onRetry={() => void settingsQuery.refetch()}
+        retrying={settingsQuery.isFetching}
+      />
+    );
+  }
+  if (settingsQuery.isPending) {
+    return (
+      <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+        {isRu ? 'Загрузка настроек...' : 'Sozlamalar yuklanmoqda...'}
+      </div>
+    );
+  }
+  // Mounted once the settings are loaded: the form starts from them and a
+  // later background refetch never overwrites what the user has changed.
+  return <SalesSettingsForm initial={settingsQuery.data} />;
+}
+
+function SalesSettingsForm({ initial }: { initial: CompanySettings | null | undefined }) {
   const { token, company, updateCompanySettings } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Settings state
-  const [enableMultiTierPriceLists, setEnableMultiTierPriceLists] = useState(false);
-  const [allowSellerPriceOverride, setAllowSellerPriceOverride] = useState(false);
-
-  useEffect(() => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<any>('/tenants/settings', {
-      token,
-      tenantId: company.id,
-      locale,
-    })
-      .then((settings) => {
-        if (settings?.sales) {
-          setEnableMultiTierPriceLists(Boolean(settings.sales.enableMultiTierPriceLists));
-          setAllowSellerPriceOverride(Boolean(settings.sales.allowSellerPriceOverride));
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load sales settings:', err);
-        setError(err.message || 'Xatolik yuz berdi');
-      })
-      .finally(() => setLoading(false));
-  }, [token, company, locale]);
+  const [enableMultiTierPriceLists, setEnableMultiTierPriceLists] = useState(() =>
+    Boolean(initial?.sales?.enableMultiTierPriceLists),
+  );
+  const [allowSellerPriceOverride, setAllowSellerPriceOverride] = useState(() =>
+    Boolean(initial?.sales?.allowSellerPriceOverride),
+  );
 
   const handleSave = async () => {
     if (!token || !company) return;
@@ -60,7 +72,7 @@ export default function SalesSettingsPage() {
     setSaveSuccess(false);
 
     try {
-      const updated = await apiFetch<any>('/tenants/settings', {
+      const updated = await apiFetch<CompanySettings>('/tenants/settings', {
         method: 'PATCH',
         token,
         tenantId: company.id,
@@ -78,21 +90,13 @@ export default function SalesSettingsPage() {
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Save failed:', err);
-      setError(err.message || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
+      setError(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-        {isRu ? 'Загрузка настроек...' : 'Sozlamalar yuklanmoqda...'}
-      </div>
-    );
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '900px' }}>

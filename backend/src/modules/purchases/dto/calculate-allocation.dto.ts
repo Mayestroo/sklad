@@ -23,7 +23,8 @@ export class CalculateAllocationDto {
 
   @IsOptional()
   @IsEnum(ExpenseAllocationMethod)
-  allocationMethod?: ExpenseAllocationMethod = ExpenseAllocationMethod.BY_AMOUNT;
+  allocationMethod?: ExpenseAllocationMethod =
+    ExpenseAllocationMethod.BY_AMOUNT;
 
   @IsOptional()
   @IsArray()

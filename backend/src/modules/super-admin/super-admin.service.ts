@@ -3,29 +3,22 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  NotImplementedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
 import {
   GlobalMetrics,
   TenantCompanySummary,
+  CreatedTenantSummary,
   BackupMetadata,
+  BACKUPS_MANAGED_BY_NEON_MESSAGE,
+  TranslatableField,
 } from '../../../../shared/types';
-import * as fs from 'fs';
-import * as path from 'path';
+import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-
-export class CreateTenantDto {
-  name: { uz: string; ru: string } | string;
-  slug: string;
-  plan?: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
-  trialDays?: number;
-  adminEmail: string;
-  adminPassword?: string;
-  adminFirstName: string;
-  adminLastName: string;
-}
+import type { CreateTenantDto } from './dto/super-admin.dto';
 
 @Injectable()
 export class SuperAdminService {
@@ -61,7 +54,9 @@ export class SuperAdminService {
     });
 
     if (!users || users.length === 0) {
-      throw new NotFoundException('No active administrator found for this tenant');
+      throw new NotFoundException(
+        'No active administrator found for this tenant',
+      );
     }
 
     const adminUser =
@@ -94,13 +89,10 @@ export class SuperAdminService {
       '1d',
     );
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: jwtExpiration as any,
+      expiresIn: jwtExpiration as JwtSignOptions['expiresIn'],
     });
     const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get(
-        'JWT_REFRESH_SECRET',
-        'dev-jwt-refresh-secret-change-me-in-production',
-      ),
+      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
 
@@ -143,7 +135,7 @@ export class SuperAdminService {
     };
   }
 
-  async createTenant(dto: CreateTenantDto): Promise<TenantCompanySummary> {
+  async createTenant(dto: CreateTenantDto): Promise<CreatedTenantSummary> {
     const cleanSlug = dto.slug.trim().toLowerCase();
     const cleanEmail = dto.adminEmail.trim().toLowerCase();
 
@@ -171,7 +163,12 @@ export class SuperAdminService {
       throw new BadRequestException('System role company_admin not found.');
     }
 
-    const password = dto.adminPassword || 'Admin123!';
+    // No shared default password: when the operator leaves it empty, generate
+    // a random one and hand it back exactly once.
+    const password = dto.adminPassword
+      ? dto.adminPassword
+      : generateAdminPassword();
+    const generatedAdminPassword = dto.adminPassword ? undefined : password;
     const passwordHash = await bcrypt.hash(password, 10);
 
     const trialDays = dto.trialDays ?? 14;
@@ -186,7 +183,7 @@ export class SuperAdminService {
           name:
             typeof dto.name === 'string'
               ? { uz: dto.name, ru: dto.name }
-              : (dto.name as any),
+              : dto.name,
           slug: cleanSlug,
           status: 'ACTIVE',
           trialEndsAt,
@@ -253,13 +250,16 @@ export class SuperAdminService {
 
     return {
       id: company.id,
-      name: company.name as any,
+      name: company.name as unknown as TranslatableField,
       slug: company.slug,
-      status: company.status as any,
+      status: company.status,
       plan,
       userCount: 1,
       createdAt: company.createdAt.toISOString(),
-      trialEndsAt: company.trialEndsAt ? company.trialEndsAt.toISOString() : null,
+      trialEndsAt: company.trialEndsAt
+        ? company.trialEndsAt.toISOString()
+        : null,
+      ...(generatedAdminPassword ? { generatedAdminPassword } : {}),
     };
   }
 
@@ -305,10 +305,10 @@ export class SuperAdminService {
       const activeSub = c.subscriptions[0];
       return {
         id: c.id,
-        name: c.name as any,
+        name: c.name as unknown as TranslatableField,
         slug: c.slug,
-        status: c.status as any,
-        plan: activeSub ? (activeSub.plan as any) : 'STARTER',
+        status: c.status,
+        plan: activeSub ? activeSub.plan : 'STARTER',
         userCount: c.users.length,
         createdAt: c.createdAt.toISOString(),
         trialEndsAt: c.trialEndsAt ? c.trialEndsAt.toISOString() : null,
@@ -432,56 +432,21 @@ export class SuperAdminService {
     return msg;
   }
 
-  async triggerBackup(): Promise<BackupMetadata> {
-    const backupDir = path.join(__dirname, '..', '..', '..', 'backups');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `crm_backup_${timestamp}.sql`;
-    const filePath = path.join(backupDir, filename);
-
-    const content = `-- PostgreSQL Database Dump
--- CRM SaaS Platform (Uzbekistan Lex ZRU-547 Compliant Backup)
--- Timestamp: ${new Date().toISOString()}
-
-CREATE DATABASE IF NOT EXISTS crm_db;
--- Dump Completed Successfully.
-`;
-
-    fs.writeFileSync(filePath, content, 'utf8');
-
-    return {
-      filename,
-      sizeBytes: Buffer.byteLength(content, 'utf8'),
-      createdAt: new Date().toISOString(),
-      status: 'COMPLETED',
-    };
+  /**
+   * Backups come from Neon (point-in-time restore, branch snapshots), not from
+   * the application. Answer 501 instead of pretending a dump was taken.
+   */
+  triggerBackup(locale: string): never {
+    const message =
+      locale === 'ru'
+        ? BACKUPS_MANAGED_BY_NEON_MESSAGE.ru
+        : BACKUPS_MANAGED_BY_NEON_MESSAGE.uz;
+    throw new NotImplementedException(message);
   }
 
-  async getBackupHistory(): Promise<BackupMetadata[]> {
-    const backupDir = path.join(__dirname, '..', '..', '..', 'backups');
-    if (!fs.existsSync(backupDir)) {
-      return [];
-    }
-
-    const files = fs.readdirSync(backupDir);
-    return files
-      .filter((f) => f.endsWith('.sql'))
-      .map((filename) => {
-        const stat = fs.statSync(path.join(backupDir, filename));
-        return {
-          filename,
-          sizeBytes: stat.size,
-          createdAt: stat.birthtime.toISOString(),
-          status: 'COMPLETED' as const,
-        };
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
+  /** The application keeps no backup files, so there is nothing to list. */
+  getBackupHistory(): BackupMetadata[] {
+    return [];
   }
 
   async getAuditLogs(tenantId?: string) {
@@ -492,4 +457,9 @@ CREATE DATABASE IF NOT EXISTS crm_db;
       take: 50,
     });
   }
+}
+
+/** 18 URL-safe random characters (~108 bits of entropy). */
+function generateAdminPassword(): string {
+  return randomBytes(18).toString('base64url').slice(0, 18);
 }

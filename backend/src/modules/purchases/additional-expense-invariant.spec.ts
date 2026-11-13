@@ -2,13 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AdditionalExpensesService } from './additional-expenses.service';
 import { PrismaService } from '../../common/prisma';
 import { BadRequestException } from '@nestjs/common';
-import {
-  ExpenseType,
-  ExpenseAllocationMethod,
-  PurchaseDocStatus,
-} from '@prisma/client';
+import { ExpenseAllocationMethod, PurchaseDocStatus } from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
+import { JournalService } from '../accounting/journal/journal.service';
+
+jest.mock('../../common/sequences/document-sequence');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('Additional Expenses & Landed Cost Invariant Tests', () => {
   let service: AdditionalExpensesService;
@@ -38,7 +38,9 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         update: jest.fn(),
       },
       purchaseReceiptItem: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'receipt-item-1', landedCost: 1000000 }),
         update: jest.fn(),
       },
       productBatch: {
@@ -71,15 +73,21 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       },
       account: {
         findFirst: jest.fn().mockImplementation(({ where }) => {
-          if (where.code === '2910') return Promise.resolve({ id: 'acc-2910', code: '2910' });
-          if (where.code === '9110') return Promise.resolve({ id: 'acc-9110', code: '9110' });
-          if (where.code === '4410') return Promise.resolve({ id: 'acc-4410', code: '4410' });
-          if (where.code === '6010') return Promise.resolve({ id: 'acc-6010', code: '6010' });
-          if (where.code === '5010') return Promise.resolve({ id: 'acc-5010', code: '5010' });
+          if (where.code === '2910')
+            return Promise.resolve({ id: 'acc-2910', code: '2910' });
+          if (where.code === '9110')
+            return Promise.resolve({ id: 'acc-9110', code: '9110' });
+          if (where.code === '4410')
+            return Promise.resolve({ id: 'acc-4410', code: '4410' });
+          if (where.code === '6010')
+            return Promise.resolve({ id: 'acc-6010', code: '6010' });
+          if (where.code === '5010')
+            return Promise.resolve({ id: 'acc-5010', code: '5010' });
           return Promise.resolve(null);
         }),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -92,10 +100,19 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
         AdditionalExpensesService,
         { provide: PrismaService, useValue: prisma },
-        { provide: CounterpartySettlementService, useValue: { recordMovement: jest.fn().mockResolvedValue({ created: true }) } },
-        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
+        {
+          provide: CounterpartySettlementService,
+          useValue: {
+            recordMovement: jest.fn().mockResolvedValue({ created: true }),
+          },
+        },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -147,12 +164,19 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     expect(posted.status).toBe(PurchaseDocStatus.POSTED);
     // 2,000,000 / 10 = 200,000 -> 1,000,000 + 200,000 = 1,200,000
     expect(prisma.productBatch.update).toHaveBeenCalledWith({
-      where: { id: 'batch-1' },
+      where: {
+        tenantId: 'tenant-invariant-1',
+        id: 'batch-1',
+      },
       data: { landedCost: 1200000 },
     });
     expect(prisma.product.update).toHaveBeenCalledWith({
-      where: { id: 'prod-iphone' },
-      data: { costPrice: 1200000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 },
+      where: { tenantId: 'tenant-invariant-1', id: 'prod-iphone' },
+      data: {
+        costPrice: 1200000,
+        costPriceCurrency: 'UZS',
+        costPriceExchangeRate: 1,
+      },
     });
     expect(prisma.journalEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -241,7 +265,10 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     // Unit expense = 200,000 per unit
     // Batch landed cost = 1,000,000 + 200,000 = 1,200,000
     expect(prisma.productBatch.update).toHaveBeenCalledWith({
-      where: { id: 'batch-1' },
+      where: {
+        tenantId: 'tenant-invariant-1',
+        id: 'batch-1',
+      },
       data: { landedCost: 1200000 },
     });
 
@@ -249,7 +276,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     // New lineCogs = 6,000,000 + 1,200,000 = 7,200,000
     // New grossProfit = 9,000,000 - 7,200,000 = 1,800,000
     expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
-      where: { id: 'inv-item-1' },
+      where: { invoice: { tenantId: 'tenant-invariant-1' }, id: 'inv-item-1' },
       data: {
         unitCogs: 1200000,
         lineCogs: 7200000,
@@ -283,9 +310,30 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     prisma.purchaseReceipt.findFirst.mockResolvedValue({
       id: receiptId,
       items: [
-        { id: 'i-1', productId: 'p-1', quantity: 1, totalPrice: 50000, landedCost: 50000, product: { weight: 1 } },
-        { id: 'i-2', productId: 'p-2', quantity: 1, totalPrice: 30000, landedCost: 30000, product: { weight: 1 } },
-        { id: 'i-3', productId: 'p-3', quantity: 1, totalPrice: 20000, landedCost: 20000, product: { weight: 1 } },
+        {
+          id: 'i-1',
+          productId: 'p-1',
+          quantity: 1,
+          totalPrice: 50000,
+          landedCost: 50000,
+          product: { weight: 1 },
+        },
+        {
+          id: 'i-2',
+          productId: 'p-2',
+          quantity: 1,
+          totalPrice: 30000,
+          landedCost: 30000,
+          product: { weight: 1 },
+        },
+        {
+          id: 'i-3',
+          productId: 'p-3',
+          quantity: 1,
+          totalPrice: 20000,
+          landedCost: 20000,
+          product: { weight: 1 },
+        },
       ],
       batches: [],
     });
@@ -371,15 +419,22 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       status: PurchaseDocStatus.CANCELLED,
     });
 
-    const cancelled = await service.cancelExpense(tenantId, userId, 'exp-inv-5');
+    const cancelled = await service.cancelExpense(
+      tenantId,
+      userId,
+      'exp-inv-5',
+    );
 
     expect(cancelled.status).toBe(PurchaseDocStatus.CANCELLED);
     expect(prisma.productBatch.update).toHaveBeenCalledWith({
-      where: { id: 'batch-1' },
+      where: {
+        tenantId: 'tenant-invariant-1',
+        id: 'batch-1',
+      },
       data: { landedCost: 1000000 }, // Restored to initial cost
     });
     expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
-      where: { id: 'inv-item-1' },
+      where: { invoice: { tenantId: 'tenant-invariant-1' }, id: 'inv-item-1' },
       data: {
         unitCogs: 1000000,
         lineCogs: 6000000,

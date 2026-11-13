@@ -4,8 +4,18 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { asJson } from '../../common/utils/json-column';
 import { PrismaService } from '../../common/prisma';
 import { CreateTenantDto, UpdateCompanySettingsDto } from './dto';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+
+/** Shape of `Company.settings` (JSON); every section is optional. */
+interface StoredCompanySettings {
+  sales?: Prisma.JsonObject;
+  inventory?: Prisma.JsonObject;
+  accounting?: Prisma.JsonObject;
+}
 
 @Injectable()
 export class TenantsService {
@@ -25,7 +35,7 @@ export class TenantsService {
 
     return this.prisma.company.create({
       data: {
-        name: dto.name as any,
+        name: asJson(dto.name),
         slug: dto.slug,
         defaultLanguage: dto.defaultLanguage || 'uz',
         status: 'TRIAL',
@@ -49,12 +59,6 @@ export class TenantsService {
       },
     });
     return company;
-  }
-
-  async findBySlug(slug: string) {
-    return this.prisma.company.findUnique({
-      where: { slug },
-    });
   }
 
   // ============================================
@@ -114,7 +118,7 @@ export class TenantsService {
     }
 
     return this.prisma.branch.update({
-      where: { id: branchId },
+      where: { tenantId, id: branchId },
       data: {
         ...(data.name && { name: data.name }),
         ...(data.address !== undefined && { address: data.address }),
@@ -141,10 +145,12 @@ export class TenantsService {
       where: { tenantId },
     });
     if (totalBranches <= 1) {
-      throw new BadRequestException('Kompaniyada kamida bitta filial qolishi kerak');
+      throw new BadRequestException(
+        'Kompaniyada kamida bitta filial qolishi kerak',
+      );
     }
 
-    await this.prisma.branch.delete({ where: { id: branchId } });
+    await this.prisma.branch.delete({ where: { tenantId, id: branchId } });
     return { success: true, message: 'Filial o‘chirildi' };
   }
 
@@ -159,6 +165,7 @@ export class TenantsService {
     address?: string,
     phone?: string,
   ) {
+    await assertTenantOwned(this.prisma, tenantId, { branch: branchId });
     return this.prisma.warehouse.create({
       data: {
         tenantId,
@@ -192,9 +199,10 @@ export class TenantsService {
       where: { id: warehouseId, tenantId },
     });
     if (!warehouse) throw new NotFoundException('Omborxona topilmadi');
+    await assertTenantOwned(this.prisma, tenantId, { branch: data.branchId });
 
     return this.prisma.warehouse.update({
-      where: { id: warehouseId },
+      where: { tenantId, id: warehouseId },
       data: {
         ...(data.branchId !== undefined && { branchId: data.branchId }),
         ...(data.name && { name: data.name }),
@@ -215,7 +223,9 @@ export class TenantsService {
       where: { tenantId },
     });
     if (totalWarehouses <= 1) {
-      throw new BadRequestException('Kompaniyada kamida bitta omborxona qolishi kerak');
+      throw new BadRequestException(
+        'Kompaniyada kamida bitta omborxona qolishi kerak',
+      );
     }
 
     // Check if warehouse has non-zero stock
@@ -249,10 +259,11 @@ export class TenantsService {
       where: { tenantId, warehouseId },
     });
 
-    await this.prisma.warehouse.delete({ where: { id: warehouseId } });
+    await this.prisma.warehouse.delete({
+      where: { tenantId, id: warehouseId },
+    });
     return { success: true, message: 'Omborxona o‘chirildi' };
   }
-
 
   // ============================================
   // SETTINGS MANAGEMENT
@@ -263,7 +274,7 @@ export class TenantsService {
       where: { id: tenantId },
       select: { settings: true },
     });
-    const settings = (company?.settings as any) || {};
+    const settings = (company?.settings as StoredCompanySettings | null) || {};
     return {
       sales: {
         enableMultiTierPriceLists: false,
@@ -281,6 +292,18 @@ export class TenantsService {
     dto: UpdateCompanySettingsDto,
     userId?: string,
   ) {
+    // D2: the configured account must exist in this tenant's chart.
+    const gainCode = dto.accounting?.purchaseReturnGainAccountCode;
+    if (gainCode) {
+      const account = await this.prisma.account.findFirst({
+        where: { tenantId, code: gainCode },
+      });
+      if (!account) {
+        throw new BadRequestException(
+          `${gainCode} hisobi hisoblar rejasida topilmadi. / Счёт ${gainCode} не найден в плане счетов.`,
+        );
+      }
+    }
     const current = await this.getSettings(tenantId);
     const mergedSettings = {
       ...current,

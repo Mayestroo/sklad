@@ -3,18 +3,20 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, listOf, type ListResponse } from '@/lib/api';
+import type { Warehouse } from '@shared/types';
+import type { SalesOrderDetail, StockAvailability } from './order-form/types';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
-import { formatCurrency } from '@/lib/utils';
-import { Truck, AlertCircle, CheckCircle, Warehouse as WarehouseIcon, Package } from 'lucide-react';
+import { errorMessage } from '@/lib/utils';
+import { Truck, AlertCircle, Warehouse as WarehouseIcon } from 'lucide-react';
 
 interface PartialDispatchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  order: any | null;
+  order: SalesOrderDetail | null;
   onSuccess: () => void;
 }
 
@@ -28,10 +30,10 @@ export function PartialDispatchModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [dispatchQuantities, setDispatchQuantities] = useState<Record<string, number>>({});
-  const [stockMap, setStockMap] = useState<Record<string, any>>({});
+  const [stockMap, setStockMap] = useState<Record<string, StockAvailability>>({});
   const [loadingStock, setLoadingStock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -40,13 +42,13 @@ export function PartialDispatchModal({
   useEffect(() => {
     if (!isOpen || !token || !company) return;
 
-    apiFetch<any>('/tenants/warehouses', {
+    apiFetch<ListResponse<Warehouse>>('/tenants/warehouses', {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data || [];
+        const list = listOf(res);
         setWarehouses(list);
         if (order?.warehouseId) {
           setSelectedWarehouseId(order.warehouseId);
@@ -62,7 +64,7 @@ export function PartialDispatchModal({
     if (!isOpen || !order) return;
 
     const initialMap: Record<string, number> = {};
-    (order.items || []).forEach((item: any) => {
+    (order.items || []).forEach((item) => {
       const qty = Number(item.quantity);
       const shipped = Number(item.shippedQty || 0);
       const remaining = Math.max(0, qty - shipped);
@@ -78,15 +80,15 @@ export function PartialDispatchModal({
     if (!isOpen || !token || !company || !selectedWarehouseId) return;
 
     setLoadingStock(true);
-    apiFetch<any>(`/inventory/products/stock-levels?warehouseId=${selectedWarehouseId}`, {
+    apiFetch<ListResponse<{ productId: string; quantity?: number | string | null; reservedQuantity?: number | string | null }>>(`/inventory/products/stock-levels?warehouseId=${selectedWarehouseId}`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data || [];
-        const map: Record<string, any> = {};
-        list.forEach((sl: any) => {
+        const list = listOf(res);
+        const map: Record<string, StockAvailability> = {};
+        list.forEach((sl) => {
           const physical = Number(sl.quantity || 0);
           const reserved = Number(sl.reservedQuantity || 0);
           map[sl.productId] = {
@@ -160,7 +162,7 @@ export function PartialDispatchModal({
 
     try {
       const itemsPayload = Object.entries(dispatchQuantities)
-        .filter(([_, qty]) => qty > 0)
+        .filter(([, qty]) => qty > 0)
         .map(([orderItemId, quantity]) => ({
           orderItemId,
           quantity,
@@ -179,10 +181,10 @@ export function PartialDispatchModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setError(
-        err.message ||
+        errorMessage(err) ||
           (isRu ? 'Ошибка при отгрузке со склада' : 'Ombordan chiqim qilishda xatolik yuz berdi'),
       );
     } finally {
@@ -272,7 +274,7 @@ export function PartialDispatchModal({
               </tr>
             </thead>
             <tbody>
-              {(order.items || []).map((item: any) => {
+              {(order.items || []).map((item) => {
                 const prodName =
                   typeof item.product?.name === 'object'
                     ? item.product.name[locale] || item.product.name.uz

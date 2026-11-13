@@ -3,18 +3,20 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { nextDocumentNumber } from '../../../common/sequences/document-sequence';
+import { consumeFifoBatches, createFifoBatch } from '../fifo/fifo-batches';
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
-import { EventsGateway } from '../../../common/websockets/events.gateway';
 import { JournalService } from '../../accounting/journal/journal.service';
 import { CreateStockTransferDto } from '../dto';
+import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
+import { assertPeriodOpen } from '../../../common/accounting-period/period-lock';
 
 @Injectable()
 export class StockTransfersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-    private readonly eventsGateway: EventsGateway,
     private readonly journalService: JournalService,
   ) {}
 
@@ -31,6 +33,11 @@ export class StockTransfersService {
         'Source and target warehouses cannot be identical',
       );
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      warehouse: [dto.sourceWarehouseId, dto.targetWarehouseId],
+      product: dto.items.map((item) => item.productId),
+    });
 
     const transferNumber = await this.generateTransferNumber(tenantId);
 
@@ -89,6 +96,8 @@ export class StockTransfersService {
 
     // Atomic transaction: deduct source stock
     const updated = await this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, transfer.transferDate, 'post');
       for (const item of transfer.items) {
         const stock = await tx.stockLevel.findUnique({
           where: {
@@ -122,12 +131,21 @@ export class StockTransfersService {
           },
         });
 
-        const costPrice = Number(item.product?.costPrice) || 0;
-        totalCostValue += requestedQty * costPrice;
+        // Goods leave the source at their FIFO batch cost; the consumption is
+        // recorded so receipt can recreate the same cost layers.
+        const allocation = await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId: transfer.sourceWarehouseId,
+          productId: item.productId,
+          quantity: requestedQty,
+          source: { stockTransferItemId: item.id },
+        });
+        totalCostValue += allocation.totalCost;
       }
+      totalCostValue = Math.round(totalCostValue * 100) / 100;
 
-      return tx.stockTransfer.update({
-        where: { id },
+      const shipped = await tx.stockTransfer.update({
+        where: { tenantId, id },
         data: {
           status: 'IN_TRANSIT',
           shippedAt: new Date(),
@@ -138,23 +156,19 @@ export class StockTransfersService {
           items: { include: { product: true } },
         },
       });
-    });
 
-    // Auto-post NAS journal entry: Dt 2920 / Kt 2910
-    try {
+      // Dt 2920 / Kt 2910 commits with the stock movement
       await this.journalService.autoPostShipTransfer(
         tenantId,
-        updated,
+        shipped,
         totalCostValue,
+        tx,
       );
-    } catch (err) {
-      console.error(
-        'Failed to auto-post journal entry for ship transfer:',
-        err,
-      );
-    }
 
-    // Audit log & WebSocket broadcast
+      return shipped;
+    });
+
+    // Audit log
     await this.auditService.logAction({
       tenantId,
       userId,
@@ -165,12 +179,6 @@ export class StockTransfersService {
         status: 'IN_TRANSIT',
         transferNumber: updated.transferNumber,
       },
-    });
-
-    this.eventsGateway.notifyStockUpdate(tenantId, {
-      event: 'transfer_shipped',
-      transferNumber: updated.transferNumber,
-      updatedAt: new Date().toISOString(),
     });
 
     return updated;
@@ -205,6 +213,8 @@ export class StockTransfersService {
 
     // Atomic transaction: add target stock
     const updated = await this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, transfer.transferDate, 'post');
       for (const item of transfer.items) {
         const requestedQty = Number(item.quantity);
 
@@ -238,12 +248,39 @@ export class StockTransfersService {
           },
         });
 
-        const costPrice = Number(item.product?.costPrice) || 0;
-        totalCostValue += requestedQty * costPrice;
+        // Recreate exactly the cost layers that left the source, keeping each
+        // batch's FIFO age, so 2920 (in transit) nets to zero.
+        const shippedLayers = await tx.batchConsumption.findMany({
+          where: { tenantId, stockTransferItemId: item.id },
+          include: { batch: { select: { createdAt: true } } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+        const shippedQty = shippedLayers.reduce(
+          (sum, layer) => sum + Number(layer.quantity),
+          0,
+        );
+        if (Math.abs(shippedQty - requestedQty) > 0.0005) {
+          throw new BadRequestException(
+            `Jo'natilgan partiyalar (${shippedQty}) ko'chirish miqdoriga (${requestedQty}) mos emas`,
+          );
+        }
+        for (const [index, layer] of shippedLayers.entries()) {
+          await createFifoBatch(tx, {
+            tenantId,
+            warehouseId: transfer.targetWarehouseId,
+            productId: item.productId,
+            quantity: Number(layer.quantity),
+            unitCost: Number(layer.unitCost),
+            batchNumber: `${transfer.transferNumber}-${index + 1}`,
+            createdAt: layer.batch.createdAt,
+          });
+          totalCostValue += Number(layer.quantity) * Number(layer.unitCost);
+        }
       }
+      totalCostValue = Math.round(totalCostValue * 100) / 100;
 
-      return tx.stockTransfer.update({
-        where: { id },
+      const received = await tx.stockTransfer.update({
+        where: { tenantId, id },
         data: {
           status: 'RECEIVED',
           receivedAt: new Date(),
@@ -254,23 +291,19 @@ export class StockTransfersService {
           items: { include: { product: true } },
         },
       });
-    });
 
-    // Auto-post NAS journal entry: Dt 2910 / Kt 2920
-    try {
+      // Dt 2910 / Kt 2920 commits with the stock movement
       await this.journalService.autoPostReceiveTransfer(
         tenantId,
-        updated,
+        received,
         totalCostValue,
+        tx,
       );
-    } catch (err) {
-      console.error(
-        'Failed to auto-post journal entry for receive transfer:',
-        err,
-      );
-    }
 
-    // Audit log & WebSocket broadcast
+      return received;
+    });
+
+    // Audit log
     await this.auditService.logAction({
       tenantId,
       userId,
@@ -278,12 +311,6 @@ export class StockTransfersService {
       entityId: updated.id,
       action: 'UPDATE',
       newValue: { status: 'RECEIVED', transferNumber: updated.transferNumber },
-    });
-
-    this.eventsGateway.notifyStockUpdate(tenantId, {
-      event: 'transfer_received',
-      transferNumber: updated.transferNumber,
-      updatedAt: new Date().toISOString(),
     });
 
     return updated;
@@ -321,11 +348,11 @@ export class StockTransfersService {
     }
 
     await this.prisma.stockTransferItem.deleteMany({
-      where: { transferId: id },
+      where: { transfer: { tenantId }, transferId: id },
     });
 
     await this.prisma.stockTransfer.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     await this.auditService.logAction({
@@ -342,10 +369,6 @@ export class StockTransfersService {
   }
 
   private async generateTransferNumber(tenantId: string): Promise<string> {
-    const count = await this.prisma.stockTransfer.count({
-      where: { tenantId },
-    });
-    const nextSeq = (count + 1).toString().padStart(6, '0');
-    return `TR-${nextSeq}`;
+    return nextDocumentNumber(this.prisma, tenantId, 'STOCK_TRANSFER');
   }
 }

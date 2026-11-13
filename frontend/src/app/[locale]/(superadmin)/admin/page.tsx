@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -15,7 +15,6 @@ import {
   Building2,
   Users,
   DollarSign,
-  TrendingUp,
   Plus,
   Search,
   LogIn,
@@ -25,7 +24,8 @@ import {
   Clock,
   XCircle,
 } from 'lucide-react';
-import { GlobalMetrics, TenantCompanySummary } from '@shared/types';
+import { CreatedTenantSummary, GlobalMetrics, TenantCompanySummary } from '@shared/types';
+import type { AuthResponse } from '@shared/types';
 
 export default function SuperAdminTenantsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -51,7 +51,12 @@ export default function SuperAdminTenantsPage() {
   const [adminFirstName, setAdminFirstName] = useState('');
   const [adminLastName, setAdminLastName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('Admin123!');
+  // Empty means "generate one": the server returns it once and we show it once.
+  const [adminPassword, setAdminPassword] = useState('');
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
 
   // Edit Tenant Modal
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -73,8 +78,8 @@ export default function SuperAdminTenantsPage() {
       ]);
       setMetrics(m);
       setTenants(t);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка загрузки данных' : 'Maʼlumotlarni yuklashda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Maʼlumotlarni yuklashda xatolik yuz berdi'));
     } finally {
       setLoading(false);
     }
@@ -89,7 +94,7 @@ export default function SuperAdminTenantsPage() {
     if (!token) return;
     setCreateLoading(true);
     try {
-      await apiFetch('/super-admin/tenants', {
+      const created = await apiFetch<CreatedTenantSummary>('/super-admin/tenants', {
         token,
         locale,
         method: 'POST',
@@ -100,9 +105,15 @@ export default function SuperAdminTenantsPage() {
           adminFirstName,
           adminLastName,
           adminEmail: adminEmail.trim().toLowerCase(),
-          adminPassword,
+          ...(adminPassword ? { adminPassword } : {}),
         }),
       });
+      if (created.generatedAdminPassword) {
+        setCreatedCredentials({
+          email: adminEmail.trim().toLowerCase(),
+          password: created.generatedAdminPassword,
+        });
+      }
 
       toast.success(
         isRu ? 'Предприятие успешно создано' : 'Yangi korxona muvaffaqiyatli yaratildi',
@@ -110,8 +121,8 @@ export default function SuperAdminTenantsPage() {
       setCreateModalOpen(false);
       resetCreateForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка при создании' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при создании' : 'Xatolik yuz berdi'));
     } finally {
       setCreateLoading(false);
     }
@@ -125,7 +136,7 @@ export default function SuperAdminTenantsPage() {
     setAdminFirstName('');
     setAdminLastName('');
     setAdminEmail('');
-    setAdminPassword('Admin123!');
+    setAdminPassword('');
   };
 
   const handleOpenEditModal = (t: TenantCompanySummary) => {
@@ -155,8 +166,8 @@ export default function SuperAdminTenantsPage() {
       );
       setEditModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка сохранения' : 'Xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Xatolik yuz berdi'));
     } finally {
       setEditLoading(false);
     }
@@ -166,7 +177,7 @@ export default function SuperAdminTenantsPage() {
     if (!token) return;
     setImpersonateLoadingId(t.id);
     try {
-      const res = await apiFetch<any>(`/super-admin/impersonate/${t.id}`, {
+      const res = await apiFetch<AuthResponse>(`/super-admin/impersonate/${t.id}`, {
         token,
         locale,
         method: 'POST',
@@ -179,8 +190,8 @@ export default function SuperAdminTenantsPage() {
       );
 
       startImpersonation(res);
-    } catch (err: any) {
-      toast.error(err.message || (isRu ? 'Ошибка входа в кабинет' : 'Kabinetga kirishda xatolik yuz berdi'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка входа в кабинет' : 'Kabinetga kirishda xatolik yuz berdi'));
     } finally {
       setImpersonateLoadingId(null);
     }
@@ -355,7 +366,7 @@ export default function SuperAdminTenantsPage() {
             </div>
           </div>
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
-            {metrics ? formatCurrency(metrics.totalMrr, locale, (metrics as any)?.currency || 'USD') : '—'}
+            {metrics ? formatCurrency(metrics.totalMrr, locale, (metrics as { currency?: string } | null | undefined)?.currency || 'USD') : '—'}
           </div>
         </Card>
 
@@ -743,13 +754,15 @@ export default function SuperAdminTenantsPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                  {isRu ? 'Начальный пароль' : 'Dastlabki parol'} *
+                  {isRu ? 'Начальный пароль' : 'Dastlabki parol'}
                 </label>
                 <input
                   type="text"
-                  required
+                  minLength={8}
+                  autoComplete="new-password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder={isRu ? 'Пусто — сгенерировать' : 'Bo‘sh — avtomatik yaratish'}
                   style={inputStyle}
                 />
               </div>
@@ -765,6 +778,50 @@ export default function SuperAdminTenantsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* MODAL: generated admin password, shown exactly once */}
+      <Modal
+        isOpen={!!createdCredentials}
+        onClose={() => setCreatedCredentials(null)}
+        title={isRu ? 'Пароль администратора' : 'Administrator paroli'}
+        size="md"
+      >
+        {createdCredentials && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start', color: 'var(--color-warning-600)' }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 'var(--text-sm)' }}>
+                {isRu
+                  ? 'Пароль показывается только один раз. Сохраните его и передайте администратору — после закрытия окна его нельзя будет посмотреть.'
+                  : 'Parol faqat bir marta ko‘rsatiladi. Uni saqlab, administratorga yetkazing — oyna yopilgandan keyin uni qayta ko‘rib bo‘lmaydi.'}
+              </span>
+            </div>
+            <div style={{ fontSize: 'var(--text-sm)' }}>
+              <div>Email: <strong>{createdCredentials.email}</strong></div>
+              <div style={{ marginTop: 'var(--space-2)' }}>
+                {isRu ? 'Пароль' : 'Parol'}:{' '}
+                <code style={{ fontSize: 'var(--text-base)', userSelect: 'all' }}>{createdCredentials.password}</code>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard
+                    .writeText(createdCredentials.password)
+                    .then(() => toast.success(isRu ? 'Скопировано' : 'Nusxa olindi'))
+                    .catch(() => toast.error(isRu ? 'Не удалось скопировать' : 'Nusxa olib bo‘lmadi'));
+                }}
+              >
+                {isRu ? 'Копировать' : 'Nusxa olish'}
+              </Button>
+              <Button variant="primary" onClick={() => setCreatedCredentials(null)}>
+                {isRu ? 'Я сохранил пароль' : 'Parolni saqladim'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* MODAL: Edit Tenant Status & Plan */}

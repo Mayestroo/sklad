@@ -3,6 +3,17 @@
  * Supporting Uzbek (uz-UZ) and Russian (ru-RU) locales
  */
 
+import { formatMoney } from '../../../shared/format/money.ts';
+
+export {
+  formatAmount,
+  formatCompactNumber,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+  formatQuantity,
+} from '../../../shared/format/money.ts';
+
 /**
  * Summani valyuta kodi bilan birga formatlaydi.
  *
@@ -16,7 +27,7 @@
  * // ❌ XATO — "1 500 000 UZS UZS" (ikki marta!)
  * {formatCurrency(amount, locale, currency)} {currency}
  */
-export function formatCurrency(amount: number | string, locale: string = 'uz', currency: string): string {
+export function formatCurrency(amount: number | string, _locale: string = 'uz', currency: string): string {
   const numericAmount =
     typeof amount === 'string' && amount.trim() !== ''
       ? Number(amount)
@@ -30,14 +41,9 @@ export function formatCurrency(amount: number | string, locale: string = 'uz', c
     throw new TypeError(`formatCurrency: currency must be a non-empty string, received ${String(currency)}`);
   }
 
-  // Always format as 111,111.000 — comma thousands separator, dot decimal, 3 fixed decimals
-  const formatted = new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
-  }).format(numericAmount);
-
-  const cur = currency.trim().toUpperCase();
-  return `${formatted} ${cur}`;
+  // One display format for the whole app (D8): `8 000 UZS`, `8 000,50 UZS`,
+  // `1 234,56 USD`. See shared/format/money.ts.
+  return formatMoney(numericAmount, currency);
 }
 
 /**
@@ -73,8 +79,6 @@ export const CURRENCY_OPTIONS = [
   { value: 'USD', label: 'USD' },
 ];
 
-const UZ_MONTHS_SHORT = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
-const RU_MONTHS_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
 export function formatDate(date: string | Date | null | undefined, _locale?: string): string {
   if (!date) return '—';
@@ -117,8 +121,24 @@ export function formatDateTime(date: string | Date | null | undefined, _locale?:
 /**
  * Extracts the localized string from a name that might be an object { uz: string, ru: string } or a plain string.
  */
-export function getLocalizedName(name: any, locale: string = 'uz'): string {
+export type LocalizedName = string | { uz?: string; ru?: string };
+
+export function getLocalizedName(name: LocalizedName | null | undefined, locale: string = 'uz'): string {
   if (!name) return '—';
   if (typeof name === 'string') return name;
-  return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
+  const byLocale = name as Record<string, string | undefined>;
+  return byLocale[locale] || name.ru || name.uz || Object.values(byLocale)[0] || '—';
+}
+
+/**
+ * The message of a caught error, or `undefined` when the thrown value has no
+ * string `message` (callers keep their own fallback text). Use in
+ * `catch (err)` blocks instead of typing the error as `any`.
+ */
+export function errorMessage(err: unknown): string | undefined {
+  if (err !== null && typeof err === 'object' && 'message' in err) {
+    const { message } = err as { message: unknown };
+    return typeof message === 'string' ? message : undefined;
+  }
+  return undefined;
 }

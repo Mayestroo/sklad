@@ -17,22 +17,17 @@ import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatDate, formatCurrency, formatAmount, formatMoney, formatCompactNumber } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import type { FullDashboard, DashboardPeriod, CashFlowPoint } from '@shared/types';
 import {
   TrendingUp,
   TrendingDown,
   Wallet,
   ShoppingCart,
-  ClipboardList,
-  Factory,
-  Truck,
   BarChart3,
-  Users,
   Building2,
   ArrowRight,
   ArrowUpRight,
@@ -42,10 +37,6 @@ import {
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────
-
-function fmt(amount: number): string {
-  return new Intl.NumberFormat('uz-UZ', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
-}
 
 function getPeriodDates(period: DashboardPeriod): { date_from: string; date_to: string } {
   const now = new Date();
@@ -88,13 +79,6 @@ function getPeriodDates(period: DashboardPeriod): { date_from: string; date_to: 
 }
 
 // ─── Cash Flow Chart (Recharts) ──────────────────────────────────
-
-function fmtShort(val: number): string {
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}B`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
-  return String(val);
-}
 
 function CashFlowChart({
   seriesByCurrency,
@@ -193,7 +177,7 @@ function CashFlowChart({
               tickFormatter={(v: string) => v.slice(5)}
             />
             <YAxis
-              tickFormatter={fmtShort}
+              tickFormatter={formatCompactNumber}
               tick={{ fontSize: 11, fill: 'var(--color-text-tertiary)' }}
               tickLine={false}
               axisLine={false}
@@ -208,7 +192,7 @@ function CashFlowChart({
                 boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
               }}
               formatter={(value: number | string | readonly (number | string)[] | undefined, name?: number | string) => [
-                new Intl.NumberFormat('uz-UZ').format(typeof value === 'number' ? value : Number(value) || 0) + ` ${activeCurrency}`,
+                formatMoney(typeof value === 'number' ? value : Number(value) || 0, activeCurrency),
                 name ? String(name) : '',
               ]}
               labelStyle={{ color: 'var(--color-text-secondary)', marginBottom: 4 }}
@@ -274,7 +258,7 @@ function SalesBarChart({ dynamics, isRu }: { dynamics: { period: string; amount:
             fontSize: 12,
           }}
           formatter={(value: number | string | readonly (number | string)[] | undefined) => [
-            new Intl.NumberFormat('uz-UZ').format(typeof value === 'number' ? value : Number(value) || 0) + ' UZS',
+            formatMoney(typeof value === 'number' ? value : Number(value) || 0, 'UZS'),
             isRu ? 'Продажи' : 'Sotuv',
           ]}
           cursor={{ fill: 'var(--color-bg-hover)' }}
@@ -303,7 +287,7 @@ interface KpiCardProps {
   currency?: string;
 }
 
-function KpiCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, trend, currency }: KpiCardProps) {
+function KpiCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, currency }: KpiCardProps) {
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
@@ -336,7 +320,7 @@ export default function DashboardPage() {
 
   const [period, setPeriod] = useState<DashboardPeriod>('this_month');
   const [data, setData] = useState<FullDashboard | null>(null);
-  const [orderStats, setOrderStats] = useState<any>(null);
+  const [orderStats, setOrderStats] = useState<{ pipeline?: Partial<Record<string, number>> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [cashFlowGranularity, setCashFlowGranularity] = useState<'day' | 'week' | 'month'>('day');
 
@@ -349,7 +333,7 @@ export default function DashboardPage() {
     try {
       const [result, orders] = await Promise.all([
         apiFetch<FullDashboard>(`/dashboard?${params}`, { token, tenantId: company.id, locale }),
-        apiFetch<any>('/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
+        apiFetch<{ pipeline?: Partial<Record<string, number>> }>('/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
       ]);
       setData(result);
       setOrderStats(orders);
@@ -493,7 +477,7 @@ export default function DashboardPage() {
           value={
             data?.sales.byCurrency?.length
               ? data.sales.byCurrency.map((summary) => formatCurrency(summary.amount, locale, summary.currency)).join(' / ')
-              : `${fmt(data?.sales?.totalSales ?? 0)} UZS (equiv.)`
+              : `${formatMoney(data?.sales?.totalSales ?? 0, 'UZS')} (equiv.)`
           }
           subtitle={`${data?.sales?.invoiceCount ?? 0} ${isRu ? 'документов' : 'ta hujjat'}`}
           icon={ShoppingCart}
@@ -504,8 +488,8 @@ export default function DashboardPage() {
         {/* Expenses */}
         <KpiCard
           title={isRu ? 'Всего расходов' : 'Jami chiqim'}
-          value={`${fmt(uzsSummary?.totalExpense ?? 0)} UZS`}
-          subtitle={usdSummary ? `+ ${fmt(usdSummary.totalExpense)} USD` : undefined}
+          value={formatMoney(uzsSummary?.totalExpense ?? 0, 'UZS')}
+          subtitle={usdSummary ? `+ ${formatMoney(usdSummary.totalExpense, 'USD')}` : undefined}
           icon={TrendingDown}
           iconColor="var(--color-error-600)"
           iconBg="var(--color-error-50)"
@@ -514,8 +498,8 @@ export default function DashboardPage() {
         {/* Profit */}
         <KpiCard
           title={isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)'}
-          value={`${fmt(data?.finance?.profit?.grossProfit ?? 0)} UZS`}
-          subtitle={`${isRu ? 'Продажи' : 'Sotuv'}: ${fmt(data?.finance?.profit?.revenue ?? 0)} UZS`}
+          value={formatMoney(data?.finance?.profit?.grossProfit ?? 0, 'UZS')}
+          subtitle={`${isRu ? 'Продажи' : 'Sotuv'}: ${formatMoney(data?.finance?.profit?.revenue ?? 0, 'UZS')}`}
           icon={BarChart3}
           iconColor="var(--color-warning-600)"
           iconBg="var(--color-warning-50)"
@@ -634,9 +618,9 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
               <MultiCurrencyValue
-                items={(data?.debts?.receivable as any)?.byCurrency}
+                items={data?.debts?.receivable?.byCurrency}
                 fallbackAmount={data?.debts?.receivable?.total ?? 0}
-                fallbackCurrency={(data?.debts?.receivable as any)?.byCurrency?.[0]?.currency || 'UZS'}
+                fallbackCurrency={data?.debts?.receivable?.byCurrency?.[0]?.currency || 'UZS'}
                 locale={locale}
                 color="var(--color-success-600)"
               />
@@ -651,7 +635,7 @@ export default function DashboardPage() {
           {data?.debts?.receivable?.topDebtors?.slice(0, 3).map((d) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{d.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, (d as any).currency || 'UZS')}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, (d as { currency?: string } | null | undefined)?.currency || 'UZS')}</span>
             </div>
           ))}
         </Card>
@@ -664,9 +648,9 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
               <MultiCurrencyValue
-                items={(data?.debts?.payable as any)?.byCurrency}
+                items={data?.debts?.payable?.byCurrency}
                 fallbackAmount={data?.debts?.payable?.total ?? 0}
-                fallbackCurrency={(data?.debts?.payable as any)?.byCurrency?.[0]?.currency || 'UZS'}
+                fallbackCurrency={data?.debts?.payable?.byCurrency?.[0]?.currency || 'UZS'}
                 locale={locale}
                 color="var(--color-error-600)"
               />
@@ -681,7 +665,7 @@ export default function DashboardPage() {
           {data?.debts?.payable?.topCreditors?.slice(0, 3).map((c) => (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{c.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, (c as any).currency || 'UZS')}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, (c as { currency?: string } | null | undefined)?.currency || 'UZS')}</span>
             </div>
           ))}
         </Card>
@@ -722,16 +706,16 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', gap: 'var(--space-6)', marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего приход (UZS)' : 'Jami kirim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{fmt(uzsSummary.totalIncome)}</div>
+              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalIncome, 'UZS')}</div>
             </div>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего расход (UZS)' : 'Jami chiqim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{fmt(uzsSummary.totalExpense)}</div>
+              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalExpense, 'UZS')}</div>
             </div>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистый поток (UZS)' : 'Sof oqim (UZS)'}</div>
               <div style={{ fontWeight: 'var(--font-bold)', color: uzsSummary.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>
-                {uzsSummary.netCashFlow >= 0 ? '+' : ''}{fmt(uzsSummary.netCashFlow)}
+                {uzsSummary.netCashFlow >= 0 ? '+' : ''}{formatAmount(uzsSummary.netCashFlow, 'UZS')}
               </div>
             </div>
           </div>
@@ -744,7 +728,7 @@ export default function DashboardPage() {
         <Card title={isRu ? 'Динамика продаж (эквивалент UZS)' : 'Sotuv dinamikasi (UZS ekv.)'}>
           <div style={{ marginTop: 'var(--space-2)' }}>
             <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', fontVariantNumeric: 'tabular-nums', marginBottom: 'var(--space-2)' }}>
-              {fmt(data?.sales?.totalSales ?? 0)} <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-regular)' }}>UZS</span>
+              {formatAmount(data?.sales?.totalSales ?? 0, 'UZS')} <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-regular)' }}>UZS</span>
             </div>
             <SalesBarChart dynamics={data?.sales?.dynamics ?? []} isRu={isRu} />
           </div>
@@ -794,10 +778,10 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
-                        {tx.counterparty?.name ?? (tx.account?.name as any)?.[locale] ?? (isRu ? 'Операция' : 'Operatsiya')}
+                        {tx.counterparty?.name ?? tx.account?.name?.[locale] ?? (isRu ? 'Операция' : 'Operatsiya')}
                       </div>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                        {formatDate(tx.transactionDate, locale)} · {(tx.account?.name as any)?.[locale] ?? ''}
+                        {formatDate(tx.transactionDate, locale)} · {tx.account?.name?.[locale] ?? ''}
                       </div>
                     </div>
                   </div>
@@ -807,7 +791,7 @@ export default function DashboardPage() {
                     fontVariantNumeric: 'tabular-nums',
                     color: tx.direction === 'INCOME' ? 'var(--color-success-600)' : tx.direction === 'EXPENSE' ? 'var(--color-error-600)' : 'var(--color-info-600)',
                   }}>
-                    {tx.direction === 'INCOME' ? '+' : tx.direction === 'EXPENSE' ? '−' : ''}{fmt(Number(tx.amount))} {tx.currency}
+                    {tx.direction === 'INCOME' ? '+' : tx.direction === 'EXPENSE' ? '−' : ''}{formatMoney(Number(tx.amount), tx.currency)}
                   </div>
                 </div>
               ))}

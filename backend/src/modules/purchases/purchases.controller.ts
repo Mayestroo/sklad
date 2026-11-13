@@ -16,10 +16,15 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../common/auth/request-context';
 import { CreatePurchaseReceiptDto } from './dto/create-purchase-receipt.dto';
 import { FilterPurchaseReceiptsDto } from './dto/filter-purchase-receipts.dto';
 import { CreatePurchaseExpenseDto } from './dto/create-purchase-expense.dto';
 import { CreatePurchaseReturnDto } from './dto/create-purchase-return.dto';
+import { PayPurchaseReceiptDto } from './dto/pay-purchase-receipt.dto';
+
+/** Query-string filters for the purchase-return list (not a DTO: unvalidated). */
+type ReturnFilters = Parameters<PurchasesService['findAllReturns']>[1];
 
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
 @Controller('api/purchases')
@@ -58,7 +63,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:create')
   async createReceipt(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreatePurchaseReceiptDto,
   ) {
     return this.purchasesService.createReceipt(tenantId, user?.id, dto);
@@ -78,7 +83,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:edit')
   async postReceipt(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.purchasesService.postReceipt(tenantId, user?.id, id);
@@ -88,7 +93,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:edit')
   async unpostReceipt(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.purchasesService.unpostReceipt(tenantId, user?.id, id);
@@ -98,16 +103,9 @@ export class PurchasesController {
   @RequirePermissions('inventory:edit')
   async payReceipt(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body()
-    dto: {
-      amount: number;
-      cashAccountId: string;
-      exchangeRate?: number;
-      note?: string;
-      paymentDate?: string;
-    },
+    @Body() dto: PayPurchaseReceiptDto,
   ) {
     return this.purchasesService.payPurchaseReceipt(
       tenantId,
@@ -149,7 +147,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:create')
   async createReturn(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreatePurchaseReturnDto,
   ) {
     return this.purchasesService.createReturn(tenantId, user?.id, dto);
@@ -159,7 +157,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:view')
   async findAllReturns(
     @CurrentTenant() tenantId: string,
-    @Query() query: any,
+    @Query() query: ReturnFilters,
   ) {
     return this.purchasesService.findAllReturns(tenantId, query);
   }
@@ -177,7 +175,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:create')
   async approveReturn(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.purchasesService.approveReturn(tenantId, user?.id, id);
@@ -187,7 +185,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:create')
   async postReturn(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.purchasesService.approveReturn(tenantId, user?.id, id);
@@ -197,7 +195,7 @@ export class PurchasesController {
   @RequirePermissions('inventory:delete')
   async cancelReturn(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.purchasesService.cancelReturn(tenantId, user?.id, id);

@@ -3,8 +3,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
-import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { apiDownload, apiFetch, listOf, type ListResponse } from '@/lib/api';
+import {
+  IMPORT_CATEGORY_LABELS,
+  openingBalanceImportPaths,
+  summarizeImportPreview,
+} from '@/lib/opening-balance-import';
+import { CURRENCY_OPTIONS, formatCurrency, formatCurrencyIfAvailable, errorMessage } from '@/lib/utils';
+import { withProductCost, withRegisterAsset } from '@/lib/opening-balance-lines';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -12,9 +18,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { toast } from '@/context/ToastContext';
 import {
-  Scale,
   Plus,
   Save,
   CheckCircle2,
@@ -43,11 +51,33 @@ import type {
   OpeningBalanceStatus,
   OpeningBalanceMetrics,
   ImportErrorItem,
+  ImportValidationResult,
 } from '@shared/types/opening-balances';
-import { isCashAccountCurrencyValid } from '@/lib/cash-account-policy';
+import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
+import type { CashAccount } from '@shared/types/finance';
+import type { Product } from '@shared/types/inventory';
+import type { Counterparty } from '@shared/types/sales';
+import type { Warehouse } from '@shared/types/tenant';
+import type { FixedAsset } from '@shared/types/fixed-assets';
 
 type TabKey = 'cash' | 'inventory' | 'customers' | 'suppliers' | 'advances' | 'fixed-assets' | 'other';
 type OpeningBalanceDraftLine = Omit<Partial<OpeningBalanceLine>, 'exchangeRate'> & { exchangeRate?: number | string };
+type LineValue = OpeningBalanceDraftLine[keyof OpeningBalanceDraftLine];
+type IndexedLine = { line: OpeningBalanceDraftLine; index: number };
+
+interface SubledgerTableProps {
+  lines: OpeningBalanceDraftLine[];
+  isReadOnly: boolean;
+  locale: 'uz' | 'ru';
+  isRu: boolean;
+  onUpdate: (index: number, field: keyof OpeningBalanceLine, value: LineValue) => void;
+  onRemove: (index: number) => void;
+}
+
+/** The lines of one category, with their position in the full list. */
+function linesWhere(lines: OpeningBalanceDraftLine[], keep: (line: OpeningBalanceDraftLine) => boolean): IndexedLine[] {
+  return lines.flatMap((line, index) => (keep(line) ? [{ line, index }] : []));
+}
 
 export default function OpeningBalancesPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -60,16 +90,21 @@ export default function OpeningBalancesPage() {
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [currentDoc, setCurrentDoc] = useState<OpeningBalanceDocument | null>(null);
   const docCurrency = 'UZS';
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('cash');
 
   // Lookups
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [counterparties, setCounterparties] = useState<any[]>([]);
-  const [fixedAssets, setFixedAssets] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<CashAccount[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+  const [fixedAssets, setFixedAssets] = useState<FixedAsset[]>([]);
+  // muammolar B1/B4: create a missing product or counterparty from a line's
+  // dropdown, then put it on that line.
+  const [quickCreate, setQuickCreate] = useState<
+    { kind: 'product'; index: number } | { kind: 'counterparty'; index: number; type: 'CUSTOMER' | 'SUPPLIER' | 'BOTH' } | null
+  >(null);
 
   // Working Document Lines & State
   const [lines, setLines] = useState<OpeningBalanceDraftLine[]>([]);
@@ -85,6 +120,7 @@ export default function OpeningBalancesPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importErrors, setImportErrors] = useState<ImportErrorItem[]>([]);
+  const [importPreview, setImportPreview] = useState<ImportValidationResult | null>(null);
   const [importing, setImporting] = useState(false);
 
   const [showUnpostModal, setShowUnpostModal] = useState(false);
@@ -98,17 +134,17 @@ export default function OpeningBalancesPage() {
     const fetchLookups = async () => {
       try {
         const [accs, whs, prods, cps, fas] = await Promise.all([
-          apiFetch<any[]>('/finance/accounts', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
-          apiFetch<any>('/tenants/warehouses', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => res?.data || (Array.isArray(res) ? res : []))
+          apiFetch<CashAccount[]>('/finance/accounts', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
+          apiFetch<ListResponse<Warehouse>>('/tenants/warehouses', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => listOf(res))
             .catch(() => []),
-          apiFetch<any>('/inventory/products', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => res?.data || (Array.isArray(res) ? res : []))
+          apiFetch<ListResponse<Product>>('/inventory/products', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => listOf(res))
             .catch(() => []),
-          apiFetch<any>('/sales/counterparties', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => res?.data || (Array.isArray(res) ? res : []))
+          apiFetch<ListResponse<Counterparty>>('/sales/counterparties', { token: token || undefined, tenantId: companyId, locale })
+            .then((res) => listOf(res))
             .catch(() => []),
-          apiFetch<any[]>('/fixed-assets', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
+          apiFetch<FixedAsset[]>('/fixed-assets', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
         ]);
 
         setAccounts(Array.isArray(accs) ? accs : []);
@@ -144,8 +180,8 @@ export default function OpeningBalancesPage() {
         setCurrentDoc(null);
         setLines([]);
       }
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка при загрузке документов' : 'Hujjatlarni yuklashda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка при загрузке документов' : 'Hujjatlarni yuklashda xatolik'));
     } finally {
       setLoading(false);
     }
@@ -170,8 +206,8 @@ export default function OpeningBalancesPage() {
         setLines(doc.lines || []);
         setOpeningDate(doc.openingDate ? doc.openingDate.slice(0, 10) : '2026-10-01');
         setNotes(doc.notes || '');
-      } catch (e: any) {
-        toast.error(e?.message || (isRu ? 'Ошибка загрузки документа' : 'Hujjat tafsilotlarini yuklashda xatolik'));
+      } catch (e) {
+        toast.error(errorMessage(e) || (isRu ? 'Ошибка загрузки документа' : 'Hujjat tafsilotlarini yuklashda xatolik'));
       }
     },
     [token, companyId, locale, isRu],
@@ -261,6 +297,7 @@ export default function OpeningBalancesPage() {
   }, [lines]);
 
   const isReadOnly = currentDoc?.status === 'POSTED' || currentDoc?.status === 'CANCELLED';
+  const importSummary = importPreview ? summarizeImportPreview(importPreview) : null;
 
   // ─── Actions & Handlers ────────────────────────────────────────
 
@@ -281,8 +318,8 @@ export default function OpeningBalancesPage() {
       });
       toast.success(isRu ? 'Изменения успешно сохранены' : 'Boshlang‘ich qoldiqlar muvaffaqiyatli saqlandi');
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
     } finally {
       setActionLoading(false);
     }
@@ -318,8 +355,8 @@ export default function OpeningBalancesPage() {
       );
       loadDocuments();
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -345,8 +382,8 @@ export default function OpeningBalancesPage() {
       );
       loadDocuments();
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка переоткрытия' : 'Hujjatni qayta ochishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка переоткрытия' : 'Hujjatni qayta ochishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -368,8 +405,8 @@ export default function OpeningBalancesPage() {
           : 'Balans ustav kapitali orqali avtomatik tenglashtirildi',
       );
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка балансировки' : 'Balansni tenglashtirishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка балансировки' : 'Balansni tenglashtirishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -388,8 +425,8 @@ export default function OpeningBalancesPage() {
       toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
       setSelectedDocId('');
       loadDocuments();
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -417,56 +454,93 @@ export default function OpeningBalancesPage() {
       toast.success(isRu ? 'Новый документ остатков создан' : 'Yangi boshlang‘ich qoldiq hujjati yaratildi');
       await loadDocuments();
       setSelectedDocId(created.id);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка создания' : 'Yaratishda xatolik'));
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка создания' : 'Yaratishda xatolik'));
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDownloadTemplate = () => {
-    window.open('/api/opening-balances/template/download', '_blank');
+  const handleDownloadTemplate = async () => {
+    if (!token || !companyId) return;
+    try {
+      const blob = await apiDownload(openingBalanceImportPaths('').template, {
+        token,
+        tenantId: companyId,
+        locale,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'boshlangich_qoldiqlar_shablon.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : isRu ? 'Не удалось скачать шаблон' : 'Shablonni yuklab bo‘lmadi');
+    }
   };
 
-  const handleImportFile = async () => {
+  const resetImport = () => {
+    setImportFile(null);
+    setImportErrors([]);
+    setImportPreview(null);
+  };
+
+  const closeImportModal = () => {
+    setShowImportModal(false);
+    resetImport();
+  };
+
+  const importFormData = (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return formData;
+  };
+
+  /** Step 1: the server validates the file and returns the lines it would save. */
+  const handlePreviewImport = async () => {
     if (!importFile || !token || !companyId || !selectedDocId) return;
     setImporting(true);
     setImportErrors([]);
+    setImportPreview(null);
     try {
-      const formData = new FormData();
-      formData.append('file', importFile);
-      formData.append('documentId', selectedDocId);
+      const result = await apiFetch<ImportValidationResult>(
+        openingBalanceImportPaths(selectedDocId).preview,
+        { token, tenantId: companyId, locale, method: 'POST', body: importFormData(importFile) },
+      );
+      setImportPreview(result);
+      setImportErrors(result.errors);
+      if (result.errors.length > 0) {
+        toast.error(isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : isRu ? 'Ошибка загрузки файла' : 'Faylni yuklashda xatolik');
+    } finally {
+      setImporting(false);
+    }
+  };
 
-      const res = await fetch('/api/opening-balances/import/excel', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'x-tenant-id': companyId,
-        },
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        if (data.errors && Array.isArray(data.errors)) {
-          setImportErrors(data.errors);
-          toast.error(isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi');
-        } else {
-          toast.error(data.message || (isRu ? 'Ошибка импорта' : 'Yuklashda xatolik'));
-        }
+  /** Step 2: save the previewed lines into the draft document. */
+  const handleCommitImport = async () => {
+    if (!importFile || !token || !companyId || !selectedDocId) return;
+    setImporting(true);
+    try {
+      const result = await apiFetch<{ success: boolean; message: string; errors?: ImportErrorItem[] }>(
+        openingBalanceImportPaths(selectedDocId).commit,
+        { token, tenantId: companyId, locale, method: 'POST', body: importFormData(importFile) },
+      );
+      if (!result.success) {
+        setImportErrors(result.errors ?? []);
+        toast.error(result.message || (isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi'));
         return;
       }
-
-      setShowImportModal(false);
-      setImportFile(null);
-      toast.success(
-        isRu
-          ? `Импорт завершен! Загружено строк: ${data.importedCount}`
-          : `Excel muvaffaqiyatli yuklandi! Kiritilgan qatorlar: ${data.importedCount}`,
-      );
+      closeImportModal();
+      toast.success(result.message);
       loadDocumentDetails(selectedDocId);
-    } catch (e: any) {
-      toast.error(e?.message || (isRu ? 'Ошибка загрузки файла' : 'Faylni yuklashda xatolik'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : isRu ? 'Ошибка импорта' : 'Yuklashda xatolik');
     } finally {
       setImporting(false);
     }
@@ -491,20 +565,53 @@ export default function OpeningBalancesPage() {
     setLines((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: any) => {
+  const handleQuickCreated = async (id: string) => {
+    const target = quickCreate;
+    setQuickCreate(null);
+    if (!target || !token || !companyId) return;
+    const opts = { token, tenantId: companyId, locale };
+    try {
+      if (target.kind === 'product') {
+        const product = await apiFetch<Product>(`/inventory/products/${id}`, opts);
+        setProducts((prev) => [product, ...prev.filter((p) => p.id !== product.id)]);
+        updateLineField(target.index, 'productId', product.id);
+      } else {
+        const counterparty = await apiFetch<Counterparty>(`/sales/counterparties/${id}`, opts);
+        setCounterparties((prev) => [counterparty, ...prev.filter((c) => c.id !== counterparty.id)]);
+        updateLineField(target.index, 'counterpartyId', counterparty.id);
+      }
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось загрузить созданную запись' : 'Yaratilgan yozuvni yuklab bo‘lmadi'));
+    }
+  };
+
+  const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: LineValue) => {
     if (isReadOnly) return;
     setLines((prev) => {
       const updated = [...prev];
-      const target: OpeningBalanceDraftLine = { ...updated[index], [field]: value };
+      let target: OpeningBalanceDraftLine = { ...updated[index], [field]: value };
 
       if (field === 'currency') {
         target.exchangeRate = value === 'UZS' ? 1 : '';
+      }
+
+      // muammolar B2: a product picked on an inventory line brings its card
+      // cost and that cost's currency, unless a cost was already typed. A
+      // foreign-currency rate is never guessed (ADR 0022): the user enters it.
+      if (target.category === 'INVENTORY' && field === 'productId') {
+        target = withProductCost(target, products.find((p) => p.id === value));
       }
 
       if (target.category === 'INVENTORY' && (field === 'quantity' || field === 'unitCost')) {
         const q = Number(field === 'quantity' ? value : target.quantity || 0);
         const c = Number(field === 'unitCost' ? value : target.unitCost || 0);
         target.amount = Math.round(q * c * 100) / 100;
+      }
+
+      // D6: a fixed-asset line opens an asset from the register and takes
+      // its cost and depreciation from it (the server checks they match).
+      if (target.category === 'FIXED_ASSET' && field === 'fixedAssetId') {
+        target = withRegisterAsset(target, fixedAssets.find((a) => a.id === value));
       }
 
       if (target.category === 'FIXED_ASSET' && (field === 'amount' || field === 'accumulatedDepreciation')) {
@@ -1023,13 +1130,13 @@ export default function OpeningBalancesPage() {
           addText={isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
         >
           <InventoryTable
+            onCreateProduct={(index) => setQuickCreate({ kind: 'product', index })}
             lines={lines}
             isReadOnly={isReadOnly}
             products={products}
             warehouses={warehouses}
             locale={locale}
             isRu={isRu}
-            currency={docCurrency}
             onUpdate={updateLineField}
             onRemove={removeLine}
           />
@@ -1047,6 +1154,7 @@ export default function OpeningBalancesPage() {
         >
           <CounterpartyTable
             category="CUSTOMER_DEBT"
+            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'CUSTOMER' })}
             lines={lines}
             isReadOnly={isReadOnly}
             counterparties={counterparties.filter((c) => c.type === 'CUSTOMER' || c.type === 'BOTH')}
@@ -1069,6 +1177,7 @@ export default function OpeningBalancesPage() {
         >
           <CounterpartyTable
             category="SUPPLIER_DEBT"
+            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'SUPPLIER' })}
             lines={lines}
             isReadOnly={isReadOnly}
             counterparties={counterparties.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH')}
@@ -1090,6 +1199,7 @@ export default function OpeningBalancesPage() {
           addText={isRu ? 'Добавить аванс' : 'Avans qo‘shish'}
         >
           <AdvancesTable
+            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'BOTH' })}
             lines={lines}
             isReadOnly={isReadOnly}
             counterparties={counterparties}
@@ -1110,6 +1220,15 @@ export default function OpeningBalancesPage() {
           onAdd={() => addLine('FIXED_ASSET')}
           addText={isRu ? 'Добавить объект' : 'Asosiy vosita qo‘shish'}
         >
+          {/* B6 / D6: depreciation is not computed by the system. */}
+          <p
+            data-testid="fixed-asset-depreciation-notice"
+            style={{ margin: '0 0 var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
+          >
+            {isRu
+              ? 'Амортизация не рассчитывается автоматически. Сначала добавьте средство в реестр основных средств (первоначальная стоимость и накопленная амортизация в UZS), затем выберите его здесь: значения берутся из реестра.'
+              : 'Eskirish tizimda avtomatik hisoblanmaydi. Avval vositani asosiy vositalar reyestriga qo‘shing (boshlang‘ich qiymat va jamg‘arilgan eskirish UZS da), so‘ng shu yerda tanlang: qiymatlar reyestrdan olinadi.'}
+          </p>
           <FixedAssetsTable
             lines={lines}
             isReadOnly={isReadOnly}
@@ -1141,6 +1260,26 @@ export default function OpeningBalancesPage() {
             onRemove={removeLine}
           />
         </SubledgerCard>
+      )}
+
+      {quickCreate?.kind === 'product' && (
+        <CreateProductDrawer
+          isOpen
+          onClose={() => setQuickCreate(null)}
+          onSuccess={(created) => {
+            void handleQuickCreated(created.id);
+          }}
+        />
+      )}
+      {quickCreate?.kind === 'counterparty' && (
+        <CreateCounterpartyDrawer
+          isOpen
+          defaultType={quickCreate.type}
+          onClose={() => setQuickCreate(null)}
+          onSuccess={(created) => {
+            void handleQuickCreated(created.id);
+          }}
+        />
       )}
 
       {/* ─── Modal: New Document ───────────────────────────────────── */}
@@ -1196,7 +1335,7 @@ export default function OpeningBalancesPage() {
       <Modal
         isOpen={showImportModal}
         title={isRu ? 'Импорт остатков из Excel' : 'Boshlang‘ich qoldiqlarni Exceldan yuklash'}
-        onClose={() => setShowImportModal(false)}
+        onClose={closeImportModal}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -1218,7 +1357,10 @@ export default function OpeningBalancesPage() {
             <input
               type="file"
               accept=".xlsx,.xls"
-              onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                resetImport();
+                setImportFile(e.target.files?.[0] ?? null);
+              }}
               style={{ display: 'block', margin: '0 auto', fontSize: 'var(--text-sm)' }}
             />
           </div>
@@ -1247,19 +1389,72 @@ export default function OpeningBalancesPage() {
             </div>
           )}
 
+          {importSummary && importPreview && (
+            <div
+              style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: 'var(--space-3)',
+                fontSize: 'var(--text-sm)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <div>
+                {isRu ? 'Строк в файле' : 'Fayldagi qatorlar'}: <strong>{importPreview.totalRows}</strong>
+                {' · '}
+                {isRu ? 'Готово к сохранению' : 'Saqlashga tayyor'}: <strong>{importSummary.lineCount}</strong>
+                {' · '}
+                {isRu ? 'Ошибок' : 'Xatoliklar'}: <strong>{importPreview.errors.length}</strong>
+              </div>
+              {importSummary.byCategory.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {importSummary.byCategory.map(({ category, count }) => (
+                    <Badge key={category} variant="info">
+                      {IMPORT_CATEGORY_LABELS[category][locale]}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {importSummary.canCommit && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', color: 'var(--color-warning-600)' }}>
+                  <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                  <span>
+                    {isRu
+                      ? 'При сохранении все текущие строки черновика будут заменены строками из файла.'
+                      : 'Saqlaganda qoralamaning hozirgi barcha qatorlari fayldagi qatorlar bilan almashtiriladi.'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={() => setShowImportModal(false)}>
+            <Button variant="secondary" onClick={closeImportModal}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleImportFile}
-              disabled={!importFile || importing}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Upload size={16} />
-              <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Загрузить и применить' : 'Yuklash va saqlash'}</span>
-            </Button>
+            {importSummary?.canCommit ? (
+              <Button
+                variant="primary"
+                onClick={handleCommitImport}
+                disabled={importing}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Save size={16} />
+                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={handlePreviewImport}
+                disabled={!importFile || importing}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Upload size={16} />
+                <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
@@ -1382,12 +1577,10 @@ function CashTable({
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === 'CASH' || l.category === 'BANK' ? { line: l, index: i } : null))
-    .filter(Boolean);
+}: SubledgerTableProps & { accounts: CashAccount[] }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'CASH' || l.category === 'BANK');
 
-  const getAccountName = (acc: any) => {
+  const getAccountName = (acc: CashAccount | undefined) => {
     if (!acc) return '—';
     if (typeof acc.name === 'string') return acc.name;
     return acc.name?.[locale] || acc.name?.uz || acc.name?.ru || 'Kassa';
@@ -1414,7 +1607,7 @@ function CashTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -1424,7 +1617,7 @@ function CashTable({
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
                 {(() => {
-                  const compatibleAccounts = accounts.filter((account: any) =>
+                  const compatibleAccounts = accounts.filter((account) =>
                     isCashAccountCurrencyValid(account) &&
                     (line.category === 'BANK'
                       ? account.accountType === 'BANK'
@@ -1435,7 +1628,7 @@ function CashTable({
                   value={line.accountId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => {
-                    const account = accounts.find((item: any) => item.id === value);
+                    const account = accounts.find((item) => item.id === value);
                     onUpdate(index, 'accountId', value);
                     if (account) {
                        onUpdate(index, 'currency', account.currency);
@@ -1445,7 +1638,7 @@ function CashTable({
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
-                    ...compatibleAccounts.map((account: any) => ({
+                    ...compatibleAccounts.map((account) => ({
                       value: account.id,
                       label: `${getAccountName(account)} (${account.accountType}, ${account.currency})`,
                     })),
@@ -1477,13 +1670,12 @@ function CashTable({
                 )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -1546,21 +1738,19 @@ function InventoryTable({
   warehouses,
   locale,
   isRu,
-  currency,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === 'INVENTORY' ? { line: l, index: i } : null))
-    .filter(Boolean);
+  onCreateProduct,
+}: SubledgerTableProps & { products: Product[]; warehouses: Warehouse[]; onCreateProduct: (index: number) => void }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'INVENTORY');
 
-  const getProductName = (p: any) => {
+  const getProductName = (p: Product | undefined) => {
     if (!p) return '—';
     if (typeof p.name === 'string') return p.name;
     return p.name?.[locale] || p.name?.uz || p.name?.ru || 'Tovar';
   };
 
-  const getWarehouseName = (w: any) => {
+  const getWarehouseName = (w: Warehouse | undefined) => {
     if (!w) return '—';
     if (typeof w.name === 'string') return w.name;
     return w.name?.[locale] || w.name?.uz || w.name?.ru || 'Ombor';
@@ -1575,6 +1765,8 @@ function InventoryTable({
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px' }}>{isRu ? 'СКЛАД' : 'OMBOR'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '120px', textAlign: 'right' }}>{isRu ? 'КОЛИЧЕСТВО' : 'MIQDOR'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px', textAlign: 'right' }}>{isRu ? 'ТАННАРХ' : 'TANNARX'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '110px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
+          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '120px' }}>{isRu ? 'КУРС' : 'KURS'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
           <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px' }}>{isRu ? 'ПАРТИЯ' : 'PARTIYA №'}</th>
           {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
@@ -1583,12 +1775,12 @@ function InventoryTable({
       <tbody>
         {filtered.length === 0 ? (
           <tr>
-            <td colSpan={8} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+            <td colSpan={10} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Остатки товаров не добавлены' : 'Tovarlar qoldig‘i qo‘shilmagan'}
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -1601,10 +1793,12 @@ function InventoryTable({
                   value={line.productId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'productId', value)}
+                  onCreateNew={!isReadOnly ? () => onCreateProduct(index) : undefined}
+                  createNewLabel={isRu ? 'Новый товар' : 'Yangi tovar qo‘shish'}
                   style={{ width: '100%' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите товар' : 'Tovarni tanlang' },
-                    ...products.map((product: any) => ({
+                    ...products.map((product) => ({
                       value: product.id,
                       label: `${product.sku ? `[${product.sku}] ` : ''}${getProductName(product)}`,
                     })),
@@ -1619,7 +1813,7 @@ function InventoryTable({
                   style={{ width: '100%' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите склад' : 'Omborni tanlang' },
-                    ...warehouses.map((warehouse: any) => ({
+                    ...warehouses.map((warehouse) => ({
                       value: warehouse.id,
                       label: getWarehouseName(warehouse),
                     })),
@@ -1627,13 +1821,12 @@ function InventoryTable({
                 />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.quantity || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'quantity', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'quantity', value)}
+                  min={0}
+                  decimals={3}
                   placeholder="0"
                   className="tabular-nums"
                   style={{
@@ -1649,13 +1842,12 @@ function InventoryTable({
                 />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.unitCost || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'unitCost', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'unitCost', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -1670,8 +1862,34 @@ function InventoryTable({
                   }}
                 />
               </td>
+              <td style={{ padding: '12px 16px' }}>
+                <Select
+                  options={CURRENCY_OPTIONS}
+                  value={line.currency || 'UZS'}
+                  disabled={isReadOnly}
+                  onChange={(value) => onUpdate(index, 'currency', value)}
+                  aria-label={isRu ? 'Валюта себестоимости' : 'Tannarx valyutasi'}
+                />
+              </td>
+              <td style={{ padding: '12px 16px' }}>
+                {line.currency === 'UZS' || !line.currency ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                ) : (
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="any"
+                    value={line.exchangeRate ?? ''}
+                    disabled={isReadOnly}
+                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
+                    placeholder="UZS/USD"
+                    aria-label={isRu ? 'Курс валюты к UZS' : 'Valyutaning UZS kursi'}
+                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
+                  />
+                )}
+              </td>
               <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                {formatCurrency(Number(line.amount || 0), locale, currency || 'USD')}
+                {formatCurrency(Number(line.amount || 0), locale, line.currency || 'UZS')}
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <input
@@ -1718,14 +1936,12 @@ function CounterpartyTable({
   lines,
   isReadOnly,
   counterparties,
-  locale,
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === category ? { line: l, index: i } : null))
-    .filter(Boolean);
+  onCreateCounterparty,
+}: SubledgerTableProps & { category: OpeningBalanceCategory; counterparties: Counterparty[]; onCreateCounterparty: (index: number) => void }) {
+  const filtered = linesWhere(lines, (l) => l.category === category);
 
   const isCustomer = category === 'CUSTOMER_DEBT';
 
@@ -1755,7 +1971,7 @@ function CounterpartyTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -1768,10 +1984,12 @@ function CounterpartyTable({
                   value={line.counterpartyId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'counterpartyId', value)}
+                  onCreateNew={!isReadOnly ? () => onCreateCounterparty(index) : undefined}
+                  createNewLabel={isRu ? 'Новый контрагент' : 'Yangi kontragent qo‘shish'}
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
-                    ...counterparties.map((counterparty: any) => ({
+                    ...counterparties.map((counterparty) => ({
                       value: counterparty.id,
                       label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
                     })),
@@ -1824,13 +2042,12 @@ function CounterpartyTable({
                 )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -1890,16 +2107,12 @@ function AdvancesTable({
   lines,
   isReadOnly,
   counterparties,
-  locale,
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) =>
-      l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE' ? { line: l, index: i } : null,
-    )
-    .filter(Boolean);
+  onCreateCounterparty,
+}: SubledgerTableProps & { counterparties: Counterparty[]; onCreateCounterparty: (index: number) => void }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE');
 
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
@@ -1923,7 +2136,7 @@ function AdvancesTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -1933,7 +2146,7 @@ function AdvancesTable({
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
                 <Select
-                  value={line.category}
+                  value={line.category ?? ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'category', value)}
                   style={{ width: '100%' }}
@@ -1948,10 +2161,12 @@ function AdvancesTable({
                   value={line.counterpartyId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'counterpartyId', value)}
+                  onCreateNew={!isReadOnly ? () => onCreateCounterparty(index) : undefined}
+                  createNewLabel={isRu ? 'Новый контрагент' : 'Yangi kontragent qo‘shish'}
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
-                    ...counterparties.map((counterparty: any) => ({
+                    ...counterparties.map((counterparty) => ({
                       value: counterparty.id,
                       label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
                     })),
@@ -1986,13 +2201,12 @@ function AdvancesTable({
                 )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -2051,16 +2265,14 @@ function AdvancesTable({
 function FixedAssetsTable({
   lines,
   isReadOnly,
-  fixedAssets,
   locale,
   isRu,
   currency,
+  fixedAssets,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) => (l.category === 'FIXED_ASSET' ? { line: l, index: i } : null))
-    .filter(Boolean);
+}: SubledgerTableProps & { fixedAssets: FixedAsset[]; currency?: string }) {
+  const filtered = linesWhere(lines, (l) => l.category === 'FIXED_ASSET');
 
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
@@ -2083,10 +2295,12 @@ function FixedAssetsTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => {
+          filtered.map(({ line, index }: IndexedLine, pos: number) => {
             const initCost = Number(line.amount || 0);
             const accDep = Number(line.accumulatedDepreciation || 0);
             const netBookValue = Math.max(0, initCost - accDep);
+            // Rejected by the server as well (B6): never clamp silently.
+            const overDepreciated = accDep > initCost;
 
             return (
               <tr
@@ -2097,50 +2311,35 @@ function FixedAssetsTable({
               >
                 <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
                 <td style={{ padding: '12px 16px' }}>
-                  <input
-                    type="text"
-                    value={line.notes || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-                    placeholder={isRu ? 'Название станка, оборудования...' : 'Stanok, texnika, bino nomi...'}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      color: 'var(--color-text-primary)',
-                      width: '100%',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  />
+                  <div data-testid="fixed-asset-register-select">
+                    <Select
+                      value={line.fixedAssetId || ''}
+                      disabled={isReadOnly}
+                      onChange={(value) => onUpdate(index, 'fixedAssetId', value)}
+                      searchable
+                      style={{ width: '100%' }}
+                      options={[
+                        { value: '', label: isRu ? 'Выберите средство из реестра' : 'Reyestrdan vositani tanlang' },
+                        ...fixedAssets.map((asset) => ({
+                          value: asset.id,
+                          label: asset.name,
+                          description: asset.inventoryNumber,
+                        })),
+                      ]}
+                    />
+                  </div>
                 </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <input
-                    type="text"
-                    value={line.contractNumber || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'contractNumber', e.target.value)}
-                    placeholder="INV-001"
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      color: 'var(--color-text-primary)',
-                      width: '100%',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  />
+                <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
+                  {line.contractNumber || '—'}
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
+                  <CurrencyInput
                     value={line.amount || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
+                    disabled={isReadOnly || Boolean(line.fixedAssetId)}
+                    onChange={(value) => onUpdate(index, 'amount', value)}
+                    min={0}
+                    decimals={2}
+                    placeholder="0"
                     className="tabular-nums"
                     style={{
                       padding: '8px 12px',
@@ -2156,14 +2355,13 @@ function FixedAssetsTable({
                   />
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
+                  <CurrencyInput
                     value={line.accumulatedDepreciation || ''}
-                    disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'accumulatedDepreciation', parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
+                    disabled={isReadOnly || Boolean(line.fixedAssetId)}
+                    onChange={(value) => onUpdate(index, 'accumulatedDepreciation', value)}
+                    min={0}
+                    decimals={2}
+                    placeholder="0"
                     className="tabular-nums"
                     style={{
                       padding: '8px 12px',
@@ -2178,8 +2376,14 @@ function FixedAssetsTable({
                     }}
                   />
                 </td>
-                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#10b981' }} className="tabular-nums">
-                  {formatCurrency(netBookValue, locale, currency || 'USD')}
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : '#10b981' }} className="tabular-nums">
+                  {overDepreciated ? (
+                    <span data-testid="fixed-asset-over-depreciated">
+                      {isRu ? 'Амортизация больше стоимости' : 'Eskirish qiymatdan katta'}
+                    </span>
+                  ) : (
+                    formatCurrencyIfAvailable(netBookValue, locale, line.currency, currency) ?? '—'
+                  )}
                 </td>
                 {!isReadOnly && (
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -2207,18 +2411,14 @@ function FixedAssetsTable({
 function OtherTable({
   lines,
   isReadOnly,
-  locale,
   isRu,
   onUpdate,
   onRemove,
-}: any) {
-  const filtered = lines
-    .map((l: any, i: number) =>
-      l.category === 'EQUITY' || l.category === 'OTHER_ASSET' || l.category === 'OTHER_LIABILITY'
-        ? { line: l, index: i }
-        : null,
-    )
-    .filter(Boolean);
+}: SubledgerTableProps) {
+  const filtered = linesWhere(
+    lines,
+    (l) => l.category === 'EQUITY' || l.category === 'OTHER_ASSET' || l.category === 'OTHER_LIABILITY',
+  );
 
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
@@ -2239,7 +2439,7 @@ function OtherTable({
             </td>
           </tr>
         ) : (
-          filtered.map(({ line, index }: any, pos: number) => (
+          filtered.map(({ line, index }: IndexedLine, pos: number) => (
             <tr
               key={index}
               style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
@@ -2249,7 +2449,7 @@ function OtherTable({
               <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
               <td style={{ padding: '12px 16px' }}>
                 <Select
-                  value={line.category}
+                  value={line.category ?? ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'category', value)}
                   style={{ width: '100%' }}
@@ -2279,13 +2479,12 @@ function OtherTable({
                 />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{

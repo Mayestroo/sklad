@@ -2,6 +2,9 @@ import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
 import { JournalService } from './journal.service';
 
+jest.mock('../../../common/sequences/document-sequence');
+jest.mock('../../../common/accounting-period/period-lock');
+
 const cashAccountLedgerCases: Array<[string, string, string, number]> = [
   ['UZS_CASH', 'UZS', '5010', 25],
   ['USD_CASH', 'USD', '5020', 320000],
@@ -107,6 +110,19 @@ describe('JournalService cash-account routing', () => {
         amount: 100000,
       }),
     ]);
+  });
+
+  it('writes the entry through the transaction client it is given, so it commits or rolls back with the business document', async () => {
+    const tx = createPrismaMock();
+
+    await service.autoPostInboundDoc(
+      tenantId,
+      { id: 'doc-1', docNumber: 'IN-000001', totalAmount: 500 },
+      tx as never,
+    );
+
+    expect(tx.journalEntry.create).toHaveBeenCalledTimes(1);
+    expect(prisma.journalEntry.create).not.toHaveBeenCalled();
   });
 
   it('posts the settlement-rate loss separately from customer receivables', async () => {

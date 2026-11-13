@@ -18,6 +18,15 @@ export interface AuthTokens {
   expiresIn: number;
 }
 
+/**
+ * Answer of POST /auth/register (D3). The same for every request, whether
+ * the email or company address is free or taken; what happened is said in
+ * the email. The account is created by POST /auth/register/confirm.
+ */
+export interface RegistrationPendingResponse {
+  status: 'CONFIRMATION_SENT';
+}
+
 export interface AuthResponse {
   user: {
     id: string;

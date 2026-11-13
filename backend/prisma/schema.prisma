@@ -58,6 +58,13 @@ enum PermissionAction {
   CREATE
   EDIT
   DELETE
+  CLOSE
+  REOPEN
+}
+
+enum AccountingPeriodStatus {
+  OPEN
+  CLOSED
 }
 
 enum AuditAction {
@@ -306,6 +313,8 @@ model Company {
   inventoryDocs      InventoryDocument[]
   stockTransfers     StockTransfer[]
   counterparties     Counterparty[]
+  documentSequences  DocumentSequence[]
+  accountingPeriods  AccountingPeriod[]
   salesOrders        SalesOrder[]
   salesInvoices      SalesInvoice[]
   purchaseOrders     PurchaseOrder[]
@@ -427,11 +436,21 @@ model SubscriptionPayment {
   receiptUrl     String?            @map("receipt_url")
   createdAt      DateTime           @default(now()) @map("created_at")
 
+  // Provider (Click / Payme) transaction lifecycle. `transactionId` holds the
+  // provider's transaction id; state follows Payme: 1 created, 2 performed,
+  // -1 cancelled before perform, -2 cancelled after perform.
+  providerState        Int?      @map("provider_state")
+  providerCreatedAt    DateTime? @map("provider_created_at")
+  providerPerformedAt  DateTime? @map("provider_performed_at")
+  providerCancelledAt  DateTime? @map("provider_cancelled_at")
+  providerCancelReason Int?      @map("provider_cancel_reason")
+
   company      Company       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId])
+  @@index([method, transactionId])
   @@map("subscription_payments")
 }
 
@@ -804,6 +823,7 @@ model InventoryDocumentItem {
 
   document   InventoryDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchConsumptions BatchConsumption[]
 
   @@map("inventory_document_items")
 }
@@ -841,6 +861,7 @@ model StockTransferItem {
 
   transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchConsumptions BatchConsumption[]
 
   @@map("stock_transfer_items")
 }
@@ -1716,6 +1737,7 @@ model PurchaseReturn {
   counterpartyId String          @map("counterparty_id")
   warehouseId    String          @map("warehouse_id")
   currency       String          @default("UZS")
+  exchangeRate   Decimal         @default(1) @db.Decimal(15, 4) @map("exchange_rate")
   actNumber      String?         @map("act_number")
   reason         String?
   comment        String?
@@ -1749,6 +1771,7 @@ model PurchaseReturnItem {
 
   return     PurchaseReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
   product    Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchConsumptions BatchConsumption[]
 
   @@map("purchase_return_items")
 }
@@ -1846,19 +1869,29 @@ model AdditionalExpenseItem {
 model BatchConsumption {
   id                 String           @id @default(uuid())
   tenantId           String           @map("tenant_id")
-  salesInvoiceItemId String           @map("sales_invoice_item_id")
+  // Exactly one source line (CHECK batch_consumptions_single_source_check).
+  salesInvoiceItemId   String?             @map("sales_invoice_item_id")
+  purchaseReturnItemId String?             @map("purchase_return_item_id")
+  inventoryDocumentItemId String?          @map("inventory_document_item_id")
+  stockTransferItemId  String?             @map("stock_transfer_item_id")
   batchId            String           @map("batch_id")
   quantity           Decimal          @db.Decimal(15, 3)
   unitCost           Decimal          @db.Decimal(15, 2) @map("unit_cost")
   createdAt          DateTime         @default(now()) @map("created_at")
 
   company            Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  salesInvoiceItem   SalesInvoiceItem @relation(fields: [salesInvoiceItemId], references: [id], onDelete: Cascade)
+  salesInvoiceItem   SalesInvoiceItem?   @relation(fields: [salesInvoiceItemId], references: [id], onDelete: Cascade)
+  purchaseReturnItem PurchaseReturnItem? @relation(fields: [purchaseReturnItemId], references: [id], onDelete: Cascade)
+  inventoryDocumentItem InventoryDocumentItem? @relation(fields: [inventoryDocumentItemId], references: [id], onDelete: Cascade)
+  stockTransferItem  StockTransferItem?  @relation(fields: [stockTransferItemId], references: [id], onDelete: Cascade)
   batch              ProductBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([batchId])
   @@index([salesInvoiceItemId])
+  @@index([purchaseReturnItemId])
+  @@index([inventoryDocumentItemId])
+  @@index([stockTransferItemId])
   @@map("batch_consumptions")
 }
 
@@ -2099,4 +2132,63 @@ model OpeningBalanceImportError {
 
   @@index([tenantId, sessionId])
   @@map("opening_balance_import_errors")
+}
+
+/// Per-tenant document number counters (key = series, e.g. "INV-2026").
+/// Incremented atomically by common/sequences/document-sequence.ts; never
+/// derive a document number from count() + 1.
+model DocumentSequence {
+  tenantId  String   @map("tenant_id")
+  key       String
+  lastValue Int      @map("last_value")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key])
+  @@map("document_sequences")
+}
+
+/// A calendar month of a tenant's books (D4). No row means OPEN. While a
+/// period is CLOSED nothing dated in it may be posted, unposted or
+/// cancelled, and no journal entry dated in it may be created or deleted.
+/// Month boundaries are UTC calendar months (document dates are stored as
+/// UTC midnight of the chosen day).
+model AccountingPeriod {
+  id           String                 @id @default(uuid())
+  tenantId     String                 @map("tenant_id")
+  year         Int
+  month        Int
+  status       AccountingPeriodStatus @default(OPEN)
+  closedAt     DateTime?              @map("closed_at")
+  closedById   String?                @map("closed_by_id")
+  reopenedAt   DateTime?              @map("reopened_at")
+  reopenedById String?                @map("reopened_by_id")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, year, month])
+  @@map("accounting_periods")
+}
+
+/// A company sign-up waiting for its email confirmation (D3). Not tenant
+/// data: the tenant is created only when the emailed link is confirmed.
+/// Only hashes of the one-time token and of the password are stored; the
+/// row is deleted when confirmed or (lazily) after it expires.
+model PendingRegistration {
+  id           String   @id @default(uuid())
+  email        String
+  companySlug  String   @map("company_slug")
+  tokenHash    String   @unique @map("token_hash")
+  passwordHash String   @map("password_hash")
+  /// Company name, admin names and languages from the sign-up form.
+  data         Json
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("pending_registrations")
 }

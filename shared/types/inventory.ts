@@ -36,6 +36,7 @@ export interface Product {
   updatedAt: string;
   category?: Category;
   totalStock?: number;
+  isLowStock?: boolean;
   productPrices?: { id: string; priceListId: string; price: number; updatedAt?: string }[];
 }
 
@@ -71,6 +72,9 @@ export interface InventoryDocument {
   totalAmount: number;
   createdById: string | null;
   items?: InventoryDocumentItem[];
+  // Joined for lists and print views
+  warehouse?: { id: string; name: TranslatableField } | null;
+  createdBy?: { id: string; firstName: string; lastName: string } | null;
 }
 
 export interface StockTransferItem {

@@ -21,6 +21,10 @@ import { CurrentTenant } from '../../../common/decorators/current-tenant.decorat
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
+import {
+  UpdateReadyQtyDto,
+  UpdateSalesOrderDto,
+} from '../dto/update-sales-order.dto';
 
 class TransitionDto {
   @IsEnum(['SUBMIT', 'APPROVE', 'REJECT', 'SEND_TO_PRODUCTION', 'CANCEL'])
@@ -42,14 +46,6 @@ class UpdateStatusDto {
   @IsOptional()
   @IsString()
   warehouseId?: string;
-}
-
-class UpdateReadyQtyDto {
-  readyQty: number;
-}
-
-class DispatchDto {
-  warehouseId: string;
 }
 
 @ApiTags('Sales Orders')
@@ -76,7 +72,10 @@ export class SalesOrdersController {
     @Query('salesOrderId') salesOrderId?: string,
     @Query('status') status?: string,
   ) {
-    return this.service.findProductionOrders(tenantId, { salesOrderId, status });
+    return this.service.findProductionOrders(tenantId, {
+      salesOrderId,
+      status,
+    });
   }
 
   // ─── LIST & CREATE ─────────────────────────────────────────────
@@ -90,15 +89,25 @@ export class SalesOrdersController {
     const result = await this.service.findAll(tenantId, { counterpartyId });
     const orderList = result.data || [];
     const totalOrders = result.total ?? orderList.length;
-    const totalAmount = orderList.reduce(
-      (sum: number, o: { totalAmount?: unknown }) => sum + Number(o.totalAmount || 0),
-      0,
-    );
+    // One total per currency: amounts in different currencies are never
+    // added together (ADR 0023).
+    const byCurrency = new Map<string, number>();
+    for (const order of orderList as Array<{
+      currency: string;
+      totalAmount?: unknown;
+    }>) {
+      byCurrency.set(
+        order.currency,
+        (byCurrency.get(order.currency) ?? 0) + Number(order.totalAmount || 0),
+      );
+    }
     return {
       orders: orderList,
       summary: {
         totalOrders,
-        totalAmount,
+        totalsByCurrency: [...byCurrency.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([currency, totalAmount]) => ({ currency, totalAmount })),
       },
     };
   }
@@ -137,7 +146,7 @@ export class SalesOrdersController {
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
     @Param('id') id: string,
-    @Body() dto: Partial<CreateSalesOrderDto>,
+    @Body() dto: UpdateSalesOrderDto,
   ) {
     return this.service.update(tenantId, userId, id, dto);
   }
@@ -163,7 +172,14 @@ export class SalesOrdersController {
     @Param('id') id: string,
     @Body() dto: TransitionDto,
   ) {
-    return this.service.transition(tenantId, userId, id, dto.action, roles || [], dto.comment);
+    return this.service.transition(
+      tenantId,
+      userId,
+      id,
+      dto.action,
+      roles || [],
+      dto.comment,
+    );
   }
 
   @Patch(':id/status')
@@ -187,7 +203,7 @@ export class SalesOrdersController {
   }
 
   @Post(':id/complete')
-  @RequirePermissions('sales:post')
+  @RequirePermissions('sales:edit')
   completeOrder(
     @CurrentTenant() tenantId: string,
     @CurrentUser('id') userId: string,
@@ -210,17 +226,6 @@ export class SalesOrdersController {
     return this.service.dispatch(tenantId, userId, id, dto);
   }
 
-  // ─── COUNTERPARTY PROFILE ──────────────────────────────────────
-
-  @Get('by-counterparty/:counterpartyId')
-  @RequirePermissions('sales:view')
-  getCounterpartyOrders(
-    @CurrentTenant() tenantId: string,
-    @Param('counterpartyId') counterpartyId: string,
-  ) {
-    return this.service.getCounterpartyOrders(tenantId, counterpartyId);
-  }
-
   // ─── PRODUCTION ORDER ACTIONS ──────────────────────────────────
 
   @Post('production/:productionOrderId/start')
@@ -230,7 +235,11 @@ export class SalesOrdersController {
     @CurrentUser('id') userId: string,
     @Param('productionOrderId') productionOrderId: string,
   ) {
-    return this.service.startProductionOrder(tenantId, userId, productionOrderId);
+    return this.service.startProductionOrder(
+      tenantId,
+      userId,
+      productionOrderId,
+    );
   }
 
   @Patch('production/:productionOrderId/ready-qty')

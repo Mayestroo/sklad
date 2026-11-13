@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -13,14 +15,10 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import {
   RotateCcw,
-  Building2,
-  Package,
   Plus,
   Search,
   Printer,
-  FileText,
   Download,
-  Filter,
   CheckCircle2,
   XCircle,
   Eye,
@@ -28,7 +26,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { PurchaseReturn } from '@shared/types';
-import { Link, useRouter } from '@/i18n/navigation';
+import { Link } from '@/i18n/navigation';
 import { ReturnActModal } from '@/components/purchases/ReturnActModal';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
@@ -36,20 +34,30 @@ import { toast } from '@/context/ToastContext';
 export default function ReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const router = useRouter();
   const { token, company } = useAuth();
   const confirm = useConfirm();
   const defaultCurrency = useDefaultCurrency();
 
-  const [returns, setReturns] = useState<PurchaseReturn[]>([]);
-  const returnsCurrency = returns[0]?.currency || defaultCurrency;
-  const [loading, setLoading] = useState(true);
-
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
+  // The typed search applies on submit (as before); the status at once.
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate] = useState('');
+  const [endDate] = useState('');
+
+  const returnsEndpoint = useMemo(() => {
+    const queryParams = new URLSearchParams();
+    if (appliedSearch) queryParams.set('search', appliedSearch);
+    if (statusFilter !== 'ALL') queryParams.set('status', statusFilter);
+    if (startDate) queryParams.set('startDate', startDate);
+    if (endDate) queryParams.set('endDate', endDate);
+    return `/purchases/returns${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  }, [appliedSearch, statusFilter, startDate, endDate]);
+  const returnsQuery = useApiQuery<PurchaseReturn[]>(returnsEndpoint);
+  const returns = useMemo(() => returnsQuery.data ?? [], [returnsQuery.data]);
+  const returnsCurrency = returns[0]?.currency || defaultCurrency;
+  const loading = returnsQuery.isPending;
 
   // Modals state
   const [selectedReturnForAct, setSelectedReturnForAct] = useState<PurchaseReturn | null>(null);
@@ -73,42 +81,22 @@ export default function ReturnsPage() {
       });
       setDeleteConfirmReturn(null);
       fetchReturns();
-    } catch (err: any) {
-      setDeleteError(err.message || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
+    } catch (err) {
+      setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  const fetchReturns = () => {
-    if (!token || !company) return;
-    setLoading(true);
-
-    const queryParams = new URLSearchParams();
-    if (searchTerm) queryParams.set('search', searchTerm);
-    if (statusFilter !== 'ALL') queryParams.set('status', statusFilter);
-    if (startDate) queryParams.set('startDate', startDate);
-    if (endDate) queryParams.set('endDate', endDate);
-
-    const url = `/purchases/returns${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-
-    apiFetch<PurchaseReturn[]>(url, { token, tenantId: company.id, locale })
-      .then((res) => setReturns(res || []))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    if (!token || !company) return;
-    fetchReturns();
-  }, [token, company, locale, statusFilter]);
+  const fetchReturns = () => void returnsQuery.refetch();
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchReturns();
+    if (searchTerm === appliedSearch) fetchReturns();
+    else setAppliedSearch(searchTerm);
   };
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -128,8 +116,8 @@ export default function ReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно утвержден' : 'Qaytarish muvaffaqiyatli tasdiqlandi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при утверждении возврата' : 'Tasdiqlashda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при утверждении возврата' : 'Tasdiqlashda xatolik'));
     } finally {
       setActionLoadingId(null);
     }
@@ -158,8 +146,8 @@ export default function ReturnsPage() {
       });
       toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
       fetchReturns();
-    } catch (err: any) {
-      toast.error(err?.message || (isRu ? 'Ошибка при отмене возврата' : 'Bekor qilishda xatolik'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при отмене возврата' : 'Bekor qilishda xatolik'));
     } finally {
       setActionLoadingId(null);
     }
@@ -375,7 +363,9 @@ export default function ReturnsPage() {
 
           {/* Table Card */}
           <Card style={{ padding: 0, overflow: 'hidden' }}>
-            {loading ? (
+            {returnsQuery.isError ? (
+              <LoadError error={returnsQuery.error} onRetry={fetchReturns} retrying={returnsQuery.isFetching} />
+            ) : loading ? (
               <div style={{ padding: '48px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                 <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
                 <div>{isRu ? 'Загрузка документов...' : 'Hujjatlar yuklanmoqda...'}</div>

@@ -22,7 +22,9 @@ describe('CounterpartySettlementService', () => {
   beforeEach(() => {
     tx = {
       counterparty: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'counterparty-1', tenantId: 'tenant-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'counterparty-1', tenantId: 'tenant-1' }),
       },
       counterpartySettlementEntry: {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -72,18 +74,21 @@ describe('CounterpartySettlementService', () => {
 
     expect(result.created).toBe(true);
     expect(tx.counterpartySettlementEntry.createMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({
-        tenantId: 'tenant-1',
-        counterpartyId: 'counterparty-1',
-        currency: 'USD',
-        side: 'CUSTOMER',
-        amount: 125,
-        idempotencyKey: 'SalesInvoice:invoice-1:POSTED',
-      })],
+      data: [
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          counterpartyId: 'counterparty-1',
+          currency: 'USD',
+          side: 'CUSTOMER',
+          amount: 125,
+          idempotencyKey: 'SalesInvoice:invoice-1:POSTED',
+        }),
+      ],
       skipDuplicates: true,
     });
     expect(tx.counterpartyBalance.upsert).toHaveBeenCalledWith({
       where: {
+        tenantId: 'tenant-1',
         counterpartyId_currency: {
           counterpartyId: 'counterparty-1',
           currency: 'USD',
@@ -119,16 +124,19 @@ describe('CounterpartySettlementService', () => {
 
     await service.recordMovement(tx, input);
 
-    expect(tx.counterpartyBalance.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
-        counterpartyId_currency: {
-          counterpartyId: 'counterparty-1',
-          currency: 'UZS',
+    expect(tx.counterpartyBalance.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId: 'tenant-1',
+          counterpartyId_currency: {
+            counterpartyId: 'counterparty-1',
+            currency: 'UZS',
+          },
         },
-      },
-      create: expect.objectContaining({ supplierDebt: -750_000 }),
-      update: { supplierDebt: { increment: -750_000 } },
-    }));
+        create: expect.objectContaining({ supplierDebt: -750_000 }),
+        update: { supplierDebt: { increment: -750_000 } },
+      }),
+    );
   });
 
   it('does not increment the projection when the identical source event is retried', async () => {
@@ -148,23 +156,49 @@ describe('CounterpartySettlementService', () => {
       id: 'entry-1',
     });
 
-    await expect(service.recordMovement(tx, movement())).rejects.toThrow(ConflictException);
+    await expect(service.recordMovement(tx, movement())).rejects.toThrow(
+      ConflictException,
+    );
     expect(tx.counterpartyBalance.upsert).not.toHaveBeenCalled();
   });
 
   it('rejects unsupported currency and zero movement before writing', async () => {
-    await expect(service.recordMovement(tx, movement({ currency: 'EUR' }))).rejects.toThrow();
-    await expect(service.recordMovement(tx, movement({ amount: 0 }))).rejects.toThrow();
+    await expect(
+      service.recordMovement(tx, movement({ currency: 'EUR' })),
+    ).rejects.toThrow();
+    await expect(
+      service.recordMovement(tx, movement({ amount: 0 })),
+    ).rejects.toThrow();
     expect(tx.counterpartySettlementEntry.createMany).not.toHaveBeenCalled();
     expect(tx.counterpartyBalance.upsert).not.toHaveBeenCalled();
   });
 
   it('rebuilds balances by counterparty, currency, and side', async () => {
     tx.counterpartySettlementEntry.findMany.mockResolvedValue([
-      { counterpartyId: 'counterparty-1', currency: 'USD', side: 'CUSTOMER', amount: 500 },
-      { counterpartyId: 'counterparty-1', currency: 'USD', side: 'CUSTOMER', amount: -125 },
-      { counterpartyId: 'counterparty-1', currency: 'USD', side: 'SUPPLIER', amount: 40 },
-      { counterpartyId: 'counterparty-1', currency: 'UZS', side: 'CUSTOMER', amount: 100_000 },
+      {
+        counterpartyId: 'counterparty-1',
+        currency: 'USD',
+        side: 'CUSTOMER',
+        amount: 500,
+      },
+      {
+        counterpartyId: 'counterparty-1',
+        currency: 'USD',
+        side: 'CUSTOMER',
+        amount: -125,
+      },
+      {
+        counterpartyId: 'counterparty-1',
+        currency: 'USD',
+        side: 'SUPPLIER',
+        amount: 40,
+      },
+      {
+        counterpartyId: 'counterparty-1',
+        currency: 'UZS',
+        side: 'CUSTOMER',
+        amount: 100_000,
+      },
     ]);
 
     await service.rebuildBalances(tx, 'tenant-1');
@@ -174,13 +208,17 @@ describe('CounterpartySettlementService', () => {
     });
     const rebuilt = tx.counterpartyBalance.createMany.mock.calls[0][0].data;
     expect(rebuilt).toHaveLength(2);
-    expect(rebuilt.map((row: any) => ({
-      currency: row.currency,
-      customerDebt: Number(row.customerDebt),
-      supplierDebt: Number(row.supplierDebt),
-    }))).toEqual(expect.arrayContaining([
-      { currency: 'USD', customerDebt: 375, supplierDebt: 40 },
-      { currency: 'UZS', customerDebt: 100_000, supplierDebt: 0 },
-    ]));
+    expect(
+      rebuilt.map((row: any) => ({
+        currency: row.currency,
+        customerDebt: Number(row.customerDebt),
+        supplierDebt: Number(row.supplierDebt),
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { currency: 'USD', customerDebt: 375, supplierDebt: 40 },
+        { currency: 'UZS', customerDebt: 100_000, supplierDebt: 0 },
+      ]),
+    );
   });
 });

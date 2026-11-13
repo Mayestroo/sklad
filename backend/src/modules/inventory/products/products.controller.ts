@@ -94,4 +94,3 @@ export class ProductsController {
     return this.productsService.delete(tenantId, id);
   }
 }
-

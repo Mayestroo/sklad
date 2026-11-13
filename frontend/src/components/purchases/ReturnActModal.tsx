@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Printer } from 'lucide-react';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatQuantity, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { PurchaseReturn } from '@shared/types';
 
 interface ReturnActModalProps {
@@ -27,7 +27,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
     window.print();
   };
 
-  const getProductName = (name: any) => {
+  const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
@@ -80,7 +80,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h1 style={{ fontSize: '18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                  {company?.name || 'Sklad ERP'}
+                  {company?.name ? getLocalizedName(company.name, locale) : 'Sklad ERP'}
                 </h1>
                 <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '4px' }}>
                   {isRu ? 'Официальный акт возврата материальных ценностей' : 'Moddiy boyliklarni yetkazib beruvchiga qaytarish dalolatnomasi'}
@@ -104,7 +104,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
                 {isRu ? 'Отправитель (Покупатель / Склад)' : 'Yuboruvchi (Xaridor / Ombor)'}
               </div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>
-                {company?.name || 'Kompaniya'}
+                {company?.name ? getLocalizedName(company.name, locale) : 'Kompaniya'}
               </div>
               <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>
                 {isRu ? 'Склад отгрузки' : 'Chiqim ombori'}: <strong>{getProductName(purchaseReturn.warehouse?.name)}</strong>
@@ -185,7 +185,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
                       </span>
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700 }}>
-                      {Number(item.quantity).toLocaleString()}
+                      {formatQuantity(Number(item.quantity))}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'right' }}>
                       {formatCurrency(Number(item.unitPrice), locale, purchaseReturn.currency)}

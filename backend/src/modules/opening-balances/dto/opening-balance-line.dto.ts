@@ -75,11 +75,11 @@ export class OpeningBalanceLineDto {
 
   @IsOptional()
   @IsString()
-  batchNumber?: string;
+  batchNumber?: string | null;
 
   @IsOptional()
   @IsString()
-  contractNumber?: string;
+  contractNumber?: string | null;
 
   @IsOptional()
   @IsString()

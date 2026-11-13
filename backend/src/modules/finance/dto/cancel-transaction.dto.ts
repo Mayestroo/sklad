@@ -3,7 +3,7 @@ import { Transform } from 'class-transformer';
 
 export class CancelTransactionDto {
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === '' || value === null ? undefined : value,
   )
   @IsString()

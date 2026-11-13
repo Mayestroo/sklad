@@ -11,7 +11,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency, CURRENCY_OPTIONS } from '@/lib/utils';
+import { formatCurrency, formatNumber, CURRENCY_OPTIONS } from '@/lib/utils';
 import { convertCostPriceToDocumentCurrency } from '@/lib/inventory-cost';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
@@ -31,9 +31,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Pencil,
-  UserPlus,
   PackagePlus,
-  Sparkles,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { PurchaseReceipt } from '@shared/types';
@@ -1585,7 +1583,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               </div>
               {currency && currency !== 'UZS' && exchangeRate > 0 && (
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
-                  ≈ {formatCurrency(totals.grandTotal * exchangeRate, locale, 'UZS')} ({isRu ? 'курс:' : 'kurs:'} {exchangeRate.toLocaleString()})
+                  ≈ {formatCurrency(totals.grandTotal * exchangeRate, locale, 'UZS')} ({isRu ? 'курс:' : 'kurs:'} {formatNumber(exchangeRate, { maximumFractionDigits: 4 })})
                 </div>
               )}
             </div>

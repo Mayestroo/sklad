@@ -1,34 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { FileText, ArrowRightLeft } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { JournalEntry } from '@shared/types';
 
 export default function JournalPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<JournalEntry[]>('/accounting/journal', { token, tenantId: company.id, locale })
-      .then(setEntries)
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, [token, company]);
+  const journalQuery = useApiQuery<JournalEntry[]>('/accounting/journal');
+  const entries = journalQuery.data ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -42,7 +30,13 @@ export default function JournalPage() {
       </div>
 
       <Card>
-        {loading ? (
+        {journalQuery.isError ? (
+          <LoadError
+            error={journalQuery.error}
+            onRetry={() => void journalQuery.refetch()}
+            retrying={journalQuery.isFetching}
+          />
+        ) : journalQuery.isPending ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>
@@ -92,7 +86,7 @@ export default function JournalPage() {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                       {(entry.lines || []).map((line, idx) => (
-                        <div key={idx}>{formatCurrency(Number(line.amount), locale, (line as any).currency || (entry as any)?.currency || defaultCurrency)}</div>
+                        <div key={idx}>{formatCurrency(Number(line.amount), locale, (line as { currency?: string } | null | undefined)?.currency || (entry as { currency?: string } | null | undefined)?.currency || defaultCurrency)}</div>
                       ))}
                     </td>
                   </tr>

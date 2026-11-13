@@ -6,10 +6,7 @@ import {
 import { PrismaService } from '../../common/prisma';
 import { CreatePurchaseReceiptDto } from './dto/create-purchase-receipt.dto';
 import { FilterPurchaseReceiptsDto } from './dto/filter-purchase-receipts.dto';
-import {
-  CreatePurchaseExpenseDto,
-  ExpenseAllocationMethodDto,
-} from './dto/create-purchase-expense.dto';
+import { CreatePurchaseExpenseDto } from './dto/create-purchase-expense.dto';
 import { CreatePurchaseReturnDto } from './dto/create-purchase-return.dto';
 import {
   Prisma,
@@ -18,14 +15,16 @@ import {
   PurchaseReturnStatus,
   ReturnDocStatus,
   ExpenseAllocationMethod,
-  ExpenseType,
   TransactionDirection,
   CounterpartySettlementSide,
   SettlementAllocationTarget,
 } from '@prisma/client';
 
-import { generateDocumentSequence } from '../../common/utils/document-sequence.util';
-import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
+import { nextDocumentNumber } from '../../common/sequences/document-sequence';
+import {
+  SUPPORTED_CURRENCIES,
+  isSupportedCurrency,
+} from '../../common/validators/currency.validator';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
@@ -37,6 +36,52 @@ import {
   convertAmountToUzs,
   requireExchangeRateForCurrency,
 } from '../../common/utils/transaction-exchange-rate';
+import { JournalService } from '../accounting/journal/journal.service';
+import type { JournalLineDto } from '../accounting/dto';
+import {
+  consumeFifoBatches,
+  restoreBatchConsumptions,
+} from '../inventory/fifo/fifo-batches';
+import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { formatMoney } from '../../../../shared/format/money';
+import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+import {
+  accountingSettings,
+  PURCHASE_RETURN_GAIN_ACCOUNT_SETTING,
+} from '../../common/settings/accounting-settings';
+
+type Numeric = number | string | Prisma.Decimal;
+
+/** A purchase receipt with the lines and batches a return is matched against. */
+type ReceiptForReturn = Prisma.PurchaseReceiptGetPayload<{
+  include: { items: { include: { product: true } }; batches: true };
+}>;
+
+/** A purchase-return line as posting reads it (a stored line or a prepared one). */
+interface ReturnPostingLine {
+  id?: string;
+  productId: string;
+  quantity: Numeric;
+  unitPrice: Numeric;
+  vatAmount?: Numeric | null;
+  product?: { type: string } | null;
+}
+
+/** A purchase return as posting reads it; links missing here come from `fallbackData`. */
+interface PurchaseReturnForPosting {
+  id: string;
+  currency: string;
+  /** UZS per unit of `currency`; the journal is kept in UZS. */
+  exchangeRate: Numeric;
+  returnDate: Date;
+  returnNumber?: string;
+  warehouseId?: string;
+  counterpartyId?: string;
+  receiptId?: string | null;
+  items?: ReturnPostingLine[];
+  receipt?: ReceiptForReturn | null;
+  counterparty?: { name: string } | null;
+}
 
 @Injectable()
 export class PurchasesService {
@@ -45,24 +90,17 @@ export class PurchasesService {
     private readonly settlementService: CounterpartySettlementService,
     private readonly settlementAllocationService: SettlementAllocationService,
     private readonly accountsService: AccountsService,
+    private readonly journalService: JournalService,
   ) {}
 
   // ─── RECEIPT NUMBER GENERATOR ─────────────────────────────────
 
   private async generateDocNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('PUR', (prefix) =>
-      this.prisma.purchaseReceipt.count({
-        where: { tenantId, docNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'PURCHASE_RECEIPT');
   }
 
   private async generateReturnNumber(tenantId: string): Promise<string> {
-    return generateDocumentSequence('PRET', (prefix) =>
-      this.prisma.purchaseReturn.count({
-        where: { tenantId, returnNumber: { startsWith: prefix } },
-      }),
-    );
+    return nextDocumentNumber(this.prisma, tenantId, 'PURCHASE_RETURN');
   }
 
   // ─── RECEIPTS ─────────────────────────────────────────────────
@@ -184,7 +222,7 @@ export class PurchasesService {
       );
     }
 
-    if (!dto.currency || !SUPPORTED_CURRENCIES.includes(dto.currency as any)) {
+    if (!dto.currency || !isSupportedCurrency(dto.currency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -226,6 +264,12 @@ export class PurchasesService {
         );
       }
     }
+
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+      product: dto.items.map((item) => item.productId),
+    });
 
     const docNumber = await this.generateDocNumber(tenantId);
 
@@ -329,8 +373,14 @@ export class PurchasesService {
       );
     }
 
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+      product: dto.items?.map((item) => item.productId),
+    });
+
     const targetCurrency = dto.currency || existing.currency;
-    if (!SUPPORTED_CURRENCIES.includes(targetCurrency as any)) {
+    if (!isSupportedCurrency(targetCurrency)) {
       throw new BadRequestException(
         `Valyuta ko'rsatilishi shart va faqat quyidagilardan biri bo'lishi mumkin: ${SUPPORTED_CURRENCIES.join(', ')}`,
       );
@@ -339,7 +389,9 @@ export class PurchasesService {
     let exchangeRate = Number(existing.exchangeRate);
     if (targetCurrency !== 'UZS') {
       const rateToCheck =
-        dto.exchangeRate !== undefined ? Number(dto.exchangeRate) : exchangeRate;
+        dto.exchangeRate !== undefined
+          ? Number(dto.exchangeRate)
+          : exchangeRate;
       if (isNaN(rateToCheck) || rateToCheck <= 0) {
         throw new BadRequestException(
           "Xorijiy valyutada kurs (exchangeRate) 0 dan katta bo'lishi shart",
@@ -417,11 +469,11 @@ export class PurchasesService {
 
     return this.prisma.$transaction(async (tx) => {
       await tx.purchaseReceiptItem.deleteMany({
-        where: { receiptId: id },
+        where: { receipt: { tenantId }, receiptId: id },
       });
 
       return tx.purchaseReceipt.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
@@ -497,7 +549,7 @@ export class PurchasesService {
 
         if (stockLevel) {
           await tx.stockLevel.update({
-            where: { id: stockLevel.id },
+            where: { tenantId, id: stockLevel.id },
             data: {
               quantity: { increment: item.quantity },
             },
@@ -516,10 +568,14 @@ export class PurchasesService {
 
         const rate = requireExchangeRateForCurrency(
           receipt.currency,
-          receipt.exchangeRate == null ? undefined : Number(receipt.exchangeRate),
+          receipt.exchangeRate == null
+            ? undefined
+            : Number(receipt.exchangeRate),
         );
-        const purchasePriceInBase = Math.round((Number(item.unitPrice) * rate) * 100) / 100;
-        const landedCostInBase = Math.round((Number(item.landedCost) * rate) * 100) / 100;
+        const purchasePriceInBase =
+          Math.round(Number(item.unitPrice) * rate * 100) / 100;
+        const landedCostInBase =
+          Math.round(Number(item.landedCost) * rate * 100) / 100;
 
         // Create product batch record
         await tx.productBatch.create({
@@ -539,7 +595,7 @@ export class PurchasesService {
         // Sync Product catalog costPrice in base currency
         if (tx.product?.update) {
           await tx.product.update({
-            where: { id: item.productId },
+            where: { tenantId, id: item.productId },
             data: {
               costPrice: landedCostInBase,
               costPriceCurrency: 'UZS',
@@ -569,8 +625,6 @@ export class PurchasesService {
       // Debit 9420/9430 (Operating Expense / Xizmat xarajatlari): Service costs
       // Debit 4410 (Input VAT / Kiruvchi QQS): VAT amount
       // Credit 6010 (Accounts Payable / Yetkazib beruvchiga qarz): Total Amount
-      const entryCount = await tx.journalEntry.count({ where: { tenantId } });
-      const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
 
       const inventoryAcc = await tx.account.findFirst({
         where: { tenantId, code: '2910' },
@@ -601,15 +655,21 @@ export class PurchasesService {
 
         const rate = requireExchangeRateForCurrency(
           receipt.currency,
-          receipt.exchangeRate == null ? undefined : Number(receipt.exchangeRate),
+          receipt.exchangeRate == null
+            ? undefined
+            : Number(receipt.exchangeRate),
         );
         const totalNet =
-          Math.round((Number(receipt.subtotalAmount || 0) -
-            Number(receipt.discountAmount || 0) +
-            Number(receipt.additionalExpensesTotal || 0)) * rate * 100) / 100;
+          Math.round(
+            (Number(receipt.subtotalAmount || 0) -
+              Number(receipt.discountAmount || 0) +
+              Number(receipt.additionalExpensesTotal || 0)) *
+              rate *
+              100,
+          ) / 100;
 
         const hasSpecialTypes = receipt.items.some(
-          (i: any) =>
+          (i) =>
             i.product?.type === 'RAW_MATERIAL' || i.product?.type === 'SERVICE',
         );
 
@@ -620,7 +680,8 @@ export class PurchasesService {
             const lineTotal =
               (item.totalPrice !== undefined
                 ? Number(item.totalPrice)
-                : Number(item.quantity || 0) * Number(item.unitPrice || 0)) * rate;
+                : Number(item.quantity || 0) * Number(item.unitPrice || 0)) *
+              rate;
             const allocated = Number(item.allocatedExpenses || 0) * rate;
             const itemNet = Math.round((lineTotal + allocated) * 100) / 100;
             const itemType = item.product?.type || 'PRODUCT';
@@ -636,7 +697,7 @@ export class PurchasesService {
         }
 
         const vatSum = Math.round(Number(receipt.vatAmount) * rate * 100) / 100;
-        const journalLines: any[] = [];
+        const journalLines: JournalLineDto[] = [];
 
         if (productSum > 0 && inventoryAcc) {
           journalLines.push({
@@ -675,19 +736,17 @@ export class PurchasesService {
         }
 
         if (journalLines.length > 0) {
-          await tx.journalEntry.create({
-            data: {
-              tenantId,
-              entryNumber,
+          await this.journalService.createJournalEntry(
+            tenantId,
+            {
               entryDate: receipt.docDate,
               description: `Nomenklatura qabul qilish № ${receipt.docNumber} (${receipt.counterparty.name})`,
               sourceDocType: 'PurchaseReceipt',
               sourceDocId: receipt.id,
-              lines: {
-                create: journalLines,
-              },
+              lines: journalLines,
             },
-          });
+            tx,
+          );
         }
       }
 
@@ -706,7 +765,7 @@ export class PurchasesService {
 
       // 5. Update purchase receipt status
       return tx.purchaseReceipt.update({
-        where: { id: receipt.id },
+        where: { tenantId, id: receipt.id },
         data: {
           status: PurchaseDocStatus.POSTED,
           postedById: userId,
@@ -752,7 +811,7 @@ export class PurchasesService {
       receipt.paymentStatus !== PurchasePaymentStatus.UNPAID
     ) {
       throw new BadRequestException(
-        `Ushbu xarid hujjati bo'yicha to'lovlar kiritilgan (To'langan: ${receipt.paidAmount} ${receipt.currency}). Hujjatni bekor qilishdan avval Moliya modulida unga bog'liq to'lovlarni o'chiring.`,
+        `Ushbu xarid hujjati bo'yicha to'lovlar kiritilgan (To'langan: ${receipt.paidAmount.toString()} ${receipt.currency}). Hujjatni bekor qilishdan avval Moliya modulida unga bog'liq to'lovlarni o'chiring.`,
       );
     }
 
@@ -773,9 +832,11 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, receipt.docDate, 'unpost');
       // 1. Decrement stock levels & delete batches
       for (const item of receipt.items) {
-        const itemType = (item as any).product?.type || 'PRODUCT';
+        const itemType = item.product?.type || 'PRODUCT';
         if (itemType === 'SERVICE') {
           // Services do not have physical warehouse stock or product batches
           continue;
@@ -791,14 +852,17 @@ export class PurchasesService {
           },
         });
 
-        if (!stockLevel || Number(stockLevel.quantity) < Number(item.quantity)) {
+        if (
+          !stockLevel ||
+          Number(stockLevel.quantity) < Number(item.quantity)
+        ) {
           throw new BadRequestException(
             `Xaridni bekor qilish imkonsiz: ${item.productId} bo'yicha omborda yetarli qoldiq mavjud emas`,
           );
         }
 
         await tx.stockLevel.update({
-          where: { id: stockLevel.id },
+          where: { tenantId, id: stockLevel.id },
           data: {
             quantity: Number(stockLevel.quantity) - Number(item.quantity),
           },
@@ -806,7 +870,7 @@ export class PurchasesService {
       }
 
       await tx.productBatch.deleteMany({
-        where: { receiptId: id },
+        where: { tenantId, receiptId: id },
       });
 
       // 2. Reverse the supplier payable without deleting its history.
@@ -824,9 +888,13 @@ export class PurchasesService {
       });
 
       // 3. Remove journal entries
-      await tx.journalEntry.deleteMany({
-        where: { tenantId, sourceDocType: 'PurchaseReceipt', sourceDocId: id },
-      });
+      await this.journalService.deleteEntriesForSource(
+        tx,
+        tenantId,
+        'PurchaseReceipt',
+        id,
+        'unpost',
+      );
 
       // 4. Audit Log
       await tx.auditLog.create({
@@ -843,7 +911,7 @@ export class PurchasesService {
 
       // 5. Update status
       return tx.purchaseReceipt.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           status: PurchaseDocStatus.DRAFT,
           postedById: null,
@@ -900,7 +968,10 @@ export class PurchasesService {
       throw new NotFoundException('Kassa hisobi topilmadi');
     }
 
-    if (!isCashAccountCurrencyValid(cashAccount) || cashAccount.currency !== receipt.currency) {
+    if (
+      !isCashAccountCurrencyValid(cashAccount) ||
+      cashAccount.currency !== receipt.currency
+    ) {
       throw new BadRequestException(
         `Tanlangan kassa turi/valyutasi xarid hujjatiga (${receipt.currency}) mos kelmaydi.`,
       );
@@ -908,7 +979,7 @@ export class PurchasesService {
 
     if (Number(cashAccount.balance) < dto.amount) {
       throw new BadRequestException(
-        `Kassada mablag' yetarli emas. Mavjud: ${cashAccount.balance} ${cashAccount.currency}, To'lov: ${dto.amount} ${receipt.currency}`,
+        `Kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(cashAccount.balance), cashAccount.currency)}, To'lov: ${formatMoney(dto.amount, receipt.currency)}`,
       );
     }
 
@@ -929,8 +1000,16 @@ export class PurchasesService {
     if (payAmount <= 0) {
       throw new BadRequestException("To'lov summasi noto'g'ri");
     }
-    const paymentAmountInUzs = convertAmountToUzs(payAmount, receipt.currency, exchangeRate);
-    const payableReductionInUzs = convertAmountToUzs(payAmount, receipt.currency, receiptExchangeRate);
+    const paymentAmountInUzs = convertAmountToUzs(
+      payAmount,
+      receipt.currency,
+      exchangeRate,
+    );
+    const payableReductionInUzs = convertAmountToUzs(
+      payAmount,
+      receipt.currency,
+      receiptExchangeRate,
+    );
 
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
@@ -943,15 +1022,16 @@ export class PurchasesService {
 
       // 1. Decrement CashAccount balance
       await tx.cashAccount.update({
-        where: { id: dto.cashAccountId },
+        where: { tenantId, id: dto.cashAccountId },
         data: { balance: { decrement: payAmount } },
       });
 
       // 2. Create Finance Transaction (EXPENSE)
-      const txCount = await tx.financeTransaction.count({
-        where: { tenantId },
-      });
-      const txNumber = `FT-${new Date().getFullYear()}-${(txCount + 1).toString().padStart(5, '0')}`;
+      const txNumber = await nextDocumentNumber(
+        tx,
+        tenantId,
+        'FINANCE_TRANSACTION',
+      );
 
       const financeTransaction = await tx.financeTransaction.create({
         data: {
@@ -998,7 +1078,7 @@ export class PurchasesService {
 
       // 3. Update receipt paidAmount and paymentStatus after validating the allocation.
       const updatedReceipt = await tx.purchaseReceipt.update({
-        where: { id },
+        where: { tenantId, id },
         data: {
           paidAmount: newPaidAmount,
           paymentStatus: newPaymentStatus,
@@ -1010,30 +1090,40 @@ export class PurchasesService {
       const supplierAcc = await tx.account.findFirst({
         where: { tenantId, code: '6010' },
       });
-      const cashLedgerAccountCode = ledgerAccountCodeForCashAccount(cashAccount);
+      const cashLedgerAccountCode =
+        ledgerAccountCodeForCashAccount(cashAccount);
       const cashAcc = await tx.account.findFirst({
-        where: { tenantId, code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__' },
+        where: {
+          tenantId,
+          code: cashLedgerAccountCode ?? '__INVALID_CASH_ACCOUNT__',
+        },
       });
 
       if (supplierAcc && cashAcc) {
-        const jeCount = await tx.journalEntry.count({ where: { tenantId } });
-        const jeNumber = `JE-${new Date().getFullYear()}-${(jeCount + 1).toString().padStart(5, '0')}`;
-        const exchangeDifference = Math.round((paymentAmountInUzs - payableReductionInUzs) * 100) / 100;
+        const exchangeDifference =
+          Math.round((paymentAmountInUzs - payableReductionInUzs) * 100) / 100;
         const journalLines: Array<{
           debitAccountId: string;
           creditAccountId: string;
           amount: number;
           description: string;
-        }> = [{
-          debitAccountId: supplierAcc.id,
-          creditAccountId: cashAcc.id,
-          amount: Math.min(paymentAmountInUzs, payableReductionInUzs),
-          description: `Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (${payAmount} ${receipt.currency})`,
-        }];
+        }> = [
+          {
+            debitAccountId: supplierAcc.id,
+            creditAccountId: cashAcc.id,
+            amount: Math.min(paymentAmountInUzs, payableReductionInUzs),
+            description: `Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (${payAmount} ${receipt.currency})`,
+          },
+        ];
 
         if (exchangeDifference > 0) {
-          const exchangeLossAcc = await tx.account.findFirst({ where: { tenantId, code: '9620' } });
-          if (!exchangeLossAcc) throw new BadRequestException('Valyuta kursi zarar hisobi (9620) topilmadi');
+          const exchangeLossAcc = await tx.account.findFirst({
+            where: { tenantId, code: '9620' },
+          });
+          if (!exchangeLossAcc)
+            throw new BadRequestException(
+              'Valyuta kursi zarar hisobi (9620) topilmadi',
+            );
           journalLines.push({
             debitAccountId: exchangeLossAcc.id,
             creditAccountId: cashAcc.id,
@@ -1041,8 +1131,13 @@ export class PurchasesService {
             description: `Xarid to‘lovi bo‘yicha valyuta kursi zarari (${payAmount} ${receipt.currency})`,
           });
         } else if (exchangeDifference < 0) {
-          const exchangeGainAcc = await tx.account.findFirst({ where: { tenantId, code: '9540' } });
-          if (!exchangeGainAcc) throw new BadRequestException('Valyuta kursi daromad hisobi (9540) topilmadi');
+          const exchangeGainAcc = await tx.account.findFirst({
+            where: { tenantId, code: '9540' },
+          });
+          if (!exchangeGainAcc)
+            throw new BadRequestException(
+              'Valyuta kursi daromad hisobi (9540) topilmadi',
+            );
           journalLines.push({
             debitAccountId: supplierAcc.id,
             creditAccountId: exchangeGainAcc.id,
@@ -1051,17 +1146,17 @@ export class PurchasesService {
           });
         }
 
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber: jeNumber,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             entryDate: paymentDate,
             description: `To'lov: ${receipt.docNumber} — ${receipt.counterparty.name}`,
             sourceDocType: 'PurchasePayment',
             sourceDocId: receipt.id,
-            lines: { create: journalLines },
+            lines: journalLines,
           },
-        });
+          tx,
+        );
       }
 
       // 6. Audit Log
@@ -1106,7 +1201,7 @@ export class PurchasesService {
     }
 
     await this.prisma.purchaseReceipt.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     return {
@@ -1134,6 +1229,9 @@ export class PurchasesService {
 
     const allocationMethod =
       dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.supplierId,
+    });
 
     return this.prisma.$transaction(async (tx) => {
       // Create expense
@@ -1152,7 +1250,7 @@ export class PurchasesService {
 
       // Recalculate total additional expenses for this receipt
       const allExpenses = await tx.purchaseExpense.findMany({
-        where: { receiptId: dto.receiptId },
+        where: { tenantId, receiptId: dto.receiptId },
       });
 
       const totalExpensesAmount = allExpenses.reduce(
@@ -1209,7 +1307,7 @@ export class PurchasesService {
           itemQty > 0 ? (itemTotal + allocatedForItem) / itemQty : 0;
 
         await tx.purchaseReceiptItem.update({
-          where: { id: item.id },
+          where: { receipt: { tenantId }, id: item.id },
           data: {
             allocatedExpenses: allocatedForItem,
             landedCost: newLandedCost,
@@ -1219,7 +1317,11 @@ export class PurchasesService {
         // Update product batch landed cost if created
         if (receipt.status === PurchaseDocStatus.POSTED) {
           await tx.productBatch.updateMany({
-            where: { receiptId: receipt.id, productId: item.productId },
+            where: {
+              tenantId,
+              receiptId: receipt.id,
+              productId: item.productId,
+            },
             data: { landedCost: newLandedCost },
           });
         }
@@ -1233,7 +1335,7 @@ export class PurchasesService {
         totalExpensesAmount;
 
       const updatedReceipt = await tx.purchaseReceipt.update({
-        where: { id: receipt.id },
+        where: { tenantId, id: receipt.id },
         data: {
           additionalExpensesTotal: totalExpensesAmount,
           totalAmount: newTotalAmount,
@@ -1274,8 +1376,16 @@ export class PurchasesService {
       );
     }
 
+    // Products are checked one by one below; a return without a linked
+    // receipt takes its counterparty and warehouse only from the request.
+    await assertTenantOwned(this.prisma, tenantId, {
+      counterparty: dto.counterpartyId,
+      warehouse: dto.warehouseId,
+    });
+
     const returnNumber = await this.generateReturnNumber(tenantId);
-    const targetStatus = (dto.status as ReturnDocStatus) || ReturnDocStatus.POSTED;
+    const targetStatus =
+      (dto.status as ReturnDocStatus) || ReturnDocStatus.POSTED;
 
     // Validate products and check that SERVICE and BUNDLE are rejected
     for (const item of dto.items) {
@@ -1323,7 +1433,7 @@ export class PurchasesService {
     }
 
     // Validate receipt & items if receiptId is linked
-    let receipt: any = null;
+    let receipt: ReceiptForReturn | null = null;
     if (dto.receiptId) {
       receipt = await this.prisma.purchaseReceipt.findFirst({
         where: { id: dto.receiptId, tenantId },
@@ -1335,7 +1445,7 @@ export class PurchasesService {
       });
 
       if (!receipt) {
-        throw new NotFoundException("Biriktirilgan xarid hujjati topilmadi");
+        throw new NotFoundException('Biriktirilgan xarid hujjati topilmadi');
       }
 
       if (receipt.status !== PurchaseDocStatus.POSTED) {
@@ -1343,18 +1453,28 @@ export class PurchasesService {
           "Faqat tasdiqlangan (POSTED) xaridlar bo'yicha qaytarish yaratish mumkin",
         );
       }
-      if (receipt.counterpartyId !== dto.counterpartyId || receipt.warehouseId !== dto.warehouseId || receipt.currency !== dto.currency) {
-        throw new BadRequestException("Qaytarishdagi kontragent, ombor va valyuta asl xarid hujjatiga mos bo'lishi shart");
+      if (
+        receipt.counterpartyId !== dto.counterpartyId ||
+        receipt.warehouseId !== dto.warehouseId ||
+        receipt.currency !== dto.currency
+      ) {
+        throw new BadRequestException(
+          "Qaytarishdagi kontragent, ombor va valyuta asl xarid hujjatiga mos bo'lishi shart",
+        );
       }
 
       const requestedQtyByProduct = new Map<string, number>();
       for (const item of dto.items) {
-        requestedQtyByProduct.set(item.productId, (requestedQtyByProduct.get(item.productId) ?? 0) + Number(item.quantity));
+        requestedQtyByProduct.set(
+          item.productId,
+          (requestedQtyByProduct.get(item.productId) ?? 0) +
+            Number(item.quantity),
+        );
       }
 
       for (const item of dto.items) {
         const receiptItem = receipt.items.find(
-          (ri: any) => ri.productId === item.productId,
+          (ri) => ri.productId === item.productId,
         );
         if (!receiptItem) {
           throw new BadRequestException(
@@ -1363,7 +1483,8 @@ export class PurchasesService {
         }
 
         const unreturnedQty =
-          Number(receiptItem.quantity) - Number(receiptItem.returnedQuantity || 0);
+          Number(receiptItem.quantity) -
+          Number(receiptItem.returnedQuantity || 0);
         if ((requestedQtyByProduct.get(item.productId) ?? 0) > unreturnedQty) {
           throw new BadRequestException(
             `Qaytariladigan miqdor (${item.quantity}) ushbu xariddan qolgan qaytarilmagan miqdordan (${unreturnedQty}) oshishi mumkin emas`,
@@ -1371,14 +1492,41 @@ export class PurchasesService {
         }
 
         const batch = receipt.batches.find(
-          (b: any) => b.productId === item.productId,
+          (b) => b.productId === item.productId,
         );
-        if (batch && (requestedQtyByProduct.get(item.productId) ?? 0) > Number(batch.remainingQty)) {
+        if (
+          batch &&
+          (requestedQtyByProduct.get(item.productId) ?? 0) >
+            Number(batch.remainingQty)
+        ) {
           throw new BadRequestException(
-            `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
+            `Qaytariladigan miqdor (${item.quantity}) partiyada qolgan miqdordan (${batch.remainingQty.toString()}) oshishi mumkin emas. Sotib yuborilgan tovarni qaytarish taqiqlanadi.`,
           );
         }
       }
+    }
+
+    // The supplier payable from a linked receipt was booked at the receipt's
+    // rate, so its return reverses at that rate. A standalone return needs one.
+    let exchangeRate: number;
+    if (receipt) {
+      exchangeRate = requireExchangeRateForCurrency(
+        receipt.currency,
+        Number(receipt.exchangeRate),
+      );
+      if (
+        dto.exchangeRate !== undefined &&
+        Number(dto.exchangeRate) !== exchangeRate
+      ) {
+        throw new BadRequestException(
+          `Xarid hujjatiga bog'langan qaytarish xarid kursida (${exchangeRate}) bo'lishi shart`,
+        );
+      }
+    } else {
+      exchangeRate = requireExchangeRateForCurrency(
+        dto.currency,
+        dto.exchangeRate,
+      );
     }
 
     let totalAmount = 0;
@@ -1413,6 +1561,7 @@ export class PurchasesService {
           counterpartyId: dto.counterpartyId,
           warehouseId: dto.warehouseId,
           currency: dto.currency,
+          exchangeRate,
           actNumber: dto.actNumber || null,
           reason: dto.reason || null,
           comment: dto.comment || null,
@@ -1426,27 +1575,23 @@ export class PurchasesService {
         include: {
           counterparty: true,
           warehouse: true,
-          receipt: { include: { items: { include: { product: true } }, batches: true } },
+          receipt: {
+            include: { items: { include: { product: true } }, batches: true },
+          },
           items: { include: { product: true } },
         },
       });
 
       // If created directly in POSTED status, execute posting inventory & financial movements
       if (targetStatus === ReturnDocStatus.POSTED) {
-        await this.executeReturnPostingInternal(
-          tx,
-          tenantId,
-          userId,
-          pReturn,
-          {
-            items: preparedItems,
-            warehouseId: dto.warehouseId,
-            counterpartyId: dto.counterpartyId,
-            receiptId: dto.receiptId,
-            receipt,
-            returnNumber,
-          },
-        );
+        await this.executeReturnPostingInternal(tx, tenantId, userId, pReturn, {
+          items: preparedItems,
+          warehouseId: dto.warehouseId,
+          counterpartyId: dto.counterpartyId,
+          receiptId: dto.receiptId,
+          receipt,
+          returnNumber,
+        });
       }
 
       // Audit Log
@@ -1469,16 +1614,16 @@ export class PurchasesService {
    * Internal reusable posting engine for Purchase Returns (ADR 0009 & ADR 0017)
    */
   private async executeReturnPostingInternal(
-    tx: any,
+    tx: Prisma.TransactionClient,
     tenantId: string,
     userId: string,
-    pReturn: any,
+    pReturn: PurchaseReturnForPosting,
     fallbackData?: {
-      items?: any[];
+      items?: ReturnPostingLine[];
       warehouseId?: string;
       counterpartyId?: string;
       receiptId?: string | null;
-      receipt?: any;
+      receipt?: ReceiptForReturn | null;
       returnNumber?: string;
     },
   ) {
@@ -1491,13 +1636,27 @@ export class PurchasesService {
       Array.isArray(pReturn?.items) && pReturn.items.length > 0
         ? pReturn.items
         : Array.isArray(fallbackData?.items)
-        ? fallbackData.items
-        : [];
-    const warehouseId = pReturn?.warehouseId || fallbackData?.warehouseId;
-    const counterpartyId = pReturn?.counterpartyId || fallbackData?.counterpartyId;
-    const receiptId = pReturn?.receiptId !== undefined ? pReturn.receiptId : fallbackData?.receiptId;
+          ? fallbackData.items
+          : [];
+    // Typed as present: FIFO consumption and the settlement ledger reject a
+    // missing warehouse or counterparty themselves.
+    const warehouseId = (pReturn?.warehouseId ||
+      fallbackData?.warehouseId) as string;
+    const counterpartyId = (pReturn?.counterpartyId ||
+      fallbackData?.counterpartyId) as string;
+    const receiptId =
+      pReturn?.receiptId !== undefined
+        ? pReturn.receiptId
+        : fallbackData?.receiptId;
     const receipt = pReturn?.receipt || fallbackData?.receipt;
-    const returnNumber = pReturn?.returnNumber || fallbackData?.returnNumber || 'RET';
+    // Line prices and VAT are in the return's currency; batch costs and the
+    // journal are in UZS.
+    const exchangeRate = requireExchangeRateForCurrency(
+      pReturn.currency,
+      Number(pReturn.exchangeRate),
+    );
+    const toUzs = (amount: number) =>
+      convertAmountToUzs(amount, pReturn.currency, exchangeRate);
 
     for (const item of items) {
       const qty = Number(item.quantity);
@@ -1533,82 +1692,57 @@ export class PurchasesService {
       }
 
       await tx.stockLevel.update({
-        where: { id: stockLevel.id },
+        where: { tenantId, id: stockLevel.id },
         data: { quantity: { decrement: qty } },
       });
 
-      // 2. Batch deduction & Landed cost calculation
-      let unitLandedCost = unitPrice;
+      // 2. Batch deduction. Goods leave at the landed cost of the batches
+      // actually consumed (UZS per unit). A receipt line's own landedCost is
+      // in the receipt's currency, so it is never used as a UZS cost.
+      let lineLandedCost: number;
 
       if (receiptId && receipt) {
-        const receiptItem = receipt.items?.find(
-          (ri: any) => ri.productId === item.productId,
+        const receiptItem = receipt.items.find(
+          (ri) => ri.productId === item.productId,
         );
-
-        if (
-          receiptItem &&
-          Number(receiptItem.quantity) > 0 &&
-          Number(receiptItem.landedCost) > 0
-        ) {
-          unitLandedCost = Number(receiptItem.landedCost);
-        }
 
         if (receiptItem) {
           await tx.purchaseReceiptItem.update({
-            where: { id: receiptItem.id },
+            where: { receipt: { tenantId }, id: receiptItem.id },
             data: {
               returnedQuantity: { increment: qty },
             },
           });
         }
 
-        const batch = receipt.batches?.find(
-          (b: any) => b.productId === item.productId,
+        // Return the receipt's own goods when they are still in this warehouse.
+        const batch = receipt.batches.find(
+          (b) =>
+            b.productId === item.productId && b.warehouseId === warehouseId,
         );
-        if (batch) {
-          const newBatchQty = Math.max(0, Number(batch.remainingQty) - qty);
-          await tx.productBatch.update({
-            where: { id: batch.id },
-            data: { remainingQty: newBatchQty },
-          });
-        }
+        const allocation = await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId,
+          productId: item.productId,
+          quantity: qty,
+          batchIds: batch ? [batch.id] : undefined,
+          // Stored return lines always have an id; prepared lines are only a fallback.
+          source: { purchaseReturnItemId: item.id as string },
+        });
+        lineLandedCost = allocation.totalCost;
       } else {
         // Standalone return: FIFO batch consumption from warehouse
-        const batches = await tx.productBatch.findMany({
-          where: {
-            tenantId,
-            warehouseId,
-            productId: item.productId,
-            remainingQty: { gt: 0 },
-          },
-          orderBy: { createdAt: 'asc' },
+        const allocation = await consumeFifoBatches(tx, {
+          tenantId,
+          warehouseId,
+          productId: item.productId,
+          quantity: qty,
+          // Stored return lines always have an id; prepared lines are only a fallback.
+          source: { purchaseReturnItemId: item.id as string },
         });
-
-        let needed = qty;
-        let accumulatedLandedCost = 0;
-        for (const b of batches) {
-          if (needed <= 0) break;
-          const bRemaining = Number(b.remainingQty);
-          const consume = Math.min(needed, bRemaining);
-          const bLandedUnit =
-            Number(b.initialQty) > 0
-              ? Number(b.landedCost) / Number(b.initialQty)
-              : Number(b.purchasePrice);
-          accumulatedLandedCost += consume * bLandedUnit;
-
-          await tx.productBatch.update({
-            where: { id: b.id },
-            data: { remainingQty: { decrement: consume } },
-          });
-          needed -= consume;
-        }
-
-        if (qty - needed > 0) {
-          unitLandedCost = accumulatedLandedCost / (qty - needed);
-        }
+        lineLandedCost = allocation.totalCost;
       }
 
-      const lineLandedCost = qty * unitLandedCost;
       if (itemType === 'RAW_MATERIAL') {
         rawMaterialLandedCostTotal += lineLandedCost;
       } else {
@@ -1633,23 +1767,23 @@ export class PurchasesService {
     // 4. Update main receipt returnStatus if linked
     if (receiptId) {
       const updatedItems = await tx.purchaseReceiptItem.findMany({
-        where: { receiptId },
+        where: { receipt: { tenantId }, receiptId },
       });
 
       const allFullyReturned = updatedItems.every(
-        (ri: any) => Number(ri.returnedQuantity) >= Number(ri.quantity),
+        (ri) => Number(ri.returnedQuantity) >= Number(ri.quantity),
       );
       const anyReturned = updatedItems.some(
-        (ri: any) => Number(ri.returnedQuantity) > 0,
+        (ri) => Number(ri.returnedQuantity) > 0,
       );
       const returnStatus = allFullyReturned
         ? PurchaseReturnStatus.FULLY_RETURNED
         : anyReturned
-        ? PurchaseReturnStatus.PARTIALLY_RETURNED
-        : PurchaseReturnStatus.NONE;
+          ? PurchaseReturnStatus.PARTIALLY_RETURNED
+          : PurchaseReturnStatus.NONE;
 
       await tx.purchaseReceipt.update({
-        where: { id: receiptId },
+        where: { tenantId, id: receiptId },
         data: { returnStatus },
       });
     }
@@ -1677,65 +1811,147 @@ export class PurchasesService {
       }));
 
     if (supplierAcc) {
-      const journalLines: any[] = [];
-      const totalLandedCost =
-        productLandedCostTotal + rawMaterialLandedCostTotal;
-      const baseWithoutVat = basePurchaseTotalReduction - totalVatAmount;
-      const varianceLoss = Math.max(0, totalLandedCost - baseWithoutVat);
+      const journalLines: JournalLineDto[] = [];
+      // Everything below is UZS. Inventory leaves at landed cost; the supplier
+      // payable falls by the base price; the non-refundable rest is a loss
+      // (ADR 0009).
+      const productCost = round2(productLandedCostTotal);
+      const rawMaterialCost = round2(rawMaterialLandedCostTotal);
+      const totalLandedCost = round2(productCost + rawMaterialCost);
+      const baseWithoutVat = toUzs(basePurchaseTotalReduction - totalVatAmount);
+      const vatInUzs = toUzs(totalVatAmount);
+      const varianceLoss = round2(
+        Math.max(0, totalLandedCost - baseWithoutVat),
+      );
+      // Landed cost below the base price (D2): the payable still falls by the
+      // base price, and the gap goes to the account the accountant configured
+      // in company settings. Not configured -> the return is refused rather
+      // than leaving 6010 out of line with the supplier settlement.
+      const gainGap = round2(Math.max(0, baseWithoutVat - totalLandedCost));
+      const gainAcc =
+        gainGap > 0
+          ? await this.purchaseReturnGainAccount(tx, tenantId, gainGap)
+          : null;
+      const fromSupplier = round2(totalLandedCost - varianceLoss);
+      const productFromSupplier =
+        totalLandedCost > 0
+          ? round2((fromSupplier * productCost) / totalLandedCost)
+          : 0;
+      const rawMaterialFromSupplier = round2(
+        fromSupplier - productFromSupplier,
+      );
+      const productLoss = round2(productCost - productFromSupplier);
+      const rawMaterialLoss = round2(rawMaterialCost - rawMaterialFromSupplier);
 
-      if (productLandedCostTotal > 0 && inventoryAcc) {
+      if (varianceLoss > 0 && !lossAcc) {
+        throw new BadRequestException(
+          'Qaytarish zarari uchun hisob (9430 yoki 9420) topilmadi',
+        );
+      }
+
+      const goods = [
+        {
+          account: inventoryAcc,
+          fromSupplier: productFromSupplier,
+          loss: productLoss,
+          label: 'tovarlar',
+        },
+        {
+          account: rawMaterialAcc,
+          fromSupplier: rawMaterialFromSupplier,
+          loss: rawMaterialLoss,
+          label: 'xomashyolar',
+        },
+      ];
+      for (const { account, fromSupplier: amount, label } of goods) {
+        if (amount > 0 && account) {
+          journalLines.push({
+            debitAccountId: supplierAcc.id,
+            creditAccountId: account.id,
+            amount,
+            description: `Qaytarilgan ${label} hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
+          });
+        }
+      }
+
+      if (gainAcc) {
         journalLines.push({
           debitAccountId: supplierAcc.id,
-          creditAccountId: inventoryAcc.id,
-          amount: productLandedCostTotal,
-          description: `Qaytarilgan tovarlar hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
+          creditAccountId: gainAcc.id,
+          amount: gainGap,
+          description: `Qaytarishda tannarx asosiy narxdan past: farq (№ ${pReturn.returnNumber})`,
         });
       }
 
-      if (rawMaterialLandedCostTotal > 0 && rawMaterialAcc) {
-        journalLines.push({
-          debitAccountId: supplierAcc.id,
-          creditAccountId: rawMaterialAcc.id,
-          amount: rawMaterialLandedCostTotal,
-          description: `Qaytarilgan xomashyolar hisobdan chiqarilishi (№ ${pReturn.returnNumber})`,
-        });
-      }
-
-      if (totalVatAmount > 0 && vatAcc) {
+      if (vatInUzs > 0 && vatAcc) {
         journalLines.push({
           debitAccountId: supplierAcc.id,
           creditAccountId: vatAcc.id,
-          amount: totalVatAmount,
+          amount: vatInUzs,
           description: `Qaytarilgan tovarlar bo‘yicha QQS kamayishi (№ ${pReturn.returnNumber})`,
         });
       }
 
-      if (varianceLoss > 0 && lossAcc && inventoryAcc) {
-        journalLines.push({
-          debitAccountId: lossAcc.id,
-          creditAccountId: inventoryAcc.id,
-          amount: varianceLoss,
-          description: `Qaytarish bo‘yicha taqsimlangan xarajatlar zarari (Landed Cost Return Variance, № ${pReturn.returnNumber})`,
-        });
+      for (const { account, loss } of goods) {
+        if (loss > 0 && lossAcc && account) {
+          journalLines.push({
+            debitAccountId: lossAcc.id,
+            creditAccountId: account.id,
+            amount: loss,
+            description: `Qaytarish bo‘yicha taqsimlangan xarajatlar zarari (Landed Cost Return Variance, № ${pReturn.returnNumber})`,
+          });
+        }
       }
 
       if (journalLines.length > 0) {
-        const entryCount = await tx.journalEntry.count({ where: { tenantId } });
-        const entryNumber = `JE-${new Date().getFullYear()}-${(entryCount + 1).toString().padStart(5, '0')}`;
-
-        await tx.journalEntry.create({
-          data: {
-            tenantId,
-            entryNumber,
+        await this.journalService.createJournalEntry(
+          tenantId,
+          {
             entryDate: pReturn.returnDate,
             description: `Yetkazib beruvchiga qaytarish № ${pReturn.returnNumber} (${pReturn.counterparty?.name || ''})`,
             sourceDocType: 'PurchaseReturn',
             sourceDocId: pReturn.id,
-            lines: { create: journalLines },
+            lines: journalLines,
           },
-        });
+          tx,
+        );
       }
     }
+  }
+
+  /**
+   * D2: the account that takes the gap when returned goods leave at a
+   * landed cost below their base price. Chosen by the accountant in
+   * company settings (accounting.purchaseReturnGainAccountCode); there is
+   * no default, so a missing setting refuses the return with a clear error.
+   */
+  private async purchaseReturnGainAccount(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    gap: number,
+  ) {
+    const company = await tx.company.findFirst({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const code = accountingSettings(
+      company?.settings,
+    ).purchaseReturnGainAccountCode;
+    if (!code) {
+      throw new BadRequestException(
+        `Qaytarilayotgan tovar tannarxi asosiy narxdan ${formatMoney(gap, 'UZS')} past. Bu farq uchun hisob sozlanmagan: ` +
+          `kompaniya sozlamalarida accounting.${PURCHASE_RETURN_GAIN_ACCOUNT_SETTING} ni belgilang (buxgalter tanlaydi). / ` +
+          `Себестоимость возвращаемого товара ниже базовой цены на ${formatMoney(gap, 'UZS')}. Счёт для этой разницы не настроен: ` +
+          `укажите accounting.${PURCHASE_RETURN_GAIN_ACCOUNT_SETTING} в настройках компании (выбирает бухгалтер).`,
+      );
+    }
+    const account = await tx.account.findFirst({ where: { tenantId, code } });
+    if (!account) {
+      throw new BadRequestException(
+        `Sozlamadagi ${code} hisobi hisoblar rejasida topilmadi. / Счёт ${code} из настроек не найден в плане счетов.`,
+      );
+    }
+    return account;
   }
 
   async approveReturn(tenantId: string, userId: string, returnId: string) {
@@ -1763,14 +1979,16 @@ export class PurchasesService {
     }
 
     if (pReturn.status === ReturnDocStatus.CANCELLED) {
-      throw new BadRequestException('Bekor qilingan hujjatni tasdiqlab bo\'lmaydi');
+      throw new BadRequestException(
+        "Bekor qilingan hujjatni tasdiqlab bo'lmaydi",
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
       await this.executeReturnPostingInternal(tx, tenantId, userId, pReturn);
 
       const updated = await tx.purchaseReturn.update({
-        where: { id: returnId },
+        where: { tenantId, id: returnId },
         data: { status: ReturnDocStatus.POSTED },
         include: {
           counterparty: true,
@@ -1850,6 +2068,10 @@ export class PurchasesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      if (pReturn.status === ReturnDocStatus.POSTED) {
+        await assertPeriodOpen(tx, tenantId, pReturn.returnDate, 'cancel');
+      }
       // If the document was POSTED, reverse stock, batch, debt, journal entries and receipt items
       if (pReturn.status === ReturnDocStatus.POSTED) {
         let basePurchaseTotal = 0;
@@ -1871,19 +2093,19 @@ export class PurchasesService {
 
           if (stockLevel) {
             await tx.stockLevel.update({
-              where: { id: stockLevel.id },
+              where: { tenantId, id: stockLevel.id },
               data: { quantity: { increment: qty } },
             });
           }
 
-          // 2. Re-increment ProductBatch remainingQty and decrement PurchaseReceiptItem returnedQuantity
+          // 2. Decrement PurchaseReceiptItem returnedQuantity
           if (pReturn.receipt) {
             const receiptItem = pReturn.receipt.items.find(
-              (ri: any) => ri.productId === item.productId,
+              (ri) => ri.productId === item.productId,
             );
             if (receiptItem) {
               await tx.purchaseReceiptItem.update({
-                where: { id: receiptItem.id },
+                where: { receipt: { tenantId }, id: receiptItem.id },
                 data: {
                   returnedQuantity: {
                     decrement: Math.min(
@@ -1894,20 +2116,15 @@ export class PurchasesService {
                 },
               });
             }
-
-            const batch = pReturn.receipt.batches.find(
-              (b: any) => b.productId === item.productId,
-            );
-            if (batch) {
-              await tx.productBatch.update({
-                where: { id: batch.id },
-                data: { remainingQty: { increment: qty } },
-              });
-            }
           }
+
+          // 3. Put back exactly the batches this return line consumed.
+          await restoreBatchConsumptions(tx, tenantId, {
+            purchaseReturnItemId: item.id,
+          });
         }
 
-        // 3. Reverse the supplier-balance effect without deleting history.
+        // 4. Reverse the supplier-balance effect without deleting history.
         await this.settlementService.recordMovement(tx, {
           tenantId,
           counterpartyId: pReturn.counterpartyId,
@@ -1924,7 +2141,7 @@ export class PurchasesService {
         // 4. Update receipt returnStatus
         if (pReturn.receiptId) {
           const updatedItems = await tx.purchaseReceiptItem.findMany({
-            where: { receiptId: pReturn.receiptId },
+            where: { receipt: { tenantId }, receiptId: pReturn.receiptId },
           });
 
           const totalReturned = updatedItems.reduce(
@@ -1937,24 +2154,24 @@ export class PurchasesService {
               : PurchaseReturnStatus.PARTIALLY_RETURNED;
 
           await tx.purchaseReceipt.update({
-            where: { id: pReturn.receiptId },
+            where: { tenantId, id: pReturn.receiptId },
             data: { returnStatus },
           });
         }
 
         // 5. Delete journal entries created for this return
-        await tx.journalEntry.deleteMany({
-          where: {
-            tenantId,
-            sourceDocType: 'PurchaseReturn',
-            sourceDocId: returnId,
-          },
-        });
+        await this.journalService.deleteEntriesForSource(
+          tx,
+          tenantId,
+          'PurchaseReturn',
+          returnId,
+          'cancel',
+        );
       }
 
       // Update status to CANCELLED
       const updatedReturn = await tx.purchaseReturn.update({
-        where: { id: returnId },
+        where: { tenantId, id: returnId },
         data: { status: ReturnDocStatus.CANCELLED },
         include: { items: true, counterparty: true, warehouse: true },
       });
@@ -1994,11 +2211,11 @@ export class PurchasesService {
     }
 
     await this.prisma.purchaseReturnItem.deleteMany({
-      where: { returnId: id },
+      where: { return: { tenantId }, returnId: id },
     });
 
     await this.prisma.purchaseReturn.delete({
-      where: { id },
+      where: { tenantId, id },
     });
 
     return {
@@ -2018,7 +2235,7 @@ export class PurchasesService {
       endDate?: string;
     },
   ) {
-    const where: any = { tenantId };
+    const where: Prisma.PurchaseReturnWhereInput = { tenantId };
 
     if (filters?.supplierId) {
       where.counterpartyId = filters.supplierId;
@@ -2033,15 +2250,16 @@ export class PurchasesService {
     }
 
     if (filters?.startDate || filters?.endDate) {
-      where.returnDate = {};
+      const returnDate: Prisma.DateTimeFilter = {};
       if (filters.startDate) {
-        where.returnDate.gte = new Date(filters.startDate);
+        returnDate.gte = new Date(filters.startDate);
       }
       if (filters.endDate) {
         const end = new Date(filters.endDate);
         end.setHours(23, 59, 59, 999);
-        where.returnDate.lte = end;
+        returnDate.lte = end;
       }
+      where.returnDate = returnDate;
     }
 
     if (filters?.search) {
@@ -2124,8 +2342,16 @@ export class PurchasesService {
     }));
     const supplierAdvancesByCurrency = balancesByCurrency
       .filter((balance) => balance.supplierDebt < 0)
-      .map((balance) => ({ currency: balance.currency, amount: Math.abs(balance.supplierDebt) }));
-    const { debtBalance: _legacyDebtBalance, customerDebt: _legacyCustomerDebt, supplierDebt: _legacySupplierDebt, ...supplierData } = supplier;
+      .map((balance) => ({
+        currency: balance.currency,
+        amount: Math.abs(balance.supplierDebt),
+      }));
+    const {
+      debtBalance: _legacyDebtBalance,
+      customerDebt: _legacyCustomerDebt,
+      supplierDebt: _legacySupplierDebt,
+      ...supplierData
+    } = supplier;
 
     return {
       supplier: { ...supplierData, balancesByCurrency },
@@ -2159,14 +2385,16 @@ export class PurchasesService {
     let monthlyPurchasesTotal = 0;
     for (const r of monthlyReceipts) {
       const amt = Number(r.totalAmount || 0);
-      const curr = r.currency || 'UZS';
+      const curr = r.currency;
       purchasesByCurrMap[curr] = (purchasesByCurrMap[curr] || 0) + amt;
       monthlyPurchasesTotal += amt;
     }
-    const monthlyPurchasesByCurrency = Object.entries(purchasesByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
+    const monthlyPurchasesByCurrency = Object.entries(purchasesByCurrMap).map(
+      ([currency, amount]) => ({
+        currency,
+        amount,
+      }),
+    );
 
     const settlementBalances = await this.prisma.counterpartyBalance.findMany({
       where: { tenantId },
@@ -2178,19 +2406,28 @@ export class PurchasesService {
     for (const balance of settlementBalances) {
       const supplierDebt = Number(balance.supplierDebt);
       if (supplierDebt > 0) {
-        debtByCurrMap[balance.currency] = (debtByCurrMap[balance.currency] || 0) + supplierDebt;
+        debtByCurrMap[balance.currency] =
+          (debtByCurrMap[balance.currency] || 0) + supplierDebt;
         suppliersWithDebt.add(balance.counterpartyId);
       } else if (supplierDebt < 0) {
-        advancesByCurrMap[balance.currency] = (advancesByCurrMap[balance.currency] || 0) + Math.abs(supplierDebt);
+        advancesByCurrMap[balance.currency] =
+          (advancesByCurrMap[balance.currency] || 0) + Math.abs(supplierDebt);
       }
     }
 
-    const totalSupplierDebtByCurrency = Object.entries(debtByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
-    const supplierAdvancesByCurrency = Object.entries(advancesByCurrMap).map(([currency, amount]) => ({ currency, amount }));
-    const totalSupplierDebt = totalSupplierDebtByCurrency.length === 1 ? totalSupplierDebtByCurrency[0].amount : 0;
+    const totalSupplierDebtByCurrency = Object.entries(debtByCurrMap).map(
+      ([currency, amount]) => ({
+        currency,
+        amount,
+      }),
+    );
+    const supplierAdvancesByCurrency = Object.entries(advancesByCurrMap).map(
+      ([currency, amount]) => ({ currency, amount }),
+    );
+    const totalSupplierDebt =
+      totalSupplierDebtByCurrency.length === 1
+        ? totalSupplierDebtByCurrency[0].amount
+        : 0;
     const suppliersWithDebtCount = suppliersWithDebt.size;
 
     const monthlyReturns = await this.prisma.purchaseReturn.findMany({
@@ -2205,14 +2442,16 @@ export class PurchasesService {
     let monthlyReturnsTotal = 0;
     for (const ret of monthlyReturns) {
       const amt = Number(ret.totalAmount || 0);
-      const curr = (ret as any).currency || 'UZS';
+      const curr = ret.currency;
       returnsByCurrMap[curr] = (returnsByCurrMap[curr] || 0) + amt;
       monthlyReturnsTotal += amt;
     }
-    const monthlyReturnsByCurrency = Object.entries(returnsByCurrMap).map(([currency, amount]) => ({
-      currency,
-      amount,
-    }));
+    const monthlyReturnsByCurrency = Object.entries(returnsByCurrMap).map(
+      ([currency, amount]) => ({
+        currency,
+        amount,
+      }),
+    );
 
     const activeSuppliers = await this.prisma.counterparty.count({
       where: {
@@ -2229,11 +2468,19 @@ export class PurchasesService {
       monthlyReturnsTotal,
       monthlyReturnsCount: monthlyReturns.length,
       activeSuppliersCount: activeSuppliers,
-      currency: monthlyPurchasesByCurrency.length === 1 ? monthlyPurchasesByCurrency[0].currency : 'UZS',
+      currency:
+        monthlyPurchasesByCurrency.length === 1
+          ? monthlyPurchasesByCurrency[0].currency
+          : 'UZS',
       monthlyPurchasesByCurrency,
       totalSupplierDebtByCurrency,
       supplierAdvancesByCurrency,
       monthlyReturnsByCurrency,
     };
   }
+}
+
+/** Round a UZS amount to tiyin. */
+function round2(amount: number): number {
+  return Math.round(amount * 100) / 100;
 }

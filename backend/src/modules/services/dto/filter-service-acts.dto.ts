@@ -1,6 +1,17 @@
-import { IsOptional, IsString, IsEnum, IsUUID, IsNumber, Min } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsUUID,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { ServiceActType, ServiceActStatus, ServicePaymentStatus } from '@prisma/client';
+import {
+  ServiceActType,
+  ServiceActStatus,
+  ServicePaymentStatus,
+} from '@prisma/client';
 
 export class FilterServiceActsDto {
   @IsOptional()

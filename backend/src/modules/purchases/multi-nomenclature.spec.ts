@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PurchasesService } from './purchases.service';
 import { PrismaService } from '../../common/prisma';
-import { BadRequestException } from '@nestjs/common';
 import {
   PurchaseDocStatus,
   PurchasePaymentStatus,
@@ -12,6 +11,11 @@ import {
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
+import { JournalService } from '../accounting/journal/journal.service';
+
+jest.mock('../../common/sequences/document-sequence');
+jest.mock('../../common/prisma/assert-tenant-owned');
+jest.mock('../../common/accounting-period/period-lock');
 
 describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Suite', () => {
   let service: PurchasesService;
@@ -25,8 +29,12 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
   const counterpartyId = 'supplier-main';
 
   beforeEach(async () => {
-    settlementService = { recordMovement: jest.fn().mockResolvedValue({ created: true }) };
-    settlementAllocationService = { recordAllocation: jest.fn().mockResolvedValue({ created: true }) };
+    settlementService = {
+      recordMovement: jest.fn().mockResolvedValue({ created: true }),
+    };
+    settlementAllocationService = {
+      recordAllocation: jest.fn().mockResolvedValue({ created: true }),
+    };
     prisma = {
       purchaseReceipt: {
         count: jest.fn().mockResolvedValue(0),
@@ -56,10 +64,15 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         findMany: jest.fn(),
         update: jest.fn(),
       },
+      batchConsumption: {
+        create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+      },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn(),
         update: jest.fn(),
-        updateMany: jest.fn(),
         deleteMany: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
@@ -77,6 +90,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         findFirst: jest.fn(),
       },
       journalEntry: {
+        findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         deleteMany: jest.fn(),
@@ -96,11 +110,18 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
         PurchasesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
-        { provide: SettlementAllocationService, useValue: settlementAllocationService },
-        { provide: AccountsService, useValue: { ensureDefaultAccounts: jest.fn() } },
+        {
+          provide: SettlementAllocationService,
+          useValue: settlementAllocationService,
+        },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -140,14 +161,16 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         ],
       };
 
-      prisma.purchaseReceipt.create.mockImplementation(({ data }: { data: any }) => ({
-        id: 'rec-hetero-1',
-        ...data,
-        status: PurchaseDocStatus.DRAFT,
-        paymentStatus: PurchasePaymentStatus.UNPAID,
-      }));
+      prisma.purchaseReceipt.create.mockImplementation(
+        ({ data }: { data: any }) => ({
+          id: 'rec-hetero-1',
+          ...data,
+          status: PurchaseDocStatus.DRAFT,
+          paymentStatus: PurchasePaymentStatus.UNPAID,
+        }),
+      );
 
-      const receipt = await service.createReceipt(tenantId, userId, dto as any);
+      const receipt = await service.createReceipt(tenantId, userId, dto);
 
       expect(receipt).toBeDefined();
       expect(prisma.purchaseReceipt.create).toHaveBeenCalled();
@@ -188,7 +211,11 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
             totalPrice: 5000000,
             landedCost: 500000,
             allocatedExpenses: 0,
-            product: { id: 'prod-finish', type: ProductType.PRODUCT, name: { uz: 'LED Panel' } },
+            product: {
+              id: 'prod-finish',
+              type: ProductType.PRODUCT,
+              name: { uz: 'LED Panel' },
+            },
           },
           {
             id: 'item-raw',
@@ -198,7 +225,11 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
             totalPrice: 2000000,
             landedCost: 40000,
             allocatedExpenses: 0,
-            product: { id: 'raw-alu', type: ProductType.RAW_MATERIAL, name: { uz: 'Alyumin profil' } },
+            product: {
+              id: 'raw-alu',
+              type: ProductType.RAW_MATERIAL,
+              name: { uz: 'Alyumin profil' },
+            },
           },
           {
             id: 'item-srv',
@@ -208,48 +239,67 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
             totalPrice: 300000,
             landedCost: 300000,
             allocatedExpenses: 0,
-            product: { id: 'srv-freight', type: ProductType.SERVICE, name: { uz: 'Yuk tashish xizmati' } },
+            product: {
+              id: 'srv-freight',
+              type: ProductType.SERVICE,
+              name: { uz: 'Yuk tashish xizmati' },
+            },
           },
         ],
         expenses: [],
       };
 
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.stockLevel.findUnique.mockImplementation(({ where }: { where: any }) => {
-        if (where.tenantId_warehouseId_productId.productId === 'prod-finish') {
-          return Promise.resolve({ id: 'stock-prod', quantity: 5 });
-        }
-        if (where.tenantId_warehouseId_productId.productId === 'raw-alu') {
-          return Promise.resolve({ id: 'stock-raw', quantity: 100 });
-        }
-        return Promise.resolve(null);
-      });
+      prisma.stockLevel.findUnique.mockImplementation(
+        ({ where }: { where: any }) => {
+          if (
+            where.tenantId_warehouseId_productId.productId === 'prod-finish'
+          ) {
+            return Promise.resolve({ id: 'stock-prod', quantity: 5 });
+          }
+          if (where.tenantId_warehouseId_productId.productId === 'raw-alu') {
+            return Promise.resolve({ id: 'stock-raw', quantity: 100 });
+          }
+          return Promise.resolve(null);
+        },
+      );
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.productBatch.create.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
-      prisma.account.findFirst.mockImplementation(({ where }: { where: any }) => ({
-        id: `acc-${where.code}`,
-        code: where.code,
-      }));
+      prisma.account.findFirst.mockImplementation(
+        ({ where }: { where: any }) => ({
+          id: `acc-${where.code}`,
+          code: where.code,
+        }),
+      );
       prisma.journalEntry.create.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
-      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({
-        ...receipt,
-        ...data,
-      }));
+      prisma.purchaseReceipt.update.mockImplementation(
+        ({ data }: { data: any }) => ({
+          ...receipt,
+          ...data,
+        }),
+      );
 
-      const posted = await service.postReceipt(tenantId, userId, 'rec-hetero-1');
+      const posted = await service.postReceipt(
+        tenantId,
+        userId,
+        'rec-hetero-1',
+      );
 
       expect(posted.status).toBe(PurchaseDocStatus.POSTED);
 
       // 1. StockLevel invariant: incremented ONLY for PRODUCT and RAW_MATERIAL (2 times), NEVER for SERVICE
       expect(prisma.stockLevel.update).toHaveBeenCalledTimes(2);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-prod' },
+        where: {
+          tenantId: 'tenant-xyz',
+          id: 'stock-prod',
+        },
         data: { quantity: { increment: 10 } },
       });
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-raw' },
+        where: { tenantId: 'tenant-xyz', id: 'stock-raw' },
         data: { quantity: { increment: 50 } },
       });
 
@@ -272,16 +322,19 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         }),
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: 8140000,
-        entryType: 'PURCHASE_RECEIPT_POSTED',
-        sourceDocType: 'PurchaseReceipt',
-        sourceDocId: 'rec-hetero-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: 8140000,
+          entryType: 'PURCHASE_RECEIPT_POSTED',
+          sourceDocType: 'PurchaseReceipt',
+          sourceDocId: 'rec-hetero-1',
+        }),
+      );
 
       // 4. Double-Entry Accounting Invariant (BHMS NAS Standard)
       expect(prisma.journalEntry.create).toHaveBeenCalled();
@@ -290,13 +343,21 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
 
       expect(lines).toHaveLength(4);
       // Dt 2910 (Finished goods) = 5,000,000 / Kt 6010
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-2910')?.amount).toBe(5000000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-2910')?.amount,
+      ).toBe(5000000);
       // Dt 1010 (Raw materials) = 2,000,000 / Kt 6010
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-1010')?.amount).toBe(2000000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-1010')?.amount,
+      ).toBe(2000000);
       // Dt 9420 (Administrative / Operating expense) = 300,000 / Kt 6010
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-9420')?.amount).toBe(300000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-9420')?.amount,
+      ).toBe(300000);
       // Dt 4410 (Input VAT) = 840,000 / Kt 6010
-      expect(lines.find((l: any) => l.debitAccountId === 'acc-4410')?.amount).toBe(840000);
+      expect(
+        lines.find((l: any) => l.debitAccountId === 'acc-4410')?.amount,
+      ).toBe(840000);
     });
 
     it('should unpost heterogeneous receipt symmetrically: decrement stock ONLY for PRODUCT and RAW_MATERIAL, skip SERVICE, delete batches, reverse debt', async () => {
@@ -307,6 +368,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         docDate: new Date('2026-09-14'),
         updatedAt: new Date('2026-09-23T12:00:00.000Z'),
         currency: 'UZS',
+        exchangeRate: 1,
         status: PurchaseDocStatus.POSTED,
         paidAmount: 0,
         paymentStatus: PurchasePaymentStatus.UNPAID,
@@ -338,55 +400,71 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       };
 
       prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
-      prisma.stockLevel.findUnique.mockImplementation(({ where }: { where: any }) => {
-        if (where.tenantId_warehouseId_productId.productId === 'prod-finish') {
-          return Promise.resolve({ id: 'stock-prod', quantity: 15 });
-        }
-        if (where.tenantId_warehouseId_productId.productId === 'raw-alu') {
-          return Promise.resolve({ id: 'stock-raw', quantity: 150 });
-        }
-        return Promise.resolve(null);
-      });
+      prisma.stockLevel.findUnique.mockImplementation(
+        ({ where }: { where: any }) => {
+          if (
+            where.tenantId_warehouseId_productId.productId === 'prod-finish'
+          ) {
+            return Promise.resolve({ id: 'stock-prod', quantity: 15 });
+          }
+          if (where.tenantId_warehouseId_productId.productId === 'raw-alu') {
+            return Promise.resolve({ id: 'stock-raw', quantity: 150 });
+          }
+          return Promise.resolve(null);
+        },
+      );
       prisma.stockLevel.update.mockResolvedValue({});
       prisma.productBatch.deleteMany.mockResolvedValue({});
       prisma.counterparty.update.mockResolvedValue({});
       prisma.journalEntry.deleteMany.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
-      prisma.purchaseReceipt.update.mockImplementation(({ data }: { data: any }) => ({
-        ...receipt,
-        ...data,
-      }));
+      prisma.purchaseReceipt.update.mockImplementation(
+        ({ data }: { data: any }) => ({
+          ...receipt,
+          ...data,
+        }),
+      );
 
-      const unposted = await service.unpostReceipt(tenantId, userId, 'rec-hetero-1');
+      const unposted = await service.unpostReceipt(
+        tenantId,
+        userId,
+        'rec-hetero-1',
+      );
 
       expect(unposted.status).toBe(PurchaseDocStatus.DRAFT);
 
       // Stock decremented only for physical items (15 -> 5, 150 -> 100), NEVER called for SERVICE
       expect(prisma.stockLevel.update).toHaveBeenCalledTimes(2);
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-prod' },
+        where: {
+          tenantId: 'tenant-xyz',
+          id: 'stock-prod',
+        },
         data: { quantity: 5 },
       });
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-raw' },
+        where: { tenantId: 'tenant-xyz', id: 'stock-raw' },
         data: { quantity: 100 },
       });
 
       // Product batches deleted
       expect(prisma.productBatch.deleteMany).toHaveBeenCalledWith({
-        where: { receiptId: 'rec-hetero-1' },
+        where: { tenantId: 'tenant-xyz', receiptId: 'rec-hetero-1' },
       });
 
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -8140000,
-        entryType: 'PURCHASE_RECEIPT_UNPOSTED',
-        sourceDocType: 'PurchaseReceipt',
-        sourceDocId: 'rec-hetero-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -8140000,
+          entryType: 'PURCHASE_RECEIPT_UNPOSTED',
+          sourceDocType: 'PurchaseReceipt',
+          sourceDocId: 'rec-hetero-1',
+        }),
+      );
 
       // Journal entries removed
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
@@ -413,17 +491,20 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         service.createReturn(tenantId, userId, {
           counterpartyId,
           warehouseId,
+          currency: 'UZS',
           items: [{ productId: 'srv-freight', quantity: 1, unitPrice: 300000 }],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('Xizmat (SERVICE)');
     });
 
     it('should permit returning RAW_MATERIAL lines within valid stock & batch limits', async () => {
       prisma.purchaseReturn.count.mockResolvedValue(0);
-      prisma.purchaseReturn.create.mockImplementation(({ data }: { data: any }) => ({
-        id: 'ret-raw-1',
-        ...data,
-      }));
+      prisma.purchaseReturn.create.mockImplementation(
+        ({ data }: { data: any }) => ({
+          id: 'ret-raw-1',
+          ...data,
+        }),
+      );
       prisma.product.findFirst.mockResolvedValue({
         id: 'raw-alu',
         type: ProductType.RAW_MATERIAL,
@@ -440,6 +521,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         counterpartyId,
         warehouseId,
         currency: 'UZS',
+        exchangeRate: 1,
         status: PurchaseDocStatus.POSTED,
         totalAmount: 8140000,
         returns: [],
@@ -457,6 +539,7 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
         batches: [
           {
             id: 'batch-raw',
+            createdAt: new Date('2026-01-01T00:00:01Z'),
             productId: 'raw-alu',
             remainingQty: 50,
             initialQty: 50,
@@ -465,13 +548,27 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
           },
         ],
       });
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-raw',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
+          productId: 'raw-alu',
+          remainingQty: 50,
+          initialQty: 50,
+          purchasePrice: 40000,
+          landedCost: 40000,
+        },
+      ]);
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.purchaseReceiptItem.findMany.mockResolvedValue([
         { id: 'item-raw', quantity: 50, returnedQuantity: 10 },
       ]);
       prisma.productBatch.update.mockResolvedValue({});
       prisma.purchaseReceipt.update.mockResolvedValue({});
-      prisma.account.findFirst.mockResolvedValue({ id: 'acc-1010', code: '1010' });
+      prisma.account.findFirst.mockResolvedValue({
+        id: 'acc-1010',
+        code: '1010',
+      });
       prisma.journalEntry.create.mockResolvedValue({});
       prisma.auditLog.create.mockResolvedValue({});
 
@@ -486,19 +583,25 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       expect(pReturn).toBeDefined();
       // Stock decremented by 10
       expect(prisma.stockLevel.update).toHaveBeenCalledWith({
-        where: { id: 'stock-raw' },
+        where: {
+          tenantId: 'tenant-xyz',
+          id: 'stock-raw',
+        },
         data: { quantity: { decrement: 10 } },
       });
-      expect(settlementService.recordMovement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        tenantId,
-        counterpartyId,
-        currency: 'UZS',
-        side: CounterpartySettlementSide.SUPPLIER,
-        amount: -400000,
-        entryType: 'PURCHASE_RETURN_POSTED',
-        sourceDocType: 'PurchaseReturn',
-        sourceDocId: 'ret-raw-1',
-      }));
+      expect(settlementService.recordMovement).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          tenantId,
+          counterpartyId,
+          currency: 'UZS',
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: -400000,
+          entryType: 'PURCHASE_RETURN_POSTED',
+          sourceDocType: 'PurchaseReturn',
+          sourceDocId: 'ret-raw-1',
+        }),
+      );
     });
   });
 });

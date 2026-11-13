@@ -1,26 +1,29 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { formatCurrency, formatCurrencyIfAvailable } from './utils.ts';
+import { errorMessage, formatCurrency, formatCurrencyIfAvailable } from './utils.ts';
+
+// Non-breaking space (U+00A0) used by the money format.
+const NB = String.fromCharCode(0xa0);
 
 describe('formatCurrency - Zero-Tolerance Invariants', () => {
   test('should format valid amount, locale, and currency correctly', () => {
     const resUz = formatCurrency(1500000, 'uz', 'UZS');
-    assert.strictEqual(resUz, '1,500,000.000 UZS');
+    assert.strictEqual(resUz, `1${NB}500${NB}000${NB}UZS`);
 
     const resUsd = formatCurrency(1234.56, 'en', 'USD');
-    assert.strictEqual(resUsd, '1,234.560 USD');
+    assert.strictEqual(resUsd, `1${NB}234,56${NB}USD`);
 
     const resZero = formatCurrency(0, 'uz', 'UZS');
-    assert.strictEqual(resZero, '0.000 UZS');
+    assert.strictEqual(resZero, `0${NB}UZS`);
   });
 
   test('should throw TypeError when amount is null or undefined', () => {
     assert.throws(() => {
-      formatCurrency(null as any, 'uz', 'UZS');
+      formatCurrency(null as unknown as number, 'uz', 'UZS');
     }, TypeError);
 
     assert.throws(() => {
-      formatCurrency(undefined as any, 'uz', 'UZS');
+      formatCurrency(undefined as unknown as number, 'uz', 'UZS');
     }, TypeError);
   });
 
@@ -40,11 +43,11 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
 
   test('should throw TypeError when currency is null, undefined, or empty', () => {
     assert.throws(() => {
-      formatCurrency(100, 'uz', null as any);
+      formatCurrency(100, 'uz', null as unknown as string);
     }, TypeError);
 
     assert.throws(() => {
-      formatCurrency(100, 'uz', undefined as any);
+      formatCurrency(100, 'uz', undefined as unknown as string);
     }, TypeError);
 
     assert.throws(() => {
@@ -58,16 +61,16 @@ describe('formatCurrency - Zero-Tolerance Invariants', () => {
 
   test('should throw TypeError when currency is omitted', () => {
     assert.throws(() => {
-      (formatCurrency as any)(100, 'uz');
+      (formatCurrency as (amount: number, locale: string) => string)(100, 'uz');
     }, TypeError);
   });
 
   test('should correctly parse numeric string amounts from API/Decimal responses', () => {
     const res = formatCurrency('1500000.00', 'uz', 'UZS');
-    assert.strictEqual(res, '1,500,000.000 UZS');
+    assert.strictEqual(res, `1${NB}500${NB}000${NB}UZS`);
 
     const resInt = formatCurrency('50000', 'ru', 'USD');
-    assert.strictEqual(resInt, '50,000.000 USD');
+    assert.strictEqual(resInt, `50${NB}000,00${NB}USD`);
   });
 
   test('should throw TypeError when string amount is non-numeric or empty', () => {
@@ -91,10 +94,23 @@ describe('formatCurrencyIfAvailable - Optional Display Currency', () => {
   });
 
   test('should use the first non-blank currency candidate after trimming it', () => {
-    assert.strictEqual(formatCurrencyIfAvailable(100, 'uz', '  ', ' USD '), '100.000 USD');
+    assert.strictEqual(formatCurrencyIfAvailable(100, 'uz', '  ', ' USD '), `100,00${NB}USD`);
   });
 
   test('should preserve strict amount validation when a currency is available', () => {
     assert.throws(() => formatCurrencyIfAvailable(NaN, 'uz', 'UZS'), /amount must be a valid finite number/);
+  });
+});
+
+describe('errorMessage', () => {
+  test('returns the message of an Error or of any object carrying a string message', () => {
+    assert.strictEqual(errorMessage(new Error('boom')), 'boom');
+    assert.strictEqual(errorMessage({ message: 'api said no' }), 'api said no');
+  });
+
+  test('returns undefined for anything without a string message, so callers keep their fallback', () => {
+    for (const value of [undefined, null, 'text', 42, {}, { message: 7 }]) {
+      assert.strictEqual(errorMessage(value), undefined);
+    }
   });
 });

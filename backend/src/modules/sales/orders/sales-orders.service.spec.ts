@@ -8,10 +8,15 @@ import {
   SalesOrderStatus,
   PaymentCondition,
   ProductionOrderStatus,
-  SalesDocStatus,
   SalesPaymentStatus,
 } from '@prisma/client';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { AccountsService } from '../../accounting/accounts/accounts.service';
+import { JournalService } from '../../accounting/journal/journal.service';
+
+jest.mock('../../../common/sequences/document-sequence');
+jest.mock('../../../common/prisma/assert-tenant-owned');
+jest.mock('../../../common/accounting-period/period-lock');
 
 describe('SalesOrdersService', () => {
   let service: SalesOrdersService;
@@ -93,11 +98,14 @@ describe('SalesOrdersService', () => {
         update: jest.fn(),
       },
       productBatch: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn(),
         update: jest.fn(),
       },
       batchConsumption: {
         create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
       },
       counterparty: {
         update: jest.fn(),
@@ -134,6 +142,8 @@ describe('SalesOrdersService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        JournalService,
+        { provide: AccountsService, useValue: {} },
         SalesOrdersService,
         { provide: PrismaService, useValue: prisma },
         { provide: StockReservationService, useValue: stockReservationService },
@@ -161,6 +171,7 @@ describe('SalesOrdersService', () => {
 
       const dto: any = {
         counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
         paymentCondition: 'PREPAID_100',
         currency: 'UZS',
         items: [
@@ -199,6 +210,7 @@ describe('SalesOrdersService', () => {
 
       const result = await service.create('tenant-1', 'user-1', ['SELLER'], {
         counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
         paymentCondition: 'CREDIT',
         currency: 'UZS',
         additionalChargeAmount: 50_000,
@@ -232,6 +244,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'UZS',
           items: [],
@@ -243,6 +256,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: '' as any,
           items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
@@ -252,6 +266,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'RUB' as any,
           items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
@@ -263,6 +278,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'USD',
           items: [{ productId: 'p1', quantity: 1, unitPrice: 100 }],
@@ -272,6 +288,7 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'USD',
           exchangeRate: 0,
@@ -284,11 +301,140 @@ describe('SalesOrdersService', () => {
       await expect(
         service.create('tenant-1', 'user-1', ['SELLER'], {
           counterpartyId: 'cust-1',
+          warehouseId: 'wh-1',
           paymentCondition: 'CREDIT',
           currency: 'UZS',
           items: [{ productId: 'p1', quantity: 0, unitPrice: 100 }],
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Designated warehouse (ADR 0018)', () => {
+    type CreateDto = Parameters<SalesOrdersService['create']>[3];
+    type CreateArgs = {
+      data: { items: { create: Record<string, unknown>[] } } & Record<
+        string,
+        unknown
+      >;
+    };
+    const db = () =>
+      prisma as {
+        salesOrder: Record<
+          'count' | 'create' | 'findFirst' | 'update',
+          jest.Mock
+        >;
+        warehouse: { findFirst: jest.Mock };
+      };
+    const reservations = () =>
+      stockReservationService as { reserveStockForOrder: jest.Mock };
+    const orderDto = (warehouseId?: string) =>
+      ({
+        counterpartyId: 'cust-1',
+        paymentCondition: 'CREDIT',
+        currency: 'UZS',
+        warehouseId,
+        items: [{ productId: 'prod-1', quantity: 5, unitPrice: 1000 }],
+      }) as unknown as CreateDto;
+
+    beforeEach(() => {
+      db().salesOrder.count.mockResolvedValue(0);
+      db().salesOrder.create.mockImplementation(({ data }: CreateArgs) => ({
+        id: 'order-1',
+        ...data,
+        items: data.items.create.map((item, index) => ({
+          id: `item-${index + 1}`,
+          ...item,
+        })),
+        payments: [],
+        salesInvoices: [],
+      }));
+    });
+
+    it('rejects an order without a warehouse instead of reserving stock in the first warehouse', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', ['SELLER'], orderDto(undefined)),
+      ).rejects.toThrow('Buyurtma uchun ombor tanlanishi shart');
+      expect(reservations().reserveStockForOrder).not.toHaveBeenCalled();
+    });
+
+    it('rejects a warehouse that does not belong to the tenant', async () => {
+      db().warehouse.findFirst.mockResolvedValue(null);
+      await expect(
+        service.create(
+          'tenant-1',
+          'user-1',
+          ['SELLER'],
+          orderDto('wh-foreign'),
+        ),
+      ).rejects.toThrow('Ombor topilmadi');
+      expect(db().warehouse.findFirst).toHaveBeenCalledWith({
+        where: { id: 'wh-foreign', tenantId: 'tenant-1' },
+      });
+    });
+
+    it('reserves stock in the designated warehouse', async () => {
+      db().warehouse.findFirst.mockResolvedValue({ id: 'wh-2' });
+      await service.create('tenant-1', 'user-1', ['SELLER'], orderDto('wh-2'));
+      expect(reservations().reserveStockForOrder).toHaveBeenCalledWith(
+        'tenant-1',
+        'order-1',
+        'wh-2',
+        expect.any(Array),
+      );
+    });
+
+    it("rejects moving an order to another tenant's warehouse", async () => {
+      db().salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.NEW,
+        currency: 'UZS',
+        exchangeRate: 1,
+        warehouseId: 'wh-1',
+        items: [],
+      });
+      db().warehouse.findFirst.mockResolvedValue(null);
+      await expect(
+        service.update('tenant-1', 'user-1', 'order-1', {
+          warehouseId: 'wh-foreign',
+        }),
+      ).rejects.toThrow('Ombor topilmadi');
+      expect(db().salesOrder.update).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch from an arbitrary warehouse when none is designated', async () => {
+      db().salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.READY_FOR_SHIPMENT,
+        paymentCondition: PaymentCondition.CREDIT,
+        warehouseId: null,
+        items: [],
+        payments: [],
+      });
+      await expect(
+        service.dispatch('tenant-1', 'user-1', 'order-1', {}),
+      ).rejects.toThrow('Chiqarish uchun ombor tanlanmagan');
+      expect(db().warehouse.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('does not approve an order without a warehouse by reserving in the first warehouse', async () => {
+      db().salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        status: SalesOrderStatus.PENDING_APPROVAL,
+        warehouseId: null,
+        items: [
+          { id: 'item-1', productId: 'prod-1', quantity: 5, reservedQty: 0 },
+        ],
+      });
+      await expect(
+        service.transition('tenant-1', 'user-1', 'order-1', 'APPROVE', [
+          'MANAGER',
+        ]),
+      ).rejects.toThrow('Buyurtma uchun ombor tanlanishi shart');
+      expect(reservations().reserveStockForOrder).not.toHaveBeenCalled();
     });
   });
 
@@ -306,7 +452,7 @@ describe('SalesOrdersService', () => {
       ]);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.PENDING_APPROVAL },
       });
     });
@@ -316,6 +462,7 @@ describe('SalesOrdersService', () => {
         id: 'order-1',
         tenantId: 'tenant-1',
         status: SalesOrderStatus.PENDING_APPROVAL,
+        warehouseId: 'wh-1',
         items: [],
       });
 
@@ -324,7 +471,7 @@ describe('SalesOrdersService', () => {
       ]);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.APPROVED },
       });
     });
@@ -364,7 +511,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.SENT_TO_PRODUCTION },
       });
       expect(prisma.productionOrder.create).toHaveBeenCalledTimes(2);
@@ -395,15 +542,15 @@ describe('SalesOrdersService', () => {
       await service.updateProductionReadyQty('tenant-1', 'user-1', 'po-1', 4);
 
       expect(prisma.productionOrder.update).toHaveBeenCalledWith({
-        where: { id: 'po-1' },
+        where: { tenantId: 'tenant-1', id: 'po-1' },
         data: { readyQty: 4, status: ProductionOrderStatus.IN_PROGRESS },
       });
       expect(prisma.salesOrderItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-1' },
+        where: { order: { tenantId: 'tenant-1' }, id: 'item-1' },
         data: { readyQty: 4 },
       });
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.PARTIALLY_READY },
       });
     });
@@ -432,7 +579,7 @@ describe('SalesOrdersService', () => {
       await service.updateProductionReadyQty('tenant-1', 'user-1', 'po-1', 10);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.AWAITING_PAYMENT },
       });
     });
@@ -460,7 +607,7 @@ describe('SalesOrdersService', () => {
       await service.updateProductionReadyQty('tenant-1', 'user-1', 'po-1', 10);
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.READY_TO_SHIP },
       });
     });
@@ -484,7 +631,7 @@ describe('SalesOrdersService', () => {
       await service.onPaymentRegistered('tenant-1', 'user-1', 'order-1');
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.READY_TO_SHIP },
       });
     });
@@ -576,13 +723,14 @@ describe('SalesOrdersService', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
           remainingQty: 5,
           landedCost: 120000,
           purchasePrice: 120000,
         },
       ]);
 
-      const result = await service.dispatch('tenant-1', 'user-1', 'order-1', {
+      await service.dispatch('tenant-1', 'user-1', 'order-1', {
         warehouseId: 'wh-1',
       });
 
@@ -634,8 +782,14 @@ describe('SalesOrdersService', () => {
           data: expect.objectContaining({
             lines: {
               create: expect.arrayContaining([
-                expect.objectContaining({ creditAccountId: 'acc-9010', amount: 1050000 }),
-                expect.objectContaining({ creditAccountId: 'acc-6410', amount: 126000 }),
+                expect.objectContaining({
+                  creditAccountId: 'acc-9010',
+                  amount: 1050000,
+                }),
+                expect.objectContaining({
+                  creditAccountId: 'acc-6410',
+                  amount: 126000,
+                }),
               ]),
             },
           }),
@@ -643,7 +797,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.SHIPPED, warehouseId: 'wh-1' },
       });
     });
@@ -721,6 +875,7 @@ describe('SalesOrdersService', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:02Z'),
           remainingQty: 5,
           landedCost: 120000,
           purchasePrice: 120000,
@@ -741,7 +896,7 @@ describe('SalesOrdersService', () => {
       );
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inv-prepaid-1' },
+          where: { id: 'inv-prepaid-1', tenantId: 'tenant-1' },
           data: expect.objectContaining({
             paidAmount: 1000000,
             paymentStatus: SalesPaymentStatus.PAID,
@@ -782,7 +937,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.ACCEPTED },
       });
     });
@@ -823,7 +978,7 @@ describe('SalesOrdersService', () => {
       );
 
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.PROCESSING },
       });
     });
@@ -848,7 +1003,7 @@ describe('SalesOrdersService', () => {
         stockReservationService.releaseOrderReservations,
       ).toHaveBeenCalledWith('tenant-1', 'order-1', expect.anything());
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.CANCELLED },
       });
     });
@@ -902,6 +1057,7 @@ describe('SalesOrdersService', () => {
       prisma.productBatch.findMany.mockResolvedValue([
         {
           id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:03Z'),
           remainingQty: 5,
           landedCost: 100000,
           purchasePrice: 100000,
@@ -930,7 +1086,7 @@ describe('SalesOrdersService', () => {
         }),
       );
       expect(prisma.salesOrder.update).toHaveBeenCalledWith({
-        where: { id: 'order-1' },
+        where: { tenantId: 'tenant-1', id: 'order-1' },
         data: { status: SalesOrderStatus.SHIPPED, warehouseId: 'wh-1' },
       });
     });
