@@ -458,7 +458,9 @@ frontend changed.
 | Plan file committed | done | 4f88eb6 | |
 | T1.1 product currency tests | already done | 0bce6d3 | 5 cases in products.service.spec.ts pass |
 | T1.2 run focused product test | done | — | 16/16 |
-| T1.3 schema + backfill migration | done | (this commit) | column/CHECK were in the baseline; production was built with db push, so the backfill gets its own idempotent migration 20261113000300, int-spec runs it twice |
+| T1.3 schema + backfill migration | done | 992d187 | column/CHECK were in the baseline; production was built with db push, so the backfill gets its own idempotent migration 20261113000300, int-spec runs it twice |
+| T1.4 create/update currency resolution | already done | 0bce6d3 | DTOs use IsValidCurrency; service resolves explicit → sales default, rejects unresolved nonzero price |
+| T1.5 product form currency | done | (this commit) | create mode now starts from the tenant sales default or blank (was: USD guess via useDefaultCurrency, UZS guess on products/new); component test |
 
 ## Round 4 decisions
 
@@ -481,6 +483,12 @@ frontend changed.
   consumer is this card); the card lists one amount per currency, shows
   an explicit error (role=alert) when the rows or a row's currency are
   missing, and "no active subscriptions" when there are none.
+
+- F8 (found in T1.5) useDefaultCurrency() falls back to USD (and to
+  accounting/currency settings) when the tenant has no default; 32 files use
+  it. Sales/product forms covered by the plan now use the strict
+  useSalesDefaultCurrency() (null → blank). The other uses (purchases,
+  finance, services, dashboards) are outside the plan; left as a finding.
 
 ## Needs owner decision (round 4)
 

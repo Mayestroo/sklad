@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
 import { Category } from '@shared/types';
 
@@ -20,7 +20,8 @@ export default function NewProductPage() {
   const isRu = locale === 'ru';
   const router = useRouter();
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
+  // Never guessed: no tenant sales default leaves the currency blank (ADR 0022).
+  const salesDefault = useSalesDefaultCurrency();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,7 +45,7 @@ export default function NewProductPage() {
   const [costPriceCurrency, setCostPriceCurrency] = useState<'USD' | 'UZS'>('UZS');
   const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('1');
   const [salePrice, setSalePrice] = useState<number>(0);
-  const [salePriceCurrency, setSalePriceCurrency] = useState<'USD' | 'UZS'>(defaultCurrency === 'USD' ? 'USD' : 'UZS');
+  const [salePriceCurrency, setSalePriceCurrency] = useState<'USD' | 'UZS' | ''>(salesDefault ?? '');
   const [vatRate, setVatRate] = useState<number>(12);
   const [minStockAlert, setMinStockAlert] = useState<number>(5);
 
@@ -56,8 +57,8 @@ export default function NewProductPage() {
   }, [token, company, locale]);
 
   useEffect(() => {
-    if (salePrice === 0) setSalePriceCurrency(defaultCurrency === 'USD' ? 'USD' : 'UZS');
-  }, [defaultCurrency, salePrice]);
+    if (salePrice === 0) setSalePriceCurrency(salesDefault ?? '');
+  }, [salesDefault, salePrice]);
 
   const handleCreateCategory = async (event: FormEvent) => {
     event.preventDefault();
@@ -118,7 +119,7 @@ export default function NewProductPage() {
           costPriceCurrency,
           costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate),
           salePrice: Number(salePrice),
-          salePriceCurrency,
+          salePriceCurrency: salePriceCurrency || undefined,
           vatRate: Number(vatRate),
           minStockAlert: Number(minStockAlert),
         }),

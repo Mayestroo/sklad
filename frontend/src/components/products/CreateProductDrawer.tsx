@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { toast } from '@/context/ToastContext';
 import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import type { Category } from '@shared/types';
@@ -59,7 +59,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
+  // Never guessed: no tenant sales default leaves the currency blank (ADR 0022).
+  const salesDefault = useSalesDefaultCurrency();
   const isEdit = Boolean(productToEdit);
 
   const [itemType, setItemType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>(initialType);
@@ -131,7 +132,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setItemType(initialType || 'PRODUCT');
         setCostPriceCurrency('UZS');
         setCostPriceExchangeRate('1');
-        setSalePriceCurrency(defaultCurrency);
+        setSalePriceCurrency(salesDefault ?? '');
         if (initialSkuOrBarcode) {
           if (!/^\d{8,14}$/.test(initialSkuOrBarcode)) {
             setName(initialSkuOrBarcode);
@@ -141,7 +142,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         }
       }
     }
-  }, [isOpen, productToEdit, initialType, initialSkuOrBarcode, locale, token, company, defaultCurrency]);
+  }, [isOpen, productToEdit, initialType, initialSkuOrBarcode, locale, token, company, salesDefault]);
 
   const handleCreateCategory = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -281,7 +282,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setCostPriceCurrency('UZS');
     setCostPriceExchangeRate('1');
     setSellingPrice('');
-    setSalePriceCurrency(defaultCurrency);
+    setSalePriceCurrency(salesDefault ?? '');
     setError(null);
   };
 
