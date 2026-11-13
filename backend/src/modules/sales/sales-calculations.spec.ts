@@ -46,4 +46,89 @@ describe('sales calculations', () => {
       2_874_965_700,
     );
   });
+
+  it('uses the plan example: 2 x 100, 10% discount, 12% VAT -> 201.6', () => {
+    expect(
+      calculateSalesLineAmounts({
+        quantity: 2,
+        unitPrice: 100,
+        discountPercent: 10,
+        vatRate: 12,
+      }),
+    ).toEqual({
+      subtotal: 200,
+      discountAmount: 20,
+      netAmount: 180,
+      vatAmount: 21.6,
+      totalAmount: 201.6,
+    });
+  });
+
+  it('adds no VAT at a zero rate', () => {
+    expect(
+      calculateSalesLineAmounts({
+        quantity: 3,
+        unitPrice: 50,
+        discountPercent: 10,
+        vatRate: 0,
+      }),
+    ).toEqual({
+      subtotal: 150,
+      discountAmount: 15,
+      netAmount: 135,
+      vatAmount: 0,
+      totalAmount: 135,
+    });
+  });
+
+  it('a 100% discount leaves nothing to tax or pay', () => {
+    expect(
+      calculateSalesLineAmounts({
+        quantity: 2,
+        unitPrice: 100,
+        discountPercent: 100,
+        vatRate: 12,
+      }),
+    ).toEqual({
+      subtotal: 200,
+      discountAmount: 200,
+      netAmount: 0,
+      vatAmount: 0,
+      totalAmount: 0,
+    });
+  });
+
+  it('header totals are the sums of the line amounts', () => {
+    const lines = [
+      { quantity: 2, unitPrice: 100, discountPercent: 10, vatRate: 12 },
+      { quantity: 1, unitPrice: 33.33, discountPercent: 0, vatRate: 0 },
+      { quantity: 7, unitPrice: 9.99, discountPercent: 100, vatRate: 12 },
+    ];
+    const amounts = lines.map(calculateSalesLineAmounts);
+    const sum = (key: keyof (typeof amounts)[number]) =>
+      Math.round(amounts.reduce((s, a) => s + a[key], 0) * 100) / 100;
+    const totals = calculateSalesDocumentTotals(lines, 0, 12);
+
+    expect(totals.subtotalAmount).toBe(sum('subtotal'));
+    expect(totals.discountAmount).toBe(sum('discountAmount'));
+    expect(totals.vatAmount).toBe(sum('vatAmount'));
+    expect(totals.totalAmount).toBe(sum('totalAmount'));
+    expect(totals.totalAmount).toBe(
+      Math.round(
+        (totals.subtotalAmount - totals.discountAmount + totals.vatAmount) *
+          100,
+      ) / 100,
+    );
+  });
+
+  it('rejects a discount outside 0-100', () => {
+    expect(() =>
+      calculateSalesLineAmounts({
+        quantity: 1,
+        unitPrice: 10,
+        discountPercent: 101,
+        vatRate: 0,
+      }),
+    ).toThrow();
+  });
 });

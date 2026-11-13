@@ -464,7 +464,9 @@ frontend changed.
 | T1.6 product checks | done | — | product spec 16/16, prisma validate OK, nest build OK |
 | T2.1 price-conversion tests | done (coverage) | c05f5fc | 5 cases existed (0bce6d3); added the two-decimal round-trip case the plan asks for; passes on the existing code |
 | T2.2 forms: no price list, native price currency | done | b58f5ee | price-list selector/auto-selection and native-currency conversion + repair error were already done (0bce6d3); new documents now start in the strict sales default or blank (see N2) |
-| T2.3 backend price resolution | done | (this commit) | saved-currency conversion existed; removed the last 'UZS' fallback (zero price, no currency on product or request → 400). Price-list endpoints kept; no form calls GET products/:id/price |
+| T2.3 backend price resolution | done | 16ea3ab | saved-currency conversion existed; removed the last 'UZS' fallback (zero price, no currency on product or request → 400). Price-list endpoints kept; no form calls GET products/:id/price |
+| T2.4 sales checks | done | — | invoice/order specs pass; frontend build OK (after T2.2) |
+| T3.1 order/invoice calculation tests | done (coverage) | (this commit) | 2x100/10%/12% = 201.6, zero VAT, 100% discount, header = sum of lines; pass on the shared calculator from 0bce6d3 |
 
 ## Round 4 decisions
 
