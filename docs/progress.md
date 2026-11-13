@@ -133,3 +133,29 @@ so the work survives context compaction. Re-read this file, then
   11 suites / 30 tests pass; e2e 1 suite / 2 tests pass; frontend tests
   66/66 pass. Backend lint, frontend tsc, lint and build: NOT RUN (see above).
 
+# Round 2 (2026-11-13) — Phases 1–7
+
+Prompt summary: finish checks; D8 money format; D4 period closing (+A1);
+D5 Redis throttler storage; D3 registration enumeration; B13/B6; D2 gap
+account; react-hooks migration; visual verification; final verification.
+
+## Round 2 task list
+- [x] P1 backend lint, frontend tsc, frontend lint, frontend build (at 0acf6e2)
+- [ ] P2 shared money/quantity formatter (D8) + scan test
+- [ ] P3 accounting periods (D4) + A1 sales-return cancel
+- [ ] P4.4 pluggable throttler storage (D5, REDIS_URL)
+- [ ] P4.5 registration enumeration (D3)
+- [ ] P4.6 B13 reading + B6 opening-balance labelling
+- [ ] P4.7 D2 purchase-return gap account setting
+- [ ] P5 react-hooks: shared data-loading + page migration
+- [ ] P6 visual verification on local Docker DB
+- [ ] P7 final verification, review, git hygiene
+
+## Round 2 decisions
+
+## Round 2 log
+- P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
+  lint` clean, `--fix` changed nothing; frontend `npx tsc --noEmit` exit 0;
+  frontend `eslint .` 123 problems in 60 files, all react-hooks
+  (set-state-in-effect 76, exhaustive-deps 45, use-memo 1,
+  preserve-manual-memoization 1) -> Phase 5; frontend `npm run build` OK.
