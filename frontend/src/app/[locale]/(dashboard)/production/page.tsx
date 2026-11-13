@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import {
   CheckCircle2,
@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, formatQuantity } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -97,13 +100,6 @@ export default function ProductionPage() {
   const canViewStaff = Boolean(user?.roles.some((role) => ['super_admin', 'company_admin'].includes(role)) || user?.permissions.includes('users:view'));
 
   const [activeTab, setActiveTab] = useState<'documents' | 'recipes'>('documents');
-  const [documents, setDocuments] = useState<ProductionDocument[]>([]);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [products, setProducts] = useState<ProductOption[]>([]);
-  const [rawMaterials, setRawMaterials] = useState<ProductOption[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
-  const [staff, setStaff] = useState<StaffOption[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pageError, setPageError] = useState('');
   const [notice, setNotice] = useState('');
@@ -114,6 +110,44 @@ export default function ProductionPage() {
   const [responsibleFilter, setResponsibleFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  // Filters go into the documents endpoint (the query key); the typed search
+  // waits for a pause. Reference lists load once and are not refetched by a
+  // filter change.
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const documentsEndpoint = useMemo(() => {
+    const query = new URLSearchParams();
+    if (debouncedSearch) query.set('search', debouncedSearch);
+    if (statusFilter) query.set('status', statusFilter);
+    if (productFilter) query.set('productId', productFilter);
+    if (warehouseFilter) query.set('warehouseId', warehouseFilter);
+    if (responsibleFilter) query.set('responsibleId', responsibleFilter);
+    if (dateFrom) query.set('dateFrom', dateFrom);
+    if (dateTo) query.set('dateTo', dateTo);
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return `/production/documents${suffix}`;
+  }, [debouncedSearch, statusFilter, productFilter, warehouseFilter, responsibleFilter, dateFrom, dateTo]);
+  const documentsQuery = useApiQuery<ProductionDocument[]>(documentsEndpoint, { keepPrevious: true });
+  const recipesQuery = useApiQuery<Recipe[]>('/production/recipes');
+  const productsQuery = useApiQuery<ProductOption[]>('/inventory/products?type=PRODUCT');
+  const rawMaterialsQuery = useApiQuery<ProductOption[]>('/inventory/products?type=RAW_MATERIAL');
+  const warehousesQuery = useApiQuery<WarehouseOption[]>('/tenants/warehouses');
+  const staffQuery = useApiQuery<StaffOption[]>(canViewStaff ? '/users/staff' : null);
+  const invalidateApi = useInvalidateApi();
+
+  const documents = asList<ProductionDocument>(documentsQuery.data);
+  const recipes = asList<Recipe>(recipesQuery.data);
+  const products = asList<ProductOption>(productsQuery.data);
+  const rawMaterials = asList<ProductOption>(rawMaterialsQuery.data);
+  const warehouses = asList<WarehouseOption>(warehousesQuery.data);
+  const staff = asList<StaffOption>(staffQuery.data);
+  const pageQueries = [documentsQuery, recipesQuery, productsQuery, rawMaterialsQuery, warehousesQuery, staffQuery];
+  const failedQuery = pageQueries.find((query) => query.isError);
+  const retryFailed = () => {
+    for (const query of pageQueries) if (query.isError) void query.refetch();
+  };
+  const documentsLoading = documentsQuery.isPending;
+  const recipesLoading = recipesQuery.isPending;
 
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [recipeProductId, setRecipeProductId] = useState('');
@@ -157,52 +191,6 @@ export default function ProductionPage() {
     value: recipe.id,
     label: `${localName(recipe.product.name, locale)} · ${formatQuantity(asNumber(recipe.outputQuantity))} ${unitLabel(recipe.product.unitOfMeasure, locale)}`,
   })), [recipes, locale]);
-
-  const loadData = useCallback(async (showLoading = true) => {
-    if (!token || !company) {
-      setLoading(false);
-      return;
-    }
-    if (showLoading) setLoading(true);
-    setPageError('');
-    try {
-      const query = new URLSearchParams();
-      if (search.trim()) query.set('search', search.trim());
-      if (statusFilter) query.set('status', statusFilter);
-      if (productFilter) query.set('productId', productFilter);
-      if (warehouseFilter) query.set('warehouseId', warehouseFilter);
-      if (responsibleFilter) query.set('responsibleId', responsibleFilter);
-      if (dateFrom) query.set('dateFrom', dateFrom);
-      if (dateTo) query.set('dateTo', dateTo);
-      const suffix = query.size ? `?${query.toString()}` : '';
-      const [documentData, recipeData, productData, rawData, warehouseData] = await Promise.all([
-        apiFetch<ProductionDocument[]>(`/production/documents${suffix}`, { token, tenantId: company.id, locale }),
-        apiFetch<Recipe[]>('/production/recipes', { token, tenantId: company.id, locale }),
-        apiFetch<ProductOption[]>('/inventory/products?type=PRODUCT', { token, tenantId: company.id, locale }),
-        apiFetch<ProductOption[]>('/inventory/products?type=RAW_MATERIAL', { token, tenantId: company.id, locale }),
-        apiFetch<WarehouseOption[]>('/tenants/warehouses', { token, tenantId: company.id, locale }),
-      ]);
-      setDocuments(asList<ProductionDocument>(documentData));
-      setRecipes(asList<Recipe>(recipeData));
-      setProducts(asList<ProductOption>(productData));
-      setRawMaterials(asList<ProductOption>(rawData));
-      setWarehouses(asList<WarehouseOption>(warehouseData));
-      if (canViewStaff) {
-        const staffData = await apiFetch<StaffOption[]>('/users/staff', { token, tenantId: company.id, locale });
-        setStaff(asList<StaffOption>(staffData));
-      }
-    } catch (error) {
-      setPageError(error instanceof Error ? error.message : (isRu ? 'Не удалось загрузить производство' : 'Ishlab chiqarish ma’lumotlarini yuklab bo‘lmadi'));
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, [token, company, locale, search, statusFilter, productFilter, warehouseFilter, responsibleFilter, dateFrom, dateTo, canViewStaff, isRu]);
-
-  useEffect(() => {
-    // loadData synchronizes this client page with its authenticated API resources.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData();
-  }, [loadData]);
 
   useEffect(() => {
     if (!documentModalOpen || !token || !company || !documentRecipeId || !documentWarehouseId || Number(documentQuantity) <= 0) {
@@ -275,7 +263,7 @@ export default function ProductionPage() {
       setRecipeModalOpen(false);
       resetRecipeForm();
       setNotice(isRu ? 'Рецептура сохранена' : 'Retseptura saqlandi');
-      await loadData(false);
+      await invalidateApi('/production');
     } catch (error) {
       setPageError(error instanceof Error ? error.message : 'Could not save recipe');
     } finally {
@@ -304,7 +292,7 @@ export default function ProductionPage() {
       });
       setDocumentModalOpen(false);
       setNotice(isRu ? 'Черновик производственного документа создан' : 'Ishlab chiqarish hujjati qoralamasi yaratildi');
-      await loadData(false);
+      await invalidateApi('/production');
       if (created?.id) await openDocument(created.id);
     } catch (error) {
       setPageError(error instanceof Error ? error.message : 'Could not create production document');
@@ -366,7 +354,7 @@ export default function ProductionPage() {
       }
       setSelectedDocument(updated);
       setNotice(actionNotice(action, isRu));
-      await loadData(false);
+      await invalidateApi('/production');
     } catch (error) {
       setPageError(error instanceof Error ? error.message : 'Production action failed');
     } finally {
@@ -404,6 +392,7 @@ export default function ProductionPage() {
         </div>
       </div>
 
+      {failedQuery && <LoadError error={failedQuery.error} onRetry={retryFailed} />}
       {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
       {notice && <div role="status" style={alertStyle('success')}>{notice}</div>}
 
@@ -433,7 +422,7 @@ export default function ProductionPage() {
             <Input label={isRu ? 'С даты' : 'Boshlanish'} type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} style={{ width: 160 }} />
             <Input label={isRu ? 'По дату' : 'Tugash'} type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} style={{ width: 160 }} />
           </div>
-          {loading ? <EmptyState text={isRu ? 'Загрузка...' : 'Yuklanmoqda...'} /> : documents.length === 0 ? (
+          {documentsLoading ? <EmptyState text={isRu ? 'Загрузка...' : 'Yuklanmoqda...'} /> : documents.length === 0 ? (
             <EmptyState text={isRu ? 'Производственных документов пока нет' : 'Hozircha ishlab chiqarish hujjatlari yo‘q'} />
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -470,7 +459,7 @@ export default function ProductionPage() {
         </Card>
       ) : (
         <Card style={{ padding: 0, overflow: 'hidden' }}>
-          {loading ? <EmptyState text={isRu ? 'Загрузка...' : 'Yuklanmoqda...'} /> : recipes.length === 0 ? (
+          {recipesLoading ? <EmptyState text={isRu ? 'Загрузка...' : 'Yuklanmoqda...'} /> : recipes.length === 0 ? (
             <EmptyState text={isRu ? 'Рецептуры еще не созданы' : 'Hali retsepturalar yaratilmagan'} />
           ) : (
             <div style={{ overflowX: 'auto' }}>

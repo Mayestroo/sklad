@@ -479,10 +479,12 @@ frontend changed.
 | T4.3 atomic draft replacement | done | b13b569 | status was checked before the transaction; now SELECT … FOR UPDATE and re-check DRAFT inside it |
 | T4.4 form save path | verified | — | SalesInvoiceForm saves drafts with PATCH /sales/invoices/:id; posted invoices keep explicit post/unpost |
 | T4.5 invoice checks | done | — | backend unit/int/typecheck/lint/build; frontend unchanged |
-| T5.1 profit currency tests | done (UZS convention, N4) | (this commit) | plan example as a UZS test (600,000 UZS = USD 50 at 12,000), UZS identity, VAT excluded |
-| T5.2 COGS conversion / line profit | partly: N4 | (this commit) | storage kept in UZS (N4). Fixed the ADR 0008 recalibration: additional-expense post/cancel set profit to totalPrice − COGS (VAT included, USD amount minus UZS COGS); now net of VAT in UZS like posting |
+| T5.1 profit currency tests | done (UZS convention, N4) | 02fa675 | plan example as a UZS test (600,000 UZS = USD 50 at 12,000), UZS identity, VAT excluded |
+| T5.2 COGS conversion / line profit | partly: N4 | 02fa675 | storage kept in UZS (N4). Fixed the ADR 0008 recalibration: additional-expense post/cancel set profit to totalPrice − COGS (VAT included, USD amount minus UZS COGS); now net of VAT in UZS like posting |
 | T5.3 summaries by currency | verified | — | no profit is labelled USD: sales summary/analytics return [{UZS}], customer profile and dashboard label UZS |
 | T5.4 checks | done | — | backend checks green; frontend unchanged |
+| Fresh-DB check | done | — | new empty local DB sklad_round4: all migrations applied, re-run "No pending", migrate diff "No difference" |
+| P3 production page on TanStack Query | done | (this commit) | the only simple page left on the old pattern (hidden by a disable comment): one query per list, filters in the documents endpoint, debounced search, LoadError + retry, writes invalidate /production; component test (each list once, search reloads only documents, error/retry) |
 
 ## Round 4 decisions
 
