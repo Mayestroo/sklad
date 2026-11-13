@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -38,8 +40,9 @@ export default function BranchesPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [branches, setBranches] = useState<BranchRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const branchesQuery = useApiQuery<BranchRow[]>('/tenants/branches');
+  const branches = branchesQuery.data ?? [];
+  const loading = branchesQuery.isPending;
 
   // Modals state
   const [branchModalOpen, setBranchModalOpen] = useState(false);
@@ -52,7 +55,9 @@ export default function BranchesPage() {
   const [branchIsMain, setBranchIsMain] = useState(false);
 
   // Warehouse form
-  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [pickedBranchId, setSelectedBranchId] = useState('');
+  // The new-warehouse form starts on the first branch until one is picked.
+  const selectedBranchId = pickedBranchId || branches[0]?.id || '';
   const [warehouseNameUz, setWarehouseNameUz] = useState('');
   const [warehouseNameRu, setWarehouseNameRu] = useState('');
   const [warehouseAddress, setWarehouseAddress] = useState('');
@@ -83,25 +88,7 @@ export default function BranchesPage() {
   const [deletingWarehouse, setDeletingWarehouse] = useState<WarehouseRow | null>(null);
   const [deleteWarehouseLoading, setDeleteWarehouseLoading] = useState(false);
 
-  const fetchBranches = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const data = await apiFetch<BranchRow[]>('/tenants/branches', { token, tenantId: company.id, locale });
-      setBranches(data || []);
-      if (data && data.length > 0 && !selectedBranchId) {
-        setSelectedBranchId(data[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to load branches:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBranches();
-  }, [token, company, locale]);
+  const fetchBranches = () => void branchesQuery.refetch();
 
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,7 +285,11 @@ export default function BranchesPage() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {branchesQuery.isError ? (
+        <Card>
+          <LoadError error={branchesQuery.error} onRetry={fetchBranches} retrying={branchesQuery.isFetching} />
+        </Card>
+      ) : loading ? (
         <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {isRu ? 'Загрузка структуры...' : 'Filiallar yuklanmoqda...'}
         </Card>

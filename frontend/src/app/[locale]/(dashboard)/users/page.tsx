@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -36,9 +38,9 @@ export default function UsersPage() {
   const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
 
-  const [users, setUsers] = useState<StaffUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const usersQuery = useApiQuery<StaffUser[]>('/users/staff');
+  const users = usersQuery.data ?? [];
+  const loading = usersQuery.isPending;
 
   // Modal State - Create
   const [showModal, setShowModal] = useState(false);
@@ -65,26 +67,7 @@ export default function UsersPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const fetchUsers = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const data = await apiFetch<StaffUser[]>('/users/staff', {
-        token,
-        tenantId: company.id,
-        locale,
-      });
-      setUsers(data || []);
-    } catch (err) {
-      setError(errorMessage(err) || (isRu ? 'Ошибка загрузки пользователей' : 'Foydalanuvchilarni yuklashda xatolik'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, [token, company, locale]);
+  const fetchUsers = () => void usersQuery.refetch();
 
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
@@ -238,14 +221,11 @@ export default function UsersPage() {
 
       {/* Main Staff List Card */}
       <Card>
-        {loading ? (
+        {usersQuery.isError ? (
+          <LoadError error={usersQuery.error} onRetry={fetchUsers} retrying={usersQuery.isFetching} />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
-          </div>
-        ) : error ? (
-          <div style={{ padding: 'var(--space-4)', color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <AlertCircle size={18} />
-            <span>{error}</span>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

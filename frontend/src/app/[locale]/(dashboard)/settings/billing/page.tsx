@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -38,10 +40,15 @@ export default function BillingSettingsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const { token, company } = useAuth();
 
-  const [plans, setPlans] = useState<PricingPlan[]>([]);
-  const [subStatus, setSubStatus] = useState<SubscriptionStatusView | null>(null);
-  const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const plansQuery = useApiQuery<PricingPlan[]>('/billing/plans');
+  const statusQuery = useApiQuery<SubscriptionStatusView>('/billing/status');
+  const historyQuery = useApiQuery<SubscriptionPayment[]>('/billing/history');
+  const billingQueries = [plansQuery, statusQuery, historyQuery];
+  const plans = plansQuery.data ?? [];
+  const subStatus = statusQuery.data ?? null;
+  const payments = historyQuery.data ?? [];
+  const loading = billingQueries.some((q) => q.isPending);
+  const failedQuery = billingQueries.find((q) => q.isError);
 
   // Checkout modal
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
@@ -49,30 +56,6 @@ export default function BillingSettingsPage() {
   const [paymentMethod, setPaymentMethod] = useState<'CLICK' | 'PAYME' | 'BANK_TRANSFER'>('CLICK');
   const [checkoutResult, setCheckoutResult] = useState<CheckoutResult | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-
-  const fetchBillingData = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const [plansData, statusData, historyData] = await Promise.all([
-        apiFetch<PricingPlan[]>('/billing/plans', { token, tenantId: company.id, locale }),
-        apiFetch<SubscriptionStatusView>('/billing/status', { token, tenantId: company.id, locale }),
-        apiFetch<SubscriptionPayment[]>('/billing/history', { token, tenantId: company.id, locale }),
-      ]);
-
-      setPlans(plansData);
-      setSubStatus(statusData);
-      setPayments(historyData);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBillingData();
-  }, [token, company]);
 
   const handleStartCheckout = (planId: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE') => {
     setSelectedPlanId(planId);
@@ -113,7 +96,13 @@ export default function BillingSettingsPage() {
         </h1>
       </div>
 
-      {loading ? (
+      {failedQuery ? (
+        <LoadError
+          error={failedQuery.error}
+          onRetry={() => billingQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+          retrying={billingQueries.some((q) => q.isFetching)}
+        />
+      ) : loading ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {tCommon('loading')}
         </div>
