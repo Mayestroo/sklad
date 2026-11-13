@@ -17,6 +17,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
+import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { toast } from '@/context/ToastContext';
 import {
   Plus,
@@ -96,6 +99,11 @@ export default function OpeningBalancesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [fixedAssets, setFixedAssets] = useState<FixedAsset[]>([]);
+  // muammolar B1/B4: create a missing product or counterparty from a line's
+  // dropdown, then put it on that line.
+  const [quickCreate, setQuickCreate] = useState<
+    { kind: 'product'; index: number } | { kind: 'counterparty'; index: number; type: 'CUSTOMER' | 'SUPPLIER' | 'BOTH' } | null
+  >(null);
 
   // Working Document Lines & State
   const [lines, setLines] = useState<OpeningBalanceDraftLine[]>([]);
@@ -554,6 +562,26 @@ export default function OpeningBalancesPage() {
   const removeLine = (index: number) => {
     if (isReadOnly) return;
     setLines((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleQuickCreated = async (id: string) => {
+    const target = quickCreate;
+    setQuickCreate(null);
+    if (!target || !token || !companyId) return;
+    const opts = { token, tenantId: companyId, locale };
+    try {
+      if (target.kind === 'product') {
+        const product = await apiFetch<Product>(`/inventory/products/${id}`, opts);
+        setProducts((prev) => [product, ...prev.filter((p) => p.id !== product.id)]);
+        updateLineField(target.index, 'productId', product.id);
+      } else {
+        const counterparty = await apiFetch<Counterparty>(`/sales/counterparties/${id}`, opts);
+        setCounterparties((prev) => [counterparty, ...prev.filter((c) => c.id !== counterparty.id)]);
+        updateLineField(target.index, 'counterpartyId', counterparty.id);
+      }
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось загрузить созданную запись' : 'Yaratilgan yozuvni yuklab bo‘lmadi'));
+    }
   };
 
   const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: LineValue) => {
@@ -1088,6 +1116,7 @@ export default function OpeningBalancesPage() {
           addText={isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
         >
           <InventoryTable
+            onCreateProduct={(index) => setQuickCreate({ kind: 'product', index })}
             lines={lines}
             isReadOnly={isReadOnly}
             products={products}
@@ -1112,6 +1141,7 @@ export default function OpeningBalancesPage() {
         >
           <CounterpartyTable
             category="CUSTOMER_DEBT"
+            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'CUSTOMER' })}
             lines={lines}
             isReadOnly={isReadOnly}
             counterparties={counterparties.filter((c) => c.type === 'CUSTOMER' || c.type === 'BOTH')}
@@ -1134,6 +1164,7 @@ export default function OpeningBalancesPage() {
         >
           <CounterpartyTable
             category="SUPPLIER_DEBT"
+            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'SUPPLIER' })}
             lines={lines}
             isReadOnly={isReadOnly}
             counterparties={counterparties.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH')}
@@ -1155,6 +1186,7 @@ export default function OpeningBalancesPage() {
           addText={isRu ? 'Добавить аванс' : 'Avans qo‘shish'}
         >
           <AdvancesTable
+            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'BOTH' })}
             lines={lines}
             isReadOnly={isReadOnly}
             counterparties={counterparties}
@@ -1206,6 +1238,26 @@ export default function OpeningBalancesPage() {
             onRemove={removeLine}
           />
         </SubledgerCard>
+      )}
+
+      {quickCreate?.kind === 'product' && (
+        <CreateProductDrawer
+          isOpen
+          onClose={() => setQuickCreate(null)}
+          onSuccess={(created) => {
+            void handleQuickCreated(created.id);
+          }}
+        />
+      )}
+      {quickCreate?.kind === 'counterparty' && (
+        <CreateCounterpartyDrawer
+          isOpen
+          defaultType={quickCreate.type}
+          onClose={() => setQuickCreate(null)}
+          onSuccess={(created) => {
+            void handleQuickCreated(created.id);
+          }}
+        />
       )}
 
       {/* ─── Modal: New Document ───────────────────────────────────── */}
@@ -1596,13 +1648,12 @@ function CashTable({
                 )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -1668,7 +1719,8 @@ function InventoryTable({
   currency,
   onUpdate,
   onRemove,
-}: SubledgerTableProps & { products: Product[]; warehouses: Warehouse[]; currency?: string }) {
+  onCreateProduct,
+}: SubledgerTableProps & { products: Product[]; warehouses: Warehouse[]; currency?: string; onCreateProduct: (index: number) => void }) {
   const filtered = linesWhere(lines, (l) => l.category === 'INVENTORY');
 
   const getProductName = (p: Product | undefined) => {
@@ -1718,6 +1770,8 @@ function InventoryTable({
                   value={line.productId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'productId', value)}
+                  onCreateNew={!isReadOnly ? () => onCreateProduct(index) : undefined}
+                  createNewLabel={isRu ? 'Новый товар' : 'Yangi tovar qo‘shish'}
                   style={{ width: '100%' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите товар' : 'Tovarni tanlang' },
@@ -1744,13 +1798,12 @@ function InventoryTable({
                 />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.quantity || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'quantity', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'quantity', value)}
+                  min={0}
+                  decimals={3}
                   placeholder="0"
                   className="tabular-nums"
                   style={{
@@ -1766,13 +1819,12 @@ function InventoryTable({
                 />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.unitCost || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'unitCost', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'unitCost', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -1838,7 +1890,8 @@ function CounterpartyTable({
   isRu,
   onUpdate,
   onRemove,
-}: SubledgerTableProps & { category: OpeningBalanceCategory; counterparties: Counterparty[] }) {
+  onCreateCounterparty,
+}: SubledgerTableProps & { category: OpeningBalanceCategory; counterparties: Counterparty[]; onCreateCounterparty: (index: number) => void }) {
   const filtered = linesWhere(lines, (l) => l.category === category);
 
   const isCustomer = category === 'CUSTOMER_DEBT';
@@ -1882,6 +1935,8 @@ function CounterpartyTable({
                   value={line.counterpartyId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'counterpartyId', value)}
+                  onCreateNew={!isReadOnly ? () => onCreateCounterparty(index) : undefined}
+                  createNewLabel={isRu ? 'Новый контрагент' : 'Yangi kontragent qo‘shish'}
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
@@ -1938,13 +1993,12 @@ function CounterpartyTable({
                 )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -2007,7 +2061,8 @@ function AdvancesTable({
   isRu,
   onUpdate,
   onRemove,
-}: SubledgerTableProps & { counterparties: Counterparty[] }) {
+  onCreateCounterparty,
+}: SubledgerTableProps & { counterparties: Counterparty[]; onCreateCounterparty: (index: number) => void }) {
   const filtered = linesWhere(lines, (l) => l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE');
 
   return (
@@ -2057,6 +2112,8 @@ function AdvancesTable({
                   value={line.counterpartyId || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'counterpartyId', value)}
+                  onCreateNew={!isReadOnly ? () => onCreateCounterparty(index) : undefined}
+                  createNewLabel={isRu ? 'Новый контрагент' : 'Yangi kontragent qo‘shish'}
                   style={{ width: '100%', maxWidth: '300px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
@@ -2095,13 +2152,12 @@ function AdvancesTable({
                 )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{
@@ -2239,13 +2295,12 @@ function FixedAssetsTable({
                   />
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
+                  <CurrencyInput
                     value={line.amount || ''}
                     disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                    onChange={(value) => onUpdate(index, 'amount', value)}
+                    min={0}
+                    decimals={2}
                     placeholder="0.00"
                     className="tabular-nums"
                     style={{
@@ -2262,13 +2317,12 @@ function FixedAssetsTable({
                   />
                 </td>
                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
+                  <CurrencyInput
                     value={line.accumulatedDepreciation || ''}
                     disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'accumulatedDepreciation', parseFloat(e.target.value) || 0)}
+                    onChange={(value) => onUpdate(index, 'accumulatedDepreciation', value)}
+                    min={0}
+                    decimals={2}
                     placeholder="0.00"
                     className="tabular-nums"
                     style={{
@@ -2381,13 +2435,12 @@ function OtherTable({
                 />
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
+                <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+                  onChange={(value) => onUpdate(index, 'amount', value)}
+                  min={0}
+                  decimals={2}
                   placeholder="0.00"
                   className="tabular-nums"
                   style={{

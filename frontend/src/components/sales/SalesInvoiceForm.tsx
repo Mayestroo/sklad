@@ -35,6 +35,7 @@ import { PaySalesInvoiceModal } from './PaySalesInvoiceModal';
 import { CreateSalesReturnModal } from './CreateSalesReturnModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
@@ -187,6 +188,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   // Quick Add Drawers
   const [isQuickCustomerOpen, setIsQuickCustomerOpen] = useState(false);
   const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false);
+  // Row whose product is being created from the product dropdown (muammolar B9).
+  const [quickProductRow, setQuickProductRow] = useState<number | null>(null);
 
   // Modals state
   const [isPayOpen, setIsPayOpen] = useState(false);
@@ -319,6 +322,16 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     markDirty();
     setWarehouses((prev) => [newWarehouse, ...prev]);
     setWarehouseId(newWarehouse.id);
+  };
+
+  /** A product created from a row's dropdown is loaded and put on that row. */
+  const handleProductAdded = async (newProduct: { id: string }) => {
+    const row = quickProductRow;
+    setQuickProductRow(null);
+    await fetchDropdowns();
+    if (row === null) return;
+    markDirty();
+    setItems((prev) => prev.map((item, i) => (i === row ? { ...item, productId: newProduct.id } : item)));
   };
 
   // Calculations
@@ -1332,6 +1345,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         onChange={(val) => handleItemChange(idx, 'productId', val)}
                         placeholder={isRu ? 'Выберите товар...' : 'Tovarni tanlang...'}
                         disabled={isReadOnly}
+                        onCreateNew={!isReadOnly ? () => setQuickProductRow(idx) : undefined}
+                        createNewLabel={isRu ? 'Новый товар' : 'Yangi tovar qo‘shish'}
                       />
                       {prd && (
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -1579,6 +1594,16 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         onClose={() => setIsQuickWarehouseOpen(false)}
         onSuccess={handleWarehouseAdded}
       />
+
+      {quickProductRow !== null && (
+        <CreateProductDrawer
+          isOpen={quickProductRow !== null}
+          onClose={() => setQuickProductRow(null)}
+          onSuccess={(created) => {
+            void handleProductAdded(created);
+          }}
+        />
+      )}
 
       {currentInvoiceData && (
         <>
