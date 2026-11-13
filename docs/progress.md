@@ -19,8 +19,8 @@ so the work survives context compaction. Re-read this file, then
 ### Phase A — open items
 - [x] A1 Sales-return cancel in a closed period — SKIPPED: period closing is not implemented (no model, field, ADR or service). Recorded as owner decision D4.
 - [x] A2 Pre-release checklist entries + "Decisions needed from owner"
-- [ ] A3 Second tenant sweep (ids from body/params/query, nested line ids),
-      `assertTenantOwned` helper + guard test, `docs/tenant-isolation-sweep.md`
+- [x] A3 Second tenant sweep (ids from body/params/query, nested line ids),
+      `assertTenantOwned` helper + guard test, `docs/tenant-isolation-sweep.md` — 5eb0313
 - [ ] A4a `/sales/purchases` page (lists purchase orders nothing creates)
 - [ ] A4b Excel opening-balance template: asset-type / useful-life columns
 - [ ] A5 Frontend lint, by rule category
@@ -37,6 +37,11 @@ so the work survives context compaction. Re-read this file, then
 
 ## Decisions made (by me, during this run)
 
+- A3: legacy unit specs with hand-written Prisma mocks opt into a no-op
+  `__mocks__/assert-tenant-owned.ts` (same convention as document-sequence);
+  the real helper is covered by its own spec and tenant-isolation.spec.ts.
+- A3: the guard scan sees DTO-typed and inline-object parameters only; the
+  few ids passed as bare positional strings are listed by hand in the sweep doc.
 - A1: there is no accounting-period / books-closed concept anywhere
   (`grep -i period|closed|lock` over schema, services and ADRs). Building one
   is a product feature, not a fix, so A1 is skipped and listed as owner
@@ -54,4 +59,8 @@ so the work survives context compaction. Re-read this file, then
 
 ## Log
 
-- A1+A2: docs only (checklist + this file).
+- A1+A2: docs only (checklist + this file). Commit 8a24f5f.
+- A3: 5eb0313. 75 entry points audited, 35 fixed. Backend jest 47 suites /
+  433 tests pass; typecheck, eslint, nest build clean. The 6 new pattern
+  tests and the guard were run against the old service code (git stash) and
+  fail there.
