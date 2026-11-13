@@ -156,7 +156,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     if (!token || !company) return;
 
     // Counterparties
-    apiFetch<CounterpartyOption[]>('/counterparties', { token, tenantId: company.id, locale })
+    apiFetch<CounterpartyOption[]>('/sales/counterparties?type=SUPPLIER', { token, tenantId: company.id, locale })
       .then((res) => {
         const suppliers = (res || []).filter(
           (c) => c.type === 'SUPPLIER' || c.type === 'BOTH',
