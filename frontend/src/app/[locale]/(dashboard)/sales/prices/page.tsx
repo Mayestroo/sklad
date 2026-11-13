@@ -72,7 +72,7 @@ export default function PricesPage() {
   const [showEditPL, setShowEditPL] = useState(false);
   const [editPLNameUz, setEditPLNameUz] = useState('');
   const [editPLNameRu, setEditPLNameRu] = useState('');
-  const [editPLCurrency, setEditPLCurrency] = useState(defaultCurrency);
+  const [editPLCurrency, setEditPLCurrency] = useState('');
   const [editPLDefault, setEditPLDefault] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 

@@ -1599,7 +1599,6 @@ function FinanceTransactionDrawer({
   onSuccess: () => void;
 }) {
   const isTransferOrExchange = mode === 'transfer' || mode === 'exchange';
-  const defaultCurrency = useDefaultCurrency();
   const preferredAccount = accounts.find((account) => account.currency === prefilledSettlement?.currency);
   const initialFromAccount = preferredAccount ?? accounts[0];
   const initialToAccount = accounts.find((account) =>
@@ -1609,7 +1608,8 @@ function FinanceTransactionDrawer({
   const [accountId, setAccountId] = useState(initialFromAccount?.id || '');
   const [toAccountId, setToAccountId] = useState(initialToAccount?.id || '');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(prefilledSettlement?.currency || defaultCurrency);
+  // F8 / ADR 0022: the currency is the chosen cash account's (or the settlement's), never a tenant-level guess.
+  const [currency, setCurrency] = useState(prefilledSettlement?.currency || initialFromAccount?.currency || '');
   const [counterpartyId, setCounterpartyId] = useState(prefilledCounterpartyId || '');
   const [settlementSide, setSettlementSide] = useState<'CUSTOMER' | 'SUPPLIER' | ''>(prefilledSettlement?.side || '');
   const [typeId, setTypeId] = useState('');
@@ -1724,7 +1724,7 @@ function FinanceTransactionDrawer({
       return;
     }
 
-    if (!accountId || (isTransferOrExchange && !toAccountId)) {
+    if (!accountId || !fromAccount || (isTransferOrExchange && !toAccountId)) {
       setError(isRu ? 'Выберите оба счёта для операции' : 'Amaliyot uchun hisoblarni tanlang');
       return;
     }
@@ -1768,7 +1768,7 @@ function FinanceTransactionDrawer({
 
       const body: Record<string, string | number | undefined> = {
         amount: Number(amount),
-        currency: fromAccount ? fromAccount.currency : currency,
+        currency: fromAccount.currency,
         comment: comment.trim() || undefined,
       };
 
