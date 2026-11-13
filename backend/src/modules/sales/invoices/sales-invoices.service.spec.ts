@@ -1636,6 +1636,37 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
           }),
         ).rejects.toThrow(BadRequestException);
       });
+      it('refuses to invent a currency when neither the product nor the request names one', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          settings: { sales: { enableMultiTierPriceLists: false } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-free',
+          salePrice: 0,
+          salePriceCurrency: null,
+        });
+
+        await expect(
+          service.resolveProductPrice('tenant-1', 'prod-free', {}),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('prices a zero, currency-less product in the requested document currency', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          settings: { sales: { enableMultiTierPriceLists: false } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-free',
+          salePrice: 0,
+          salePriceCurrency: null,
+        });
+
+        await expect(
+          service.resolveProductPrice('tenant-1', 'prod-free', {
+            currency: 'USD',
+          }),
+        ).resolves.toMatchObject({ resolvedPrice: 0, currency: 'USD' });
+      });
     });
   });
 });

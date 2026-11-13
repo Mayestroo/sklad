@@ -1993,7 +1993,14 @@ export class SalesInvoicesService {
         `Product ${product.sku} has a sale price without a recoverable currency`,
       );
     }
-    const baseCurrency = product.salePriceCurrency ?? options.currency ?? 'UZS';
+    // A zero price may carry no currency; it then takes the requested
+    // document currency. Nothing is invented when neither names one (ADR 0022).
+    const baseCurrency = product.salePriceCurrency ?? options.currency;
+    if (!baseCurrency) {
+      throw new BadRequestException(
+        'Sales document currency is required to price a product without a sale-price currency',
+      );
+    }
     const baseTargetCurrency = options.currency ?? baseCurrency;
     if (
       !SUPPORTED_CURRENCIES.includes(
