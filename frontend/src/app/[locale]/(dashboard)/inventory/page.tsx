@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
 import type { Warehouse as WarehouseRow } from '@shared/types';
+import { unitLabel } from '@/lib/units';
 
 export default function InventoryPage() {
   const t = useTranslations('inventory');
@@ -317,7 +318,7 @@ export default function InventoryPage() {
                         )}
                       </td>
                       <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                        {t(`units.${product.unitOfMeasure}`) || product.unitOfMeasure}
+                        {unitLabel(product.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency || 'UZS')}
@@ -326,7 +327,7 @@ export default function InventoryPage() {
                         {formatCurrency(Number(product.salePrice), locale, product.salePriceCurrency || defaultCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {product.totalStock || 0} {t(`units.${product.unitOfMeasure}`)}
+                        {product.totalStock || 0} {unitLabel(product.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         {isLow ? (

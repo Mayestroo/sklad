@@ -38,6 +38,7 @@ import {
   AllocationPreviewResult,
 } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
+import { unitLabel } from '@/lib/units';
 
 interface Counterparty {
   id: string;
@@ -1023,7 +1024,7 @@ export default function NewExpensePage() {
                         )}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {Number(item.quantity) || 0} {item.product?.unitOfMeasure || 'dona'}
+                        {Number(item.quantity) || 0} {unitLabel(item.product?.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
                         {formatCurrency(Number(item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import type { ServiceActDetail } from '@/lib/service-act';
 import type { CashAccount } from '@shared/types';
+import { unitLabel } from '@/lib/units';
 
 interface ServiceActDetailsModalProps {
   act: ServiceActDetail;
@@ -468,7 +469,7 @@ export function ServiceActDetailsModal({
                           <p className="text-gray-500 text-[11px] mt-0.5">{item.description}</p>
                         )}
                       </td>
-                      <td className="p-2.5 text-center text-gray-600">{item.unit || 'dona'}</td>
+                      <td className="p-2.5 text-center text-gray-600">{unitLabel(item.unit, locale)}</td>
                       <td className="p-2.5 text-right font-medium">{Number(item.quantity)}</td>
                       <td className="p-2.5 text-right">
                         {formatCurrency(Number(item.unitPrice), locale, act.currency)}

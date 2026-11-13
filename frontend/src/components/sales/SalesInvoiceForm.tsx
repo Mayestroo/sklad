@@ -39,6 +39,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
+import { unitLabel } from '@/lib/units';
 
 interface CounterpartyOption {
   id: string;
@@ -1336,7 +1337,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           <span>Tannarx: {currency ? formatCurrency(convertSalePriceToDocumentCurrency(costInUzs, 'UZS', currency, Number(exchangeRate)) ?? 0, locale, currency) : '—'}</span>
                           <span>•</span>
-                          <span>Birlik: {prd.unitOfMeasure || 'dona'}</span>
+                          <span>{isRu ? 'Ед.' : 'Birlik'}: {unitLabel(prd.unitOfMeasure, locale)}</span>
                           {warehouseStockMap[item.productId] !== undefined && (
                             <>
                               <span>•</span>

@@ -27,6 +27,7 @@ import {
 import { Product, Category } from '@shared/types';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { toast } from '@/context/ToastContext';
+import { unitLabel } from '@/lib/units';
 
 export default function ProductsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -487,7 +488,7 @@ export default function ProductsPage() {
 
                       {/* Unit */}
                       <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
-                        {p.unitOfMeasure || (isRu ? 'шт' : 'dona')}
+                        {unitLabel(p.unitOfMeasure, locale)}
                       </td>
 
                       {/* Cost price */}
@@ -589,7 +590,7 @@ export default function ProductsPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Единица измерения' : 'O‘lchov birligi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
-                  {selectedProduct.unitOfMeasure}
+                  {unitLabel(selectedProduct.unitOfMeasure, locale)}
                 </div>
               </div>
               <div>
@@ -613,7 +614,7 @@ export default function ProductsPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Порог мин. остатка' : 'Minimal qoldiq chegarasi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }}>
-                  {selectedProduct.minStockAlert} {selectedProduct.unitOfMeasure}
+                  {selectedProduct.minStockAlert} {unitLabel(selectedProduct.unitOfMeasure, locale)}
                 </div>
               </div>
             </div>

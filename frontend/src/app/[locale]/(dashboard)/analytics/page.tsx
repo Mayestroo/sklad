@@ -22,6 +22,7 @@ import {
   TopProductItem,
   FinancialRatios,
 } from '@shared/types';
+import { unitLabel } from '@/lib/units';
 
 /** GET /analytics/top-clients */
 interface TopClient {
@@ -344,7 +345,7 @@ export default function AnalyticsPage() {
                             {p.productName[locale] || p.productName.ru || p.productName.uz}
                           </td>
                           <td style={{ padding: '8px', fontFamily: 'var(--font-mono)' }}>{p.sku}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{p.totalQuantity} {p.unitOfMeasure}</td>
+                          <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{p.totalQuantity} {unitLabel(p.unitOfMeasure, locale)}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
                             {formatCurrency(p.totalRevenue, locale, reportCurrency)}
                           </td>
