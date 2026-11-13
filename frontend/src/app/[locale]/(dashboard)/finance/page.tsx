@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
+import { financeQuickAction } from '@/lib/finance-quick-action';
 import { useAuth } from '@/context/AuthContext';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { apiFetch } from '@/lib/api';
@@ -195,9 +197,11 @@ export default function FinancePage() {
   const [counterpartyFilter, setCounterpartyFilter] = useState('');
 
   // Modals & Drawers
+  // `?new=expense` (Sales → Sotuv xarajatlari, B13) opens that drawer.
+  const searchParams = useSearchParams();
   const [drawerMode, setDrawerMode] = useState<
     'income' | 'expense' | 'transfer' | 'exchange' | null
-  >(null);
+  >(() => financeQuickAction(searchParams.get('new')));
   const [prefilledCounterpartyId, setPrefilledCounterpartyId] = useState<string | null>(null);
   const [prefilledSettlement, setPrefilledSettlement] = useState<{
     side: 'CUSTOMER' | 'SUPPLIER';
