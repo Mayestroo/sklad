@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
+import { lockDocumentStatus } from '../../common/prisma/lock-document';
 import { CreatePurchaseReceiptDto } from './dto/create-purchase-receipt.dto';
 import { FilterPurchaseReceiptsDto } from './dto/filter-purchase-receipts.dto';
 import { CreatePurchaseExpenseDto } from './dto/create-purchase-expense.dto';
@@ -468,6 +469,22 @@ export class PurchasesService {
       Number(existing.additionalExpensesTotal);
 
     return this.prisma.$transaction(async (tx) => {
+      // F9: lock the row and re-check the status inside the transaction; a
+      // post committed after the check above must not have its lines replaced.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'purchaseReceipt',
+        id,
+        tenantId,
+      );
+      if (lockedStatus === null) {
+        throw new NotFoundException('Xarid hujjati topilmadi');
+      }
+      if (lockedStatus !== PurchaseDocStatus.DRAFT) {
+        throw new BadRequestException(
+          'Faqat qoralama holatidagi xarid hujjatlarini tahrirlash mumkin',
+        );
+      }
       await tx.purchaseReceiptItem.deleteMany({
         where: { receipt: { tenantId }, receiptId: id },
       });

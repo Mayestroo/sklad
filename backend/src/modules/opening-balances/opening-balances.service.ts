@@ -15,6 +15,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { lockDocumentStatus } from '../../common/prisma/lock-document';
 import { CreateOpeningBalanceDto } from './dto/create-opening-balance.dto';
 import { UpdateOpeningBalanceLinesDto } from './dto/update-opening-balance.dto';
 import { UnpostOpeningBalanceDto } from './dto/unpost-opening-balance.dto';
@@ -511,6 +512,22 @@ export class OpeningBalancesService {
     );
 
     return this.prisma.$transaction(async (tx) => {
+      // F9: lock the row and re-check the status inside the transaction; a
+      // post committed after the check above must not have its lines replaced.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'openingBalanceDocument',
+        documentId,
+        tenantId,
+      );
+      if (lockedStatus === null) {
+        throw new NotFoundException('Hujjat topilmadi');
+      }
+      if (lockedStatus === OpeningBalanceStatus.POSTED) {
+        throw new BadRequestException(
+          'Tasdiqlangan boshlang‘ich qoldiq hujjatini to‘g‘ridan-to‘g‘ri o‘zgartirib bo‘lmaydi. Avval qayta oching (Unpost)',
+        );
+      }
       // 1. Delete previous lines
       await tx.openingBalanceLine.deleteMany({
         where: { documentId, tenantId },

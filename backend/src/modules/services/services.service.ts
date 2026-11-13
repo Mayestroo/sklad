@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { PrismaService } from '../../common/prisma';
+import { lockDocumentStatus } from '../../common/prisma/lock-document';
 import { JournalService } from '../accounting/journal/journal.service';
 import {
   ServiceActStatus,
@@ -373,6 +374,22 @@ export class ServicesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // F9: lock the row and re-check the status inside the transaction; a
+      // post committed after the check above must not have its lines replaced.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'serviceAct',
+        id,
+        tenantId,
+      );
+      if (lockedStatus === null) {
+        throw new NotFoundException('Xizmatlar dalolatnomasi topilmadi');
+      }
+      if (lockedStatus !== ServiceActStatus.DRAFT) {
+        throw new BadRequestException(
+          'Faqat qoralama (DRAFT) holatidagi aktni tahrirlash mumkin',
+        );
+      }
       if (calculatedItems) {
         await tx.serviceActItem.deleteMany({ where: { tenantId, actId: id } });
         await tx.serviceActItem.createMany({

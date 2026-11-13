@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
+import { lockDocumentStatus } from '../../common/prisma/lock-document';
 import {
   CreateAdditionalExpenseDto,
   UpdateAdditionalExpenseDto,
@@ -307,6 +308,22 @@ export class AdditionalExpensesService {
     const vatAmount = vatRate > 0 ? (amount * vatRate) / (100 + vatRate) : 0;
 
     return this.prisma.$transaction(async (tx) => {
+      // F9: lock the row and re-check the status inside the transaction; a
+      // post committed after the check above must not have its lines replaced.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'additionalExpense',
+        id,
+        tenantId,
+      );
+      if (lockedStatus === null) {
+        throw new NotFoundException('Qo‘shimcha xarajat hujjati topilmadi');
+      }
+      if (lockedStatus !== PurchaseDocStatus.DRAFT) {
+        throw new BadRequestException(
+          'Faqat qoralama holatidagi xarajatlarni tahrirlash mumkin',
+        );
+      }
       await tx.additionalExpenseItem.deleteMany({
         where: { expense: { tenantId }, expenseId: id },
       });
