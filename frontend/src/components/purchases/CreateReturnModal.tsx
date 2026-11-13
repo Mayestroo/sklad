@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
@@ -33,7 +33,19 @@ export function CreateReturnModal({
   const [actNumber, setActNumber] = useState('');
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
-  const [returnItems, setReturnItems] = useState<{ productId: string; name: string; maxQty: number; returnQty: number; unitPrice: number; landedCost: number; vatRate: number }[]>([]);
+  // Only what the user typed is state (per receipt line); the rows are derived
+  // from the receipt on every render, so a language switch or a reload of the
+  // same receipt keeps the typed quantities and VAT. Another receipt starts
+  // from zero.
+  const receiptId = receipt?.id ?? null;
+  const [typed, setTyped] = useState<{
+    receiptId: string | null;
+    qty: Record<number, number>;
+    vat: Record<number, number>;
+  }>({ receiptId, qty: {}, vat: {} });
+  if (typed.receiptId !== receiptId) {
+    setTyped({ receiptId, qty: {}, vat: {} });
+  }
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -48,35 +60,29 @@ export function CreateReturnModal({
     ? ['Брак / дефект товара', 'Отправлен не тот товар', 'Излишек товара', 'Поврежденный товар', 'Не соответствует заказу', 'Ошибка в документах', 'Другое']
     : ['Brak / nuqsonli tovar', 'Noto\'g\'ri tovar yuborilgan', 'Ortiqcha tovar', 'Shikastlangan tovar', 'Buyurtmaga mos emas', 'Hujjatdagi xato', 'Boshqa'];
 
-  useEffect(() => {
-    if (receipt && receipt.items) {
-      setReturnItems(
-        receipt.items.map((i) => {
-          const unreturned = Math.max(0, Number(i.quantity) - Number(i.returnedQuantity || 0));
-          const landedUnit = Number(i.quantity) > 0 && Number(i.landedCost) > 0 ? Number(i.landedCost) / Number(i.quantity) : Number(i.unitPrice);
-          return {
-            productId: i.productId,
-            name: getProductName(i.product?.name),
-            maxQty: unreturned,
-            returnQty: 0,
-            unitPrice: Number(i.unitPrice),
-            landedCost: landedUnit,
-            vatRate: Number(i.vatRate || 0),
-          };
-        })
-      );
-    }
-  }, [receipt, locale]);
+  const returnItems = useMemo(
+    () =>
+      (receipt?.items ?? []).map((i, index) => {
+        const unreturned = Math.max(0, Number(i.quantity) - Number(i.returnedQuantity || 0));
+        const landedUnit = Number(i.quantity) > 0 && Number(i.landedCost) > 0 ? Number(i.landedCost) / Number(i.quantity) : Number(i.unitPrice);
+        return {
+          productId: i.productId,
+          productName: i.product?.name,
+          maxQty: unreturned,
+          returnQty: typed.qty[index] ?? 0,
+          unitPrice: Number(i.unitPrice),
+          landedCost: landedUnit,
+          vatRate: typed.vat[index] ?? Number(i.vatRate || 0),
+        };
+      }),
+    [receipt, typed],
+  );
 
   if (!receipt) return null;
 
   const handleQtyChange = (index: number, qty: number) => {
-    setReturnItems((prev) => {
-      const updated = [...prev];
-      const max = updated[index].maxQty;
-      updated[index].returnQty = Math.max(0, Math.min(max, qty));
-      return updated;
-    });
+    const max = returnItems[index].maxQty;
+    setTyped((prev) => ({ ...prev, qty: { ...prev.qty, [index]: Math.max(0, Math.min(max, qty)) } }));
   };
 
   const calculateReturnTotal = () => {
@@ -235,7 +241,7 @@ export function CreateReturnModal({
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                       <td style={{ padding: '8px', fontWeight: 'var(--font-medium)' }}>
-                        <div>{item.name}</div>
+                        <div>{getProductName(item.productName)}</div>
                         {item.landedCost > item.unitPrice && (
                           <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
                             {isRu ? `Себестоимость: ${formatCurrency(item.landedCost, locale, receipt.currency)}` : `Tannarxi: ${formatCurrency(item.landedCost, locale, receipt.currency)}`}
@@ -263,11 +269,7 @@ export function CreateReturnModal({
                           value={item.vatRate}
                           onChange={(e) => {
                             const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
-                            setReturnItems((prev) => {
-                              const updated = [...prev];
-                              updated[idx].vatRate = val;
-                              return updated;
-                            });
+                            setTyped((prev) => ({ ...prev, vat: { ...prev.vat, [idx]: val } }));
                           }}
                           style={{ textAlign: 'right' }}
                         />
