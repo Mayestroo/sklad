@@ -67,8 +67,9 @@ export default function ServicesPage() {
   const [printAct, setPrintAct] = useState<ServiceActDetail | null>(null);
 
   // Fetch Acts
+  const companyId = company?.id;
   const fetchActs = useCallback(async () => {
-    if (!token && !company?.id) return;
+    if (!token && !companyId) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -81,7 +82,7 @@ export default function ServicesPage() {
 
       const res = await apiFetch<{ items: ServiceActDetail[]; total: number }>(`/services?${params.toString()}`, {
         token: token || undefined,
-        tenantId: company?.id,
+        tenantId: companyId,
         locale,
       });
 
@@ -95,7 +96,7 @@ export default function ServicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeType, search, statusFilter, paymentStatusFilter, page, token, company?.id, locale]);
+  }, [activeType, search, statusFilter, paymentStatusFilter, page, token, companyId, locale]);
 
   useEffect(() => {
     fetchActs();

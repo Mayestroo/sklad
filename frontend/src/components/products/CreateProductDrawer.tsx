@@ -106,7 +106,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       .catch(console.error);
   }, [token, company, locale, isOpen]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (isOpen) {
       if (productToEdit) {
