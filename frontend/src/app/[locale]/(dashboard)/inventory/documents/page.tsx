@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -26,15 +28,22 @@ export default function InventoryDocumentsPage() {
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
 
-  const [documents, setDocuments] = useState<InventoryDocument[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const documentsQuery = useApiQuery<InventoryDocument[]>('/inventory/documents');
+  const productsQuery = useApiQuery<Product[]>('/inventory/products');
+  const warehousesQuery = useApiQuery<Warehouse[]>('/tenants/warehouses');
+  const pageQueries = [documentsQuery, productsQuery, warehousesQuery];
+  const documents = documentsQuery.data ?? [];
+  const products = productsQuery.data ?? [];
+  const warehouses = warehousesQuery.data ?? [];
+  const loading = pageQueries.some((q) => q.isPending);
+  const failedQuery = pageQueries.find((q) => q.isError);
 
   // Document Modal State
   const [showModal, setShowModal] = useState(false);
   const [docType, setDocType] = useState<'INBOUND' | 'OUTBOUND' | 'STOCKTAKING'>('INBOUND');
-  const [warehouseId, setWarehouseId] = useState('');
+  const [pickedWarehouseId, setWarehouseId] = useState('');
+  // The document form starts on the first warehouse until one is picked.
+  const warehouseId = pickedWarehouseId || warehouses[0]?.id || '';
   const [comment, setComment] = useState('');
 
   // Line Item Entry
@@ -49,32 +58,9 @@ export default function InventoryDocumentsPage() {
   // Print Preview
   const [printDoc, setPrintDoc] = useState<InventoryDocument | null>(null);
 
-  const fetchData = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-
-    try {
-      const [docs, prods, whs] = await Promise.all([
-        apiFetch<InventoryDocument[]>('/inventory/documents', { token, tenantId: company.id, locale }),
-        apiFetch<Product[]>('/inventory/products', { token, tenantId: company.id, locale }),
-        apiFetch<Warehouse[]>('/tenants/warehouses', { token, tenantId: company.id, locale }),
-      ]);
-      setDocuments(docs || []);
-      setProducts(prods || []);
-      setWarehouses(whs || []);
-      if (whs && whs.length > 0 && !warehouseId) {
-        setWarehouseId(whs[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to load inventory docs:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetchData = () => {
+    pageQueries.forEach((q) => void q.refetch());
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [token, company, locale]);
 
   const handleAddItem = () => {
     if (!selectedProductId || quantity <= 0) return;
@@ -187,7 +173,13 @@ export default function InventoryDocumentsPage() {
 
       {/* Document History Table */}
       <Card>
-        {loading ? (
+        {failedQuery ? (
+          <LoadError
+            error={failedQuery.error}
+            onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+            retrying={pageQueries.some((q) => q.isFetching)}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>

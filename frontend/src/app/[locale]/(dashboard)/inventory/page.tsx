@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -38,13 +40,9 @@ export default function InventoryPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const defaultCurrency = useDefaultCurrency();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([]);
-  const [lowStockAlerts, setLowStockAlerts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [search, setSearch] = useState('');
+  // The typed search applies on Enter / the filter button, as before.
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
@@ -55,50 +53,28 @@ export default function InventoryPage() {
   const [scanResult, setScanResult] = useState<Product | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    if (!token || !company) {
-      setLoading(false);
+  const productsQuery = useApiQuery<Product[]>(
+    `/inventory/products?${appliedSearch ? `search=${encodeURIComponent(appliedSearch)}` : ''}${selectedCategory ? `&category=${encodeURIComponent(selectedCategory)}` : ''}`,
+  );
+  const categoriesQuery = useApiQuery<Category[]>('/inventory/categories');
+  const warehousesQuery = useApiQuery<WarehouseRow[]>('/tenants/warehouses');
+  const lowStockQuery = useApiQuery<Product[]>('/inventory/products/low-stock');
+  const inventoryQueries = [productsQuery, categoriesQuery, warehousesQuery, lowStockQuery];
+  const products = productsQuery.data;
+  const categories = categoriesQuery.data;
+  const warehouses = warehousesQuery.data;
+  const lowStockAlerts = Array.isArray(lowStockQuery.data) ? lowStockQuery.data : [];
+  const loading = inventoryQueries.some((q) => q.isPending);
+  const failedQuery = inventoryQueries.find((q) => q.isError);
+
+  /** Enter / filter button: apply the typed search, or reload when it is unchanged. */
+  const fetchData = () => {
+    if (search !== appliedSearch) {
+      setAppliedSearch(search);
       return;
     }
-    setLoading(true);
-    try {
-      const [prodsData, catsData, whData, alertData] = await Promise.all([
-        apiFetch<Product[]>(`/inventory/products?${search ? `search=${search}` : ''}${selectedCategory ? `&category=${selectedCategory}` : ''}`, {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-        apiFetch<Category[]>('/inventory/categories', {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-        apiFetch<WarehouseRow[]>('/tenants/warehouses', {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-        apiFetch<Product[]>('/inventory/products/low-stock', {
-          token,
-          tenantId: company.id,
-          locale,
-        }),
-      ]);
-
-      setProducts(Array.isArray(prodsData) ? prodsData : []);
-      setCategories(Array.isArray(catsData) ? catsData : []);
-      setWarehouses(Array.isArray(whData) ? whData : []);
-      setLowStockAlerts(Array.isArray(alertData) ? alertData : []);
-    } catch (err) {
-      console.error('Failed to load inventory data:', err);
-    } finally {
-      setLoading(false);
-    }
+    inventoryQueries.forEach((q) => void q.refetch());
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [token, company, selectedCategory]);
 
   const handleBarcodeSearch = async () => {
     if (!scannedBarcode || !token || !company) return;
@@ -276,7 +252,13 @@ export default function InventoryPage() {
 
       {/* Product Catalog Table */}
       <Card>
-        {loading ? (
+        {failedQuery ? (
+          <LoadError
+            error={failedQuery.error}
+            onRetry={() => inventoryQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+            retrying={inventoryQueries.some((q) => q.isFetching)}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>

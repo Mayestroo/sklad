@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatPercent, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -29,15 +31,25 @@ import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { toast } from '@/context/ToastContext';
 import { unitLabel } from '@/lib/units';
 
+/** Product name in the UI language (falls back to the other language). */
+function productName(p: Product, locale: 'uz' | 'ru'): string {
+  if (!p.name) return '—';
+  if (typeof p.name === 'string') return p.name;
+  return p.name[locale] || p.name.ru || p.name.uz || '—';
+}
+
 export default function ProductsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const productsQuery = useApiQuery<Product[]>('/inventory/products');
+  // Optional: without categories the list still shows ("no category").
+  const categoriesQuery = useApiQuery<Category[]>('/inventory/categories');
+  const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
+  const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+  const loading = productsQuery.isPending;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
@@ -64,24 +76,9 @@ export default function ProductsPage() {
   // Selected product modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  const fetchCatalogData = async () => {
-    if (!token || !company) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const [prodsData, catsData] = await Promise.all([
-        apiFetch<Product[]>('/inventory/products', { token, tenantId: company.id, locale }),
-        apiFetch<Category[]>('/inventory/categories', { token, tenantId: company.id, locale }).catch(() => []),
-      ]);
-      setProducts(prodsData || []);
-      setCategories(catsData || []);
-    } catch (err) {
-      console.error('Failed to fetch products catalog:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetchCatalogData = () => {
+    void productsQuery.refetch();
+    void categoriesQuery.refetch();
   };
 
   const handleDeleteProduct = async () => {
@@ -181,17 +178,10 @@ export default function ProductsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchCatalogData();
-  }, [token, company, locale]);
 
 
   // Helper for localized name
-  const getProductName = (p: Product) => {
-    if (!p.name) return '—';
-    if (typeof p.name === 'string') return p.name;
-    return p.name[locale] || p.name.ru || p.name.uz || '—';
-  };
+  const getProductName = (p: Product) => productName(p, locale);
 
   const getCategoryName = (catId?: string | null) => {
     const defaultLabel = isRu ? 'Без категории' : 'Kategoriyasiz';
@@ -205,7 +195,7 @@ export default function ProductsPage() {
   // Filtered Products List
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      const name = getProductName(p).toLowerCase();
+      const name = productName(p, locale).toLowerCase();
       const sku = (p.sku || '').toLowerCase();
       const barcode = (p.barcode || '').toLowerCase();
       const query = search.toLowerCase().trim();
@@ -260,8 +250,8 @@ export default function ProductsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <Button variant="ghost" size="sm" onClick={fetchCatalogData} disabled={loading}>
-            <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : undefined }} />
+          <Button variant="ghost" size="sm" onClick={fetchCatalogData} disabled={productsQuery.isFetching}>
+            <RefreshCw size={16} style={{ animation: productsQuery.isFetching ? 'spin 1s linear infinite' : undefined }} />
             {isRu ? 'Обновить' : 'Yangilash'}
           </Button>
           <Button
@@ -392,7 +382,13 @@ export default function ProductsPage() {
 
       {/* Products Table */}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
-        {loading ? (
+        {productsQuery.isError ? (
+          <LoadError
+            error={productsQuery.error}
+            onRetry={() => void productsQuery.refetch()}
+            retrying={productsQuery.isFetching}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
           </div>
