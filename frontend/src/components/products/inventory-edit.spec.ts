@@ -16,3 +16,17 @@ test('each product row can be opened in the product drawer for editing', () => {
   assert.match(page, /onClick=\{\(\) => setEditingProduct\(product\)\}/);
   assert.match(page, /<CreateProductDrawer[\s\S]*?productToEdit=\{editingProduct\}/);
 });
+
+const documentsPage = readFileSync(
+  fileURLToPath(new URL('../../app/[locale]/(dashboard)/inventory/documents/page.tsx', import.meta.url)),
+  'utf8',
+);
+
+test('inventory document amounts are shown in UZS, the currency of batch cost', () => {
+  // Inventory documents have no currency column: unit prices become FIFO
+  // batch cost, which is UZS (CLAUDE.md), so the tenant default currency
+  // (possibly USD) must not label them.
+  assert.doesNotMatch(documentsPage, /defaultCurrency/);
+  assert.match(documentsPage, /INVENTORY_COST_CURRENCY = 'UZS'/);
+});
+
