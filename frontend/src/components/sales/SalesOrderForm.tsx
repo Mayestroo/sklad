@@ -1017,7 +1017,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           <OrderDeliveryNoteModal
             isOpen={isDeliveryNoteOpen}
             onClose={() => setIsDeliveryNoteOpen(false)}
-            companyName={company?.name}
+            companyName={company?.name ? getLocalizedName(company.name, locale) : undefined}
             order={currentOrderData}
           />
         </>

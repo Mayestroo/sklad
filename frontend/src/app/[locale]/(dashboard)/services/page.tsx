@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getLocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -930,7 +930,7 @@ export default function ServicesPage() {
       {printAct && (
         <ServiceActPrintView
           act={printAct}
-          companyName={company?.name || 'KORXONA'}
+          companyName={company?.name ? getLocalizedName(company.name, locale) : 'KORXONA'}
           onClose={() => setPrintAct(null)}
           locale={locale}
         />

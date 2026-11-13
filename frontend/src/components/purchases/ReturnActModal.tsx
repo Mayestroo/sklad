@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Printer } from 'lucide-react';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getLocalizedName } from '@/lib/utils';
 import { PurchaseReturn } from '@shared/types';
 
 interface ReturnActModalProps {
@@ -80,7 +80,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h1 style={{ fontSize: '18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                  {company?.name || 'Sklad ERP'}
+                  {company?.name ? getLocalizedName(company.name, locale) : 'Sklad ERP'}
                 </h1>
                 <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '4px' }}>
                   {isRu ? 'Официальный акт возврата материальных ценностей' : 'Moddiy boyliklarni yetkazib beruvchiga qaytarish dalolatnomasi'}
@@ -104,7 +104,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
                 {isRu ? 'Отправитель (Покупатель / Склад)' : 'Yuboruvchi (Xaridor / Ombor)'}
               </div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>
-                {company?.name || 'Kompaniya'}
+                {company?.name ? getLocalizedName(company.name, locale) : 'Kompaniya'}
               </div>
               <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>
                 {isRu ? 'Склад отгрузки' : 'Chiqim ombori'}: <strong>{getProductName(purchaseReturn.warehouse?.name)}</strong>

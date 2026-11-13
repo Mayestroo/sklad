@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useApiData } from '@/lib/useApiData';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -786,7 +786,7 @@ export default function SalesOrdersPage() {
         <OrderDeliveryNoteModal
           isOpen={Boolean(deliveryNoteOrder)}
           onClose={() => setDeliveryNoteOrder(null)}
-          companyName={company?.name}
+          companyName={company?.name ? getLocalizedName(company.name, locale) : undefined}
           order={deliveryNoteOrder}
         />
       )}
