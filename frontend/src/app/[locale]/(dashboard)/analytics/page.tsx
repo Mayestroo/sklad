@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
@@ -37,49 +37,32 @@ export default function AnalyticsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | 'quarter' | 'year'>('month');
-  const [kpi, setKpi] = useState<KpiSummary | null>(null);
-  const [trend, setTrend] = useState<SalesTrendDataPoint[]>([]);
-  const [categories, setCategories] = useState<CategoryBreakdownItem[]>([]);
-  const [topProducts, setTopProducts] = useState<TopProductItem[]>([]);
-  const [topClients, setTopClients] = useState<TopClient[]>([]);
-  const [ratios, setRatios] = useState<FinancialRatios | null>(null);
-  const [loading, setLoading] = useState(true);
+  // One query per report; the range is part of each endpoint (= cache key).
+  const kpiQuery = useApiQuery<KpiSummary>(`/analytics/kpi-summary?range=${timeRange}`);
+  const trendQuery = useApiQuery<SalesTrendDataPoint[]>(`/analytics/sales-trend?range=${timeRange}`);
+  const categoriesQuery = useApiQuery<CategoryBreakdownItem[]>(`/analytics/category-breakdown?range=${timeRange}`);
+  const topProductsQuery = useApiQuery<TopProductItem[]>(`/analytics/top-products?range=${timeRange}&limit=10`);
+  // Optional block: a failure leaves it empty (as before) instead of failing the page.
+  const topClientsQuery = useApiQuery<TopClient[]>(`/analytics/top-clients?range=${timeRange}&limit=5`);
+  const ratiosQuery = useApiQuery<FinancialRatios>('/analytics/financial-ratios');
+  const requiredQueries = [kpiQuery, trendQuery, categoriesQuery, topProductsQuery, ratiosQuery];
 
-  const reportCurrency = (kpi as { currency?: string } | null | undefined)?.currency || defaultCurrency || 'USD';
-
-  const fetchData = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const opts = { token, tenantId: company.id, locale };
-      const [k, t, c, tp, tc, r] = await Promise.all([
-        apiFetch<KpiSummary>(`/analytics/kpi-summary?range=${timeRange}`, opts),
-        apiFetch<SalesTrendDataPoint[]>(`/analytics/sales-trend?range=${timeRange}`, opts),
-        apiFetch<CategoryBreakdownItem[]>(`/analytics/category-breakdown?range=${timeRange}`, opts),
-        apiFetch<TopProductItem[]>(`/analytics/top-products?range=${timeRange}&limit=10`, opts),
-        apiFetch<TopClient[]>(`/analytics/top-clients?range=${timeRange}&limit=5`, opts).catch(() => []),
-        apiFetch<FinancialRatios>(`/analytics/financial-ratios`, opts),
-      ]);
-      setKpi(k);
-      setTrend(t || []);
-      setCategories(c || []);
-      setTopProducts(tp || []);
-      setTopClients(tc || []);
-      setRatios(r);
-    } catch (err) {
-      console.error('Failed to load BI Analytics data:', err);
-    } finally {
-      setLoading(false);
-    }
+  const kpi = kpiQuery.data ?? null;
+  const trend = trendQuery.data ?? [];
+  const categories = categoriesQuery.data ?? [];
+  const topProducts = topProductsQuery.data ?? [];
+  const topClients = topClientsQuery.data ?? [];
+  const ratios = ratiosQuery.data ?? null;
+  const failedQuery = requiredQueries.find((q) => q.isError);
+  const loading = requiredQueries.some((q) => q.isPending);
+  const retryFailed = () => {
+    requiredQueries.filter((q) => q.isError).forEach((q) => void q.refetch());
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [token, company, timeRange, locale]);
+  const reportCurrency = (kpi as { currency?: string } | null | undefined)?.currency || defaultCurrency || 'USD';
 
   const maxTrendRevenue = Math.max(...trend.map((t) => t.revenue), 1);
 
@@ -144,7 +127,13 @@ export default function AnalyticsPage() {
       </div>
 
       {/* KPI Cards Grid */}
-      {loading ? (
+      {failedQuery ? (
+        <LoadError
+          error={failedQuery.error}
+          onRetry={retryFailed}
+          retrying={requiredQueries.some((q) => q.isFetching)}
+        />
+      ) : loading ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {tCommon('loading')}
         </div>

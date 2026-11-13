@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -21,19 +20,9 @@ export default function AccountingPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
 
-  const [osv, setOsv] = useState<TrialBalanceReport | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<TrialBalanceReport>('/accounting/reports/osv', { token, tenantId: company.id, locale })
-      .then(setOsv)
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, [token, company, locale]);
+  const osvQuery = useApiQuery<TrialBalanceReport>('/accounting/reports/osv');
+  const osv = osvQuery.data ?? null;
 
   const getAccountTypeBadge = (type: string) => {
     switch (type) {
@@ -91,7 +80,9 @@ export default function AccountingPage() {
           </div>
         </div>
 
-        {loading ? (
+        {osvQuery.isError ? (
+          <LoadError error={osvQuery.error} onRetry={() => void osvQuery.refetch()} retrying={osvQuery.isFetching} />
+        ) : osvQuery.isPending ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>

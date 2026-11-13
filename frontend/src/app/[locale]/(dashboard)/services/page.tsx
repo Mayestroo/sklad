@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -52,10 +54,6 @@ export default function ServicesPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  // Data
-  const [acts, setActs] = useState<ServiceActDetail[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
 
   // Modal / Drawer states
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -66,41 +64,24 @@ export default function ServicesPage() {
 
   const [printAct, setPrintAct] = useState<ServiceActDetail | null>(null);
 
-  // Fetch Acts
-  const companyId = company?.id;
-  const fetchActs = useCallback(async () => {
-    if (!token && !companyId) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('type', activeType);
-      params.append('page', String(page));
-      params.append('limit', String(pageSize));
-      if (search.trim()) params.append('search', search.trim());
-      if (statusFilter) params.append('status', statusFilter);
-      if (paymentStatusFilter) params.append('paymentStatus', paymentStatusFilter);
-
-      const res = await apiFetch<{ items: ServiceActDetail[]; total: number }>(`/services?${params.toString()}`, {
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
-
-      if (res) {
-        setActs(res.items || []);
-        setTotal(res.total || 0);
-      }
-    } catch {
-      setActs([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeType, search, statusFilter, paymentStatusFilter, page, token, companyId, locale]);
-
-  useEffect(() => {
-    fetchActs();
-  }, [fetchActs]);
+  // Data: the filters and page are the endpoint (= query key).
+  const actsEndpoint = useMemo(() => {
+    const params = new URLSearchParams();
+    params.append('type', activeType);
+    params.append('page', String(page));
+    params.append('limit', String(pageSize));
+    if (search.trim()) params.append('search', search.trim());
+    if (statusFilter) params.append('status', statusFilter);
+    if (paymentStatusFilter) params.append('paymentStatus', paymentStatusFilter);
+    return `/services?${params.toString()}`;
+  }, [activeType, page, search, statusFilter, paymentStatusFilter]);
+  const actsQuery = useApiQuery<{ items: ServiceActDetail[]; total: number }>(actsEndpoint);
+  const acts = useMemo(() => actsQuery.data?.items ?? [], [actsQuery.data]);
+  const total = actsQuery.data?.total ?? 0;
+  const loading = actsQuery.isPending;
+  const fetchActs = async () => {
+    await actsQuery.refetch();
+  };
 
   // Aggregate Metrics for Active Tab
   const { totalAmountSum, totalPaidSum, totalDebtSum, totalPages } = useMemo(() => {
@@ -633,7 +614,13 @@ export default function ServicesPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {actsQuery.isError ? (
+                <tr>
+                  <td colSpan={8}>
+                    <LoadError error={actsQuery.error} onRetry={() => void fetchActs()} retrying={actsQuery.isFetching} />
+                  </td>
+                </tr>
+              ) : loading ? (
                 <tr>
                   <td colSpan={8} style={{ padding: '48px', textAlign: 'center' }}>
                     <div className="inline-block animate-spin rounded-full h-7 w-7 border-2 border-blue-600 border-t-transparent"></div>
