@@ -3,7 +3,7 @@
  * Supporting Uzbek (uz-UZ) and Russian (ru-RU) locales
  */
 
-import { formatMoney } from '../../../shared/format/money.ts';
+import { formatMoney, formatNumber as formatPlainNumber } from '../../../shared/format/money.ts';
 
 export {
   formatAmount,
@@ -63,6 +63,26 @@ export function formatCurrencyIfAvailable(
 
   return currency ? formatCurrency(amount, locale, currency.trim()) : undefined;
 }
+
+/**
+ * F8 / ADR 0022: a stored price whose currency is not set (legacy product
+ * prices left unresolved) is shown as a plain number marked "currency not
+ * chosen", never labelled with a guessed currency.
+ */
+export function formatPriceOrUnset(
+  amount: number | string,
+  locale: string,
+  currency: string | null | undefined,
+): string {
+  const formatted = formatCurrencyIfAvailable(amount, locale, currency);
+  if (formatted) return formatted;
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value === 0) return '—';
+  return `${formatPlainNumber(value)} (${locale === 'ru' ? 'валюта не выбрана' : 'valyuta tanlanmagan'})`;
+}
+
+/** Journal lines and the accounting reports are always in UZS (ADR 0006); a defined currency, not a fallback. */
+export const LEDGER_CURRENCY = 'UZS';
 
 /**
  * Valyuta select opsiyalari — butun loyihada SHU konstantani ishlating.

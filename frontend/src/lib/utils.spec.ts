@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { errorMessage, formatCurrency, formatCurrencyIfAvailable } from './utils.ts';
+import { errorMessage, formatCurrency, formatCurrencyIfAvailable, formatPriceOrUnset } from './utils.ts';
 
 // Non-breaking space (U+00A0) used by the money format.
 const NB = String.fromCharCode(0xa0);
@@ -112,5 +112,20 @@ describe('errorMessage', () => {
     for (const value of [undefined, null, 'text', 42, {}, { message: 7 }]) {
       assert.strictEqual(errorMessage(value), undefined);
     }
+  });
+});
+
+describe('formatPriceOrUnset - a price whose currency is not set (F8)', () => {
+  test('formats with the price currency when it is set', () => {
+    assert.strictEqual(formatPriceOrUnset(5000, 'uz', 'UZS'), `5${NB}000${NB}UZS`);
+  });
+
+  test('says the currency is not chosen instead of guessing one', () => {
+    assert.strictEqual(formatPriceOrUnset(5000, 'uz', null), `5${NB}000 (valyuta tanlanmagan)`);
+    assert.strictEqual(formatPriceOrUnset(5000, 'ru', ''), `5${NB}000 (валюта не выбрана)`);
+  });
+
+  test('shows a dash for a zero price without a currency', () => {
+    assert.strictEqual(formatPriceOrUnset(0, 'uz', undefined), '—');
   });
 });

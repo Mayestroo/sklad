@@ -3,8 +3,7 @@
 import { useTranslations, useLocale } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { formatCurrency, formatDate, LEDGER_CURRENCY } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { FileText } from 'lucide-react';
 import { JournalEntry } from '@shared/types';
@@ -13,7 +12,6 @@ export default function JournalPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const defaultCurrency = useDefaultCurrency();
 
   const journalQuery = useApiQuery<JournalEntry[]>('/accounting/journal');
   const entries = journalQuery.data ?? [];
@@ -86,7 +84,7 @@ export default function JournalPage() {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                       {(entry.lines || []).map((line, idx) => (
-                        <div key={idx}>{formatCurrency(Number(line.amount), locale, (line as { currency?: string } | null | undefined)?.currency || (entry as { currency?: string } | null | undefined)?.currency || defaultCurrency)}</div>
+                        <div key={idx}>{formatCurrency(Number(line.amount), locale, LEDGER_CURRENCY)}</div>
                       ))}
                     </td>
                   </tr>

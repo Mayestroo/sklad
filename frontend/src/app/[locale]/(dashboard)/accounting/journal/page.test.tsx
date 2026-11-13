@@ -6,7 +6,6 @@ const apiFetch = vi.fn();
 vi.mock('@/lib/api', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
 const auth = { token: 'tok', company: { id: 'tenant-1' } };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
-vi.mock('@/hooks/useDefaultCurrency', () => ({ useDefaultCurrency: () => 'UZS' }));
 vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,
