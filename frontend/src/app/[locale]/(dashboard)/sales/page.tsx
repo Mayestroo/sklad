@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { apiFetch, listOf, type ListResponse } from '@/lib/api';
-import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatPercent, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -329,7 +329,7 @@ export default function SalesPage() {
               color="#10b981"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Маржинальность:' : 'Marja:'} {Number(stats?.monthlyGrossProfitMargin || 0).toFixed(1)}%
+              {isRu ? 'Маржинальность:' : 'Marja:'} {formatPercent(Number(stats?.monthlyGrossProfitMargin || 0))}
             </div>
           </div>
         </Card>

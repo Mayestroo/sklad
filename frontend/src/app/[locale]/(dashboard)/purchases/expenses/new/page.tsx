@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate, CURRENCY_OPTIONS, errorMessage, getLocalizedName, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatPercent, formatDate, CURRENCY_OPTIONS, errorMessage, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -1057,7 +1057,7 @@ export default function NewExpensePage() {
                               border: '1px solid var(--color-warning-100)',
                             }}
                           >
-                            +{preview.costIncreasePercent.toFixed(1)}%
+                            +{formatPercent(preview.costIncreasePercent)}
                           </span>
                         ) : (
                           <span style={{ color: 'var(--color-text-tertiary)', fontSize: '11px' }}>0%</span>

@@ -34,6 +34,7 @@ import { requireExchangeRateForCurrency } from '../../common/utils/transaction-e
 import { JournalService } from '../accounting/journal/journal.service';
 import type { JournalLineDto } from '../accounting/dto';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { formatMoney } from '../../../../shared/format/money';
 
 /** A posted sales invoice whose COGS a posted expense changed retroactively. */
 export interface RetroactiveSalesImpact {
@@ -817,7 +818,7 @@ export class AdditionalExpensesService {
 
         if (Number(cashAcc.balance) < totalAmount) {
           throw new BadRequestException(
-            `Kassada mablag' yetarli emas. Mavjud: ${cashAcc.balance.toString()} ${cashAcc.currency}, Xarajat: ${totalAmount} ${expense.currency}`,
+            `Kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(cashAcc.balance), cashAcc.currency)}, Xarajat: ${formatMoney(totalAmount, expense.currency)}`,
           );
         }
 

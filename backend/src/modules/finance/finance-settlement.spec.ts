@@ -1689,4 +1689,31 @@ describe('FinanceService Settlement Unit Test Suite', () => {
       });
     });
   });
+  describe('insufficient-funds message (D8 money format)', () => {
+    it('shows the balance and the request in the shared money format', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        tenantId: 'tenant-1',
+        accountType: 'UZS_CASH',
+        currency: 'UZS',
+        balance: 8000,
+        isActive: true,
+      });
+      const nb = String.fromCharCode(0xa0);
+
+      const error = await service
+        .createExpense('tenant-1', {
+          accountId: 'acc-1',
+          amount: 12000.5,
+          currency: 'UZS',
+          transactionTypeId: 'tt-1',
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(BadRequestException);
+      const message = (error as BadRequestException).message;
+      expect(message).toContain(`Mavjud: 8${nb}000${nb}UZS`);
+      expect(message).toContain(`12${nb}000,50${nb}UZS`);
+    });
+  });
 });

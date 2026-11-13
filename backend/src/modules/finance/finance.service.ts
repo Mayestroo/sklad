@@ -26,6 +26,7 @@ import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
 import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
+import { formatMoney } from '../../../../shared/format/money';
 import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
 import type {
   FinanceAccountFlow,
@@ -944,7 +945,7 @@ export class FinanceService {
     // Invariant: Cash account cannot go negative
     if (Number(account.balance) < Number(dto.amount)) {
       throw new BadRequestException(
-        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${account.balance.toString()} ${account.currency}, so'ralgan: ${dto.amount} ${dto.currency}`,
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(account.balance), account.currency)}, so'ralgan: ${formatMoney(dto.amount, dto.currency)}`,
       );
     }
 
@@ -1755,7 +1756,7 @@ export class FinanceService {
 
     if (Number(fromAccount.balance) < fromAmount) {
       throw new BadRequestException(
-        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${fromAccount.balance.toString()} ${fromAccount.currency}`,
+        `Chiquvchi kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(fromAccount.balance), fromAccount.currency)}`,
       );
     }
 

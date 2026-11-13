@@ -17,7 +17,7 @@ import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatDate, formatCurrency, formatAmount, formatMoney, formatCompactNumber } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -37,10 +37,6 @@ import {
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────
-
-function fmt(amount: number): string {
-  return new Intl.NumberFormat('uz-UZ', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
-}
 
 function getPeriodDates(period: DashboardPeriod): { date_from: string; date_to: string } {
   const now = new Date();
@@ -83,13 +79,6 @@ function getPeriodDates(period: DashboardPeriod): { date_from: string; date_to: 
 }
 
 // ─── Cash Flow Chart (Recharts) ──────────────────────────────────
-
-function fmtShort(val: number): string {
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}B`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
-  return String(val);
-}
 
 function CashFlowChart({
   seriesByCurrency,
@@ -188,7 +177,7 @@ function CashFlowChart({
               tickFormatter={(v: string) => v.slice(5)}
             />
             <YAxis
-              tickFormatter={fmtShort}
+              tickFormatter={formatCompactNumber}
               tick={{ fontSize: 11, fill: 'var(--color-text-tertiary)' }}
               tickLine={false}
               axisLine={false}
@@ -203,7 +192,7 @@ function CashFlowChart({
                 boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
               }}
               formatter={(value: number | string | readonly (number | string)[] | undefined, name?: number | string) => [
-                new Intl.NumberFormat('uz-UZ').format(typeof value === 'number' ? value : Number(value) || 0) + ` ${activeCurrency}`,
+                formatMoney(typeof value === 'number' ? value : Number(value) || 0, activeCurrency),
                 name ? String(name) : '',
               ]}
               labelStyle={{ color: 'var(--color-text-secondary)', marginBottom: 4 }}
@@ -269,7 +258,7 @@ function SalesBarChart({ dynamics, isRu }: { dynamics: { period: string; amount:
             fontSize: 12,
           }}
           formatter={(value: number | string | readonly (number | string)[] | undefined) => [
-            new Intl.NumberFormat('uz-UZ').format(typeof value === 'number' ? value : Number(value) || 0) + ' UZS',
+            formatMoney(typeof value === 'number' ? value : Number(value) || 0, 'UZS'),
             isRu ? 'Продажи' : 'Sotuv',
           ]}
           cursor={{ fill: 'var(--color-bg-hover)' }}
@@ -488,7 +477,7 @@ export default function DashboardPage() {
           value={
             data?.sales.byCurrency?.length
               ? data.sales.byCurrency.map((summary) => formatCurrency(summary.amount, locale, summary.currency)).join(' / ')
-              : `${fmt(data?.sales?.totalSales ?? 0)} UZS (equiv.)`
+              : `${formatMoney(data?.sales?.totalSales ?? 0, 'UZS')} (equiv.)`
           }
           subtitle={`${data?.sales?.invoiceCount ?? 0} ${isRu ? 'документов' : 'ta hujjat'}`}
           icon={ShoppingCart}
@@ -499,8 +488,8 @@ export default function DashboardPage() {
         {/* Expenses */}
         <KpiCard
           title={isRu ? 'Всего расходов' : 'Jami chiqim'}
-          value={`${fmt(uzsSummary?.totalExpense ?? 0)} UZS`}
-          subtitle={usdSummary ? `+ ${fmt(usdSummary.totalExpense)} USD` : undefined}
+          value={formatMoney(uzsSummary?.totalExpense ?? 0, 'UZS')}
+          subtitle={usdSummary ? `+ ${formatMoney(usdSummary.totalExpense, 'USD')}` : undefined}
           icon={TrendingDown}
           iconColor="var(--color-error-600)"
           iconBg="var(--color-error-50)"
@@ -509,8 +498,8 @@ export default function DashboardPage() {
         {/* Profit */}
         <KpiCard
           title={isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)'}
-          value={`${fmt(data?.finance?.profit?.grossProfit ?? 0)} UZS`}
-          subtitle={`${isRu ? 'Продажи' : 'Sotuv'}: ${fmt(data?.finance?.profit?.revenue ?? 0)} UZS`}
+          value={formatMoney(data?.finance?.profit?.grossProfit ?? 0, 'UZS')}
+          subtitle={`${isRu ? 'Продажи' : 'Sotuv'}: ${formatMoney(data?.finance?.profit?.revenue ?? 0, 'UZS')}`}
           icon={BarChart3}
           iconColor="var(--color-warning-600)"
           iconBg="var(--color-warning-50)"
@@ -717,16 +706,16 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', gap: 'var(--space-6)', marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего приход (UZS)' : 'Jami kirim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{fmt(uzsSummary.totalIncome)}</div>
+              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalIncome, 'UZS')}</div>
             </div>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего расход (UZS)' : 'Jami chiqim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{fmt(uzsSummary.totalExpense)}</div>
+              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalExpense, 'UZS')}</div>
             </div>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистый поток (UZS)' : 'Sof oqim (UZS)'}</div>
               <div style={{ fontWeight: 'var(--font-bold)', color: uzsSummary.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>
-                {uzsSummary.netCashFlow >= 0 ? '+' : ''}{fmt(uzsSummary.netCashFlow)}
+                {uzsSummary.netCashFlow >= 0 ? '+' : ''}{formatAmount(uzsSummary.netCashFlow, 'UZS')}
               </div>
             </div>
           </div>
@@ -739,7 +728,7 @@ export default function DashboardPage() {
         <Card title={isRu ? 'Динамика продаж (эквивалент UZS)' : 'Sotuv dinamikasi (UZS ekv.)'}>
           <div style={{ marginTop: 'var(--space-2)' }}>
             <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', fontVariantNumeric: 'tabular-nums', marginBottom: 'var(--space-2)' }}>
-              {fmt(data?.sales?.totalSales ?? 0)} <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-regular)' }}>UZS</span>
+              {formatAmount(data?.sales?.totalSales ?? 0, 'UZS')} <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-regular)' }}>UZS</span>
             </div>
             <SalesBarChart dynamics={data?.sales?.dynamics ?? []} isRu={isRu} />
           </div>
@@ -802,7 +791,7 @@ export default function DashboardPage() {
                     fontVariantNumeric: 'tabular-nums',
                     color: tx.direction === 'INCOME' ? 'var(--color-success-600)' : tx.direction === 'EXPENSE' ? 'var(--color-error-600)' : 'var(--color-info-600)',
                   }}>
-                    {tx.direction === 'INCOME' ? '+' : tx.direction === 'EXPENSE' ? '−' : ''}{fmt(Number(tx.amount))} {tx.currency}
+                    {tx.direction === 'INCOME' ? '+' : tx.direction === 'EXPENSE' ? '−' : ''}{formatMoney(Number(tx.amount), tx.currency)}
                   </div>
                 </div>
               ))}

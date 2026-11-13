@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
+import { formatCurrency, formatPercent, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -383,7 +383,7 @@ export default function ExpenseDetailPage() {
                       {formatCurrency(newCost, locale, expense.currency || 'UZS')}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                      +{percent.toFixed(1)}%
+                      +{formatPercent(percent)}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       <span style={{ color: 'var(--color-success-600)', fontWeight: 'var(--font-medium)' }}>

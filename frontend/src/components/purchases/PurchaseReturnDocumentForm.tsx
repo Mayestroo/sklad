@@ -12,6 +12,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
+import { roundTo } from '@/lib/round';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -245,10 +246,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
             );
             const unitPrice = Number(i.unitPrice);
             const vatRate = Number(i.vatRate || 0);
-            const vatAmount = Number(
-              ((unreturned * unitPrice * vatRate) / 100).toFixed(2),
-            );
-            const totalPrice = Number((unreturned * unitPrice + vatAmount).toFixed(2));
+            const vatAmount = roundTo((unreturned * unitPrice * vatRate) / 100, 2);
+            const totalPrice = roundTo(unreturned * unitPrice + vatAmount, 2);
 
             return {
               productId: i.productId,
@@ -339,8 +338,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
       // Recalculate
       const baseTotal = row.quantity * row.unitPrice;
-      row.vatAmount = Number(((baseTotal * row.vatRate) / 100).toFixed(2));
-      row.totalPrice = Number((baseTotal + row.vatAmount).toFixed(2));
+      row.vatAmount = roundTo((baseTotal * row.vatRate) / 100, 2);
+      row.totalPrice = roundTo(baseTotal + row.vatAmount, 2);
 
       updated[index] = row;
       return updated;
@@ -361,7 +360,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     [items],
   );
   const totalAmount = useMemo(
-    () => Number((subtotal + totalVat).toFixed(2)),
+    () => roundTo(subtotal + totalVat, 2),
     [subtotal, totalVat],
   );
 

@@ -43,6 +43,7 @@ import {
   restoreBatchConsumptions,
 } from '../inventory/fifo/fifo-batches';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import { formatMoney } from '../../../../shared/format/money';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -967,7 +968,7 @@ export class PurchasesService {
 
     if (Number(cashAccount.balance) < dto.amount) {
       throw new BadRequestException(
-        `Kassada mablag' yetarli emas. Mavjud: ${cashAccount.balance.toString()} ${cashAccount.currency}, To'lov: ${dto.amount} ${receipt.currency}`,
+        `Kassada mablag' yetarli emas. Mavjud: ${formatMoney(Number(cashAccount.balance), cashAccount.currency)}, To'lov: ${formatMoney(dto.amount, receipt.currency)}`,
       );
     }
 

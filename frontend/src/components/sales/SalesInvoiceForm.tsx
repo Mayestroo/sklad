@@ -12,7 +12,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { formatCurrency, CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
+import { formatCurrency, formatPercent, CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -1575,7 +1575,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Маржа (%):' : 'Marja (%):'}</span>
               <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: calculations.marginPercent >= 0 ? '#10b981' : '#ef4444' }} className="tabular-nums">
-                {calculations.marginPercent.toFixed(1)}%
+                {formatPercent(calculations.marginPercent)}
               </span>
             </div>
           </div>

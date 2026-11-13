@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, errorMessage } from '@/lib/utils';
+import { formatCurrency, formatPercent, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -427,7 +427,7 @@ export default function ProductsPage() {
                   const cost = Number(p.costPrice || 0);
                   const sale = Number(p.salePrice || 0);
                   const samePriceCurrency = (p.costPriceCurrency || 'UZS') === (p.salePriceCurrency || defaultCurrency);
-                  const marginPct = cost > 0 && samePriceCurrency ? (((sale - cost) / cost) * 100).toFixed(1) : '—';
+                  const marginPct = cost > 0 && samePriceCurrency ? formatPercent(((sale - cost) / cost) * 100) : '—';
                   const isLastRow = idx === filteredProducts.length - 1;
 
                   return (

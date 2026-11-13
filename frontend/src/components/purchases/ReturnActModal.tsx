@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Printer } from 'lucide-react';
-import { formatCurrency, formatDate, getLocalizedName, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatDate, formatQuantity, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { PurchaseReturn } from '@shared/types';
 
 interface ReturnActModalProps {
@@ -185,7 +185,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
                       </span>
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700 }}>
-                      {Number(item.quantity).toLocaleString()}
+                      {formatQuantity(Number(item.quantity))}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'right' }}>
                       {formatCurrency(Number(item.unitPrice), locale, purchaseReturn.currency)}

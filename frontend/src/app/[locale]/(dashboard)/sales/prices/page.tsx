@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatPercent, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -400,11 +400,11 @@ export default function PricesPage() {
                     let discountBadge = null;
                     if (listPrice > 0 && basePrice > 0) {
                       if (listPrice < basePrice) {
-                        const disc = (((basePrice - listPrice) / basePrice) * 100).toFixed(1);
-                        discountBadge = <Badge variant="success">-{disc}% {isRu ? 'скидка' : 'chegirma'}</Badge>;
+                        const disc = formatPercent(((basePrice - listPrice) / basePrice) * 100);
+                        discountBadge = <Badge variant="success">-{disc} {isRu ? 'скидка' : 'chegirma'}</Badge>;
                       } else if (listPrice > basePrice) {
-                        const markup = (((listPrice - basePrice) / basePrice) * 100).toFixed(1);
-                        discountBadge = <Badge variant="warning">+{markup}% {isRu ? 'наценка' : 'ustama'}</Badge>;
+                        const markup = formatPercent(((listPrice - basePrice) / basePrice) * 100);
+                        discountBadge = <Badge variant="warning">+{markup} {isRu ? 'наценка' : 'ustama'}</Badge>;
                       } else {
                         discountBadge = <Badge variant="neutral">0%</Badge>;
                       }

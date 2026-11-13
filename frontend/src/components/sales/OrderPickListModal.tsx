@@ -2,7 +2,7 @@
 
 import { useLocale } from 'next-intl';
 import { Button } from '@/components/ui/Button';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatQuantity } from '@/lib/utils';
 import { Printer, X, PackageCheck } from 'lucide-react';
 
 interface PickListItem {
@@ -150,7 +150,7 @@ export function OrderPickListModal({ isOpen, onClose, order }: OrderPickListModa
                       <td className="border border-gray-300 p-2 font-mono text-gray-600">{sku}</td>
                       <td className="border border-gray-300 p-2 text-center text-gray-600">{uom}</td>
                       <td className="border border-gray-300 p-2 text-right font-bold text-gray-900 text-sm">
-                        {Number(item.quantity).toLocaleString()}
+                        {formatQuantity(Number(item.quantity))}
                       </td>
                       <td className="border border-gray-300 p-2 text-center">
                         <div className="mx-auto h-4 w-4 border border-gray-400 rounded-sm"></div>
@@ -165,7 +165,7 @@ export function OrderPickListModal({ isOpen, onClose, order }: OrderPickListModa
                     {isRu ? 'Итого количество:' : 'Jami tovarlar miqdori:'}
                   </td>
                   <td className="border border-gray-300 p-2 text-right font-black text-sm">
-                    {totalQty.toLocaleString()}
+                    {formatQuantity(totalQty)}
                   </td>
                   <td className="border border-gray-300 p-2"></td>
                 </tr>

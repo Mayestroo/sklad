@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { formatCurrency } from '@/lib/utils';
 import { Plus, Trash2 } from 'lucide-react';
 import { ProductDropdownItem } from '@/hooks/useDocumentDropdowns';
 
@@ -30,13 +31,6 @@ export interface OrderItemsTableProps {
   onRemoveItem: (index: number) => void;
 }
 
-/** Format a number as 1,234,567.000 */
-function formatNum(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
-  }).format(value || 0);
-}
 
 
 export function OrderItemsTable({
@@ -186,7 +180,7 @@ export function OrderItemsTable({
 
                   {/* Line Total */}
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                    {currency ? `${formatNum(lineTotal)} ${currency.toUpperCase()}` : '—'}
+                    {currency ? formatCurrency(lineTotal, locale, currency) : '—'}
                   </td>
 
                   {/* Delete */}

@@ -3,6 +3,17 @@
  * Supporting Uzbek (uz-UZ) and Russian (ru-RU) locales
  */
 
+import { formatMoney } from '../../../shared/format/money.ts';
+
+export {
+  formatAmount,
+  formatCompactNumber,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+  formatQuantity,
+} from '../../../shared/format/money.ts';
+
 /**
  * Summani valyuta kodi bilan birga formatlaydi.
  *
@@ -30,14 +41,9 @@ export function formatCurrency(amount: number | string, _locale: string = 'uz', 
     throw new TypeError(`formatCurrency: currency must be a non-empty string, received ${String(currency)}`);
   }
 
-  // Always format as 111,111.000 — comma thousands separator, dot decimal, 3 fixed decimals
-  const formatted = new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
-  }).format(numericAmount);
-
-  const cur = currency.trim().toUpperCase();
-  return `${formatted} ${cur}`;
+  // One display format for the whole app (D8): `8 000 UZS`, `8 000,50 UZS`,
+  // `1 234,56 USD`. See shared/format/money.ts.
+  return formatMoney(numericAmount, currency);
 }
 
 /**

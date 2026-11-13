@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatQuantity } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -155,7 +155,7 @@ export default function ProductionPage() {
   })), [staff]);
   const recipeOptions = useMemo<SelectOption[]>(() => recipes.map((recipe) => ({
     value: recipe.id,
-    label: `${localName(recipe.product.name, locale)} · ${formatQuantity(asNumber(recipe.outputQuantity), locale)} ${unitLabel(recipe.product.unitOfMeasure, locale)}`,
+    label: `${localName(recipe.product.name, locale)} · ${formatQuantity(asNumber(recipe.outputQuantity))} ${unitLabel(recipe.product.unitOfMeasure, locale)}`,
   })), [recipes, locale]);
 
   const loadData = useCallback(async (showLoading = true) => {
@@ -455,7 +455,7 @@ export default function ProductionPage() {
                       <td style={{ fontWeight: 600 }}>{document.docNumber}</td>
                       <td>{formatDate(document.docDate, locale)}</td>
                       <td>{localName(document.product.name, locale)}</td>
-                      <td>{formatQuantity(asNumber(document.plannedQuantity), locale)} {unitLabel(document.product.unitOfMeasure, locale)}</td>
+                      <td>{formatQuantity(asNumber(document.plannedQuantity))} {unitLabel(document.product.unitOfMeasure, locale)}</td>
                       <td>{localName(document.warehouse.name, locale)}</td>
                       <td>{document.responsible ? `${document.responsible.firstName} ${document.responsible.lastName}` : '—'}</td>
                       <td>{formatCurrency(asNumber(['DRAFT', 'PLANNED'].includes(document.status) ? document.plannedMaterialCost : document.actualMaterialCost), locale, 'UZS')}</td>
@@ -486,9 +486,9 @@ export default function ProductionPage() {
                   {recipes.map((recipe) => (
                     <tr key={recipe.id}>
                       <td style={{ fontWeight: 600 }}>{localName(recipe.product.name, locale)}</td>
-                      <td>{formatQuantity(asNumber(recipe.outputQuantity), locale)} {unitLabel(recipe.product.unitOfMeasure, locale)}</td>
+                      <td>{formatQuantity(asNumber(recipe.outputQuantity))} {unitLabel(recipe.product.unitOfMeasure, locale)}</td>
                       <td>{recipe.items.length}</td>
-                      <td>{recipe.items.map((line) => `${localName(line.product?.name, locale)} — ${formatQuantity(asNumber(line.quantity), locale)} ${line.product ? unitLabel(line.product.unitOfMeasure, locale) : ''}`).join(', ')}</td>
+                      <td>{recipe.items.map((line) => `${localName(line.product?.name, locale)} — ${formatQuantity(asNumber(line.quantity))} ${line.product ? unitLabel(line.product.unitOfMeasure, locale) : ''}`).join(', ')}</td>
                       <td>{recipe.note || '—'}</td>
                     </tr>
                   ))}
@@ -549,9 +549,9 @@ export default function ProductionPage() {
                 {preview.materials.map((material) => (
                   <div key={material.productId} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 'var(--text-sm)' }}>
                     <span>{localName(material.product.name, locale)}</span>
-                    <span>{formatQuantity(material.plannedQuantity, locale)} {unitLabel(material.product.unitOfMeasure, locale)}</span>
-                    <span>{isRu ? 'Доступно' : 'Mavjud'}: {formatQuantity(material.freeQuantity, locale)}</span>
-                    {material.shortage > 0 && <Badge variant="error">{isRu ? 'Не хватает' : 'Yetishmaydi'}: {formatQuantity(material.shortage, locale)}</Badge>}
+                    <span>{formatQuantity(material.plannedQuantity)} {unitLabel(material.product.unitOfMeasure, locale)}</span>
+                    <span>{isRu ? 'Доступно' : 'Mavjud'}: {formatQuantity(material.freeQuantity)}</span>
+                    {material.shortage > 0 && <Badge variant="error">{isRu ? 'Не хватает' : 'Yetishmaydi'}: {formatQuantity(material.shortage)}</Badge>}
                   </div>
                 ))}
               </div>
@@ -573,7 +573,7 @@ export default function ProductionPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
               <Detail label={isRu ? 'Дата' : 'Sana'} value={formatDate(selectedDocument.docDate, locale)} />
-              <Detail label={isRu ? 'План' : 'Reja'} value={`${formatQuantity(asNumber(selectedDocument.plannedQuantity), locale)} ${unitLabel(selectedDocument.product.unitOfMeasure, locale)}`} />
+              <Detail label={isRu ? 'План' : 'Reja'} value={`${formatQuantity(asNumber(selectedDocument.plannedQuantity))} ${unitLabel(selectedDocument.product.unitOfMeasure, locale)}`} />
               <Detail label={isRu ? 'Склад' : 'Ombor'} value={localName(selectedDocument.warehouse.name, locale)} />
               <Detail label={isRu ? 'Статус' : 'Holat'} value={<StatusBadge status={selectedDocument.status} isRu={isRu} />} />
               <Detail label={isRu ? 'Ответственный' : 'Mas’ul xodim'} value={selectedDocument.responsible ? `${selectedDocument.responsible.firstName} ${selectedDocument.responsible.lastName}` : '—'} />
@@ -595,15 +595,15 @@ export default function ProductionPage() {
                   {selectedDocument.materials.map((line) => (
                     <tr key={line.id}>
                       <td>{localName(line.product.name, locale)}</td>
-                      <td>{formatQuantity(asNumber(line.plannedQuantity), locale)} {unitLabel(line.product.unitOfMeasure, locale)}</td>
+                      <td>{formatQuantity(asNumber(line.plannedQuantity))} {unitLabel(line.product.unitOfMeasure, locale)}</td>
                       <td>
                         {selectedDocument.status === 'IN_PROGRESS' ? (
                           <Input aria-label={`${localName(line.product.name, locale)} actual`} type="number" min="0" step="0.001" value={actualInputs[line.productId] ?? ''} onChange={(event) => setActualInputs((current) => ({ ...current, [line.productId]: event.target.value }))} style={{ width: 135 }} />
-                        ) : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity), locale)} ${unitLabel(line.product.unitOfMeasure, locale)}`}
+                        ) : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`}
                       </td>
                       <td>{selectedDocument.status === 'IN_PROGRESS' && actualInputs[line.productId] !== undefined && actualInputs[line.productId] !== ''
-                        ? `${formatQuantity(Number(actualInputs[line.productId]) - asNumber(line.plannedQuantity), locale)} ${unitLabel(line.product.unitOfMeasure, locale)}`
-                        : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity) - asNumber(line.plannedQuantity), locale)} ${unitLabel(line.product.unitOfMeasure, locale)}`}</td>
+                        ? `${formatQuantity(Number(actualInputs[line.productId]) - asNumber(line.plannedQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`
+                        : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity) - asNumber(line.plannedQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`}</td>
                       <td>{formatCurrency(asNumber(line.unitCost), locale, 'UZS')}</td>
                       <td>{formatCurrency(asNumber(line.totalCost), locale, 'UZS')}</td>
                     </tr>
@@ -616,7 +616,7 @@ export default function ProductionPage() {
             )}
             {selectedDocument.status === 'COMPLETED' && (
               <div style={{ ...alertStyle('success'), display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                <span>{isRu ? 'Принято на склад' : 'Omborga kirim qilindi'}: <b>{formatQuantity(asNumber(selectedDocument.producedQuantity), locale)} {unitLabel(selectedDocument.product.unitOfMeasure, locale)}</b></span>
+                <span>{isRu ? 'Принято на склад' : 'Omborga kirim qilindi'}: <b>{formatQuantity(asNumber(selectedDocument.producedQuantity))} {unitLabel(selectedDocument.product.unitOfMeasure, locale)}</b></span>
                 <span>{isRu ? 'Себестоимость единицы' : 'Birlik tannarxi'}: <b>{formatCurrency(asNumber(selectedDocument.unitCost), locale, 'UZS')}</b></span>
               </div>
             )}
@@ -645,10 +645,6 @@ function localName(value: unknown, locale: 'uz' | 'ru'): string {
   if (!value || typeof value !== 'object') return '';
   const localized = value as Record<string, unknown>;
   return String(localized[locale] ?? localized.uz ?? localized.ru ?? '');
-}
-
-function formatQuantity(value: number, locale: 'uz' | 'ru'): string {
-  return new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : 'uz-UZ', { maximumFractionDigits: 3 }).format(value);
 }
 
 function actionNotice(action: 'plan' | 'start' | 'ready' | 'complete' | 'cancel', isRu: boolean): string {
