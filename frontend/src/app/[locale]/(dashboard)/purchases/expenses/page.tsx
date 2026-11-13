@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -54,8 +56,6 @@ export default function ExpensesPage() {
   const defaultCurrency = useDefaultCurrency();
 
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
-  const [data, setData] = useState<ExpensesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -63,30 +63,20 @@ export default function ExpensesPage() {
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [page, setPage] = useState(1);
 
-  const fetchExpenses = () => {
-    if (!token || !company) return;
-    setLoading(true);
-
+  // The filters and page are the endpoint (= query key).
+  const expensesEndpoint = useMemo(() => {
     const queryParams = new URLSearchParams();
     if (search) queryParams.set('search', search);
     if (statusFilter !== 'ALL') queryParams.set('status', statusFilter);
     if (typeFilter !== 'ALL') queryParams.set('expenseType', typeFilter);
     queryParams.set('page', page.toString());
     queryParams.set('limit', '20');
-
-    apiFetch<ExpensesResponse>(`/purchases/additional-expenses?${queryParams.toString()}`, {
-      token: token || undefined,
-      tenantId: company?.id || undefined,
-      locale,
-    })
-      .then((res) => setData(res))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchExpenses();
-  }, [token, company, locale, search, statusFilter, typeFilter, page]);
+    return `/purchases/additional-expenses?${queryParams.toString()}`;
+  }, [search, statusFilter, typeFilter, page]);
+  const expensesQuery = useApiQuery<ExpensesResponse>(expensesEndpoint);
+  const data = expensesQuery.data ?? null;
+  const loading = expensesQuery.isPending;
+  const fetchExpenses = () => void expensesQuery.refetch();
 
   const handleDeleteDraft = async (item: AdditionalExpense, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -359,7 +349,13 @@ export default function ExpensesPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {expensesQuery.isError ? (
+                  <tr>
+                    <td colSpan={9}>
+                      <LoadError error={expensesQuery.error} onRetry={fetchExpenses} retrying={expensesQuery.isFetching} />
+                    </td>
+                  </tr>
+                ) : loading ? (
                   <tr>
                     <td colSpan={9} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
                       {isRu ? 'Загрузка данных...' : 'Ma’lumotlar yuklanmoqda...'}

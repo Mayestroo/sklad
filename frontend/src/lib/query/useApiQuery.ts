@@ -24,7 +24,17 @@ export interface UseApiQueryOptions {
   enabled?: boolean;
   /** ms the data is considered fresh; default from createQueryClient (15 s). */
   staleTime?: number;
+  /**
+   * ms an unused result stays cached. Pages that hand the data to an edit
+   * form use `staleTime: Infinity, gcTime: 0`: a fresh load on every visit
+   * and no background refetch that could replace what the user is typing
+   * (see FORM_SNAPSHOT).
+   */
+  gcTime?: number;
 }
+
+/** Options for a document loaded once per visit into an edit form. */
+export const FORM_SNAPSHOT: UseApiQueryOptions = { staleTime: Infinity, gcTime: 0 };
 
 /**
  * Loads `endpoint` (a GET path such as `/accounting/accounts?type=ASSET`)
@@ -53,6 +63,7 @@ export function useApiQuery<T>(
       }),
     enabled: ready,
     ...(options.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
+    ...(options.gcTime !== undefined ? { gcTime: options.gcTime } : {}),
   });
 }
 

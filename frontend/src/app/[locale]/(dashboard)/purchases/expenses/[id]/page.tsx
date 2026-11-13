@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatPercent, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -39,31 +41,13 @@ export default function ExpenseDetailPage() {
   const { token, company } = useAuth();
   const confirm = useConfirm();
 
-  const [expense, setExpense] = useState<ExpenseDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const expenseQuery = useApiQuery<ExpenseDetail>(id ? `/purchases/additional-expenses/${id}` : null);
+  const expense = expenseQuery.data ?? null;
+  const loading = expenseQuery.isPending;
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [, setErrorMsg] = useState<string | null>(null);
 
-  const fetchExpense = () => {
-    if (!token || !company || !id) return;
-    setLoading(true);
-    apiFetch<ExpenseDetail>(`/purchases/additional-expenses/${id}`, {
-      token: token || undefined,
-      tenantId: company?.id || undefined,
-      locale,
-    })
-      .then((res) => setExpense(res))
-      .catch((err) => {
-        console.error(err);
-        setErrorMsg(err.message || (isRu ? 'Ошибка загрузки' : 'Yuklashda xatolik'));
-      })
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchExpense();
-  }, [token, company, id, locale]);
+  const fetchExpense = () => void expenseQuery.refetch();
 
   const handlePost = async () => {
     const confirmed = await confirm({
@@ -199,6 +183,14 @@ export default function ExpenseDetailPage() {
         return null;
     }
   };
+
+  if (expenseQuery.isError) {
+    return (
+      <Card>
+        <LoadError error={expenseQuery.error} onRetry={fetchExpense} retrying={expenseQuery.isFetching} />
+      </Card>
+    );
+  }
 
   if (loading) {
     return (
