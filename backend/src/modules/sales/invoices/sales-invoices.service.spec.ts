@@ -1152,6 +1152,58 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(data.totalAmount).toBe(100.8);
     });
 
+    it('prorates partial returns cumulatively so they add up to the source line exactly (plan T3.7)', async () => {
+      // 3 sold for 612.16 incl. 65.50 VAT. Three single returns of 204.05
+      // would give back 612.15; the second one carries the cent: 204.06.
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesDocStatus.POSTED,
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 3,
+            unitPrice: 182.22,
+            discount: 0,
+            vatRate: 12,
+            vatAmount: 65.5,
+            totalPrice: 612.16,
+            unitCogs: 40,
+          },
+        ],
+        returns: [
+          {
+            status: SalesReturnDocStatus.POSTED,
+            items: [{ productId: 'prod-1', quantity: 1 }],
+          },
+        ],
+      });
+      prisma.salesReturn.count.mockResolvedValue(0);
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-draft',
+        ...data,
+      }));
+
+      await service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesReturnDocStatus.DRAFT,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 0 }],
+      });
+
+      const { data } = prisma.salesReturn.create.mock.calls[0][0];
+      expect(data.items.create[0]).toMatchObject({
+        vatAmount: 21.84,
+        totalPrice: 204.06,
+      });
+      expect(data.totalAmount).toBe(204.06);
+    });
+
     it('should route defective items to defect warehouse on confirm', async () => {
       prisma.salesReturn.update.mockImplementation(({ where, data }: any) => ({
         id: where.id,

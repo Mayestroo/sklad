@@ -712,6 +712,88 @@ describe('SalesOrdersService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('bills the last shipment of a line as the rest of that line, so shipments add up exactly (plan T3.7)', async () => {
+      // 3 x 10.05, 10% discount, 12% VAT: whole line 27.13 net + 3.26 VAT.
+      // 1 already shipped (9.04 + 1.08); the last 2 must be 18.09 + 2.18.
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'order-1',
+        tenantId: 'tenant-1',
+        orderNumber: 'Z-2026-0002',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        exchangeRate: 1,
+        status: SalesOrderStatus.READY_TO_SHIP,
+        paymentCondition: PaymentCondition.CREDIT,
+        paidAmount: 0,
+        totalAmount: 30.39,
+        additionalChargeAmount: 0,
+        additionalChargeVatRate: 12,
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 3,
+            unitPrice: 10.05,
+            discount: 10,
+            vatRate: 12,
+            shippedQty: 1,
+            product: { name: { uz: 'Mahsulot 1' }, costPrice: 5 },
+          },
+        ],
+      });
+      prisma.salesOrderItem.findMany.mockResolvedValue([
+        { id: 'item-1', quantity: 3, shippedQty: 3 },
+      ]);
+      prisma.salesInvoice.count.mockResolvedValue(0);
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `acc-${where.code}`,
+        code: where.code,
+      }));
+      prisma.salesInvoice.create.mockImplementation(({ data }: any) => ({
+        id: 'inv-2',
+        tenantId: 'tenant-1',
+        invoiceDate: new Date('2026-09-25T00:00:00.000Z'),
+        ...data,
+        items: data.items.create.map((item: any, i: number) => ({
+          id: `inv-item-${i}`,
+          ...item,
+          product: { name: { uz: 'Mahsulot 1' } },
+        })),
+      }));
+      prisma.stockLevel.findUnique.mockResolvedValue({
+        id: 'stock-1',
+        quantity: 10,
+      });
+      prisma.productBatch.findMany.mockResolvedValue([
+        {
+          id: 'batch-1',
+          createdAt: new Date('2026-01-01T00:00:01Z'),
+          remainingQty: 5,
+          landedCost: 5,
+          purchasePrice: 5,
+        },
+      ]);
+
+      await service.dispatch('tenant-1', 'user-1', 'order-1', {
+        warehouseId: 'wh-1',
+        items: [{ orderItemId: 'item-1', quantity: 2 }],
+      });
+
+      const { data } = prisma.salesInvoice.create.mock.calls[0][0];
+      expect(data.items.create[0]).toMatchObject({
+        quantity: 2,
+        vatAmount: 2.18,
+        totalPrice: 20.27,
+      });
+      expect(data).toMatchObject({
+        subtotalAmount: 20.1,
+        discountAmount: 2.01,
+        vatAmount: 2.18,
+        totalAmount: 20.27,
+      });
+    });
+
     it('should successfully dispatch, deduct stock via FIFO, create POSTED invoice, and transition order to SHIPPED', async () => {
       prisma.salesOrder.findFirst.mockResolvedValue({
         id: 'order-1',

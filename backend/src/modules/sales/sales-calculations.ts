@@ -67,6 +67,19 @@ export function calculateSalesDocumentTotals(
   additionalChargeAmount: number,
   additionalChargeVatRate: number,
 ): SalesDocumentTotals {
+  return sumSalesDocumentTotals(
+    items.map(calculateSalesLineAmounts),
+    additionalChargeAmount,
+    additionalChargeVatRate,
+  );
+}
+
+/** Header totals from line amounts already calculated (header = sum of lines). */
+export function sumSalesDocumentTotals(
+  lines: SalesLineAmounts[],
+  additionalChargeAmount: number,
+  additionalChargeVatRate: number,
+): SalesDocumentTotals {
   if (!Number.isFinite(additionalChargeAmount) || additionalChargeAmount < 0) {
     throw new Error('Additional charge must be non-negative');
   }
@@ -78,7 +91,6 @@ export function calculateSalesDocumentTotals(
     throw new Error('Additional charge VAT rate must be between 0 and 100');
   }
 
-  const lines = items.map(calculateSalesLineAmounts);
   const subtotalAmount = roundMoney(
     lines.reduce((sum, line) => sum + line.subtotal, 0),
   );
@@ -104,6 +116,97 @@ export function calculateSalesDocumentTotals(
     vatAmount,
     totalAmount: roundMoney(netRevenueAmount + vatAmount),
     netRevenueAmount,
+  };
+}
+
+const ZERO_LINE: SalesLineAmounts = {
+  subtotal: 0,
+  discountAmount: 0,
+  netAmount: 0,
+  vatAmount: 0,
+  totalAmount: 0,
+};
+
+/**
+ * The amounts of shipping `quantity` more of an order line after
+ * `alreadyQuantity` has been shipped: the line amounts at the new cumulative
+ * quantity minus those at the old one. Shipments of one line therefore add
+ * up to the whole line exactly, however it is split (plan T3.7); rounding
+ * each shipment on its own could leave a cent over or short.
+ */
+export function calculateIncrementalLineAmounts(
+  line: Omit<SalesLineInput, 'quantity'>,
+  alreadyQuantity: number,
+  quantity: number,
+): SalesLineAmounts {
+  if (!Number.isFinite(alreadyQuantity) || alreadyQuantity < 0) {
+    throw new Error('Already shipped quantity must be non-negative');
+  }
+  const before =
+    alreadyQuantity > 0
+      ? calculateSalesLineAmounts({ ...line, quantity: alreadyQuantity })
+      : ZERO_LINE;
+  const after = calculateSalesLineAmounts({
+    ...line,
+    quantity: alreadyQuantity + quantity,
+  });
+  return {
+    subtotal: roundMoney(after.subtotal - before.subtotal),
+    discountAmount: roundMoney(after.discountAmount - before.discountAmount),
+    netAmount: roundMoney(after.netAmount - before.netAmount),
+    vatAmount: roundMoney(after.vatAmount - before.vatAmount),
+    totalAmount: roundMoney(after.totalAmount - before.totalAmount),
+  };
+}
+
+export interface SourceLineAmounts {
+  quantity: number;
+  /** VAT-inclusive line total. */
+  totalAmount: number;
+  vatAmount: number;
+}
+
+/**
+ * The share of a source (invoice) line for returning `quantity` more after
+ * `alreadyQuantity` was returned: cumulative proration differenced, so
+ * returns of one line give back exactly the line's total and VAT once the
+ * whole quantity is back (plan T3.7).
+ */
+export function prorateSourceLine(
+  source: SourceLineAmounts,
+  alreadyQuantity: number,
+  quantity: number,
+): { netAmount: number; vatAmount: number; totalAmount: number } {
+  const sold = source.quantity;
+  if (!Number.isFinite(sold) || sold <= 0) {
+    throw new Error('Source line quantity must be greater than zero');
+  }
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error('Return quantity must be greater than zero');
+  }
+  if (
+    !Number.isFinite(alreadyQuantity) ||
+    alreadyQuantity < 0 ||
+    alreadyQuantity + quantity > sold + 0.0005
+  ) {
+    throw new Error('Return quantity exceeds the source line quantity');
+  }
+  const share = (amount: number, qty: number) =>
+    qty >= sold - 0.0005
+      ? roundMoney(amount)
+      : roundMoney((amount * qty) / sold);
+  const after = alreadyQuantity + quantity;
+  const totalAmount = roundMoney(
+    share(source.totalAmount, after) -
+      share(source.totalAmount, alreadyQuantity),
+  );
+  const vatAmount = roundMoney(
+    share(source.vatAmount, after) - share(source.vatAmount, alreadyQuantity),
+  );
+  return {
+    netAmount: roundMoney(totalAmount - vatAmount),
+    vatAmount,
+    totalAmount,
   };
 }
 

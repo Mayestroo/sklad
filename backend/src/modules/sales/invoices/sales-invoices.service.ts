@@ -27,6 +27,7 @@ import {
   calculateSalesDocumentTotals,
   calculateSalesLineAmounts,
   grossProfitInUzs,
+  prorateSourceLine,
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
 import {
@@ -1013,6 +1014,7 @@ export class SalesInvoicesService {
           Number(item.quantity),
       );
     }
+    const returnedInThisRequest = new Map<string, number>();
     for (const i of dto.items) {
       const qty = Number(i.quantity);
       if (i.quantity == null || isNaN(qty) || qty <= 0) {
@@ -1046,11 +1048,26 @@ export class SalesInvoicesService {
       const unitCogs = originalSaleUnitCost(
         originalInvoice.items.filter((oi) => oi.productId === i.productId),
       );
-      const unitTotalPrice = Number(origItem.totalPrice) / soldQty;
-      const unitVatAmount = Number(origItem.vatAmount || 0) / soldQty;
-      const unitPrice = unitTotalPrice - unitVatAmount;
-      const lineVatAmount = roundMoney(unitVatAmount * qty);
-      const lineTotal = roundMoney(unitPrice * qty + lineVatAmount);
+      // Cumulative proration (plan T3.7): returns of a line give back exactly
+      // its total and VAT once the whole quantity is back.
+      const alreadyReturned =
+        previouslyReturned + (returnedInThisRequest.get(i.productId) ?? 0);
+      returnedInThisRequest.set(
+        i.productId,
+        (returnedInThisRequest.get(i.productId) ?? 0) + qty,
+      );
+      const share = prorateSourceLine(
+        {
+          quantity: soldQty,
+          totalAmount: Number(origItem.totalPrice),
+          vatAmount: Number(origItem.vatAmount || 0),
+        },
+        alreadyReturned,
+        qty,
+      );
+      const unitPrice = share.netAmount / qty;
+      const lineVatAmount = share.vatAmount;
+      const lineTotal = share.totalAmount;
       totalAmount += lineTotal;
 
       const lineCogs = roundMoney(qty * unitCogs);

@@ -34,8 +34,10 @@ import {
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import {
+  calculateIncrementalLineAmounts,
   calculateSalesDocumentTotals,
   calculateSalesLineAmounts,
+  sumSalesDocumentTotals,
   grossProfitInUzs,
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
@@ -1685,13 +1687,25 @@ export class SalesOrdersService {
       const additionalChargeVatRate = Number(
         order.additionalChargeVatRate ?? 12,
       );
-      const totals = calculateSalesDocumentTotals(
-        lineInputs,
+      // Each shipment bills the order line's amounts at the new shipped
+      // quantity minus those at the old one, so the shipments of a line add
+      // up to the order line exactly (plan T3.7).
+      const shippedSoFar = new Map<string, number>();
+      const lineAmounts = dispatchPlan.map((dp, index) => {
+        const already =
+          shippedSoFar.get(dp.orderItem.id) ??
+          Number(dp.orderItem.shippedQty || 0);
+        shippedSoFar.set(dp.orderItem.id, already + dp.dispatchQty);
+        const { quantity, ...line } = lineInputs[index];
+        return calculateIncrementalLineAmounts(line, already, quantity);
+      });
+      const totals = sumSalesDocumentTotals(
+        lineAmounts,
         invoiceAdditionalCharge,
         additionalChargeVatRate,
       );
       const invoiceItems = dispatchPlan.map((dp, index) => {
-        const amounts = calculateSalesLineAmounts(lineInputs[index]);
+        const amounts = lineAmounts[index];
         return {
           productId: dp.orderItem.productId,
           quantity: dp.dispatchQty,
