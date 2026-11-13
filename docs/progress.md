@@ -155,7 +155,7 @@ account; react-hooks migration; visual verification; final verification.
 - [x] P4.4 pluggable throttler storage (D5, REDIS_URL) — 354592d
 - [x] P4.5 registration enumeration (D3) — SKIPPED by the rule in the prompt (breaks registration UX), kept as owner decision D3
 - [x] P4.6 B13 reading (62c3c7c) + B6 opening-balance labelling (3ee02fc)
-- [ ] P4.7 D2 purchase-return gap account setting
+- [x] P4.7 D2 purchase-return gap account setting
 - [ ] P5 react-hooks: shared data-loading + page migration
 - [ ] P6 visual verification on local Docker DB
 - [ ] P7 final verification, review, git hygiene
@@ -207,6 +207,15 @@ account; react-hooks migration; visual verification; final verification.
 - P4.6 B6: no depreciation computed; notice on the tab, depreciation above
   cost rejected (server) / flagged (page) instead of clamped to 0.
 
+- P4.7: setting lives in Company.settings.accounting (existing JSON
+  section, no migration); typed DTO (4-digit code) and the code must exist
+  in the tenant chart when saved and when posting. No default account.
+  Behaviour change: such returns are refused until the setting exists
+  (checklist). No settings UI.
+- Slip (again): `git add docs` committed the owner's untracked plan note;
+  amended out of the unpushed commit, file kept on disk. Staging explicit
+  paths only from now on.
+
 ## Round 2 log
 - P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
   lint` clean, `--fix` changed nothing; frontend `npx tsc --noEmit` exit 0;
@@ -232,3 +241,7 @@ account; react-hooks migration; visual verification; final verification.
   fail on the old code); frontend tsc clean; eslint on changed files only
   pre-existing react-hooks; frontend build OK; backend unit 51 suites /
   477 tests; backend typecheck clean.
+- P4.7: purchase-returns spec 3 new cases and tenants spec 3 new cases
+  (5 failed before the change); backend unit 51 suites / 483 tests;
+  integration 12 suites / 35 tests (+3 Redis skipped without
+  REDIS_URL_TEST); typecheck, eslint, nest build clean.

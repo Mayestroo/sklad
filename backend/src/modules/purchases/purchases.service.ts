@@ -45,6 +45,10 @@ import {
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { formatMoney } from '../../../../shared/format/money';
 import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+import {
+  accountingSettings,
+  PURCHASE_RETURN_GAIN_ACCOUNT_SETTING,
+} from '../../common/settings/accounting-settings';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -1819,8 +1823,15 @@ export class PurchasesService {
       const varianceLoss = round2(
         Math.max(0, totalLandedCost - baseWithoutVat),
       );
-      // Landed cost below the base price leaves that gap unbooked, as before;
-      // there is no ledger account for it yet.
+      // Landed cost below the base price (D2): the payable still falls by the
+      // base price, and the gap goes to the account the accountant configured
+      // in company settings. Not configured -> the return is refused rather
+      // than leaving 6010 out of line with the supplier settlement.
+      const gainGap = round2(Math.max(0, baseWithoutVat - totalLandedCost));
+      const gainAcc =
+        gainGap > 0
+          ? await this.purchaseReturnGainAccount(tx, tenantId, gainGap)
+          : null;
       const fromSupplier = round2(totalLandedCost - varianceLoss);
       const productFromSupplier =
         totalLandedCost > 0
@@ -1863,6 +1874,15 @@ export class PurchasesService {
         }
       }
 
+      if (gainAcc) {
+        journalLines.push({
+          debitAccountId: supplierAcc.id,
+          creditAccountId: gainAcc.id,
+          amount: gainGap,
+          description: `Qaytarishda tannarx asosiy narxdan past: farq (№ ${pReturn.returnNumber})`,
+        });
+      }
+
       if (vatInUzs > 0 && vatAcc) {
         journalLines.push({
           debitAccountId: supplierAcc.id,
@@ -1897,6 +1917,41 @@ export class PurchasesService {
         );
       }
     }
+  }
+
+  /**
+   * D2: the account that takes the gap when returned goods leave at a
+   * landed cost below their base price. Chosen by the accountant in
+   * company settings (accounting.purchaseReturnGainAccountCode); there is
+   * no default, so a missing setting refuses the return with a clear error.
+   */
+  private async purchaseReturnGainAccount(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    gap: number,
+  ) {
+    const company = await tx.company.findFirst({
+      where: { id: tenantId },
+      select: { settings: true },
+    });
+    const code = accountingSettings(
+      company?.settings,
+    ).purchaseReturnGainAccountCode;
+    if (!code) {
+      throw new BadRequestException(
+        `Qaytarilayotgan tovar tannarxi asosiy narxdan ${formatMoney(gap, 'UZS')} past. Bu farq uchun hisob sozlanmagan: ` +
+          `kompaniya sozlamalarida accounting.${PURCHASE_RETURN_GAIN_ACCOUNT_SETTING} ni belgilang (buxgalter tanlaydi). / ` +
+          `Себестоимость возвращаемого товара ниже базовой цены на ${formatMoney(gap, 'UZS')}. Счёт для этой разницы не настроен: ` +
+          `укажите accounting.${PURCHASE_RETURN_GAIN_ACCOUNT_SETTING} в настройках компании (выбирает бухгалтер).`,
+      );
+    }
+    const account = await tx.account.findFirst({ where: { tenantId, code } });
+    if (!account) {
+      throw new BadRequestException(
+        `Sozlamadagi ${code} hisobi hisoblar rejasida topilmadi. / Счёт ${code} из настроек не найден в плане счетов.`,
+      );
+    }
+    return account;
   }
 
   async approveReturn(tenantId: string, userId: string, returnId: string) {

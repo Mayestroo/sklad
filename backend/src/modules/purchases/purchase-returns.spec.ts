@@ -107,6 +107,10 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       auditLog: {
         create: jest.fn(),
       },
+      // Company settings: no purchase-return gain account configured (D2).
+      company: {
+        findFirst: jest.fn().mockResolvedValue({ settings: {} }),
+      },
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
 
@@ -948,6 +952,106 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       expect(credited(lines, 'acc-2910')).toBe(260000);
       expect(debited(lines, 'acc-6010')).toBe(252000);
       expect(debited(lines, 'acc-9430')).toBe(8000);
+    });
+
+    describe('D2: landed cost below the base price', () => {
+      // Bought at 10 USD (rate 12,500 = 125,000 UZS) but the batch was costed
+      // at 120,000 UZS per unit: returning 5 units takes 600,000 out of 2910
+      // while the payable falls by 625,000 (+ VAT). The 25,000 gap used to be
+      // left unbooked, so 6010 disagreed with the supplier settlement.
+      const lowCostReceipt = () => ({
+        id: 'rec-low',
+        tenantId,
+        counterpartyId,
+        warehouseId,
+        currency: 'USD',
+        exchangeRate: 12500,
+        status: PurchaseDocStatus.POSTED,
+        returns: [],
+        items: [
+          {
+            id: 'rec-low-item',
+            productId: 'prod-usd',
+            quantity: 10,
+            returnedQuantity: 0,
+            unitPrice: 10,
+            landedCost: 120000,
+            vatRate: 12,
+            product: { id: 'prod-usd', type: ProductType.PRODUCT },
+          },
+        ],
+        batches: [
+          {
+            id: 'batch-low',
+            productId: 'prod-usd',
+            warehouseId,
+            createdAt: new Date('2026-01-01T00:00:07Z'),
+            remainingQty: 10,
+            initialQty: 10,
+            purchasePrice: 120000,
+            landedCost: 120000,
+          },
+        ],
+      });
+      const returnDto = {
+        receiptId: 'rec-low',
+        counterpartyId,
+        warehouseId,
+        currency: 'USD',
+        items: [
+          { productId: 'prod-usd', quantity: 5, unitPrice: 10, vatRate: 12 },
+        ],
+      };
+
+      beforeEach(() => {
+        const receipt = lowCostReceipt();
+        prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+        prisma.productBatch.findMany.mockResolvedValue(receipt.batches);
+        prisma.purchaseReceiptItem.findMany.mockResolvedValue([
+          { id: 'rec-low-item', quantity: 10, returnedQuantity: 5 },
+        ]);
+        prisma.purchaseReturn.create.mockImplementation(
+          ({ data }: { data: any }) => ({ id: 'ret-low', ...data }),
+        );
+      });
+
+      it('fails with a clear error when no gain account is configured', async () => {
+        prisma.company.findFirst.mockResolvedValue({ settings: {} });
+        await expect(
+          service.createReturn(tenantId, userId, returnDto),
+        ).rejects.toThrow(/purchaseReturnGainAccountCode/);
+        expect(prisma.journalEntry.create).not.toHaveBeenCalled();
+      });
+
+      it('books the gap to the configured account so 6010 matches the settlement', async () => {
+        prisma.company.findFirst.mockResolvedValue({
+          settings: { accounting: { purchaseReturnGainAccountCode: '9390' } },
+        });
+        await service.createReturn(tenantId, userId, returnDto);
+
+        const lines = journalLines();
+        expect(credited(lines, 'acc-2910')).toBe(600000);
+        expect(credited(lines, 'acc-4410')).toBe(75000);
+        // payable falls by the full base price + VAT at the receipt rate
+        expect(debited(lines, 'acc-6010')).toBe(700000);
+        expect(credited(lines, 'acc-9390')).toBe(25000);
+        expect(debited(lines, 'acc-9430')).toBe(0);
+      });
+
+      it('fails when the configured account is not in the chart of accounts', async () => {
+        prisma.company.findFirst.mockResolvedValue({
+          settings: { accounting: { purchaseReturnGainAccountCode: '9999' } },
+        });
+        prisma.account.findFirst.mockImplementation(
+          ({ where }: { where: any }) =>
+            where.code === '9999'
+              ? null
+              : { id: `acc-${where.code}`, code: where.code },
+        );
+        await expect(
+          service.createReturn(tenantId, userId, returnDto),
+        ).rejects.toThrow(/9999/);
+      });
     });
   });
 });

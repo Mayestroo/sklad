@@ -94,18 +94,15 @@ branch**, never with `db push`. All are additive and idempotent.
 
 ## Accounting decisions
 
-- [ ] **Purchase returns: where the gap goes when landed cost is below the
-      base price.** A return takes goods out of 2910/1010 at batch landed cost
-      (UZS) and should reduce the supplier payable (6010) by the base price at
-      the document rate (ADR 0009). When landed cost is *above* the base price
-      the excess goes to 9430/9420. When it is *below* (e.g. a USD receipt whose
-      batches were costed at a lower rate, or rounding), 6010 is only debited
-      with the landed cost and the difference stays unbooked
-      (`PurchasesService` return journal, "Landed cost below the base price
-      leaves that gap unbooked"). The ledger 6010 then disagrees with the
-      counterparty settlement by that amount. The accountant must choose the
-      account that takes the gain (other operating income, an FX gain account,
-      or a 2910 cost correction) before this is coded.
+- [ ] **Purchase returns: configure the gap account** (D2, code path done in
+      round 2). When returned goods leave at a landed cost below their base
+      price, 6010 is reduced by the base price and the gap is credited to
+      `Company.settings.accounting.purchaseReturnGainAccountCode`
+      (`PATCH /api/tenants/settings`, must exist in the chart of accounts).
+      Until the accountant sets it, such returns are **refused** with a clear
+      error (no default account is invented). Candidate accounts: other
+      operating income (e.g. 9390), FX gain (9540), or a 2910 cost correction.
+      No settings UI yet (API only).
 
 ## Decisions needed from owner
 
@@ -115,7 +112,7 @@ The owner should confirm the default or choose the alternative.
 | # | Decision | Default in place now | Alternative(s) | Why the default |
 |---|---|---|---|---|
 | D1 | **ZRU-547 hosting**: may tenant personal data stay on Neon (Singapore)? | Nothing changed; hosting stays on Neon `ap-southeast-1`. The false "stored in Uzbekistan" claim was removed from the tenant UI. | Move the whole database to a host in Uzbekistan (e.g. a local cloud/DC Postgres), or split personal data into a local store. | Changing hosting is a legal/commercial decision and was explicitly out of scope. Needs a lawyer's answer before real tenants onboard. |
-| D2 | **Purchase-return gap account** (landed cost below base price) | Gap stays unbooked; 6010 is debited only with the landed cost (current behaviour, documented in the code). | Book the gain to other operating income (9390), to an FX gain account (9540), or as a correction of 2910 cost. | An accounting policy choice; coding a guess would create entries the accountant may have to reverse. |
+| D2 | **Purchase-return gap account** (landed cost below base price) | **Round 2**: the gap is posted Dt 6010 / Kt the account in `settings.accounting.purchaseReturnGainAccountCode`; not configured -> the return is refused with a clear error. | Choose the account: other operating income (9390), FX gain (9540), or a 2910 cost correction. | The account is an accounting policy choice; the code no longer leaves 6010 silently out of line. |
 | D3 | **Registration email enumeration** | Unchanged: 409 for a taken email (and slug); 5 registrations/hour/IP. Round 2 checked: a uniform answer needs email confirmation (the answer carries login tokens today), which breaks the sign-up UX, so it was not changed. | (a) Email-confirmation sign-up ("check your inbox", tenant created on the link); (b) 201 for both, email the existing owner. Both need an email provider. | **Recommendation: (a)** once an email provider exists; it also verifies the address. |
 | D4 | **Accounting period closing** | **Done in round 2** (ADR 0024): monthly periods, `accounting:close` (admin, accountant) / `accounting:reopen` (admin only), audit log. API only, no UI yet. | Yearly periods; let the accountant reopen too; a closing UI. | Owner asked for a minimal safe version. |
 | D5 | **Rate-limit storage** | **Done in round 2**: Redis when `REDIS_URL` is set, in memory otherwise (production warning). | — | Owner asked for it in round 2. |

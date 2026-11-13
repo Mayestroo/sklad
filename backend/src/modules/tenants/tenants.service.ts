@@ -292,6 +292,18 @@ export class TenantsService {
     dto: UpdateCompanySettingsDto,
     userId?: string,
   ) {
+    // D2: the configured account must exist in this tenant's chart.
+    const gainCode = dto.accounting?.purchaseReturnGainAccountCode;
+    if (gainCode) {
+      const account = await this.prisma.account.findFirst({
+        where: { tenantId, code: gainCode },
+      });
+      if (!account) {
+        throw new BadRequestException(
+          `${gainCode} hisobi hisoblar rejasida topilmadi. / Счёт ${gainCode} не найден в плане счетов.`,
+        );
+      }
+    }
     const current = await this.getSettings(tenantId);
     const mergedSettings = {
       ...current,
