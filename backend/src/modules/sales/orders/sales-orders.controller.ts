@@ -89,16 +89,25 @@ export class SalesOrdersController {
     const result = await this.service.findAll(tenantId, { counterpartyId });
     const orderList = result.data || [];
     const totalOrders = result.total ?? orderList.length;
-    const totalAmount = orderList.reduce(
-      (sum: number, o: { totalAmount?: unknown }) =>
-        sum + Number(o.totalAmount || 0),
-      0,
-    );
+    // One total per currency: amounts in different currencies are never
+    // added together (ADR 0023).
+    const byCurrency = new Map<string, number>();
+    for (const order of orderList as Array<{
+      currency: string;
+      totalAmount?: unknown;
+    }>) {
+      byCurrency.set(
+        order.currency,
+        (byCurrency.get(order.currency) ?? 0) + Number(order.totalAmount || 0),
+      );
+    }
     return {
       orders: orderList,
       summary: {
         totalOrders,
-        totalAmount,
+        totalsByCurrency: [...byCurrency.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([currency, totalAmount]) => ({ currency, totalAmount })),
       },
     };
   }
@@ -215,17 +224,6 @@ export class SalesOrdersController {
     @Body() dto: DispatchSalesOrderDto,
   ) {
     return this.service.dispatch(tenantId, userId, id, dto);
-  }
-
-  // ─── COUNTERPARTY PROFILE ──────────────────────────────────────
-
-  @Get('by-counterparty/:counterpartyId')
-  @RequirePermissions('sales:view')
-  getCounterpartyOrders(
-    @CurrentTenant() tenantId: string,
-    @Param('counterpartyId') counterpartyId: string,
-  ) {
-    return this.service.getCounterpartyOrders(tenantId, counterpartyId);
   }
 
   // ─── PRODUCTION ORDER ACTIONS ──────────────────────────────────

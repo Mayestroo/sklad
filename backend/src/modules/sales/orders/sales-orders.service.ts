@@ -2041,36 +2041,4 @@ export class SalesOrdersService {
   }
 
   // ─── COUNTERPARTY PROFILE ──────────────────────────────────────
-
-  async getCounterpartyOrders(tenantId: string, counterpartyId: string) {
-    const orders = await this.prisma.salesOrder.findMany({
-      where: { tenantId, counterpartyId },
-      include: this.buildOrderInclude(),
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const totalOrdersCount = orders.length;
-    const completedOrdersCount = orders.filter(
-      (o) => o.status === SalesOrderStatus.COMPLETED,
-    ).length;
-    const totalOrderValue = orders.reduce(
-      (sum, o) => sum + Number(o.totalAmount),
-      0,
-    );
-    const totalPaidValue = orders.reduce(
-      (sum, o) => sum + Number(o.paidAmount),
-      0,
-    );
-
-    return {
-      orders: orders.map((o) => this.enrichOrder(o)),
-      stats: {
-        totalOrdersCount,
-        completedOrdersCount,
-        totalOrderValue,
-        totalPaidValue,
-        outstandingOrderValue: Math.max(0, totalOrderValue - totalPaidValue),
-      },
-    };
-  }
 }

@@ -39,7 +39,7 @@ import {
 
 /** GET /sales/orders/by-counterparty/:id */
 interface CustomerOrdersData {
-  summary: { totalOrders: number; totalAmount: number; currency?: string };
+  summary: { totalOrders: number; totalsByCurrency: Array<{ currency: string; totalAmount: number }> };
   orders: Array<{
     id: string;
     orderNumber: string;
@@ -1377,7 +1377,7 @@ export default function CounterpartiesPage() {
                 </h4>
                 {customerOrdersData?.summary && (
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{formatCurrency(customerOrdersData.summary.totalAmount, locale, customerOrdersData.summary.currency || (detailItem as { currency?: string } | null | undefined)?.currency || defaultCurrency)}</strong>
+                    {isRu ? 'Всего заказов:' : 'Jami buyurtmalar:'} <strong>{customerOrdersData.summary.totalOrders}</strong> | {isRu ? 'Сумма:' : 'Jami summa:'} <strong>{customerOrdersData.summary.totalsByCurrency.length > 0 ? customerOrdersData.summary.totalsByCurrency.map((t) => formatCurrency(t.totalAmount, locale, t.currency)).join(' · ') : '—'}</strong>
                   </span>
                 )}
               </div>
