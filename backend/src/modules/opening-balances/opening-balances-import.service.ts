@@ -40,6 +40,37 @@ function cellValue(row: ExcelJS.Row, column: number): PlainCellValue {
   return plainCellValue(row.getCell(column).value);
 }
 
+/**
+ * Column positions on the fixed-assets sheet, read from its header row. The
+ * import has no asset type or useful life (an opening-balance line carries
+ * cost and accumulated depreciation only), so those columns are not in the
+ * template any more; older templates that still have them are read by header.
+ */
+function fixedAssetColumns(sheet: ExcelJS.Worksheet) {
+  const headers = new Map<string, number>();
+  sheet.getRow(1).eachCell((cell, column) => {
+    headers.set(
+      String(plainCellValue(cell.value) ?? '')
+        .trim()
+        .toLowerCase(),
+      column,
+    );
+  });
+  const find = (prefix: string, fallback: number) => {
+    for (const [header, column] of headers) {
+      if (header.startsWith(prefix)) return column;
+    }
+    return fallback;
+  };
+  return {
+    name: find('asosiy vosita nomi', 1),
+    invNumber: find('inventar raqami', 2),
+    initialCost: find('boshlang', 3),
+    depreciation: find('jamg', 4),
+    notes: find('izoh', 5),
+  };
+}
+
 /** A `{ uz, ru }` JSON name column as read back from the database. */
 type TranslatableName = { uz?: string; ru?: string };
 
@@ -218,20 +249,16 @@ export class OpeningBalancesImportService {
     sheetAsosiy.columns = [
       { header: 'Asosiy vosita nomi', key: 'name', width: 30 },
       { header: 'Inventar raqami', key: 'invNumber', width: 20 },
-      { header: 'Aktiv turi', key: 'type', width: 20 },
       { header: 'Boshlang‘ich qiymati', key: 'initialCost', width: 24 },
       { header: 'Jamg‘arilgan amortizatsiya', key: 'depreciation', width: 26 },
-      { header: 'Foydali xizmat muddati (oy)', key: 'usefulLife', width: 26 },
       { header: 'Izoh', key: 'notes', width: 30 },
     ];
     sheetAsosiy.getRow(1).eachCell((cell) => Object.assign(cell, headerStyle));
     sheetAsosiy.addRow({
       name: 'Frezerlash stanogi',
       invNumber: 'ST-0012',
-      type: 'EQUIPMENT',
       initialCost: 300000000,
       depreciation: 50000000,
-      usefulLife: 60,
       notes: 'Ishlab chiqarish sexi stanogi',
     });
 
@@ -748,13 +775,18 @@ export class OpeningBalancesImportService {
     const sheetAsosiy =
       workbook.getWorksheet('6_Asosiy_vositalar') || workbook.worksheets[5];
     if (sheetAsosiy) {
+      // Columns are found by header, so templates downloaded before the
+      // asset-type and useful-life columns were removed still import.
+      const assetColumns = fixedAssetColumns(sheetAsosiy);
       sheetAsosiy.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
-        const name = String(cellValue(row, 1) || '').trim();
-        const invNumber = String(cellValue(row, 2) || '').trim();
-        const rawCost = cellValue(row, 4);
-        const rawDep = cellValue(row, 5) || 0;
-        const notes = String(cellValue(row, 7) || '').trim();
+        const name = String(cellValue(row, assetColumns.name) || '').trim();
+        const invNumber = String(
+          cellValue(row, assetColumns.invNumber) || '',
+        ).trim();
+        const rawCost = cellValue(row, assetColumns.initialCost);
+        const rawDep = cellValue(row, assetColumns.depreciation) || 0;
+        const notes = String(cellValue(row, assetColumns.notes) || '').trim();
 
         if (!name && !rawCost) return;
         totalRows++;

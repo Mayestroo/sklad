@@ -234,4 +234,99 @@ describe('OpeningBalancesImportService', () => {
       where: { tenantId: 'tenant-1' },
     });
   });
+
+  describe('fixed assets sheet', () => {
+    const emptyPrisma = () =>
+      ({
+        cashAccount: { findMany: jest.fn().mockResolvedValue([]) },
+        product: { findMany: jest.fn().mockResolvedValue([]) },
+        warehouse: { findMany: jest.fn().mockResolvedValue([]) },
+        counterparty: { findMany: jest.fn().mockResolvedValue([]) },
+      }) as unknown as PrismaService;
+
+    it('the template offers only the columns the import honours (no asset type or useful life)', async () => {
+      const service = new OpeningBalancesImportService(emptyPrisma());
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(
+        (await service.generateTemplate()) as unknown as ExcelJS.Buffer,
+      );
+      const headers = (
+        workbook.getWorksheet('6_Asosiy_vositalar')!.getRow(1)
+          .values as unknown[]
+      ).filter(Boolean);
+      expect(headers).toEqual([
+        'Asosiy vosita nomi',
+        'Inventar raqami',
+        'Boshlang‘ich qiymati',
+        'Jamg‘arilgan amortizatsiya',
+        'Izoh',
+      ]);
+    });
+
+    const parseAssets = async (header: string[], row: unknown[]) => {
+      const service = new OpeningBalancesImportService(emptyPrisma());
+      const workbook = new ExcelJS.Workbook();
+      // Earlier sheets present but empty, as in a real template.
+      for (const name of [
+        '1_Pul',
+        '2_Tovar',
+        '3_Mijozlar',
+        '4_Yetkazib_beruvchilar',
+        '5_Avanslar',
+      ]) {
+        workbook.addWorksheet(name).addRow(['header']);
+      }
+      const sheet = workbook.addWorksheet('6_Asosiy_vositalar');
+      sheet.addRow(header);
+      sheet.addRow(row);
+      return service.validateAndParse(
+        'tenant-1',
+        Buffer.from(await workbook.xlsx.writeBuffer()),
+        'opening.xlsx',
+      );
+    };
+
+    it('reads the current template by header', async () => {
+      const result = await parseAssets(
+        [
+          'Asosiy vosita nomi',
+          'Inventar raqami',
+          'Boshlang‘ich qiymati',
+          'Jamg‘arilgan amortizatsiya',
+          'Izoh',
+        ],
+        ['Stanok', 'ST-1', 3000, 500, 'sex'],
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.previewLines).toEqual([
+        expect.objectContaining({
+          category: 'FIXED_ASSET',
+          amount: 3000,
+          accumulatedDepreciation: 500,
+          netAmount: 2500,
+          contractNumber: 'ST-1',
+          notes: 'Stanok (Inv: ST-1) sex',
+        }),
+      ]);
+    });
+
+    it('still reads a template downloaded before the columns were removed', async () => {
+      const result = await parseAssets(
+        [
+          'Asosiy vosita nomi',
+          'Inventar raqami',
+          'Aktiv turi',
+          'Boshlang‘ich qiymati',
+          'Jamg‘arilgan amortizatsiya',
+          'Foydali xizmat muddati (oy)',
+          'Izoh',
+        ],
+        ['Stanok', 'ST-1', 'EQUIPMENT', 3000, 500, 60, 'sex'],
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.previewLines).toEqual([
+        expect.objectContaining({ amount: 3000, accumulatedDepreciation: 500 }),
+      ]);
+    });
+  });
 });
