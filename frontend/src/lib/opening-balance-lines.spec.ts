@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { withProductCost, withRegisterAsset } from './opening-balance-lines.ts';
+import { linesMissingCurrency, newOpeningBalanceLine, withProductCost, withRegisterAsset } from './opening-balance-lines.ts';
 
 test('an empty inventory line takes the product card cost in the card currency', () => {
   const line = withProductCost({ quantity: 2, unitCost: null, currency: 'UZS', exchangeRate: 1 }, { costPrice: 550, costPriceCurrency: 'USD' });
@@ -49,4 +49,34 @@ test('D6: clearing the asset clears the link and the copied values', () => {
   assert.equal(line.amount, 0);
   assert.equal(line.accumulatedDepreciation, 0);
   assert.equal(line.netAmount, 0);
+});
+
+test('a new opening-balance line never guesses a currency (F8, ADR 0022)', async (t) => {
+  for (const category of ['CASH', 'INVENTORY', 'CUSTOMER_DEBT', 'SUPPLIER_DEBT', 'CUSTOMER_ADVANCE'] as const) {
+    await t.test(`${category} starts blank with no rate`, () => {
+      const line = newOpeningBalanceLine(category);
+      assert.equal(line.currency, '');
+      assert.equal(line.exchangeRate, '');
+      assert.equal(line.amount, 0);
+    });
+  }
+
+  await t.test('equity and fixed assets are kept in the UZS base currency (no currency choice on those tables)', () => {
+    assert.equal(newOpeningBalanceLine('EQUITY').currency, 'UZS');
+    assert.equal(newOpeningBalanceLine('FIXED_ASSET').currency, 'UZS');
+    assert.equal(newOpeningBalanceLine('EQUITY').exchangeRate, 1);
+  });
+
+  await t.test('linesMissingCurrency lists the 1-based rows that still need a currency', () => {
+    assert.deepEqual(
+      linesMissingCurrency([
+        { category: 'CASH', currency: 'UZS' },
+        { category: 'CUSTOMER_DEBT', currency: '' },
+        { category: 'INVENTORY' },
+        { category: 'EQUITY', currency: 'UZS' },
+      ]),
+      [2, 3],
+    );
+    assert.deepEqual(linesMissingCurrency([{ category: 'SUPPLIER_DEBT', currency: 'USD' }]), []);
+  });
 });

@@ -38,6 +38,7 @@ test('B2: inventory opening lines carry their own cost currency and rate', () =>
   const inventoryTable = openingBalances.slice(openingBalances.indexOf('function InventoryTable('), openingBalances.indexOf('function CounterpartyTable('));
   assert.match(inventoryTable, /onUpdate\(index, 'currency', value\)/);
   assert.match(inventoryTable, /onUpdate\(index, 'exchangeRate', event\.target\.value\)/);
-  assert.match(inventoryTable, /formatCurrency\(Number\(line\.amount \|\| 0\), locale, line\.currency \|\| 'UZS'\)/);
-  assert.doesNotMatch(inventoryTable, /currency \|\| 'USD'/);
+  // F8: a line without a currency shows a dash, never a UZS label.
+  assert.match(inventoryTable, /formatCurrencyIfAvailable\(Number\(line\.amount \|\| 0\), locale, line\.currency\) \?\? '—'/);
+  assert.doesNotMatch(inventoryTable, /currency \|\| '(USD|UZS)'/);
 });

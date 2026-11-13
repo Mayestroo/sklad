@@ -80,3 +80,28 @@ export function withRegisterAsset<T extends FixedAssetLineDraft>(
     contractNumber: asset.inventoryNumber,
   };
 }
+
+/**
+ * F8 / ADR 0022: lines on the tables that offer a currency choice (cash,
+ * inventory, debts, advances) start blank and must be given a currency.
+ * Equity and fixed-asset lines have no currency choice: they are kept in the
+ * UZS base currency (fixed assets copy the register, which is UZS).
+ */
+const UZS_BASE_CATEGORIES = new Set(['EQUITY', 'FIXED_ASSET']);
+
+export interface NewOpeningBalanceLine {
+  category: string;
+  amount: number;
+  currency: string;
+  exchangeRate: number | '';
+}
+
+export function newOpeningBalanceLine(category: string): NewOpeningBalanceLine {
+  const base = UZS_BASE_CATEGORIES.has(category);
+  return { category, amount: 0, currency: base ? 'UZS' : '', exchangeRate: base ? 1 : '' };
+}
+
+/** 1-based row numbers of lines that still have no currency. */
+export function linesMissingCurrency(lines: ReadonlyArray<{ category?: string | null; currency?: string | null }>): number[] {
+  return lines.flatMap((line, index) => (line.currency && line.currency.trim() ? [] : [index + 1]));
+}
