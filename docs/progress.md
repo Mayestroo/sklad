@@ -152,7 +152,7 @@ account; react-hooks migration; visual verification; final verification.
 - [x] P1 backend lint, frontend tsc, frontend lint, frontend build (at 0acf6e2)
 - [x] P2 shared money/quantity formatter (D8) + scan test — 15b05be
 - [x] P3 accounting periods (D4) + A1 sales-return cancel — d8a9128
-- [ ] P4.4 pluggable throttler storage (D5, REDIS_URL)
+- [x] P4.4 pluggable throttler storage (D5, REDIS_URL) — 354592d
 - [ ] P4.5 registration enumeration (D3)
 - [ ] P4.6 B13 reading + B6 opening-balance labelling
 - [ ] P4.7 D2 purchase-return gap account setting
@@ -187,6 +187,12 @@ account; react-hooks migration; visual verification; final verification.
 - Tooling: typed backslash escapes are collapsed on the way into commands
   and files (a double backslash arrives as one); scripts use chr(92) / String.fromCharCode.
 
+- P4.4: Redis failure -> count in memory (neither fail-open, which drops
+  limits, nor fail-closed, which takes the API down with Redis). Fixed
+  window in Redis vs sliding per-hit in memory (documented in the code).
+  Added ioredis 5.8.2 exact. Local Redis container started with
+  docker-compose (dev infra only); backend/.env REDIS_URL is localhost.
+
 ## Round 2 log
 - P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
   lint` clean, `--fix` changed nothing; frontend `npx tsc --noEmit` exit 0;
@@ -204,3 +210,7 @@ account; react-hooks migration; visual verification; final verification.
   2 tests pass; typecheck clean; eslint on changed files clean; nest build
   OK. Guards: 17 lifecycle checks + journal-writer scan fail on the old
   services (git stash); A1 test fails on the old sales service.
+- P4.4 354592d: unit 51 suites / 476 tests; rate-limit specs 18; Redis
+  int-spec 3/3 on local Redis (REDIS_URL_TEST=redis://127.0.0.1:6379/15);
+  e2e 2/2 with REDIS_URL set, counters seen in Redis db 15 (then
+  flushed); typecheck, eslint, nest build clean.
