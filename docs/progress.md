@@ -153,8 +153,8 @@ account; react-hooks migration; visual verification; final verification.
 - [x] P2 shared money/quantity formatter (D8) + scan test — 15b05be
 - [x] P3 accounting periods (D4) + A1 sales-return cancel — d8a9128
 - [x] P4.4 pluggable throttler storage (D5, REDIS_URL) — 354592d
-- [ ] P4.5 registration enumeration (D3)
-- [ ] P4.6 B13 reading + B6 opening-balance labelling
+- [x] P4.5 registration enumeration (D3) — SKIPPED by the rule in the prompt (breaks registration UX), kept as owner decision D3
+- [x] P4.6 B13 reading (62c3c7c) + B6 opening-balance labelling (3ee02fc)
 - [ ] P4.7 D2 purchase-return gap account setting
 - [ ] P5 react-hooks: shared data-loading + page migration
 - [ ] P6 visual verification on local Docker DB
@@ -193,6 +193,20 @@ account; react-hooks migration; visual verification; final verification.
   Added ioredis 5.8.2 exact. Local Redis container started with
   docker-compose (dev infra only); backend/.env REDIS_URL is localhost.
 
+- P4.5: POST /auth/register answers with login tokens and the page signs
+  the user straight in (AuthContext.register). An identical answer for a
+  taken and a free email is only possible if the answer carries no
+  tokens, i.e. with email confirmation, which the project has no mail
+  provider for. That breaks the registration UX, so per the prompt it is
+  skipped; timing equalisation alone is pointless while the bodies differ.
+  Company slug is enumerable the same way (409 on a taken slug).
+- P4.6 B13: reading = selling-side expenses recorded from Sales; Sales menu
+  "Sotuv xarajatlari" opens Finance -> new expense (period expense).
+  Drawer opened by a lazy useState initializer from ?new= (no effect).
+  The ?new= stays in the URL after closing the drawer (harmless).
+- P4.6 B6: no depreciation computed; notice on the tab, depreciation above
+  cost rejected (server) / flagged (page) instead of clamped to 0.
+
 ## Round 2 log
 - P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
   lint` clean, `--fix` changed nothing; frontend `npx tsc --noEmit` exit 0;
@@ -214,3 +228,7 @@ account; react-hooks migration; visual verification; final verification.
   int-spec 3/3 on local Redis (REDIS_URL_TEST=redis://127.0.0.1:6379/15);
   e2e 2/2 with REDIS_URL set, counters seen in Redis db 15 (then
   flushed); typecheck, eslint, nest build clean.
+- P4.6 62c3c7c + 3ee02fc: frontend tests 120/120 (B13 spec 3 and B6 spec 3
+  fail on the old code); frontend tsc clean; eslint on changed files only
+  pre-existing react-hooks; frontend build OK; backend unit 51 suites /
+  477 tests; backend typecheck clean.
