@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -335,7 +335,7 @@ export default function InventoryPage() {
                         {formatCurrency(Number(product.salePrice), locale, product.salePriceCurrency || defaultCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {product.totalStock || 0} {unitLabel(product.unitOfMeasure, locale)}
+                        {formatQuantity(Number(product.totalStock ?? 0))} {unitLabel(product.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         {isLow ? (

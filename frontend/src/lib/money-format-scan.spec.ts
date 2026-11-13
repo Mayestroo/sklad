@@ -58,3 +58,9 @@ test('the scan sees the files it is meant to scan', () => {
   assert.ok(files.length > 50, `expected many component files, found ${files.length}`);
   assert.ok(files.some((file) => file.endsWith('CurrencyInput.tsx')));
 });
+
+test('inventory stock quantities use formatQuantity (seen as "1250.5 dona" in the visual check)', () => {
+  const page = readFileSync(join(SRC, 'app/[locale]/(dashboard)/inventory/page.tsx'), 'utf8');
+  assert.ok(page.includes('formatQuantity(Number(product.totalStock ?? 0))'));
+  assert.ok(!page.includes('{product.totalStock || 0}'));
+});

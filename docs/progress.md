@@ -59,6 +59,12 @@ so the work survives context compaction. Re-read this file, then
 
 ## Findings to fix later (found while typing the frontend)
 
+- F6 (round 2, seen in P6) CurrencyInput shows `1.000` / `0.000` in form
+  inputs (old 3-decimal dot grammar, the one D8 exception), which reads as
+  one thousand exactly like the old display. Changing it changes how users
+  type numbers (decimal key, grouping while typing); needs a deliberate
+  input-grammar decision and a manual check of every form. Listed for the
+  owner.
 - F5 (round 2) Several automatic postings date their journal entry "now"
   instead of the document date: JournalService.autoPostPayment /
   autoPostInboundDoc / autoPost*Transfer / autoPostServiceAct, the
@@ -157,7 +163,7 @@ account; react-hooks migration; visual verification; final verification.
 - [x] P4.6 B13 reading (62c3c7c) + B6 opening-balance labelling (3ee02fc)
 - [x] P4.7 D2 purchase-return gap account setting
 - [~] P5 react-hooks: shared data-loading + page migration — PARTLY DONE (88bad69, acccfaa): 123 -> 110, 6 pages migrated, rest listed below
-- [ ] P6 visual verification on local Docker DB
+- [x] P6 visual verification on local Docker DB (headless Edge, docs/screenshots/README.md)
 - [ ] P7 final verification, review, git hygiene
 
 ## Round 2 decisions
@@ -291,3 +297,8 @@ NOT migrated in this run, by reason:
   clean, eslint 110 problems (all react-hooks, listed above), build OK.
   Added deps (pinned): @tanstack/react-query 5.104.5; dev: vitest 4.1.12,
   jsdom 30.1.3, @testing-library/react 16.3.3, @testing-library/dom 10.4.2.
+- P6: local sklad_demo DB (Docker), backend dist + frontend prod build,
+  headless Edge via CDP (extension declined). 11 screenshots, findings in
+  docs/screenshots/README.md. Fixed one miss found there: inventory stock
+  printed raw `1250.5 dona` -> formatQuantity (`1 250,5 dona`), pinned in
+  money-format-scan.spec.ts, re-shot after rebuild. Servers stopped.
