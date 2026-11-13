@@ -422,4 +422,6 @@ commit that adds this section.
 | 74 | `src/modules/tenants/tenants.service.ts:188` | TenantsService.updateWarehouse | body | branchId | no | Fixed |
 | 75 | `src/modules/users/users.service.ts:23` | UsersService.createUser / updateUser | body | roleSlug (role looked up by slug) | yes: role looked up with the tenant (first sweep) | Checked |
 
+Note: an opening-balance line's `accountId` is a kassa (`CashAccount`); it is checked as such (fix d7d5496).
+
 **Totals:** 75 entry points; 35 fixed (were unchecked or partly checked), 40 already checked, read-only, or internal.

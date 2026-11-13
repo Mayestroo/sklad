@@ -21,8 +21,8 @@ so the work survives context compaction. Re-read this file, then
 - [x] A2 Pre-release checklist entries + "Decisions needed from owner"
 - [x] A3 Second tenant sweep (ids from body/params/query, nested line ids),
       `assertTenantOwned` helper + guard test, `docs/tenant-isolation-sweep.md` — 5eb0313
-- [ ] A4a `/sales/purchases` page (lists purchase orders nothing creates)
-- [ ] A4b Excel opening-balance template: asset-type / useful-life columns
+- [x] A4a `/sales/purchases` page — removed page + GET /api/sales/purchases (e19cfdd)
+- [x] A4b Excel opening-balance template: asset-type / useful-life columns removed, sheet read by header (a27fa8c)
 - [ ] A5 Frontend lint, by rule category
 - [ ] A6 Integration + e2e tests on local Docker Postgres
 
@@ -42,6 +42,13 @@ so the work survives context compaction. Re-read this file, then
   the real helper is covered by its own spec and tenant-isolation.spec.ts.
 - A3: the guard scan sees DTO-typed and inline-object parameters only; the
   few ids passed as bare positional strings are listed by hand in the sweep doc.
+- A4a: removing the orphan page is smaller than repointing it; /purchases is
+  already the purchase-documents page. PurchaseOrder table kept (dropping it
+  would delete data). No dedicated test: dead-code removal, verified by
+  backend typecheck/build and frontend build having no remaining reference.
+- A4b: removing the columns is smaller than honouring them (honouring needs
+  new line columns + FixedAsset creation at posting). Old 7-column templates
+  still import (header-based read, tested).
 - A1: there is no accounting-period / books-closed concept anywhere
   (`grep -i period|closed|lock` over schema, services and ADRs). Building one
   is a product feature, not a fix, so A1 is skipped and listed as owner
@@ -64,3 +71,7 @@ so the work survives context compaction. Re-read this file, then
   433 tests pass; typecheck, eslint, nest build clean. The 6 new pattern
   tests and the guard were run against the old service code (git stash) and
   fail there.
+- d7d5496: A3 follow-up bug: opening-balance line accountId is a CashAccount;
+  the A3 check used the ledger Account model. Fixed with a pinning test.
+- A4a e19cfdd, A4b a27fa8c. (A staging slip had put the A4a deletions into
+  the d7d5496 commit; the three local commits were redone so each builds.)
