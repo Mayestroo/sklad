@@ -8,6 +8,7 @@ import {
   ThrottlerModule,
   ThrottlerStorage,
 } from '@nestjs/throttler';
+import { createThrottlerStorage } from './throttler-storage';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -66,7 +67,14 @@ export class WebhookAuthFailureLimiter {
 /** Registers the throttler globally (every route, before auth guards). */
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{ name: 'default', ...DEFAULT_RATE_LIMIT }]),
+    // Storage chosen once at startup: Redis with REDIS_URL, else in memory
+    // (warned in production). See throttler-storage.ts.
+    ThrottlerModule.forRootAsync({
+      useFactory: () => ({
+        throttlers: [{ name: 'default', ...DEFAULT_RATE_LIMIT }],
+        storage: createThrottlerStorage(process.env),
+      }),
+    }),
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

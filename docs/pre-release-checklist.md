@@ -61,13 +61,15 @@ tenants use the system. Tick each one off in the PR that resolves it.
       share one login limit and get 429 together. `true` is refused at startup
       (clients could spoof `X-Forwarded-For` and bypass the limits). Listed,
       empty, in `.env.example`.
-- [ ] **Rate-limit counters are in memory, per process.** `ThrottlerModule`
-      uses its default in-memory storage. With more than one API instance (or
-      after every restart) each process counts separately, so an attacker
-      gets N × the limit and counters reset on deploy. Acceptable for a single
-      instance. Before scaling out, move the throttler storage to Redis (Redis
-      is already in `docker-compose.yml`, `REDIS_URL` is in `.env`), e.g. with
-      a `ThrottlerStorage` backed by Redis `INCR` + `PEXPIRE`.
+- [ ] **Set `REDIS_URL` in production** (D5, done in round 2). With it the
+      throttler counters live in Redis (`RedisThrottlerStorage`,
+      `backend/src/common/rate-limit/throttler-storage.ts`): shared by every
+      API instance, kept across restarts, one atomic Lua step per request.
+      Without it the counters stay in process memory and the API logs a
+      warning at startup in production. If Redis becomes unreachable the API
+      keeps answering and counts in memory until it recovers (logged once a
+      minute). Use a Redis reachable only from the API (password/TLS:
+      `rediss://user:pass@host:port/db`).
 - [ ] **Password reset has no route yet.** When it is added, give it
       `@Throttle(strictThrottle(...))` like login and registration.
 - [ ] **Registration email enumeration (owner decision).**
@@ -116,7 +118,7 @@ The owner should confirm the default or choose the alternative.
 | D2 | **Purchase-return gap account** (landed cost below base price) | Gap stays unbooked; 6010 is debited only with the landed cost (current behaviour, documented in the code). | Book the gain to other operating income (9390), to an FX gain account (9540), or as a correction of 2910 cost. | An accounting policy choice; coding a guess would create entries the accountant may have to reverse. |
 | D3 | **Registration email enumeration** | Registration still returns 409 for a taken email; the route is limited to 5/hour per IP. | (a) Email-confirmation sign-up: always answer "check your inbox", create the tenant only after the link is clicked; (b) answer 201 for both, and email the existing owner instead. | Both alternatives change the onboarding UX and need an email provider, which the project does not have yet. |
 | D4 | **Accounting period closing** | **Done in round 2** (ADR 0024): monthly periods, `accounting:close` (admin, accountant) / `accounting:reopen` (admin only), audit log. API only, no UI yet. | Yearly periods; let the accountant reopen too; a closing UI. | Owner asked for a minimal safe version. |
-| D5 | **Rate-limit storage** | In-memory, per process. | Redis-backed throttler storage. | Single instance today; Redis storage is only needed before scaling out. |
+| D5 | **Rate-limit storage** | **Done in round 2**: Redis when `REDIS_URL` is set, in memory otherwise (production warning). | — | Owner asked for it in round 2. |
 | D6 | **Opening-balance fixed assets and depreciation** (muammolar B6) | Accumulated depreciation typed per line; OB fixed-asset lines do not enter the fixed-asset register, so they do not depreciate afterwards. | Create a register asset per line at posting (useful life, start date, method per line), or link each line to an existing register asset, or a calculation helper only. | Accounting policy and a feature; see `docs/muammolar-triage.md` O1. |
 | D7 | **Additional expenses under Sales** (muammolar B13) | No Sales menu entry; additional expenses exist only as purchase landed cost. | A selling-expense document (9410 group), or a Sales shortcut to Finance → Expense with a selling category. Do not reuse landed cost (it would capitalise selling costs into inventory). | Account choice and margin treatment; see triage O2. |
 | D8 | **Money format** | **Done in round 2.** One shared formatter (`shared/format/money.ts`): `8 000 UZS`, `8 000,50 UZS`, `1 234,56 USD`, quantities `2,5`; NBSP thousands, comma decimals. | Owner may still prefer always 2 decimals for UZS. | Owner asked for it in round 2. Input fields (`CurrencyInput`) keep their typing grammar (dot decimal, comma grouping while typing). |
