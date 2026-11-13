@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,19 +14,8 @@ export default function FinancialReportsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
-
-  const [statements, setStatements] = useState<FinancialStatements | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<FinancialStatements>('/accounting/reports/statements', { token, tenantId: company.id, locale })
-      .then(setStatements)
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, [token, company]);
+  const statementsQuery = useApiQuery<FinancialStatements>('/accounting/reports/statements');
+  const statements = statementsQuery.data ?? null;
 
   const reportCurrency = (statements as { currency?: string } | null | undefined)?.currency || 'UZS';
 
@@ -46,7 +34,13 @@ export default function FinancialReportsPage() {
         </Button>
       </div>
 
-      {loading ? (
+      {statementsQuery.isError ? (
+        <LoadError
+          error={statementsQuery.error}
+          onRetry={() => void statementsQuery.refetch()}
+          retrying={statementsQuery.isFetching}
+        />
+      ) : statementsQuery.isPending ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {tCommon('loading')}
         </div>

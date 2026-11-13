@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types src/lib/utils.spec.ts src/lib/money.spec.ts src/lib/money-format-scan.spec.ts src/lib/finance-quick-action.spec.ts src/lib/opening-balance-fixed-assets.spec.ts src/lib/localized-name.spec.ts src/lib/api.spec.ts src/lib/sales-pricing.spec.ts src/lib/sales-return.spec.ts src/lib/service-act.spec.ts src/lib/counterparty-form.spec.ts src/lib/inventory-cost.spec.ts src/lib/cash-account-policy.spec.ts src/lib/opening-balance-import.spec.ts src/lib/units.spec.ts src/lib/opening-balance-lines.spec.ts src/lib/stock-label.spec.ts src/lib/api-routes.spec.ts src/components/products/inventory-edit.spec.ts src/components/products/quick-create-wiring.spec.ts src/components/ui/select-keyboard.spec.ts src/components/sales/order-form/order-items-columns.spec.ts"
+    "test:components": "vitest run",
+    "test": "node --test --experimental-strip-types src/lib/utils.spec.ts src/lib/money.spec.ts src/lib/money-format-scan.spec.ts src/lib/finance-quick-action.spec.ts src/lib/opening-balance-fixed-assets.spec.ts src/lib/localized-name.spec.ts src/lib/api.spec.ts src/lib/sales-pricing.spec.ts src/lib/sales-return.spec.ts src/lib/service-act.spec.ts src/lib/counterparty-form.spec.ts src/lib/inventory-cost.spec.ts src/lib/cash-account-policy.spec.ts src/lib/opening-balance-import.spec.ts src/lib/units.spec.ts src/lib/opening-balance-lines.spec.ts src/lib/stock-label.spec.ts src/lib/api-routes.spec.ts src/components/products/inventory-edit.spec.ts src/components/products/quick-create-wiring.spec.ts src/components/ui/select-keyboard.spec.ts src/components/sales/order-form/order-items-columns.spec.ts && vitest run"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.104.5",
     "lucide-react": "^1.30.0",
     "next": "16.3.0",
     "next-intl": "^4.13.5",
@@ -19,12 +21,16 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "jsdom": "30.1.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "4.1.12"
   }
 }

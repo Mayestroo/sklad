@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { useApiData } from '@/lib/useApiData';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -157,8 +158,8 @@ export default function SalesOrdersPage() {
       });
       invalidateApiCache('/sales/orders*');
       toast.success(isRu ? 'Статус заказа обновлен' : 'Buyurtma statusi yangilandi');
-      fetchOrders();
-      fetchStats();
+      // Refreshes the order list and the stats (both under /sales/orders).
+      void invalidateApi('/sales/orders');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка смены статуса' : 'Statusni o‘zgartirishda xatolik yuz berdi'));
     } finally {
@@ -206,10 +207,11 @@ export default function SalesOrdersPage() {
     }
   };
 
-  // SWR Cached Reference Data (5 min fresh time)
-  const { data: rawCp } = useApiData<CounterpartyItem[] | { data: CounterpartyItem[] }>(
-    token && company ? '/sales/counterparties' : null,
-    { staleTime: 5 * 60 * 1000, token: token || undefined, tenantId: company?.id, locale }
+  // Reference data, fresh for 5 minutes (TanStack Query, see docs/frontend-data-loading.md)
+  const invalidateApi = useInvalidateApi();
+  const { data: rawCp } = useApiQuery<CounterpartyItem[] | { data: CounterpartyItem[] }>(
+    '/sales/counterparties',
+    { staleTime: 5 * 60 * 1000 },
   );
   const counterparties: CounterpartyItem[] = useMemo(() => {
     if (!rawCp) return [];
@@ -217,10 +219,9 @@ export default function SalesOrdersPage() {
     return (rawCp as { data: CounterpartyItem[] }).data || [];
   }, [rawCp]);
 
-  const { data: rawUsers } = useApiData<SellerItem[] | { data: SellerItem[] }>(
-    token && company ? '/users' : null,
-    { staleTime: 5 * 60 * 1000, token: token || undefined, tenantId: company?.id, locale }
-  );
+  const { data: rawUsers } = useApiQuery<SellerItem[] | { data: SellerItem[] }>('/users', {
+    staleTime: 5 * 60 * 1000,
+  });
   const sellers: SellerItem[] = useMemo(() => {
     if (!rawUsers) return [];
     const list = Array.isArray(rawUsers) ? rawUsers : (rawUsers as { data: SellerItem[] }).data || [];
@@ -231,15 +232,13 @@ export default function SalesOrdersPage() {
     }));
   }, [rawUsers]);
 
-  // SWR Cached Stats
-  const { data: stats, refetch: fetchStats } = useApiData<OrderStatsSummary>(
-    token && company ? '/sales/orders/stats' : null,
-    { staleTime: 15000, token: token || undefined, tenantId: company?.id, locale }
-  );
+  const statsQuery = useApiQuery<OrderStatsSummary>('/sales/orders/stats');
+  const stats = statsQuery.data ?? null;
+  const fetchStats = () => void statsQuery.refetch();
 
-  // SWR Cached Orders with Active Filters
+  // The endpoint string carries the filters: a new filter is a new query,
+  // the same filters reuse the cache (no refetch loop).
   const ordersEndpoint = useMemo(() => {
-    if (!token || !company) return null;
     const query = new URLSearchParams();
     if (search) query.append('search', search);
     if (counterpartyId) query.append('counterpartyId', counterpartyId);
@@ -250,18 +249,14 @@ export default function SalesOrdersPage() {
     if (dateTo) query.append('dateTo', dateTo);
     query.append('take', String(pageSize));
     return `/sales/orders?${query.toString()}`;
-  }, [token, company, search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo, pageSize]);
+  }, [search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo, pageSize]);
 
-  const {
-    data: rawOrders,
-    loading,
-    refetch: fetchOrders,
-  } = useApiData<{ data: OrderItemSummary[]; total: number }>(ordersEndpoint, {
+  const ordersQuery = useApiQuery<{ data: OrderItemSummary[]; total: number }>(ordersEndpoint, {
     staleTime: 10000,
-    token: token || undefined,
-    tenantId: company?.id,
-    locale,
   });
+  const rawOrders = ordersQuery.data;
+  const loading = ordersQuery.isPending;
+  const fetchOrders = () => void ordersQuery.refetch();
 
   // GET /sales/orders returns { data, total, page, pageSize }
   const orders: OrderItemSummary[] = rawOrders?.data ?? [];
@@ -491,7 +486,13 @@ export default function SalesOrdersPage() {
 
       {/* Orders Table */}
       <Card style={{ overflow: 'hidden' }}>
-        {loading ? (
+        {ordersQuery.isError ? (
+          <LoadError
+            error={ordersQuery.error}
+            onRetry={fetchOrders}
+            retrying={ordersQuery.isFetching}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
             <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>

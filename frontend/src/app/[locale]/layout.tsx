@@ -6,6 +6,7 @@ import { routing } from '@/i18n/routing';
 import { AppShell } from '@/components/layout/AppShell';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { QueryProvider } from '@/lib/query/QueryProvider';
 import { ConfirmProvider } from '@/context/ConfirmContext';
 import '../globals.css';
 
@@ -32,7 +33,9 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
       <ToastProvider>
         <ConfirmProvider>
           <AuthProvider>
-            <AppShell>{children}</AppShell>
+            <QueryProvider>
+              <AppShell>{children}</AppShell>
+            </QueryProvider>
           </AuthProvider>
         </ConfirmProvider>
       </ToastProvider>

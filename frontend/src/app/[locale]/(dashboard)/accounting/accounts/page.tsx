@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
 import { Card } from '@/components/ui/Card';
+import { LoadError } from '@/components/ui/LoadError';
 import { Badge } from '@/components/ui/Badge';
 import { Account } from '@shared/types';
 
@@ -12,19 +11,8 @@ export default function ChartOfAccountsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
-
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<Account[]>('/accounting/accounts', { token, tenantId: company.id, locale })
-      .then(setAccounts)
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, [token, company]);
+  const accountsQuery = useApiQuery<Account[]>('/accounting/accounts');
+  const accounts = accountsQuery.data ?? [];
 
   const getAccountTypeBadge = (type: string) => {
     switch (type) {
@@ -53,7 +41,13 @@ export default function ChartOfAccountsPage() {
       </div>
 
       <Card>
-        {loading ? (
+        {accountsQuery.isError ? (
+          <LoadError
+            error={accountsQuery.error}
+            onRetry={() => void accountsQuery.refetch()}
+            retrying={accountsQuery.isFetching}
+          />
+        ) : accountsQuery.isPending ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {tCommon('loading')}
           </div>
