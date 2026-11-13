@@ -72,8 +72,9 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const [unitOfMeasure, setUnitOfMeasure] = useState('piece');
   const [quantity, setQuantity] = useState<number | string>(1);
   const [costPrice, setCostPrice] = useState<number | string>('');
-  const [costPriceCurrency, setCostPriceCurrency] = useState('UZS');
-  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('1');
+  // F8 / ADR 0022: the cost currency is chosen, never guessed.
+  const [costPriceCurrency, setCostPriceCurrency] = useState('');
+  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [salePriceCurrency, setSalePriceCurrency] = useState('');
 
@@ -121,8 +122,12 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setItemType((productToEdit.type || 'PRODUCT') as typeof itemType);
         setUnitOfMeasure(productToEdit.unitOfMeasure || 'piece');
         setCostPrice(productToEdit.costPrice !== undefined ? String(productToEdit.costPrice) : '');
-        setCostPriceCurrency(productToEdit.costPriceCurrency || 'UZS');
-        setCostPriceExchangeRate(String(productToEdit.costPriceExchangeRate || 1));
+        const editCostCurrency = productToEdit.costPriceCurrency || '';
+        const editCostRate = Number(productToEdit.costPriceExchangeRate);
+        setCostPriceCurrency(editCostCurrency);
+        setCostPriceExchangeRate(
+          editCostCurrency === 'UZS' ? '1' : editCostRate > 0 ? String(editCostRate) : '',
+        );
         setSellingPrice(productToEdit.salePrice !== undefined ? String(productToEdit.salePrice) : '');
         setSalePriceCurrency(productToEdit.salePriceCurrency || '');
         setMinStockAlert(productToEdit.minStockAlert !== undefined ? String(productToEdit.minStockAlert) : '0');
@@ -130,8 +135,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
       } else {
         setItemType(initialType || 'PRODUCT');
-        setCostPriceCurrency('UZS');
-        setCostPriceExchangeRate('1');
+        setCostPriceCurrency('');
+        setCostPriceExchangeRate('');
         setSalePriceCurrency(salesDefault ?? '');
         if (initialSkuOrBarcode) {
           if (!/^\d{8,14}$/.test(initialSkuOrBarcode)) {
@@ -186,8 +191,12 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       setError(isRu ? 'Укажите валюту цены продажи' : 'Sotish narxi valyutasini tanlang');
       return;
     }
+    if (Number(costPrice) > 0 && !costPriceCurrency) {
+      setError(isRu ? 'Укажите валюту себестоимости' : 'Xarid tannarxi valyutasini tanlang');
+      return;
+    }
     if (
-      costPriceCurrency !== 'UZS' &&
+      costPriceCurrency === 'USD' &&
       Number(costPrice) > 0 &&
       (!Number.isFinite(Number(costPriceExchangeRate)) || Number(costPriceExchangeRate) <= 0)
     ) {
@@ -218,8 +227,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           type: itemType,
           unitOfMeasure: validDbUnit,
           costPrice: Number(costPrice) || 0,
-          costPriceCurrency,
-          costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate),
+          costPriceCurrency: costPriceCurrency || undefined,
+          costPriceExchangeRate: costPriceCurrency === 'USD' ? Number(costPriceExchangeRate) : 1,
           salePrice: Number(sellingPrice) || 0,
           salePriceCurrency: salePriceCurrency || undefined,
           minStockAlert: Number(minStockAlert) || 0,
@@ -243,8 +252,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           type: itemType,
           unitOfMeasure: validDbUnit,
           costPrice: Number(costPrice) || 0,
-          costPriceCurrency,
-          costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate),
+          costPriceCurrency: costPriceCurrency || undefined,
+          costPriceExchangeRate: costPriceCurrency === 'USD' ? Number(costPriceExchangeRate) : 1,
           salePrice: Number(sellingPrice) || 0,
           salePriceCurrency: salePriceCurrency || undefined,
           minStockAlert: Number(minStockAlert) || 0,
@@ -279,8 +288,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setUnitOfMeasure('piece');
     setQuantity(1);
     setCostPrice('');
-    setCostPriceCurrency('UZS');
-    setCostPriceExchangeRate('1');
+    setCostPriceCurrency('');
+    setCostPriceExchangeRate('');
     setSellingPrice('');
     setSalePriceCurrency(salesDefault ?? '');
     setError(null);
@@ -645,11 +654,12 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                 onChange={(value) => {
                   setCostPriceCurrency(value);
                   if (value === 'UZS') setCostPriceExchangeRate('1');
-                  else if (costPriceCurrency === 'UZS') setCostPriceExchangeRate('');
+                  else if (costPriceCurrency !== 'USD') setCostPriceExchangeRate('');
                 }}
+                placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
               />
             </div>
-            {costPriceCurrency !== 'UZS' && (
+            {costPriceCurrency === 'USD' && (
               <Input
                 label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
                 type="number"

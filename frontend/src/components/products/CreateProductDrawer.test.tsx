@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderPage } from '@/test/render-page';
 
 const apiFetch = vi.fn();
@@ -51,5 +51,56 @@ describe('CreateProductDrawer sale-price currency (plan Task 1 Step 5)', () => {
       />,
     );
     await waitFor(() => expect(salePriceCurrencyTrigger().textContent).toContain('Valyutani tanlang'));
+  });
+});
+
+/** The cost-price currency select's trigger (label → its field). */
+function costPriceCurrencyTrigger(): HTMLElement {
+  const label = screen.getByText('Xarid tannarxi valyutasi');
+  return (label.parentElement as HTMLElement).querySelector('button') as HTMLElement;
+}
+
+function costPriceInput(): HTMLInputElement {
+  const label = screen.getByText('Xarid narxi (Tan narx)');
+  return (label.parentElement as HTMLElement).querySelector('input') as HTMLInputElement;
+}
+
+function postedProductBodies(): Array<Record<string, unknown>> {
+  return apiFetch.mock.calls
+    .filter(([path, options]) => path === '/inventory/products' && (options as { method?: string })?.method === 'POST')
+    .map(([, options]) => JSON.parse((options as { body: string }).body));
+}
+
+describe('CreateProductDrawer cost-price currency (F8, ADR 0022)', () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+    apiFetch.mockImplementation((path: string, options?: { method?: string }) =>
+      Promise.resolve(options?.method === 'POST' ? { id: 'p-new', name: { uz: 'Shampun' } } : []),
+    );
+    auth.company = { id: 'tenant-1', settings: {} };
+  });
+
+  it('starts a new product with a blank cost-price currency, not UZS', async () => {
+    renderPage(<CreateProductDrawer isOpen onClose={vi.fn()} initialSkuOrBarcode="Shampun" />);
+    await waitFor(() => expect(costPriceCurrencyTrigger().textContent).toContain('Valyutani tanlang'));
+    expect(costPriceCurrencyTrigger().textContent).not.toContain('UZS');
+  });
+
+  it('refuses to save a nonzero cost price until a currency is chosen', async () => {
+    renderPage(<CreateProductDrawer isOpen onClose={vi.fn()} initialSkuOrBarcode="Shampun" />);
+    fireEvent.change(costPriceInput(), { target: { value: '5000' } });
+    fireEvent.click(screen.getByText('Tovarni saqlash (Ctrl+Enter)'));
+    await waitFor(() => expect(screen.getByText('Xarid tannarxi valyutasini tanlang')).toBeTruthy());
+    expect(postedProductBodies()).toEqual([]);
+  });
+
+  it('saves the cost price in the chosen currency', async () => {
+    renderPage(<CreateProductDrawer isOpen onClose={vi.fn()} initialSkuOrBarcode="Shampun" />);
+    fireEvent.change(costPriceInput(), { target: { value: '5000' } });
+    fireEvent.click(costPriceCurrencyTrigger());
+    fireEvent.click(await screen.findByRole('option', { name: 'UZS' }));
+    fireEvent.click(screen.getByText('Tovarni saqlash (Ctrl+Enter)'));
+    await waitFor(() => expect(postedProductBodies()).toHaveLength(1));
+    expect(postedProductBodies()[0]).toMatchObject({ costPrice: 5000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 });
   });
 });

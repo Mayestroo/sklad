@@ -47,8 +47,9 @@ export function QuickAddProductModal({
   const [barcode, setBarcode] = useState(initialSkuOrBarcode || '');
   const [unitOfMeasure, setUnitOfMeasure] = useState<string>('piece');
   const [costPrice, setCostPrice] = useState<number>(0);
-  const [costPriceCurrency, setCostPriceCurrency] = useState<'USD' | 'UZS'>('UZS');
-  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('1');
+  // F8 / ADR 0022: the cost currency is chosen, never guessed.
+  const [costPriceCurrency, setCostPriceCurrency] = useState<'USD' | 'UZS' | ''>('');
+  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('');
   const [salePrice, setSalePrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +89,10 @@ export function QuickAddProductModal({
       setError(isRu ? 'Введите наименование' : 'Nomini kiriting');
       return;
     }
+    if (costPrice > 0 && !costPriceCurrency) {
+      setError(isRu ? 'Укажите валюту себестоимости' : 'Xarid tannarxi valyutasini tanlang');
+      return;
+    }
     if (costPrice > 0 && costPriceCurrency === 'USD' && !(Number(costPriceExchangeRate) > 0)) {
       setError(isRu ? 'Укажите положительный курс себестоимости' : 'Xarid tannarxi uchun 0 dan katta kursni kiriting');
       return;
@@ -113,7 +118,7 @@ export function QuickAddProductModal({
           barcode: itemType !== 'SERVICE' && barcode.trim() ? barcode.trim() : undefined,
           unitOfMeasure,
           costPrice: Number(costPrice) || 0,
-          costPriceCurrency,
+          costPriceCurrency: costPriceCurrency || undefined,
           // Never invent a rate: a zero USD cost may omit it, a nonzero one was validated above.
           costPriceExchangeRate:
             costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate) > 0 ? Number(costPriceExchangeRate) : undefined,
@@ -363,6 +368,7 @@ export function QuickAddProductModal({
                     setCostPriceCurrency(value as 'USD' | 'UZS');
                     setCostPriceExchangeRate(value === 'UZS' ? '1' : '');
                   }}
+                  placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
                 />
               </div>
               {costPriceCurrency === 'USD' && (
