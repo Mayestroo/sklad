@@ -25,6 +25,8 @@ export const DEFAULT_RATE_LIMIT = { ttl: MINUTE, limit: 300 };
 export const STRICT_RATE_LIMITS = {
   login: { ttl: MINUTE, limit: 5 },
   register: { ttl: HOUR, limit: 5 },
+  /** The emailed sign-up link (one-time, 256-bit token). */
+  registerConfirm: { ttl: MINUTE, limit: 10 },
   /**
    * Webhook requests that fail the provider's signature / Basic-auth check.
    * Authenticated callbacks (including the providers' idempotent retries)

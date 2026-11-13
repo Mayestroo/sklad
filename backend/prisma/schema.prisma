@@ -2172,3 +2172,23 @@ model AccountingPeriod {
   @@unique([tenantId, year, month])
   @@map("accounting_periods")
 }
+
+/// A company sign-up waiting for its email confirmation (D3). Not tenant
+/// data: the tenant is created only when the emailed link is confirmed.
+/// Only hashes of the one-time token and of the password are stored; the
+/// row is deleted when confirmed or (lazily) after it expires.
+model PendingRegistration {
+  id           String   @id @default(uuid())
+  email        String
+  companySlug  String   @map("company_slug")
+  tokenHash    String   @unique @map("token_hash")
+  passwordHash String   @map("password_hash")
+  /// Company name, admin names and languages from the sign-up form.
+  data         Json
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("pending_registrations")
+}

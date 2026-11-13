@@ -3,19 +3,17 @@
 import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 import { Button } from '@/components/ui/Button';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, MailCheck } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
-import type { AuthResponse } from '@shared/types';
+import type { RegistrationPendingResponse } from '@shared/types';
 
 export default function RegisterPage() {
   const t = useTranslations('auth');
   const tCommon = useTranslations('common');
   const locale = useLocale();
-  const { login } = useAuth();
 
   const [companyUzName, setCompanyUzName] = useState('');
   const [companyRuName, setCompanyRuName] = useState('');
@@ -28,6 +26,8 @@ export default function RegisterPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /** D3: the email the confirmation link was sent to (sign-up step 1 done). */
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   const handleSlugChange = (val: string) => {
     // Sanitize slug
@@ -41,7 +41,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const response = await apiFetch<AuthResponse>('/auth/register', {
+      await apiFetch<RegistrationPendingResponse>('/auth/register', {
         method: 'POST',
         locale,
         body: JSON.stringify({
@@ -59,7 +59,7 @@ export default function RegisterPage() {
         }),
       });
 
-      login(response);
+      setSentTo(adminEmail);
     } catch (err) {
       setError(errorMessage(err) || 'Registration failed');
     } finally {
@@ -128,6 +128,29 @@ export default function RegisterPage() {
           </p>
         </div>
 
+        {/* D3: the account is created when the emailed link is confirmed. */}
+        {sentTo ? (
+          <div
+            role="status"
+            style={{
+              padding: 'var(--space-4)',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--color-success-50)',
+              border: '1px solid var(--color-success-100)',
+              color: 'var(--color-text-primary)',
+              fontSize: 'var(--text-sm)',
+              display: 'flex',
+              gap: 'var(--space-3)',
+            }}
+          >
+            <MailCheck size={22} style={{ color: 'var(--color-success-600)', flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 'var(--font-semibold)', marginBottom: '4px' }}>{t('checkInboxTitle')}</div>
+              <div>{t('checkInboxText', { email: sentTo })}</div>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Error Alert */}
         {error && (
           <div
@@ -321,6 +344,8 @@ export default function RegisterPage() {
             {loading ? tCommon('loading') : t('startTrial')}
           </Button>
         </form>
+        </>
+        )}
 
         <div style={{ marginTop: 'var(--space-6)', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
           {t('alreadyHaveAccount')}{' '}

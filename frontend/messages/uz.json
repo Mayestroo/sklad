@@ -70,7 +70,15 @@
     "startTrial": "Sinov muddatini boshlash",
     "trialDays": "14 kunlik bepul sinov",
     "alreadyHaveAccount": "Hisobingiz bormi?",
-    "noAccount": "Hisobingiz yo'qmi?"
+    "noAccount": "Hisobingiz yo'qmi?",
+    "checkInboxTitle": "Pochtangizni tekshiring",
+    "checkInboxText": "{email} manziliga xat yubordik. Ro'yxatdan o'tishni yakunlash uchun xatdagi havolani oching (24 soat amal qiladi). Xat kelmasa, spam papkasini tekshiring.",
+    "confirmTitle": "Ro'yxatdan o'tishni tasdiqlash",
+    "confirmText": "Kompaniyangizni yaratish va tizimga kirish uchun tugmani bosing.",
+    "confirmButton": "Tasdiqlash va kirish",
+    "confirmMissingToken": "Havola to'liq emas. Xatdagi havolani to'liq nusxalang yoki qaytadan ro'yxatdan o'ting.",
+    "confirmFailed": "Tasdiqlab bo'lmadi",
+    "registerAgain": "Qaytadan ro'yxatdan o'tish"
   },
   "dashboard": {
     "title": "Bosh sahifa",

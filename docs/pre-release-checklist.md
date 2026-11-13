@@ -70,9 +70,23 @@ tenants use the system. Tick each one off in the PR that resolves it.
       keeps answering and counts in memory until it recovers (logged once a
       minute). Use a Redis reachable only from the API (password/TLS:
       `rediss://user:pass@host:port/db`).
+- [ ] **Choose and configure a mail provider** (D3, round 3). Sign-up now
+      sends a confirmation link by email through the provider-agnostic
+      `MailTransport` (`backend/src/common/mail/`). Only a console transport
+      exists: in development it writes the email (with the link) to the API
+      log; in production it logs a warning and delivers nothing, so nobody
+      can sign up until a real transport (SMTP or a mail API) is written,
+      bound in `MailModule` and given its credentials. Links use
+      `FRONTEND_URL` (already needed for CORS), so it must be the public web
+      address in production.
 - [ ] **Password reset has no route yet.** When it is added, give it
       `@Throttle(strictThrottle(...))` like login and registration.
-- [ ] **Registration email enumeration (owner decision).**
+- [ ] **Registration email enumeration** — code done in round 3 (D3,
+      option a): `POST /api/auth/register` answers `202
+      {status:'CONFIRMATION_SENT'}` for a free email, a taken email and a taken
+      company address alike; the difference goes into the email. Done in
+      production only after the migration and the mail provider above.
+      Original note:
       `POST /api/auth/register` answers `409 A user with this email address
       already exists` when the admin email is taken
       (`AuthService.registerCompany`, `backend/src/modules/auth/auth.service.ts`),
@@ -91,6 +105,10 @@ branch**, never with `db push`. All are additive and idempotent.
       `PermissionAction` values `CLOSE`, `REOPEN` (D4).
 - [ ] `20261113000100_accounting_period_permissions` — `accounting:close` /
       `accounting:reopen` permission rows and system-role grants (D4).
+- [ ] `20261113000200_pending_registrations` — `pending_registrations`
+      table for sign-up by email confirmation (D3, round 3). **Apply to Neon
+      later**: until it is applied, `POST /api/auth/register` fails on
+      production.
 
 ## Accounting decisions
 

@@ -1,7 +1,21 @@
-import { Controller, Post, Get, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  Req,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { RegisterCompanyDto, LoginDto, RefreshTokenDto } from './dto';
+import {
+  RegisterCompanyDto,
+  LoginDto,
+  RefreshTokenDto,
+  ConfirmRegistrationDto,
+} from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import type { AppRequest } from '../../common/auth/request-context';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -11,10 +25,19 @@ import { strictThrottle } from '../../common/rate-limit/rate-limit';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  /** Sign-up step 1 (D3): 202, the same answer for every request. */
   @Post('register')
+  @HttpCode(HttpStatus.ACCEPTED)
   @Throttle(strictThrottle('register'))
   register(@Body() dto: RegisterCompanyDto) {
     return this.authService.registerCompany(dto);
+  }
+
+  /** Sign-up step 2 (D3): the emailed link; creates the company, signs in. */
+  @Post('register/confirm')
+  @Throttle(strictThrottle('registerConfirm'))
+  confirmRegistration(@Body() dto: ConfirmRegistrationDto) {
+    return this.authService.confirmRegistration(dto.token);
   }
 
   @Post('login')

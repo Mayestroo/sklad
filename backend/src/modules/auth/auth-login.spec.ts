@@ -32,6 +32,7 @@ describe('AuthService.login does not reveal accounts', () => {
         JWT_REFRESH_SECRET: 'b',
       }),
       { logAction: jest.fn() } as any,
+      { send: jest.fn() },
     );
     logged = [];
     const capture = (...args: unknown[]) => {

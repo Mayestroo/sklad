@@ -47,10 +47,10 @@ const ALLOWED: Allowed[] = [
   },
   {
     file: 'src/modules/auth/auth.service.ts',
-    scope: 'AuthService.registerCompany',
+    scope: 'AuthService.emailTaken',
     query: 'User.findFirst',
     reason:
-      'Emails are unique across tenants; checked before the tenant exists.',
+      'Emails are unique across tenants; checked at sign-up before the tenant exists (D3).',
   },
   {
     file: 'src/modules/auth/auth.service.ts',
