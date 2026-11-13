@@ -412,6 +412,20 @@ export class SalesInvoicesService {
     });
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Lock the row and re-check it is still a draft: a post that commits
+      // between the read above and this write must not have its lines
+      // replaced (plan T4.3).
+      const [locked] = await tx.$queryRaw<{ status: string }[]>(Prisma.sql`
+        SELECT "status" FROM "sales_invoices"
+        WHERE "id" = ${id} AND "tenant_id" = ${tenantId}
+        FOR UPDATE
+      `);
+      if (!locked) throw new NotFoundException('Sotuv hujjati topilmadi');
+      if (locked.status !== SalesDocStatus.DRAFT) {
+        throw new BadRequestException(
+          'Faqat qoralama sotuv hujjatini tahrirlash mumkin',
+        );
+      }
       const result = await tx.salesInvoice.update({
         where: { tenantId, id },
         data: {

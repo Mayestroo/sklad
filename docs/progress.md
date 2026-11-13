@@ -472,7 +472,12 @@ frontend changed.
 | T3.4 VAT through partial dispatch | already done | 0bce6d3 | dispatch copies discount/VAT rates per line, sets header VAT, settles the VAT-inclusive total (existing dispatch test); exact-sum check in T3.7 |
 | T3.5 invoice discount/VAT | already done | 0bce6d3 | createInvoice/draft update use the shared calculator; existing draft-invoice tests |
 | T3.6 returns from source line | done | 454d2c6 | backend already derived price/VAT from the source line and ignored the client price; added source discount to the returnable-items API and the stored return line; modal shows it; returns-page create form now totals with VAT (was VAT-free) |
-| T3.7 partial-dispatch and return regressions | done | (this commit) | the tests failed: each shipment/return was rounded on its own (3x10.05 at 10%/12%: VAT 1.08+2.17=3.25 vs 3.26; three returns of 612.16/3 gave back 612.15). Shipments now bill cumulative-minus-previous line amounts, returns prorate cumulatively; both telescope to the source line. Applies to new documents only |
+| T3.7 partial-dispatch and return regressions | done | d4a6266 | the tests failed: each shipment/return was rounded on its own (3x10.05 at 10%/12%: VAT 1.08+2.17=3.25 vs 3.26; three returns of 612.16/3 gave back 612.15). Shipments now bill cumulative-minus-previous line amounts, returns prorate cumulatively; both telescope to the source line. Applies to new documents only |
+| T3.8 sales specs + schema validation | done | — | invoice/order/return specs pass, prisma validate OK, frontend build OK (T3.6) |
+| T4.1 draft-edit tests | done | (this commit) | success without stock/ledger/settlement calls, 404, POSTED/CANCELLED refused, posted-after-read refused, rollback; int-spec on the local DB |
+| T4.2 PATCH route | already done (see N3) | 0bce6d3 | route exists with sales:edit, full DTO |
+| T4.3 atomic draft replacement | done | (this commit) | status was checked before the transaction; now SELECT … FOR UPDATE and re-check DRAFT inside it |
+| T4.4 form save path | verified | — | SalesInvoiceForm saves drafts with PATCH /sales/invoices/:id; posted invoices keep explicit post/unpost |
 
 ## Round 4 decisions
 
@@ -523,3 +528,10 @@ frontend changed.
   settings.sales.defaultCurrency or blank (the forms already refuse to
   save without a currency). Owner: confirm, or set a sales default for
   every tenant.
+- N3 (plan T4.2, conflict with CLAUDE.md permission rule) The plan guards
+  PATCH /sales/invoices/:id with sales:create. The route uses sales:edit
+  (CLAUDE.md: edit/lifecycle actions are <module>:edit; permission-catalog
+  contract test). Kept sales:edit. The plan also says the body is
+  Partial<CreateSalesInvoiceDto>; the route takes the full DTO (the form
+  always sends the whole document; a partial body would silently merge
+  missing fields). Owner: confirm.

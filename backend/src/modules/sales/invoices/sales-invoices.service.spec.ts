@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { PrismaService } from '../../../common/prisma';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import {
   SalesDocStatus,
@@ -164,6 +164,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
     });
 
     it('updates a draft through the edit endpoint with percent discount and VAT totals', async () => {
+      prisma.$queryRaw = jest.fn().mockResolvedValue([{ status: 'DRAFT' }]);
       prisma.salesInvoice.findFirst.mockResolvedValue({
         id: 'inv-draft',
         tenantId: 'tenant-1',
@@ -211,6 +212,94 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         }),
       );
       expect(prisma.auditLog.create).toHaveBeenCalled();
+    });
+
+    describe('draft edit (PATCH /sales/invoices/:id, plan T4)', () => {
+      const draftDto = {
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100 }],
+      };
+      const stored = (status: SalesDocStatus) => ({
+        id: 'inv-x',
+        tenantId: 'tenant-1',
+        status,
+        invoiceDate: new Date('2026-10-01'),
+        items: [],
+      });
+      const expectNoPostingEffects = () => {
+        expect(prisma.stockLevel.update).not.toHaveBeenCalled();
+        expect(prisma.journalEntry.create).not.toHaveBeenCalled();
+        expect(settlementService.recordMovement).not.toHaveBeenCalled();
+      };
+
+      beforeEach(() => {
+        prisma.$queryRaw = jest.fn().mockResolvedValue([{ status: 'DRAFT' }]);
+        prisma.salesInvoice.update.mockImplementation(({ data }: any) => ({
+          id: 'inv-x',
+          status: SalesDocStatus.DRAFT,
+          ...data,
+          items: data.items.create,
+        }));
+      });
+
+      it('replaces a draft under a row lock without stock, ledger or settlement effects', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(
+          stored(SalesDocStatus.DRAFT),
+        );
+
+        await service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto);
+
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+        expect(prisma.salesInvoice.update).toHaveBeenCalledTimes(1);
+        expectNoPostingEffects();
+      });
+
+      it('404s for an invoice of another tenant or a missing one', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(null);
+        await expect(
+          service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+        ).rejects.toThrow(NotFoundException);
+        expect(prisma.salesInvoice.update).not.toHaveBeenCalled();
+      });
+
+      it.each([SalesDocStatus.POSTED, SalesDocStatus.CANCELLED])(
+        'refuses to edit a %s invoice',
+        async (status) => {
+          prisma.salesInvoice.findFirst.mockResolvedValue(stored(status));
+          await expect(
+            service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+          ).rejects.toThrow(BadRequestException);
+          expect(prisma.salesInvoice.update).not.toHaveBeenCalled();
+          expectNoPostingEffects();
+        },
+      );
+
+      it('refuses when the invoice was posted after it was read (status re-checked under the lock)', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(
+          stored(SalesDocStatus.DRAFT),
+        );
+        prisma.$queryRaw = jest.fn().mockResolvedValue([{ status: 'POSTED' }]);
+
+        await expect(
+          service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.salesInvoice.update).not.toHaveBeenCalled();
+      });
+
+      it('rolls back as a whole when replacing the lines fails', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(
+          stored(SalesDocStatus.DRAFT),
+        );
+        prisma.salesInvoice.update.mockRejectedValue(new Error('db down'));
+
+        await expect(
+          service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+        ).rejects.toThrow('db down');
+        expect(prisma.auditLog.create).not.toHaveBeenCalled();
+        expectNoPostingEffects();
+      });
     });
 
     it('should throw BadRequestException if items array is empty', async () => {
