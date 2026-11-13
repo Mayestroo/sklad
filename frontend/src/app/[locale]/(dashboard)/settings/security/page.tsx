@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -25,27 +24,8 @@ export default function SecurityPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
-
-  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchSecurityData = async () => {
-    if (!token || !company) return;
-    setLoading(true);
-    try {
-      const logs = await apiFetch<AuditLogRow[]>('/audit-logs', { token, tenantId: company.id, locale });
-      setAuditLogs(logs);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSecurityData();
-  }, [token, company]);
+  const auditQuery = useApiQuery<AuditLogRow[]>('/audit-logs');
+  const auditLogs = auditQuery.data ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -58,7 +38,13 @@ export default function SecurityPage() {
         </div>
       </div>
 
-      {loading ? (
+      {auditQuery.isError ? (
+        <LoadError
+          error={auditQuery.error}
+          onRetry={() => void auditQuery.refetch()}
+          retrying={auditQuery.isFetching}
+        />
+      ) : auditQuery.isPending ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
           {tCommon('loading')}
         </div>

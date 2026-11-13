@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -34,8 +36,12 @@ export default function SuppliersPage() {
   const { token, company } = useAuth();
   const defaultCurrency = useDefaultCurrency();
 
-  const [suppliers, setSuppliers] = useState<Counterparty[]>([]);
-  const [loading, setLoading] = useState(true);
+  const suppliersQuery = useApiQuery<Counterparty[]>('/sales/counterparties');
+  const suppliers = useMemo(
+    () => (suppliersQuery.data ?? []).filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH'),
+    [suppliersQuery.data],
+  );
+  const loading = suppliersQuery.isPending;
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
@@ -43,20 +49,7 @@ export default function SuppliersPage() {
   const [deletingSupplier, setDeletingSupplier] = useState<Counterparty | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const fetchSuppliers = () => {
-    if (!token || !company) return;
-    setLoading(true);
-
-    apiFetch<Counterparty[]>('/sales/counterparties', { token, tenantId: company.id, locale })
-      .then((res) => {
-        const filtered = (res || []).filter(
-          (c) => c.type === 'SUPPLIER' || c.type === 'BOTH'
-        );
-        setSuppliers(filtered);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
+  const fetchSuppliers = () => void suppliersQuery.refetch();
 
   const handleDeleteSupplier = async () => {
     if (!deletingSupplier || !token || !company) return;
@@ -78,10 +71,6 @@ export default function SuppliersPage() {
     }
   };
 
-  useEffect(() => {
-    if (!token || !company) return;
-    fetchSuppliers();
-  }, [token, company, locale]);
 
   const filteredSuppliers = suppliers.filter(
     (s) =>
@@ -156,7 +145,13 @@ export default function SuppliersPage() {
 
       {/* Suppliers Grid / List */}
       <Card>
-        {loading ? (
+        {suppliersQuery.isError ? (
+          <LoadError
+            error={suppliersQuery.error}
+            onRetry={fetchSuppliers}
+            retrying={suppliersQuery.isFetching}
+          />
+        ) : loading ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
             {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
           </div>
