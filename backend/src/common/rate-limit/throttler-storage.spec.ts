@@ -1,3 +1,4 @@
+import { ThrottlerStorageService } from '@nestjs/throttler';
 import { ThrottlerStorage } from '@nestjs/throttler';
 import {
   createThrottlerStorage,
@@ -175,6 +176,63 @@ describe('RedisThrottlerStorage', () => {
     const redis = new FakeRedis();
     await new RedisThrottlerStorage(redis).onApplicationShutdown();
     expect(redis.quit).toHaveBeenCalled();
+  });
+
+  it('destroys a socket that is still open after a failed QUIT (half-open connection)', async () => {
+    // Seen in e2e: localhost -> ::1 accepted the TCP connection but never
+    // answered, the client stayed in 'connect', and disconnect() only
+    // half-closed the socket, which kept the Jest process alive.
+    const destroy = jest.fn();
+    const disconnect = jest.fn();
+    const redis: RedisEvalClient = {
+      eval: jest.fn(),
+      quit: jest.fn(() => Promise.reject(new Error("Stream isn't writeable"))),
+      disconnect,
+      stream: { destroyed: false, destroy },
+    };
+    await new RedisThrottlerStorage(
+      redis,
+      undefined,
+      'p',
+      50,
+    ).onApplicationShutdown();
+    expect(disconnect).toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalled();
+  });
+
+  it('shuts the connection down once even when Nest calls the hook twice', async () => {
+    const redis = new FakeRedis();
+    const storage = new RedisThrottlerStorage(redis);
+    await Promise.all([
+      storage.onApplicationShutdown(),
+      storage.onApplicationShutdown(),
+    ]);
+    await storage.onApplicationShutdown();
+    expect(redis.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the in-memory fallback timers on shutdown (they ran for up to an hour)', async () => {
+    // While Redis is unreachable every hit is counted in the fallback, which
+    // sets a timer per hit for the throttler TTL (1 h for sign-up). Those
+    // timers kept the e2e Jest process alive for up to an hour.
+    jest.useFakeTimers();
+    try {
+      const fallback = new ThrottlerStorageService();
+      const redis: RedisEvalClient = {
+        eval: jest.fn(() => Promise.reject(new Error('down'))),
+        quit: jest.fn(() => Promise.resolve('OK')),
+        disconnect: jest.fn(),
+      };
+      const storage = new RedisThrottlerStorage(redis, fallback, 'p');
+      await storage.increment('ip-1', 3_600_000, 5, 3_600_000, 'register');
+      expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+      await storage.onApplicationShutdown();
+
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

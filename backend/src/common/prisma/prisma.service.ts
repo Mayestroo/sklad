@@ -23,6 +23,14 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  /**
+   * The pool behind the driver adapter. $disconnect() does not end a pool the
+   * caller created, so onModuleDestroy ends it; otherwise its sockets keep the
+   * process alive after app.close().
+   */
+  private readonly pgPool: Pool;
+  private poolEnded = false;
+
   constructor() {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString?.trim()) {
@@ -46,6 +54,7 @@ export class PrismaService
       // interactive transaction; over a remote DB it exceeds Prisma's 5 s default.
       transactionOptions: { maxWait: 10_000, timeout: 30_000 },
     });
+    this.pgPool = pool;
   }
 
   async onModuleInit() {
@@ -55,5 +64,9 @@ export class PrismaService
 
   async onModuleDestroy() {
     await this.$disconnect();
+    if (!this.poolEnded) {
+      this.poolEnded = true;
+      await this.pgPool.end();
+    }
   }
 }
