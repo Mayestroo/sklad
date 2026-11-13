@@ -21,16 +21,21 @@ import {
   FileText,
   ArrowRightLeft,
   Building2,
+  Pencil,
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
 import type { Warehouse as WarehouseRow } from '@shared/types';
 import { unitLabel } from '@/lib/units';
+import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 
 export default function InventoryPage() {
   const t = useTranslations('inventory');
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const { token, company, hasPermission } = useAuth();
+  const canEditProducts = hasPermission('inventory:edit');
+  // muammolar B10: the nomenclature list can open a product for editing.
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const defaultCurrency = useDefaultCurrency();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -294,6 +299,9 @@ export default function InventoryPage() {
                   <th style={{ padding: '12px', textAlign: 'right' }}>SOTUV NARXI</th>
                   <th style={{ padding: '12px', textAlign: 'right' }}>JAMI QOLDIQ</th>
                   <th style={{ padding: '12px', textAlign: 'center' }}>HOLAT</th>
+                  {canEditProducts && (
+                    <th style={{ padding: '12px', textAlign: 'center' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -336,6 +344,19 @@ export default function InventoryPage() {
                           <Badge variant="success">Normal</Badge>
                         )}
                       </td>
+                      {canEditProducts && (
+                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingProduct(product)}
+                            aria-label={`${isRu ? 'Редактировать' : 'Tahrirlash'}: ${getLocalizedName(product.name)}`}
+                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
+                          >
+                            <Pencil size={16} />
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -344,6 +365,18 @@ export default function InventoryPage() {
           </div>
         )}
       </Card>
+
+      {editingProduct && (
+        <CreateProductDrawer
+          isOpen={Boolean(editingProduct)}
+          productToEdit={editingProduct}
+          onClose={() => setEditingProduct(null)}
+          onSuccess={() => {
+            setEditingProduct(null);
+            fetchData();
+          }}
+        />
+      )}
 
       {/* Barcode Scanner Modal */}
       {showScanner && (
