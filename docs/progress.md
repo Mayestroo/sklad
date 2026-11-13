@@ -65,6 +65,11 @@ so the work survives context compaction. Re-read this file, then
   type numbers (decimal key, grouping while typing); needs a deliberate
   input-grammar decision and a manual check of every form. Listed for the
   owner.
+- F7 (round 2, pre-existing, found in review) Cancelling a purchase
+  payment through Finance (cancelTransaction) reverses the cash and the
+  settlement but leaves the payment's journal entry (Dt 6010 / Kt
+  5010/5110): FinanceService never touches the journal. Ledger and cash
+  then disagree. Not changed (accounting flow change); listed for owner.
 - F5 (round 2) Several automatic postings date their journal entry "now"
   instead of the document date: JournalService.autoPostPayment /
   autoPostInboundDoc / autoPost*Transfer / autoPostServiceAct, the
@@ -164,7 +169,7 @@ account; react-hooks migration; visual verification; final verification.
 - [x] P4.7 D2 purchase-return gap account setting
 - [~] P5 react-hooks: shared data-loading + page migration — PARTLY DONE (88bad69, acccfaa): 123 -> 110, 6 pages migrated, rest listed below
 - [x] P6 visual verification on local Docker DB (headless Edge, docs/screenshots/README.md)
-- [ ] P7 final verification, review, git hygiene
+- [x] P7 final verification, review, git hygiene
 
 ## Round 2 decisions
 
@@ -302,3 +307,27 @@ NOT migrated in this run, by reason:
   docs/screenshots/README.md. Fixed one miss found there: inventory stock
   printed raw `1250.5 dona` -> formatQuantity (`1 250,5 dona`), pinned in
   money-format-scan.spec.ts, re-shot after rebuild. Servers stopped.
+- P7 final run (at 55866e5 + docs): backend jest 51 suites / 484 tests;
+  typecheck exit 0; nest build exit 0; backend lint exit 0 (no --fix
+  changes); integration 13 suites / 38 tests (incl. Redis int-spec with
+  REDIS_URL_TEST); e2e 1 suite / 2 tests. Frontend node tests 121/121,
+  component tests 6 files / 13 tests, tsc exit 0, eslint 110 problems
+  (70 errors set-state-in-effect, 40 warnings exhaustive-deps: the
+  Phase 5 remainder), build exit 0.
+- P7 found and fixed 55866e5: app.close() hung when REDIS_URL pointed at
+  an unreachable Redis (QUIT never resolves); shutdown now bounded.
+- P7 review (diff 0acf6e2..HEAD, 115 files): no secrets; every new route
+  has PermissionsGuard + a catalog permission (contract specs pass); all
+  new queries filter by tenantId (period rows, journal deletion, gain
+  account, settings check); query cache keyed by tenant; D2 gap in UZS
+  like the other return lines; journal writes only in JournalService
+  (scan test); status-changing paths pinned in period-lock.spec.ts.
+  Residual: JournalService calls made without a transaction client
+  (autoPost* default db) still check the period but the advisory lock
+  ends with the statement. Fresh deploy: sklad_demo migrated from empty,
+  booted, auto-seeded (incl. accounting:close/reopen grants); e2e boot
+  passes; app.module.spec DI test passes.
+- P7 git: no CR-only changes (stat identical with --ignore-cr-at-eol), no
+  CRLF in the index for changed files; untracked: .claude/, the plan
+  note, muammolar.pdf (owner's). Local leftovers (disposable): Docker
+  databases sklad_test, sklad_demo; sklad_redis container running.
