@@ -141,7 +141,7 @@ account; react-hooks migration; visual verification; final verification.
 
 ## Round 2 task list
 - [x] P1 backend lint, frontend tsc, frontend lint, frontend build (at 0acf6e2)
-- [ ] P2 shared money/quantity formatter (D8) + scan test
+- [x] P2 shared money/quantity formatter (D8) + scan test — 15b05be
 - [ ] P3 accounting periods (D4) + A1 sales-return cancel
 - [ ] P4.4 pluggable throttler storage (D5, REDIS_URL)
 - [ ] P4.5 registration enumeration (D3)
@@ -153,9 +153,26 @@ account; react-hooks migration; visual verification; final verification.
 
 ## Round 2 decisions
 
+- P2: formatter lives in `shared/format/money.ts` (no imports, so both the
+  Next app and Nest import it at runtime). UZS fractional amounts show 2
+  decimals (`8 000,50`), not 1. Separator is NBSP (U+00A0), also between
+  amount and code, so a currency code never wraps alone. Percentages use
+  `formatPercent` (1 decimal, comma). Chart axes keep the B/M/K suffixes.
+- P2: `CurrencyInput` keeps its editing grammar (dot decimal, comma groups
+  while typing) — changing how people type numbers is not a display fix;
+  it is the only allow-listed file in the scan test.
+- P2: backend `toFixed(2)` calls are value rounding of stored amounts, not
+  text; left unchanged (display-only rule).
+- Tooling: the shell/Write layer turns a typed ` ` escape into a raw
+  NBSP; code builds it with `String.fromCharCode(0xa0)` instead.
+
 ## Round 2 log
 - P1 (at 0acf6e2, run one at a time, 2.1 GB RAM free): backend `npm run
   lint` clean, `--fix` changed nothing; frontend `npx tsc --noEmit` exit 0;
   frontend `eslint .` 123 problems in 60 files, all react-hooks
   (set-state-in-effect 76, exhaustive-deps 45, use-memo 1,
   preserve-manual-memoization 1) -> Phase 5; frontend `npm run build` OK.
+- P2 15b05be: frontend tests 112/112; frontend tsc clean; backend
+  typecheck clean; backend jest 49 suites / 440 tests; eslint on changed
+  files clean except pre-existing react-hooks; frontend build OK; nest
+  build OK. Scan test verified failing on the pre-change components.
