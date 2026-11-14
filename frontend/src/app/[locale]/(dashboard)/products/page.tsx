@@ -6,8 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatPercent, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { formatCurrency, formatPercent, formatPriceOrUnset, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -42,7 +41,6 @@ export default function ProductsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
 
   const productsQuery = useApiQuery<Product[]>('/inventory/products');
   // Optional: without categories the list still shows ("no category").
@@ -422,7 +420,7 @@ export default function ProductsPage() {
                 {filteredProducts.map((p, idx) => {
                   const cost = Number(p.costPrice || 0);
                   const sale = Number(p.salePrice || 0);
-                  const samePriceCurrency = (p.costPriceCurrency || 'UZS') === (p.salePriceCurrency || defaultCurrency);
+                  const samePriceCurrency = Boolean(p.salePriceCurrency) && p.costPriceCurrency === p.salePriceCurrency;
                   const marginPct = cost > 0 && samePriceCurrency ? formatPercent(((sale - cost) / cost) * 100) : '—';
                   const isLastRow = idx === filteredProducts.length - 1;
 
@@ -494,7 +492,7 @@ export default function ProductsPage() {
 
                       {/* Sale price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                        {formatCurrency(sale, locale, p.salePriceCurrency || defaultCurrency)}
+                        {formatPriceOrUnset(sale, locale, p.salePriceCurrency)}
                       </td>
 
                       {/* Margin % */}
@@ -598,7 +596,7 @@ export default function ProductsPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Цена продажи' : 'Sotish narxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-primary-600)' }}>
-                  {formatCurrency(selectedProduct.salePrice, locale, selectedProduct.salePriceCurrency || defaultCurrency)}
+                  {formatPriceOrUnset(selectedProduct.salePrice, locale, selectedProduct.salePriceCurrency)}
                 </div>
               </div>
               <div>

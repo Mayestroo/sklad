@@ -36,3 +36,28 @@ function isSupportedCurrency(currency: string | null | undefined): currency is S
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+
+/**
+ * The unit price a purchase line starts with when a product is picked: the
+ * product's reference cost in the document currency, or 0 (left for the user)
+ * when the document or cost currency is not chosen yet or a needed rate is
+ * missing. F8 / ADR 0022: never priced in a guessed currency.
+ */
+export function documentUnitPriceFromProductCost(
+  product: {
+    costPrice?: number | string | null;
+    costPriceCurrency?: string | null;
+    costPriceExchangeRate?: number | string | null;
+  },
+  documentCurrency: string | null | undefined,
+  documentExchangeRate: number,
+): number {
+  if (!documentCurrency) return 0;
+  return convertCostPriceToDocumentCurrency(
+    Number(product.costPrice) || 0,
+    product.costPriceCurrency,
+    Number(product.costPriceExchangeRate),
+    documentCurrency,
+    documentExchangeRate,
+  ) ?? 0;
+}

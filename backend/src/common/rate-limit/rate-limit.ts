@@ -66,15 +66,37 @@ export class WebhookAuthFailureLimiter {
   }
 }
 
+/** The rate-limit storage instance (Redis, or null for in-memory). */
+export const RATE_LIMIT_STORAGE = Symbol('RATE_LIMIT_STORAGE');
+
+/**
+ * Owns the storage as a provider, so Nest runs its onApplicationShutdown
+ * hook on app.close() and the Redis connection is closed. Built inside the
+ * ThrottlerModule options it was not a provider: the hook never ran and the
+ * open socket kept the process (and the e2e Jest run) alive.
+ */
+@Module({
+  providers: [
+    {
+      provide: RATE_LIMIT_STORAGE,
+      useFactory: () => createThrottlerStorage(process.env) ?? null,
+    },
+  ],
+  exports: [RATE_LIMIT_STORAGE],
+})
+class RateLimitStorageModule {}
+
 /** Registers the throttler globally (every route, before auth guards). */
 @Module({
   imports: [
     // Storage chosen once at startup: Redis with REDIS_URL, else in memory
     // (warned in production). See throttler-storage.ts.
     ThrottlerModule.forRootAsync({
-      useFactory: () => ({
+      imports: [RateLimitStorageModule],
+      inject: [RATE_LIMIT_STORAGE],
+      useFactory: (storage: ThrottlerStorage | null) => ({
         throttlers: [{ name: 'default', ...DEFAULT_RATE_LIMIT }],
-        storage: createThrottlerStorage(process.env),
+        storage: storage ?? undefined,
       }),
     }),
   ],

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -24,8 +26,9 @@ export default function SuperAdminAnnouncementsPage() {
   const isRu = locale === 'ru';
   const { token } = useAuth();
 
-  const [announcements, setAnnouncements] = useState<SystemAnnouncement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const invalidateApi = useInvalidateApi();
+  const announcementsQuery = useApiQuery<SystemAnnouncement[]>('/super-admin/announcements', { scope: 'platform' });
+  const announcements = announcementsQuery.data ?? [];
 
   // Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,22 +38,6 @@ export default function SuperAdminAnnouncementsPage() {
   const [msgRu, setMsgRu] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
 
-  const fetchAnnouncements = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const res = await apiFetch<SystemAnnouncement[]>('/super-admin/announcements', { token, locale });
-      setAnnouncements(res);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки оповещений' : 'Xatolik yuz berdi'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAnnouncements();
-  }, [token]);
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +60,7 @@ export default function SuperAdminAnnouncementsPage() {
       setTitleRu('');
       setMsgUz('');
       setMsgRu('');
-      fetchAnnouncements();
+      void invalidateApi('/super-admin/announcements');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при публикации' : 'Xatolik yuz berdi'));
     } finally {
@@ -110,7 +97,15 @@ export default function SuperAdminAnnouncementsPage() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        {loading ? (
+        {announcementsQuery.isError ? (
+          <Card>
+            <LoadError
+              error={announcementsQuery.error}
+              onRetry={() => void announcementsQuery.refetch()}
+              retrying={announcementsQuery.isFetching}
+            />
+          </Card>
+        ) : announcementsQuery.isPending ? (
           <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             Yuklanmoqda...
           </div>

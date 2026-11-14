@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -15,8 +15,8 @@ import {
 } from 'recharts';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatDate, formatCurrency, formatAmount, formatMoney, formatCompactNumber } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
@@ -87,20 +87,11 @@ function CashFlowChart({
   seriesByCurrency: { currency: string; series: CashFlowPoint[] }[];
   isRu: boolean;
 }) {
-  const [activeCurrency, setActiveCurrency] = useState<string>('UZS');
-
-  // Sync activeCurrency whenever data loads or changes
-  useEffect(() => {
-    if (seriesByCurrency.length === 0) return;
-    const preferred = seriesByCurrency.find((e) => e.currency === 'UZS');
-    const fallback = seriesByCurrency[0];
-    setActiveCurrency((prev) => {
-      // Keep current selection if it still exists in new data
-      const stillExists = seriesByCurrency.some((e) => e.currency === prev);
-      if (stillExists) return prev;
-      return preferred?.currency ?? fallback?.currency ?? 'UZS';
-    });
-  }, [seriesByCurrency]);
+  // The user's tab; when the data has no series in it, UZS, else the first.
+  const [chosenCurrency, setActiveCurrency] = useState<string>('UZS');
+  const activeCurrency = seriesByCurrency.some((e) => e.currency === chosenCurrency)
+    ? chosenCurrency
+    : (seriesByCurrency.find((e) => e.currency === 'UZS') ?? seriesByCurrency[0])?.currency ?? 'UZS';
 
   const currencies = seriesByCurrency.map((e) => e.currency);
   const currentEntry = seriesByCurrency.find((e) => e.currency === activeCurrency);
@@ -316,35 +307,25 @@ function KpiCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, curren
 export default function DashboardPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token, company } = useAuth();
-
   const [period, setPeriod] = useState<DashboardPeriod>('this_month');
-  const [data, setData] = useState<FullDashboard | null>(null);
-  const [orderStats, setOrderStats] = useState<{ pipeline?: Partial<Record<string, number>> } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [cashFlowGranularity, setCashFlowGranularity] = useState<'day' | 'week' | 'month'>('day');
 
-  const fetchDashboard = useCallback(async () => {
-    if (!token || !company) return;
-    setLoading(true);
+  const dashboardEndpoint = useMemo(() => {
     const { date_from, date_to } = getPeriodDates(period);
-    const params = new URLSearchParams({ date_from, date_to, granularity: cashFlowGranularity });
-
-    try {
-      const [result, orders] = await Promise.all([
-        apiFetch<FullDashboard>(`/dashboard?${params}`, { token, tenantId: company.id, locale }),
-        apiFetch<{ pipeline?: Partial<Record<string, number>> }>('/dashboard/sales-orders', { token, tenantId: company.id, locale }).catch(() => null),
-      ]);
-      setData(result);
-      setOrderStats(orders);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [token, company, locale, period, cashFlowGranularity]);
-
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+    return `/dashboard?${new URLSearchParams({ date_from, date_to, granularity: cashFlowGranularity })}`;
+  }, [period, cashFlowGranularity]);
+  // keepPrevious: switching the period keeps the current numbers until the
+  // new ones arrive, as before.
+  const dashboardQuery = useApiQuery<FullDashboard>(dashboardEndpoint, { keepPrevious: true });
+  // Optional: the order pipeline card stays empty if this fails.
+  const ordersQuery = useApiQuery<{ pipeline?: Partial<Record<string, number>> }>('/dashboard/sales-orders');
+  const data = dashboardQuery.data ?? null;
+  const orderStats = ordersQuery.data ?? null;
+  const loading = dashboardQuery.isFetching;
+  const fetchDashboard = () => {
+    void dashboardQuery.refetch();
+    void ordersQuery.refetch();
+  };
 
   const periodsList: { label: string; value: DashboardPeriod }[] = [
     { label: isRu ? 'Сегодня' : 'Bugun', value: 'today' },
@@ -374,6 +355,12 @@ export default function DashboardPage() {
           {isRu ? 'Обновить' : 'Yangilash'}
         </Button>
       </div>
+
+      {dashboardQuery.isError && (
+        <Card>
+          <LoadError error={dashboardQuery.error} onRetry={() => void dashboardQuery.refetch()} retrying={dashboardQuery.isFetching} />
+        </Card>
+      )}
 
       {/* Period Selector */}
       <div style={{

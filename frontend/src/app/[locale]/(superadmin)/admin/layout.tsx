@@ -27,19 +27,22 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { user, isAuthenticated, isLoading, logout, hasRole } = useAuth();
+  // A boolean, not hasRole itself: hasRole is a new function on every render
+  // and would re-run the redirect each time.
+  const isSuperAdmin = hasRole('super_admin');
 
   // Guard: Must be authenticated and have super_admin role
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
         router.push('/login');
-      } else if (!hasRole('super_admin')) {
+      } else if (!isSuperAdmin) {
         router.push('/');
       }
     }
-  }, [isAuthenticated, isLoading, user]);
+  }, [isAuthenticated, isLoading, isSuperAdmin, router]);
 
-  if (isLoading || !isAuthenticated || !hasRole('super_admin')) {
+  if (isLoading || !isAuthenticated || !isSuperAdmin) {
     return (
       <div
         style={{

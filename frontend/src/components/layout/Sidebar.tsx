@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SALES_EXPENSE_HREF } from '@/lib/finance-quick-action';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
@@ -31,6 +31,22 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+/**
+ * Open state of a menu group: open when the current route is inside it, and
+ * opened again when the route enters it; while the route stays inside, the
+ * user's open/close wins. Adjusted during render (the previous route state is
+ * kept in state), not in an effect.
+ */
+function useGroupOpen(active: boolean) {
+  const [open, setOpen] = useState(active);
+  const [wasActive, setWasActive] = useState(active);
+  if (active !== wasActive) {
+    setWasActive(active);
+    if (active) setOpen(true);
+  }
+  return [open, setOpen] as const;
+}
+
 export function Sidebar() {
   const t = useTranslations('nav');
   const locale = useLocale() as 'uz' | 'ru';
@@ -40,25 +56,13 @@ export function Sidebar() {
 
   // Dropdown states
   const isPurchasesActive = pathname.startsWith('/purchases');
-  const [isPurchasesOpen, setIsPurchasesOpen] = useState(isPurchasesActive);
+  const [isPurchasesOpen, setIsPurchasesOpen] = useGroupOpen(isPurchasesActive);
 
   const isSalesActive = pathname.startsWith('/sales');
-  const [isSalesOpen, setIsSalesOpen] = useState(isSalesActive);
+  const [isSalesOpen, setIsSalesOpen] = useGroupOpen(isSalesActive);
 
   const isSettingsActive = pathname.startsWith('/settings');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsActive);
-
-  useEffect(() => {
-    if (isPurchasesActive) setIsPurchasesOpen(true);
-  }, [isPurchasesActive]);
-
-  useEffect(() => {
-    if (isSalesActive) setIsSalesOpen(true);
-  }, [isSalesActive]);
-
-  useEffect(() => {
-    if (isSettingsActive) setIsSettingsOpen(true);
-  }, [isSettingsActive]);
+  const [isSettingsOpen, setIsSettingsOpen] = useGroupOpen(isSettingsActive);
 
   // Sub-items for Purchases
   const purchasesSubItems = [

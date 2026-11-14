@@ -19,6 +19,11 @@ export interface RedisEvalClient {
   ): Promise<unknown>;
   quit?(): Promise<unknown>;
   disconnect?(): void;
+  /** ioredis' socket; destroyed on shutdown if a failed QUIT left it open. */
+  stream?: { destroyed?: boolean; destroy(): void } | null;
+  /** ioredis' connection state ('end' once fully closed). */
+  status?: string;
+  once?(event: 'end', listener: () => void): unknown;
 }
 
 /**
@@ -70,6 +75,7 @@ export class RedisThrottlerStorage
 {
   private readonly logger = new Logger('RateLimit');
   private lastErrorLog = 0;
+  private shutdown?: Promise<void>;
 
   constructor(
     private readonly redis: RedisEvalClient,
@@ -134,24 +140,54 @@ export class RedisThrottlerStorage
    * unreachable server never gives, so after `quitTimeoutMs` the socket is
    * dropped instead (seen as a hanging app.close() in the e2e suite).
    */
-  async onApplicationShutdown(): Promise<void> {
+  onApplicationShutdown(): Promise<void> {
+    // The instance is registered under two tokens (the storage provider and
+    // ThrottlerModule's storage), so Nest calls this hook twice: close once.
+    this.shutdown ??= this.close();
+    return this.shutdown;
+  }
+
+  private async close(): Promise<void> {
+    // The in-memory fallback is not a Nest provider either: its per-hit
+    // expiry timers (1 h for sign-up) would keep the process alive.
+    (this.fallback as Partial<OnApplicationShutdown>).onApplicationShutdown?.();
     if (!this.redis.quit) {
-      this.redis.disconnect?.();
+      this.dropConnection();
       return;
     }
     let timer: NodeJS.Timeout | undefined;
     const timedOut = new Promise<'timeout'>((resolve) => {
       timer = setTimeout(() => resolve('timeout'), this.quitTimeoutMs);
     });
-    const outcome = await Promise.race([
-      this.redis.quit().then(
-        () => 'quit' as const,
-        () => 'failed' as const,
-      ),
-      timedOut,
-    ]);
+    // QUIT's reply comes before the socket closes: wait for 'end' too, all
+    // within quitTimeoutMs, so app.close() returns with the socket gone.
+    const quitAndEnd = this.redis.quit().then(
+      async () => {
+        const redis = this.redis;
+        if (redis.status !== 'end' && redis.once) {
+          await new Promise<void>((resolve) => {
+            redis.once?.('end', resolve);
+          });
+        }
+        return 'quit' as const;
+      },
+      () => 'failed' as const,
+    );
+    const outcome = await Promise.race([quitAndEnd, timedOut]);
     clearTimeout(timer);
-    if (outcome !== 'quit') this.redis.disconnect?.();
+    if (outcome !== 'quit') this.dropConnection();
+  }
+
+  /**
+   * disconnect() only half-closes the socket (end()); a peer that accepted
+   * the TCP connection but never answers (seen with localhost -> ::1 under
+   * Docker Desktop) never completes the close, and the open socket keeps
+   * the process alive. Destroy it.
+   */
+  private dropConnection(): void {
+    this.redis.disconnect?.();
+    const stream = this.redis.stream;
+    if (stream && !stream.destroyed) stream.destroy();
   }
 }
 

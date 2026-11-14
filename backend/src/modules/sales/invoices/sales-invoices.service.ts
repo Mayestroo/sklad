@@ -27,6 +27,7 @@ import {
   calculateSalesDocumentTotals,
   calculateSalesLineAmounts,
   grossProfitInUzs,
+  prorateSourceLine,
 } from '../sales-calculations';
 import { JournalService } from '../../accounting/journal/journal.service';
 import {
@@ -411,6 +412,20 @@ export class SalesInvoicesService {
     });
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Lock the row and re-check it is still a draft: a post that commits
+      // between the read above and this write must not have its lines
+      // replaced (plan T4.3).
+      const [locked] = await tx.$queryRaw<{ status: string }[]>(Prisma.sql`
+        SELECT "status" FROM "sales_invoices"
+        WHERE "id" = ${id} AND "tenant_id" = ${tenantId}
+        FOR UPDATE
+      `);
+      if (!locked) throw new NotFoundException('Sotuv hujjati topilmadi');
+      if (locked.status !== SalesDocStatus.DRAFT) {
+        throw new BadRequestException(
+          'Faqat qoralama sotuv hujjatini tahrirlash mumkin',
+        );
+      }
       const result = await tx.salesInvoice.update({
         where: { tenantId, id },
         data: {
@@ -919,6 +934,7 @@ export class SalesInvoicesService {
           (Number(item.totalPrice) - Number(item.vatAmount || 0)) /
           soldQuantity,
         unitVatAmount: Number(item.vatAmount) / soldQuantity,
+        discount: Number(item.discount ?? 0),
         vatRate: Number(item.vatRate),
         unitTotalPrice: Number(item.totalPrice) / soldQuantity,
         unitCogs: Number(item.unitCogs || 0),
@@ -995,6 +1011,7 @@ export class SalesInvoicesService {
       productId: string;
       quantity: number;
       unitPrice: number;
+      discount: number;
       vatRate: number;
       vatAmount: number;
       totalPrice: number;
@@ -1011,6 +1028,7 @@ export class SalesInvoicesService {
           Number(item.quantity),
       );
     }
+    const returnedInThisRequest = new Map<string, number>();
     for (const i of dto.items) {
       const qty = Number(i.quantity);
       if (i.quantity == null || isNaN(qty) || qty <= 0) {
@@ -1044,11 +1062,26 @@ export class SalesInvoicesService {
       const unitCogs = originalSaleUnitCost(
         originalInvoice.items.filter((oi) => oi.productId === i.productId),
       );
-      const unitTotalPrice = Number(origItem.totalPrice) / soldQty;
-      const unitVatAmount = Number(origItem.vatAmount || 0) / soldQty;
-      const unitPrice = unitTotalPrice - unitVatAmount;
-      const lineVatAmount = roundMoney(unitVatAmount * qty);
-      const lineTotal = roundMoney(unitPrice * qty + lineVatAmount);
+      // Cumulative proration (plan T3.7): returns of a line give back exactly
+      // its total and VAT once the whole quantity is back.
+      const alreadyReturned =
+        previouslyReturned + (returnedInThisRequest.get(i.productId) ?? 0);
+      returnedInThisRequest.set(
+        i.productId,
+        (returnedInThisRequest.get(i.productId) ?? 0) + qty,
+      );
+      const share = prorateSourceLine(
+        {
+          quantity: soldQty,
+          totalAmount: Number(origItem.totalPrice),
+          vatAmount: Number(origItem.vatAmount || 0),
+        },
+        alreadyReturned,
+        qty,
+      );
+      const unitPrice = share.netAmount / qty;
+      const lineVatAmount = share.vatAmount;
+      const lineTotal = share.totalAmount;
       totalAmount += lineTotal;
 
       const lineCogs = roundMoney(qty * unitCogs);
@@ -1058,6 +1091,8 @@ export class SalesInvoicesService {
         productId: i.productId,
         quantity: i.quantity,
         unitPrice,
+        // Provenance: already applied in unitPrice (the source line net price).
+        discount: Number(origItem.discount ?? 0),
         vatRate: Number(origItem.vatRate || 0),
         vatAmount: lineVatAmount,
         totalPrice: lineTotal,
@@ -1139,6 +1174,7 @@ export class SalesInvoicesService {
         productId: string;
         quantity: number;
         unitPrice: number;
+        discount: number;
         vatRate: number;
         vatAmount: number;
         totalPrice: number;
@@ -1462,6 +1498,7 @@ export class SalesInvoicesService {
       productId: i.productId,
       quantity: Number(i.quantity),
       unitPrice: Number(i.unitPrice),
+      discount: Number(i.discount ?? 0),
       vatRate: Number(i.vatRate || 0),
       vatAmount: Number(i.vatAmount || 0),
       totalPrice: Number(i.totalPrice),
@@ -1654,7 +1691,7 @@ export class SalesInvoicesService {
         await this.journalService.createJournalEntry(
           tenantId,
           {
-            entryDate: new Date(),
+            entryDate: existing.returnDate,
             description: `Sotuv qaytarilishini bekor qilish № ${existing.returnNumber}`,
             sourceDocType: 'SalesReturnCancel',
             sourceDocId: existing.id,
@@ -1993,7 +2030,14 @@ export class SalesInvoicesService {
         `Product ${product.sku} has a sale price without a recoverable currency`,
       );
     }
-    const baseCurrency = product.salePriceCurrency ?? options.currency ?? 'UZS';
+    // A zero price may carry no currency; it then takes the requested
+    // document currency. Nothing is invented when neither names one (ADR 0022).
+    const baseCurrency = product.salePriceCurrency ?? options.currency;
+    if (!baseCurrency) {
+      throw new BadRequestException(
+        'Sales document currency is required to price a product without a sale-price currency',
+      );
+    }
     const baseTargetCurrency = options.currency ?? baseCurrency;
     if (
       !SUPPORTED_CURRENCIES.includes(

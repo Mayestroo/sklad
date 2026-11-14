@@ -53,6 +53,7 @@ describe('JournalService cash-account routing', () => {
       await service.autoPostPayment(tenantId, {
         id: 'payment-1',
         paymentNumber: 'PAY-000001',
+        paymentDate: new Date('2026-01-10T00:00:00.000Z'),
         method: 'CASH',
         amount: 25,
         currency,
@@ -87,6 +88,7 @@ describe('JournalService cash-account routing', () => {
     await service.autoPostPayment(tenantId, {
       id: 'payment-gain',
       paymentNumber: 'PAY-GAIN',
+      paymentDate: new Date('2026-01-10T00:00:00.000Z'),
       method: 'CASH',
       amount: 100,
       currency: 'USD',
@@ -117,7 +119,12 @@ describe('JournalService cash-account routing', () => {
 
     await service.autoPostInboundDoc(
       tenantId,
-      { id: 'doc-1', docNumber: 'IN-000001', totalAmount: 500 },
+      {
+        id: 'doc-1',
+        docNumber: 'IN-000001',
+        docDate: new Date('2026-01-10T00:00:00.000Z'),
+        totalAmount: 500,
+      },
       tx as never,
     );
 
@@ -129,6 +136,7 @@ describe('JournalService cash-account routing', () => {
     await service.autoPostPayment(tenantId, {
       id: 'payment-loss',
       paymentNumber: 'PAY-LOSS',
+      paymentDate: new Date('2026-01-10T00:00:00.000Z'),
       method: 'BANK_TRANSFER',
       amount: 100,
       currency: 'USD',
@@ -152,5 +160,126 @@ describe('JournalService cash-account routing', () => {
         amount: 100000,
       }),
     ]);
+  });
+});
+
+/**
+ * F5: an automatic posting carries the source document's date, never the
+ * moment it was posted (CLAUDE.md: pass the document date as entryDate).
+ */
+describe('JournalService entry dates', () => {
+  const tenantId = 'tenant-1';
+  const documentDate = new Date('2026-03-15T00:00:00.000Z');
+  let prisma: ReturnType<typeof createPrismaMock>;
+  let service: JournalService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    const prismaService = prisma as unknown as PrismaService;
+    service = new JournalService(
+      prismaService,
+      new AccountsService(prismaService),
+    );
+  });
+
+  const postedEntryDate = () =>
+    (
+      prisma.journalEntry.create.mock.calls[0]?.[0] as {
+        data: { entryDate: Date };
+      }
+    ).data.entryDate;
+
+  it('refuses an automatic entry without a date instead of dating it now', async () => {
+    await expect(
+      service.createJournalEntry(tenantId, {
+        description: 'no date',
+        lines: [{ debitAccountId: 'a', creditAccountId: 'b', amount: 1 }],
+      } as never),
+    ).rejects.toThrow();
+    expect(prisma.journalEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('dates a customer payment by its payment date', async () => {
+    await service.autoPostPayment(tenantId, {
+      id: 'payment-1',
+      paymentNumber: 'PAY-000001',
+      paymentDate: documentDate,
+      method: 'CASH',
+      amount: 25,
+      currency: 'UZS',
+      exchangeRate: 1,
+      invoice: { currency: 'UZS', exchangeRate: 1 },
+      cashAccount: { accountType: 'UZS_CASH', currency: 'UZS' },
+    });
+    expect(postedEntryDate()).toEqual(documentDate);
+  });
+
+  it('dates an inbound inventory document by its document date', async () => {
+    await service.autoPostInboundDoc(tenantId, {
+      id: 'doc-1',
+      docNumber: 'IN-000001',
+      docDate: documentDate,
+      totalAmount: 500,
+    });
+    expect(postedEntryDate()).toEqual(documentDate);
+  });
+
+  it('dates a transfer shipment by the transfer date', async () => {
+    await service.autoPostShipTransfer(
+      tenantId,
+      {
+        id: 'tr-1',
+        transferNumber: 'TR-000001',
+        transferDate: documentDate,
+        receivedAt: null,
+      },
+      100,
+    );
+    expect(postedEntryDate()).toEqual(documentDate);
+  });
+
+  it('dates a transfer receipt by the receipt recorded on the transfer', async () => {
+    const receivedAt = new Date('2026-03-18T09:00:00.000Z');
+    await service.autoPostReceiveTransfer(
+      tenantId,
+      {
+        id: 'tr-1',
+        transferNumber: 'TR-000001',
+        transferDate: documentDate,
+        receivedAt,
+      },
+      100,
+    );
+    expect(postedEntryDate()).toEqual(receivedAt);
+  });
+
+  it('refuses a transfer receipt that has no receipt date', async () => {
+    await expect(
+      service.autoPostReceiveTransfer(
+        tenantId,
+        {
+          id: 'tr-1',
+          transferNumber: 'TR-000001',
+          transferDate: documentDate,
+          receivedAt: null,
+        },
+        100,
+      ),
+    ).rejects.toThrow();
+    expect(prisma.journalEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('dates a service act by the act date', async () => {
+    await service.autoPostServiceAct(tenantId, {
+      id: 'act-1',
+      actNumber: 'ACT-000001',
+      actDate: documentDate,
+      type: 'PROVIDED',
+      currency: 'UZS',
+      exchangeRate: 1,
+      subtotal: 100,
+      vatAmount: 12,
+    });
+    expect(postedEntryDate()).toEqual(documentDate);
   });
 });

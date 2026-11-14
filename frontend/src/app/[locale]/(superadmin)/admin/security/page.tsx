@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
-import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
-import { formatDate, errorMessage } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
+import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { HardDrive, ShieldCheck } from 'lucide-react';
 import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '@shared/types';
-import { toast } from '@/context/ToastContext';
+
 
 interface AuditLogEntry {
   id: string;
@@ -29,27 +28,8 @@ interface AuditLogEntry {
 export default function SuperAdminSecurityPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const { token } = useAuth();
-
-  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
-  const [, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const l = await apiFetch<AuditLogEntry[]>('/super-admin/audit-logs', { token, locale });
-      setLogs(l);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Xatolik yuz berdi'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [token]);
+  const logsQuery = useApiQuery<AuditLogEntry[]>('/super-admin/audit-logs', { scope: 'platform' });
+  const logs = logsQuery.data ?? [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -98,7 +78,13 @@ export default function SuperAdminSecurityPage() {
           <span>{isRu ? 'Глобальный журнал аудита (Последние 50 записей)' : 'Global Audit Jurnali (So‘nggi 50 ta amal)'}</span>
         </div>
 
-        {logs.length === 0 ? (
+        {logsQuery.isError ? (
+          <LoadError error={logsQuery.error} onRetry={() => void logsQuery.refetch()} retrying={logsQuery.isFetching} />
+        ) : logsQuery.isPending ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+            {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
+          </div>
+        ) : logs.length === 0 ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             {isRu ? 'Записи аудита отсутствуют' : 'Audit yozuvlari yo‘q'}
           </div>

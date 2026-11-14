@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { MultiCurrencyValue, type CurrencyAmountItem } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -40,10 +40,11 @@ interface ExpensesResponse {
   limit: number;
   totalPages: number;
   stats: {
-    totalTransport: number;
-    totalCustoms: number;
-    totalBroker: number;
-    totalAll: number;
+    // ADR 0023: one amount per currency (F8).
+    transport: CurrencyAmountItem[];
+    customs: CurrencyAmountItem[];
+    broker: CurrencyAmountItem[];
+    all: CurrencyAmountItem[];
   };
 }
 
@@ -53,7 +54,6 @@ export default function ExpensesPage() {
   const router = useRouter();
   const { token, company } = useAuth();
   const confirm = useConfirm();
-  const defaultCurrency = useDefaultCurrency();
 
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
 
@@ -180,7 +180,11 @@ export default function ExpensesPage() {
 
       {/* KPI Cards */}
       {(() => {
-        const expenseCurrency = (data?.stats as { currency?: string } | null | undefined)?.currency || data?.items?.[0]?.currency || defaultCurrency;
+        // No posted expense in a currency: show a dash, never a guessed currency label.
+        const kpi = (items: CurrencyAmountItem[] | undefined) =>
+          items && items.some((item) => item.amount !== 0)
+            ? <MultiCurrencyValue items={items} locale={locale} />
+            : '—';
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
             <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -192,7 +196,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Транспортные расходы' : 'Transport Xarajatlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(Number(data?.stats.totalTransport) || 0, locale, expenseCurrency || 'UZS')}
+                  {kpi(data?.stats.transport)}
                 </div>
               </div>
             </Card>
@@ -206,7 +210,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Таможенные пошлины' : 'Bojxona To‘lovlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(Number(data?.stats.totalCustoms) || 0, locale, expenseCurrency || 'UZS')}
+                  {kpi(data?.stats.customs)}
                 </div>
               </div>
             </Card>
@@ -220,7 +224,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Брокерские услуги' : 'Brokerlik Xizmatlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(Number(data?.stats.totalBroker) || 0, locale, expenseCurrency || 'UZS')}
+                  {kpi(data?.stats.broker)}
                 </div>
               </div>
             </Card>
@@ -234,7 +238,7 @@ export default function ExpensesPage() {
                   {isRu ? 'Всего распределено' : 'Jami Taqsimlangan'}
                 </div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {formatCurrency(Number(data?.stats.totalAll) || 0, locale, expenseCurrency || 'UZS')}
+                  {kpi(data?.stats.all)}
                 </div>
               </div>
             </Card>

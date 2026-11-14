@@ -10,7 +10,7 @@ import {
   summarizeImportPreview,
 } from '@/lib/opening-balance-import';
 import { CURRENCY_OPTIONS, formatCurrency, formatCurrencyIfAvailable, errorMessage } from '@/lib/utils';
-import { withProductCost, withRegisterAsset } from '@/lib/opening-balance-lines';
+import { linesMissingCurrency, newOpeningBalanceLine, withProductCost, withRegisterAsset } from '@/lib/opening-balance-lines';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -303,6 +303,15 @@ export default function OpeningBalancesPage() {
 
   const handleSaveLines = async () => {
     if (!token || !companyId || !selectedDocId) return;
+    const missingCurrencyRows = linesMissingCurrency(lines);
+    if (missingCurrencyRows.length > 0) {
+      toast.error(
+        isRu
+          ? `Выберите валюту в каждой строке (строки: ${missingCurrencyRows.join(', ')})`
+          : `Har bir qatorda valyutani tanlang (qatorlar: ${missingCurrencyRows.join(', ')})`,
+      );
+      return;
+    }
     setActionLoading(true);
     try {
       await apiFetch(`/opening-balances/${selectedDocId}/lines`, {
@@ -327,6 +336,15 @@ export default function OpeningBalancesPage() {
 
   const handlePost = async () => {
     if (!token || !companyId || !selectedDocId) return;
+    const missingCurrencyRows = linesMissingCurrency(lines);
+    if (missingCurrencyRows.length > 0) {
+      toast.error(
+        isRu
+          ? `Выберите валюту в каждой строке (строки: ${missingCurrencyRows.join(', ')})`
+          : `Har bir qatorda valyutani tanlang (qatorlar: ${missingCurrencyRows.join(', ')})`,
+      );
+      return;
+    }
     if (!metrics.hasValidCurrencyRates) {
       toast.error(isRu ? 'Введите положительный курс для каждой USD-строки' : 'Har bir USD qatori uchun 0 dan katta kursni kiriting');
       return;
@@ -551,12 +569,9 @@ export default function OpeningBalancesPage() {
   const addLine = (category: OpeningBalanceCategory, defaults?: Partial<OpeningBalanceLine>) => {
     if (isReadOnly) return;
     const newLine: Partial<OpeningBalanceLine> = {
-      category,
-      amount: 0,
-      currency: 'UZS',
-      exchangeRate: 1,
+      ...newOpeningBalanceLine(category),
       ...defaults,
-    };
+    } as Partial<OpeningBalanceLine>;
     setLines((prev) => [...prev, newLine]);
   };
 
@@ -1649,7 +1664,7 @@ function CashTable({
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <Badge variant="neutral">
-                  {line.currency || 'USD'}
+                  {line.currency || '—'}
                 </Badge>
               </td>
               <td style={{ padding: '12px 16px' }}>
@@ -1865,15 +1880,16 @@ function InventoryTable({
               <td style={{ padding: '12px 16px' }}>
                 <Select
                   options={CURRENCY_OPTIONS}
-                  value={line.currency || 'UZS'}
+                  value={line.currency || ''}
+                  placeholder={isRu ? 'Валюта' : 'Valyuta'}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'currency', value)}
                   aria-label={isRu ? 'Валюта себестоимости' : 'Tannarx valyutasi'}
                 />
               </td>
               <td style={{ padding: '12px 16px' }}>
-                {line.currency === 'UZS' || !line.currency ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                {line.currency !== 'USD' ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{line.currency === 'UZS' ? '1' : '—'}</span>
                 ) : (
                   <input
                     type="number"
@@ -1889,7 +1905,7 @@ function InventoryTable({
                 )}
               </td>
               <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                {formatCurrency(Number(line.amount || 0), locale, line.currency || 'UZS')}
+                {formatCurrencyIfAvailable(Number(line.amount || 0), locale, line.currency) ?? '—'}
               </td>
               <td style={{ padding: '12px 16px' }}>
                 <input
@@ -2017,7 +2033,8 @@ function CounterpartyTable({
               <td style={{ padding: '12px 16px' }}>
                 <Select
                   options={CURRENCY_OPTIONS}
-                  value={line.currency || 'UZS'}
+                  value={line.currency || ''}
+                  placeholder={isRu ? 'Валюта' : 'Valyuta'}
                   disabled={isReadOnly}
                   onChange={(currency) => {
                     onUpdate(index, 'currency', currency);
@@ -2025,8 +2042,8 @@ function CounterpartyTable({
                 />
               </td>
               <td style={{ padding: '12px 16px' }}>
-                {line.currency === 'UZS' || !line.currency ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                {line.currency !== 'USD' ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{line.currency === 'UZS' ? '1' : '—'}</span>
                 ) : (
                   <input
                     type="number"
@@ -2176,7 +2193,8 @@ function AdvancesTable({
               <td style={{ padding: '12px 16px' }}>
                 <Select
                   options={CURRENCY_OPTIONS}
-                  value={line.currency || 'UZS'}
+                  value={line.currency || ''}
+                  placeholder={isRu ? 'Валюта' : 'Valyuta'}
                   disabled={isReadOnly}
                   onChange={(currency) => {
                     onUpdate(index, 'currency', currency);
@@ -2184,8 +2202,8 @@ function AdvancesTable({
                 />
               </td>
               <td style={{ padding: '12px 16px' }}>
-                {line.currency === 'UZS' || !line.currency ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
+                {line.currency !== 'USD' ? (
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>{line.currency === 'UZS' ? '1' : '—'}</span>
                 ) : (
                   <input
                     type="number"

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
 import { Category } from '@shared/types';
 
@@ -20,7 +20,8 @@ export default function NewProductPage() {
   const isRu = locale === 'ru';
   const router = useRouter();
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
+  // Never guessed: no tenant sales default leaves the currency blank (ADR 0022).
+  const salesDefault = useSalesDefaultCurrency();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,10 +42,11 @@ export default function NewProductPage() {
   const [type, setType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE' | 'BUNDLE'>('PRODUCT');
   const [unitOfMeasure, setUnitOfMeasure] = useState<'piece' | 'kg' | 'liter' | 'meter' | 'box' | 'pack'>('piece');
   const [costPrice, setCostPrice] = useState<number>(0);
-  const [costPriceCurrency, setCostPriceCurrency] = useState<'USD' | 'UZS'>('UZS');
-  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('1');
+  // F8 / ADR 0022: the cost currency is chosen, never guessed.
+  const [costPriceCurrency, setCostPriceCurrency] = useState<'USD' | 'UZS' | ''>('');
+  const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('');
   const [salePrice, setSalePrice] = useState<number>(0);
-  const [salePriceCurrency, setSalePriceCurrency] = useState<'USD' | 'UZS'>(defaultCurrency === 'USD' ? 'USD' : 'UZS');
+  const [salePriceCurrency, setSalePriceCurrency] = useState<'USD' | 'UZS' | ''>(salesDefault ?? '');
   const [vatRate, setVatRate] = useState<number>(12);
   const [minStockAlert, setMinStockAlert] = useState<number>(5);
 
@@ -56,8 +58,8 @@ export default function NewProductPage() {
   }, [token, company, locale]);
 
   useEffect(() => {
-    if (salePrice === 0) setSalePriceCurrency(defaultCurrency === 'USD' ? 'USD' : 'UZS');
-  }, [defaultCurrency, salePrice]);
+    if (salePrice === 0) setSalePriceCurrency(salesDefault ?? '');
+  }, [salesDefault, salePrice]);
 
   const handleCreateCategory = async (event: FormEvent) => {
     event.preventDefault();
@@ -89,6 +91,11 @@ export default function NewProductPage() {
     setError(null);
     setLoading(true);
 
+    if (costPrice > 0 && !costPriceCurrency) {
+      setError(isRu ? 'Укажите валюту себестоимости' : 'Xarid tannarxi valyutasini tanlang');
+      setLoading(false);
+      return;
+    }
     if (costPrice > 0 && costPriceCurrency === 'USD' && Number(costPriceExchangeRate) <= 0) {
       setError(isRu ? 'Укажите положительный курс себестоимости' : 'Xarid tannarxi uchun 0 dan katta kursni kiriting');
       setLoading(false);
@@ -115,10 +122,10 @@ export default function NewProductPage() {
           type,
           unitOfMeasure,
           costPrice: Number(costPrice),
-          costPriceCurrency,
-          costPriceExchangeRate: costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate),
+          costPriceCurrency: costPriceCurrency || undefined,
+          costPriceExchangeRate: costPriceCurrency === 'USD' ? Number(costPriceExchangeRate) : 1,
           salePrice: Number(salePrice),
-          salePriceCurrency,
+          salePriceCurrency: salePriceCurrency || undefined,
           vatRate: Number(vatRate),
           minStockAlert: Number(minStockAlert),
         }),
@@ -260,7 +267,7 @@ export default function NewProductPage() {
               onChange={(e) => setCostPrice(Number(e.target.value))}
             />
 
-            <Select label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'} options={CURRENCY_OPTIONS} value={costPriceCurrency} onChange={(value) => { setCostPriceCurrency(value as 'USD' | 'UZS'); setCostPriceExchangeRate(value === 'UZS' ? '1' : ''); }} />
+            <Select label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'} options={CURRENCY_OPTIONS} value={costPriceCurrency} onChange={(value) => { setCostPriceCurrency(value as 'USD' | 'UZS'); setCostPriceExchangeRate(value === 'UZS' ? '1' : ''); }} placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'} />
             {costPriceCurrency === 'USD' && (
               <Input label={isRu ? 'Курс к UZS' : 'UZS ga kurs'} type="number" min="0.0001" step="any" value={costPriceExchangeRate} onChange={(event) => setCostPriceExchangeRate(event.target.value)} />
             )}

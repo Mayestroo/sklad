@@ -110,6 +110,38 @@ branch**, never with `db push`. All are additive and idempotent.
       later**: until it is applied, `POST /api/auth/register` fails on
       production.
 
+- [ ] `20261113000300_sales_price_currency_backfill` — round 4, sales
+      plan Task 1 Step 3. **Apply to Neon later, in this order** (after the
+      three above). Idempotent: adds `products.sale_price_currency` and its
+      CHECK only if missing (production was built with `db push`), then
+      fills NULL currencies from a valid `settings.sales.defaultCurrency`.
+      Products of tenants without a valid default stay NULL and are listed
+      in a `NOTICE` (tenant/id:sku); those prices must get a currency in the
+      product form before they can be sold.
+
+- [ ] `20261113000400_sales_vat_and_return_discount` — round 4, sales
+      plan Task 3 Step 2. **Apply to Neon later, in this order** (after
+      `20261113000300`). Additive and idempotent: guards the order/return VAT
+      columns with `IF NOT EXISTS` (production was built with `db push`) and
+      adds `sales_return_items.discount` (default 0, CHECK 0–100). No
+      existing amount changes.
+
+Round 5 (F8/F9) added **no** migration; the list above is unchanged.
+
+## Deploy backend and frontend together (round 5)
+
+- [ ] **API contract changes, ship both sides in one release.**
+      `GET /purchases/additional-expenses` now returns `stats` as one amount
+      per currency (`transport/customs/broker/all: [{ currency, amount }]`)
+      instead of summed scalars; an old frontend shows empty KPI cards.
+      `POST /purchases/expenses` now **requires** `currency` (USD/UZS); the
+      current frontend already sends it, other API clients must too.
+- [ ] **Manual check of the changed forms** (covered by tests only): product
+      drawer / new product page / quick-add (cost currency starts blank),
+      purchase document line prefill, opening-balance lines (blank currency,
+      save/post message), finance income/expense form, additional-expense
+      KPI cards, sales order edit (one transaction).
+
 ## Accounting decisions
 
 - [ ] **Purchase returns: configure the gap account** (D2, code path done in
@@ -122,6 +154,18 @@ branch**, never with `db push`. All are additive and idempotent.
       operating income (e.g. 9390), FX gain (9540), or a 2910 cost correction.
       No settings UI yet (API only).
 
+- [ ] **Accountant to review historical entries dated at posting time**
+      (F5, round 4). Until round 4 these automatic postings were dated the
+      moment they were posted instead of the document date: customer
+      payments, inbound inventory documents, transfer shipments and
+      receipts, service acts, order-dispatch invoices and sales-return
+      cancellations. New entries now carry the document date; existing
+      ledger rows were **not** rewritten. Find candidates with
+      `entry_date::date <> <document date>` per `source_doc_type`
+      (Payment, InventoryDocument, StockTransfer, ServiceAct, SalesInvoice
+      from dispatch, SalesReturnCancel) and decide whether any month needs
+      a correcting entry.
+
 ## Decisions needed from owner
 
 Each item below has a safe default already in place, so nothing is blocked.
@@ -131,12 +175,19 @@ The owner should confirm the default or choose the alternative.
 |---|---|---|---|---|
 | D1 | **ZRU-547 hosting**: may tenant personal data stay on Neon (Singapore)? | Nothing changed; hosting stays on Neon `ap-southeast-1`. The false "stored in Uzbekistan" claim was removed from the tenant UI. | Move the whole database to a host in Uzbekistan (e.g. a local cloud/DC Postgres), or split personal data into a local store. | Changing hosting is a legal/commercial decision and was explicitly out of scope. Needs a lawyer's answer before real tenants onboard. |
 | D2 | **Purchase-return gap account** (landed cost below base price) | **Round 2**: the gap is posted Dt 6010 / Kt the account in `settings.accounting.purchaseReturnGainAccountCode`; not configured -> the return is refused with a clear error. | Choose the account: other operating income (9390), FX gain (9540), or a 2910 cost correction. | The account is an accounting policy choice; the code no longer leaves 6010 silently out of line. |
-| D3 | **Registration email enumeration** | Unchanged: 409 for a taken email (and slug); 5 registrations/hour/IP. Round 2 checked: a uniform answer needs email confirmation (the answer carries login tokens today), which breaks the sign-up UX, so it was not changed. | (a) Email-confirmation sign-up ("check your inbox", tenant created on the link); (b) 201 for both, email the existing owner. Both need an email provider. | **Recommendation: (a)** once an email provider exists; it also verifies the address. |
-| D4 | **Accounting period closing** | **Done in round 2** (ADR 0024): monthly periods, `accounting:close` (admin, accountant) / `accounting:reopen` (admin only), audit log. API only, no UI yet. | Yearly periods; let the accountant reopen too; a closing UI. | Owner asked for a minimal safe version. |
 | D5 | **Rate-limit storage** | **Done in round 2**: Redis when `REDIS_URL` is set, in memory otherwise (production warning). | — | Owner asked for it in round 2. |
-| D6 | **Opening-balance fixed assets and depreciation** (muammolar B6) | Round 2: accumulated depreciation typed per line, labelled "not computed" on the page, depreciation above cost rejected. Opening fixed assets do not enter the register and do not depreciate later. | **Option 1**: on posting, create a fixed-asset register entry per line (useful life, start date, method per line; the register then depreciates monthly). **Option 2**: link each line to an existing register asset (`fixedAssetId`) and post its opening value to it; assets are created in the register first. | **Recommendation: Option 2** — one source of truth for depreciation (the register), no duplicate asset creation, smaller change; needs the accountant to confirm the depreciation method and start month. |
-| D7 | **Additional expenses under Sales** (muammolar B13) | **Round 2**: Sales menu "Sotuv xarajatlari" opens Finance → new expense (period expense). | A dedicated selling-expense document linked to invoices (for margin per invoice). | Reading of the PDF judged most probable; no new account or document. Owner to confirm the reading. |
 | D8 | **Money format** | **Done in round 2.** One shared formatter (`shared/format/money.ts`): `8 000 UZS`, `8 000,50 UZS`, `1 234,56 USD`, quantities `2,5`; NBSP thousands, comma decimals. | Owner may still prefer always 2 decimals for UZS. | Owner asked for it in round 2. Input fields (`CurrencyInput`) keep their typing grammar (dot decimal, comma grouping while typing). |
-| D9 | **Number inputs still use `1.000` (3 decimals, dot)** — seen in the visual check (finding F6) | Unchanged: `CurrencyInput` keeps its typing grammar (dot decimal, comma grouping while typing); displays use the new format. | (a) Same format as display (`1 000,5`), accept both `,` and `.` as decimal key; (b) keep dot decimal but drop trailing zeros (`1`, `0`). | **Recommendation: (b)** first (small, removes the "1.000 = thousand" reading without changing how people type), then (a) with a manual check of every form. |
 | D10 | **Cancelled purchase payment leaves its journal entry** (finding F7, pre-existing) | Unchanged: Finance cancel reverses cash and settlement only. | Reverse (or delete) the payment's journal entry in the same cancel, through JournalService (period-checked). | **Recommendation**: do it; it is an accounting-integrity fix, but it changes ledger history for already-cancelled payments, so the accountant should confirm and a reconcile script should report past cases first. |
+
+## Decided by owner (2026-11-13, round 3)
+
+Moved out of the table above; D1, D2 and D10 stay open there.
+
+| # | Decision | Done in |
+|---|---|---|
+| D3 | Option (a): sign-up by email confirmation behind a provider-agnostic `MailTransport` with a console transport only (no provider, no credentials). Same 202 answer for a free email, a taken email and a taken company address; sign-up works end to end in the e2e test. | d7a5dab. Production still needs the mail provider and the `pending_registrations` migration (items above). |
+| D4 | Period reopen stays **company admin only**, as implemented. | d8a9128 (round 2), no change. |
+| D6 | Option 2: each opening-balance fixed-asset line links an existing register asset (`fixedAssetId`); cost and accumulated depreciation come from the register; nothing is depreciated in opening balances. | 8f73fc0. Existing column, no migration. |
+| D7 | B13 reading confirmed: Sales menu "Sotuv xarajatlari" opens Finance → new expense (period expense). | 62c3c7c (round 2), no change. |
+| D9 | Option (b): number inputs drop trailing zeros (`1`, not `1.000`) and keep their typing grammar; the display formatter stays as is elsewhere. | ab01952. |
 

@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
+import { lockDocumentStatus } from '../../common/prisma/lock-document';
 import {
   CreateAdditionalExpenseDto,
   UpdateAdditionalExpenseDto,
@@ -19,6 +20,7 @@ import {
 } from '@prisma/client';
 
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
+import { grossProfitInUzs } from '../sales/sales-calculations';
 import { ExpenseAllocationEngine } from './expense-allocation.engine';
 import {
   SUPPORTED_CURRENCIES,
@@ -306,6 +308,22 @@ export class AdditionalExpensesService {
     const vatAmount = vatRate > 0 ? (amount * vatRate) / (100 + vatRate) : 0;
 
     return this.prisma.$transaction(async (tx) => {
+      // F9: lock the row and re-check the status inside the transaction; a
+      // post committed after the check above must not have its lines replaced.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'additionalExpense',
+        id,
+        tenantId,
+      );
+      if (lockedStatus === null) {
+        throw new NotFoundException('Qo‘shimcha xarajat hujjati topilmadi');
+      }
+      if (lockedStatus !== PurchaseDocStatus.DRAFT) {
+        throw new BadRequestException(
+          'Faqat qoralama holatidagi xarajatlarni tahrirlash mumkin',
+        );
+      }
       await tx.additionalExpenseItem.deleteMany({
         where: { expense: { tenantId }, expenseId: id },
       });
@@ -473,16 +491,25 @@ export class AdditionalExpensesService {
       select: { expenseType: true, amount: true, currency: true },
     });
 
-    const totalTransport = allPosted
-      .filter((e) => e.expenseType === 'TRANSPORT')
-      .reduce((s, e) => s + Number(e.amount), 0);
-    const totalCustoms = allPosted
-      .filter((e) => e.expenseType === 'CUSTOMS')
-      .reduce((s, e) => s + Number(e.amount), 0);
-    const totalBroker = allPosted
-      .filter((e) => e.expenseType === 'BROKER')
-      .reduce((s, e) => s + Number(e.amount), 0);
-    const totalAll = allPosted.reduce((s, e) => s + Number(e.amount), 0);
+    // ADR 0023 / F8: one amount per currency, never a cross-currency sum or a guessed label.
+    const byCurrency = (type?: string) => {
+      const totals = new Map<string, number>();
+      for (const e of allPosted) {
+        if (type && e.expenseType !== type) continue;
+        totals.set(
+          e.currency,
+          (totals.get(e.currency) ?? 0) + Number(e.amount),
+        );
+      }
+      return [...totals.entries()]
+        .sort(([a], [b]) =>
+          a === b ? 0 : a === 'UZS' ? -1 : b === 'UZS' ? 1 : a.localeCompare(b),
+        )
+        .map(([currency, amount]) => ({
+          currency,
+          amount: Math.round(amount * 100) / 100,
+        }));
+    };
 
     return {
       items,
@@ -491,11 +518,10 @@ export class AdditionalExpensesService {
       limit: Number(limit),
       totalPages: Math.ceil(total / Number(limit)),
       stats: {
-        totalTransport,
-        totalCustoms,
-        totalBroker,
-        totalAll,
-        currency: allPosted[0]?.currency || items[0]?.currency || 'USD',
+        transport: byCurrency('TRANSPORT'),
+        customs: byCurrency('CUSTOMS'),
+        broker: byCurrency('BROKER'),
+        all: byCurrency(),
       },
     };
   }
@@ -731,8 +757,20 @@ export class AdditionalExpensesService {
               );
               const newUnitCogs = currentUnitCogs + allocatedPerUnit;
               const newLineCogs = currentLineCogs + lineCogsDelta;
-              const newGrossProfit =
-                Number(consumption.salesInvoiceItem.totalPrice) - newLineCogs;
+              const invoice = await tx.salesInvoice.findUnique({
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
+              });
+              if (!invoice) {
+                throw new BadRequestException(
+                  'Sotuv hujjati topilmadi (tannarxni qayta hisoblash)',
+                );
+              }
+              const newGrossProfit = salesProfitInUzs(
+                invoice,
+                Number(consumption.salesInvoiceItem.totalPrice) -
+                  Number(consumption.salesInvoiceItem.vatAmount || 0),
+                newLineCogs,
+              );
 
               await tx.salesInvoiceItem.update({
                 where: {
@@ -760,11 +798,11 @@ export class AdditionalExpensesService {
                 return s + Number(it.lineCogs || 0);
               }, 0);
 
-              const invoice = await tx.salesInvoice.findUnique({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-              });
-              const newInvoiceGrossProfit =
-                Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
+              const newInvoiceGrossProfit = salesProfitInUzs(
+                invoice,
+                Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
+                invoiceTotalCogs,
+              );
 
               await tx.salesInvoice.update({
                 where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
@@ -1086,9 +1124,20 @@ export class AdditionalExpensesService {
                 0,
                 currentLineCogs - lineCogsDelta,
               );
-              const restoredGrossProfit =
+              const invoice = await tx.salesInvoice.findUnique({
+                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
+              });
+              if (!invoice) {
+                throw new BadRequestException(
+                  'Sotuv hujjati topilmadi (tannarxni qayta hisoblash)',
+                );
+              }
+              const restoredGrossProfit = salesProfitInUzs(
+                invoice,
                 Number(consumption.salesInvoiceItem.totalPrice) -
-                restoredLineCogs;
+                  Number(consumption.salesInvoiceItem.vatAmount || 0),
+                restoredLineCogs,
+              );
 
               await tx.salesInvoiceItem.update({
                 where: {
@@ -1116,11 +1165,11 @@ export class AdditionalExpensesService {
                 return s + Number(it.lineCogs || 0);
               }, 0);
 
-              const invoice = await tx.salesInvoice.findUnique({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-              });
-              const newInvoiceGrossProfit =
-                Number(invoice?.totalAmount || 0) - invoiceTotalCogs;
+              const newInvoiceGrossProfit = salesProfitInUzs(
+                invoice,
+                Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
+                invoiceTotalCogs,
+              );
 
               await tx.salesInvoice.update({
                 where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
@@ -1188,5 +1237,31 @@ export class AdditionalExpensesService {
 
       return cancelledExpense;
     });
+  }
+}
+
+/**
+ * Gross profit of a sales invoice (or line) after its COGS is recalibrated
+ * (ADR 0008): net revenue excluding VAT, converted to UZS at the invoice's
+ * rate, minus COGS in UZS (ADR 0011), the same rule as posting the invoice.
+ */
+function salesProfitInUzs(
+  invoice: { currency: string; exchangeRate: Prisma.Decimal | number },
+  netRevenue: number,
+  cogsInUzs: number,
+): number {
+  try {
+    return grossProfitInUzs(
+      netRevenue,
+      invoice.currency,
+      Number(invoice.exchangeRate),
+      cogsInUzs,
+    );
+  } catch (error) {
+    throw new BadRequestException(
+      error instanceof Error
+        ? error.message
+        : 'Yalpi foydani hisoblab bo‘lmadi',
+    );
   }
 }

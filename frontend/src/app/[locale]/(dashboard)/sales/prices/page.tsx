@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatPercent, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -40,10 +42,24 @@ export default function PricesPage() {
   const isRu = locale === 'ru';
   const defaultCurrency = useDefaultCurrency();
 
-  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [, setLoading] = useState(true);
-  const [selectedPLId, setSelectedPLId] = useState<string | null>(null);
+  const invalidateApi = useInvalidateApi();
+  const priceListsQuery = useApiQuery<PriceList[]>('/sales/price-lists');
+  const productsQuery = useApiQuery<Product[]>('/inventory/products');
+  const priceLists = priceListsQuery.data ?? [];
+  const products = productsQuery.data ?? [];
+  const loadFailed = priceListsQuery.isError || productsQuery.isError;
+  const retryLoad = () => {
+    if (priceListsQuery.isError) void priceListsQuery.refetch();
+    if (productsQuery.isError) void productsQuery.refetch();
+  };
+  // The list chosen earlier in this browser session, if any.
+  const [selectedPLId, setSelectedPLId] = useState<string | null>(() => {
+    try {
+      return typeof window === 'undefined' ? null : sessionStorage.getItem('sklad_selected_price_list_id');
+    } catch {
+      return null;
+    }
+  });
 
   const [showCreatePL, setShowCreatePL] = useState(false);
   const [newPLNameUz, setNewPLNameUz] = useState('');
@@ -56,7 +72,7 @@ export default function PricesPage() {
   const [showEditPL, setShowEditPL] = useState(false);
   const [editPLNameUz, setEditPLNameUz] = useState('');
   const [editPLNameRu, setEditPLNameRu] = useState('');
-  const [editPLCurrency, setEditPLCurrency] = useState(defaultCurrency);
+  const [editPLCurrency, setEditPLCurrency] = useState('');
   const [editPLDefault, setEditPLDefault] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -68,53 +84,25 @@ export default function PricesPage() {
   const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
   const [savingPrice, setSavingPrice] = useState<string | null>(null);
 
-  // Restore saved active price list on initial mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('sklad_selected_price_list_id');
-      if (saved) setSelectedPLId(saved);
-    }
-  }, []);
-
   const selectPriceList = (id: string) => {
     setSelectedPLId(id);
-    if (typeof window !== 'undefined') {
+    try {
       sessionStorage.setItem('sklad_selected_price_list_id', id);
+    } catch {
+      // storage unavailable (private mode): the choice lasts for this visit
     }
   };
 
+  // A chosen list that no longer exists falls back to the default list.
   const selectedPL =
     priceLists.find((pl) => pl.id === selectedPLId) ||
+    priceLists.find((pl) => pl.isDefault) ||
     priceLists[0] ||
     null;
 
   const getProductName = (p: Product) =>
     typeof p.name === 'object' ? (p.name[locale] || p.name.ru || p.name.uz || '') : (p.name || '');
 
-  const fetchData = () => {
-    if (!token || !company) return;
-    setLoading(true);
-    Promise.all([
-      apiFetch<PriceList[]>('/sales/price-lists', { token: token || undefined, tenantId: company.id, locale }),
-      apiFetch<Product[]>('/inventory/products', { token: token || undefined, tenantId: company.id, locale }),
-    ])
-      .then(([pls, prods]) => {
-        const list = pls || [];
-        setPriceLists(list);
-        setProducts(prods || []);
-        if (list.length > 0) {
-          setSelectedPLId((prev) => {
-            if (prev && list.some((p) => p.id === prev)) return prev;
-            const def = list.find((p) => p.isDefault) || list[0];
-            return def.id;
-          });
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { fetchData(); }, [token, company, locale]);
 
   const handleCreatePL = async () => {
     if (!token || !company || !newPLNameUz) return;
@@ -140,7 +128,7 @@ export default function PricesPage() {
       setNewPLNameRu('');
       setNewPLDefault(false);
       toast.success(isRu ? 'Прайс-лист успешно создан' : 'Narx jadvali muvaffaqiyatli yaratildi');
-      fetchData();
+      void invalidateApi('/sales/price-lists');
       if (created) selectPriceList(created.id);
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка создания прайс-листа' : 'Narx jadvalini yaratishda xatolik'));
@@ -178,7 +166,7 @@ export default function PricesPage() {
       });
       setShowEditPL(false);
       toast.success(isRu ? 'Прайс-лист успешно обновлен' : 'Narx jadvali muvaffaqiyatli yangilandi');
-      fetchData();
+      void invalidateApi('/sales/price-lists');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления прайс-листа' : 'Narx jadvalini tahrirlashda xatolik'));
     } finally {
@@ -198,7 +186,7 @@ export default function PricesPage() {
       });
       setDeletingPL(null);
       toast.success(isRu ? 'Прайс-лист успешно удален' : 'Narx jadvali muvaffaqiyatli o‘chirildi');
-      fetchData();
+      void invalidateApi('/sales/price-lists');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка удаления прайс-листа' : 'Narx jadvalini o‘chirishda xatolik'));
     } finally {
@@ -240,22 +228,9 @@ export default function PricesPage() {
         }),
       });
 
-      // Optimistically update local priceLists state so the table immediately shows new price
-      setPriceLists((prev) =>
-        prev.map((pl) => {
-          if (pl.id !== targetPLId) return pl;
-          const oldPrices = pl.prices || [];
-          const existingIdx = oldPrices.findIndex((p) => p.productId === productId);
-          let newPrices: NonNullable<PriceList['prices']>;
-          if (existingIdx >= 0) {
-            newPrices = [...oldPrices];
-            newPrices[existingIdx] = { ...newPrices[existingIdx], price: Number(priceVal) };
-          } else {
-            newPrices = [...oldPrices, { id: 'temp-' + Date.now(), productId, price: Number(priceVal) }];
-          }
-          return { ...pl, prices: newPrices };
-        }),
-      );
+      // Reload the lists before leaving edit mode, so the row shows the saved
+      // price and never flashes the old one.
+      await invalidateApi('/sales/price-lists');
 
       setEditingPrices((prev) => {
         const next = { ...prev };
@@ -263,7 +238,6 @@ export default function PricesPage() {
         return next;
       });
 
-      fetchData();
       toast.success(isRu ? 'Цена успешно сохранена' : 'Narx muvaffaqiyatli saqlandi');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка сохранения цены' : 'Narxni saqlashda xatolik'));
@@ -285,6 +259,16 @@ export default function PricesPage() {
           <Plus size={16} /> {isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'}
         </Button>
       </div>
+
+      {loadFailed && (
+        <Card>
+          <LoadError
+            error={priceListsQuery.error ?? productsQuery.error}
+            onRetry={retryLoad}
+            retrying={priceListsQuery.isFetching || productsQuery.isFetching}
+          />
+        </Card>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 'var(--space-5)', alignItems: 'start' }}>
         {/* Price list tabs */}

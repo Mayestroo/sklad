@@ -48,7 +48,7 @@ describe('journal entry numbering (real database)', () => {
     await prisma.$disconnect();
   });
 
-  const post = (entryDate?: Date) =>
+  const post = (entryDate: Date = new Date()) =>
     journal.createJournalEntry(tenantId, {
       description: 'test',
       entryDate,

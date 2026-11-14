@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { formatCurrency, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatPercent, errorMessage, type LocalizedName } from '@/lib/utils';
 import { SalesInvoice, SalesInvoiceItem } from '@shared/types';
 
 /** GET /sales/invoices/:id/returnable-items */
@@ -24,6 +24,8 @@ interface ReturnableItemRow {
   returnableQuantity: number | string;
   unitPrice: number | string;
   unitVatAmount?: number | string | null;
+  /** Source line discount percentage, already applied in unitPrice. */
+  discount?: number | string | null;
   vatRate?: number | string | null;
 }
 import { RotateCcw, AlertCircle, Barcode, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
@@ -47,6 +49,7 @@ interface ReturnableItemState {
   returnQty: number;
   unitPrice: number;
   unitVatAmount: number;
+  discount: number;
   vatRate: number;
   isDefective: boolean;
 }
@@ -133,6 +136,7 @@ export function CreateSalesReturnModal({
               returnQty: 0,
               unitPrice: Number(i.unitPrice),
               unitVatAmount: Number(i.unitVatAmount || 0),
+              discount: Number(i.discount ?? 0),
               vatRate: Number(i.vatRate || 0),
               isDefective: false,
             }))
@@ -151,6 +155,7 @@ export function CreateSalesReturnModal({
               returnQty: 0,
               unitPrice: Number(i.totalPrice ?? i.unitPrice * i.quantity) / Number(i.quantity) - Number(i.vatAmount || 0) / Number(i.quantity),
               unitVatAmount: Number(i.vatAmount || 0) / Number(i.quantity),
+              discount: Number(i.discount ?? 0),
               vatRate: Number(i.vatRate || 0),
               isDefective: false,
             }))
@@ -172,6 +177,7 @@ export function CreateSalesReturnModal({
               returnQty: 0,
               unitPrice: Number(i.totalPrice ?? i.unitPrice * i.quantity) / Number(i.quantity) - Number(i.vatAmount || 0) / Number(i.quantity),
               unitVatAmount: Number(i.vatAmount || 0) / Number(i.quantity),
+              discount: Number(i.discount ?? 0),
               vatRate: Number(i.vatRate || 0),
               isDefective: false,
             }))
@@ -502,6 +508,9 @@ export function CreateSalesReturnModal({
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(item.unitPrice, locale, invoice.currency)}
+                        {item.discount > 0 && (
+                          <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>-{formatPercent(item.discount)}</div>
+                        )}
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                         <div>{formatCurrency(lineVat, locale, invoice.currency)}</div>

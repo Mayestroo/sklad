@@ -12,7 +12,7 @@ import { Select, SelectOption } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatNumber, CURRENCY_OPTIONS } from '@/lib/utils';
-import { convertCostPriceToDocumentCurrency } from '@/lib/inventory-cost';
+import { documentUnitPriceFromProductCost } from '@/lib/inventory-cost';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -196,13 +196,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     setProducts((prev) => [newProduct, ...prev]);
 
     const qty = Number(initialQuantity) || 1;
-    const price = convertCostPriceToDocumentCurrency(
-      Number(newProduct.costPrice) || 0,
-      newProduct.costPriceCurrency || 'UZS',
-      Number(newProduct.costPriceExchangeRate || 1),
-      currency || 'UZS',
-      Number(exchangeRate),
-    ) ?? 0;
+    const price = documentUnitPriceFromProductCost(newProduct, currency, Number(exchangeRate));
 
     if (activeRowIndexForNewProduct !== null && items[activeRowIndexForNewProduct]) {
       const targetIdx = activeRowIndexForNewProduct;
@@ -295,13 +289,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       if (field === 'productId') {
         const p = products.find((prod) => prod.id === value);
         if (p) {
-          next[index].unitPrice = convertCostPriceToDocumentCurrency(
-            Number(p.costPrice) || 0,
-            p.costPriceCurrency || 'UZS',
-            Number(p.costPriceExchangeRate || 1),
-            currency || 'UZS',
-            Number(exchangeRate),
-          ) ?? 0;
+          next[index].unitPrice = documentUnitPriceFromProductCost(p, currency, Number(exchangeRate));
         }
       }
       return next;
@@ -337,13 +325,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             {
               productId: matched.id,
               quantity: 1,
-              unitPrice: convertCostPriceToDocumentCurrency(
-                Number(matched.costPrice) || 0,
-                matched.costPriceCurrency || 'UZS',
-                Number(matched.costPriceExchangeRate || 1),
-                currency || 'UZS',
-                Number(exchangeRate),
-              ) ?? 0,
+              unitPrice: documentUnitPriceFromProductCost(matched, currency, Number(exchangeRate)),
               discount: 0,
               vatRate: 12,
             },

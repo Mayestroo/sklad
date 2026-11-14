@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { useLocale } from 'next-intl';
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 
@@ -31,6 +31,18 @@ export interface UseApiQueryOptions {
    * (see FORM_SNAPSHOT).
    */
   gcTime?: number;
+  /**
+   * 'tenant' (default): company data; waits for a company and sends it as
+   * `X-Tenant-Id`. 'platform': super-admin endpoints that are not about one
+   * company; needs only a token and never sends the selected company.
+   */
+  scope?: 'tenant' | 'platform';
+  /**
+   * true: while a new endpoint (another period, page or filter) loads, keep
+   * showing the previous result instead of an empty screen. `isPlaceholderData`
+   * tells the page the numbers are the old ones.
+   */
+  keepPrevious?: boolean;
 }
 
 /** Options for a document loaded once per visit into an edit form. */
@@ -49,8 +61,9 @@ export function useApiQuery<T>(
 ): UseQueryResult<T, Error> {
   const { token, company } = useAuth();
   const locale = useLocale();
-  const tenantId = company?.id;
-  const ready = Boolean(endpoint && token && tenantId) && (options.enabled ?? true);
+  const platform = options.scope === 'platform';
+  const tenantId = platform ? undefined : company?.id;
+  const ready = Boolean(endpoint && token && (platform || tenantId)) && (options.enabled ?? true);
 
   return useQuery<T, Error>({
     queryKey: apiQueryKey(tenantId, endpoint ?? '', locale),
@@ -64,6 +77,7 @@ export function useApiQuery<T>(
     enabled: ready,
     ...(options.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
     ...(options.gcTime !== undefined ? { gcTime: options.gcTime } : {}),
+    ...(options.keepPrevious ? { placeholderData: keepPreviousData } : {}),
   });
 }
 

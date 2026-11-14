@@ -272,10 +272,15 @@ export class SuperAdminService {
       this.prisma.user.count(),
     ]);
 
-    let totalMrr = 0;
-    subscriptions.forEach((sub) => {
-      totalMrr += Number(sub.amount);
-    });
+    // ADR 0023: subscription amounts are kept apart per currency, never summed.
+    const mrr = new Map<string, number>();
+    for (const sub of subscriptions) {
+      mrr.set(sub.currency, (mrr.get(sub.currency) ?? 0) + Number(sub.amount));
+    }
+    const mrrByCurrency = [...mrr].map(([currency, amount]) => ({
+      currency,
+      amount: Math.round(amount * 100) / 100,
+    }));
 
     const activeTenantsCount = companies.filter(
       (c) => c.status === 'ACTIVE',
@@ -285,7 +290,7 @@ export class SuperAdminService {
     ).length;
 
     return {
-      totalMrr,
+      mrrByCurrency,
       activeTenantsCount,
       trialTenantsCount,
       totalUsersCount,

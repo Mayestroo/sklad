@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, errorMessage } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
@@ -129,14 +132,16 @@ export default function CounterpartiesPage() {
   const isRu = locale === 'ru';
   const defaultCurrency = useDefaultCurrency();
 
-  const [items, setItems] = useState<Counterparty[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<CounterpartySummary | null>(null);
+  const invalidateApi = useInvalidateApi();
+  // List, summary and folders all live under /sales/counterparties.
+  const refreshCounterparties = () => void invalidateApi('/sales/counterparties');
+  const summary = useApiQuery<CounterpartySummary>('/sales/counterparties/summary').data ?? null;
+  const foldersData = useApiQuery<FoldersResponse>('/sales/counterparties/folders').data;
 
   // Folder states
-  const [folders, setFolders] = useState<CounterpartyFolder[]>([]);
-  const [unassignedCount, setUnassignedCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
+  const folders = foldersData?.folders ?? [];
+  const unassignedCount = foldersData?.unassignedCount ?? 0;
+  const totalCount = foldersData?.totalCount ?? 0;
   const [activeFolderId, setActiveFolderId] = useState<string>('all');
 
   // Filter state
@@ -144,6 +149,24 @@ export default function CounterpartiesPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [hasDebtOnly, setHasDebtOnly] = useState(false);
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'receivables' | 'payables' | 'settled'>('all');
+
+  // Typed filters apply 300 ms after the last change; the folder at once.
+  const filterParams = useMemo(() => {
+    const query = new URLSearchParams();
+    if (search) query.append('search', search);
+    if (typeFilter) query.append('type', typeFilter);
+    if (hasDebtOnly) query.append('hasDebt', 'true');
+    if (balanceFilter && balanceFilter !== 'all') query.append('balanceFilter', balanceFilter);
+    return query.toString();
+  }, [search, typeFilter, hasDebtOnly, balanceFilter]);
+  const debouncedFilterParams = useDebouncedValue(filterParams, 300);
+  const listEndpoint = useMemo(() => {
+    const query = new URLSearchParams(debouncedFilterParams);
+    if (activeFolderId) query.append('folderId', activeFolderId);
+    return `/sales/counterparties?${query.toString()}`;
+  }, [debouncedFilterParams, activeFolderId]);
+  const listQuery = useApiQuery<Counterparty[]>(listEndpoint);
+  const items = listQuery.data ?? [];
 
   // Quick Payment & Akt Sverka Drawer states
   const [paymentCounterparty, setPaymentCounterparty] = useState<PaymentCounterparty | null>(null);
@@ -187,91 +210,11 @@ export default function CounterpartiesPage() {
 
   // Detail Modal state
   const [detailItem, setDetailItem] = useState<Counterparty | null>(null);
-  const [customerOrdersData, setCustomerOrdersData] = useState<CustomerOrdersData | null>(null);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-
-  useEffect(() => {
-    if (!detailItem || !token || !company) {
-      setCustomerOrdersData(null);
-      return;
-    }
-    setOrdersLoading(true);
-    apiFetch<CustomerOrdersData>(`/sales/orders/by-counterparty/${detailItem.id}`, {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setCustomerOrdersData(res))
-      .catch(console.error)
-      .finally(() => setOrdersLoading(false));
-  }, [detailItem, token, company, locale]);
-
-  const fetchSummary = () => {
-    if (!token || !company) return;
-    apiFetch<CounterpartySummary>('/sales/counterparties/summary', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => {
-        if (res) setSummary(res);
-      })
-      .catch(console.error);
-  };
-
-  const fetchFolders = () => {
-    if (!token || !company) return;
-    apiFetch<FoldersResponse>('/sales/counterparties/folders', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => {
-        if (res) {
-          setFolders(res.folders || []);
-          setUnassignedCount(res.unassignedCount || 0);
-          setTotalCount(res.totalCount || 0);
-        }
-      })
-      .catch(console.error);
-  };
-
-  const fetchCounterparties = () => {
-    if (!token || !company) return;
-    setLoading(true);
-
-    const query = new URLSearchParams();
-    if (search) query.append('search', search);
-    if (typeFilter) query.append('type', typeFilter);
-    if (hasDebtOnly) query.append('hasDebt', 'true');
-    if (balanceFilter && balanceFilter !== 'all') query.append('balanceFilter', balanceFilter);
-    if (activeFolderId) query.append('folderId', activeFolderId);
-
-    apiFetch<Counterparty[]>(`/sales/counterparties?${query.toString()}`, {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setItems(res || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchFolders();
-    fetchSummary();
-  }, [token, company, locale]);
-
-  useEffect(() => {
-    fetchCounterparties();
-  }, [token, company, locale, activeFolderId]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchCounterparties();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search, typeFilter, hasDebtOnly, balanceFilter]);
+  const ordersQuery = useApiQuery<CustomerOrdersData>(
+    detailItem ? `/sales/orders/by-counterparty/${detailItem.id}` : null,
+  );
+  const customerOrdersData = detailItem ? (ordersQuery.data ?? null) : null;
+  const ordersLoading = Boolean(detailItem) && ordersQuery.isPending;
 
   const handleDeleteCounterparty = async () => {
     if (!deletingCounterparty || !token || !company) return;
@@ -284,9 +227,7 @@ export default function CounterpartiesPage() {
         locale,
       });
       setDeletingCounterparty(null);
-      fetchCounterparties();
-      fetchSummary();
-      fetchFolders();
+      refreshCounterparties();
       toast.success(isRu ? 'Контрагент успешно удален' : 'Kontragent muvaffaqiyatli o‘chirildi');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении контрагента' : 'Kontragentni o‘chirishda xatolik'));
@@ -370,8 +311,7 @@ export default function CounterpartiesPage() {
       }
 
       setIsFolderModalOpen(false);
-      fetchFolders();
-      fetchCounterparties();
+      refreshCounterparties();
     } catch (err) {
       setFolderError(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik yuz berdi'));
     } finally {
@@ -395,8 +335,7 @@ export default function CounterpartiesPage() {
         setActiveFolderId('all');
       }
       setDeleteFolderId(null);
-      fetchFolders();
-      fetchCounterparties();
+      refreshCounterparties();
     } catch (err) {
       console.error(err);
     } finally {
@@ -422,9 +361,7 @@ export default function CounterpartiesPage() {
       });
 
       setMoveItem(null);
-      fetchFolders();
-      fetchSummary();
-      fetchCounterparties();
+      refreshCounterparties();
     } catch (err) {
       console.error(err);
     } finally {
@@ -933,7 +870,9 @@ export default function CounterpartiesPage() {
 
           {/* Counterparties Table */}
           <Card style={{ overflow: 'hidden' }}>
-            {loading ? (
+            {listQuery.isError ? (
+              <LoadError error={listQuery.error} onRetry={() => void listQuery.refetch()} retrying={listQuery.isFetching} />
+            ) : listQuery.isPending ? (
               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
                 <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
                 {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
@@ -1148,9 +1087,7 @@ export default function CounterpartiesPage() {
           onSuccess={() => {
             setIsCreateOpen(false);
             setEditingCounterparty(null);
-            fetchFolders();
-            fetchCounterparties();
-            fetchSummary();
+            refreshCounterparties();
           }}
         />
       )}
@@ -1433,8 +1370,7 @@ export default function CounterpartiesPage() {
           onClose={closeQuickPayment}
           onSuccess={() => {
             closeQuickPayment();
-            fetchSummary();
-            fetchCounterparties();
+            refreshCounterparties();
           }}
         />
       )}

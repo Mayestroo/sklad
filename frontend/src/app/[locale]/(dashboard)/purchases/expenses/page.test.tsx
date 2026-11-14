@@ -6,7 +6,6 @@ const apiFetch = vi.fn();
 vi.mock('@/lib/api', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
 const auth = { token: 'tok', company: { id: 'tenant-1' } };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
-vi.mock('@/hooks/useDefaultCurrency', () => ({ useDefaultCurrency: () => 'UZS' }));
 vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,
@@ -16,6 +15,7 @@ vi.mock('@/context/ConfirmContext', () => ({ useConfirm: () => vi.fn() }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import ExpensesPage from './page';
+import { formatCurrency } from '@/lib/utils';
 
 const response = (docNumber: string) => ({
   items: [
@@ -34,7 +34,7 @@ const response = (docNumber: string) => ({
   total: 1,
   page: 1,
   limit: 20,
-  stats: { totalTransport: 1000, totalCustoms: 0, totalBroker: 0, totalAll: 1000 },
+  stats: { transport: [{ currency: 'UZS', amount: 1000 }], customs: [], broker: [], all: [{ currency: 'UZS', amount: 1000 }] },
 });
 
 describe('Additional expenses page', () => {
@@ -72,5 +72,30 @@ describe('Additional expenses page', () => {
 
     expect(await screen.findByText('AE-0001')).toBeTruthy();
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('Additional expenses KPI totals (F8, ADR 0023)', () => {
+  it('shows one amount per currency instead of a summed, guessed-currency total', async () => {
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({
+      ...response('AE-0001'),
+      stats: {
+        transport: [{ currency: 'UZS', amount: 500000 }, { currency: 'USD', amount: 100 }],
+        customs: [],
+        broker: [],
+        all: [{ currency: 'UZS', amount: 500000 }, { currency: 'USD', amount: 100 }],
+      },
+    });
+    renderPage(<ExpensesPage />);
+
+    const transportLabel = await screen.findByText('Transport Xarajatlari');
+    const card = transportLabel.parentElement as HTMLElement;
+    await waitFor(() => expect(card.textContent).toContain(formatCurrency(500000, 'uz', 'UZS')));
+    expect(card.textContent).toContain(formatCurrency(100, 'uz', 'USD'));
+    expect(card.textContent).not.toContain(formatCurrency(500100, 'uz', 'UZS'));
+
+    const customsCard = screen.getByText('Bojxona To‘lovlari').parentElement as HTMLElement;
+    expect(customsCard.textContent).toContain('—');
   });
 });

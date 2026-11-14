@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 
 import { ExpenseAllocationMethod, ExpenseType } from '@prisma/client';
+import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 /** The DTO accepts exactly the database enums. */
 export const ExpenseTypeDto = ExpenseType;
@@ -31,9 +32,9 @@ export class CreatePurchaseExpenseDto {
   @Min(0.01)
   amount: number;
 
-  @IsOptional()
-  @IsString()
-  currency?: string;
+  // F8 / ADR 0022: required; a missing currency used to fall to the column default (UZS).
+  @IsValidCurrency()
+  currency: string;
 
   @IsOptional()
   @IsEnum(ExpenseAllocationMethodDto)

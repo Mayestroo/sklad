@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesInvoicesService } from './sales-invoices.service';
 import { PrismaService } from '../../../common/prisma';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import {
   SalesDocStatus,
@@ -164,6 +164,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
     });
 
     it('updates a draft through the edit endpoint with percent discount and VAT totals', async () => {
+      prisma.$queryRaw = jest.fn().mockResolvedValue([{ status: 'DRAFT' }]);
       prisma.salesInvoice.findFirst.mockResolvedValue({
         id: 'inv-draft',
         tenantId: 'tenant-1',
@@ -211,6 +212,94 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         }),
       );
       expect(prisma.auditLog.create).toHaveBeenCalled();
+    });
+
+    describe('draft edit (PATCH /sales/invoices/:id, plan T4)', () => {
+      const draftDto = {
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 100 }],
+      };
+      const stored = (status: SalesDocStatus) => ({
+        id: 'inv-x',
+        tenantId: 'tenant-1',
+        status,
+        invoiceDate: new Date('2026-10-01'),
+        items: [],
+      });
+      const expectNoPostingEffects = () => {
+        expect(prisma.stockLevel.update).not.toHaveBeenCalled();
+        expect(prisma.journalEntry.create).not.toHaveBeenCalled();
+        expect(settlementService.recordMovement).not.toHaveBeenCalled();
+      };
+
+      beforeEach(() => {
+        prisma.$queryRaw = jest.fn().mockResolvedValue([{ status: 'DRAFT' }]);
+        prisma.salesInvoice.update.mockImplementation(({ data }: any) => ({
+          id: 'inv-x',
+          status: SalesDocStatus.DRAFT,
+          ...data,
+          items: data.items.create,
+        }));
+      });
+
+      it('replaces a draft under a row lock without stock, ledger or settlement effects', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(
+          stored(SalesDocStatus.DRAFT),
+        );
+
+        await service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto);
+
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+        expect(prisma.salesInvoice.update).toHaveBeenCalledTimes(1);
+        expectNoPostingEffects();
+      });
+
+      it('404s for an invoice of another tenant or a missing one', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(null);
+        await expect(
+          service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+        ).rejects.toThrow(NotFoundException);
+        expect(prisma.salesInvoice.update).not.toHaveBeenCalled();
+      });
+
+      it.each([SalesDocStatus.POSTED, SalesDocStatus.CANCELLED])(
+        'refuses to edit a %s invoice',
+        async (status) => {
+          prisma.salesInvoice.findFirst.mockResolvedValue(stored(status));
+          await expect(
+            service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+          ).rejects.toThrow(BadRequestException);
+          expect(prisma.salesInvoice.update).not.toHaveBeenCalled();
+          expectNoPostingEffects();
+        },
+      );
+
+      it('refuses when the invoice was posted after it was read (status re-checked under the lock)', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(
+          stored(SalesDocStatus.DRAFT),
+        );
+        prisma.$queryRaw = jest.fn().mockResolvedValue([{ status: 'POSTED' }]);
+
+        await expect(
+          service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.salesInvoice.update).not.toHaveBeenCalled();
+      });
+
+      it('rolls back as a whole when replacing the lines fails', async () => {
+        prisma.salesInvoice.findFirst.mockResolvedValue(
+          stored(SalesDocStatus.DRAFT),
+        );
+        prisma.salesInvoice.update.mockRejectedValue(new Error('db down'));
+
+        await expect(
+          service.updateInvoice('tenant-1', 'user-1', 'inv-x', draftDto),
+        ).rejects.toThrow('db down');
+        expect(prisma.auditLog.create).not.toHaveBeenCalled();
+        expectNoPostingEffects();
+      });
     });
 
     it('should throw BadRequestException if items array is empty', async () => {
@@ -1071,6 +1160,139 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(prisma.journalEntry.create).not.toHaveBeenCalled();
     });
 
+    it('lists each returnable line with its source discount and VAT rates (plan T3.6)', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 2,
+            unitPrice: 100,
+            discount: 10,
+            vatRate: 12,
+            vatAmount: 21.6,
+            totalPrice: 201.6,
+            unitCogs: 40,
+            product: { name: { uz: 'M1' }, sku: 'S1', unitOfMeasure: 'piece' },
+          },
+        ],
+        returns: [],
+      });
+
+      const [item] = await service.getInvoiceReturnableItems(
+        'tenant-1',
+        'inv-1',
+      );
+
+      expect(item).toMatchObject({
+        discount: 10,
+        vatRate: 12,
+        unitPrice: 90,
+        unitVatAmount: 10.8,
+        unitTotalPrice: 100.8,
+      });
+    });
+
+    it('derives a return line from the source line, keeps its discount and ignores the client price (plan T3.6)', async () => {
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesDocStatus.POSTED,
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 2,
+            unitPrice: 100,
+            discount: 10,
+            vatRate: 12,
+            vatAmount: 21.6,
+            totalPrice: 201.6,
+            unitCogs: 40,
+          },
+        ],
+        returns: [],
+      });
+      prisma.salesReturn.count.mockResolvedValue(0);
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-draft',
+        ...data,
+      }));
+
+      await service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesReturnDocStatus.DRAFT,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 9999 }],
+      });
+
+      const { data } = prisma.salesReturn.create.mock.calls[0][0];
+      expect(data.items.create[0]).toMatchObject({
+        unitPrice: 90,
+        discount: 10,
+        vatRate: 12,
+        vatAmount: 10.8,
+        totalPrice: 100.8,
+      });
+      expect(data.totalAmount).toBe(100.8);
+    });
+
+    it('prorates partial returns cumulatively so they add up to the source line exactly (plan T3.7)', async () => {
+      // 3 sold for 612.16 incl. 65.50 VAT. Three single returns of 204.05
+      // would give back 612.15; the second one carries the cent: 204.06.
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesDocStatus.POSTED,
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 3,
+            unitPrice: 182.22,
+            discount: 0,
+            vatRate: 12,
+            vatAmount: 65.5,
+            totalPrice: 612.16,
+            unitCogs: 40,
+          },
+        ],
+        returns: [
+          {
+            status: SalesReturnDocStatus.POSTED,
+            items: [{ productId: 'prod-1', quantity: 1 }],
+          },
+        ],
+      });
+      prisma.salesReturn.count.mockResolvedValue(0);
+      prisma.salesReturn.create.mockImplementation(({ data }: any) => ({
+        id: 'sret-draft',
+        ...data,
+      }));
+
+      await service.createReturn('tenant-1', 'user-1', {
+        invoiceId: 'inv-1',
+        counterpartyId: 'cust-1',
+        warehouseId: 'wh-1',
+        currency: 'UZS',
+        status: SalesReturnDocStatus.DRAFT,
+        items: [{ productId: 'prod-1', quantity: 1, unitPrice: 0 }],
+      });
+
+      const { data } = prisma.salesReturn.create.mock.calls[0][0];
+      expect(data.items.create[0]).toMatchObject({
+        vatAmount: 21.84,
+        totalPrice: 204.06,
+      });
+      expect(data.totalAmount).toBe(204.06);
+    });
+
     it('should route defective items to defect warehouse on confirm', async () => {
       prisma.salesReturn.update.mockImplementation(({ where, data }: any) => ({
         id: where.id,
@@ -1261,6 +1483,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         counterpartyId: 'cust-1',
         warehouseId: 'wh-1',
         currency: 'USD',
+        returnDate: '2026-03-15',
         items: [{ productId: 'prod-1', quantity: 2, unitPrice: 112 }],
       });
       expect(journal).toHaveLength(1);
@@ -1292,6 +1515,9 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       expect(journal).toHaveLength(2);
       const reversal = journal[1];
       expect(reversal.sourceDocType).toBe('SalesReturnCancel');
+      // F5: the reversal is dated by the return, never by the cancel moment.
+      expect(reversal.entryDate).toEqual(journal[0].entryDate);
+      expect(reversal.entryDate).toEqual(new Date('2026-03-15'));
       expect(reversal.sourceDocId).toBe('sret-usd');
       expect(reversal.lines).toHaveLength(postingLines.length);
       postingLines.forEach((line: any, i: number) => {
@@ -1631,6 +1857,37 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
             currency: 'USD',
           }),
         ).rejects.toThrow(BadRequestException);
+      });
+      it('refuses to invent a currency when neither the product nor the request names one', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          settings: { sales: { enableMultiTierPriceLists: false } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-free',
+          salePrice: 0,
+          salePriceCurrency: null,
+        });
+
+        await expect(
+          service.resolveProductPrice('tenant-1', 'prod-free', {}),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('prices a zero, currency-less product in the requested document currency', async () => {
+        prisma.company.findUnique.mockResolvedValue({
+          settings: { sales: { enableMultiTierPriceLists: false } },
+        });
+        prisma.product.findFirst.mockResolvedValue({
+          id: 'prod-free',
+          salePrice: 0,
+          salePriceCurrency: null,
+        });
+
+        await expect(
+          service.resolveProductPrice('tenant-1', 'prod-free', {
+            currency: 'USD',
+          }),
+        ).resolves.toMatchObject({ resolvedPrice: 0, currency: 'USD' });
       });
     });
   });

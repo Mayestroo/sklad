@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { salesReturnHeaderFromInvoice } from '@/lib/sales-return';
-import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatDate, formatPercent, errorMessage, type LocalizedName } from '@/lib/utils';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -90,7 +92,12 @@ interface ReturnableItemRow {
   returnedQuantity: number;
   returnableQuantity: number;
   quantity: number;
+  /** Source line net unit price (after discount, before VAT). */
   unitPrice: number;
+  /** Source line discount percentage, already applied in unitPrice. */
+  discount: number;
+  /** Net price plus VAT per unit: what the customer is credited. */
+  unitTotalPrice: number;
   isDefective: boolean;
 }
 
@@ -101,11 +108,13 @@ export default function SalesReturnsPage() {
   const confirm = useConfirm();
   const defaultCurrency = useDefaultCurrency();
 
-  const [returns, setReturns] = useState<SalesReturnRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [counterparties, setCounterparties] = useState<CounterpartyItem[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
-  const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
+  const invalidateApi = useInvalidateApi();
+  const returnsQuery = useApiQuery<SalesReturnRow[]>('/sales/returns');
+  const returns = useMemo(() => returnsQuery.data ?? [], [returnsQuery.data]);
+  const counterparties = useApiQuery<CounterpartyItem[]>('/sales/counterparties').data ?? [];
+  const warehouses = useApiQuery<WarehouseItem[]>('/tenants/warehouses').data ?? [];
+  const invoicesQuery = useApiQuery<InvoiceItem[]>('/sales/invoices?status=POSTED');
+  const invoices = useMemo(() => invoicesQuery.data ?? [], [invoicesQuery.data]);
 
   // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,7 +123,13 @@ export default function SalesReturnsPage() {
   // Create Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [counterpartyId, setCounterpartyId] = useState('');
-  const [defectWarehouseId, setDefectWarehouseId] = useState('');
+  // The user's choice; until they choose, the tenant's defect warehouse
+  // (or the second warehouse) is used.
+  const [defectWarehouseChoice, setDefectWarehouseId] = useState('');
+  const defaultDefectWarehouseId =
+    warehouses.find((w) => w.isDefect || (typeof w.name === 'string' && w.name.toLowerCase().includes('brak')))?.id ??
+    (warehouses.length > 1 ? warehouses[1].id : '');
+  const defectWarehouseId = defectWarehouseChoice || defaultDefectWarehouseId;
   const [invoiceId, setInvoiceId] = useState('');
   // A return is booked in the invoice's own warehouse and currency
   const selectedInvoice = invoices.find((inv) => inv.id === invoiceId);
@@ -123,6 +138,9 @@ export default function SalesReturnsPage() {
   const [reason, setReason] = useState('');
   const [items, setItems] = useState<ReturnableItemRow[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  // Bumped on every invoice change, so a late answer for an earlier invoice
+  // never replaces the items of the current one.
+  const itemsRequest = useRef(0);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -155,7 +173,7 @@ export default function SalesReturnsPage() {
         locale,
       });
       setDeleteConfirmReturn(null);
-      fetchReturns();
+      void invalidateApi('/sales/returns');
     } catch (err) {
       setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления возврата' : "Qaytarishni o'chirishda xatolik"));
     } finally {
@@ -173,69 +191,27 @@ export default function SalesReturnsPage() {
     ? ['Брак / дефект товара', 'Срок годности истек', 'Неправильный размер / артикул', 'Отказ клиента', 'Повреждение при доставке', 'Другое']
     : ['Brak / nuqsonli tovar', 'Yaroqlilik muddati o\'tgan', 'Noto\'g\'ri o\'lcham / tovar', 'Mijoz rad etdi', 'Yetkazib berishda shikastlangan', 'Boshqa'];
 
-  const fetchReturns = () => {
-    if (!token || !company) return;
-    setLoading(true);
-    apiFetch<SalesReturnRow[]>('/sales/returns', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setReturns(res || []))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    if (!token || !company) return;
-    fetchReturns();
-
-    apiFetch<CounterpartyItem[]>('/sales/counterparties', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setCounterparties(res || []))
-      .catch(console.error);
-
-    apiFetch<WarehouseItem[]>('/tenants/warehouses', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => {
-        const list = res || [];
-        setWarehouses(list);
-        const defWh = list.find((w) => w.isDefect || (typeof w.name === 'string' && w.name.toLowerCase().includes('brak')));
-        if (defWh) setDefectWarehouseId(defWh.id);
-        else if (list.length > 1) setDefectWarehouseId(list[1].id);
-      })
-      .catch(console.error);
-
-    apiFetch<InvoiceItem[]>('/sales/invoices?status=POSTED', {
-      token: token || undefined,
-      tenantId: company.id,
-      locale,
-    })
-      .then((res) => setInvoices(res || []))
-      .catch(console.error);
-  }, [token, company, locale]);
-
-  // When invoice selection changes in create form, load returnable items
-  useEffect(() => {
-    if (!invoiceId || !token || !company) {
-      setItems([]);
+  // Choosing an invoice in the create form loads its returnable items into
+  // the editable list (event-driven, so typed quantities are never replaced
+  // by a background reload).
+  const handleInvoiceChange = (nextInvoiceId: string) => {
+    setInvoiceId(nextInvoiceId);
+    const request = ++itemsRequest.current;
+    setItems([]);
+    setFormError(null);
+    if (!nextInvoiceId || !token || !company) {
+      setLoadingItems(false);
       return;
     }
 
     setLoadingItems(true);
-    setFormError(null);
-    apiFetch<Omit<ReturnableItemRow, 'quantity' | 'isDefective'>[]>(`/sales/invoices/${invoiceId}/returnable-items`, {
+    apiFetch<Array<Omit<ReturnableItemRow, 'quantity' | 'isDefective' | 'discount'> & { discount?: number }>>(`/sales/invoices/${nextInvoiceId}/returnable-items`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((res) => {
+        if (request !== itemsRequest.current) return;
         if (res && res.length > 0) {
           setItems(
             res.map((i) => ({
@@ -249,6 +225,8 @@ export default function SalesReturnsPage() {
               returnableQuantity: Number(i.returnableQuantity),
               quantity: 0,
               unitPrice: Number(i.unitPrice),
+              discount: Number(i.discount ?? 0),
+              unitTotalPrice: Number(i.unitTotalPrice),
               isDefective: false,
             }))
           );
@@ -257,16 +235,18 @@ export default function SalesReturnsPage() {
         }
       })
       .catch((err) => {
+        if (request !== itemsRequest.current) return;
         setFormError(err?.message || (isRu ? 'Ошибка загрузки товаров' : 'Tovarlarni yuklashda xatolik'));
       })
-      .finally(() => setLoadingItems(false));
-  }, [invoiceId, token, company, locale]);
+      .finally(() => {
+        if (request === itemsRequest.current) setLoadingItems(false);
+      });
+  };
 
   // Handle counterparty change: auto-filter or clear invoice
   const handleCounterpartyChange = (cpId: string) => {
     setCounterpartyId(cpId);
-    setInvoiceId('');
-    setItems([]);
+    handleInvoiceChange('');
   };
 
   const handleQtyChange = (idx: number, val: number) => {
@@ -323,7 +303,8 @@ export default function SalesReturnsPage() {
     setBarcodeInput('');
   };
 
-  const totalReturnAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  // VAT-inclusive, like the posted return (plan T3.6).
+  const totalReturnAmount = items.reduce((s, i) => s + i.quantity * i.unitTotalPrice, 0);
   const hasDefectiveItems = items.some((i) => i.isDefective && i.quantity > 0);
 
   const handleSubmit = async (submitStatus: 'DRAFT' | 'POSTED') => {
@@ -362,10 +343,9 @@ export default function SalesReturnsPage() {
       });
 
       setShowCreateModal(false);
-      setItems([]);
       setReason('');
-      setInvoiceId('');
-      fetchReturns();
+      handleInvoiceChange('');
+      void invalidateApi('/sales/returns');
     } catch (err) {
       setFormError(errorMessage(err) || (isRu ? 'Произошла ошибка при создании' : 'Qaytarishni yaratishda xatolik yuz berdi'));
     } finally {
@@ -385,7 +365,7 @@ export default function SalesReturnsPage() {
         locale,
       });
       toast.success(isRu ? 'Возврат успешно подтвержден' : 'Qaytarish muvaffaqiyatli tasdiqlandi');
-      fetchReturns();
+      void invalidateApi('/sales/returns');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при подтверждении' : 'Tasdiqlashda xatolik yuz berdi'));
     } finally {
@@ -417,7 +397,7 @@ export default function SalesReturnsPage() {
         locale,
       });
       toast.success(isRu ? 'Возврат успешно отменен' : 'Qaytarish muvaffaqiyatli bekor qilindi');
-      fetchReturns();
+      void invalidateApi('/sales/returns');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik yuz berdi'));
     } finally {
@@ -563,7 +543,17 @@ export default function SalesReturnsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {returnsQuery.isError ? (
+                <tr>
+                  <td colSpan={9}>
+                    <LoadError
+                      error={returnsQuery.error}
+                      onRetry={() => void returnsQuery.refetch()}
+                      retrying={returnsQuery.isFetching}
+                    />
+                  </td>
+                </tr>
+              ) : returnsQuery.isPending ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>
                     {isRu ? 'Загрузка документов...' : 'Hujjatlar yuklanmoqda...'}
@@ -720,7 +710,7 @@ export default function SalesReturnsPage() {
           {/* Form Fields */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
             <Select id="ret-counterparty" label={isRu ? 'Клиент *' : 'Mijoz *'} value={counterpartyId} onChange={handleCounterpartyChange} options={cpOptions} />
-            <Select id="ret-invoice" label={isRu ? 'Исходная продажа *' : 'Asl sotuv hujjati *'} value={invoiceId} onChange={(val) => setInvoiceId(val)} options={invoiceOptions} />
+            <Select id="ret-invoice" label={isRu ? 'Исходная продажа *' : 'Asl sotuv hujjati *'} value={invoiceId} onChange={handleInvoiceChange} options={invoiceOptions} />
             <Select id="ret-warehouse" label={isRu ? 'Склад (из продажи)' : 'Ombor (sotuvdagi)'} value={selectedInvoice?.warehouseId ?? ''} onChange={() => {}} options={whOptions} disabled />
             {hasDefectiveItems && (
               <Select id="ret-defect-warehouse" label={isRu ? 'Склад брака *' : 'Brak ombori *'} value={defectWarehouseId} onChange={(val) => setDefectWarehouseId(val)} options={whOptions} />
@@ -877,9 +867,12 @@ export default function SalesReturnsPage() {
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }} className="tabular-nums">
                             {formatCurrency(item.unitPrice, locale, activeReturnCurrency)}
+                            {item.discount > 0 && (
+                              <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>-{formatPercent(item.discount)}</div>
+                            )}
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }} className="tabular-nums">
-                            {formatCurrency(item.quantity * item.unitPrice, locale, activeReturnCurrency)}
+                            {formatCurrency(item.quantity * item.unitTotalPrice, locale, activeReturnCurrency)}
                           </td>
                         </tr>
                       );

@@ -7,8 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { formatCurrency, formatPriceOrUnset, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -38,7 +37,6 @@ export default function InventoryPage() {
   const canEditProducts = hasPermission('inventory:edit');
   // muammolar B10: the nomenclature list can open a product for editing.
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const defaultCurrency = useDefaultCurrency();
 
   const [search, setSearch] = useState('');
   // The typed search applies on Enter / the filter button, as before.
@@ -314,7 +312,7 @@ export default function InventoryPage() {
                         {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency || 'UZS')}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {formatCurrency(Number(product.salePrice), locale, product.salePriceCurrency || defaultCurrency)}
+                        {formatPriceOrUnset(Number(product.salePrice), locale, product.salePriceCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                         {formatQuantity(Number(product.totalStock ?? 0))} {unitLabel(product.unitOfMeasure, locale)}
@@ -392,7 +390,7 @@ export default function InventoryPage() {
                 <div style={{ fontWeight: 'var(--font-bold)' }}>{getLocalizedName(scanResult.name)}</div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>SKU: {scanResult.sku} | Barcode: {scanResult.barcode}</div>
                 <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-primary-600)', marginTop: '4px' }}>
-                  Narxi: {formatCurrency(Number(scanResult.salePrice), locale, scanResult.salePriceCurrency || defaultCurrency)}
+                  Narxi: {formatPriceOrUnset(Number(scanResult.salePrice), locale, scanResult.salePriceCurrency)}
                 </div>
               </div>
             )}

@@ -43,7 +43,8 @@ import { OrderTotalsSummary } from './order-form/OrderTotalsSummary';
 import type { SalesOrderDetail } from './order-form/types';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
+import { initialDocumentCurrency } from '@/lib/sales-currency';
 import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
 
 // Re-export ORDER_STATUS_LABELS for backward compatibility
@@ -58,7 +59,9 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company, hasPermission } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
+  // New documents start in the tenant sales default, or blank (never a guessed USD).
+  const salesDefault = useSalesDefaultCurrency();
+  const defaultCurrency = initialDocumentCurrency(undefined, salesDefault);
   const router = useRouter();
   const confirm = useConfirm();
 
@@ -101,11 +104,11 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   // Stock is reserved and shipped from this warehouse (ADR 0018)
   const [warehouseId, setWarehouseId] = useState<string>(initialData?.warehouseId || '');
-  const [currency, setCurrency] = useState(initialData?.currency || defaultCurrency);
+  const [currency, setCurrency] = useState(initialDocumentCurrency(initialData?.currency, salesDefault));
   const [exchangeRate, setExchangeRate] = useState<number | string>(
     initialData?.exchangeRate !== undefined
       ? Number(initialData.exchangeRate)
-      : (initialData?.currency || defaultCurrency) === 'UZS' ? 1 : '',
+      : initialDocumentCurrency(initialData?.currency, salesDefault) === 'UZS' ? 1 : '',
   );
   const [paymentCondition, setPaymentCondition] = useState<'PREPAID_100' | 'PARTIAL' | 'CREDIT'>(
     initialData?.paymentCondition || 'PREPAID_100'

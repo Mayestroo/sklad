@@ -253,7 +253,10 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     ]);
     prisma.salesInvoice.findUnique.mockResolvedValue({
       id: 'inv-1',
+      currency: 'UZS',
+      exchangeRate: 1,
       totalAmount: 9000000,
+      vatAmount: 0,
     });
     prisma.additionalExpense.update.mockResolvedValue({
       ...mockExpense,
@@ -412,7 +415,10 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     ]);
     prisma.salesInvoice.findUnique.mockResolvedValue({
       id: 'inv-1',
+      currency: 'UZS',
+      exchangeRate: 1,
       totalAmount: 9000000,
+      vatAmount: 0,
     });
     prisma.additionalExpense.update.mockResolvedValue({
       id: 'exp-inv-5',

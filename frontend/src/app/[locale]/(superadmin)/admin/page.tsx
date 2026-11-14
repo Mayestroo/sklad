@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
+import { LoadError } from '@/components/ui/LoadError';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -27,14 +29,71 @@ import {
 import { CreatedTenantSummary, GlobalMetrics, TenantCompanySummary } from '@shared/types';
 import type { AuthResponse } from '@shared/types';
 
+type MrrState =
+  | { kind: 'rows'; rows: Array<{ currency: string; amount: number }> }
+  | { kind: 'empty' }
+  | { kind: 'missing-currency' };
+
+/**
+ * MRR rows as the API sent them. A row without a currency (or an old
+ * response without rows) is an error, never shown as USD or UZS (ADR 0022);
+ * currencies are listed apart, never summed (ADR 0023).
+ */
+function readMrr(metrics: GlobalMetrics): MrrState {
+  const rows: unknown = (metrics as { mrrByCurrency?: unknown }).mrrByCurrency;
+  if (!Array.isArray(rows)) return { kind: 'missing-currency' };
+  if (rows.length === 0) return { kind: 'empty' };
+  const valid = rows.every(
+    (row) =>
+      typeof row?.currency === 'string' &&
+      row.currency.trim() !== '' &&
+      typeof row.amount === 'number' &&
+      Number.isFinite(row.amount),
+  );
+  return valid ? { kind: 'rows', rows } : { kind: 'missing-currency' };
+}
+
+function MrrValue({ metrics, locale }: { metrics: GlobalMetrics | null; locale: 'uz' | 'ru' }) {
+  const isRu = locale === 'ru';
+  if (!metrics) return <>—</>;
+  const state = readMrr(metrics);
+  if (state.kind === 'missing-currency') {
+    return (
+      <span role="alert" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-danger-600)' }}>
+        {isRu ? 'Валюта не указана — сумму показать нельзя' : "Valyuta ko'rsatilmagan — summani ko'rsatib bo'lmaydi"}
+      </span>
+    );
+  }
+  if (state.kind === 'empty') {
+    return (
+      <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+        {isRu ? 'Нет активных подписок' : "Faol obuna yo'q"}
+      </span>
+    );
+  }
+  return (
+    <>
+      {state.rows.map((row) => (
+        <div key={row.currency}>{formatCurrency(row.amount, locale, row.currency)}</div>
+      ))}
+    </>
+  );
+}
+
 export default function SuperAdminTenantsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, startImpersonation } = useAuth();
 
-  const [metrics, setMetrics] = useState<GlobalMetrics | null>(null);
-  const [tenants, setTenants] = useState<TenantCompanySummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const invalidateApi = useInvalidateApi();
+  const metrics = useApiQuery<GlobalMetrics>('/super-admin/metrics', { scope: 'platform' }).data ?? null;
+  const tenantsQuery = useApiQuery<TenantCompanySummary[]>('/super-admin/tenants', { scope: 'platform' });
+  const tenants = tenantsQuery.data ?? [];
+  // A tenant change moves the metrics too (active/trial counts, MRR).
+  const refreshPlatform = () => {
+    void invalidateApi('/super-admin/tenants');
+    void invalidateApi('/super-admin/metrics');
+  };
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,26 +127,6 @@ export default function SuperAdminTenantsPage() {
   // Impersonation loading state
   const [impersonateLoadingId, setImpersonateLoadingId] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const [m, t] = await Promise.all([
-        apiFetch<GlobalMetrics>('/super-admin/metrics', { token, locale }),
-        apiFetch<TenantCompanySummary[]>('/super-admin/tenants', { token, locale }),
-      ]);
-      setMetrics(m);
-      setTenants(t);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка загрузки данных' : 'Maʼlumotlarni yuklashda xatolik yuz berdi'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [token]);
 
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +159,7 @@ export default function SuperAdminTenantsPage() {
       );
       setCreateModalOpen(false);
       resetCreateForm();
-      fetchData();
+      refreshPlatform();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при создании' : 'Xatolik yuz berdi'));
     } finally {
@@ -165,7 +204,7 @@ export default function SuperAdminTenantsPage() {
         isRu ? 'Данные предприятия обновлены' : 'Korxona maʼlumotlari yangilandi',
       );
       setEditModalOpen(false);
-      fetchData();
+      refreshPlatform();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка сохранения' : 'Xatolik yuz berdi'));
     } finally {
@@ -346,6 +385,7 @@ export default function SuperAdminTenantsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
         {/* Card 1: Total MRR */}
         <Card>
+          <div data-mrr-card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
               {isRu ? 'Месячный доход (MRR)' : 'Oylik daromad (MRR)'}
@@ -366,7 +406,8 @@ export default function SuperAdminTenantsPage() {
             </div>
           </div>
           <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '12px' }}>
-            {metrics ? formatCurrency(metrics.totalMrr, locale, (metrics as { currency?: string } | null | undefined)?.currency || 'USD') : '—'}
+            <MrrValue metrics={metrics} locale={locale} />
+          </div>
           </div>
         </Card>
 
@@ -516,7 +557,9 @@ export default function SuperAdminTenantsPage() {
           overflow: 'hidden',
         }}
       >
-        {loading ? (
+        {tenantsQuery.isError ? (
+          <LoadError error={tenantsQuery.error} onRetry={() => void tenantsQuery.refetch()} retrying={tenantsQuery.isFetching} />
+        ) : tenantsQuery.isPending ? (
           <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
             Yuklanmoqda...
           </div>
