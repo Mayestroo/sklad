@@ -28,6 +28,10 @@ import {
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+import {
+  businessRangeEnd,
+  businessRangeStart,
+} from '../../common/utils/business-day';
 
 @Injectable()
 export class ServicesService {
@@ -235,10 +239,10 @@ export class ServicesService {
     if (filters.dateFrom || filters.dateTo) {
       where.actDate = {};
       if (filters.dateFrom) {
-        where.actDate.gte = new Date(filters.dateFrom);
+        where.actDate.gte = businessRangeStart(filters.dateFrom);
       }
       if (filters.dateTo) {
-        where.actDate.lte = new Date(filters.dateTo + 'T23:59:59Z');
+        where.actDate.lte = businessRangeEnd(filters.dateTo);
       }
     }
 
@@ -527,6 +531,7 @@ export class ServicesService {
         tenantId,
         sourceDocType: 'ServiceAct',
         sourceDocId: id,
+        status: 'POSTED',
         isDeleted: false,
       },
     });
@@ -612,6 +617,7 @@ export class ServicesService {
         tenantId,
         sourceDocType: 'ServiceAct',
         sourceDocId: id,
+        status: 'POSTED',
         isDeleted: false,
       },
     });

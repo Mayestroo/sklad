@@ -438,6 +438,8 @@ describe('tenant isolation', () => {
       fakePrisma(store) as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(

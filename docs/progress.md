@@ -775,3 +775,26 @@ other-tenant lookup of the helper.
 - No new migration in round 5 (API/DTO and code only).
 - Checklist: added the API contract changes (purchase expense currency
   required; additional-expense stats shape).
+
+## Round 6: money in/out (Finance) audit, 2026-11-14
+
+Owner report: "issue in transaction/money in/out UI and logic", then
+"check full project". Audit of the Finance page, FinanceService and the
+cash paths in sales payments, purchase payments, additional expenses,
+services and opening balances.
+
+| Commit | What |
+|---|---|
+| e3556e9 | Locked-row balance re-check (no negative tills under concurrency) in Finance expense/transfer/reversals, purchase payment, additional-expense payment; Payment journal removed on storno; sales-order payment gate re-closed on storno; additional-expense FIFO open amount net of earlier payments; cancelled/deleted transactions no longer block service act / additional expense / purchase return cancel or count in supplier totals; Finance drawer lists every valid account (was locked to the first account's currency), exchange mode targets the other currency, linked-document overpayment caught, formatted balance message |
+| 2d465c2 | Finance income/expense/transfer post journal entries (ADR 0006 section added): cash vs 4010 / 6010 / new 9390 / 9430, FX difference at document rate to 9540 / 9620; deleted on cancel; purchase payments keyed by FinanceTransaction; paid-at-posting additional expense reversed only by cancelling the expense; expense cancel blocked by FIFO allocations |
+| 30b36d4 | `npm run finance:backfill-journal -- --tenant <id> (--dry-run \| --apply)` for pre-existing transactions; Finance refuses to cancel opening-balance cash (unposting the document reverses it) |
+
+NOT RUN: the backfill against any database (only unit-tested; the owner
+runs `--dry-run` first on Neon); `purchase-invariant.int-spec.ts` (changed
+for the new purchase-payment journal key) needs `DATABASE_URL_TEST`; no
+browser click-through.
+
+Left open: legacy purchase payments (journal keyed `PurchasePayment` /
+receipt id) still keep their entry if cancelled from Finance; a cancelled
+customer Payment stays listed under Payments (no status column); dashboard
+"today" uses the server clock, not Asia/Tashkent.

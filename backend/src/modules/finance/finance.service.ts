@@ -25,9 +25,17 @@ import { FilterTransactionsDto } from './dto/filter-transactions.dto';
 import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
-import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
+import { JournalService } from '../accounting/journal/journal.service';
+import {
+  isCashAccountCurrencyValid,
+  ledgerAccountCodeForCashAccount,
+} from '../../../../shared/types/cash-account-policy';
 import { formatMoney } from '../../../../shared/format/money';
-import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
+import {
+  convertAmountToUzs,
+  requireExchangeRateForCurrency,
+} from '../../common/utils/transaction-exchange-rate';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 import type {
   FinanceAccountFlow,
   FinanceSummaryByAccount,
@@ -35,6 +43,12 @@ import type {
 import { readCompanySettings } from '../../common/utils/company-settings';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+import {
+  businessRangeEnd,
+  businessRangeStart,
+  startOfBusinessDay,
+  startOfBusinessMonth,
+} from '../../common/utils/business-day';
 
 interface FinanceSettlementContext {
   side: CounterpartySettlementSide | null;
@@ -52,12 +66,27 @@ interface FifoSettlementTarget {
 
 type SettlementDirection = Exclude<TransactionDirection, 'TRANSFER'>;
 
+/**
+ * The part of a settlement payment applied to one document, with that
+ * document's exchange rate (undefined when the document carries none, e.g. a
+ * sales return: then the payment rate applies).
+ */
+interface SettlementApplication {
+  amount: number;
+  documentRate?: number;
+}
+
+/** Journal source key of the entries a Finance transaction posts itself. */
+const FINANCE_JOURNAL_SOURCE = 'FinanceTransaction';
+
 @Injectable()
 export class FinanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly settlementAllocationService: SettlementAllocationService,
+    private readonly journalService: JournalService,
+    private readonly accountsService: AccountsService,
   ) {}
 
   // ─── Accounts ────────────────────────────────────────────────
@@ -115,9 +144,10 @@ export class FinanceService {
 
     if (filters.date_from || filters.date_to) {
       const transactionDate: Prisma.DateTimeFilter = {};
-      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
+      if (filters.date_from)
+        transactionDate.gte = businessRangeStart(filters.date_from);
       if (filters.date_to)
-        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = businessRangeEnd(filters.date_to);
       where.transactionDate = transactionDate;
     }
 
@@ -317,12 +347,9 @@ export class FinanceService {
 
   async getDashboardMetrics(tenantId: string) {
     const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Business days in Tashkent time, whatever the server timezone.
+    const startOfToday = startOfBusinessDay(now);
+    const startOfMonth = startOfBusinessMonth(now);
 
     // Accounts
     const accounts = await this.getAccounts(tenantId);
@@ -707,9 +734,10 @@ export class FinanceService {
 
     if (filters.date_from || filters.date_to) {
       const transactionDate: Prisma.DateTimeFilter = {};
-      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
+      if (filters.date_from)
+        transactionDate.gte = businessRangeStart(filters.date_from);
       if (filters.date_to)
-        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = businessRangeEnd(filters.date_to);
       where.transactionDate = transactionDate;
     }
     const ledgerFilters: Prisma.FinanceTransactionWhereInput[] = [];
@@ -820,14 +848,16 @@ export class FinanceService {
       user: dto.responsibleUserId,
     });
 
+    // The journal entry below needs the cash, settlement and 9390/9430 accounts.
+    await this.accountsService.ensureDefaultAccounts(tenantId);
+
+    const transactionDate = dto.transactionDate
+      ? new Date(dto.transactionDate)
+      : new Date();
+
     return this.prisma.$transaction(async (tx) => {
       // D4: nothing dated in a closed accounting period may change.
-      await assertPeriodOpen(
-        tx,
-        tenantId,
-        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
-        'post',
-      );
+      await assertPeriodOpen(tx, tenantId, transactionDate, 'post');
       const settlement = await this.resolveSettlementContext(
         tx,
         tenantId,
@@ -843,9 +873,7 @@ export class FinanceService {
           amount: dto.amount,
           currency: dto.currency,
           exchangeRate,
-          transactionDate: dto.transactionDate
-            ? new Date(dto.transactionDate)
-            : new Date(),
+          transactionDate,
           counterpartyId: dto.counterpartyId,
           settlementSide: settlement?.side ?? null,
           transactionTypeId: dto.transactionTypeId,
@@ -863,9 +891,10 @@ export class FinanceService {
         data: { balance: { increment: dto.amount } },
       });
 
+      const applications: SettlementApplication[] = [];
       if (settlement?.side) {
         if (settlement.targetType && settlement.targetId) {
-          await this.allocateAndUpdateTarget(
+          const application = await this.allocateAndUpdateTarget(
             tx,
             transaction,
             settlement,
@@ -873,11 +902,12 @@ export class FinanceService {
             dto.counterpartyId!,
             dto.amount,
           );
+          if (application) applications.push(application);
         } else if (
           !dto.sourceDocId &&
           settlement.side === CounterpartySettlementSide.CUSTOMER
         ) {
-          await this.allocateIncomeFifo(
+          const fifoApplications = await this.allocateIncomeFifo(
             tx,
             tenantId,
             transaction,
@@ -885,6 +915,7 @@ export class FinanceService {
             dto.amount,
             dto.currency,
           );
+          applications.push(...fifoApplications);
         } else if (
           this.settlementMovementAmount(
             TransactionDirection.INCOME,
@@ -919,6 +950,21 @@ export class FinanceService {
           idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT`,
         });
       }
+
+      await this.postSettlementJournal(tx, tenantId, {
+        transaction: {
+          id: transaction.id,
+          direction: TransactionDirection.INCOME,
+          amount: dto.amount,
+          currency: dto.currency,
+          exchangeRate,
+          transactionDate: transaction.transactionDate ?? transactionDate,
+          comment: dto.comment,
+        },
+        cashAccount: account,
+        side: settlement?.side ?? null,
+        applications,
+      });
 
       return transaction;
     });
@@ -962,14 +1008,16 @@ export class FinanceService {
       user: dto.responsibleUserId,
     });
 
+    // The journal entry below needs the cash, settlement and 9390/9430 accounts.
+    await this.accountsService.ensureDefaultAccounts(tenantId);
+
+    const transactionDate = dto.transactionDate
+      ? new Date(dto.transactionDate)
+      : new Date();
+
     return this.prisma.$transaction(async (tx) => {
       // D4: nothing dated in a closed accounting period may change.
-      await assertPeriodOpen(
-        tx,
-        tenantId,
-        dto.transactionDate ? new Date(dto.transactionDate) : new Date(),
-        'post',
-      );
+      await assertPeriodOpen(tx, tenantId, transactionDate, 'post');
       const settlement = await this.resolveSettlementContext(
         tx,
         tenantId,
@@ -985,9 +1033,7 @@ export class FinanceService {
           amount: dto.amount,
           currency: dto.currency,
           exchangeRate,
-          transactionDate: dto.transactionDate
-            ? new Date(dto.transactionDate)
-            : new Date(),
+          transactionDate,
           counterpartyId: dto.counterpartyId,
           settlementSide: settlement?.side ?? null,
           transactionTypeId: dto.transactionTypeId,
@@ -1000,14 +1046,18 @@ export class FinanceService {
         include: { account: true, counterparty: true, transactionType: true },
       });
 
-      await tx.cashAccount.update({
-        where: { tenantId, id: dto.accountId },
-        data: { balance: { decrement: dto.amount } },
-      });
+      await this.withdrawFromCashAccount(
+        tx,
+        tenantId,
+        dto.accountId,
+        dto.amount,
+        "Chiquvchi kassada mablag' yetarli emas",
+      );
 
+      const applications: SettlementApplication[] = [];
       if (settlement?.side) {
         if (settlement.targetType && settlement.targetId) {
-          await this.allocateAndUpdateTarget(
+          const application = await this.allocateAndUpdateTarget(
             tx,
             transaction,
             settlement,
@@ -1015,11 +1065,12 @@ export class FinanceService {
             dto.counterpartyId!,
             dto.amount,
           );
+          if (application) applications.push(application);
         } else if (
           !dto.sourceDocId &&
           settlement.side === CounterpartySettlementSide.SUPPLIER
         ) {
-          await this.allocateExpenseFifo(
+          const fifoApplications = await this.allocateExpenseFifo(
             tx,
             tenantId,
             transaction,
@@ -1027,6 +1078,7 @@ export class FinanceService {
             dto.amount,
             dto.currency,
           );
+          applications.push(...fifoApplications);
         } else if (
           this.settlementMovementAmount(
             TransactionDirection.EXPENSE,
@@ -1061,6 +1113,21 @@ export class FinanceService {
           idempotencyKey: `FinanceTransaction:${transaction.id}:SETTLEMENT`,
         });
       }
+
+      await this.postSettlementJournal(tx, tenantId, {
+        transaction: {
+          id: transaction.id,
+          direction: TransactionDirection.EXPENSE,
+          amount: dto.amount,
+          currency: dto.currency,
+          exchangeRate,
+          transactionDate: transaction.transactionDate ?? transactionDate,
+          comment: dto.comment,
+        },
+        cashAccount: account,
+        side: settlement?.side ?? null,
+        applications,
+      });
 
       return transaction;
     });
@@ -1101,19 +1168,28 @@ export class FinanceService {
       });
       if (!order)
         throw new NotFoundException('Sales order settlement target not found');
-      const paidAmount = Number(order.paidAmount) + amount;
+      const paidAmount = Math.max(0, Number(order.paidAmount) + amount);
       let status = order.status;
-      if (status === 'AWAITING_PAYMENT') {
-        if (
-          order.paymentCondition === 'PREPAID_100' &&
-          paidAmount >= Number(order.totalAmount)
-        ) {
-          status = 'PAYMENT_CONFIRMED';
-        } else if (order.paymentCondition === 'PARTIAL') {
-          const required = Number(order.requiredPaymentPercent) || 0;
-          if (paidAmount >= (Number(order.totalAmount) * required) / 100)
-            status = 'PAYMENT_CONFIRMED';
-        }
+      const total = Number(order.totalAmount);
+      const requiredAmount =
+        order.paymentCondition === 'PREPAID_100'
+          ? total
+          : order.paymentCondition === 'PARTIAL'
+            ? (total * Number(order.requiredPaymentPercent ?? 0)) / 100
+            : 0;
+      if (
+        amount > 0 &&
+        status === 'AWAITING_PAYMENT' &&
+        paidAmount >= requiredAmount
+      ) {
+        status = 'PAYMENT_CONFIRMED';
+      } else if (
+        // A cancelled payment must re-close the order's payment gate.
+        amount < 0 &&
+        status === 'PAYMENT_CONFIRMED' &&
+        paidAmount < requiredAmount
+      ) {
+        status = 'AWAITING_PAYMENT';
       }
       await tx.salesOrder.update({
         where: { tenantId, id: targetId },
@@ -1130,7 +1206,7 @@ export class FinanceService {
         throw new NotFoundException(
           'Purchase receipt settlement target not found',
         );
-      const paidAmount = Number(receipt.paidAmount) + amount;
+      const paidAmount = Math.max(0, Number(receipt.paidAmount) + amount);
       const paymentStatus =
         paidAmount >= Number(receipt.totalAmount)
           ? PurchasePaymentStatus.PAID
@@ -1150,7 +1226,7 @@ export class FinanceService {
       });
       if (!act)
         throw new NotFoundException('Service act settlement target not found');
-      const paidAmount = Number(act.paidAmount) + amount;
+      const paidAmount = Math.max(0, Number(act.paidAmount) + amount);
       const paymentStatus =
         paidAmount >= Number(act.totalAmount)
           ? ServicePaymentStatus.PAID
@@ -1188,6 +1264,261 @@ export class FinanceService {
           data: { isPaid },
         });
       }
+    }
+  }
+
+  private async ledgerAccount(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    code: string,
+  ) {
+    const account = await tx.account.findFirst({ where: { tenantId, code } });
+    if (!account) {
+      throw new BadRequestException(`Buxgalteriya hisobi (${code}) topilmadi`);
+    }
+    return account;
+  }
+
+  private cashLedgerCode(account: {
+    accountType: CashAccountType;
+    currency: string;
+  }) {
+    const code = ledgerAccountCodeForCashAccount(account);
+    if (!code) {
+      throw new BadRequestException(
+        `Kassa turi (${account.accountType}) va valyutasi (${account.currency}) mos emas`,
+      );
+    }
+    return code;
+  }
+
+  /**
+   * ADR 0006: a Finance income or expense posts its own journal entry, keyed
+   * by the transaction so cancelling it removes exactly that entry.
+   *
+   * - customer settlement: cash ⇄ 4010; supplier settlement: cash ⇄ 6010;
+   *   no counterparty: cash ⇄ 9390 (other income) / 9430 (other expenses).
+   * - Amounts are in UZS. Cash is valued at the payment rate. The settlement
+   *   side is valued at each applied document's own rate (the rate its debt
+   *   was booked at) and the unapplied rest (an advance) at the payment rate;
+   *   the difference is an exchange gain (9540) or loss (9620), as for
+   *   customer Payments and purchase payments.
+   */
+  private async postSettlementJournal(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    input: {
+      transaction: {
+        id: string;
+        direction: TransactionDirection;
+        amount: Prisma.Decimal | number;
+        currency: string;
+        exchangeRate: Prisma.Decimal | number;
+        transactionDate: Date;
+        comment?: string | null;
+      };
+      cashAccount: { accountType: CashAccountType; currency: string };
+      side: CounterpartySettlementSide | null;
+      applications: SettlementApplication[];
+    },
+  ) {
+    const { transaction, side, applications } = input;
+    const isIncome = transaction.direction === TransactionDirection.INCOME;
+    const amount = Number(transaction.amount);
+    const rate = Number(transaction.exchangeRate);
+    const currency = transaction.currency;
+
+    const cash = await this.ledgerAccount(
+      tx,
+      tenantId,
+      this.cashLedgerCode(input.cashAccount),
+    );
+    const counterCode =
+      side === CounterpartySettlementSide.CUSTOMER
+        ? '4010'
+        : side === CounterpartySettlementSide.SUPPLIER
+          ? '6010'
+          : isIncome
+            ? '9390'
+            : '9430';
+    const counter = await this.ledgerAccount(tx, tenantId, counterCode);
+
+    const cashUzs = convertAmountToUzs(amount, currency, rate);
+    let counterUzs = cashUzs;
+    if (side) {
+      const applied = applications.reduce((sum, item) => sum + item.amount, 0);
+      const appliedUzs = applications.reduce(
+        (sum, item) =>
+          sum +
+          convertAmountToUzs(
+            item.amount,
+            currency,
+            // A UZS document's rate is always 1 and plays no part.
+            currency === 'UZS' ? undefined : (item.documentRate ?? rate),
+          ),
+        0,
+      );
+      counterUzs =
+        Math.round(
+          (appliedUzs +
+            convertAmountToUzs(Math.max(0, amount - applied), currency, rate)) *
+            100,
+        ) / 100;
+    }
+    const difference = Math.round((cashUzs - counterUzs) * 100) / 100;
+    const label = isIncome ? 'Kassa kirimi' : 'Kassa chiqimi';
+    const rateNote = currency === 'UZS' ? '' : ` (1 USD = ${rate} UZS)`;
+
+    const lines: Array<{
+      debitAccountId: string;
+      creditAccountId: string;
+      amount: number;
+      description: string;
+    }> = [
+      {
+        debitAccountId: isIncome ? cash.id : counter.id,
+        creditAccountId: isIncome ? counter.id : cash.id,
+        amount: Math.min(cashUzs, counterUzs),
+        description: `${label}: ${amount} ${currency}${rateNote}`,
+      },
+    ];
+    if (difference !== 0) {
+      // Income: more UZS in the till than debt cleared is a gain.
+      // Expense: more UZS out of the till than debt cleared is a loss.
+      const isGain = isIncome ? difference > 0 : difference < 0;
+      const fx = await this.ledgerAccount(
+        tx,
+        tenantId,
+        isGain ? '9540' : '9620',
+      );
+      const fxAmount = Math.abs(difference);
+      lines.push(
+        isIncome
+          ? isGain
+            ? {
+                debitAccountId: cash.id,
+                creditAccountId: fx.id,
+                amount: fxAmount,
+                description: `Valyuta kursi farqidan daromad${rateNote}`,
+              }
+            : {
+                debitAccountId: fx.id,
+                creditAccountId: counter.id,
+                amount: fxAmount,
+                description: `Valyuta kursi farqidan zarar${rateNote}`,
+              }
+          : isGain
+            ? {
+                debitAccountId: counter.id,
+                creditAccountId: fx.id,
+                amount: fxAmount,
+                description: `Valyuta kursi farqidan daromad${rateNote}`,
+              }
+            : {
+                debitAccountId: fx.id,
+                creditAccountId: cash.id,
+                amount: fxAmount,
+                description: `Valyuta kursi farqidan zarar${rateNote}`,
+              },
+      );
+    }
+
+    await this.journalService.createJournalEntry(
+      tenantId,
+      {
+        entryDate: transaction.transactionDate,
+        description: transaction.comment
+          ? `${label}: ${transaction.comment}`
+          : label,
+        sourceDocType: FINANCE_JOURNAL_SOURCE,
+        sourceDocId: transaction.id,
+        lines,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * A transfer moves money between two cash/bank ledger accounts: Dt target /
+   * Kt source at the UZS value of the movement (the UZS leg of a conversion,
+   * or the USD amount at the recorded rate when both legs are USD).
+   */
+  private async postTransferJournal(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    input: {
+      transaction: {
+        id: string;
+        exchangeRate: Prisma.Decimal | number;
+        transactionDate: Date;
+        comment?: string | null;
+      };
+      fromAccount: { accountType: CashAccountType; currency: string };
+      toAccount: { accountType: CashAccountType; currency: string };
+      fromAmount: number;
+      toAmount: number;
+    },
+  ) {
+    const { transaction, fromAccount, toAccount, fromAmount, toAmount } = input;
+    const fromCode = this.cashLedgerCode(fromAccount);
+    const toCode = this.cashLedgerCode(toAccount);
+    if (fromCode === toCode) return;
+    const valueUzs =
+      fromAccount.currency === 'UZS'
+        ? fromAmount
+        : toAccount.currency === 'UZS'
+          ? toAmount
+          : convertAmountToUzs(
+              fromAmount,
+              fromAccount.currency,
+              Number(transaction.exchangeRate),
+            );
+    const [from, to] = await Promise.all([
+      this.ledgerAccount(tx, tenantId, fromCode),
+      this.ledgerAccount(tx, tenantId, toCode),
+    ]);
+    await this.journalService.createJournalEntry(
+      tenantId,
+      {
+        entryDate: transaction.transactionDate,
+        description: transaction.comment
+          ? `Kassalararo o‘tkazma: ${transaction.comment}`
+          : 'Kassalararo o‘tkazma',
+        sourceDocType: FINANCE_JOURNAL_SOURCE,
+        sourceDocId: transaction.id,
+        lines: [
+          {
+            debitAccountId: to.id,
+            creditAccountId: from.id,
+            amount: valueUzs,
+            description: `${fromAmount} ${fromAccount.currency} → ${toAmount} ${toAccount.currency}`,
+          },
+        ],
+      },
+      tx,
+    );
+  }
+
+  /**
+   * Takes money out of a cash/bank account inside the caller's transaction.
+   * The UPDATE locks the row and applies the decrement to the latest committed
+   * balance, so checking the returned balance catches concurrent withdrawals
+   * that a read-then-write pre-check would miss; throwing rolls the whole
+   * document back. Cash accounts never go negative.
+   */
+  private async withdrawFromCashAccount(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    accountId: string,
+    amount: number,
+    insufficientFundsMessage: string,
+  ) {
+    const account = await tx.cashAccount.update({
+      where: { tenantId, id: accountId },
+      data: { balance: { decrement: amount } },
+    });
+    if (Number(account.balance) < 0) {
+      throw new BadRequestException(insufficientFundsMessage);
     }
   }
 
@@ -1396,9 +1727,10 @@ export class FinanceService {
     tenantId: string,
     counterpartyId: string,
     amount: number,
-  ) {
+  ): Promise<SettlementApplication | undefined> {
     if (!settlement.side || !settlement.targetType || !settlement.targetId)
-      return;
+      return undefined;
+    let documentRate: number | undefined;
     await this.settlementAllocationService.recordAllocation(tx, {
       tenantId,
       counterpartyId,
@@ -1417,6 +1749,7 @@ export class FinanceService {
         throw new NotFoundException(
           'Sales invoice settlement target not found',
         );
+      documentRate = Number(invoice.exchangeRate);
       const paidAmount = Number(invoice.paidAmount) + amount;
       const paymentStatus =
         paidAmount >= Number(invoice.totalAmount)
@@ -1436,6 +1769,7 @@ export class FinanceService {
       });
       if (!order)
         throw new NotFoundException('Sales order settlement target not found');
+      documentRate = Number(order.exchangeRate);
       const paidAmount = Math.max(0, Number(order.paidAmount) + amount);
       let status = order.status;
       const total = Number(order.totalAmount);
@@ -1467,6 +1801,7 @@ export class FinanceService {
         throw new NotFoundException(
           'Purchase receipt settlement target not found',
         );
+      documentRate = Number(receipt.exchangeRate);
       const paidAmount = Math.max(0, Number(receipt.paidAmount) + amount);
       const paymentStatus =
         paidAmount >= Number(receipt.totalAmount)
@@ -1486,6 +1821,7 @@ export class FinanceService {
       });
       if (!act)
         throw new NotFoundException('Service act settlement target not found');
+      documentRate = Number(act.exchangeRate);
       const paidAmount = Math.max(0, Number(act.paidAmount) + amount);
       const paymentStatus =
         paidAmount >= Number(act.totalAmount)
@@ -1507,6 +1843,7 @@ export class FinanceService {
         throw new NotFoundException(
           'Additional expense settlement target not found',
         );
+      documentRate = Number(expense.exchangeRate);
       const allocations = await tx.settlementAllocation.findMany({
         where: {
           tenantId,
@@ -1526,6 +1863,7 @@ export class FinanceService {
         });
       }
     }
+    return { amount, documentRate };
   }
 
   private async allocateIncomeFifo(
@@ -1535,7 +1873,7 @@ export class FinanceService {
     counterpartyId: string,
     amount: number,
     currency: string,
-  ) {
+  ): Promise<SettlementApplication[]> {
     const [invoices, acts] = await Promise.all([
       tx.salesInvoice.findMany({
         where: {
@@ -1590,7 +1928,7 @@ export class FinanceService {
     ].sort(
       (left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime(),
     );
-    await this.allocateFifoTargets(
+    return this.allocateFifoTargets(
       tx,
       tenantId,
       transaction,
@@ -1607,7 +1945,7 @@ export class FinanceService {
     counterpartyId: string,
     amount: number,
     currency: string,
-  ) {
+  ): Promise<SettlementApplication[]> {
     const [receipts, acts, expenses] = await Promise.all([
       tx.purchaseReceipt.findMany({
         where: {
@@ -1651,6 +1989,27 @@ export class FinanceService {
         orderBy: { docDate: 'asc' },
       }),
     ]);
+    // An additional expense has no paidAmount column: its open amount is the
+    // gross amount minus what is already allocated to it (reversals are
+    // negative allocation rows, so the sum is the net paid amount).
+    const expenseAllocations = expenses.length
+      ? await tx.settlementAllocation.findMany({
+          where: {
+            tenantId,
+            targetType: SettlementAllocationTarget.ADDITIONAL_EXPENSE,
+            targetId: { in: expenses.map((expense) => expense.id) },
+          },
+          select: { targetId: true, amount: true },
+        })
+      : [];
+    const allocatedByExpense = new Map<string, number>();
+    for (const allocation of expenseAllocations) {
+      allocatedByExpense.set(
+        allocation.targetId,
+        (allocatedByExpense.get(allocation.targetId) ?? 0) +
+          Number(allocation.amount),
+      );
+    }
     const targets: FifoSettlementTarget[] = [
       ...receipts.map((receipt) => ({
         targetType: SettlementAllocationTarget.PURCHASE_RECEIPT,
@@ -1679,13 +2038,15 @@ export class FinanceService {
         effectiveAt: expense.docDate,
         openAmount: Math.max(
           0,
-          Number(expense.amount) + Number(expense.vatAmount),
+          Number(expense.amount) +
+            Number(expense.vatAmount) -
+            (allocatedByExpense.get(expense.id) ?? 0),
         ),
       })),
     ].sort(
       (left, right) => left.effectiveAt.getTime() - right.effectiveAt.getTime(),
     );
-    await this.allocateFifoTargets(
+    return this.allocateFifoTargets(
       tx,
       tenantId,
       transaction,
@@ -1702,13 +2063,14 @@ export class FinanceService {
     counterpartyId: string,
     amount: number,
     targets: FifoSettlementTarget[],
-  ) {
+  ): Promise<SettlementApplication[]> {
+    const applications: SettlementApplication[] = [];
     let remaining = Number(amount);
     for (const target of targets) {
       if (remaining <= 0) break;
       const allocate = Math.min(target.openAmount, remaining);
       if (allocate <= 0) continue;
-      await this.allocateAndUpdateTarget(
+      const application = await this.allocateAndUpdateTarget(
         tx,
         transaction,
         {
@@ -1720,8 +2082,10 @@ export class FinanceService {
         counterpartyId,
         allocate,
       );
+      if (application) applications.push(application);
       remaining -= allocate;
     }
+    return applications;
   }
 
   // ─── Create Transfer ──────────────────────────────────────────
@@ -1849,6 +2213,8 @@ export class FinanceService {
         : undefined,
     );
 
+    await this.accountsService.ensureDefaultAccounts(tenantId);
+
     const tx = await this.prisma.$transaction(async (tx) => {
       // D4: nothing dated in a closed accounting period may change.
       await assertPeriodOpen(
@@ -1879,15 +2245,26 @@ export class FinanceService {
       });
 
       // Deduct from source
-      await tx.cashAccount.update({
-        where: { tenantId, id: dto.fromAccountId },
-        data: { balance: { decrement: fromAmount } },
-      });
+      await this.withdrawFromCashAccount(
+        tx,
+        tenantId,
+        dto.fromAccountId,
+        fromAmount,
+        "Chiquvchi kassada mablag' yetarli emas",
+      );
 
       // Add to destination
       await tx.cashAccount.update({
         where: { tenantId, id: dto.toAccountId },
         data: { balance: { increment: toAmount } },
+      });
+
+      await this.postTransferJournal(tx, tenantId, {
+        transaction,
+        fromAccount,
+        toAccount,
+        fromAmount,
+        toAmount,
       });
 
       return transaction;
@@ -2089,6 +2466,53 @@ export class FinanceService {
     }
   }
 
+  /**
+   * Purchase payments made before 2026-11-14 posted their entry under
+   * ('PurchasePayment', receipt id), shared by every payment of that receipt.
+   * Each entry is dated with its payment and its first line names the paid
+   * amount, so the payment's own entry is the one with the same date and
+   * amount (if two identical payments exist, their entries are identical and
+   * either one is the right one to remove).
+   */
+  private async deleteLegacyPurchasePaymentEntry(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    existing: {
+      sourceDocType: string | null;
+      sourceDocId: string | null;
+      docNumber: string | null;
+      transactionDate: Date;
+      amount: Prisma.Decimal;
+      currency: string;
+    },
+    action: 'cancel' | 'delete',
+  ) {
+    if (
+      existing.sourceDocType !== 'PurchaseReceipt' ||
+      !existing.sourceDocId ||
+      !existing.docNumber
+    ) {
+      return;
+    }
+    const amountLabel = `(${Number(existing.amount)} ${existing.currency})`;
+    const candidates = await tx.journalEntry.findMany({
+      where: {
+        tenantId,
+        sourceDocType: 'PurchasePayment',
+        sourceDocId: existing.sourceDocId,
+        entryDate: existing.transactionDate,
+      },
+      select: { id: true, lines: { select: { description: true } } },
+      orderBy: { entryNumber: 'asc' },
+    });
+    const match = candidates.find((entry) =>
+      entry.lines.some((line) => line.description?.endsWith(amountLabel)),
+    );
+    if (match) {
+      await this.journalService.deleteEntry(tx, tenantId, match.id, action);
+    }
+  }
+
   private async reversePostedTransaction(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -2107,23 +2531,39 @@ export class FinanceService {
       isDeleted ? 'delete' : 'cancel',
     );
 
+    // A paid-at-posting additional expense credited cash in the expense's own
+    // journal entry and never opened a supplier debt; reversing only its cash
+    // would leave the cost booked as paid. Cancelling the expense document
+    // reverses both together.
+    if (
+      existing.sourceDocType === 'AdditionalExpense' &&
+      !existing.settlementSide
+    ) {
+      throw new BadRequestException(
+        "Bu to'lov qo'shimcha xarajat bilan birga o'tkazilgan. Uni bekor qilish uchun Xaridlar bo'limida qo'shimcha xarajat hujjatini bekor qiling.",
+      );
+    }
+
+    // Opening-balance cash is reversed by unposting its document, which also
+    // removes its journal entry; reversing it here too would take it twice.
+    if (existing.sourceDocType === 'OpeningBalanceDocument') {
+      throw new BadRequestException(
+        "Bu boshlang'ich qoldiq yozuvi. Uni bekor qilish uchun Boshlang'ich qoldiqlar hujjatini qayta oching.",
+      );
+    }
+
     const amount = Number(existing.amount);
 
     if (existing.direction === TransactionDirection.INCOME) {
       // Safe check: Account balance cannot go negative
       if (existing.accountId) {
-        const acc = await tx.cashAccount.findUnique({
-          where: { tenantId, id: existing.accountId },
-        });
-        if (!acc || Number(acc.balance) < amount) {
-          throw new BadRequestException(
-            'Kirimni bekor qilish imkonsiz: kassada yetarli qoldiq mavjud emas (manfiy qoldiq yuzaga keladi)',
-          );
-        }
-        await tx.cashAccount.update({
-          where: { tenantId, id: existing.accountId },
-          data: { balance: { decrement: amount } },
-        });
+        await this.withdrawFromCashAccount(
+          tx,
+          tenantId,
+          existing.accountId,
+          amount,
+          'Kirimni bekor qilish imkonsiz: kassada yetarli qoldiq mavjud emas (manfiy qoldiq yuzaga keladi)',
+        );
       }
 
       await this.reverseCounterpartySettlement(
@@ -2133,6 +2573,23 @@ export class FinanceService {
         amount,
         isDeleted,
       );
+
+      // A customer Payment posts Dt cash / Kt 4010 under its own id; once its
+      // cash and settlement are reversed, that entry must go too or the
+      // ledger keeps money the cash account no longer has.
+      if (existing.sourceDocType === 'PAYMENT' && existing.sourceDocId) {
+        await this.journalService.deleteEntriesForSource(
+          tx,
+          tenantId,
+          'Payment',
+          existing.sourceDocId,
+          isDeleted ? 'delete' : 'cancel',
+        );
+        await tx.payment.updateMany({
+          where: { id: existing.sourceDocId, tenantId, cancelledAt: null },
+          data: { cancelledAt: new Date() },
+        });
+      }
     } else if (existing.direction === TransactionDirection.EXPENSE) {
       // Return money to account
       if (existing.accountId) {
@@ -2149,21 +2606,22 @@ export class FinanceService {
         amount,
         isDeleted,
       );
+      await this.deleteLegacyPurchasePaymentEntry(
+        tx,
+        tenantId,
+        existing,
+        isDeleted ? 'delete' : 'cancel',
+      );
     } else if (existing.direction === TransactionDirection.TRANSFER) {
       const destinationAmount = Number(existing.transferToAmount ?? amount);
       if (existing.transferToId) {
-        const toAcc = await tx.cashAccount.findUnique({
-          where: { tenantId, id: existing.transferToId },
-        });
-        if (!toAcc || Number(toAcc.balance) < destinationAmount) {
-          throw new BadRequestException(
-            "O'tkazmani bekor qilish imkonsiz: qabul qiluvchi kassada yetarli qoldiq mavjud emas",
-          );
-        }
-        await tx.cashAccount.update({
-          where: { tenantId, id: existing.transferToId },
-          data: { balance: { decrement: destinationAmount } },
-        });
+        await this.withdrawFromCashAccount(
+          tx,
+          tenantId,
+          existing.transferToId,
+          destinationAmount,
+          "O'tkazmani bekor qilish imkonsiz: qabul qiluvchi kassada yetarli qoldiq mavjud emas",
+        );
       }
       if (existing.accountId) {
         await tx.cashAccount.update({
@@ -2172,6 +2630,16 @@ export class FinanceService {
         });
       }
     }
+
+    // Entries this transaction posted itself (none for rows created before
+    // Finance posted journals, or by modules that post their own).
+    await this.journalService.deleteEntriesForSource(
+      tx,
+      tenantId,
+      FINANCE_JOURNAL_SOURCE,
+      existing.id,
+      isDeleted ? 'delete' : 'cancel',
+    );
 
     const finalized = await tx.financeTransaction.updateMany({
       where: {
@@ -2277,6 +2745,182 @@ export class FinanceService {
       where: { tenantId, id },
       data: { isDeleted: false },
     });
+  }
+
+  // ─── Journal backfill ─────────────────────────────────────────
+
+  /**
+   * Posts the journal entry that Finance transactions recorded before Finance
+   * posted journals are missing (ADR 0006). Skips transactions whose entry
+   * is posted by the module that created them: customer Payments,
+   * opening-balance cash, purchase payments (they carry a document number,
+   * which Finance-page transactions never have) and the cash payment of an
+   * additional expense posted as paid. Each transaction posts in its own
+   * database transaction; a dry run rolls every one of them back, so it
+   * reports exactly what --apply would do, including closed-period failures.
+   */
+  async backfillJournalEntries(tenantId: string, options: { apply: boolean }) {
+    const candidates = await this.prisma.financeTransaction.findMany({
+      where: { tenantId, status: TransactionStatus.POSTED, isDeleted: false },
+      include: { account: true, transferToAccount: true },
+      orderBy: { transactionDate: 'asc' },
+    });
+    const existing = await this.prisma.journalEntry.findMany({
+      where: {
+        tenantId,
+        sourceDocType: FINANCE_JOURNAL_SOURCE,
+        sourceDocId: { in: candidates.map((item) => item.id) },
+      },
+      select: { sourceDocId: true },
+    });
+    const alreadyPosted = new Set(existing.map((entry) => entry.sourceDocId));
+
+    const skipped: Record<string, number> = {};
+    const skip = (reason: string) => {
+      skipped[reason] = (skipped[reason] ?? 0) + 1;
+    };
+    const posted: string[] = [];
+    const failures: Array<{ id: string; date: string; error: string }> = [];
+    class DryRunRollback extends Error {}
+
+    if (!candidates.length) {
+      return { apply: options.apply, posted: 0, skipped, failures };
+    }
+    await this.accountsService.ensureDefaultAccounts(tenantId);
+
+    for (const item of candidates) {
+      if (alreadyPosted.has(item.id)) {
+        skip('already has a Finance journal entry');
+        continue;
+      }
+      if (item.sourceDocType === 'PAYMENT') {
+        skip('customer Payment (posts its own entry)');
+        continue;
+      }
+      if (item.sourceDocType === 'OpeningBalanceDocument') {
+        skip('opening balance (posts its own entry)');
+        continue;
+      }
+      if (item.sourceDocType === 'AdditionalExpense' && !item.settlementSide) {
+        skip('additional expense paid at posting (in the expense entry)');
+        continue;
+      }
+      if (item.sourceDocType === 'PurchaseReceipt' && item.docNumber) {
+        skip('purchase payment (posts its own entry)');
+        continue;
+      }
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          if (item.direction === TransactionDirection.TRANSFER) {
+            if (!item.transferToAccount || item.transferToAmount == null) {
+              throw new BadRequestException(
+                'Transfer has no destination account or amount',
+              );
+            }
+            await this.postTransferJournal(tx, tenantId, {
+              transaction: item,
+              fromAccount: item.account,
+              toAccount: item.transferToAccount,
+              fromAmount: Number(item.amount),
+              toAmount: Number(item.transferToAmount),
+            });
+          } else {
+            await this.postSettlementJournal(tx, tenantId, {
+              transaction: item,
+              cashAccount: item.account,
+              side: item.settlementSide,
+              applications: item.settlementSide
+                ? await this.currentApplications(tx, tenantId, item.id)
+                : [],
+            });
+          }
+          if (!options.apply) throw new DryRunRollback();
+        });
+        posted.push(item.id);
+      } catch (error) {
+        if (error instanceof DryRunRollback) {
+          posted.push(item.id);
+          continue;
+        }
+        failures.push({
+          id: item.id,
+          date: item.transactionDate.toISOString().slice(0, 10),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { apply: options.apply, posted: posted.length, skipped, failures };
+  }
+
+  /** Net amount a transaction still applies to each document, with its rate. */
+  private async currentApplications(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    financeTransactionId: string,
+  ): Promise<SettlementApplication[]> {
+    const rows = await tx.settlementAllocation.findMany({
+      where: { tenantId, financeTransactionId },
+      select: { targetType: true, targetId: true, amount: true },
+    });
+    const net = new Map<
+      string,
+      {
+        targetType: SettlementAllocationTarget;
+        targetId: string;
+        amount: number;
+      }
+    >();
+    for (const row of rows) {
+      const key = `${row.targetType}:${row.targetId}`;
+      const current = net.get(key) ?? {
+        targetType: row.targetType,
+        targetId: row.targetId,
+        amount: 0,
+      };
+      current.amount += Number(row.amount);
+      net.set(key, current);
+    }
+    const applications: SettlementApplication[] = [];
+    for (const target of net.values()) {
+      if (target.amount <= 0.000001) continue;
+      applications.push({
+        amount: target.amount,
+        documentRate: await this.documentRate(
+          tx,
+          tenantId,
+          target.targetType,
+          target.targetId,
+        ),
+      });
+    }
+    return applications;
+  }
+
+  private async documentRate(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    targetType: SettlementAllocationTarget,
+    targetId: string,
+  ): Promise<number | undefined> {
+    const where = { id: targetId, tenantId };
+    const select = { exchangeRate: true } as const;
+    const document =
+      targetType === SettlementAllocationTarget.SALES_INVOICE
+        ? await tx.salesInvoice.findFirst({ where, select })
+        : targetType === SettlementAllocationTarget.SALES_ORDER
+          ? await tx.salesOrder.findFirst({ where, select })
+          : targetType === SettlementAllocationTarget.PURCHASE_RECEIPT
+            ? await tx.purchaseReceipt.findFirst({ where, select })
+            : targetType === SettlementAllocationTarget.SERVICE_ACT
+              ? await tx.serviceAct.findFirst({ where, select })
+              : targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE
+                ? await tx.additionalExpense.findFirst({ where, select })
+                : targetType === SettlementAllocationTarget.PURCHASE_RETURN
+                  ? await tx.purchaseReturn.findFirst({ where, select })
+                  : null; // a sales return has no rate: the payment rate applies
+    return document ? Number(document.exchangeRate) : undefined;
   }
 
   // ─── Transaction Types ────────────────────────────────────────

@@ -1601,8 +1601,11 @@ function FinanceTransactionDrawer({
   const isTransferOrExchange = mode === 'transfer' || mode === 'exchange';
   const preferredAccount = accounts.find((account) => account.currency === prefilledSettlement?.currency);
   const initialFromAccount = preferredAccount ?? accounts[0];
+  // A transfer starts with a same-currency target; a currency exchange with the other currency.
+  const wantsSameCurrencyTarget = mode !== 'exchange';
   const initialToAccount = accounts.find((account) =>
-    account.id !== initialFromAccount?.id && account.currency === initialFromAccount?.currency,
+    account.id !== initialFromAccount?.id
+    && (account.currency === initialFromAccount?.currency) === wantsSameCurrencyTarget,
   ) ?? accounts.find((account) => account.id !== initialFromAccount?.id);
 
   const [accountId, setAccountId] = useState(initialFromAccount?.id || '');
@@ -1628,9 +1631,13 @@ function FinanceTransactionDrawer({
   const fromAccount = accounts.find((a) => a.id === accountId);
   const toAccount = accounts.find((a) => a.id === toAccountId);
   const validAccounts = accounts.filter(isCashAccountCurrencyValid);
-  const availableAccounts = isTransferOrExchange
+  // The currency follows the chosen account. Filtering by the current currency
+  // locked the selector to whichever currency the first account had, so e.g.
+  // a UZS income could not be booked when the USD kassa came first. Only a
+  // debt opened from the debts tab pins the currency of its settlement.
+  const availableAccounts = isTransferOrExchange || !prefilledSettlement?.currency
     ? validAccounts
-    : validAccounts.filter((account) => account.currency === currency);
+    : validAccounts.filter((account) => account.currency === prefilledSettlement.currency);
   const compatibleOpenDocuments = openDocuments.filter((document) => !fromAccount || document.currency === fromAccount.currency);
   const selectedSourceDocument = compatibleOpenDocuments.find((document) => document.id === sourceDocId);
   const settlementSideOptions: Array<'CUSTOMER' | 'SUPPLIER'> = ['CUSTOMER', 'SUPPLIER'];
@@ -1718,10 +1725,23 @@ function FinanceTransactionDrawer({
     if (mode === 'expense' && fromAccount && Number(fromAccount.balance) < Number(amount)) {
       setError(
         isRu
-          ? `В кассе недостаточно средств. Доступно: ${fromAccount.balance} ${fromAccount.currency}`
-          : `Kassada mablag‘ yetarli emas. Mavjud: ${fromAccount.balance} ${fromAccount.currency}`,
+          ? `В кассе недостаточно средств. Доступно: ${formatCurrency(Number(fromAccount.balance), locale, fromAccount.currency)}`
+          : `Kassada mablag‘ yetarli emas. Mavjud: ${formatCurrency(Number(fromAccount.balance), locale, fromAccount.currency)}`,
       );
       return;
+    }
+
+    if (selectedSourceDocument) {
+      const remaining = Number(selectedSourceDocument.totalAmount) - Number(selectedSourceDocument.paidAmount);
+      if (Number(amount) > remaining + 0.000001) {
+        const remainingText = formatCurrency(remaining, locale, selectedSourceDocument.currency);
+        setError(
+          isRu
+            ? `Сумма больше остатка документа (${remainingText}). Уменьшите сумму или оставьте авто-закрытие по FIFO — излишек станет авансом.`
+            : `Summa hujjat qoldig‘idan (${remainingText}) katta. Summani kamaytiring yoki FIFO bo‘yicha avtomatik yopishni tanlang — ortiqchasi avans bo‘ladi.`,
+        );
+        return;
+      }
     }
 
     if (!accountId || !fromAccount || (isTransferOrExchange && !toAccountId)) {

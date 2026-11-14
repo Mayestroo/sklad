@@ -66,6 +66,9 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       counterparty: {
         update: jest.fn(),
       },
+      settlementAllocation: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       financeTransaction: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),

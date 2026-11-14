@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { FinanceService } from './finance.service';
+import { JournalService } from '../accounting/journal/journal.service';
+import { AccountsService } from '../accounting/accounts/accounts.service';
 import { PrismaService } from '../../common/prisma';
 import {
   TransactionDirection,
@@ -21,12 +23,21 @@ describe('FinanceService Settlement Unit Test Suite', () => {
   let service: FinanceService;
   let prisma: any;
   let settlementService: { recordMovement: jest.Mock };
+  let journalService: {
+    deleteEntriesForSource: jest.Mock;
+    createJournalEntry: jest.Mock;
+    deleteEntry?: jest.Mock;
+  };
   let allocationService: {
     recordAllocation: jest.Mock;
     reverseAllocation: jest.Mock;
   };
 
   beforeEach(async () => {
+    journalService = {
+      deleteEntriesForSource: jest.fn().mockResolvedValue(undefined),
+      createJournalEntry: jest.fn().mockResolvedValue({ id: 'je-1' }),
+    };
     settlementService = {
       recordMovement: jest.fn().mockResolvedValue({ created: true }),
     };
@@ -40,7 +51,8 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
         upsert: jest.fn(),
-        update: jest.fn(),
+        // The service re-checks the post-decrement balance it gets back.
+        update: jest.fn().mockResolvedValue({ balance: 0 }),
       },
       financeTransaction: {
         create: jest.fn(),
@@ -102,6 +114,13 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
       },
+      // Chart-of-accounts lookups for Finance journal postings: id = code.
+      account: {
+        findFirst: jest.fn(async ({ where }: any) => ({
+          id: `acct-${where.code}`,
+          code: where.code,
+        })),
+      },
       $transaction: jest.fn(async (cb) => cb(prisma)),
     };
 
@@ -111,6 +130,11 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: CounterpartySettlementService, useValue: settlementService },
         { provide: SettlementAllocationService, useValue: allocationService },
+        { provide: JournalService, useValue: journalService },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -1047,6 +1071,464 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         },
       });
     });
+
+    it('allocates only the unpaid rest of a partially paid additional expense', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-bank',
+        accountType: 'BANK',
+        balance: 10000000,
+        currency: 'UZS',
+      });
+      prisma.financeTransaction.create.mockResolvedValue({
+        id: 'tx-exp-ae',
+        amount: 500,
+      });
+      prisma.additionalExpense.findMany.mockResolvedValue([
+        {
+          id: 'ae-1',
+          docDate: new Date('2026-01-01'),
+          amount: 1000,
+          vatAmount: 0,
+        },
+      ]);
+      prisma.additionalExpense.findFirst.mockResolvedValue({
+        id: 'ae-1',
+        amount: 1000,
+        vatAmount: 0,
+      });
+      // 700 already paid earlier (900 allocated, 200 of it reversed).
+      prisma.settlementAllocation.findMany.mockResolvedValueOnce([
+        { targetId: 'ae-1', amount: 900 },
+        { targetId: 'ae-1', amount: -200 },
+      ]);
+
+      await service.createExpense('tenant-1', {
+        accountId: 'acc-bank',
+        amount: 500,
+        currency: 'UZS',
+        counterpartyId: 'supp-1',
+        settlementSide: CounterpartySettlementSide.SUPPLIER,
+      });
+
+      expect(allocationService.recordAllocation).toHaveBeenCalledTimes(1);
+      expect(allocationService.recordAllocation).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ targetId: 'ae-1', amount: 300 }),
+      );
+    });
+
+    it('rolls back an expense when a concurrent withdrawal leaves the locked balance negative', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-bank',
+        accountType: 'BANK',
+        balance: 1000, // stale pre-check value
+        currency: 'UZS',
+      });
+      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-race' });
+      prisma.cashAccount.update.mockResolvedValue({ balance: -400 });
+
+      await expect(
+        service.createExpense('tenant-1', {
+          accountId: 'acc-bank',
+          amount: 1000,
+          currency: 'UZS',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Reversal side effects', () => {
+    it('re-closes the sales order payment gate when its prepayment is cancelled', async () => {
+      prisma.financeTransaction.findFirst.mockResolvedValue({
+        id: 'tx-order',
+        tenantId: 'tenant-1',
+        direction: TransactionDirection.INCOME,
+        status: TransactionStatus.POSTED,
+        accountId: 'acc-1',
+        amount: 1000,
+        currency: 'UZS',
+        counterpartyId: 'cust-1',
+        settlementSide: CounterpartySettlementSide.CUSTOMER,
+        sourceDocType: 'SalesOrder',
+        sourceDocId: 'so-1',
+      });
+      prisma.settlementAllocation.findMany.mockResolvedValue([
+        {
+          id: 'alloc-1',
+          amount: 1000,
+          targetType: 'SALES_ORDER',
+          targetId: 'so-1',
+          reversesAllocationId: null,
+        },
+      ]);
+      prisma.salesOrder.findFirst.mockResolvedValue({
+        id: 'so-1',
+        paidAmount: 1000,
+        totalAmount: 1000,
+        status: 'PAYMENT_CONFIRMED',
+        paymentCondition: 'PREPAID_100',
+        requiredPaymentPercent: null,
+      });
+
+      await service.cancelTransaction('tenant-1', 'tx-order');
+
+      expect(prisma.salesOrder.update).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', id: 'so-1' },
+        data: { paidAmount: 0, status: 'AWAITING_PAYMENT' },
+      });
+    });
+
+    it('removes the Payment journal entry when a customer payment is cancelled', async () => {
+      prisma.financeTransaction.findFirst.mockResolvedValue({
+        id: 'tx-pay',
+        tenantId: 'tenant-1',
+        direction: TransactionDirection.INCOME,
+        status: TransactionStatus.POSTED,
+        accountId: 'acc-1',
+        amount: 1000,
+        currency: 'UZS',
+        counterpartyId: 'cust-1',
+        settlementSide: CounterpartySettlementSide.CUSTOMER,
+        sourceDocType: 'PAYMENT',
+        sourceDocId: 'pay-1',
+      });
+      prisma.payment = {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ invoiceId: null, orderId: null }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      };
+
+      await service.cancelTransaction('tenant-1', 'tx-pay');
+
+      expect(journalService.deleteEntriesForSource).toHaveBeenCalledWith(
+        prisma,
+        'tenant-1',
+        'Payment',
+        'pay-1',
+        'cancel',
+      );
+      // The Payment itself is marked cancelled so it stops counting as active.
+      expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+        where: { id: 'pay-1', tenantId: 'tenant-1', cancelledAt: null },
+        data: { cancelledAt: expect.any(Date) },
+      });
+    });
+
+    it('removes only its own entry when a legacy purchase payment is cancelled', async () => {
+      const paidOn = new Date('2026-10-05');
+      prisma.financeTransaction.findFirst.mockResolvedValue({
+        id: 'tx-legacy',
+        tenantId: 'tenant-1',
+        direction: TransactionDirection.EXPENSE,
+        status: TransactionStatus.POSTED,
+        accountId: 'acc-1',
+        amount: 300,
+        currency: 'USD',
+        counterpartyId: 'supp-1',
+        settlementSide: CounterpartySettlementSide.SUPPLIER,
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: 'rcp-1',
+        docNumber: 'FT-0007',
+        transactionDate: paidOn,
+      });
+      prisma.journalEntry = {
+        // Two payments of the same receipt share the legacy key.
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'je-other',
+            lines: [
+              {
+                description:
+                  'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (200 USD)',
+              },
+            ],
+          },
+          {
+            id: 'je-mine',
+            lines: [
+              {
+                description:
+                  'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (300 USD)',
+              },
+            ],
+          },
+        ]),
+      };
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
+        id: 'rcp-1',
+        totalAmount: 500,
+        paidAmount: 500,
+      });
+      journalService.deleteEntry = jest.fn().mockResolvedValue(undefined);
+
+      await service.cancelTransaction('tenant-1', 'tx-legacy');
+
+      expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            tenantId: 'tenant-1',
+            sourceDocType: 'PurchasePayment',
+            sourceDocId: 'rcp-1',
+            entryDate: paidOn,
+          },
+        }),
+      );
+      expect(journalService.deleteEntry).toHaveBeenCalledTimes(1);
+      expect(journalService.deleteEntry).toHaveBeenCalledWith(
+        prisma,
+        'tenant-1',
+        'je-mine',
+        'cancel',
+      );
+    });
+  });
+
+  describe('Journal postings (ADR 0006)', () => {
+    const journalLines = () =>
+      journalService.createJournalEntry.mock.calls[0][1].lines.map(
+        (line: any) => [line.debitAccountId, line.creditAccountId, line.amount],
+      );
+
+    it('posts a counterparty-less income against other operating income (9390)', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-1',
+        accountType: 'UZS_CASH',
+        currency: 'UZS',
+        balance: 0,
+      });
+      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-other' });
+
+      await service.createIncome('tenant-1', {
+        accountId: 'acc-1',
+        amount: 250000,
+        currency: 'UZS',
+      });
+
+      expect(journalService.createJournalEntry).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          sourceDocType: 'FinanceTransaction',
+          sourceDocId: 'tx-other',
+        }),
+        prisma,
+      );
+      expect(journalLines()).toEqual([['acct-5010', 'acct-9390', 250000]]);
+    });
+
+    it('posts a supplier expense against payables (6010)', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-bank',
+        accountType: 'BANK',
+        currency: 'UZS',
+        balance: 1000000,
+      });
+      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-sup' });
+
+      await service.createExpense('tenant-1', {
+        accountId: 'acc-bank',
+        amount: 400000,
+        currency: 'UZS',
+        counterpartyId: 'supp-1',
+        settlementSide: CounterpartySettlementSide.SUPPLIER,
+      });
+
+      expect(journalLines()).toEqual([['acct-6010', 'acct-5110', 400000]]);
+    });
+
+    it('books the exchange gain when a USD invoice is paid at a higher rate', async () => {
+      prisma.cashAccount.findFirst.mockResolvedValue({
+        id: 'acc-usd',
+        accountType: 'USD_CASH',
+        currency: 'USD',
+        balance: 0,
+      });
+      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-usd' });
+      prisma.salesInvoice.findFirst.mockResolvedValue({
+        id: 'inv-usd',
+        counterpartyId: 'cust-1',
+        currency: 'USD',
+        exchangeRate: 12000,
+        status: SalesDocStatus.POSTED,
+        totalAmount: 100,
+        paidAmount: 0,
+      });
+
+      await service.createIncome('tenant-1', {
+        accountId: 'acc-usd',
+        amount: 100,
+        currency: 'USD',
+        exchangeRate: 12500,
+        counterpartyId: 'cust-1',
+        sourceDocType: 'SalesInvoice',
+        sourceDocId: 'inv-usd',
+      });
+
+      // Cash at 12,500 = 1,250,000; receivable cleared at 12,000 = 1,200,000.
+      expect(journalLines()).toEqual([
+        ['acct-5020', 'acct-4010', 1200000],
+        ['acct-5020', 'acct-9540', 50000],
+      ]);
+    });
+
+    it('posts a UZS-to-USD conversion at its UZS value', async () => {
+      prisma.cashAccount.findFirst
+        .mockResolvedValueOnce({
+          id: 'acc-uzs',
+          accountType: 'UZS_CASH',
+          currency: 'UZS',
+          balance: 5000000,
+          isActive: true,
+        })
+        .mockResolvedValueOnce({
+          id: 'acc-usd',
+          accountType: 'USD_CASH',
+          currency: 'USD',
+          balance: 0,
+          isActive: true,
+        });
+      prisma.financeTransaction.create.mockResolvedValue({ id: 'tx-fx' });
+
+      await service.createTransfer('tenant-1', {
+        fromAccountId: 'acc-uzs',
+        toAccountId: 'acc-usd',
+        amount: 1250000,
+        currency: 'UZS',
+        exchangeRate: 12500,
+      });
+
+      expect(journalLines()).toEqual([['acct-5020', 'acct-5010', 1250000]]);
+    });
+
+    it('removes its own journal entry when the transaction is cancelled', async () => {
+      prisma.financeTransaction.findFirst.mockResolvedValue({
+        id: 'tx-plain',
+        tenantId: 'tenant-1',
+        direction: TransactionDirection.EXPENSE,
+        status: TransactionStatus.POSTED,
+        accountId: 'acc-1',
+        amount: 100,
+        currency: 'UZS',
+      });
+
+      await service.cancelTransaction('tenant-1', 'tx-plain');
+
+      expect(journalService.deleteEntriesForSource).toHaveBeenCalledWith(
+        prisma,
+        'tenant-1',
+        'FinanceTransaction',
+        'tx-plain',
+        'cancel',
+      );
+    });
+
+    it('refuses to reverse an additional expense paid at posting from Finance', async () => {
+      prisma.financeTransaction.findFirst.mockResolvedValue({
+        id: 'tx-ae',
+        tenantId: 'tenant-1',
+        direction: TransactionDirection.EXPENSE,
+        status: TransactionStatus.POSTED,
+        accountId: 'acc-1',
+        amount: 100,
+        currency: 'UZS',
+        counterpartyId: 'carrier-1',
+        settlementSide: null,
+        sourceDocType: 'AdditionalExpense',
+        sourceDocId: 'ae-1',
+      });
+
+      await expect(
+        service.cancelTransaction('tenant-1', 'tx-ae'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.cashAccount.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Journal backfill', () => {
+    const uzsCash = {
+      id: 'acc-1',
+      accountType: 'UZS_CASH',
+      currency: 'UZS',
+    };
+    const row = (overrides: Record<string, unknown>) => ({
+      tenantId: 'tenant-1',
+      status: TransactionStatus.POSTED,
+      isDeleted: false,
+      direction: TransactionDirection.INCOME,
+      amount: 1000,
+      currency: 'UZS',
+      exchangeRate: 1,
+      transactionDate: new Date('2026-10-01'),
+      account: uzsCash,
+      transferToAccount: null,
+      settlementSide: null,
+      sourceDocType: null,
+      docNumber: null,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      prisma.journalEntry = {
+        findMany: jest.fn().mockResolvedValue([{ sourceDocId: 'tx-done' }]),
+      };
+      prisma.financeTransaction.findMany.mockResolvedValue([
+        row({ id: 'tx-manual' }),
+        row({ id: 'tx-done' }),
+        row({ id: 'tx-payment', sourceDocType: 'PAYMENT' }),
+        row({ id: 'tx-ob', sourceDocType: 'OpeningBalanceDocument' }),
+        row({ id: 'tx-ae', sourceDocType: 'AdditionalExpense' }),
+        row({
+          id: 'tx-purchase',
+          direction: TransactionDirection.EXPENSE,
+          sourceDocType: 'PurchaseReceipt',
+          docNumber: 'FT-1',
+          settlementSide: CounterpartySettlementSide.SUPPLIER,
+        }),
+      ]);
+    });
+
+    it('posts only the transactions no module has journaled', async () => {
+      const report = await service.backfillJournalEntries('tenant-1', {
+        apply: true,
+      });
+
+      expect(report.posted).toBe(1);
+      expect(report.failures).toEqual([]);
+      expect(Object.values(report.skipped).reduce((a, b) => a + b, 0)).toBe(5);
+      expect(journalService.createJournalEntry).toHaveBeenCalledTimes(1);
+      expect(journalService.createJournalEntry).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          sourceDocType: 'FinanceTransaction',
+          sourceDocId: 'tx-manual',
+          entryDate: new Date('2026-10-01'),
+        }),
+        prisma,
+      );
+    });
+
+    it('rolls every posting back on a dry run and reports failures', async () => {
+      journalService.createJournalEntry.mockRejectedValueOnce(
+        new BadRequestException('Period 2026-10 is closed'),
+      );
+      const failing = await service.backfillJournalEntries('tenant-1', {
+        apply: false,
+      });
+      expect(failing.posted).toBe(0);
+      expect(failing.failures).toEqual([
+        {
+          id: 'tx-manual',
+          date: '2026-10-01',
+          error: 'Period 2026-10 is closed',
+        },
+      ]);
+
+      const ok = await service.backfillJournalEntries('tenant-1', {
+        apply: false,
+      });
+      expect(ok.posted).toBe(1);
+      expect(ok.failures).toEqual([]);
+    });
   });
 
   describe('Cancel Transaction (Storno) Invariants', () => {
@@ -1130,9 +1612,10 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         accountId: 'acc-1',
         amount: 2000000,
       });
-      prisma.cashAccount.findUnique.mockResolvedValue({
+      // Only 500k left: the locked decrement of 2M comes back negative.
+      prisma.cashAccount.update.mockResolvedValue({
         id: 'acc-1',
-        balance: 500000, // only 500k left, cannot deduct 2M!
+        balance: -1500000,
       });
 
       await expect(
@@ -1450,6 +1933,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
             if (balanceChange.increment !== undefined) {
               transactionState!.cashBalance += balanceChange.increment;
             }
+            return { id: 'acc-1', balance: transactionState!.cashBalance };
           }),
         },
         counterpartySettlementEntry: {
@@ -1532,17 +2016,17 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         accountId: 'acc-1',
         amount: 2000000,
       });
-      prisma.cashAccount.findUnique.mockResolvedValue({
+      prisma.cashAccount.update.mockResolvedValue({
         id: 'acc-1',
-        balance: 500000,
+        balance: -1500000,
       });
 
       await expect(
         service.deleteTransaction('tenant-1', 'tx-insufficient', 'user-1'),
       ).rejects.toThrow(BadRequestException);
+      // The throw rolls back the decrement; the row is never marked deleted.
       expect(prisma.financeTransaction.update).not.toHaveBeenCalled();
       expect(prisma.financeTransaction.updateMany).not.toHaveBeenCalled();
-      expect(prisma.cashAccount.update).not.toHaveBeenCalled();
     });
 
     it('moves an already-cancelled transaction to trash without repeating the reversal', async () => {

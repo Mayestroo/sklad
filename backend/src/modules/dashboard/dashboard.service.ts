@@ -8,6 +8,11 @@ import {
 } from '@prisma/client';
 import type { FinanceSummaryByAccount } from '../../../../shared/types/finance';
 import { convertAmountToUzs } from '../../common/utils/transaction-exchange-rate';
+import {
+  businessRangeEnd,
+  businessRangeStart,
+  startOfBusinessMonth,
+} from '../../common/utils/business-day';
 
 interface DashboardFilters {
   date_from?: string;
@@ -23,9 +28,9 @@ export class DashboardService {
   private dateRange(filters: DashboardFilters) {
     const now = new Date();
     const from = filters.date_from
-      ? new Date(filters.date_from)
-      : new Date(now.getFullYear(), now.getMonth(), 1);
-    const to = filters.date_to ? new Date(filters.date_to + 'T23:59:59Z') : now;
+      ? businessRangeStart(filters.date_from)
+      : startOfBusinessMonth(now);
+    const to = filters.date_to ? businessRangeEnd(filters.date_to) : now;
     return { from, to };
   }
 

@@ -27,6 +27,7 @@
     "db:generate": "npx prisma generate",
     "create:superadmin": "ts-node scripts/create-superadmin.ts",
     "settlement:reconcile": "node --env-file=.env -r ts-node/register -r tsconfig-paths/register scripts/reconcile-counterparty-settlement.ts",
+    "finance:backfill-journal": "node --env-file=.env -r ts-node/register -r tsconfig-paths/register scripts/backfill-finance-journal.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "prisma": {

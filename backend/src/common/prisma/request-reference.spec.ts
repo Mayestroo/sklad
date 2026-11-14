@@ -28,6 +28,7 @@ const ALLOWLIST: Record<string, string> = {
   'FinanceService.reverseCounterpartySettlement': INTERNAL,
   'FinanceService.reverseLegacyDocumentAllocation': INTERNAL,
   'FinanceService.reversePostedTransaction': INTERNAL,
+  'FinanceService.deleteLegacyPurchasePaymentEntry': INTERNAL,
   'StockReservationService.reserveStockForOrder': INTERNAL,
   'ProductionService.createRecipe':
     'Product and materials are loaded with tenantId and their count compared with the request',

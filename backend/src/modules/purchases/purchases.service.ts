@@ -50,6 +50,7 @@ import {
   accountingSettings,
   PURCHASE_RETURN_GAIN_ACCOUNT_SETTING,
 } from '../../common/settings/accounting-settings';
+import { startOfBusinessMonth } from '../../common/utils/business-day';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -1038,10 +1039,15 @@ export class PurchasesService {
           : PurchasePaymentStatus.PARTIALLY_PAID;
 
       // 1. Decrement CashAccount balance
-      await tx.cashAccount.update({
+      // The row lock makes the returned balance authoritative even when two
+      // payments race past the pre-check above; a cash account never goes negative.
+      const debitedCashAccount = await tx.cashAccount.update({
         where: { tenantId, id: dto.cashAccountId },
         data: { balance: { decrement: payAmount } },
       });
+      if (Number(debitedCashAccount.balance) < 0) {
+        throw new BadRequestException("Kassada mablag' yetarli emas");
+      }
 
       // 2. Create Finance Transaction (EXPENSE)
       const txNumber = await nextDocumentNumber(
@@ -1168,8 +1174,10 @@ export class PurchasesService {
           {
             entryDate: paymentDate,
             description: `To'lov: ${receipt.docNumber} — ${receipt.counterparty.name}`,
-            sourceDocType: 'PurchasePayment',
-            sourceDocId: receipt.id,
+            // Keyed by the payment's Finance transaction so cancelling that
+            // payment in Finance removes exactly this entry.
+            sourceDocType: 'FinanceTransaction',
+            sourceDocId: financeTransaction.id,
             lines: journalLines,
           },
           tx,
@@ -2075,6 +2083,8 @@ export class PurchasesService {
         tenantId,
         counterpartyId: pReturn.counterpartyId,
         direction: 'INCOME',
+        status: 'POSTED',
+        isDeleted: false,
         comment: { contains: pReturn.returnNumber },
       },
     });
@@ -2332,6 +2342,8 @@ export class PurchasesService {
         tenantId,
         counterpartyId: supplierId,
         direction: 'EXPENSE',
+        status: 'POSTED',
+        isDeleted: false,
       },
       include: { account: true, transactionType: true },
       orderBy: { transactionDate: 'desc' },
@@ -2387,7 +2399,7 @@ export class PurchasesService {
 
   async getSummaryStats(tenantId: string) {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonth = startOfBusinessMonth(now);
 
     const monthlyReceipts = await this.prisma.purchaseReceipt.findMany({
       where: {
