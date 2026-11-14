@@ -156,7 +156,8 @@ describe('AdditionalExpensesService Unit Tests', () => {
       },
       cashAccount: {
         findFirst: jest.fn(),
-        update: jest.fn(),
+        // Payments re-check the post-decrement balance they get back.
+        update: jest.fn().mockResolvedValue({ balance: 0 }),
       },
       counterparty: {
         update: jest.fn(),

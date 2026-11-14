@@ -90,7 +90,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       counterpartyBalance: { findMany: jest.fn() },
       cashAccount: {
         findFirst: jest.fn(),
-        update: jest.fn(),
+        // Payments re-check the post-decrement balance they get back.
+        update: jest.fn().mockResolvedValue({ balance: 0 }),
       },
       account: {
         findFirst: jest.fn(),

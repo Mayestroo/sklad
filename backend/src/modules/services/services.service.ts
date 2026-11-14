@@ -527,6 +527,7 @@ export class ServicesService {
         tenantId,
         sourceDocType: 'ServiceAct',
         sourceDocId: id,
+        status: 'POSTED',
         isDeleted: false,
       },
     });
@@ -612,6 +613,7 @@ export class ServicesService {
         tenantId,
         sourceDocType: 'ServiceAct',
         sourceDocId: id,
+        status: 'POSTED',
         isDeleted: false,
       },
     });

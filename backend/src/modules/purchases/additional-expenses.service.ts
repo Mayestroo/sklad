@@ -862,10 +862,13 @@ export class AdditionalExpensesService {
         }
 
         // Decrement cash balance
-        await tx.cashAccount.update({
+        const debitedCashAccount = await tx.cashAccount.update({
           where: { tenantId, id: paidCashAccountId },
           data: { balance: { decrement: totalAmount } },
         });
+        if (Number(debitedCashAccount.balance) < 0) {
+          throw new BadRequestException("Kassada mablag' yetarli emas");
+        }
 
         // Create FinanceTransaction EXPENSE
         const txNumber = await nextDocumentNumber(
@@ -1047,6 +1050,7 @@ export class AdditionalExpensesService {
         tenantId,
         sourceDocType: 'AdditionalExpense',
         sourceDocId: id,
+        status: 'POSTED',
         isDeleted: false,
       },
     });

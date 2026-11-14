@@ -1038,10 +1038,15 @@ export class PurchasesService {
           : PurchasePaymentStatus.PARTIALLY_PAID;
 
       // 1. Decrement CashAccount balance
-      await tx.cashAccount.update({
+      // The row lock makes the returned balance authoritative even when two
+      // payments race past the pre-check above; a cash account never goes negative.
+      const debitedCashAccount = await tx.cashAccount.update({
         where: { tenantId, id: dto.cashAccountId },
         data: { balance: { decrement: payAmount } },
       });
+      if (Number(debitedCashAccount.balance) < 0) {
+        throw new BadRequestException("Kassada mablag' yetarli emas");
+      }
 
       // 2. Create Finance Transaction (EXPENSE)
       const txNumber = await nextDocumentNumber(
@@ -2075,6 +2080,8 @@ export class PurchasesService {
         tenantId,
         counterpartyId: pReturn.counterpartyId,
         direction: 'INCOME',
+        status: 'POSTED',
+        isDeleted: false,
         comment: { contains: pReturn.returnNumber },
       },
     });
@@ -2332,6 +2339,8 @@ export class PurchasesService {
         tenantId,
         counterpartyId: supplierId,
         direction: 'EXPENSE',
+        status: 'POSTED',
+        isDeleted: false,
       },
       include: { account: true, transactionType: true },
       orderBy: { transactionDate: 'desc' },

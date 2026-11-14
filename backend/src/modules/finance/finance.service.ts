@@ -25,6 +25,7 @@ import { FilterTransactionsDto } from './dto/filter-transactions.dto';
 import { CancelTransactionDto } from './dto/cancel-transaction.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../settlements/settlement-allocation.service';
+import { JournalService } from '../accounting/journal/journal.service';
 import { isCashAccountCurrencyValid } from '../../../../shared/types/cash-account-policy';
 import { formatMoney } from '../../../../shared/format/money';
 import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
@@ -58,6 +59,7 @@ export class FinanceService {
     private readonly prisma: PrismaService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly settlementAllocationService: SettlementAllocationService,
+    private readonly journalService: JournalService,
   ) {}
 
   // ─── Accounts ────────────────────────────────────────────────
@@ -1000,10 +1002,13 @@ export class FinanceService {
         include: { account: true, counterparty: true, transactionType: true },
       });
 
-      await tx.cashAccount.update({
-        where: { tenantId, id: dto.accountId },
-        data: { balance: { decrement: dto.amount } },
-      });
+      await this.withdrawFromCashAccount(
+        tx,
+        tenantId,
+        dto.accountId,
+        dto.amount,
+        "Chiquvchi kassada mablag' yetarli emas",
+      );
 
       if (settlement?.side) {
         if (settlement.targetType && settlement.targetId) {
@@ -1101,19 +1106,28 @@ export class FinanceService {
       });
       if (!order)
         throw new NotFoundException('Sales order settlement target not found');
-      const paidAmount = Number(order.paidAmount) + amount;
+      const paidAmount = Math.max(0, Number(order.paidAmount) + amount);
       let status = order.status;
-      if (status === 'AWAITING_PAYMENT') {
-        if (
-          order.paymentCondition === 'PREPAID_100' &&
-          paidAmount >= Number(order.totalAmount)
-        ) {
-          status = 'PAYMENT_CONFIRMED';
-        } else if (order.paymentCondition === 'PARTIAL') {
-          const required = Number(order.requiredPaymentPercent) || 0;
-          if (paidAmount >= (Number(order.totalAmount) * required) / 100)
-            status = 'PAYMENT_CONFIRMED';
-        }
+      const total = Number(order.totalAmount);
+      const requiredAmount =
+        order.paymentCondition === 'PREPAID_100'
+          ? total
+          : order.paymentCondition === 'PARTIAL'
+            ? (total * Number(order.requiredPaymentPercent ?? 0)) / 100
+            : 0;
+      if (
+        amount > 0 &&
+        status === 'AWAITING_PAYMENT' &&
+        paidAmount >= requiredAmount
+      ) {
+        status = 'PAYMENT_CONFIRMED';
+      } else if (
+        // A cancelled payment must re-close the order's payment gate.
+        amount < 0 &&
+        status === 'PAYMENT_CONFIRMED' &&
+        paidAmount < requiredAmount
+      ) {
+        status = 'AWAITING_PAYMENT';
       }
       await tx.salesOrder.update({
         where: { tenantId, id: targetId },
@@ -1130,7 +1144,7 @@ export class FinanceService {
         throw new NotFoundException(
           'Purchase receipt settlement target not found',
         );
-      const paidAmount = Number(receipt.paidAmount) + amount;
+      const paidAmount = Math.max(0, Number(receipt.paidAmount) + amount);
       const paymentStatus =
         paidAmount >= Number(receipt.totalAmount)
           ? PurchasePaymentStatus.PAID
@@ -1150,7 +1164,7 @@ export class FinanceService {
       });
       if (!act)
         throw new NotFoundException('Service act settlement target not found');
-      const paidAmount = Number(act.paidAmount) + amount;
+      const paidAmount = Math.max(0, Number(act.paidAmount) + amount);
       const paymentStatus =
         paidAmount >= Number(act.totalAmount)
           ? ServicePaymentStatus.PAID
@@ -1188,6 +1202,29 @@ export class FinanceService {
           data: { isPaid },
         });
       }
+    }
+  }
+
+  /**
+   * Takes money out of a cash/bank account inside the caller's transaction.
+   * The UPDATE locks the row and applies the decrement to the latest committed
+   * balance, so checking the returned balance catches concurrent withdrawals
+   * that a read-then-write pre-check would miss; throwing rolls the whole
+   * document back. Cash accounts never go negative.
+   */
+  private async withdrawFromCashAccount(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    accountId: string,
+    amount: number,
+    insufficientFundsMessage: string,
+  ) {
+    const account = await tx.cashAccount.update({
+      where: { tenantId, id: accountId },
+      data: { balance: { decrement: amount } },
+    });
+    if (Number(account.balance) < 0) {
+      throw new BadRequestException(insufficientFundsMessage);
     }
   }
 
@@ -1651,6 +1688,27 @@ export class FinanceService {
         orderBy: { docDate: 'asc' },
       }),
     ]);
+    // An additional expense has no paidAmount column: its open amount is the
+    // gross amount minus what is already allocated to it (reversals are
+    // negative allocation rows, so the sum is the net paid amount).
+    const expenseAllocations = expenses.length
+      ? await tx.settlementAllocation.findMany({
+          where: {
+            tenantId,
+            targetType: SettlementAllocationTarget.ADDITIONAL_EXPENSE,
+            targetId: { in: expenses.map((expense) => expense.id) },
+          },
+          select: { targetId: true, amount: true },
+        })
+      : [];
+    const allocatedByExpense = new Map<string, number>();
+    for (const allocation of expenseAllocations) {
+      allocatedByExpense.set(
+        allocation.targetId,
+        (allocatedByExpense.get(allocation.targetId) ?? 0) +
+          Number(allocation.amount),
+      );
+    }
     const targets: FifoSettlementTarget[] = [
       ...receipts.map((receipt) => ({
         targetType: SettlementAllocationTarget.PURCHASE_RECEIPT,
@@ -1679,7 +1737,9 @@ export class FinanceService {
         effectiveAt: expense.docDate,
         openAmount: Math.max(
           0,
-          Number(expense.amount) + Number(expense.vatAmount),
+          Number(expense.amount) +
+            Number(expense.vatAmount) -
+            (allocatedByExpense.get(expense.id) ?? 0),
         ),
       })),
     ].sort(
@@ -1879,10 +1939,13 @@ export class FinanceService {
       });
 
       // Deduct from source
-      await tx.cashAccount.update({
-        where: { tenantId, id: dto.fromAccountId },
-        data: { balance: { decrement: fromAmount } },
-      });
+      await this.withdrawFromCashAccount(
+        tx,
+        tenantId,
+        dto.fromAccountId,
+        fromAmount,
+        "Chiquvchi kassada mablag' yetarli emas",
+      );
 
       // Add to destination
       await tx.cashAccount.update({
@@ -2112,18 +2175,13 @@ export class FinanceService {
     if (existing.direction === TransactionDirection.INCOME) {
       // Safe check: Account balance cannot go negative
       if (existing.accountId) {
-        const acc = await tx.cashAccount.findUnique({
-          where: { tenantId, id: existing.accountId },
-        });
-        if (!acc || Number(acc.balance) < amount) {
-          throw new BadRequestException(
-            'Kirimni bekor qilish imkonsiz: kassada yetarli qoldiq mavjud emas (manfiy qoldiq yuzaga keladi)',
-          );
-        }
-        await tx.cashAccount.update({
-          where: { tenantId, id: existing.accountId },
-          data: { balance: { decrement: amount } },
-        });
+        await this.withdrawFromCashAccount(
+          tx,
+          tenantId,
+          existing.accountId,
+          amount,
+          'Kirimni bekor qilish imkonsiz: kassada yetarli qoldiq mavjud emas (manfiy qoldiq yuzaga keladi)',
+        );
       }
 
       await this.reverseCounterpartySettlement(
@@ -2133,6 +2191,19 @@ export class FinanceService {
         amount,
         isDeleted,
       );
+
+      // A customer Payment posts Dt cash / Kt 4010 under its own id; once its
+      // cash and settlement are reversed, that entry must go too or the
+      // ledger keeps money the cash account no longer has.
+      if (existing.sourceDocType === 'PAYMENT' && existing.sourceDocId) {
+        await this.journalService.deleteEntriesForSource(
+          tx,
+          tenantId,
+          'Payment',
+          existing.sourceDocId,
+          isDeleted ? 'delete' : 'cancel',
+        );
+      }
     } else if (existing.direction === TransactionDirection.EXPENSE) {
       // Return money to account
       if (existing.accountId) {
@@ -2152,18 +2223,13 @@ export class FinanceService {
     } else if (existing.direction === TransactionDirection.TRANSFER) {
       const destinationAmount = Number(existing.transferToAmount ?? amount);
       if (existing.transferToId) {
-        const toAcc = await tx.cashAccount.findUnique({
-          where: { tenantId, id: existing.transferToId },
-        });
-        if (!toAcc || Number(toAcc.balance) < destinationAmount) {
-          throw new BadRequestException(
-            "O'tkazmani bekor qilish imkonsiz: qabul qiluvchi kassada yetarli qoldiq mavjud emas",
-          );
-        }
-        await tx.cashAccount.update({
-          where: { tenantId, id: existing.transferToId },
-          data: { balance: { decrement: destinationAmount } },
-        });
+        await this.withdrawFromCashAccount(
+          tx,
+          tenantId,
+          existing.transferToId,
+          destinationAmount,
+          "O'tkazmani bekor qilish imkonsiz: qabul qiluvchi kassada yetarli qoldiq mavjud emas",
+        );
       }
       if (existing.accountId) {
         await tx.cashAccount.update({
