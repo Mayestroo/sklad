@@ -252,6 +252,7 @@ export function PaySalesInvoiceModal({
             <Input
               type="number"
               min="0.0001"
+              step="0.0001"
               value={exchangeRate}
               onChange={(event) => setExchangeRate(event.target.value)}
               placeholder="12800"
