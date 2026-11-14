@@ -1369,6 +1369,93 @@ describe('FinanceService Settlement Unit Test Suite', () => {
     });
   });
 
+  describe('Journal backfill', () => {
+    const uzsCash = {
+      id: 'acc-1',
+      accountType: 'UZS_CASH',
+      currency: 'UZS',
+    };
+    const row = (overrides: Record<string, unknown>) => ({
+      tenantId: 'tenant-1',
+      status: TransactionStatus.POSTED,
+      isDeleted: false,
+      direction: TransactionDirection.INCOME,
+      amount: 1000,
+      currency: 'UZS',
+      exchangeRate: 1,
+      transactionDate: new Date('2026-10-01'),
+      account: uzsCash,
+      transferToAccount: null,
+      settlementSide: null,
+      sourceDocType: null,
+      docNumber: null,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      prisma.journalEntry = {
+        findMany: jest.fn().mockResolvedValue([{ sourceDocId: 'tx-done' }]),
+      };
+      prisma.financeTransaction.findMany.mockResolvedValue([
+        row({ id: 'tx-manual' }),
+        row({ id: 'tx-done' }),
+        row({ id: 'tx-payment', sourceDocType: 'PAYMENT' }),
+        row({ id: 'tx-ob', sourceDocType: 'OpeningBalanceDocument' }),
+        row({ id: 'tx-ae', sourceDocType: 'AdditionalExpense' }),
+        row({
+          id: 'tx-purchase',
+          direction: TransactionDirection.EXPENSE,
+          sourceDocType: 'PurchaseReceipt',
+          docNumber: 'FT-1',
+          settlementSide: CounterpartySettlementSide.SUPPLIER,
+        }),
+      ]);
+    });
+
+    it('posts only the transactions no module has journaled', async () => {
+      const report = await service.backfillJournalEntries('tenant-1', {
+        apply: true,
+      });
+
+      expect(report.posted).toBe(1);
+      expect(report.failures).toEqual([]);
+      expect(Object.values(report.skipped).reduce((a, b) => a + b, 0)).toBe(5);
+      expect(journalService.createJournalEntry).toHaveBeenCalledTimes(1);
+      expect(journalService.createJournalEntry).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          sourceDocType: 'FinanceTransaction',
+          sourceDocId: 'tx-manual',
+          entryDate: new Date('2026-10-01'),
+        }),
+        prisma,
+      );
+    });
+
+    it('rolls every posting back on a dry run and reports failures', async () => {
+      journalService.createJournalEntry.mockRejectedValueOnce(
+        new BadRequestException('Period 2026-10 is closed'),
+      );
+      const failing = await service.backfillJournalEntries('tenant-1', {
+        apply: false,
+      });
+      expect(failing.posted).toBe(0);
+      expect(failing.failures).toEqual([
+        {
+          id: 'tx-manual',
+          date: '2026-10-01',
+          error: 'Period 2026-10 is closed',
+        },
+      ]);
+
+      const ok = await service.backfillJournalEntries('tenant-1', {
+        apply: false,
+      });
+      expect(ok.posted).toBe(1);
+      expect(ok.failures).toEqual([]);
+    });
+  });
+
   describe('Cancel Transaction (Storno) Invariants', () => {
     it('should safely cancel income, restore customer debt and invoice paidAmount', async () => {
       prisma.financeTransaction.findFirst.mockResolvedValue({

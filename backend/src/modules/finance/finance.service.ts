@@ -2492,6 +2492,14 @@ export class FinanceService {
       );
     }
 
+    // Opening-balance cash is reversed by unposting its document, which also
+    // removes its journal entry; reversing it here too would take it twice.
+    if (existing.sourceDocType === 'OpeningBalanceDocument') {
+      throw new BadRequestException(
+        "Bu boshlang'ich qoldiq yozuvi. Uni bekor qilish uchun Boshlang'ich qoldiqlar hujjatini qayta oching.",
+      );
+    }
+
     const amount = Number(existing.amount);
 
     if (existing.direction === TransactionDirection.INCOME) {
@@ -2675,6 +2683,182 @@ export class FinanceService {
       where: { tenantId, id },
       data: { isDeleted: false },
     });
+  }
+
+  // ─── Journal backfill ─────────────────────────────────────────
+
+  /**
+   * Posts the journal entry that Finance transactions recorded before Finance
+   * posted journals are missing (ADR 0006). Skips transactions whose entry
+   * is posted by the module that created them: customer Payments,
+   * opening-balance cash, purchase payments (they carry a document number,
+   * which Finance-page transactions never have) and the cash payment of an
+   * additional expense posted as paid. Each transaction posts in its own
+   * database transaction; a dry run rolls every one of them back, so it
+   * reports exactly what --apply would do, including closed-period failures.
+   */
+  async backfillJournalEntries(tenantId: string, options: { apply: boolean }) {
+    const candidates = await this.prisma.financeTransaction.findMany({
+      where: { tenantId, status: TransactionStatus.POSTED, isDeleted: false },
+      include: { account: true, transferToAccount: true },
+      orderBy: { transactionDate: 'asc' },
+    });
+    const existing = await this.prisma.journalEntry.findMany({
+      where: {
+        tenantId,
+        sourceDocType: FINANCE_JOURNAL_SOURCE,
+        sourceDocId: { in: candidates.map((item) => item.id) },
+      },
+      select: { sourceDocId: true },
+    });
+    const alreadyPosted = new Set(existing.map((entry) => entry.sourceDocId));
+
+    const skipped: Record<string, number> = {};
+    const skip = (reason: string) => {
+      skipped[reason] = (skipped[reason] ?? 0) + 1;
+    };
+    const posted: string[] = [];
+    const failures: Array<{ id: string; date: string; error: string }> = [];
+    class DryRunRollback extends Error {}
+
+    if (!candidates.length) {
+      return { apply: options.apply, posted: 0, skipped, failures };
+    }
+    await this.accountsService.ensureDefaultAccounts(tenantId);
+
+    for (const item of candidates) {
+      if (alreadyPosted.has(item.id)) {
+        skip('already has a Finance journal entry');
+        continue;
+      }
+      if (item.sourceDocType === 'PAYMENT') {
+        skip('customer Payment (posts its own entry)');
+        continue;
+      }
+      if (item.sourceDocType === 'OpeningBalanceDocument') {
+        skip('opening balance (posts its own entry)');
+        continue;
+      }
+      if (item.sourceDocType === 'AdditionalExpense' && !item.settlementSide) {
+        skip('additional expense paid at posting (in the expense entry)');
+        continue;
+      }
+      if (item.sourceDocType === 'PurchaseReceipt' && item.docNumber) {
+        skip('purchase payment (posts its own entry)');
+        continue;
+      }
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          if (item.direction === TransactionDirection.TRANSFER) {
+            if (!item.transferToAccount || item.transferToAmount == null) {
+              throw new BadRequestException(
+                'Transfer has no destination account or amount',
+              );
+            }
+            await this.postTransferJournal(tx, tenantId, {
+              transaction: item,
+              fromAccount: item.account,
+              toAccount: item.transferToAccount,
+              fromAmount: Number(item.amount),
+              toAmount: Number(item.transferToAmount),
+            });
+          } else {
+            await this.postSettlementJournal(tx, tenantId, {
+              transaction: item,
+              cashAccount: item.account,
+              side: item.settlementSide,
+              applications: item.settlementSide
+                ? await this.currentApplications(tx, tenantId, item.id)
+                : [],
+            });
+          }
+          if (!options.apply) throw new DryRunRollback();
+        });
+        posted.push(item.id);
+      } catch (error) {
+        if (error instanceof DryRunRollback) {
+          posted.push(item.id);
+          continue;
+        }
+        failures.push({
+          id: item.id,
+          date: item.transactionDate.toISOString().slice(0, 10),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { apply: options.apply, posted: posted.length, skipped, failures };
+  }
+
+  /** Net amount a transaction still applies to each document, with its rate. */
+  private async currentApplications(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    financeTransactionId: string,
+  ): Promise<SettlementApplication[]> {
+    const rows = await tx.settlementAllocation.findMany({
+      where: { tenantId, financeTransactionId },
+      select: { targetType: true, targetId: true, amount: true },
+    });
+    const net = new Map<
+      string,
+      {
+        targetType: SettlementAllocationTarget;
+        targetId: string;
+        amount: number;
+      }
+    >();
+    for (const row of rows) {
+      const key = `${row.targetType}:${row.targetId}`;
+      const current = net.get(key) ?? {
+        targetType: row.targetType,
+        targetId: row.targetId,
+        amount: 0,
+      };
+      current.amount += Number(row.amount);
+      net.set(key, current);
+    }
+    const applications: SettlementApplication[] = [];
+    for (const target of net.values()) {
+      if (target.amount <= 0.000001) continue;
+      applications.push({
+        amount: target.amount,
+        documentRate: await this.documentRate(
+          tx,
+          tenantId,
+          target.targetType,
+          target.targetId,
+        ),
+      });
+    }
+    return applications;
+  }
+
+  private async documentRate(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    targetType: SettlementAllocationTarget,
+    targetId: string,
+  ): Promise<number | undefined> {
+    const where = { id: targetId, tenantId };
+    const select = { exchangeRate: true } as const;
+    const document =
+      targetType === SettlementAllocationTarget.SALES_INVOICE
+        ? await tx.salesInvoice.findFirst({ where, select })
+        : targetType === SettlementAllocationTarget.SALES_ORDER
+          ? await tx.salesOrder.findFirst({ where, select })
+          : targetType === SettlementAllocationTarget.PURCHASE_RECEIPT
+            ? await tx.purchaseReceipt.findFirst({ where, select })
+            : targetType === SettlementAllocationTarget.SERVICE_ACT
+              ? await tx.serviceAct.findFirst({ where, select })
+              : targetType === SettlementAllocationTarget.ADDITIONAL_EXPENSE
+                ? await tx.additionalExpense.findFirst({ where, select })
+                : targetType === SettlementAllocationTarget.PURCHASE_RETURN
+                  ? await tx.purchaseReturn.findFirst({ where, select })
+                  : null; // a sales return has no rate: the payment rate applies
+    return document ? Number(document.exchangeRate) : undefined;
   }
 
   // ─── Transaction Types ────────────────────────────────────────
