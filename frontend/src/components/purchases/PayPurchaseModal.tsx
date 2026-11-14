@@ -278,6 +278,7 @@ export function PayPurchaseModal({
             label={isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
             type="number"
             min="0.0001"
+            step="0.0001"
             value={exchangeRate}
             onChange={(event) => setExchangeRate(event.target.value)}
             placeholder="12800"

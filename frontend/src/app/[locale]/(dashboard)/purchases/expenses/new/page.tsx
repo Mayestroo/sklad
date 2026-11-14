@@ -493,6 +493,7 @@ export default function NewExpensePage() {
               <Input
                 type="number"
                 min="0.0001"
+                step="0.0001"
                 label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
                 value={exchangeRate}
                 onChange={(e) => setExchangeRate(e.target.value)}
