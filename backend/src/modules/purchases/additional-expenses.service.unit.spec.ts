@@ -162,10 +162,14 @@ describe('AdditionalExpensesService Unit Tests', () => {
       counterparty: {
         update: jest.fn(),
       },
+      settlementAllocation: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       financeTransaction: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         findFirst: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       account: {
         findFirst: jest.fn().mockImplementation(({ where }) => {
@@ -707,6 +711,61 @@ describe('AdditionalExpensesService Unit Tests', () => {
       await expect(
         service.cancelExpense(tenantId, userId, 'exp-1'),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('blocks cancellation while a FIFO Finance payment is applied to it', async () => {
+      prisma.additionalExpense.findFirst.mockResolvedValue({
+        id: 'exp-1',
+        status: PurchaseDocStatus.POSTED,
+        amount: 500000,
+        items: [],
+      });
+      prisma.financeTransaction.findFirst.mockResolvedValue(null);
+      prisma.settlementAllocation.findMany.mockResolvedValue([
+        { amount: 300000 },
+      ]);
+
+      await expect(
+        service.cancelExpense(tenantId, userId, 'exp-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('returns the cash of a paid-at-posting expense when it is cancelled', async () => {
+      prisma.additionalExpense.findFirst.mockResolvedValue({
+        id: 'exp-1',
+        docNumber: 'AE-1',
+        status: PurchaseDocStatus.POSTED,
+        amount: 500000,
+        receiptId,
+        isPaid: true,
+        counterpartyId: 'carrier-1',
+        items: [],
+      });
+      prisma.financeTransaction.findFirst
+        .mockResolvedValueOnce(null) // no later Finance payment
+        .mockResolvedValueOnce({
+          id: 'ft-posting',
+          accountId: 'acc-cash',
+          amount: 500000,
+          settlementSide: null,
+        });
+      prisma.additionalExpense.update.mockResolvedValue({
+        id: 'exp-1',
+        status: PurchaseDocStatus.CANCELLED,
+      });
+
+      await service.cancelExpense(tenantId, userId, 'exp-1');
+
+      expect(prisma.cashAccount.update).toHaveBeenCalledWith({
+        where: { tenantId, id: 'acc-cash' },
+        data: { balance: { increment: 500000 } },
+      });
+      expect(prisma.financeTransaction.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ft-posting', tenantId, status: 'POSTED' },
+          data: expect.objectContaining({ status: 'CANCELLED' }),
+        }),
+      );
     });
 
     it('cleanly cancels and restores batch and sales COGS when no active cash payment', async () => {

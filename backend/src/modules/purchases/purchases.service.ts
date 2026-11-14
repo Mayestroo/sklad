@@ -1173,8 +1173,10 @@ export class PurchasesService {
           {
             entryDate: paymentDate,
             description: `To'lov: ${receipt.docNumber} — ${receipt.counterparty.name}`,
-            sourceDocType: 'PurchasePayment',
-            sourceDocId: receipt.id,
+            // Keyed by the payment's Finance transaction so cancelling that
+            // payment in Finance removes exactly this entry.
+            sourceDocType: 'FinanceTransaction',
+            sourceDocId: financeTransaction.id,
             lines: journalLines,
           },
           tx,

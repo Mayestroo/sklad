@@ -17,6 +17,7 @@ import {
   ExpenseAllocationMethod,
   TransactionDirection,
   CounterpartySettlementSide,
+  SettlementAllocationTarget,
 } from '@prisma/client';
 
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
@@ -1044,18 +1045,36 @@ export class AdditionalExpensesService {
       );
     }
 
-    // Rollback Guardrail: Check active linked cash payment transactions
-    const linkedTx = await this.prisma.financeTransaction.findFirst({
-      where: {
-        tenantId,
-        sourceDocType: 'AdditionalExpense',
-        sourceDocId: id,
-        status: 'POSTED',
-        isDeleted: false,
-      },
-    });
+    // Rollback Guardrail: a later Finance payment (linked directly, or applied
+    // to this expense by FIFO) must be cancelled in Finance first. The cash
+    // payment made when the expense was posted as paid has no settlement side
+    // and is reversed together with the document below.
+    const [linkedTx, allocations] = await Promise.all([
+      this.prisma.financeTransaction.findFirst({
+        where: {
+          tenantId,
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: id,
+          status: 'POSTED',
+          isDeleted: false,
+          settlementSide: { not: null },
+        },
+      }),
+      this.prisma.settlementAllocation.findMany({
+        where: {
+          tenantId,
+          targetType: SettlementAllocationTarget.ADDITIONAL_EXPENSE,
+          targetId: id,
+        },
+        select: { amount: true },
+      }),
+    ]);
+    const allocatedAmount = allocations.reduce(
+      (sum, allocation) => sum + Number(allocation.amount),
+      0,
+    );
 
-    if (linkedTx) {
+    if (linkedTx || allocatedAmount > 0.000001) {
       throw new BadRequestException(
         "Ushbu xarajat bo'yicha kassa to'lovi mavjud. Avval Moliya bo'limidan kassa to'lovini bekor qiling.",
       );
@@ -1066,6 +1085,44 @@ export class AdditionalExpensesService {
     return this.prisma.$transaction(async (tx) => {
       // D4: nothing dated in a closed accounting period may change.
       await assertPeriodOpen(tx, tenantId, expense.docDate, 'cancel');
+
+      // Return the cash paid when the expense was posted as paid. Its credit
+      // to cash sits in the expense's own journal entry, deleted below.
+      const postingPayment = await tx.financeTransaction.findFirst({
+        where: {
+          tenantId,
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: id,
+          status: 'POSTED',
+          isDeleted: false,
+          settlementSide: null,
+        },
+      });
+      if (postingPayment) {
+        if (!postingPayment.accountId) {
+          throw new BadRequestException(
+            "Qo'shimcha xarajat to'lovining kassa hisobi ko'rsatilmagan",
+          );
+        }
+        await tx.cashAccount.update({
+          where: { tenantId, id: postingPayment.accountId },
+          data: { balance: { increment: postingPayment.amount } },
+        });
+        const cancelled = await tx.financeTransaction.updateMany({
+          where: { id: postingPayment.id, tenantId, status: 'POSTED' },
+          data: {
+            status: 'CANCELLED',
+            cancelledById: userId || null,
+            cancelledAt: new Date(),
+            cancellationReason: `Qo'shimcha xarajat ${expense.docNumber} bekor qilindi`,
+          },
+        });
+        if (cancelled.count !== 1) {
+          throw new BadRequestException(
+            "Qo'shimcha xarajat to'lovi allaqachon bekor qilingan",
+          );
+        }
+      }
       // 1. Revert ProductBatch landed cost & Retroactive COGS
       for (const item of expense.items) {
         const allocatedAmount = Number(item.allocatedAmount);

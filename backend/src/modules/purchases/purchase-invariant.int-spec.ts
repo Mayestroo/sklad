@@ -294,11 +294,18 @@ describe('Purchase Document End-to-End Invariant Test', () => {
     expect(await supplierDebtUzs()).toBe(initialSupplierDebt);
 
     // INVARIANT CHECK 7: Payment Journal Entry Created (Dt 6010 / Kt 5010 = 11,200,000)
+    const payTx = await prisma.financeTransaction.findFirstOrThrow({
+      where: {
+        tenantId,
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: receipt.id,
+      },
+    });
     const payJe = await prisma.journalEntry.findFirst({
       where: {
         tenantId,
-        sourceDocType: 'PurchasePayment',
-        sourceDocId: receipt.id,
+        sourceDocType: 'FinanceTransaction',
+        sourceDocId: payTx.id,
       },
       include: {
         lines: {

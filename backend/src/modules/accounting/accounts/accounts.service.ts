@@ -133,6 +133,26 @@ export const DEFAULT_NAS_ACCOUNTS = [
     isSystem: true,
   },
   {
+    // Counter-account for a Finance expense booked without a counterparty.
+    code: '9430',
+    name: {
+      uz: 'Boshqa operatsion xarajatlar',
+      ru: 'Прочие операционные расходы',
+    },
+    type: 'EXPENSE' as const,
+    isSystem: true,
+  },
+  {
+    // Counter-account for a Finance income booked without a counterparty.
+    code: '9390',
+    name: {
+      uz: 'Boshqa operatsion daromadlar',
+      ru: 'Прочие операционные доходы',
+    },
+    type: 'REVENUE' as const,
+    isSystem: true,
+  },
+  {
     code: '9540',
     name: {
       uz: 'Valyuta kursi farqidan daromad',
