@@ -50,6 +50,7 @@ import {
   accountingSettings,
   PURCHASE_RETURN_GAIN_ACCOUNT_SETTING,
 } from '../../common/settings/accounting-settings';
+import { startOfBusinessMonth } from '../../common/utils/business-day';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -2398,7 +2399,7 @@ export class PurchasesService {
 
   async getSummaryStats(tenantId: string) {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonth = startOfBusinessMonth(now);
 
     const monthlyReceipts = await this.prisma.purchaseReceipt.findMany({
       where: {

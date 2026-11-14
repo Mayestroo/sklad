@@ -43,6 +43,12 @@ import type {
 import { readCompanySettings } from '../../common/utils/company-settings';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+import {
+  businessRangeEnd,
+  businessRangeStart,
+  startOfBusinessDay,
+  startOfBusinessMonth,
+} from '../../common/utils/business-day';
 
 interface FinanceSettlementContext {
   side: CounterpartySettlementSide | null;
@@ -138,9 +144,10 @@ export class FinanceService {
 
     if (filters.date_from || filters.date_to) {
       const transactionDate: Prisma.DateTimeFilter = {};
-      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
+      if (filters.date_from)
+        transactionDate.gte = businessRangeStart(filters.date_from);
       if (filters.date_to)
-        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = businessRangeEnd(filters.date_to);
       where.transactionDate = transactionDate;
     }
 
@@ -340,12 +347,9 @@ export class FinanceService {
 
   async getDashboardMetrics(tenantId: string) {
     const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Business days in Tashkent time, whatever the server timezone.
+    const startOfToday = startOfBusinessDay(now);
+    const startOfMonth = startOfBusinessMonth(now);
 
     // Accounts
     const accounts = await this.getAccounts(tenantId);
@@ -730,9 +734,10 @@ export class FinanceService {
 
     if (filters.date_from || filters.date_to) {
       const transactionDate: Prisma.DateTimeFilter = {};
-      if (filters.date_from) transactionDate.gte = new Date(filters.date_from);
+      if (filters.date_from)
+        transactionDate.gte = businessRangeStart(filters.date_from);
       if (filters.date_to)
-        transactionDate.lte = new Date(filters.date_to + 'T23:59:59Z');
+        transactionDate.lte = businessRangeEnd(filters.date_to);
       where.transactionDate = transactionDate;
     }
     const ledgerFilters: Prisma.FinanceTransactionWhereInput[] = [];
@@ -2461,6 +2466,53 @@ export class FinanceService {
     }
   }
 
+  /**
+   * Purchase payments made before 2026-11-14 posted their entry under
+   * ('PurchasePayment', receipt id), shared by every payment of that receipt.
+   * Each entry is dated with its payment and its first line names the paid
+   * amount, so the payment's own entry is the one with the same date and
+   * amount (if two identical payments exist, their entries are identical and
+   * either one is the right one to remove).
+   */
+  private async deleteLegacyPurchasePaymentEntry(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    existing: {
+      sourceDocType: string | null;
+      sourceDocId: string | null;
+      docNumber: string | null;
+      transactionDate: Date;
+      amount: Prisma.Decimal;
+      currency: string;
+    },
+    action: 'cancel' | 'delete',
+  ) {
+    if (
+      existing.sourceDocType !== 'PurchaseReceipt' ||
+      !existing.sourceDocId ||
+      !existing.docNumber
+    ) {
+      return;
+    }
+    const amountLabel = `(${Number(existing.amount)} ${existing.currency})`;
+    const candidates = await tx.journalEntry.findMany({
+      where: {
+        tenantId,
+        sourceDocType: 'PurchasePayment',
+        sourceDocId: existing.sourceDocId,
+        entryDate: existing.transactionDate,
+      },
+      select: { id: true, lines: { select: { description: true } } },
+      orderBy: { entryNumber: 'asc' },
+    });
+    const match = candidates.find((entry) =>
+      entry.lines.some((line) => line.description?.endsWith(amountLabel)),
+    );
+    if (match) {
+      await this.journalService.deleteEntry(tx, tenantId, match.id, action);
+    }
+  }
+
   private async reversePostedTransaction(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -2533,6 +2585,10 @@ export class FinanceService {
           existing.sourceDocId,
           isDeleted ? 'delete' : 'cancel',
         );
+        await tx.payment.updateMany({
+          where: { id: existing.sourceDocId, tenantId, cancelledAt: null },
+          data: { cancelledAt: new Date() },
+        });
       }
     } else if (existing.direction === TransactionDirection.EXPENSE) {
       // Return money to account
@@ -2549,6 +2605,12 @@ export class FinanceService {
         existing,
         amount,
         isDeleted,
+      );
+      await this.deleteLegacyPurchasePaymentEntry(
+        tx,
+        tenantId,
+        existing,
+        isDeleted ? 'delete' : 'cancel',
       );
     } else if (existing.direction === TransactionDirection.TRANSFER) {
       const destinationAmount = Number(existing.transferToAmount ?? amount);

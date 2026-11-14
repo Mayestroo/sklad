@@ -208,6 +208,26 @@ export class JournalService {
   }
 
   /**
+   * Removes one journal entry, for sources that share a key across several
+   * entries (legacy purchase payments were keyed by their receipt). Same
+   * closed-period rule (D4) as deleteEntriesForSource.
+   */
+  async deleteEntry(
+    db: JournalWriter,
+    tenantId: string,
+    entryId: string,
+    action: PeriodAction,
+  ): Promise<void> {
+    const entry = await db.journalEntry.findFirst({
+      where: { id: entryId, tenantId },
+      select: { entryDate: true },
+    });
+    if (!entry) return;
+    await assertPeriodOpen(db, tenantId, [entry.entryDate], action);
+    await db.journalEntry.deleteMany({ where: { id: entryId, tenantId } });
+  }
+
+  /**
    * Auto-post Journal Entries when a Payment is received
    * Dt 5110 (Bank) or Dt 5010 (Cash) / Kt 4010 (Customer)
    */

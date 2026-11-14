@@ -26,6 +26,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
   let journalService: {
     deleteEntriesForSource: jest.Mock;
     createJournalEntry: jest.Mock;
+    deleteEntry?: jest.Mock;
   };
   let allocationService: {
     recordAllocation: jest.Mock;
@@ -1195,6 +1196,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         findFirst: jest
           .fn()
           .mockResolvedValue({ invoiceId: null, orderId: null }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       };
 
       await service.cancelTransaction('tenant-1', 'tx-pay');
@@ -1204,6 +1206,79 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         'tenant-1',
         'Payment',
         'pay-1',
+        'cancel',
+      );
+      // The Payment itself is marked cancelled so it stops counting as active.
+      expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+        where: { id: 'pay-1', tenantId: 'tenant-1', cancelledAt: null },
+        data: { cancelledAt: expect.any(Date) },
+      });
+    });
+
+    it('removes only its own entry when a legacy purchase payment is cancelled', async () => {
+      const paidOn = new Date('2026-10-05');
+      prisma.financeTransaction.findFirst.mockResolvedValue({
+        id: 'tx-legacy',
+        tenantId: 'tenant-1',
+        direction: TransactionDirection.EXPENSE,
+        status: TransactionStatus.POSTED,
+        accountId: 'acc-1',
+        amount: 300,
+        currency: 'USD',
+        counterpartyId: 'supp-1',
+        settlementSide: CounterpartySettlementSide.SUPPLIER,
+        sourceDocType: 'PurchaseReceipt',
+        sourceDocId: 'rcp-1',
+        docNumber: 'FT-0007',
+        transactionDate: paidOn,
+      });
+      prisma.journalEntry = {
+        // Two payments of the same receipt share the legacy key.
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'je-other',
+            lines: [
+              {
+                description:
+                  'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (200 USD)',
+              },
+            ],
+          },
+          {
+            id: 'je-mine',
+            lines: [
+              {
+                description:
+                  'Yetkazib beruvchi qarzi kamaymasi / Kassadan chiqim (300 USD)',
+              },
+            ],
+          },
+        ]),
+      };
+      prisma.purchaseReceipt.findFirst.mockResolvedValue({
+        id: 'rcp-1',
+        totalAmount: 500,
+        paidAmount: 500,
+      });
+      journalService.deleteEntry = jest.fn().mockResolvedValue(undefined);
+
+      await service.cancelTransaction('tenant-1', 'tx-legacy');
+
+      expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            tenantId: 'tenant-1',
+            sourceDocType: 'PurchasePayment',
+            sourceDocId: 'rcp-1',
+            entryDate: paidOn,
+          },
+        }),
+      );
+      expect(journalService.deleteEntry).toHaveBeenCalledTimes(1);
+      expect(journalService.deleteEntry).toHaveBeenCalledWith(
+        prisma,
+        'tenant-1',
+        'je-mine',
         'cancel',
       );
     });

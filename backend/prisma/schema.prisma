@@ -1474,6 +1474,8 @@ model Payment {
   paymentDate    DateTime      @default(now()) @map("payment_date")
   comment        String?
   createdAt      DateTime      @default(now()) @map("created_at")
+  /// Set when its Finance transaction is cancelled or deleted (storno).
+  cancelledAt    DateTime?     @map("cancelled_at")
 
   company      Company       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   counterparty Counterparty  @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)

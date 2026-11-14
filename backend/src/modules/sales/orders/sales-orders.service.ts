@@ -831,7 +831,8 @@ export class SalesOrdersService {
       include: {
         salesInvoices: { select: { id: true, invoiceNumber: true } },
         productionOrders: { select: { id: true } },
-        payments: { select: { id: true } },
+        // A cancelled payment no longer ties the order down.
+        payments: { where: { cancelledAt: null }, select: { id: true } },
       },
     });
 

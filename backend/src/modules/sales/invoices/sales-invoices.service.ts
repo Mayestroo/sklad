@@ -38,6 +38,7 @@ import { originalSaleUnitCost } from './sales-return-cost';
 import { readCompanySettings } from '../../../common/utils/company-settings';
 import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
 import { assertPeriodOpen } from '../../../common/accounting-period/period-lock';
+import { startOfBusinessMonth } from '../../../common/utils/business-day';
 
 @Injectable()
 export class SalesInvoicesService {
@@ -2196,7 +2197,7 @@ export class SalesInvoicesService {
 
   async getSummaryStats(tenantId: string) {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonth = startOfBusinessMonth(now);
 
     const postedInvoices = await this.prisma.salesInvoice.findMany({
       where: {
