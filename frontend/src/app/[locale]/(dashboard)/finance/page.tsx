@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
@@ -1972,17 +1973,14 @@ function FinanceTransactionDrawer({
           >
             {isRu ? 'Сумма' : 'Summa'} ({fromAccount?.currency || currency}) *
           </label>
-          <Input
-            type="number"
-            placeholder="0"
-               value={amount}
-               onChange={(e) => {
-                 setAmount(e.target.value);
-                 if (isMultiCurrency) {
-                  const rate = Number(exchangeRate);
-                  const amt = parseFloat(e.target.value) || 0;
-                  setTargetAmount(targetAmountAtRate(amt, rate));
-                }
+          <MoneyInput
+            aria-label={isRu ? 'Сумма' : 'Summa'}
+            value={amount}
+            onValueChange={(value) => {
+              setAmount(value);
+              if (isMultiCurrency) {
+                setTargetAmount(targetAmountAtRate(Number(value) || 0, Number(exchangeRate)));
+              }
             }}
           />
         </div>
@@ -2050,13 +2048,13 @@ function FinanceTransactionDrawer({
                 <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
                   {isRu ? 'Итоговая сумма' : 'Qabul qilinadigan summa'} ({toAccount?.currency})
                 </label>
-                <Input
-                  type="number"
+                <MoneyInput
+                  aria-label={isRu ? 'Итоговая сумма' : 'Qabul qilinadigan summa'}
                   value={targetAmount}
-                  onChange={(e) => {
-                    setTargetAmount(e.target.value);
+                  onValueChange={(value) => {
+                    setTargetAmount(value);
                     const sourceAmount = Number(amount);
-                    const receivingAmount = Number(e.target.value);
+                    const receivingAmount = Number(value);
                     if (sourceAmount > 0 && receivingAmount > 0 && fromAccount) {
                       const impliedRate = fromAccount.currency === 'USD'
                         ? receivingAmount / sourceAmount

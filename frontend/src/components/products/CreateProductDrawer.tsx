@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -638,13 +639,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Цена закупки (Себестоимость)' : 'Xarid narxi (Tan narx)'}
             </label>
-            <Input
-              type="number"
-              min="0"
-              step="any"
+            <MoneyInput
+              aria-label={isRu ? 'Цена закупки' : 'Xarid narxi'}
               value={costPrice}
-              onChange={(e) => setCostPrice(e.target.value)}
-              placeholder="0"
+              onValueChange={setCostPrice}
             />
             <div style={{ marginTop: 'var(--space-2)' }}>
               <Select
@@ -676,13 +674,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Цена продажи (Опционально)' : 'Sotish narxi (Ixtiyoriy)'}
             </label>
-            <Input
-              type="number"
-              min="0"
-              step="any"
+            <MoneyInput
+              aria-label={isRu ? 'Цена продажи' : 'Sotish narxi'}
               value={sellingPrice}
-              onChange={(e) => setSellingPrice(e.target.value)}
-              placeholder="0"
+              onValueChange={setSellingPrice}
             />
             <div style={{ marginTop: 'var(--space-2)' }}>
               <Select

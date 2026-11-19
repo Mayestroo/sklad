@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -1499,15 +1500,12 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       {!isReadOnly && (
         <Card style={{ padding: 'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
-            <Input
+            <MoneyInput
               label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Mijozga qo‘shimcha summa (${currency})`}
-              type="number"
-              min="0"
-              step="any"
               value={additionalChargeAmount}
-              onChange={(event) => {
+              onValueChange={(value) => {
                 markDirty();
-                setAdditionalChargeAmount(event.target.value === '' ? '' : Number(event.target.value));
+                setAdditionalChargeAmount(Number(value));
               }}
             />
             <Input

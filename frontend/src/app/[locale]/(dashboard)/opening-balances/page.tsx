@@ -252,25 +252,37 @@ export default function OpeningBalancesPage() {
   useEffect(() => {
     if (!token || !companyId) return;
     const fetchLookups = async () => {
-      try {
-        const [accs, whs, prods, cps, fas] = await Promise.all([
-          apiFetch<CashAccount[]>('/finance/accounts', requestOptions).catch(() => []),
-          apiFetch<ListResponse<Warehouse>>('/tenants/warehouses', requestOptions).then((res) => listOf(res)).catch(() => []),
-          apiFetch<ListResponse<Product>>('/inventory/products', requestOptions).then((res) => listOf(res)).catch(() => []),
-          apiFetch<ListResponse<Counterparty>>('/sales/counterparties', requestOptions).then((res) => listOf(res)).catch(() => []),
-          apiFetch<FixedAsset[]>('/fixed-assets', requestOptions).catch(() => []),
-        ]);
-        setAccounts(Array.isArray(accs) ? accs : []);
-        setWarehouses(Array.isArray(whs) ? whs : []);
-        setProducts(Array.isArray(prods) ? prods : []);
-        setCounterparties(Array.isArray(cps) ? cps : []);
-        setFixedAssets(Array.isArray(fas) ? fas : []);
-      } catch (e) {
-        console.error('Failed to load lookups', e);
+      // A list that fails to load must say so: an empty dropdown with no
+      // reason read as "the existing counterparties are not pulled in"
+      // (muammolar.pdf B4).
+      const failed: string[] = [];
+      const load = <T,>(promise: Promise<T[]>, name: { uz: string; ru: string }) =>
+        promise.catch(() => {
+          failed.push(isRu ? name.ru : name.uz);
+          return [] as T[];
+        });
+      const [accs, whs, prods, cps, fas] = await Promise.all([
+        load(apiFetch<CashAccount[]>('/finance/accounts', requestOptions), { uz: 'kassalar', ru: 'кассы' }),
+        load(apiFetch<ListResponse<Warehouse>>('/tenants/warehouses', requestOptions).then((res) => listOf(res)), { uz: 'omborlar', ru: 'склады' }),
+        load(apiFetch<ListResponse<Product>>('/inventory/products', requestOptions).then((res) => listOf(res)), { uz: 'tovarlar', ru: 'товары' }),
+        load(apiFetch<ListResponse<Counterparty>>('/sales/counterparties', requestOptions).then((res) => listOf(res)), { uz: 'kontragentlar', ru: 'контрагенты' }),
+        load(apiFetch<FixedAsset[]>('/fixed-assets', requestOptions), { uz: 'asosiy vositalar', ru: 'основные средства' }),
+      ]);
+      setAccounts(Array.isArray(accs) ? accs : []);
+      setWarehouses(Array.isArray(whs) ? whs : []);
+      setProducts(Array.isArray(prods) ? prods : []);
+      setCounterparties(Array.isArray(cps) ? cps : []);
+      setFixedAssets(Array.isArray(fas) ? fas : []);
+      if (failed.length > 0) {
+        toast.error(
+          isRu
+            ? `Не удалось загрузить: ${failed.join(', ')}. Обновите страницу.`
+            : `Yuklab bo‘lmadi: ${failed.join(', ')}. Sahifani yangilang.`,
+        );
       }
     };
     fetchLookups();
-  }, [token, companyId, requestOptions]);
+  }, [token, companyId, requestOptions, isRu]);
 
   // ─── Documents ─────────────────────────────────────────────────
 

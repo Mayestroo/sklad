@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { type ComponentProps, useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -939,13 +940,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
       <Card style={{ padding: 'var(--space-5)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
-          <Input
+          <MoneyInput
             label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Qo‘shimcha summa (${currency})`}
-            type="number"
-            min="0"
-            step="any"
             value={additionalChargeAmount}
-            onChange={(event) => { markDirty(); setAdditionalChargeAmount(event.target.value); }}
+            onValueChange={(value) => { markDirty(); setAdditionalChargeAmount(value); }}
           />
           <Input
             label={isRu ? 'НДС на доплату, %' : 'Qo‘shimcha QQS, %'}

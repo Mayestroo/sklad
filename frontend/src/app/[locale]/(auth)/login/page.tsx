@@ -35,7 +35,7 @@ export default function LoginPage() {
 
       login(response);
     } catch (err) {
-      setError(errorMessage(err) || 'Login failed');
+      setError(errorMessage(err) || (locale === 'ru' ? 'Не удалось войти' : 'Kirib bo‘lmadi'));
     } finally {
       setLoading(false);
     }

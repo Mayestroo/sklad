@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -321,7 +322,11 @@ export default function CrmKanbanPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>{isRu ? 'Ориентировочная сумма (сум)' : 'Taxminiy Summasi (So‘m)'}</label>
-                <input type="number" min={0} value={amount} onChange={(e) => setAmount(Number(e.target.value))} style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
+                <MoneyInput
+                  aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
+                  value={amount || ''}
+                  onValueChange={(value) => setAmount(Number(value) || 0)}
+                />
               </div>
 
               <Select
@@ -372,12 +377,10 @@ export default function CrmKanbanPage() {
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
                 {isRu ? 'Ориентировочная сумма (сум)' : 'Taxminiy Summasi (So‘m)'}
               </label>
-              <input
-                type="number"
-                min={0}
-                value={editAmount}
-                onChange={(e) => setEditAmount(Number(e.target.value))}
-                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              <MoneyInput
+                aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
+                value={editAmount || ''}
+                onValueChange={(value) => setEditAmount(Number(value) || 0)}
               />
             </div>
 

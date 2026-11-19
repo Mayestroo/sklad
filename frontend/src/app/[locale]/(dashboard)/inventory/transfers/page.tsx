@@ -48,6 +48,7 @@ export default function StockTransfersPage() {
   // Delete modal state
   const [deleteConfirmTransfer, setDeleteConfirmTransfer] = useState<StockTransfer | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDeleteTransfer = async () => {
@@ -100,6 +101,7 @@ export default function StockTransfersPage() {
       return;
     }
 
+    setCreateLoading(true);
     try {
       await apiFetch('/inventory/transfers', {
         token,
@@ -119,7 +121,9 @@ export default function StockTransfersPage() {
       toast.success(isRu ? 'Перемещение успешно создано' : 'O‘tkazma muvaffaqiyatli yaratildi');
       fetchTransfers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка создания перевода' : 'Error creating transfer'));
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка создания перевода' : 'O‘tkazmani yaratishda xatolik'));
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -144,7 +148,7 @@ export default function StockTransfersPage() {
       toast.success(isRu ? 'Товары успешно отправлены' : 'Tovarlar jo‘natildi');
       fetchTransfers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки' : 'Error shipping transfer'));
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки' : 'O‘tkazmani jo‘natishda xatolik'));
     }
   };
 
@@ -169,7 +173,7 @@ export default function StockTransfersPage() {
       toast.success(isRu ? 'Товары успешно приняты на склад' : 'Tovarlar omborga qabul qilindi');
       fetchTransfers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка приёмки' : 'Error receiving transfer'));
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка приёмки' : 'O‘tkazmani qabul qilishda xatolik'));
     }
   };
 
@@ -207,7 +211,7 @@ export default function StockTransfersPage() {
         </div>
 
         <Button variant="primary" onClick={() => setModalOpen(true)}>
-          <Plus size={16} /> {isRu ? 'Создать перемещение' : 'Yangi Transfer Yaratish'}
+          <Plus size={16} /> {isRu ? 'Создать перемещение' : 'Yangi o‘tkazma'}
         </Button>
       </div>
 
@@ -346,7 +350,7 @@ export default function StockTransfersPage() {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" variant="primary">{isRu ? 'Создать перемещение' : 'Transfer Yaratish'}</Button>
+            <Button type="submit" variant="primary" disabled={createLoading}>{createLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать перемещение' : 'O‘tkazma yaratish'}</Button>
           </div>
         </form>
       </Modal>

@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
+import { BILLING_PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, statusLabel } from '@/lib/constants/statuses';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -221,12 +222,12 @@ export default function BillingSettingsPage() {
                       <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                         <td style={{ padding: '12px', fontWeight: 'bold', fontFamily: 'var(--font-mono)' }}>{p.paymentNumber}</td>
                         <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{formatDate(p.paidAt, locale)}</td>
-                        <td style={{ padding: '12px', fontWeight: 'bold' }}>{p.method}</td>
+                        <td style={{ padding: '12px', fontWeight: 'bold' }}>{PAYMENT_METHOD_LABELS[p.method]?.[locale === 'ru' ? 'ru' : 'uz'] ?? p.method}</td>
                         <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }} className="tabular-nums">
                           {formatCurrency(Number(p.amount), locale, 'UZS')}
                         </td>
                         <td style={{ padding: '12px', textAlign: 'center' }}>
-                          <Badge variant={p.status === 'PAID' ? 'success' : 'neutral'}>{p.status}</Badge>
+                          <Badge variant={statusLabel(BILLING_PAYMENT_STATUS_LABELS, p.status, locale).variant}>{statusLabel(BILLING_PAYMENT_STATUS_LABELS, p.status, locale).text}</Badge>
                         </td>
                       </tr>
                     ))}

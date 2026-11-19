@@ -179,7 +179,7 @@ export default function UsersPage() {
         isRu ? 'Статус пользователя успешно изменен' : 'Foydalanuvchi holati muvaffaqiyatli o‘zgartirildi'
       );
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления статуса' : 'Status update failed'));
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления статуса' : 'Holatni yangilab bo‘lmadi'));
     }
   };
 

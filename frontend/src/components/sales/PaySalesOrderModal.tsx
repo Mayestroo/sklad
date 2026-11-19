@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -347,14 +348,10 @@ export function PaySalesOrderModal({
               )}
             </div>
           </div>
-          <Input
-            type="number"
-            min={0.01}
-            step="any"
+          <MoneyInput
+            aria-label={isRu ? 'Сумма оплаты' : 'To‘lov summasi'}
             value={amount || ''}
-            onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-            required
-            autoFocus
+            onValueChange={(value) => setPaymentAmount(Number(value) || 0)}
           />
         </div>
 

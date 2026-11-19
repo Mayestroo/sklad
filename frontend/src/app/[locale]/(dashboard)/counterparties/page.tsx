@@ -8,6 +8,7 @@ import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, errorMessage } from '@/lib/utils';
+import { ORDER_STATUS_LABELS, statusLabel } from '@/lib/constants/statuses';
 import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -1345,8 +1346,8 @@ export default function CounterpartiesPage() {
                           <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.totalAmount), locale, ord.currency)}</td>
                           <td style={{ padding: '6px 8px' }}>{formatCurrency(Number(ord.paidAmount), locale, ord.currency)} ({ord.paymentPercent}%)</td>
                           <td style={{ padding: '6px 8px' }}>
-                            <Badge variant={ord.status === 'COMPLETED' ? 'success' : ord.status === 'CANCELLED' ? 'error' : 'warning'}>
-                              {ord.status}
+                            <Badge variant={statusLabel(ORDER_STATUS_LABELS, ord.status, locale).variant}>
+                              {statusLabel(ORDER_STATUS_LABELS, ord.status, locale).text}
                             </Badge>
                           </td>
                         </tr>

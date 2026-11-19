@@ -61,7 +61,7 @@ export default function RegisterPage() {
 
       setSentTo(adminEmail);
     } catch (err) {
-      setError(errorMessage(err) || 'Registration failed');
+      setError(errorMessage(err) || (locale === 'ru' ? 'Не удалось зарегистрироваться' : 'Ro‘yxatdan o‘tib bo‘lmadi'));
     } finally {
       setLoading(false);
     }

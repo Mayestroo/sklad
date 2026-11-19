@@ -202,11 +202,11 @@ export default function ProductionPage() {
         })
         .catch((error: unknown) => {
           setPreview(null);
-          setPreviewError(error instanceof Error ? error.message : 'Preview failed');
+          setPreviewError(error instanceof Error ? error.message : isRu ? 'Не удалось рассчитать сырьё' : 'Xomashyo hisobini olib bo‘lmadi');
         });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [documentModalOpen, documentRecipeId, documentWarehouseId, documentQuantity, token, company, locale]);
+  }, [documentModalOpen, documentRecipeId, documentWarehouseId, documentQuantity, token, company, locale, isRu]);
 
   const activeCount = documents.filter((document) => document.status === 'IN_PROGRESS').length;
   const completedCount = documents.filter((document) => document.status === 'COMPLETED').length;
@@ -215,6 +215,7 @@ export default function ProductionPage() {
     .reduce((sum, document) => sum + asNumber(document.actualMaterialCost), 0);
 
   function openDocumentModal() {
+    setPageError('');
     setDocumentRecipeId('');
     setDocumentQuantity('');
     setDocumentWarehouseId(warehouses[0]?.id ?? '');
@@ -248,7 +249,7 @@ export default function ProductionPage() {
       await invalidateApi('/production');
       if (created?.id) await openDocument(created.id);
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Could not create production document');
+      setPageError(error instanceof Error ? error.message : isRu ? 'Не удалось создать документ' : 'Hujjatni yaratib bo‘lmadi');
     } finally {
       setBusy(false);
     }
@@ -265,7 +266,7 @@ export default function ProductionPage() {
         line.actualQuantity == null ? '' : String(line.actualQuantity),
       ])));
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Could not load production document');
+      setPageError(error instanceof Error ? error.message : isRu ? 'Не удалось открыть документ' : 'Hujjatni ochib bo‘lmadi');
     }
   }
 
@@ -309,7 +310,7 @@ export default function ProductionPage() {
       setNotice(actionNotice(action, isRu));
       await invalidateApi('/production');
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Production action failed');
+      setPageError(error instanceof Error ? error.message : isRu ? 'Действие не выполнено' : 'Amal bajarilmadi');
     } finally {
       setBusy(false);
     }
@@ -346,7 +347,7 @@ export default function ProductionPage() {
       </div>
 
       {failedQuery && <LoadError error={failedQuery.error} onRetry={retryFailed} />}
-      {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
+      {pageError && !documentModalOpen && !selectedDocument && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
       {notice && <div role="status" style={alertStyle('success')}>{notice}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 'var(--space-4)' }}>
@@ -482,6 +483,7 @@ export default function ProductionPage() {
 
       <Modal isOpen={documentModalOpen} onClose={() => setDocumentModalOpen(false)} title={isRu ? 'Новый производственный документ' : 'Yangi ishlab chiqarish hujjati'} size="2xl">
         <form onSubmit={createDocument} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <Select label={isRu ? 'Рецептура / продукт' : 'Retseptura / mahsulot'} options={recipeOptions} value={documentRecipeId} onChange={(value) => { setPreview(null); setPreviewError(''); setDocumentRecipeId(value); }} />
             <Input label={isRu ? 'Планируемое количество' : 'Rejalashtirilgan miqdor'} type="number" min="0.001" step="0.001" value={documentQuantity} onChange={(event) => { setPreview(null); setPreviewError(''); setDocumentQuantity(event.target.value); }} required />
@@ -523,6 +525,7 @@ export default function ProductionPage() {
       <Modal isOpen={Boolean(selectedDocument)} onClose={() => setSelectedDocument(null)} title={selectedDocument ? `${selectedDocument.docNumber} · ${localName(selectedDocument.product.name, locale)}` : ''} size="3xl">
         {selectedDocument && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
               <Detail label={isRu ? 'Дата' : 'Sana'} value={formatDate(selectedDocument.docDate, locale)} />
               <Detail label={isRu ? 'План' : 'Reja'} value={`${formatQuantity(asNumber(selectedDocument.plannedQuantity))} ${unitLabel(selectedDocument.product.unitOfMeasure, locale)}`} />

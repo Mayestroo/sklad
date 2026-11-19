@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -116,7 +117,7 @@ export default function InventoryDocumentsPage() {
       setComment('');
       fetchData();
     } catch (err) {
-      setCreateError(errorMessage(err) || (isRu ? 'Ошибка создания документа' : 'Failed to post inventory document'));
+      setCreateError(errorMessage(err) || (isRu ? 'Ошибка создания документа' : 'Hujjatni yaratib bo‘lmadi'));
     } finally {
       setCreateLoading(false);
     }
@@ -302,12 +303,10 @@ export default function InventoryDocumentsPage() {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={unitPrice}
-                      onChange={(e) => setUnitPrice(Number(e.target.value))}
-                      style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}
+                    <MoneyInput
+                      aria-label={isRu ? 'Цена за ед.' : 'Birlik narxi'}
+                      value={unitPrice || ''}
+                      onValueChange={(value) => setUnitPrice(Number(value) || 0)}
                     />
                   </div>
                   <Button type="button" variant="primary" size="sm" onClick={handleAddItem}>

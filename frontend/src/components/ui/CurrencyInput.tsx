@@ -25,6 +25,8 @@ export interface CurrencyInputProps {
  * as one thousand in Uzbek/Russian notation).
  */
 export function formatCurrencyValue(val: number | string | null | undefined, decimals = 3): string {
+  // An unset amount stays empty so the placeholder shows (it used to read "0").
+  if (val === '' || val === null || val === undefined) return '';
   const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/,/g, ''));
   if (isNaN(num)) return '0';
   return new Intl.NumberFormat('en-US', {
@@ -140,6 +142,8 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     const handleBlur = () => {
       setIsFocused(false);
+      // Focusing and leaving an empty field must not turn it into 0.
+      if (textValue.trim() === '' && (value === '' || value === null || value === undefined)) return;
       const num = parseCurrencyValue(textValue);
       const clamped = max !== undefined ? Math.min(max, Math.max(min, num)) : Math.max(min, num);
       onChange(clamped);

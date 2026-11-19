@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -508,15 +509,10 @@ export function ServiceActDrawer({
                     <label className="block text-[11px] font-medium text-gray-600 mb-1">
                       {isRu ? 'Цена за ед. *' : 'Birlik narxi *'}
                     </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.unitPrice}
-                      onChange={(e) =>
-                        handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)
-                      }
-                      required
+                    <MoneyInput
+                      aria-label={isRu ? 'Цена за ед.' : 'Birlik narxi'}
+                      value={item.unitPrice || ''}
+                      onValueChange={(value) => handleItemChange(idx, 'unitPrice', Number(value) || 0)}
                     />
                   </div>
 

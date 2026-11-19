@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, FormEvent } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
@@ -257,14 +258,11 @@ export default function NewProductPage() {
               options={unitOptions}
             />
 
-            <Input
+            <MoneyInput
               id="prod-cost-price"
               label={isRu ? 'Себестоимость' : 'Tannarxi'}
-              type="number"
-              min={0}
-              step="any"
-              value={costPrice}
-              onChange={(e) => setCostPrice(Number(e.target.value))}
+              value={costPrice || ''}
+              onValueChange={(value) => setCostPrice(Number(value) || 0)}
             />
 
             <Select label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'} options={CURRENCY_OPTIONS} value={costPriceCurrency} onChange={(value) => { setCostPriceCurrency(value as 'USD' | 'UZS'); setCostPriceExchangeRate(value === 'UZS' ? '1' : ''); }} placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'} />
@@ -272,13 +270,11 @@ export default function NewProductPage() {
               <Input label={isRu ? 'Курс к UZS' : 'UZS ga kurs'} type="number" min="0.0001" step="any" value={costPriceExchangeRate} onChange={(event) => setCostPriceExchangeRate(event.target.value)} />
             )}
 
-            <Input
+            <MoneyInput
               id="prod-sale-price"
               label={isRu ? 'Цена продажи' : 'Sotuv narxi'}
-              type="number"
-              min={0}
-              value={salePrice}
-              onChange={(e) => setSalePrice(Number(e.target.value))}
+              value={salePrice || ''}
+              onValueChange={(value) => setSalePrice(Number(value) || 0)}
             />
             <Select label={isRu ? 'Валюта цены продажи' : 'Sotish narxi valyutasi'} options={CURRENCY_OPTIONS} value={salePriceCurrency} onChange={(value) => setSalePriceCurrency(value as 'USD' | 'UZS')} />
 

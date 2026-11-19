@@ -70,6 +70,8 @@ export default function BranchesPage() {
   const [editBranchAddress, setEditBranchAddress] = useState('');
   const [editBranchIsMain, setEditBranchIsMain] = useState(false);
   const [editBranchLoading, setEditBranchLoading] = useState(false);
+  const [createBranchLoading, setCreateBranchLoading] = useState(false);
+  const [createWarehouseLoading, setCreateWarehouseLoading] = useState(false);
 
   // Delete Branch state
   const [deletingBranch, setDeletingBranch] = useState<BranchRow | null>(null);
@@ -92,7 +94,8 @@ export default function BranchesPage() {
 
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !company) return;
+    if (!token || !company || createBranchLoading) return;
+    setCreateBranchLoading(true);
     try {
       await apiFetch('/tenants/branches', {
         method: 'POST',
@@ -114,6 +117,8 @@ export default function BranchesPage() {
       toast.success(isRu ? 'Филиал успешно создан' : 'Filial muvaffaqiyatli yaratildi');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik'));
+    } finally {
+      setCreateBranchLoading(false);
     }
   };
 
@@ -175,7 +180,8 @@ export default function BranchesPage() {
 
   const handleCreateWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !company) return;
+    if (!token || !company || createWarehouseLoading) return;
+    setCreateWarehouseLoading(true);
     try {
       await apiFetch('/tenants/warehouses', {
         method: 'POST',
@@ -198,6 +204,8 @@ export default function BranchesPage() {
       toast.success(isRu ? 'Склад успешно создан' : 'Omborxona muvaffaqiyatli yaratildi');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik'));
+    } finally {
+      setCreateWarehouseLoading(false);
     }
   };
 
@@ -397,7 +405,7 @@ export default function BranchesPage() {
         <form onSubmit={handleCreateBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <Input label={isRu ? 'Название филиала (Узбекский)' : "Filial Nomi (O'zbekcha)"} value={branchNameUz} onChange={(e) => setBranchNameUz(e.target.value)} required />
           <Input label={isRu ? 'Название филиала (Русский)' : 'Название Филиала (Русский)'} value={branchNameRu} onChange={(e) => setBranchNameRu(e.target.value)} />
-          <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} />
+          <Input label={isRu ? 'Адрес' : 'Manzili'} value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} />
           <Checkbox
             checked={branchIsMain}
             onChange={(e) => setBranchIsMain(e.target.checked)}
@@ -406,7 +414,7 @@ export default function BranchesPage() {
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             <Button type="button" variant="outline" onClick={() => setBranchModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" variant="primary">{isRu ? 'Сохранить' : 'Saqlash'}</Button>
+            <Button type="submit" variant="primary" disabled={createBranchLoading}>{isRu ? 'Сохранить' : 'Saqlash'}</Button>
           </div>
         </form>
       </Modal>
@@ -417,7 +425,7 @@ export default function BranchesPage() {
           <form onSubmit={handleSaveEditBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <Input label={isRu ? 'Название филиала (Узбекский)' : "Filial Nomi (O'zbekcha)"} value={editBranchNameUz} onChange={(e) => setEditBranchNameUz(e.target.value)} required />
             <Input label={isRu ? 'Название филиала (Русский)' : 'Название Филиала (Русский)'} value={editBranchNameRu} onChange={(e) => setEditBranchNameRu(e.target.value)} />
-            <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={editBranchAddress} onChange={(e) => setEditBranchAddress(e.target.value)} />
+            <Input label={isRu ? 'Адрес' : 'Manzili'} value={editBranchAddress} onChange={(e) => setEditBranchAddress(e.target.value)} />
             <Checkbox
               checked={editBranchIsMain}
               onChange={(e) => setEditBranchIsMain(e.target.checked)}
@@ -464,11 +472,11 @@ export default function BranchesPage() {
           />
           <Input label={isRu ? 'Название склада (Узбекский)' : "Ombor Nomi (O'zbekcha)"} value={warehouseNameUz} onChange={(e) => setWarehouseNameUz(e.target.value)} required />
           <Input label={isRu ? 'Название склада (Русский)' : 'Название Склада (Русский)'} value={warehouseNameRu} onChange={(e) => setWarehouseNameRu(e.target.value)} />
-          <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={warehouseAddress} onChange={(e) => setWarehouseAddress(e.target.value)} />
-          <Input label={isRu ? 'Телефон' : 'Telefon (Phone)'} value={warehousePhone} onChange={(e) => setWarehousePhone(e.target.value)} />
+          <Input label={isRu ? 'Адрес' : 'Manzili'} value={warehouseAddress} onChange={(e) => setWarehouseAddress(e.target.value)} />
+          <Input label={isRu ? 'Телефон' : 'Telefon'} value={warehousePhone} onChange={(e) => setWarehousePhone(e.target.value)} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             <Button type="button" variant="outline" onClick={() => setWarehouseModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" variant="primary">{isRu ? 'Сохранить' : 'Saqlash'}</Button>
+            <Button type="submit" variant="primary" disabled={createWarehouseLoading}>{isRu ? 'Сохранить' : 'Saqlash'}</Button>
           </div>
         </form>
       </Modal>
@@ -485,8 +493,8 @@ export default function BranchesPage() {
             />
             <Input label={isRu ? 'Название склада (Узбекский)' : "Ombor Nomi (O'zbekcha)"} value={editWarehouseNameUz} onChange={(e) => setEditWarehouseNameUz(e.target.value)} required />
             <Input label={isRu ? 'Название склада (Русский)' : 'Название Склада (Русский)'} value={editWarehouseNameRu} onChange={(e) => setEditWarehouseNameRu(e.target.value)} />
-            <Input label={isRu ? 'Адрес' : 'Manzili (Address)'} value={editWarehouseAddress} onChange={(e) => setEditWarehouseAddress(e.target.value)} />
-            <Input label={isRu ? 'Телефон' : 'Telefon (Phone)'} value={editWarehousePhone} onChange={(e) => setEditWarehousePhone(e.target.value)} />
+            <Input label={isRu ? 'Адрес' : 'Manzili'} value={editWarehouseAddress} onChange={(e) => setEditWarehouseAddress(e.target.value)} />
+            <Input label={isRu ? 'Телефон' : 'Telefon'} value={editWarehousePhone} onChange={(e) => setEditWarehousePhone(e.target.value)} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
               <Button type="button" variant="outline" onClick={() => setEditingWarehouse(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
               <Button type="submit" variant="primary" disabled={editWarehouseLoading}>
