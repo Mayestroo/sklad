@@ -7,6 +7,7 @@ import { nextDocumentNumber } from '../../../common/sequences/document-sequence'
 import { PrismaService } from '../../../common/prisma';
 import { AuditService } from '../../audit/audit.service';
 import { JournalService } from '../../accounting/journal/journal.service';
+import { AccountsService } from '../../accounting/accounts/accounts.service';
 import { CreatePaymentDto } from '../dto';
 import { SalesOrdersService } from '../orders/sales-orders.service';
 import {
@@ -31,6 +32,7 @@ export class PaymentsService {
     private readonly salesOrdersService: SalesOrdersService,
     private readonly settlementService: CounterpartySettlementService,
     private readonly settlementAllocationService: SettlementAllocationService,
+    private readonly accountsService: AccountsService,
   ) {}
 
   async registerPayment(
@@ -125,6 +127,9 @@ export class PaymentsService {
         `To‘lov usuli (${dto.method}) uchun ${dto.currency} valyutasidagi ${requiredType} hisobini tanlang`,
       );
     }
+
+    // Seed the chart before the transaction; the posting reads it inside.
+    await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const result = await this.prisma.$transaction(async (tx) => {
       // 1. Create Payment record

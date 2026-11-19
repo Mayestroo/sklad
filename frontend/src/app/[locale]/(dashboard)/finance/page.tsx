@@ -20,6 +20,7 @@ interface OpenDocument {
   paidAmount: number | string;
 }
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
+import { amountForPickedDocument, remainingOnDocument } from '@/lib/open-document';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -1732,7 +1733,7 @@ function FinanceTransactionDrawer({
     }
 
     if (selectedSourceDocument) {
-      const remaining = Number(selectedSourceDocument.totalAmount) - Number(selectedSourceDocument.paidAmount);
+      const remaining = remainingOnDocument(selectedSourceDocument);
       if (Number(amount) > remaining + 0.000001) {
         const remainingText = formatCurrency(remaining, locale, selectedSourceDocument.currency);
         setError(
@@ -2124,7 +2125,7 @@ function FinanceTransactionDrawer({
                       : '— FIFO bo‘yicha avtomatik yopish (yoki Avans) —',
                   },
                   ...compatibleOpenDocuments.map((doc) => {
-                    const remaining = Number(doc.totalAmount) - Number(doc.paidAmount);
+                    const remaining = remainingOnDocument(doc);
                     return {
                       value: doc.id,
                       label: `${doc.docNumber || doc.invoiceNumber} — ${formatCurrency(remaining, locale, doc.currency)} qoldi`,
@@ -2136,7 +2137,11 @@ function FinanceTransactionDrawer({
                   setSourceDocId(val);
                   const selectedDocument = compatibleOpenDocuments.find((document) => document.id === val);
                   setExchangeRate(selectedDocument?.exchangeRate == null ? '' : String(selectedDocument.exchangeRate));
-                  if (val) setSettlementSide('');
+                  if (val) {
+                    setSettlementSide('');
+                    // The amount is what is still owed on the picked document (editable for a partial payment).
+                    setAmount(amountForPickedDocument(selectedDocument));
+                  }
                 }}
               />
             )}

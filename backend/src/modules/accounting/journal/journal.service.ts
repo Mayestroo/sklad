@@ -234,9 +234,21 @@ export class JournalService {
   async autoPostPayment(
     tenantId: string,
     payment: CashPaymentForJournal,
-    db: JournalWriter = this.prisma,
+    db: JournalWriter & Pick<Prisma.TransactionClient, 'account'> = this.prisma,
   ) {
-    await this.accountsService.ensureDefaultAccounts(tenantId);
+    // Accounts are read with the caller's transaction client: a lookup on
+    // another connection while the payment transaction holds one could wait
+    // for a free connection until the transaction times out. The caller seeds
+    // the default chart (AccountsService.ensureDefaultAccounts) beforehand.
+    const ledger = async (code: string) => {
+      const account = await db.account.findFirst({ where: { tenantId, code } });
+      if (!account) {
+        throw new BadRequestException(
+          `Buxgalteriya hisobi ${code} sozlanmagan / Счёт ${code} не настроен`,
+        );
+      }
+      return account;
+    };
     const exchangeRate = requireExchangeRateForCurrency(
       payment.currency,
       payment.exchangeRate,
@@ -250,13 +262,8 @@ export class JournalService {
         'Payment must reference a valid, currency-specific cash or bank account',
       );
     }
-    const accBank = await this.accountsService.findByCode(
-      tenantId,
-      cashLedgerAccountCode,
-    );
-    const acc4010 = await this.accountsService.findByCode(tenantId, '4010');
-
-    if (!accBank || !acc4010) return;
+    const accBank = await ledger(cashLedgerAccountCode);
+    const acc4010 = await ledger('4010');
 
     const linkedDocument = payment.invoice ?? payment.salesOrder;
     if (!linkedDocument || linkedDocument.currency !== payment.currency) {
@@ -294,14 +301,7 @@ export class JournalService {
     ];
 
     if (exchangeDifference > 0) {
-      const exchangeGainAccount = await this.accountsService.findByCode(
-        tenantId,
-        '9540',
-      );
-      if (!exchangeGainAccount)
-        throw new BadRequestException(
-          'Valyuta kursi daromad hisobi (9540) topilmadi',
-        );
+      const exchangeGainAccount = await ledger('9540');
       journalLines.push({
         debitAccountId: accBank.id,
         creditAccountId: exchangeGainAccount.id,
@@ -309,14 +309,7 @@ export class JournalService {
         description: `To'lov bo'yicha valyuta kursi daromadi${exchangeNote}`,
       });
     } else if (exchangeDifference < 0) {
-      const exchangeLossAccount = await this.accountsService.findByCode(
-        tenantId,
-        '9620',
-      );
-      if (!exchangeLossAccount)
-        throw new BadRequestException(
-          'Valyuta kursi zarar hisobi (9620) topilmadi',
-        );
+      const exchangeLossAccount = await ledger('9620');
       journalLines.push({
         debitAccountId: exchangeLossAccount.id,
         creditAccountId: acc4010.id,
