@@ -11,6 +11,11 @@ const UNIT_LABELS: Record<string, { uz: string; ru: string }> = {
   meter: { uz: 'metr', ru: 'м' },
   box: { uz: 'quti', ru: 'кор' },
   pack: { uz: "to'plam", ru: 'упак' },
+  // Entry-only sub-units (production recipes convert them to the card unit).
+  g: { uz: 'gramm', ru: 'г' },
+  ml: { uz: 'ml', ru: 'мл' },
+  cm: { uz: 'sm', ru: 'см' },
+  mm: { uz: 'mm', ru: 'мм' },
 };
 
 export function unitLabel(unit: string | null | undefined, locale: string): string {
