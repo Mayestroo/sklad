@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatPercent, formatPriceOrUnset, errorMessage } from '@/lib/utils';
+import { catalogMarkupPercent } from '@/lib/inventory-cost';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -418,10 +419,8 @@ export default function ProductsPage() {
               </thead>
               <tbody>
                 {filteredProducts.map((p, idx) => {
-                  const cost = Number(p.costPrice || 0);
-                  const sale = Number(p.salePrice || 0);
-                  const samePriceCurrency = Boolean(p.salePriceCurrency) && p.costPriceCurrency === p.salePriceCurrency;
-                  const marginPct = cost > 0 && samePriceCurrency ? formatPercent(((sale - cost) / cost) * 100) : '—';
+                  // Markup across currencies too (a USD cost against a UZS price uses the cost's rate).
+                  const markup = catalogMarkupPercent(p);
                   const isLastRow = idx === filteredProducts.length - 1;
 
                   return (
@@ -487,19 +486,19 @@ export default function ProductsPage() {
 
                       {/* Cost price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
-                        {formatCurrency(cost, locale, p.costPriceCurrency || 'UZS')}
+                        {formatPriceOrUnset(Number(p.costPrice || 0), locale, p.costPriceCurrency)}
                       </td>
 
                       {/* Sale price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                        {formatPriceOrUnset(sale, locale, p.salePriceCurrency)}
+                        {formatPriceOrUnset(Number(p.salePrice || 0), locale, p.salePriceCurrency)}
                       </td>
 
                       {/* Margin % */}
                       <td style={{ padding: '12px 16px' }}>
-                        {marginPct !== '—' ? (
-                          <Badge variant={Number(marginPct) >= 20 ? 'success' : Number(marginPct) > 0 ? 'warning' : 'error'}>
-                            +{marginPct}%
+                        {markup !== null ? (
+                          <Badge variant={markup >= 20 ? 'success' : markup > 0 ? 'warning' : 'error'}>
+                            {markup > 0 ? '+' : ''}{formatPercent(markup)}%
                           </Badge>
                         ) : (
                           '—'

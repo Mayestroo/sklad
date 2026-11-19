@@ -39,7 +39,7 @@ const ALLOWED: Array<{ file: string; pattern: keyof typeof PATTERNS; count: numb
   { file: `${D}finance/page.tsx`, pattern: 'hook', count: 1, reason: ZERO },
   { file: `${D}finance/page.tsx`, pattern: 'literal', count: 9, reason: `${NEVER_EMPTY}: dashboard accountCurrencies are always set by the API` },
   { file: `${D}inventory/page.tsx`, pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: products.cost_price_currency` },
-  { file: `${D}products/page.tsx`, pattern: 'literal', count: 2, reason: `${NEVER_EMPTY}: products.cost_price_currency` },
+  { file: `${D}products/page.tsx`, pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: products.cost_price_currency` },
   { file: `${D}purchases/expenses/new/page.tsx`, pattern: 'literal', count: 8, reason: `${NEVER_EMPTY}: purchase_receipts.currency` },
   { file: `${D}purchases/expenses/page.tsx`, pattern: 'literal', count: 2, reason: `${NEVER_EMPTY}: additional_expenses.currency` },
   { file: `${D}purchases/expenses/[id]/page.tsx`, pattern: 'literal', count: 5, reason: `${NEVER_EMPTY}: additional_expenses.currency` },
@@ -56,7 +56,6 @@ const ALLOWED: Array<{ file: string; pattern: keyof typeof PATTERNS; count: numb
   { file: 'app/[locale]/page.tsx', pattern: 'literal', count: 5, reason: `${ZERO}; chart series pick` },
   { file: 'components/purchases/SupplierProfileDrawer.tsx', pattern: 'literal', count: 1, reason: F10 },
   { file: 'components/sales/OrderDeliveryNoteModal.tsx', pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: sales_orders.currency (print view)` },
-  { file: 'components/sales/SalesInvoiceForm.tsx', pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: products.cost_price_currency (margin hint only)` },
   { file: 'lib/opening-balance-lines.ts', pattern: 'objectDefault', count: 1, reason: 'defined, not guessed: the fixed-asset register is kept in UZS (D6)' },
 ];
 

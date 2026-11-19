@@ -50,6 +50,10 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       },
       product: {
         update: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue({
+          costPriceCurrency: 'UZS',
+          costPriceExchangeRate: 1,
+        }),
       },
       salesInvoiceItem: {
         update: jest.fn(),
@@ -379,6 +383,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     prisma.additionalExpense.findFirst.mockResolvedValue({
       id: 'exp-inv-5',
       status: PurchaseDocStatus.POSTED,
+      currency: 'UZS',
       amount: 2000000,
       receiptId,
       isPaid: false,
