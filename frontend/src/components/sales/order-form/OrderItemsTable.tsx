@@ -1,5 +1,7 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -40,6 +42,7 @@ export function OrderItemsTable({
   orderStatus,
   isPriceOverrideAllowed,
   items,
+  products,
   productOptions,
   onItemChange,
   onAddItem,
@@ -115,12 +118,11 @@ export function OrderItemsTable({
 
                   {/* Quantity */}
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <CurrencyInput
+                    <QuantityInput
+                      unit={products.find((product) => product.id === item.productId)?.unitOfMeasure}
                       value={item.quantity}
-                      onChange={(val) => onItemChange(idx, 'quantity', val)}
+                      onValueChange={(value) => onItemChange(idx, 'quantity', Number(value) || 0)}
                       disabled={isLocked}
-                      min={0}
-                      decimals={3}
                       aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
                     />
                   </td>
@@ -129,7 +131,7 @@ export function OrderItemsTable({
                   {orderStatus !== 'NEW' && (
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? '#10b981' : '#f59e0b' }}>
-                        {item.readyQty || 0} / {item.quantity}
+                        {item.readyQty || 0} / {quantityWithUnit(item.quantity, products.find((product) => product.id === item.productId)?.unitOfMeasure, locale)}
                       </span>
                     </td>
                   )}

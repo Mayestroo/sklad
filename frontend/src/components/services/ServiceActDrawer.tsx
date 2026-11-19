@@ -1,5 +1,7 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -376,12 +378,12 @@ export function ServiceActDrawer({
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 {isRu ? 'Курс валюты' : 'Valyuta kursi'}
               </label>
-              <Input
-                type="number"
-                step="0.0001"
-                min="0.0001"
+              <MoneyInput
+                aria-label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
                 value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value === '' ? '' : Number(e.target.value))}
+                onValueChange={(value) => setExchangeRate(value === '' ? '' : Number(value))}
+                decimals={4}
+                placeholder="12,800"
               />
             </div>
           )}
@@ -492,15 +494,11 @@ export function ServiceActDrawer({
                     <label className="block text-[11px] font-medium text-gray-600 mb-1">
                       {isRu ? 'Количество *' : 'Miqdori *'}
                     </label>
-                    <Input
-                      type="number"
-                      step="0.001"
-                      min="0.001"
+                    <QuantityInput
+                      unit={item.unit}
                       value={item.quantity}
-                      onChange={(e) =>
-                        handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)
-                      }
-                      required
+                      onValueChange={(value) => handleItemChange(idx, 'quantity', Number(value) || 0)}
+                      aria-label={isRu ? 'Количество' : 'Miqdor'}
                     />
                   </div>
 
@@ -508,15 +506,10 @@ export function ServiceActDrawer({
                     <label className="block text-[11px] font-medium text-gray-600 mb-1">
                       {isRu ? 'Цена за ед. *' : 'Birlik narxi *'}
                     </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.unitPrice}
-                      onChange={(e) =>
-                        handleItemChange(idx, 'unitPrice', parseFloat(e.target.value) || 0)
-                      }
-                      required
+                    <MoneyInput
+                      aria-label={isRu ? 'Цена за ед.' : 'Birlik narxi'}
+                      value={item.unitPrice || ''}
+                      onValueChange={(value) => handleItemChange(idx, 'unitPrice', Number(value) || 0)}
                     />
                   </div>
 

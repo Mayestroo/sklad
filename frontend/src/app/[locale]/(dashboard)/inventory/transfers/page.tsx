@@ -1,5 +1,7 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -43,11 +45,12 @@ export default function StockTransfersPage() {
   const [comment, setComment] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [items, setItems] = useState<{ productId: string; productName: string; quantity: number }[]>([]);
+  const [items, setItems] = useState<{ productId: string; productName: string; quantity: number; unit?: string }[]>([]);
 
   // Delete modal state
   const [deleteConfirmTransfer, setDeleteConfirmTransfer] = useState<StockTransfer | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDeleteTransfer = async () => {
@@ -79,7 +82,7 @@ export default function StockTransfersPage() {
     const prod = products.find((p) => p.id === selectedProductId);
     if (!prod) return;
     const name = prod.name[locale] || prod.name.ru || prod.name.uz;
-    setItems((prev) => [...prev, { productId: prod.id, productName: name, quantity }]);
+    setItems((prev) => [...prev, { productId: prod.id, productName: name, quantity, unit: prod.unitOfMeasure }]);
     setSelectedProductId('');
     setQuantity(1);
   };
@@ -100,6 +103,7 @@ export default function StockTransfersPage() {
       return;
     }
 
+    setCreateLoading(true);
     try {
       await apiFetch('/inventory/transfers', {
         token,
@@ -119,7 +123,9 @@ export default function StockTransfersPage() {
       toast.success(isRu ? 'Перемещение успешно создано' : 'O‘tkazma muvaffaqiyatli yaratildi');
       fetchTransfers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка создания перевода' : 'Error creating transfer'));
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка создания перевода' : 'O‘tkazmani yaratishda xatolik'));
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -144,7 +150,7 @@ export default function StockTransfersPage() {
       toast.success(isRu ? 'Товары успешно отправлены' : 'Tovarlar jo‘natildi');
       fetchTransfers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки' : 'Error shipping transfer'));
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки' : 'O‘tkazmani jo‘natishda xatolik'));
     }
   };
 
@@ -169,7 +175,7 @@ export default function StockTransfersPage() {
       toast.success(isRu ? 'Товары успешно приняты на склад' : 'Tovarlar omborga qabul qilindi');
       fetchTransfers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка приёмки' : 'Error receiving transfer'));
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка приёмки' : 'O‘tkazmani qabul qilishda xatolik'));
     }
   };
 
@@ -207,7 +213,7 @@ export default function StockTransfersPage() {
         </div>
 
         <Button variant="primary" onClick={() => setModalOpen(true)}>
-          <Plus size={16} /> {isRu ? 'Создать перемещение' : 'Yangi Transfer Yaratish'}
+          <Plus size={16} /> {isRu ? 'Создать перемещение' : 'Yangi o‘tkazma'}
         </Button>
       </div>
 
@@ -316,7 +322,7 @@ export default function StockTransfersPage() {
             />
           </div>
 
-          <Input label={isRu ? 'Комментарий' : 'Izoh (Comment)'} value={comment} onChange={(e) => setComment(e.target.value)} />
+          <Input label={isRu ? 'Комментарий' : 'Izoh'} value={comment} onChange={(e) => setComment(e.target.value)} />
 
           <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)' }}>{isRu ? 'Перемещаемые товары:' : 'Ko‘chiriladigan Tovarlar:'}</div>
@@ -328,7 +334,13 @@ export default function StockTransfersPage() {
                 placeholder={isRu ? 'Выберите товар' : 'Mahsulotni tanlang'}
                 style={{ flex: 1 }}
               />
-              <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} style={{ width: '90px' }} />
+              <QuantityInput
+                unit={products.find((p) => p.id === selectedProductId)?.unitOfMeasure}
+                value={quantity || ''}
+                onValueChange={(value) => setQuantity(Number(value) || 0)}
+                aria-label={isRu ? 'Количество' : 'Miqdor'}
+                style={{ width: '140px' }}
+              />
               <Button type="button" variant="outline" onClick={handleAddItem}>{isRu ? 'Добавить' : 'Qo‘shish'}</Button>
             </div>
 
@@ -337,7 +349,7 @@ export default function StockTransfersPage() {
                 {items.map((it, idx) => (
                   <div key={idx} style={{ padding: '6px 12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)' }}>
                     <span>{it.productName}</span>
-                    <strong>{it.quantity} {isRu ? 'шт' : 'ta'}</strong>
+                    <strong>{quantityWithUnit(it.quantity, it.unit, locale)}</strong>
                   </div>
                 ))}
               </div>
@@ -346,7 +358,7 @@ export default function StockTransfersPage() {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" variant="primary">{isRu ? 'Создать перемещение' : 'Transfer Yaratish'}</Button>
+            <Button type="submit" variant="primary" disabled={createLoading}>{createLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать перемещение' : 'O‘tkazma yaratish'}</Button>
           </div>
         </form>
       </Modal>

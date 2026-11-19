@@ -40,7 +40,7 @@ describe('CreateSalesReturnModal (plan T3.6)', () => {
     expect(row.textContent).toContain('-10,0%');
     expect(row.textContent).toContain('12%');
 
-    fireEvent.change(row.querySelector('input[type="number"]') as HTMLInputElement, { target: { value: '2' } });
+    fireEvent.change(row.querySelector('input[inputmode="decimal"]') as HTMLInputElement, { target: { value: '2' } });
 
     const banner = screen.getByText('Jami qaytariladigan summa:').parentElement?.parentElement as HTMLElement;
     await waitFor(() => expect(banner.textContent).toMatch(/201,6/));

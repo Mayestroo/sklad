@@ -1,5 +1,7 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -589,12 +591,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Мин. остаток (оповещение)' : 'Minimal qoldiq chegarasi'}
             </label>
-            <Input
-              type="number"
-              min="0"
+            <QuantityInput
+              unit={unitOfMeasure}
               value={minStockAlert}
-              onChange={(e) => setMinStockAlert(e.target.value)}
-              placeholder="0"
+              onValueChange={setMinStockAlert}
+              aria-label={isRu ? 'Мин. остаток' : 'Minimal qoldiq'}
             />
           </div>
         </div>
@@ -619,14 +620,13 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
                 {getQuantityLabel()}
               </label>
-              <Input
-                type="number"
-                min="0.001"
-                step={isFractionalUnit ? 'any' : '1'}
+              <QuantityInput
+                unit={unitOfMeasure}
                 value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
+                onValueChange={setQuantity}
                 placeholder="1"
-                style={{ fontWeight: 600 }}
+                decimals={isFractionalUnit ? 3 : 0}
+                aria-label={getQuantityLabel()}
               />
             </div>
           )}
@@ -638,13 +638,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Цена закупки (Себестоимость)' : 'Xarid narxi (Tan narx)'}
             </label>
-            <Input
-              type="number"
-              min="0"
-              step="any"
+            <MoneyInput
+              aria-label={isRu ? 'Цена закупки' : 'Xarid narxi'}
               value={costPrice}
-              onChange={(e) => setCostPrice(e.target.value)}
-              placeholder="0"
+              onValueChange={setCostPrice}
             />
             <div style={{ marginTop: 'var(--space-2)' }}>
               <Select
@@ -660,14 +657,12 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               />
             </div>
             {costPriceCurrency === 'USD' && (
-              <Input
+              <MoneyInput
                 label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
-                type="number"
-                min="0.0001"
-                step="any"
                 value={costPriceExchangeRate}
-                onChange={(event) => setCostPriceExchangeRate(event.target.value)}
-                placeholder="1"
+                onValueChange={setCostPriceExchangeRate}
+                decimals={4}
+                placeholder="12,800"
               />
             )}
           </div>
@@ -676,13 +671,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Цена продажи (Опционально)' : 'Sotish narxi (Ixtiyoriy)'}
             </label>
-            <Input
-              type="number"
-              min="0"
-              step="any"
+            <MoneyInput
+              aria-label={isRu ? 'Цена продажи' : 'Sotish narxi'}
               value={sellingPrice}
-              onChange={(e) => setSellingPrice(e.target.value)}
-              placeholder="0"
+              onValueChange={setSellingPrice}
             />
             <div style={{ marginTop: 'var(--space-2)' }}>
               <Select

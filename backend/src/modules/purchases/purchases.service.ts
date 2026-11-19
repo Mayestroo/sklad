@@ -1,3 +1,4 @@
+import { catalogCostFromUzs } from '../inventory/products/catalog-cost';
 import {
   Injectable,
   NotFoundException,
@@ -610,15 +611,25 @@ export class PurchasesService {
           },
         });
 
-        // Sync Product catalog costPrice in base currency
+        // Sync the product card cost (ADR 0007) in the card's currency: a
+        // USD receipt gives a USD cost at the receipt rate, so it stays
+        // comparable with a USD sale price.
         if (tx.product?.update) {
+          const card = tx.product.findFirst
+            ? await tx.product.findFirst({
+                where: { tenantId, id: item.productId },
+                select: {
+                  costPriceCurrency: true,
+                  costPriceExchangeRate: true,
+                },
+              })
+            : null;
           await tx.product.update({
             where: { tenantId, id: item.productId },
-            data: {
-              costPrice: landedCostInBase,
-              costPriceCurrency: 'UZS',
-              costPriceExchangeRate: 1,
-            },
+            data: catalogCostFromUzs(landedCostInBase, card, {
+              currency: receipt.currency,
+              exchangeRate: rate,
+            }),
           });
         }
       }

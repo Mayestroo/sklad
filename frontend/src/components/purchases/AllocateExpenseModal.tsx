@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -199,13 +200,11 @@ export function AllocateExpenseModal({
             <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px', display: 'block' }}>
               {isRu ? 'Сумма расхода *' : 'Xarajat Summasi *'}
             </label>
-            <Input
-              type="number"
-              step="0.01"
+            <MoneyInput
+              aria-label={isRu ? 'Сумма расхода' : 'Xarajat summasi'}
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="500 000"
-              autoFocus
+              onValueChange={setAmount}
+              placeholder="500,000"
             />
           </div>
           <div>

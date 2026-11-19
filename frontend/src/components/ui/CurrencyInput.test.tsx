@@ -18,6 +18,19 @@ describe('CurrencyInput number text (D9)', () => {
     expect(formatCurrencyValue('abc', 3)).toBe('0');
   });
 
+  it('an unset amount stays empty (placeholder visible) and is not turned into 0 on blur', () => {
+    expect(formatCurrencyValue('', 2)).toBe('');
+    expect(formatCurrencyValue(null, 2)).toBe('');
+    const onChange = vi.fn();
+    render(<CurrencyInput value="" onChange={onChange} decimals={2} aria-label="amount" />);
+    const input = screen.getByLabelText('amount') as HTMLInputElement;
+    expect(input.value).toBe('');
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input.value).toBe('');
+  });
+
   it('shows 1 (not 1.000) for one unit and 0 as the placeholder', () => {
     render(<CurrencyInput value={1} onChange={() => {}} decimals={3} aria-label="qty" />);
     const input = screen.getByLabelText('qty') as HTMLInputElement;

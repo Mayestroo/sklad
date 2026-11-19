@@ -19,14 +19,20 @@ test('B1: opening-balance product dropdown can create a product', () => {
 });
 
 test('B4: opening-balance counterparty dropdowns can create a counterparty', () => {
-  const hooks = openingBalances.match(/onCreateNew=\{!isReadOnly \? \(\) => onCreateCounterparty\(index\) : undefined\}/g) ?? [];
-  assert.equal(hooks.length, 2, 'debts and advances tables');
+  // Debts and advances share one table; a new counterparty gets the line's side.
+  const hooks = openingBalances.match(/onCreateNew=\{!isReadOnly \? \(\) => onCreateCounterparty\(index, side\) : undefined\}/g) ?? [];
+  assert.equal(hooks.length, 1, 'debts and advances table');
   assert.match(openingBalances, /<CreateCounterpartyDrawer/);
 });
 
 test('B5: opening-balance amounts are entered with thousands separators', () => {
   assert.doesNotMatch(openingBalances, /parseFloat\(e\.target\.value\)/);
-  assert.equal((openingBalances.match(/<CurrencyInput/g) ?? []).length, 8);
+  // Every number on the page is a formatted field: money (cash, cost, debt/advance, other,
+  // fixed-asset cost and depreciation), the USD rate, and quantities with their unit.
+  assert.doesNotMatch(openingBalances, /type="number"/);
+  assert.equal((openingBalances.match(/<CurrencyInput/g) ?? []).length, 6);
+  assert.equal((openingBalances.match(/<MoneyInput/g) ?? []).length, 1);
+  assert.equal((openingBalances.match(/<QuantityInput/g) ?? []).length, 2);
 });
 
 test('B9: sales invoice product dropdown can create a product', () => {
@@ -34,10 +40,13 @@ test('B9: sales invoice product dropdown can create a product', () => {
   assert.match(salesInvoice, /<CreateProductDrawer/);
 });
 
-test('B2: inventory opening lines carry their own cost currency and rate', () => {
-  const inventoryTable = openingBalances.slice(openingBalances.indexOf('function InventoryTable('), openingBalances.indexOf('function CounterpartyTable('));
+test('B2: inventory opening lines carry their own cost currency; the USD rate is the document rate', () => {
+  const inventoryTable = openingBalances.slice(openingBalances.indexOf('function InventoryTable('), openingBalances.indexOf('function DebtsTable('));
   assert.match(inventoryTable, /onUpdate\(index, 'currency', value\)/);
-  assert.match(inventoryTable, /onUpdate\(index, 'exchangeRate', event\.target\.value\)/);
+  // One rate per document, written onto every USD line before totals and save.
+  assert.match(openingBalances, /data-testid="document-usd-rate"/);
+  assert.match(openingBalances, /withDocumentRate\(lines, usdRate\)/);
+  assert.match(openingBalances, /lines: effectiveLines/);
   // F8: a line without a currency shows a dash, never a UZS label.
   assert.match(inventoryTable, /formatCurrencyIfAvailable\(Number\(line\.amount \|\| 0\), locale, line\.currency\) \?\? '—'/);
   assert.doesNotMatch(inventoryTable, /currency \|\| '(USD|UZS)'/);

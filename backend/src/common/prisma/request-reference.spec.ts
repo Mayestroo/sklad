@@ -20,6 +20,8 @@ const ALLOWLIST: Record<string, string> = {
   'JournalService.createJournalEntry':
     'Internal writer for automatic postings (accounts resolved by code within the tenant); the user route goes through createManualEntry, which checks',
   'AuditService.logAction': INTERNAL,
+  'OpeningBalancesService.lineData':
+    'Maps a line to its row; create and updateLines call assertLineReferences on the same lines first',
   'FinanceService.listTransactions': READ_FILTER,
   'FinanceService.resolveSettlementContext':
     'Checks counterparty with findFirst({ id, tenantId }) and loads the source document within the tenant',
@@ -30,8 +32,10 @@ const ALLOWLIST: Record<string, string> = {
   'FinanceService.reversePostedTransaction': INTERNAL,
   'FinanceService.deleteLegacyPurchasePaymentEntry': INTERNAL,
   'StockReservationService.reserveStockForOrder': INTERNAL,
-  'ProductionService.createRecipe':
+  'ProductionService.insertRecipe':
     'Product and materials are loaded with tenantId and their count compared with the request',
+  'ProductionService.logRecipeCreated':
+    'Audit of a recipe insertRecipe already checked',
   'ProductionService.createDocument':
     'Recipe (preview), warehouse (requireWarehouse) and responsible user (requireTenantUser) are each loaded with tenantId',
   'ProductionService.findDocuments': READ_FILTER,

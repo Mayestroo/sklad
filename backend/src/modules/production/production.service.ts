@@ -71,7 +71,9 @@ export class ProductionService {
     });
   }
 
-  async createRecipe(
+  /** Validates a recipe and inserts it with `db` (the caller's transaction when editing). */
+  private async insertRecipe(
+    db: Pick<Prisma.TransactionClient, 'product' | 'productionRecipe'>,
     tenantId: string,
     userId: string,
     dto: CreateProductionRecipeDto,
@@ -84,8 +86,8 @@ export class ProductionService {
     }
 
     const [product, materials] = await Promise.all([
-      this.prisma.product.findFirst({ where: { id: dto.productId, tenantId } }),
-      this.prisma.product.findMany({
+      db.product.findFirst({ where: { id: dto.productId, tenantId } }),
+      db.product.findMany({
         where: { tenantId, id: { in: productIds } },
         select: { id: true, type: true },
       }),
@@ -105,7 +107,7 @@ export class ProductionService {
       );
     }
 
-    const recipe = await this.prisma.productionRecipe.create({
+    return db.productionRecipe.create({
       data: {
         tenantId,
         productId: dto.productId,
@@ -121,8 +123,15 @@ export class ProductionService {
       },
       include: recipeInclude,
     });
+  }
 
-    await this.auditService.logAction({
+  private logRecipeCreated(
+    tenantId: string,
+    userId: string,
+    recipe: { id: string; productId: string; outputQuantity: Prisma.Decimal },
+    dto: CreateProductionRecipeDto,
+  ) {
+    return this.auditService.logAction({
       tenantId,
       userId,
       entityType: 'ProductionRecipe',
@@ -134,9 +143,23 @@ export class ProductionService {
         materials: dto.materials,
       },
     });
+  }
+
+  async createRecipe(
+    tenantId: string,
+    userId: string,
+    dto: CreateProductionRecipeDto,
+  ) {
+    const recipe = await this.insertRecipe(this.prisma, tenantId, userId, dto);
+    await this.logRecipeCreated(tenantId, userId, recipe, dto);
     return recipe;
   }
 
+  /**
+   * Editing keeps history: the new version is created and the old one is
+   * deactivated in one transaction, so a failed save never leaves two active
+   * recipes (or none) for the product.
+   */
   async updateRecipe(
     tenantId: string,
     userId: string,
@@ -148,12 +171,22 @@ export class ProductionService {
       include: recipeInclude,
     });
     if (!current) throw new NotFoundException('Retseptura topilmadi');
+    if (!current.isActive) {
+      throw new BadRequestException(
+        'Bu retseptura eskirgan versiya; faol retsepturani tahrirlang',
+      );
+    }
 
-    const replacement = await this.createRecipe(tenantId, userId, dto);
-    await this.prisma.productionRecipe.update({
-      where: { tenantId, id: current.id },
-      data: { isActive: false },
+    const replacement = await this.prisma.$transaction(async (tx) => {
+      const created = await this.insertRecipe(tx, tenantId, userId, dto);
+      await tx.productionRecipe.update({
+        where: { tenantId, id: current.id },
+        data: { isActive: false },
+      });
+      return created;
     });
+
+    await this.logRecipeCreated(tenantId, userId, replacement, dto);
     await this.auditService.logAction({
       tenantId,
       userId,

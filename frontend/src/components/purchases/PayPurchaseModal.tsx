@@ -1,15 +1,16 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { formatCurrency, errorMessage } from '@/lib/utils';
+import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import { CreditCard } from 'lucide-react';
@@ -83,7 +84,7 @@ export function PayPurchaseModal({
         ? acc.name
         : acc.name[locale] || acc.name.ru || acc.name.uz || '';
     const formattedBal = formatCurrency(Number(acc.balance), locale, acc.currency);
-    return `${nameStr} (${acc.accountType}) — ${formattedBal}`;
+    return `${nameStr} (${CASH_ACCOUNT_TYPE_LABELS[acc.accountType]?.[locale === 'ru' ? 'ru' : 'uz'] ?? acc.accountType}) — ${formattedBal}`;
   };
 
   const sortedAccounts = accounts.filter(
@@ -274,15 +275,12 @@ export function PayPurchaseModal({
         </div>
 
         {receipt.currency === 'USD' && (
-          <Input
+          <MoneyInput
             label={isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
-            type="number"
-            min="0.0001"
-            step="0.0001"
             value={exchangeRate}
-            onChange={(event) => setExchangeRate(event.target.value)}
-            placeholder="12800"
-            required
+            onValueChange={setExchangeRate}
+            decimals={4}
+            placeholder="12,800"
           />
         )}
 
@@ -308,24 +306,11 @@ export function PayPurchaseModal({
               {isRu ? 'Вся сумма' : 'Barchasi'}
             </button>
           </div>
-          <input
-            type="number"
-            min={0}
-            max={remaining}
-            step="any"
+          <MoneyInput
+            aria-label={isRu ? 'Сумма оплаты' : 'To‘lov summasi'}
             value={amount || ''}
-            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--color-bg-input)',
-              color: 'var(--color-text-primary)',
-              fontSize: 'var(--text-base)',
-              fontWeight: 600,
-              boxSizing: 'border-box',
-            }}
+            max={remaining}
+            onValueChange={(value) => setAmount(Number(value) || 0)}
           />
         </div>
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
 import { useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter, useParams } from 'next/navigation';
@@ -379,11 +380,11 @@ export default function ExpenseDetailPage() {
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       <span style={{ color: 'var(--color-success-600)', fontWeight: 'var(--font-medium)' }}>
-                        {item.remainingQuantity} omborda
+                        {quantityWithUnit(item.remainingQuantity, item.product?.unitOfMeasure, locale)} {isRu ? 'на складе' : 'omborda'}
                       </span>
                       {Number(item.soldQuantity) > 0 && (
                         <span style={{ color: 'var(--color-warning-600)', marginLeft: '4px' }}>
-                          / {item.soldQuantity} sotilgan
+                          / {quantityWithUnit(item.soldQuantity, item.product?.unitOfMeasure, locale)} {isRu ? 'продано' : 'sotilgan'}
                         </span>
                       )}
                     </td>

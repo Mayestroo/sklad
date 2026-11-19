@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -352,12 +353,10 @@ export function QuickAddProductModal({
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
                 {isRu ? (itemType === 'SERVICE' ? 'Стоимость (за ед.)' : 'Цена закупки') : (itemType === 'SERVICE' ? 'Xizmat narxi' : 'Xarid narxi')}
               </label>
-              <Input
-                type="number"
-                min="0"
+              <MoneyInput
+                aria-label={isRu ? 'Цена закупки' : 'Xarid narxi'}
                 value={costPrice || ''}
-                onChange={(e) => setCostPrice(Number(e.target.value) || 0)}
-                placeholder="0"
+                onValueChange={(value) => setCostPrice(Number(value) || 0)}
               />
               <div className="mt-2">
                 <Select
@@ -372,14 +371,12 @@ export function QuickAddProductModal({
                 />
               </div>
               {costPriceCurrency === 'USD' && (
-                <Input
-                  className="mt-2"
+                <MoneyInput
                   label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
-                  type="number"
-                  min="0.0001"
-                  step="any"
                   value={costPriceExchangeRate}
-                  onChange={(event) => setCostPriceExchangeRate(event.target.value)}
+                  onValueChange={setCostPriceExchangeRate}
+                  decimals={4}
+                  placeholder="12,800"
                 />
               )}
             </div>
@@ -387,12 +384,10 @@ export function QuickAddProductModal({
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
                 {isRu ? (itemType === 'SERVICE' ? 'Тариф продажи' : 'Цена продажи') : (itemType === 'SERVICE' ? 'Sotuv tarifi' : 'Sotuv narxi')}
               </label>
-              <Input
-                type="number"
-                min="0"
+              <MoneyInput
+                aria-label={isRu ? 'Цена продажи' : 'Sotuv narxi'}
                 value={salePrice || ''}
-                onChange={(e) => setSalePrice(Number(e.target.value) || 0)}
-                placeholder="0"
+                onValueChange={(value) => setSalePrice(Number(value) || 0)}
               />
             </div>
           </div>

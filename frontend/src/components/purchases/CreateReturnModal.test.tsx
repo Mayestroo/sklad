@@ -33,7 +33,8 @@ function rerenderIn(view: ReturnType<typeof renderPage>, ui: ReactElement) {
 }
 
 const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElement;
-const inputsOf = (row: HTMLElement) => Array.from(row.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+// Quantity (formatted text field with its unit) first, then VAT %.
+const inputsOf = (row: HTMLElement) => Array.from(row.querySelectorAll('input:not([type="checkbox"])')) as HTMLInputElement[];
 
 describe('Purchase CreateReturnModal', () => {
   beforeEach(() => {
@@ -72,6 +73,8 @@ describe('Purchase CreateReturnModal', () => {
 
     rerenderIn(view, <CreateReturnModal isOpen onClose={vi.fn()} receipt={receiptB} onSuccess={vi.fn()} />);
 
-    expect(inputsOf(rowOf('Krem'))[0].value).toBe('0');
+    // Nothing to return yet: the field is empty and shows the 0 placeholder.
+    expect(inputsOf(rowOf('Krem'))[0].value).toBe('');
+    expect(inputsOf(rowOf('Krem'))[0].placeholder).toBe('0');
   });
 });

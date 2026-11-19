@@ -1,5 +1,7 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -41,6 +43,7 @@ import { toast } from '@/context/ToastContext';
 import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { initialDocumentCurrency } from '@/lib/sales-currency';
 import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
+import { convertCostPriceToDocumentCurrency } from '@/lib/inventory-cost';
 import { unitLabel } from '@/lib/units';
 import { stockLabel } from '@/lib/stock-label';
 
@@ -67,8 +70,8 @@ interface ProductOption {
   salePrice: number;
   salePriceCurrency?: 'USD' | 'UZS' | null;
   costPrice: number;
-  costPriceCurrency?: 'USD' | 'UZS';
-  costPriceExchangeRate?: number;
+  costPriceCurrency: 'USD' | 'UZS' | null;
+  costPriceExchangeRate: number;
   vatRate?: number;
   unitOfMeasure?: string;
   stockQty?: number;
@@ -256,8 +259,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         salePrice: Number(p.salePrice) || 0,
           salePriceCurrency: p.salePriceCurrency || null,
           costPrice: Number(p.costPrice) || 0,
-          costPriceCurrency: p.costPriceCurrency || 'UZS',
-          costPriceExchangeRate: Number(p.costPriceExchangeRate) || 1,
+          costPriceCurrency: p.costPriceCurrency ?? null,
+          costPriceExchangeRate: Number(p.costPriceExchangeRate),
           vatRate: Number(p.vatRate ?? 0),
           unitOfMeasure: p.unitOfMeasure || 'dona',
         stockQty: Number(p.totalStock ?? p.stockQuantity ?? p.quantity ?? 0),
@@ -350,7 +353,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     items.forEach((item) => {
       if (!item.productId) return;
       const prd = products.find((p) => p.id === item.productId);
-      const cost = prd ? Number(prd.costPrice) * Number(prd.costPriceExchangeRate || 1) : 0;
+      // Card cost in UZS in the card's own currency/rate; unknown → no estimate.
+      const cost = prd ? productCostUzs(prd) : null;
       const lineRaw = item.quantity * item.unitPrice;
       const discountVal = (lineRaw * item.discount) / 100;
       const afterDiscount = lineRaw - discountVal;
@@ -359,10 +363,10 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       subtotal += lineRaw;
       totalDiscount += discountVal;
       totalVat += vatVal;
-      totalCost += item.quantity * cost;
+      if (cost !== null) totalCost += item.quantity * cost;
 
       const itemNetUnitPriceUzs = item.unitPrice * (1 - item.discount / 100) * (currency === 'USD' ? Number(exchangeRate) : 1);
-      if (prd && item.unitPrice > 0 && itemNetUnitPriceUzs < cost) {
+      if (cost !== null && item.unitPrice > 0 && itemNetUnitPriceUzs < cost) {
         belowCostCount++;
       }
 
@@ -1232,12 +1236,12 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           {/* Exchange Rate */}
           {currency && currency !== 'UZS' && (
             <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
-              <Input
+              <MoneyInput
                 label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
                 value={exchangeRate}
-                type="text"
-                inputMode="decimal"
-                onChange={(e) => handleExchangeRateChange(e.target.value)}
+                onValueChange={(value) => handleExchangeRateChange(value)}
+                decimals={4}
+                placeholder="12,800"
                 disabled={isReadOnly}
               />
             </div>
@@ -1333,9 +1337,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 const lineAfterDiscount = Math.max(0, lineSubtotal - (lineSubtotal * disc) / 100);
                 const lineVat = (lineAfterDiscount * vatR) / 100;
                 const lineTotal = lineAfterDiscount + lineVat;
-                const costInUzs = prd ? Number(prd.costPrice) * Number(prd.costPriceExchangeRate || 1) : 0;
+                const costInUzs = prd ? productCostUzs(prd) : null;
                 const salePriceInUzs = price * (1 - Number(item.discount || 0) / 100) * (currency === 'USD' ? Number(exchangeRate) : 1);
-                const isBelowCost = prd && price > 0 && salePriceInUzs < costInUzs;
+                const isBelowCost = costInUzs !== null && price > 0 && salePriceInUzs < costInUzs;
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: isBelowCost ? 'rgba(239, 68, 68, 0.04)' : 'transparent' }}>
@@ -1354,7 +1358,10 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       />
                       {prd && (
                         <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 2, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          <span>Tannarx: {currency ? formatCurrency(convertSalePriceToDocumentCurrency(costInUzs, 'UZS', currency, Number(exchangeRate)) ?? 0, locale, currency) : '—'}</span>
+                          <span>{isRu ? 'Себестоимость' : 'Tannarx'}: {(() => {
+                            const costInDocument = currency && costInUzs !== null ? convertSalePriceToDocumentCurrency(costInUzs, 'UZS', currency, Number(exchangeRate)) : null;
+                            return costInDocument !== null && currency ? formatCurrency(costInDocument, locale, currency) : '—';
+                          })()}</span>
                           <span>•</span>
                           <span>{isRu ? 'Ед.' : 'Birlik'}: {unitLabel(prd.unitOfMeasure, locale)}</span>
                           {warehouseStockMap[item.productId] !== undefined && (
@@ -1376,23 +1383,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
                     {/* Quantity */}
                     <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="any"
+                      <QuantityInput
+                        unit={prd?.unitOfMeasure}
                         value={item.quantity}
-                        onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                        onValueChange={(value) => handleItemChange(idx, 'quantity', Number(value) || 0)}
                         disabled={isReadOnly}
                         aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
-                        style={{
-                          textAlign: 'right',
-                          borderColor:
-                            !isReadOnly &&
-                            warehouseStockMap[item.productId] !== undefined &&
-                            qty > warehouseStockMap[item.productId].free
-                              ? '#ef4444'
-                              : undefined,
-                        }}
+                        invalid={!isReadOnly && warehouseStockMap[item.productId] !== undefined && qty > warehouseStockMap[item.productId].free}
                       />
                       {!isReadOnly &&
                         warehouseStockMap[item.productId] !== undefined &&
@@ -1494,15 +1491,12 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       {!isReadOnly && (
         <Card style={{ padding: 'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
-            <Input
+            <MoneyInput
               label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Mijozga qo‘shimcha summa (${currency})`}
-              type="number"
-              min="0"
-              step="any"
               value={additionalChargeAmount}
-              onChange={(event) => {
+              onValueChange={(value) => {
                 markDirty();
-                setAdditionalChargeAmount(event.target.value === '' ? '' : Number(event.target.value));
+                setAdditionalChargeAmount(Number(value));
               }}
             />
             <Input
@@ -1638,5 +1632,17 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         </>
       )}
     </div>
+  );
+}
+
+/** The product card cost of one unit in UZS, or null when its currency/rate is unknown. */
+function productCostUzs(product: Pick<ProductOption, 'costPrice' | 'costPriceCurrency' | 'costPriceExchangeRate'>): number | null {
+  if (!(Number(product.costPrice) > 0)) return null;
+  return convertCostPriceToDocumentCurrency(
+    Number(product.costPrice),
+    product.costPriceCurrency,
+    Number(product.costPriceExchangeRate),
+    'UZS',
+    1,
   );
 }

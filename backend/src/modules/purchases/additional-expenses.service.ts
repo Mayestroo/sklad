@@ -1,3 +1,4 @@
+import { catalogCostFromUzs } from '../inventory/products/catalog-cost';
 import {
   Injectable,
   NotFoundException,
@@ -558,6 +559,11 @@ export class AdditionalExpensesService {
     // Query retroactive sales impact if posted
     let retroactiveSalesImpact: RetroactiveSalesImpact[] = [];
     if (expense.status === PurchaseDocStatus.POSTED) {
+      // Sales costs are in UZS: convert the allocation like posting did.
+      const impactRate = requireExchangeRateForCurrency(
+        expense.currency,
+        expense.currency === 'UZS' ? undefined : Number(expense.exchangeRate),
+      );
       const productIds = expense.items.map((i) => i.productId);
       const batches = await this.prisma.productBatch.findMany({
         where: {
@@ -587,9 +593,8 @@ export class AdditionalExpensesService {
           (i) => i.productId === batch.productId,
         );
         const unitExpense = itemExpense
-          ? Number(itemExpense.allocatedAmount) /
-            (Number(itemExpense.soldQuantity) +
-              Number(itemExpense.remainingQuantity) || 1)
+          ? (Number(itemExpense.allocatedAmount) * impactRate) /
+            allocationQuantity(itemExpense)
           : 0;
 
         for (const c of batch.consumptions) {
@@ -641,6 +646,23 @@ export class AdditionalExpensesService {
 
   // ─── POSTING & RETROACTIVE RECALIBRATION (TICKET 2 & 3) ───────
 
+  /** Writes a batch landed cost (UZS) onto the product card in the card's currency (ADR 0007). */
+  private async syncCatalogCost(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    productId: string,
+    landedCostUzs: number,
+  ) {
+    const card = await tx.product.findFirst({
+      where: { tenantId, id: productId },
+      select: { costPriceCurrency: true, costPriceExchangeRate: true },
+    });
+    await tx.product.update({
+      where: { tenantId, id: productId },
+      data: catalogCostFromUzs(landedCostUzs, card),
+    });
+  }
+
   async postExpense(tenantId: string, userId: string, id: string) {
     const expense = await this.prisma.additionalExpense.findFirst({
       where: { id, tenantId },
@@ -685,9 +707,7 @@ export class AdditionalExpensesService {
       for (const item of expense.items) {
         const allocatedAmount =
           Number(item.allocatedAmount) * capitalizationRate;
-        const itemQty =
-          Number(item.soldQuantity) + Number(item.remainingQuantity) || 1;
-        const allocatedPerUnit = allocatedAmount / itemQty;
+        const allocatedPerUnit = allocatedAmount / allocationQuantity(item);
 
         // Find or verify batch
         const batch = await tx.productBatch.findFirst({
@@ -731,15 +751,13 @@ export class AdditionalExpensesService {
             });
           }
 
-          // Sync Product catalog costPrice (ADR 0007)
-          await tx.product.update({
-            where: { tenantId, id: item.productId },
-            data: {
-              costPrice: newBatchLandedCost,
-              costPriceCurrency: 'UZS',
-              costPriceExchangeRate: 1,
-            },
-          });
+          // Sync the product card cost (ADR 0007), keeping the card's currency.
+          await this.syncCatalogCost(
+            tx,
+            tenantId,
+            item.productId,
+            newBatchLandedCost,
+          );
 
           // Retroactive COGS Recalibration for all downstream consumptions (ADR 0008)
           for (const consumption of batch.consumptions) {
@@ -822,7 +840,8 @@ export class AdditionalExpensesService {
           data: {
             newLandedCost: Number(item.initialLandedCost) + allocatedPerUnit,
             cogsAdjustment:
-              (Number(item.soldQuantity) / itemQty) * allocatedAmount,
+              (Number(item.soldQuantity) / allocationQuantity(item)) *
+              allocatedAmount,
           },
         });
       }
@@ -1123,12 +1142,17 @@ export class AdditionalExpensesService {
           );
         }
       }
-      // 1. Revert ProductBatch landed cost & Retroactive COGS
+      // 1. Revert ProductBatch landed cost & Retroactive COGS. Posting added
+      // the allocation converted to UZS; the reversal removes the same UZS
+      // amount (it used to subtract the raw USD figure from a UZS cost).
+      const capitalizationRate = requireExchangeRateForCurrency(
+        expense.currency,
+        expense.currency === 'UZS' ? undefined : Number(expense.exchangeRate),
+      );
       for (const item of expense.items) {
-        const allocatedAmount = Number(item.allocatedAmount);
-        const itemQty =
-          Number(item.soldQuantity) + Number(item.remainingQuantity) || 1;
-        const allocatedPerUnit = allocatedAmount / itemQty;
+        const allocatedAmount =
+          Number(item.allocatedAmount) * capitalizationRate;
+        const allocatedPerUnit = allocatedAmount / allocationQuantity(item);
 
         const batch = await tx.productBatch.findFirst({
           where: {
@@ -1155,15 +1179,13 @@ export class AdditionalExpensesService {
             data: { landedCost: restoredBatchLandedCost },
           });
 
-          // Sync catalog cost price
-          await tx.product.update({
-            where: { tenantId, id: item.productId },
-            data: {
-              costPrice: restoredBatchLandedCost,
-              costPriceCurrency: 'UZS',
-              costPriceExchangeRate: 1,
-            },
-          });
+          // Sync the product card cost, keeping the card's currency.
+          await this.syncCatalogCost(
+            tx,
+            tenantId,
+            item.productId,
+            restoredBatchLandedCost,
+          );
 
           // Revert retroactive COGS on downstream sales invoices
           for (const consumption of batch.consumptions) {
@@ -1325,4 +1347,21 @@ function salesProfitInUzs(
         : 'Yalpi foydani hisoblab bo‘lmadi',
     );
   }
+}
+
+/**
+ * Units an allocation is spread over. Zero would divide the expense over a
+ * made-up single unit (it used to fall back to 1), so it is refused.
+ */
+function allocationQuantity(item: {
+  soldQuantity: unknown;
+  remainingQuantity: unknown;
+}): number {
+  const quantity = Number(item.soldQuantity) + Number(item.remainingQuantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new BadRequestException(
+      "Qo'shimcha xarajat taqsimlangan tovar miqdori 0 — xarajatni qayta taqsimlang / Количество товара для распределения расхода равно 0",
+    );
+  }
+  return quantity;
 }

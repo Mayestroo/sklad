@@ -253,6 +253,8 @@ export interface CreateFifoBatchParams {
   batchNumber: string;
   /** FIFO age; defaults to now. Transfers keep the source batch's age. */
   createdAt?: Date;
+  /** The opening-balance line this batch opens (unposting removes it). */
+  openingBalanceLineId?: string;
 }
 
 /** Adds a new cost layer (batch) to a warehouse. */
@@ -281,6 +283,9 @@ export async function createFifoBatch(
       purchasePrice: cost,
       landedCost: cost,
       ...(params.createdAt ? { createdAt: params.createdAt } : {}),
+      ...(params.openingBalanceLineId
+        ? { openingBalanceLineId: params.openingBalanceLineId }
+        : {}),
     },
   });
 }

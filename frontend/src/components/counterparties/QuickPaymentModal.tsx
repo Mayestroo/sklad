@@ -1,10 +1,12 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { CURRENCY_OPTIONS, formatCurrency } from '@/lib/utils';
+import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -305,15 +307,10 @@ export function QuickPaymentModal({
 
         {/* Amount Input */}
         <div>
-          <Input
+          <MoneyInput
             label={isRu ? 'Сумма оплаты *' : "To'lov summasi *"}
-            type="number"
-            step="any"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            required
-            autoFocus
+            onValueChange={setAmount}
           />
         </div>
 
@@ -326,7 +323,7 @@ export function QuickPaymentModal({
             disabled={!accountsLoaded || !currency || matchingAccounts.length === 0}
             options={matchingAccounts.map((acc) => ({
               value: acc.id,
-              label: `${typeof acc.name === 'object' ? acc.name[locale] || acc.name.uz : acc.name} (${acc.accountType}) — ${formatCurrency(acc.balance, locale, acc.currency)}`,
+              label: `${typeof acc.name === 'object' ? acc.name[locale] || acc.name.uz : acc.name} (${CASH_ACCOUNT_TYPE_LABELS[acc.accountType]?.[locale === 'ru' ? 'ru' : 'uz'] ?? acc.accountType}) — ${formatCurrency(acc.balance, locale, acc.currency)}`,
             }))}
           />
           {currency && accountsLoaded && matchingAccounts.length === 0 && (
@@ -346,13 +343,12 @@ export function QuickPaymentModal({
         </div>
 
         {currency === 'USD' && (
-          <Input
+          <MoneyInput
             label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
-            type="number"
             value={exchangeRate}
-            onChange={(e) => setExchangeRate(e.target.value)}
-            placeholder="12800"
-            required
+            onValueChange={setExchangeRate}
+            decimals={4}
+            placeholder="12,800"
           />
         )}
 

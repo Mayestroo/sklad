@@ -7,6 +7,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { DOCUMENT_STATUS_LABELS, statusLabel } from '@/lib/constants/statuses';
 import { PurchaseReceipt, PurchaseReturn } from '@shared/types';
 
 interface SupplierProfileData {
@@ -283,7 +284,7 @@ export function SupplierProfileDrawer({
                             {formatCurrency(Number(r.totalAmount), locale, r.currency)}
                           </td>
                           <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            <Badge variant={r.status === 'POSTED' ? 'success' : 'neutral'}>{r.status}</Badge>
+                            <Badge variant={statusLabel(DOCUMENT_STATUS_LABELS, r.status, locale).variant}>{statusLabel(DOCUMENT_STATUS_LABELS, r.status, locale).text}</Badge>
                           </td>
                         </tr>
                       ))}

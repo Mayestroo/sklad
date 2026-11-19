@@ -8,6 +8,7 @@ import { SalesOrdersService } from '../orders/sales-orders.service';
 import { CounterpartySettlementService } from '../../settlements/counterparty-settlement.service';
 import { SettlementAllocationService } from '../../settlements/settlement-allocation.service';
 import { PaymentsService } from './payments.service';
+import { AccountsService } from '../../accounting/accounts/accounts.service';
 
 jest.mock('../../../common/sequences/document-sequence');
 
@@ -107,6 +108,10 @@ describe('PaymentsService settlement ledger integration', () => {
         { provide: SalesOrdersService, useValue: salesOrdersService },
         { provide: CounterpartySettlementService, useValue: settlementService },
         { provide: SettlementAllocationService, useValue: allocationService },
+        {
+          provide: AccountsService,
+          useValue: { ensureDefaultAccounts: jest.fn() },
+        },
       ],
     }).compile();
     service = module.get(PaymentsService);

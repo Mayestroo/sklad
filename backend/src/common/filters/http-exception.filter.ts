@@ -6,6 +6,8 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { translateValidationMessages } from './validation-message';
+import { knownPrismaError } from './prisma-error';
 
 const ERROR_MESSAGES: Record<string, Record<string, string>> = {
   UNAUTHORIZED: {
@@ -43,6 +45,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const locale = request.locale || 'uz';
 
+    // Prisma errors the user can act on get their own status and message.
+    const prismaError = knownPrismaError(exception, locale);
+    if (prismaError) {
+      if (prismaError.status >= 500) {
+        console.error('[PRISMA]', request.method, request.url, exception);
+      }
+      response.status(prismaError.status).json({
+        statusCode: prismaError.status,
+        message: prismaError.message,
+        details: null,
+        timestamp: new Date().toISOString(),
+        path: request.url,
+      });
+      return;
+    }
+
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
@@ -67,8 +85,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const resp = exceptionResponse as { message?: string | string[] };
       // Handle class-validator errors
       if (Array.isArray(resp.message)) {
-        message = resp.message.join('; ');
-        details = resp.message;
+        // class-validator: English messages with property paths → user language.
+        details = translateValidationMessages(resp.message, locale);
+        message = details.join('; ');
       } else {
         message = resp.message || this.getLocalizedMessage(status, locale);
       }

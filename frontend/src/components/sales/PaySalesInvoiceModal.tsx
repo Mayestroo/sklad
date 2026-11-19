@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -249,14 +250,12 @@ export function PaySalesInvoiceModal({
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
               {isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
             </label>
-            <Input
-              type="number"
-              min="0.0001"
-              step="0.0001"
+            <MoneyInput
+              aria-label={isRu ? 'Курс оплаты' : 'To‘lov kursi'}
               value={exchangeRate}
-              onChange={(event) => setExchangeRate(event.target.value)}
-              placeholder="12800"
-              required
+              onValueChange={setExchangeRate}
+              decimals={4}
+              placeholder="12,800"
             />
           </div>
         )}
@@ -296,14 +295,10 @@ export function PaySalesInvoiceModal({
               </button>
             )}
           </div>
-          <Input
-            type="number"
-            min={0.01}
-            step="any"
+          <MoneyInput
+            aria-label={isRu ? 'Сумма оплаты' : 'To‘lov summasi'}
             value={amount || ''}
-            onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-            required
-            autoFocus
+            onValueChange={(value) => setPaymentAmount(Number(value) || 0)}
           />
         </div>
 

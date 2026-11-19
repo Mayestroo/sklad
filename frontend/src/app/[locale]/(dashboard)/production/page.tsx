@@ -1,5 +1,6 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import {
@@ -8,6 +9,7 @@ import {
   Factory,
   FileText,
   Layers3,
+  Pencil,
   Plus,
   Save,
   XCircle,
@@ -25,9 +27,11 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { unitLabel } from '@/lib/units';
+import { estimateRecipeCost } from '@/lib/production-recipe';
+import { RecipeFormModal, type RecipeProduct } from '@/components/production/RecipeFormModal';
 
 type ProductionStatus = 'DRAFT' | 'PLANNED' | 'IN_PROGRESS' | 'READY' | 'COMPLETED' | 'CANCELLED';
-type ProductOption = { id: string; name: unknown; type: string; unitOfMeasure: string };
+type ProductOption = RecipeProduct;
 type RecipeMaterial = { id?: string; productId: string; quantity: number | string; product?: ProductOption };
 type Recipe = {
   id: string;
@@ -149,13 +153,8 @@ export default function ProductionPage() {
   const documentsLoading = documentsQuery.isPending;
   const recipesLoading = recipesQuery.isPending;
 
-  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
-  const [recipeProductId, setRecipeProductId] = useState('');
-  const [recipeOutputQty, setRecipeOutputQty] = useState('1');
-  const [recipeNote, setRecipeNote] = useState('');
-  const [recipeMaterials, setRecipeMaterials] = useState<Array<{ productId: string; quantity: string }>>([
-    { productId: '', quantity: '' },
-  ]);
+  // Recipe form: closed (null), new ('new') or editing a recipe.
+  const [recipeForm, setRecipeForm] = useState<'new' | Recipe | null>(null);
 
   const [documentModalOpen, setDocumentModalOpen] = useState(false);
   const [documentRecipeId, setDocumentRecipeId] = useState('');
@@ -174,11 +173,6 @@ export default function ProductionPage() {
     value: item.id,
     label: localName(item.name, locale),
   })), [products, locale]);
-  const rawMaterialOptions = useMemo<SelectOption[]>(() => rawMaterials.map((item) => ({
-    value: item.id,
-    label: localName(item.name, locale),
-    description: item.unitOfMeasure,
-  })), [rawMaterials, locale]);
   const warehouseOptions = useMemo<SelectOption[]>(() => warehouses.map((item) => ({
     value: item.id,
     label: localName(item.name, locale),
@@ -209,11 +203,11 @@ export default function ProductionPage() {
         })
         .catch((error: unknown) => {
           setPreview(null);
-          setPreviewError(error instanceof Error ? error.message : 'Preview failed');
+          setPreviewError(error instanceof Error ? error.message : isRu ? 'Не удалось рассчитать сырьё' : 'Xomashyo hisobini olib bo‘lmadi');
         });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [documentModalOpen, documentRecipeId, documentWarehouseId, documentQuantity, token, company, locale]);
+  }, [documentModalOpen, documentRecipeId, documentWarehouseId, documentQuantity, token, company, locale, isRu]);
 
   const activeCount = documents.filter((document) => document.status === 'IN_PROGRESS').length;
   const completedCount = documents.filter((document) => document.status === 'COMPLETED').length;
@@ -221,14 +215,8 @@ export default function ProductionPage() {
     .filter((document) => document.status === 'COMPLETED')
     .reduce((sum, document) => sum + asNumber(document.actualMaterialCost), 0);
 
-  function resetRecipeForm() {
-    setRecipeProductId('');
-    setRecipeOutputQty('1');
-    setRecipeNote('');
-    setRecipeMaterials([{ productId: '', quantity: '' }]);
-  }
-
   function openDocumentModal() {
+    setPageError('');
     setDocumentRecipeId('');
     setDocumentQuantity('');
     setDocumentWarehouseId(warehouses[0]?.id ?? '');
@@ -236,39 +224,6 @@ export default function ProductionPage() {
     setDocumentNote('');
     setPreview(null);
     setDocumentModalOpen(true);
-  }
-
-  async function createRecipe(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !company) return;
-    if (recipeMaterials.some((line) => !line.productId || line.quantity === '' || Number(line.quantity) <= 0)) {
-      setPageError(isRu ? 'Заполните все сырьевые материалы и их количество' : 'Barcha xomashyo va sarf miqdorlarini to‘ldiring');
-      return;
-    }
-    setBusy(true);
-    setPageError('');
-    try {
-      await apiFetch('/production/recipes', {
-        method: 'POST',
-        token,
-        tenantId: company.id,
-        locale,
-        body: JSON.stringify({
-          productId: recipeProductId,
-          outputQuantity: Number(recipeOutputQty),
-          note: recipeNote || undefined,
-          materials: recipeMaterials.map((line) => ({ productId: line.productId, quantity: Number(line.quantity) })),
-        }),
-      });
-      setRecipeModalOpen(false);
-      resetRecipeForm();
-      setNotice(isRu ? 'Рецептура сохранена' : 'Retseptura saqlandi');
-      await invalidateApi('/production');
-    } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Could not save recipe');
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function createDocument(event: React.FormEvent<HTMLFormElement>) {
@@ -295,7 +250,7 @@ export default function ProductionPage() {
       await invalidateApi('/production');
       if (created?.id) await openDocument(created.id);
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Could not create production document');
+      setPageError(error instanceof Error ? error.message : isRu ? 'Не удалось создать документ' : 'Hujjatni yaratib bo‘lmadi');
     } finally {
       setBusy(false);
     }
@@ -312,7 +267,7 @@ export default function ProductionPage() {
         line.actualQuantity == null ? '' : String(line.actualQuantity),
       ])));
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Could not load production document');
+      setPageError(error instanceof Error ? error.message : isRu ? 'Не удалось открыть документ' : 'Hujjatni ochib bo‘lmadi');
     }
   }
 
@@ -356,7 +311,7 @@ export default function ProductionPage() {
       setNotice(actionNotice(action, isRu));
       await invalidateApi('/production');
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Production action failed');
+      setPageError(error instanceof Error ? error.message : isRu ? 'Действие не выполнено' : 'Amal bajarilmadi');
     } finally {
       setBusy(false);
     }
@@ -380,7 +335,7 @@ export default function ProductionPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {canCreate && activeTab === 'recipes' && (
-            <Button onClick={() => { resetRecipeForm(); setRecipeModalOpen(true); }}>
+            <Button onClick={() => setRecipeForm('new')}>
               <Plus size={16} /> {isRu ? 'Новая рецептура' : 'Yangi retseptura'}
             </Button>
           )}
@@ -393,7 +348,7 @@ export default function ProductionPage() {
       </div>
 
       {failedQuery && <LoadError error={failedQuery.error} onRetry={retryFailed} />}
-      {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
+      {pageError && !documentModalOpen && !selectedDocument && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
       {notice && <div role="status" style={alertStyle('success')}>{notice}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 'var(--space-4)' }}>
@@ -467,20 +422,40 @@ export default function ProductionPage() {
                 <thead><tr>
                   <th>{isRu ? 'Готовый продукт' : 'Tayyor mahsulot'}</th>
                   <th>{isRu ? 'Норма выпуска' : 'Ishlab chiqarish normasi'}</th>
-                  <th>{isRu ? 'Сырье' : 'Xomashyo'}</th>
                   <th>{isRu ? 'Состав' : 'Tarkibi'}</th>
+                  <th>{isRu ? 'Сырьё на норму' : 'Norma uchun xomashyo'}</th>
+                  <th>{isRu ? 'Себестоимость ед.' : 'Birlik tannarxi'}</th>
                   <th>{isRu ? 'Комментарий' : 'Izoh'}</th>
+                  <th />
                 </tr></thead>
                 <tbody>
-                  {recipes.map((recipe) => (
-                    <tr key={recipe.id}>
-                      <td style={{ fontWeight: 600 }}>{localName(recipe.product.name, locale)}</td>
-                      <td>{formatQuantity(asNumber(recipe.outputQuantity))} {unitLabel(recipe.product.unitOfMeasure, locale)}</td>
-                      <td>{recipe.items.length}</td>
-                      <td>{recipe.items.map((line) => `${localName(line.product?.name, locale)} — ${formatQuantity(asNumber(line.quantity))} ${line.product ? unitLabel(line.product.unitOfMeasure, locale) : ''}`).join(', ')}</td>
-                      <td>{recipe.note || '—'}</td>
-                    </tr>
-                  ))}
+                  {recipes.map((recipe) => {
+                    // Estimate from the material cards (UZS); the real cost comes from FIFO at start.
+                    const estimate = estimateRecipeCost(
+                      recipe.items.map((line) => ({ quantity: asNumber(line.quantity), card: line.product })),
+                      recipe.outputQuantity,
+                    );
+                    return (
+                      <tr key={recipe.id}>
+                        <td style={{ fontWeight: 600 }}>{localName(recipe.product.name, locale)}</td>
+                        <td>{formatQuantity(asNumber(recipe.outputQuantity))} {unitLabel(recipe.product.unitOfMeasure, locale)}</td>
+                        <td>{recipe.items.map((line) => `${localName(line.product?.name, locale)} — ${formatQuantity(asNumber(line.quantity))} ${line.product ? unitLabel(line.product.unitOfMeasure, locale) : ''}`).join(', ')}</td>
+                        <td className="tabular-nums">
+                          {formatCurrency(estimate.total, locale, 'UZS')}
+                          {estimate.incomplete && <span title={isRu ? 'У части сырья нет цены' : 'Ba’zi xomashyoda tannarx yo‘q'} style={{ color: 'var(--color-warning-700)' }}> *</span>}
+                        </td>
+                        <td className="tabular-nums">{estimate.perUnit === null ? '—' : `${formatCurrency(estimate.perUnit, locale, 'UZS')} / ${unitLabel(recipe.product.unitOfMeasure, locale)}`}</td>
+                        <td>{recipe.note || '—'}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {canEdit && (
+                            <Button size="sm" variant="secondary" onClick={() => setRecipeForm(recipe)}>
+                              <Pencil size={14} /> {isRu ? 'Изменить' : 'Tahrirlash'}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -488,40 +463,36 @@ export default function ProductionPage() {
         </Card>
       )}
 
-      <Modal isOpen={recipeModalOpen} onClose={() => setRecipeModalOpen(false)} title={isRu ? 'Новая рецептура' : 'Yangi retseptura'} size="2xl">
-        <form onSubmit={createRecipe} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-            <Select label={isRu ? 'Готовый продукт' : 'Tayyor mahsulot'} options={productOptions} value={recipeProductId} onChange={setRecipeProductId} />
-            <Input label={isRu ? 'Норма выпуска' : 'Ishlab chiqarish normasi'} type="number" min="0.001" step="0.001" value={recipeOutputQty} onChange={(event) => setRecipeOutputQty(event.target.value)} required />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 8 }}>{isRu ? 'Сырье на норму' : 'Norma uchun xomashyo'}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {recipeMaterials.map((line, index) => (
-                <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                  <Select label={isRu ? 'Сырье' : 'Xomashyo'} options={rawMaterialOptions} value={line.productId} onChange={(value) => setRecipeMaterials((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, productId: value } : row))} />
-                  <Input label={isRu ? 'Количество' : 'Miqdori'} type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setRecipeMaterials((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row))} />
-                  <Button type="button" variant="ghost" disabled={recipeMaterials.length === 1} onClick={() => setRecipeMaterials((current) => current.filter((_, rowIndex) => rowIndex !== index))}>×</Button>
-                </div>
-              ))}
-            </div>
-            <Button type="button" variant="outline" size="sm" style={{ marginTop: 10 }} onClick={() => setRecipeMaterials((current) => [...current, { productId: '', quantity: '' }])}>
-              <Plus size={14} /> {isRu ? 'Добавить сырье' : 'Xomashyo qo‘shish'}
-            </Button>
-          </div>
-          <Input label={isRu ? 'Комментарий' : 'Izoh'} value={recipeNote} onChange={(event) => setRecipeNote(event.target.value)} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Button type="button" variant="outline" onClick={() => setRecipeModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" disabled={busy || products.length === 0 || rawMaterials.length === 0}><Save size={15} /> {isRu ? 'Сохранить рецептуру' : 'Retsepturani saqlash'}</Button>
-          </div>
-        </form>
-      </Modal>
+      {recipeForm !== null && (
+      <RecipeFormModal
+        key={recipeForm === 'new' ? 'new' : recipeForm.id}
+        isOpen
+        recipe={recipeForm && recipeForm !== 'new' ? recipeForm : null}
+        products={products}
+        rawMaterials={rawMaterials}
+        existingRecipes={recipes}
+        locale={locale}
+        onClose={() => setRecipeForm(null)}
+        onProductsChanged={() => invalidateApi('/inventory/products')}
+        onSaved={async (message) => {
+          setRecipeForm(null);
+          setNotice(message);
+          await invalidateApi('/production');
+        }}
+      />
+      )}
 
       <Modal isOpen={documentModalOpen} onClose={() => setDocumentModalOpen(false)} title={isRu ? 'Новый производственный документ' : 'Yangi ishlab chiqarish hujjati'} size="2xl">
         <form onSubmit={createDocument} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <Select label={isRu ? 'Рецептура / продукт' : 'Retseptura / mahsulot'} options={recipeOptions} value={documentRecipeId} onChange={(value) => { setPreview(null); setPreviewError(''); setDocumentRecipeId(value); }} />
-            <Input label={isRu ? 'Планируемое количество' : 'Rejalashtirilgan miqdor'} type="number" min="0.001" step="0.001" value={documentQuantity} onChange={(event) => { setPreview(null); setPreviewError(''); setDocumentQuantity(event.target.value); }} required />
+            <QuantityInput
+              label={isRu ? 'Планируемое количество' : 'Rejalashtirilgan miqdor'}
+              unit={recipes.find((recipe) => recipe.id === documentRecipeId)?.product.unitOfMeasure}
+              value={documentQuantity}
+              onValueChange={(value) => { setPreview(null); setPreviewError(''); setDocumentQuantity(value); }}
+            />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Select label={isRu ? 'Склад' : 'Ombor'} options={warehouseOptions} value={documentWarehouseId} onChange={(value) => { setPreview(null); setPreviewError(''); setDocumentWarehouseId(value); }} />
@@ -560,6 +531,7 @@ export default function ProductionPage() {
       <Modal isOpen={Boolean(selectedDocument)} onClose={() => setSelectedDocument(null)} title={selectedDocument ? `${selectedDocument.docNumber} · ${localName(selectedDocument.product.name, locale)}` : ''} size="3xl">
         {selectedDocument && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
               <Detail label={isRu ? 'Дата' : 'Sana'} value={formatDate(selectedDocument.docDate, locale)} />
               <Detail label={isRu ? 'План' : 'Reja'} value={`${formatQuantity(asNumber(selectedDocument.plannedQuantity))} ${unitLabel(selectedDocument.product.unitOfMeasure, locale)}`} />
@@ -587,7 +559,13 @@ export default function ProductionPage() {
                       <td>{formatQuantity(asNumber(line.plannedQuantity))} {unitLabel(line.product.unitOfMeasure, locale)}</td>
                       <td>
                         {selectedDocument.status === 'IN_PROGRESS' ? (
-                          <Input aria-label={`${localName(line.product.name, locale)} actual`} type="number" min="0" step="0.001" value={actualInputs[line.productId] ?? ''} onChange={(event) => setActualInputs((current) => ({ ...current, [line.productId]: event.target.value }))} style={{ width: 135 }} />
+                          <QuantityInput
+                            aria-label={`${localName(line.product.name, locale)} ${isRu ? 'факт' : 'haqiqiy'}`}
+                            unit={line.product.unitOfMeasure}
+                            value={actualInputs[line.productId] ?? ''}
+                            onValueChange={(value) => setActualInputs((current) => ({ ...current, [line.productId]: value }))}
+                            style={{ width: 150 }}
+                          />
                         ) : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`}
                       </td>
                       <td>{selectedDocument.status === 'IN_PROGRESS' && actualInputs[line.productId] !== undefined && actualInputs[line.productId] !== ''
@@ -601,7 +579,12 @@ export default function ProductionPage() {
               </table>
             </div>
             {selectedDocument.status === 'READY' && (
-              <Input label={isRu ? 'Фактически произведено' : 'Amalda ishlab chiqarildi'} type="number" min="0.001" step="0.001" value={producedQuantity} onChange={(event) => setProducedQuantity(event.target.value)} required />
+              <QuantityInput
+                label={isRu ? 'Фактически произведено' : 'Amalda ishlab chiqarildi'}
+                unit={selectedDocument.product.unitOfMeasure}
+                value={producedQuantity}
+                onValueChange={setProducedQuantity}
+              />
             )}
             {selectedDocument.status === 'COMPLETED' && (
               <div style={{ ...alertStyle('success'), display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>

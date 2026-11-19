@@ -1,11 +1,13 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatPercent, formatDate, CURRENCY_OPTIONS, errorMessage, getLocalizedName, type LocalizedName } from '@/lib/utils';
+import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -38,7 +40,7 @@ import {
   AllocationPreviewResult,
 } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
-import { unitLabel } from '@/lib/units';
+import { unitLabel, quantityWithUnit } from '@/lib/units';
 
 interface Counterparty {
   id: string;
@@ -453,17 +455,11 @@ export default function NewExpensePage() {
                 {isRu ? 'Сумма расхода *' : 'Xarajat summasi *'}
               </label>
               <div style={{ position: 'relative' }}>
-                <Input
-                  type="number"
-                  placeholder="0.00"
+                <MoneyInput
+                  aria-label={isRu ? 'Сумма расхода' : 'Xarajat summasi'}
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                  style={{
-                    fontSize: 'var(--text-base)',
-                    fontWeight: 'var(--font-bold)',
-                    color: 'var(--color-text-primary)',
-                    letterSpacing: '0.02em',
-                  }}
+                  onValueChange={(value) => setAmount(Number(value))}
+                  style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}
                 />
               </div>
             </div>
@@ -490,14 +486,12 @@ export default function NewExpensePage() {
 
           {currency === 'USD' && (
             <div style={{ marginTop: 'var(--space-3)' }}>
-              <Input
-                type="number"
-                min="0.0001"
-                step="0.0001"
+              <MoneyInput
                 label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
                 value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value)}
-                placeholder="12800"
+                onValueChange={setExchangeRate}
+                decimals={4}
+                placeholder="12,800"
               />
             </div>
           )}
@@ -525,7 +519,7 @@ export default function NewExpensePage() {
                         : a.name || 'Kassa';
                     return {
                       value: a.id,
-                       label: `${accName} (${a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
+                       label: `${accName} (${CASH_ACCOUNT_TYPE_LABELS[a.accountType]?.[locale === 'ru' ? 'ru' : 'uz'] ?? a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
                     };
                   })}
                 />
@@ -1077,7 +1071,7 @@ export default function NewExpensePage() {
                                 color: 'var(--color-success-600)',
                               }}
                             >
-                              {preview.remainingQuantity} omborda
+                              {quantityWithUnit(preview.remainingQuantity, preview.unitOfMeasure, locale)} {isRu ? 'на складе' : 'omborda'}
                             </span>
                             {preview.soldQuantity > 0 && (
                               <span
@@ -1090,7 +1084,7 @@ export default function NewExpensePage() {
                                   color: 'var(--color-warning-600)',
                                 }}
                               >
-                                {preview.soldQuantity} sotilgan
+                                {quantityWithUnit(preview.soldQuantity, preview.unitOfMeasure, locale)} {isRu ? 'продано' : 'sotilgan'}
                               </span>
                             )}
                           </div>

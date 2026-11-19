@@ -39,3 +39,18 @@ test('documentUnitPriceFromProductCost (F8: no guessed currency in a purchase li
     assert.equal(documentUnitPriceFromProductCost({ costPrice: 10, costPriceCurrency: 'USD', costPriceExchangeRate: 12500 }, 'UZS', 1), 125000);
   });
 });
+
+test('markup: same currency, a USD cost against a UZS price, and pairs that cannot be compared', async () => {
+  const { catalogMarkupPercent } = await import('./inventory-cost.ts');
+  // USD cost (after a receipt/expense the card stays in USD) vs USD price.
+  assert.equal(catalogMarkupPercent({ costPrice: 530, costPriceCurrency: 'USD', costPriceExchangeRate: 11900, salePrice: 620, salePriceCurrency: 'USD' }), 16.98);
+  // USD cost vs UZS price: the cost is converted with its own rate.
+  assert.equal(catalogMarkupPercent({ costPrice: 10, costPriceCurrency: 'USD', costPriceExchangeRate: 12500, salePrice: 150000, salePriceCurrency: 'UZS' }), 20);
+  // A loss is negative (shown without a "+").
+  assert.equal(catalogMarkupPercent({ costPrice: 100, costPriceCurrency: 'UZS', costPriceExchangeRate: 1, salePrice: 0, salePriceCurrency: 'UZS' }), -100);
+  // UZS cost vs USD price: no rate to convert with.
+  assert.equal(catalogMarkupPercent({ costPrice: 100000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1, salePrice: 10, salePriceCurrency: 'USD' }), null);
+  // No cost or no sale-price currency.
+  assert.equal(catalogMarkupPercent({ costPrice: 0, costPriceCurrency: 'UZS', salePrice: 10, salePriceCurrency: 'UZS' }), null);
+  assert.equal(catalogMarkupPercent({ costPrice: 5, costPriceCurrency: 'UZS', salePrice: 10, salePriceCurrency: null }), null);
+});

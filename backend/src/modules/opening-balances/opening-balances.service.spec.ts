@@ -60,6 +60,9 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       counterparty: {
         update: jest.fn(),
       },
+      product: {
+        updateMany: jest.fn(),
+      },
       fixedAsset: {
         update: jest.fn(),
       },
@@ -211,67 +214,34 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       expect(line.netAmount).toBe(600000);
     });
 
-    it('rebalances a draft by replacing its equity line with the UZS base-currency difference', async () => {
-      prisma.openingBalanceDocument.findFirst.mockResolvedValue({
-        id: 'doc-1',
-        tenantId: 'tenant-1',
-        status: OpeningBalanceStatus.DRAFT,
+    it('stores an inventory amount as quantity × unit cost, whatever total was typed', async () => {
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(null);
+      prisma.openingBalanceDocument.create.mockImplementation((args: any) => ({
+        id: 'doc-3',
+        ...args.data,
+      }));
+      await service.create('tenant-1', 'user-1', {
+        openingDate: '2026-10-01',
+        docNumber: 'OB-2026-0003',
         lines: [
           {
-            id: 'cash',
-            category: OpeningBalanceCategory.CASH,
-            amount: 10,
+            category: OpeningBalanceCategory.INVENTORY,
+            productId: 'prod-1',
+            warehouseId: 'wh-1',
+            quantity: 2,
+            unitCost: 4,
+            amount: 999,
             currency: 'USD',
             exchangeRate: 12500,
           },
-          {
-            id: 'payable',
-            category: OpeningBalanceCategory.SUPPLIER_DEBT,
-            amount: 25000,
-            currency: 'UZS',
-            exchangeRate: 1,
-          },
-          {
-            id: 'old-equity',
-            category: OpeningBalanceCategory.EQUITY,
-            amount: 15000,
-            currency: 'UZS',
-            exchangeRate: 1,
-          },
         ],
       });
-      prisma.openingBalanceDocument.update.mockResolvedValue({ id: 'doc-1' });
-
-      await service.balanceEquity('tenant-1', 'doc-1');
-
-      expect(prisma.openingBalanceLine.deleteMany).toHaveBeenCalledWith({
-        where: {
-          documentId: 'doc-1',
-          tenantId: 'tenant-1',
-          category: OpeningBalanceCategory.EQUITY,
-        },
-      });
-      expect(prisma.openingBalanceLine.createMany).toHaveBeenCalledWith({
-        data: [
-          expect.objectContaining({
-            documentId: 'doc-1',
-            category: OpeningBalanceCategory.EQUITY,
-            amount: 100000,
-            currency: 'UZS',
-            exchangeRate: 1,
-          }),
-        ],
-      });
-      expect(prisma.openingBalanceDocument.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            totalAssets: 125000,
-            totalLiabilities: 25000,
-            totalEquity: 100000,
-            balanceDifference: 0,
-          }),
-        }),
-      );
+      const data = prisma.openingBalanceDocument.create.mock.calls[0][0].data;
+      expect(data.lines.create[0].amount).toBe(8);
+      expect(data.totalAssets).toBe(100000);
+      // Nothing entered as capital: all of it is retained earnings.
+      expect(data.totalEquity).toBe(100000);
+      expect(data.balanceDifference).toBe(100000);
     });
 
     it('should reject creation if document number already exists', async () => {
@@ -364,29 +334,226 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       );
     });
 
-    it('should reject posting if Assets != Liabilities + Equity (unbalanced equation)', async () => {
+    it('refuses lines that would reach no kassa, warehouse or counterparty, before any write', async () => {
       prisma.openingBalanceDocument.findFirst.mockResolvedValue({
-        id: 'doc-unbalanced',
+        id: 'doc-incomplete',
         tenantId: 'tenant-1',
-        docNumber: 'OB-UNBALANCED',
+        docNumber: 'OB-INCOMPLETE',
         status: OpeningBalanceStatus.DRAFT,
         lines: [
           {
-            category: OpeningBalanceCategory.CASH,
-            amount: 50000000,
+            category: OpeningBalanceCategory.INVENTORY,
+            productId: 'prod-1',
+            warehouseId: null,
+            quantity: 1,
+            unitCost: 10,
+            amount: 10,
+            currency: 'UZS',
+            exchangeRate: 1,
           },
           {
             category: OpeningBalanceCategory.SUPPLIER_DEBT,
-            amount: 10000000,
+            counterpartyId: null,
+            amount: 10,
+            currency: 'UZS',
+            exchangeRate: 1,
           },
-          // Missing equity: 50M != 10M + 0
         ],
       });
 
       await expect(
-        service.post('tenant-1', 'user-1', 'doc-unbalanced'),
-      ).rejects.toThrow(BadRequestException);
+        service.post('tenant-1', 'user-1', 'doc-incomplete'),
+      ).rejects.toThrow(
+        /Tovarlar \/ Товары 1: tovar yoki ombor.*Qarzlar \/ Долги 1: kontragent/,
+      );
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('posts every category to its ledger account and closes 00 with retained earnings', async () => {
+      const doc = {
+        id: 'doc-ledger',
+        tenantId: 'tenant-1',
+        docNumber: 'OB-LEDGER',
+        openingDate: new Date('2026-10-01'),
+        updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+        status: OpeningBalanceStatus.DRAFT,
+        lines: [
+          {
+            id: 'l1',
+            category: OpeningBalanceCategory.SUPPLIER_ADVANCE,
+            counterpartyId: 's1',
+            amount: 300,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'l2',
+            category: OpeningBalanceCategory.CUSTOMER_ADVANCE,
+            counterpartyId: 'c1',
+            amount: 100,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'l3',
+            category: OpeningBalanceCategory.OTHER_ASSET,
+            amount: 50,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'l4',
+            category: OpeningBalanceCategory.OTHER_LIABILITY,
+            amount: 20,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'l5',
+            category: OpeningBalanceCategory.FIXED_ASSET,
+            fixedAssetId: 'fa-1',
+            amount: 1000,
+            accumulatedDepreciation: 400,
+            netAmount: 600,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'l6',
+            category: OpeningBalanceCategory.EQUITY,
+            amount: 500,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+        ],
+      };
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(doc);
+      prisma.fixedAsset.findMany = jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'fa-1', initialCost: 1000, accumulatedDepreciation: 400 },
+        ]);
+      prisma.openingBalanceLine.findFirst = jest.fn().mockResolvedValue(null);
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `account-${where.code}`,
+        code: where.code,
+      }));
+      prisma.journalEntry.create.mockResolvedValue({ id: 'je' });
+      prisma.openingBalanceDocument.update.mockResolvedValue(doc);
+
+      await service.post('tenant-1', 'user-1', doc.id);
+
+      const lines =
+        prisma.journalEntry.create.mock.calls[0][0].data.lines.create;
+      const pairs = lines.map((l: any) => [
+        l.debitAccountId,
+        l.creditAccountId,
+        l.amount,
+      ]);
+      expect(pairs).toEqual(
+        expect.arrayContaining([
+          ['account-6010', 'account-00', 300],
+          ['account-4890', 'account-00', 50],
+          ['account-0100', 'account-00', 1000],
+          ['account-00', 'account-4010', 100],
+          ['account-00', 'account-6990', 20],
+          ['account-00', 'account-0200', 400],
+          ['account-00', 'account-8330', 500],
+          // assets 300 + 50 + 600 − liabilities 120 − capital 500 = 330
+          ['account-00', 'account-8710', 330],
+        ]),
+      );
+      const net00 = lines.reduce(
+        (sum: number, l: any) =>
+          sum +
+          (l.debitAccountId === 'account-00' ? l.amount : 0) -
+          (l.creditAccountId === 'account-00' ? l.amount : 0),
+        0,
+      );
+      expect(net00).toBe(0);
+    });
+
+    it('books a loss to 8710 when liabilities exceed assets (no manual balancing)', async () => {
+      const doc = {
+        id: 'doc-loss',
+        tenantId: 'tenant-1',
+        docNumber: 'OB-LOSS',
+        openingDate: new Date('2026-10-01'),
+        updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+        status: OpeningBalanceStatus.DRAFT,
+        lines: [
+          {
+            id: 'l1',
+            category: OpeningBalanceCategory.SUPPLIER_DEBT,
+            counterpartyId: 's1',
+            amount: 70,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+        ],
+      };
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(doc);
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `account-${where.code}`,
+        code: where.code,
+      }));
+      prisma.journalEntry.create.mockResolvedValue({ id: 'je' });
+      prisma.openingBalanceDocument.update.mockResolvedValue(doc);
+
+      await service.post('tenant-1', 'user-1', doc.id);
+
+      const lines =
+        prisma.journalEntry.create.mock.calls[0][0].data.lines.create;
+      expect(lines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            debitAccountId: 'account-00',
+            creditAccountId: 'account-6010',
+            amount: 70,
+          }),
+          expect.objectContaining({
+            debitAccountId: 'account-8710',
+            creditAccountId: 'account-00',
+            amount: 70,
+          }),
+        ]),
+      );
+    });
+
+    it('fails instead of skipping a journal line when a ledger account is missing', async () => {
+      const doc = {
+        id: 'doc-noacc',
+        tenantId: 'tenant-1',
+        docNumber: 'OB-NOACC',
+        openingDate: new Date('2026-10-01'),
+        updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+        status: OpeningBalanceStatus.DRAFT,
+        lines: [
+          {
+            id: 'l1',
+            category: OpeningBalanceCategory.EQUITY,
+            amount: 70,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+          {
+            id: 'l2',
+            category: OpeningBalanceCategory.OTHER_ASSET,
+            amount: 70,
+            currency: 'UZS',
+            exchangeRate: 1,
+          },
+        ],
+      };
+      prisma.openingBalanceDocument.findFirst.mockResolvedValue(doc);
+      prisma.account.findFirst.mockImplementation(({ where }: any) =>
+        where.code === '8330' ? null : { id: `account-${where.code}` },
+      );
+
+      await expect(service.post('tenant-1', 'user-1', doc.id)).rejects.toThrow(
+        /8330/,
+      );
+      expect(prisma.journalEntry.create).not.toHaveBeenCalled();
     });
 
     it('should execute full atomic posting when balance is equal to zero difference', async () => {
@@ -403,8 +570,10 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             accountId: 'acc-cash',
             amount: 25000000,
             currency: 'UZS',
+            exchangeRate: 1,
           },
           {
+            id: 'line-inventory',
             category: OpeningBalanceCategory.INVENTORY,
             productId: 'prod-1',
             warehouseId: 'wh-1',
@@ -446,7 +615,10 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         accountType: 'UZS_CASH',
         currency: 'UZS',
       });
-      prisma.account.findFirst.mockResolvedValue({ id: 'acc-00', code: '00' });
+      prisma.account.findFirst.mockImplementation(({ where }: any) => ({
+        id: `account-${where.code}`,
+        code: where.code,
+      }));
       prisma.journalEntry.create.mockResolvedValue({ id: 'je-1' });
       prisma.openingBalanceDocument.update.mockResolvedValue({
         ...doc,
@@ -480,14 +652,25 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         update: expect.objectContaining({ quantity: { increment: 100 } }),
       });
 
-      // 4. ProductBatch created with receiptId = null
+      // 4. A FIFO batch linked to its line, aged at the opening date
       expect(prisma.productBatch.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           batchNumber: 'INIT-B1',
           initialQty: 100,
           remainingQty: 100,
-          receiptId: null,
+          landedCost: 50000,
+          createdAt: new Date('2026-10-01'),
+          openingBalanceLineId: 'line-inventory',
         }),
+      });
+      // A product without a catalog cost takes the opening cost (ADR 0007).
+      expect(prisma.product.updateMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', id: 'prod-1', costPrice: 0 },
+        data: {
+          costPrice: 50000,
+          costPriceCurrency: 'UZS',
+          costPriceExchangeRate: 1,
+        },
       });
 
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
@@ -689,7 +872,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       });
 
       // Current cash balance is only 10M (15M was spent!)
-      prisma.cashAccount.findUnique.mockResolvedValue({
+      prisma.cashAccount.findFirst.mockResolvedValue({
         id: 'acc-cash',
         balance: 10000000,
       });
@@ -714,6 +897,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
             amount: 25000000,
           },
           {
+            id: 'line-inventory',
             category: OpeningBalanceCategory.INVENTORY,
             productId: 'prod-1',
             warehouseId: 'wh-1',
@@ -731,7 +915,7 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       };
 
       prisma.openingBalanceDocument.findFirst.mockResolvedValue(doc);
-      prisma.cashAccount.findUnique.mockResolvedValue({
+      prisma.cashAccount.findFirst.mockResolvedValue({
         id: 'acc-cash',
         balance: 50000000, // Sufficient
       });
@@ -764,8 +948,13 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
         where: expect.anything(),
         data: { quantity: { decrement: 100 } },
       });
-      // Batch deleted
-      expect(prisma.productBatch.deleteMany).toHaveBeenCalled();
+      // Exactly the line's batch is deleted (not a batch-number prefix match)
+      expect(prisma.productBatch.findMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', openingBalanceLineId: 'line-inventory' },
+      });
+      expect(prisma.productBatch.deleteMany).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-1', id: { in: ['batch-intact'] } },
+      });
       expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
         where: expect.objectContaining({
           sourceDocType: 'OpeningBalanceDocument',

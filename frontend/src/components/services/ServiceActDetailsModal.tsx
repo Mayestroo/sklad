@@ -1,10 +1,12 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import React, { useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
+import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -694,7 +696,7 @@ export function ServiceActDetailsModal({
             <Select
                options={matchingPaymentAccounts.map((a) => ({
                  value: a.id,
-                 label: `${typeof a.name === 'object' ? a.name[locale] || a.name.uz : a.name} (${a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
+                 label: `${typeof a.name === 'object' ? a.name[locale] || a.name.uz : a.name} (${CASH_ACCOUNT_TYPE_LABELS[a.accountType]?.[locale === 'ru' ? 'ru' : 'uz'] ?? a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
                }))}
               value={selectedAccountId}
               onChange={(val) => setSelectedAccountId(val)}
@@ -712,14 +714,11 @@ export function ServiceActDetailsModal({
             <label className="block text-xs font-medium text-gray-700 mb-1">
               {isRu ? 'Сумма платежа *' : 'To\'lov summasi *'}
             </label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0.01"
+            <MoneyInput
+              aria-label={isRu ? 'Сумма платежа' : 'To‘lov summasi'}
+              value={paymentAmount || ''}
               max={remaining}
-              value={paymentAmount}
-              onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-              required
+              onValueChange={(value) => setPaymentAmount(Number(value) || 0)}
             />
           </div>
 

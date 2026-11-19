@@ -1,8 +1,12 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { apiDownload, apiFetch, listOf, type ListResponse } from '@/lib/api';
 import {
   IMPORT_CATEGORY_LABELS,
@@ -10,7 +14,21 @@ import {
   summarizeImportPreview,
 } from '@/lib/opening-balance-import';
 import { CURRENCY_OPTIONS, formatCurrency, formatCurrencyIfAvailable, errorMessage } from '@/lib/utils';
-import { linesMissingCurrency, newOpeningBalanceLine, withProductCost, withRegisterAsset } from '@/lib/opening-balance-lines';
+import {
+  COUNTERPARTY_LINE_KINDS,
+  counterpartiesForKind,
+  documentUsdRate,
+  isCounterpartyLineKind,
+  linesMissingCurrency,
+  needsUsdRate,
+  newOpeningBalanceLine,
+  suggestedStraightLineDepreciation,
+  withDocumentRate,
+  withProductCost,
+  withRegisterAsset,
+  type CounterpartyLineKind,
+} from '@/lib/opening-balance-lines';
+import { computeOpeningBalanceTotals } from '@shared/types/opening-balance-posting';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -36,20 +54,18 @@ import {
   Package,
   Users,
   Building2,
-  Truck,
-  DollarSign,
   Layers,
-  Sparkles,
   TrendingUp,
   TrendingDown,
   Building,
+  ArrowRight,
+  Calculator,
 } from 'lucide-react';
 import type {
   OpeningBalanceDocument,
   OpeningBalanceLine,
   OpeningBalanceCategory,
   OpeningBalanceStatus,
-  OpeningBalanceMetrics,
   ImportErrorItem,
   ImportValidationResult,
 } from '@shared/types/opening-balances';
@@ -60,15 +76,27 @@ import type { Counterparty } from '@shared/types/sales';
 import type { Warehouse } from '@shared/types/tenant';
 import type { FixedAsset } from '@shared/types/fixed-assets';
 
-type TabKey = 'cash' | 'inventory' | 'customers' | 'suppliers' | 'advances' | 'fixed-assets' | 'other';
+/**
+ * Opening balances, simplified:
+ *  - five tabs: money, goods, debts & advances, fixed assets, capital & other;
+ *  - one USD rate for the whole document (the opening date's rate);
+ *  - capital balances itself: what is not entered as ustav kapitali is posted
+ *    as retained earnings (8710), so there is no "balance difference" to fix;
+ *  - posting saves first, then opens every line in its own module (kassa,
+ *    warehouse FIFO batch, counterparty settlement, fixed-asset register,
+ *    journal), and the page links to each of them.
+ */
+
+type TabKey = 'cash' | 'inventory' | 'debts' | 'fixed-assets' | 'other';
 type OpeningBalanceDraftLine = Omit<Partial<OpeningBalanceLine>, 'exchangeRate'> & { exchangeRate?: number | string };
 type LineValue = OpeningBalanceDraftLine[keyof OpeningBalanceDraftLine];
 type IndexedLine = { line: OpeningBalanceDraftLine; index: number };
+type Locale = 'uz' | 'ru';
 
 interface SubledgerTableProps {
   lines: OpeningBalanceDraftLine[];
   isReadOnly: boolean;
-  locale: 'uz' | 'ru';
+  locale: Locale;
   isRu: boolean;
   onUpdate: (index: number, field: keyof OpeningBalanceLine, value: LineValue) => void;
   onRemove: (index: number) => void;
@@ -79,18 +107,103 @@ function linesWhere(lines: OpeningBalanceDraftLine[], keep: (line: OpeningBalanc
   return lines.flatMap((line, index) => (keep(line) ? [{ line, index }] : []));
 }
 
+const CASH_CATEGORIES = new Set<string>(['CASH', 'BANK']);
+const OTHER_CATEGORIES = new Set<string>(['EQUITY', 'OTHER_ASSET', 'OTHER_LIABILITY']);
+
+const firstDayOfMonth = () => `${new Date().toISOString().slice(0, 8)}01`;
+
+const localized = (name: unknown, locale: Locale, fallback: string): string => {
+  if (!name) return fallback;
+  if (typeof name === 'string') return name;
+  const n = name as Partial<Record<Locale, string>>;
+  return n[locale] || n.uz || n.ru || fallback;
+};
+
+// ─── Shared table styles ────────────────────────────────────────────────────
+
+const th = (extra?: React.CSSProperties): React.CSSProperties => ({
+  padding: '12px 16px',
+  fontSize: 'var(--text-xs)',
+  fontWeight: 600,
+  color: 'var(--color-text-secondary)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  ...extra,
+});
+const td: React.CSSProperties = { padding: '10px 16px' };
+const field = (width: number | string, extra?: React.CSSProperties): React.CSSProperties => ({
+  padding: '8px 12px',
+  borderRadius: 'var(--radius-md)',
+  border: '1px solid var(--color-border)',
+  backgroundColor: 'var(--color-bg-secondary)',
+  color: 'var(--color-text-primary)',
+  width,
+  fontSize: 'var(--text-sm)',
+  ...extra,
+});
+const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' };
+const theadStyle: React.CSSProperties = { backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' };
+const rowStyle: React.CSSProperties = { borderBottom: '1px solid var(--color-border-light)' };
+
+function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+        {text}
+      </td>
+    </tr>
+  );
+}
+
+function RemoveCell({ isReadOnly, isRu, onClick }: { isReadOnly: boolean; isRu: boolean; onClick: () => void }) {
+  if (isReadOnly) return null;
+  return (
+    <td style={{ ...td, textAlign: 'center' }}>
+      <button
+        type="button"
+        onClick={onClick}
+        style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+        title={isRu ? 'Удалить' : 'O‘chirish'}
+      >
+        <Trash2 size={16} />
+      </button>
+    </td>
+  );
+}
+
+function NotesInput({ line, index, isReadOnly, isRu, onUpdate, placeholder }: {
+  line: OpeningBalanceDraftLine;
+  index: number;
+  isReadOnly: boolean;
+  isRu: boolean;
+  onUpdate: SubledgerTableProps['onUpdate'];
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type="text"
+      value={line.notes || ''}
+      disabled={isReadOnly}
+      onChange={(e) => onUpdate(index, 'notes', e.target.value)}
+      placeholder={placeholder ?? (isRu ? 'Примечание...' : 'Izoh...')}
+      style={field('100%')}
+    />
+  );
+}
+
 export default function OpeningBalancesPage() {
-  const locale = useLocale() as 'uz' | 'ru';
+  const locale = useLocale() as Locale;
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const confirm = useConfirm();
   const companyId = company?.id;
+  const docCurrency = 'UZS';
 
-  // Documents State
+  // Documents
   const [documents, setDocuments] = useState<OpeningBalanceDocument[]>([]);
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [currentDoc, setCurrentDoc] = useState<OpeningBalanceDocument | null>(null);
-  const docCurrency = 'UZS';
-  const [, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('cash');
 
@@ -100,21 +213,26 @@ export default function OpeningBalancesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [fixedAssets, setFixedAssets] = useState<FixedAsset[]>([]);
-  // muammolar B1/B4: create a missing product or counterparty from a line's
-  // dropdown, then put it on that line.
+  // Create a missing product, counterparty or register asset from a line,
+  // then put it on that line.
   const [quickCreate, setQuickCreate] = useState<
-    { kind: 'product'; index: number } | { kind: 'counterparty'; index: number; type: 'CUSTOMER' | 'SUPPLIER' | 'BOTH' } | null
+    | { kind: 'product'; index: number }
+    | { kind: 'counterparty'; index: number; type: 'CUSTOMER' | 'SUPPLIER' }
+    | { kind: 'fixedAsset'; index: number }
+    | null
   >(null);
 
-  // Working Document Lines & State
+  // Working document
   const [lines, setLines] = useState<OpeningBalanceDraftLine[]>([]);
-  const [openingDate, setOpeningDate] = useState<string>('2026-10-01');
+  const [openingDate, setOpeningDate] = useState<string>(firstDayOfMonth());
   const [notes, setNotes] = useState<string>('');
+  // One USD rate for the whole document (rate at the opening date).
+  const [usdRate, setUsdRate] = useState<string>('');
+  const [ratesWereMixed, setRatesWereMixed] = useState(false);
 
   // Modals
   const [showNewDocModal, setShowNewDocModal] = useState(false);
-  const [newDocNumber, setNewDocNumber] = useState('');
-  const [newDocDate, setNewDocDate] = useState('2026-10-01');
+  const [newDocDate, setNewDocDate] = useState(firstDayOfMonth());
   const [newDocNotes, setNewDocNotes] = useState('');
 
   const [showImportModal, setShowImportModal] = useState(false);
@@ -126,55 +244,57 @@ export default function OpeningBalancesPage() {
   const [showUnpostModal, setShowUnpostModal] = useState(false);
   const [unpostReason, setUnpostReason] = useState('');
 
-  // ─── Fetch Lookups ─────────────────────────────────────────────
+  const requestOptions = useMemo(
+    () => ({ token: token || undefined, tenantId: companyId, locale }),
+    [token, companyId, locale],
+  );
+
+  // ─── Lookups ───────────────────────────────────────────────────
 
   useEffect(() => {
     if (!token || !companyId) return;
-
     const fetchLookups = async () => {
-      try {
-        const [accs, whs, prods, cps, fas] = await Promise.all([
-          apiFetch<CashAccount[]>('/finance/accounts', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
-          apiFetch<ListResponse<Warehouse>>('/tenants/warehouses', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => listOf(res))
-            .catch(() => []),
-          apiFetch<ListResponse<Product>>('/inventory/products', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => listOf(res))
-            .catch(() => []),
-          apiFetch<ListResponse<Counterparty>>('/sales/counterparties', { token: token || undefined, tenantId: companyId, locale })
-            .then((res) => listOf(res))
-            .catch(() => []),
-          apiFetch<FixedAsset[]>('/fixed-assets', { token: token || undefined, tenantId: companyId, locale }).catch(() => []),
-        ]);
-
-        setAccounts(Array.isArray(accs) ? accs : []);
-        setWarehouses(Array.isArray(whs) ? whs : []);
-        setProducts(Array.isArray(prods) ? prods : []);
-        setCounterparties(Array.isArray(cps) ? cps : []);
-        setFixedAssets(Array.isArray(fas) ? fas : []);
-      } catch (e) {
-        console.error('Failed to load lookups', e);
+      // A list that fails to load must say so: an empty dropdown with no
+      // reason read as "the existing counterparties are not pulled in"
+      // (muammolar.pdf B4).
+      const failed: string[] = [];
+      const load = <T,>(promise: Promise<T[]>, name: { uz: string; ru: string }) =>
+        promise.catch(() => {
+          failed.push(isRu ? name.ru : name.uz);
+          return [] as T[];
+        });
+      const [accs, whs, prods, cps, fas] = await Promise.all([
+        load(apiFetch<CashAccount[]>('/finance/accounts', requestOptions), { uz: 'kassalar', ru: 'кассы' }),
+        load(apiFetch<ListResponse<Warehouse>>('/tenants/warehouses', requestOptions).then((res) => listOf(res)), { uz: 'omborlar', ru: 'склады' }),
+        load(apiFetch<ListResponse<Product>>('/inventory/products', requestOptions).then((res) => listOf(res)), { uz: 'tovarlar', ru: 'товары' }),
+        load(apiFetch<ListResponse<Counterparty>>('/sales/counterparties', requestOptions).then((res) => listOf(res)), { uz: 'kontragentlar', ru: 'контрагенты' }),
+        load(apiFetch<FixedAsset[]>('/fixed-assets', requestOptions), { uz: 'asosiy vositalar', ru: 'основные средства' }),
+      ]);
+      setAccounts(Array.isArray(accs) ? accs : []);
+      setWarehouses(Array.isArray(whs) ? whs : []);
+      setProducts(Array.isArray(prods) ? prods : []);
+      setCounterparties(Array.isArray(cps) ? cps : []);
+      setFixedAssets(Array.isArray(fas) ? fas : []);
+      if (failed.length > 0) {
+        toast.error(
+          isRu
+            ? `Не удалось загрузить: ${failed.join(', ')}. Обновите страницу.`
+            : `Yuklab bo‘lmadi: ${failed.join(', ')}. Sahifani yangilang.`,
+        );
       }
     };
-
     fetchLookups();
-  }, [token, companyId, locale]);
+  }, [token, companyId, requestOptions, isRu]);
 
-  // ─── Fetch Documents ───────────────────────────────────────────
+  // ─── Documents ─────────────────────────────────────────────────
 
   const loadDocuments = useCallback(async () => {
     if (!token || !companyId) return;
-    setLoading(true);
     try {
-      const docs = await apiFetch<OpeningBalanceDocument[]>('/opening-balances', {
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
+      const docs = await apiFetch<OpeningBalanceDocument[]>('/opening-balances', requestOptions);
       setDocuments(docs || []);
       if (docs && docs.length > 0) {
-        const targetId = selectedDocId && docs.some((d) => d.id === selectedDocId) ? selectedDocId : docs[0].id;
-        setSelectedDocId(targetId);
+        setSelectedDocId((current) => (current && docs.some((d) => d.id === current) ? current : docs[0].id));
       } else {
         setSelectedDocId('');
         setCurrentDoc(null);
@@ -183,126 +303,52 @@ export default function OpeningBalancesPage() {
     } catch (e) {
       toast.error(errorMessage(e) || (isRu ? 'Ошибка при загрузке документов' : 'Hujjatlarni yuklashda xatolik'));
     } finally {
-      setLoading(false);
+      setDocumentsLoaded(true);
     }
-  }, [token, companyId, locale, selectedDocId, isRu]);
+  }, [token, companyId, requestOptions, isRu]);
 
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
 
-  // ─── Load Selected Document Details ────────────────────────────
-
   const loadDocumentDetails = useCallback(
     async (id: string) => {
       if (!token || !companyId || !id) return;
       try {
-        const doc = await apiFetch<OpeningBalanceDocument>(`/opening-balances/${id}`, {
-          token: token || undefined,
-          tenantId: companyId,
-          locale,
-        });
+        const doc = await apiFetch<OpeningBalanceDocument>(`/opening-balances/${id}`, requestOptions);
+        const docLines = doc.lines || [];
+        const { rate, mixed } = documentUsdRate(docLines);
         setCurrentDoc(doc);
-        setLines(doc.lines || []);
-        setOpeningDate(doc.openingDate ? doc.openingDate.slice(0, 10) : '2026-10-01');
+        setLines(docLines);
+        setUsdRate(rate);
+        setRatesWereMixed(mixed);
+        setOpeningDate(doc.openingDate ? doc.openingDate.slice(0, 10) : firstDayOfMonth());
         setNotes(doc.notes || '');
       } catch (e) {
         toast.error(errorMessage(e) || (isRu ? 'Ошибка загрузки документа' : 'Hujjat tafsilotlarini yuklashda xatolik'));
       }
     },
-    [token, companyId, locale, isRu],
+    [token, companyId, requestOptions, isRu],
   );
 
   useEffect(() => {
-    if (selectedDocId) {
-      loadDocumentDetails(selectedDocId);
-    }
+    if (selectedDocId) loadDocumentDetails(selectedDocId);
   }, [selectedDocId, loadDocumentDetails]);
 
-  // ─── Real-Time Client-Side Balance Metrics ──────────────────────
+  // ─── Totals (same rules the server posts with) ─────────────────
 
-  const metrics: OpeningBalanceMetrics = useMemo(() => {
-    let hasValidCurrencyRates = true;
-    let totalAssets = 0;
-    let totalLiabilities = 0;
-    let totalEquity = 0;
-    const breakdown: Record<OpeningBalanceCategory, number> = {
-      CASH: 0,
-      BANK: 0,
-      INVENTORY: 0,
-      CUSTOMER_DEBT: 0,
-      SUPPLIER_DEBT: 0,
-      CUSTOMER_ADVANCE: 0,
-      SUPPLIER_ADVANCE: 0,
-      FIXED_ASSET: 0,
-      OTHER_ASSET: 0,
-      OTHER_LIABILITY: 0,
-      EQUITY: 0,
-    };
-
-    for (const line of lines) {
-      const rawAmount = Number(line.amount || 0);
-      const rate = line.currency === 'UZS' ? 1 : Number(line.exchangeRate);
-      const validRate = line.currency === 'UZS' || (line.currency === 'USD' && Number.isFinite(rate) && rate > 0);
-      if (!validRate) hasValidCurrencyRates = false;
-      const multiplier = validRate ? rate : 0;
-      const amt = rawAmount * multiplier;
-      const cat = (line.category || 'CASH') as OpeningBalanceCategory;
-      if (breakdown[cat] !== undefined) {
-        breakdown[cat] += amt;
-      }
-
-      switch (cat) {
-        case 'CASH':
-        case 'BANK':
-        case 'INVENTORY':
-        case 'CUSTOMER_DEBT':
-        case 'SUPPLIER_ADVANCE':
-        case 'OTHER_ASSET':
-          totalAssets += amt;
-          break;
-        case 'FIXED_ASSET': {
-          const accDep = Number(line.accumulatedDepreciation || 0) * multiplier;
-          const net = line.netAmount != null
-            ? Number(line.netAmount) * multiplier
-            : Math.max(0, amt - accDep);
-          totalAssets += net;
-          break;
-        }
-        case 'SUPPLIER_DEBT':
-        case 'CUSTOMER_ADVANCE':
-        case 'OTHER_LIABILITY':
-          totalLiabilities += amt;
-          break;
-        case 'EQUITY':
-          totalEquity += amt;
-          break;
-      }
-    }
-
-    const suggestedEquity = Math.max(0, totalAssets - totalLiabilities);
-    const balanceDifference = Math.round((totalAssets - (totalLiabilities + totalEquity)) * 100) / 100;
-    const isBalanced = hasValidCurrencyRates && Math.abs(balanceDifference) < 0.01;
-
-    return {
-      totalAssets: Math.round(totalAssets * 100) / 100,
-      totalLiabilities: Math.round(totalLiabilities * 100) / 100,
-      enteredEquity: Math.round(totalEquity * 100) / 100,
-      suggestedEquity: Math.round(suggestedEquity * 100) / 100,
-      balanceDifference,
-      isBalanced,
-      hasValidCurrencyRates,
-      categoryBreakdown: breakdown,
-    };
-  }, [lines]);
+  const effectiveLines = useMemo(() => withDocumentRate(lines, usdRate), [lines, usdRate]);
+  const totals = useMemo(() => computeOpeningBalanceTotals(effectiveLines), [effectiveLines]);
 
   const isReadOnly = currentDoc?.status === 'POSTED' || currentDoc?.status === 'CANCELLED';
+  const isPosted = currentDoc?.status === 'POSTED';
   const importSummary = importPreview ? summarizeImportPreview(importPreview) : null;
+  const hasUsdLines = lines.some((l) => l.currency === 'USD');
 
-  // ─── Actions & Handlers ────────────────────────────────────────
+  // ─── Actions ───────────────────────────────────────────────────
 
-  const handleSaveLines = async () => {
-    if (!token || !companyId || !selectedDocId) return;
+  /** Client checks that need the user, not the server. */
+  const readyToSend = (): boolean => {
     const missingCurrencyRows = linesMissingCurrency(lines);
     if (missingCurrencyRows.length > 0) {
       toast.error(
@@ -310,22 +356,29 @@ export default function OpeningBalancesPage() {
           ? `Выберите валюту в каждой строке (строки: ${missingCurrencyRows.join(', ')})`
           : `Har bir qatorda valyutani tanlang (qatorlar: ${missingCurrencyRows.join(', ')})`,
       );
-      return;
+      return false;
     }
+    if (needsUsdRate(lines, usdRate)) {
+      toast.error(isRu ? 'Укажите курс USD на дату остатков' : 'Qoldiq sanasidagi USD kursini kiriting');
+      return false;
+    }
+    return true;
+  };
+
+  const saveLines = async () => {
+    await apiFetch(`/opening-balances/${selectedDocId}/lines`, {
+      ...requestOptions,
+      method: 'PUT',
+      body: JSON.stringify({ openingDate, notes, lines: effectiveLines }),
+    });
+  };
+
+  const handleSaveLines = async () => {
+    if (!token || !companyId || !selectedDocId || !readyToSend()) return;
     setActionLoading(true);
     try {
-      await apiFetch(`/opening-balances/${selectedDocId}/lines`, {
-        method: 'PUT',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-        body: JSON.stringify({
-          openingDate,
-          notes,
-          lines,
-        }),
-      });
-      toast.success(isRu ? 'Изменения успешно сохранены' : 'Boshlang‘ich qoldiqlar muvaffaqiyatli saqlandi');
+      await saveLines();
+      toast.success(isRu ? 'Изменения сохранены' : 'Boshlang‘ich qoldiqlar saqlandi');
       loadDocumentDetails(selectedDocId);
     } catch (e) {
       toast.error(errorMessage(e) || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
@@ -334,47 +387,38 @@ export default function OpeningBalancesPage() {
     }
   };
 
+  /** Saves the current lines, then posts them (no separate save step). */
   const handlePost = async () => {
-    if (!token || !companyId || !selectedDocId) return;
-    const missingCurrencyRows = linesMissingCurrency(lines);
-    if (missingCurrencyRows.length > 0) {
-      toast.error(
-        isRu
-          ? `Выберите валюту в каждой строке (строки: ${missingCurrencyRows.join(', ')})`
-          : `Har bir qatorda valyutani tanlang (qatorlar: ${missingCurrencyRows.join(', ')})`,
-      );
+    if (!token || !companyId || !selectedDocId || !readyToSend()) return;
+    if (lines.length === 0) {
+      toast.error(isRu ? 'Добавьте хотя бы одну строку' : 'Kamida bitta qator qo‘shing');
       return;
     }
-    if (!metrics.hasValidCurrencyRates) {
-      toast.error(isRu ? 'Введите положительный курс для каждой USD-строки' : 'Har bir USD qatori uchun 0 dan katta kursni kiriting');
-      return;
-    }
-    if (!metrics.isBalanced) {
-      toast.error(
-        isRu
-          ? `Баланс не сходится! Разница: ${formatCurrency(metrics.balanceDifference, locale, docCurrency)}. Разница должна быть 0.`
-          : `Balans teng emas! Farq: ${formatCurrency(metrics.balanceDifference, locale, docCurrency)}. Boshlang‘ich balans farqi 0 bo‘lishi shart!`,
-      );
-      return;
-    }
+    const ok = await confirm({
+      title: isRu ? 'Провести начальные остатки?' : 'Boshlang‘ich qoldiqlarni tasdiqlaysizmi?',
+      description: isRu
+        ? 'Деньги попадут в кассы, товары — на склады (партии FIFO), долги и авансы — в расчёты с контрагентами, основные средства станут активными, будет создана проводка в журнале. Разница между активами, обязательствами и уставным капиталом будет записана как нераспределённая прибыль (8710).'
+        : 'Pul kassalarga, tovarlar omborga (FIFO partiyalari), qarz va avanslar kontragentlar hisob-kitobiga tushadi, asosiy vositalar faollashadi va jurnalda provodka yaratiladi. Aktivlar, majburiyatlar va ustav kapitali orasidagi farq taqsimlanmagan foyda (8710) sifatida yoziladi.',
+      variant: 'info',
+      confirmText: isRu ? 'Провести' : 'Tasdiqlash',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
 
     setActionLoading(true);
     try {
-      await apiFetch(`/opening-balances/${selectedDocId}/post`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
+      await saveLines();
+      await apiFetch(`/opening-balances/${selectedDocId}/post`, { ...requestOptions, method: 'POST' });
       toast.success(
         isRu
-          ? 'Остатки успешно проведены! Склады, кассы и долги обновлены.'
-          : 'Boshlang‘ich qoldiqlar tasdiqlandi! Ombor, kassa va qarzdorliklar yangilandi.',
+          ? 'Остатки проведены: кассы, склады, расчёты и журнал обновлены.'
+          : 'Boshlang‘ich qoldiqlar tasdiqlandi: kassa, ombor, hisob-kitoblar va jurnal yangilandi.',
       );
       loadDocuments();
       loadDocumentDetails(selectedDocId);
     } catch (e) {
       toast.error(errorMessage(e) || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xatolik'));
+      loadDocumentDetails(selectedDocId);
     } finally {
       setActionLoading(false);
     }
@@ -385,19 +429,13 @@ export default function OpeningBalancesPage() {
     setActionLoading(true);
     try {
       await apiFetch(`/opening-balances/${selectedDocId}/unpost`, {
+        ...requestOptions,
         method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
         body: JSON.stringify({ reason: unpostReason || undefined }),
       });
       setShowUnpostModal(false);
       setUnpostReason('');
-      toast.success(
-        isRu
-          ? 'Документ переоткрыт (черновик). Остатки безопасно возвращены.'
-          : 'Hujjat qayta ochildi (qoralama). Qoldiqlar xavfsiz qaytarildi.',
-      );
+      toast.success(isRu ? 'Документ переоткрыт (черновик).' : 'Hujjat qayta ochildi (qoralama).');
       loadDocuments();
       loadDocumentDetails(selectedDocId);
     } catch (e) {
@@ -407,40 +445,20 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  const handleAutoBalance = async () => {
-    if (!token || !companyId || !selectedDocId) return;
-    setActionLoading(true);
-    try {
-      await apiFetch(`/opening-balances/${selectedDocId}/balance-equity`, {
-        method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
-      toast.success(
-        isRu
-          ? 'Баланс автоматически уравновешен строкой капитала'
-          : 'Balans ustav kapitali orqali avtomatik tenglashtirildi',
-      );
-      loadDocumentDetails(selectedDocId);
-    } catch (e) {
-      toast.error(errorMessage(e) || (isRu ? 'Ошибка балансировки' : 'Balansni tenglashtirishda xatolik'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handleDeleteDocument = async () => {
     if (!token || !companyId || !selectedDocId) return;
+    const ok = await confirm({
+      title: isRu ? 'Удалить черновик?' : 'Qoralamani o‘chirasizmi?',
+      description: isRu ? 'Все строки документа будут удалены.' : 'Hujjatning barcha qatorlari o‘chiriladi.',
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
     setActionLoading(true);
     try {
-      await apiFetch(`/opening-balances/${selectedDocId}`, {
-        method: 'DELETE',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-      });
-      toast.success(isRu ? 'Документ успешно удален' : 'Hujjat muvaffaqiyatli o‘chirildi');
+      await apiFetch(`/opening-balances/${selectedDocId}`, { ...requestOptions, method: 'DELETE' });
+      toast.success(isRu ? 'Документ удалён' : 'Hujjat o‘chirildi');
       setSelectedDocId('');
       loadDocuments();
     } catch (e) {
@@ -455,23 +473,15 @@ export default function OpeningBalancesPage() {
     setActionLoading(true);
     try {
       const created = await apiFetch<OpeningBalanceDocument>('/opening-balances', {
+        ...requestOptions,
         method: 'POST',
-        token: token || undefined,
-        tenantId: companyId,
-        locale,
-        body: JSON.stringify({
-          docNumber: newDocNumber.trim() || undefined,
-          openingDate: newDocDate,
-          notes: newDocNotes.trim() || undefined,
-          lines: [],
-        }),
+        body: JSON.stringify({ openingDate: newDocDate, notes: newDocNotes.trim() || undefined, lines: [] }),
       });
       setShowNewDocModal(false);
-      setNewDocNumber('');
       setNewDocNotes('');
-      toast.success(isRu ? 'Новый документ остатков создан' : 'Yangi boshlang‘ich qoldiq hujjati yaratildi');
-      await loadDocuments();
+      toast.success(isRu ? 'Документ создан' : 'Hujjat yaratildi');
       setSelectedDocId(created.id);
+      await loadDocuments();
     } catch (e) {
       toast.error(errorMessage(e) || (isRu ? 'Ошибка создания' : 'Yaratishda xatolik'));
     } finally {
@@ -479,14 +489,12 @@ export default function OpeningBalancesPage() {
     }
   };
 
+  // ─── Excel import ──────────────────────────────────────────────
+
   const handleDownloadTemplate = async () => {
     if (!token || !companyId) return;
     try {
-      const blob = await apiDownload(openingBalanceImportPaths('').template, {
-        token,
-        tenantId: companyId,
-        locale,
-      });
+      const blob = await apiDownload(openingBalanceImportPaths('').template, { token, tenantId: companyId, locale });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -524,10 +532,13 @@ export default function OpeningBalancesPage() {
     setImportErrors([]);
     setImportPreview(null);
     try {
-      const result = await apiFetch<ImportValidationResult>(
-        openingBalanceImportPaths(selectedDocId).preview,
-        { token, tenantId: companyId, locale, method: 'POST', body: importFormData(importFile) },
-      );
+      const result = await apiFetch<ImportValidationResult>(openingBalanceImportPaths(selectedDocId).preview, {
+        token,
+        tenantId: companyId,
+        locale,
+        method: 'POST',
+        body: importFormData(importFile),
+      });
       setImportPreview(result);
       setImportErrors(result.errors);
       if (result.errors.length > 0) {
@@ -564,14 +575,13 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  // ─── Line Management Helpers ────────────────────────────────────
+  // ─── Line editing ──────────────────────────────────────────────
 
-  const addLine = (category: OpeningBalanceCategory, defaults?: Partial<OpeningBalanceLine>) => {
+  const addLine = (category: OpeningBalanceCategory) => {
     if (isReadOnly) return;
-    const newLine: Partial<OpeningBalanceLine> = {
-      ...newOpeningBalanceLine(category),
-      ...defaults,
-    } as Partial<OpeningBalanceLine>;
+    const newLine: OpeningBalanceDraftLine = { ...newOpeningBalanceLine(category) } as OpeningBalanceDraftLine;
+    // One warehouse: nothing to choose.
+    if (category === 'INVENTORY' && warehouses.length === 1) newLine.warehouseId = warehouses[0].id;
     setLines((prev) => [...prev, newLine]);
   };
 
@@ -580,18 +590,46 @@ export default function OpeningBalancesPage() {
     setLines((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: LineValue) => {
+    if (isReadOnly) return;
+    setLines((prev) => {
+      const updated = [...prev];
+      let target: OpeningBalanceDraftLine = { ...updated[index], [field]: value };
+
+      // muammolar B2: a product picked on an inventory line brings its card
+      // cost and that cost's currency, unless a cost was already typed.
+      if (target.category === 'INVENTORY' && field === 'productId') {
+        target = withProductCost(target, products.find((p) => p.id === value));
+      }
+      if (target.category === 'INVENTORY' && (field === 'quantity' || field === 'unitCost')) {
+        target.amount = Math.round(Number(target.quantity || 0) * Number(target.unitCost || 0) * 100) / 100;
+      }
+      // A debt/advance kind decides the side: drop a counterparty of the other side.
+      if (field === 'category' && isCounterpartyLineKind(String(value)) && target.counterpartyId) {
+        const fits = counterpartiesForKind(value as CounterpartyLineKind, counterparties).some((c) => c.id === target.counterpartyId);
+        if (!fits) target.counterpartyId = null;
+      }
+      // D6: a fixed-asset line opens an asset from the register and takes its values.
+      if (target.category === 'FIXED_ASSET' && field === 'fixedAssetId') {
+        target = withRegisterAsset(target, fixedAssets.find((a) => a.id === value));
+      }
+
+      updated[index] = target;
+      return updated;
+    });
+  };
+
   const handleQuickCreated = async (id: string) => {
     const target = quickCreate;
     setQuickCreate(null);
     if (!target || !token || !companyId) return;
-    const opts = { token, tenantId: companyId, locale };
     try {
       if (target.kind === 'product') {
-        const product = await apiFetch<Product>(`/inventory/products/${id}`, opts);
+        const product = await apiFetch<Product>(`/inventory/products/${id}`, requestOptions);
         setProducts((prev) => [product, ...prev.filter((p) => p.id !== product.id)]);
-        updateLineField(target.index, 'productId', product.id);
-      } else {
-        const counterparty = await apiFetch<Counterparty>(`/sales/counterparties/${id}`, opts);
+        setLines((prev) => prev.map((line, i) => (i === target.index ? withProductCost({ ...line, productId: product.id }, product) : line)));
+      } else if (target.kind === 'counterparty') {
+        const counterparty = await apiFetch<Counterparty>(`/sales/counterparties/${id}`, requestOptions);
         setCounterparties((prev) => [counterparty, ...prev.filter((c) => c.id !== counterparty.id)]);
         updateLineField(target.index, 'counterpartyId', counterparty.id);
       }
@@ -600,47 +638,15 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: LineValue) => {
-    if (isReadOnly) return;
-    setLines((prev) => {
-      const updated = [...prev];
-      let target: OpeningBalanceDraftLine = { ...updated[index], [field]: value };
-
-      if (field === 'currency') {
-        target.exchangeRate = value === 'UZS' ? 1 : '';
-      }
-
-      // muammolar B2: a product picked on an inventory line brings its card
-      // cost and that cost's currency, unless a cost was already typed. A
-      // foreign-currency rate is never guessed (ADR 0022): the user enters it.
-      if (target.category === 'INVENTORY' && field === 'productId') {
-        target = withProductCost(target, products.find((p) => p.id === value));
-      }
-
-      if (target.category === 'INVENTORY' && (field === 'quantity' || field === 'unitCost')) {
-        const q = Number(field === 'quantity' ? value : target.quantity || 0);
-        const c = Number(field === 'unitCost' ? value : target.unitCost || 0);
-        target.amount = Math.round(q * c * 100) / 100;
-      }
-
-      // D6: a fixed-asset line opens an asset from the register and takes
-      // its cost and depreciation from it (the server checks they match).
-      if (target.category === 'FIXED_ASSET' && field === 'fixedAssetId') {
-        target = withRegisterAsset(target, fixedAssets.find((a) => a.id === value));
-      }
-
-      if (target.category === 'FIXED_ASSET' && (field === 'amount' || field === 'accumulatedDepreciation')) {
-        const init = Number(field === 'amount' ? value : target.amount || 0);
-        const dep = Number(field === 'accumulatedDepreciation' ? value : target.accumulatedDepreciation || 0);
-        target.netAmount = Math.max(0, init - dep);
-      }
-
-      updated[index] = target;
-      return updated;
-    });
+  const handleAssetCreated = (asset: FixedAsset) => {
+    const target = quickCreate;
+    setQuickCreate(null);
+    setFixedAssets((prev) => [asset, ...prev.filter((a) => a.id !== asset.id)]);
+    if (target?.kind !== 'fixedAsset') return;
+    setLines((prev) => prev.map((line, i) => (i === target.index ? withRegisterAsset(line, asset) : line)));
   };
 
-  // ─── Status Badge Formatter ────────────────────────────────────
+  // ─── View helpers ──────────────────────────────────────────────
 
   const getDocStatusBadge = (st: OpeningBalanceStatus) => {
     switch (st) {
@@ -664,23 +670,12 @@ export default function OpeningBalancesPage() {
     }`,
   }));
 
-  // Tab counts
   const tabCounts = useMemo(() => {
-    const counts = {
-      cash: 0,
-      inventory: 0,
-      customers: 0,
-      suppliers: 0,
-      advances: 0,
-      fixedAssets: 0,
-      other: 0,
-    };
+    const counts = { cash: 0, inventory: 0, debts: 0, fixedAssets: 0, other: 0 };
     for (const l of lines) {
-      if (l.category === 'CASH' || l.category === 'BANK') counts.cash++;
+      if (CASH_CATEGORIES.has(String(l.category))) counts.cash++;
       else if (l.category === 'INVENTORY') counts.inventory++;
-      else if (l.category === 'CUSTOMER_DEBT') counts.customers++;
-      else if (l.category === 'SUPPLIER_DEBT') counts.suppliers++;
-      else if (l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE') counts.advances++;
+      else if (isCounterpartyLineKind(l.category)) counts.debts++;
       else if (l.category === 'FIXED_ASSET') counts.fixedAssets++;
       else counts.other++;
     }
@@ -688,686 +683,372 @@ export default function OpeningBalancesPage() {
   }, [lines]);
 
   const navTabs = [
-    { key: 'cash' as TabKey, label: isRu ? 'Деньги в кассе / банке' : 'Pul mablag‘lari', icon: Wallet, count: tabCounts.cash },
-    { key: 'inventory' as TabKey, label: isRu ? 'Товары на складах' : 'Tovar va materiallar', icon: Package, count: tabCounts.inventory },
-    { key: 'customers' as TabKey, label: isRu ? 'Дебиторы (Клиенты)' : 'Mijozlar qarzi', icon: Users, count: tabCounts.customers },
-    { key: 'suppliers' as TabKey, label: isRu ? 'Кредиторы (Поставщики)' : 'Yetkazib beruvchilar', icon: Truck, count: tabCounts.suppliers },
-    { key: 'advances' as TabKey, label: isRu ? 'Авансы (Предоплаты)' : 'Avanslar', icon: DollarSign, count: tabCounts.advances },
+    { key: 'cash' as TabKey, label: isRu ? 'Деньги' : 'Pul mablag‘lari', icon: Wallet, count: tabCounts.cash },
+    { key: 'inventory' as TabKey, label: isRu ? 'Товары' : 'Tovarlar', icon: Package, count: tabCounts.inventory },
+    { key: 'debts' as TabKey, label: isRu ? 'Долги и авансы' : 'Qarzlar va avanslar', icon: Users, count: tabCounts.debts },
     { key: 'fixed-assets' as TabKey, label: isRu ? 'Основные средства' : 'Asosiy vositalar', icon: Building, count: tabCounts.fixedAssets },
     { key: 'other' as TabKey, label: isRu ? 'Капитал и прочее' : 'Kapital va boshqalar', icon: Layers, count: tabCounts.other },
   ];
 
+  const tableProps = { lines, isReadOnly, locale, isRu, onUpdate: updateLineField, onRemove: removeLine };
+
+  // ─── Render ────────────────────────────────────────────────────
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* ─── Top Header & Primary Action Controls ─────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 'var(--space-4)',
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--font-bold)',
-              color: 'var(--color-text-primary)',
-              margin: 0,
-            }}
-          >
-            {isRu ? 'Ввод начальных остатков' : 'Boshlang‘ich qoldiqlarni kiritish'}
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+        <div style={{ maxWidth: 720 }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
+            {isRu ? 'Начальные остатки' : 'Boshlang‘ich qoldiqlar'}
           </h1>
+          <p style={{ margin: '6px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            {isRu
+              ? 'Укажите, что есть у компании на дату начала учёта: деньги, товары, долги, основные средства. Капитал рассчитывается автоматически.'
+              : 'Hisob boshlanadigan sanadagi bor narsani kiriting: pul, tovar, qarzlar, asosiy vositalar. Kapital avtomatik hisoblanadi.'}
+          </p>
         </div>
-
-        {/* Global Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <Button
-            variant="primary"
-            onClick={() => setShowNewDocModal(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
+          <Button variant="secondary" onClick={() => setShowImportModal(true)} disabled={!currentDoc || isReadOnly} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileSpreadsheet size={16} />
+            <span>Excel</span>
+          </Button>
+          <Button variant="primary" onClick={() => setShowNewDocModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Plus size={16} />
             <span>{isRu ? 'Новый документ' : 'Yangi hujjat'}</span>
           </Button>
-
-          <Button
-            variant="secondary"
-            onClick={() => setShowImportModal(true)}
-            disabled={!currentDoc || isReadOnly}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Upload size={16} />
-            <span>{isRu ? 'Импорт из Excel' : 'Excel orqali yuklash'}</span>
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={handleDownloadTemplate}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Download size={16} />
-            <span>{isRu ? 'Скачать шаблон' : 'Shablonni yuklab olish'}</span>
-          </Button>
         </div>
       </div>
 
-      {/* ─── Executive KPI Cards Grid (Matches Finance / Purchases) ─ */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 'var(--space-4)',
-        }}
-      >
-        {/* Card 1: Total Assets */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid #10b981',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#10b981',
-              flexShrink: 0,
-            }}
-          >
-            <TrendingUp size={20} />
-          </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? '1. Активы (Итого)' : '1. Jami Aktivlar'}
-            </div>
-            <div
-              style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
-              className="tabular-nums"
-            >
-              {formatCurrency(metrics.totalAssets, locale, docCurrency)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Касса, банк, склад, дебиторы' : 'Kassa, bank, tovar, debitorlar'}
-            </div>
-          </div>
+      {documentsLoaded && documents.length === 0 ? (
+        <Card style={{ padding: 'var(--space-8)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <Layers size={36} color="var(--color-primary-600)" />
+          <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', color: 'var(--color-text-primary)' }}>
+            {isRu ? 'Остатки ещё не вводились' : 'Boshlang‘ich qoldiqlar hali kiritilmagan'}
+          </h3>
+          <p style={{ margin: 0, maxWidth: 520, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            {isRu
+              ? 'Выберите дату начала учёта и внесите остатки по вкладкам или загрузите их из Excel.'
+              : 'Hisob boshlanish sanasini tanlang va qoldiqlarni bo‘limlar bo‘yicha kiriting yoki Exceldan yuklang.'}
+          </p>
+          <Button variant="primary" onClick={() => setShowNewDocModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={16} />
+            <span>{isRu ? 'Начать ввод остатков' : 'Qoldiqlarni kiritishni boshlash'}</span>
+          </Button>
         </Card>
+      ) : (
+        <>
+          {/* Document bar */}
+          <Card style={{ padding: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                {documents.length > 1 ? (
+                  <div style={{ width: '280px' }}>
+                    <Select options={documentOptions} value={selectedDocId} onChange={setSelectedDocId} placeholder={isRu ? 'Выберите документ' : 'Hujjatni tanlang'} size="sm" />
+                  </div>
+                ) : (
+                  <strong style={{ color: 'var(--color-text-primary)' }}>{currentDoc?.docNumber}</strong>
+                )}
+                {currentDoc && getDocStatusBadge(currentDoc.status)}
 
-        {/* Card 2: Total Liabilities */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid #ef4444',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ef4444',
-              flexShrink: 0,
-            }}
-          >
-            <TrendingDown size={20} />
-          </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? '2. Обязательства (Итого)' : '2. Jami Majburiyatlar'}
-            </div>
-            <div
-              style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
-              className="tabular-nums"
-            >
-              {formatCurrency(metrics.totalLiabilities, locale, docCurrency)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Кредиторы, авансы клиентов' : 'Yetkazib beruvchilar, olingan avanslar'}
-            </div>
-          </div>
-        </Card>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                    {isRu ? 'Дата остатков:' : 'Qoldiq sanasi:'}
+                  </span>
+                  <div style={{ width: '150px' }}>
+                    <DatePicker value={openingDate} onChange={setOpeningDate} disabled={isReadOnly} size="sm" />
+                  </div>
+                </label>
 
-        {/* Card 3: Equity */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid #6366f1',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(99, 102, 241, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#6366f1',
-              flexShrink: 0,
-            }}
-          >
-            <Building2 size={20} />
-          </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? '3. Собственный капитал' : '3. Boshlang‘ich Kapital'}
-            </div>
-            <div
-              style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}
-              className="tabular-nums"
-            >
-              {formatCurrency(metrics.enteredEquity, locale, docCurrency)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Расчетный:' : 'Kutilayotgan:'} {formatCurrency(metrics.suggestedEquity, locale, docCurrency)}
-            </div>
-          </div>
-        </Card>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }} data-testid="document-usd-rate">
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                    {isRu ? 'Курс USD (UZS):' : 'USD kursi (UZS):'}
+                  </span>
+                  <MoneyInput
+                    value={usdRate}
+                    disabled={isReadOnly}
+                    onValueChange={setUsdRate}
+                    decimals={4}
+                    placeholder={hasUsdLines ? (isRu ? 'обязательно' : 'majburiy') : '—'}
+                    aria-label={isRu ? 'Курс USD к UZS на дату остатков' : 'Qoldiq sanasidagi USD ning UZS kursi'}
+                    style={{ width: 130, borderColor: needsUsdRate(lines, usdRate) && !isReadOnly ? 'var(--color-warning-500)' : undefined }}
+                  />
+                </label>
+              </div>
 
-        {/* Card 4: Balance Equation Control */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: `4px solid ${metrics.isBalanced ? '#10b981' : '#f59e0b'}`,
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: metrics.isBalanced ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: metrics.isBalanced ? '#10b981' : '#f59e0b',
-              flexShrink: 0,
-            }}
-          >
-            {metrics.isBalanced ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-          </div>
-          <div style={{ overflow: 'hidden', width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                {isRu ? 'Баланс (Разница)' : 'Balans (Farq)'}
-              </span>
-              <Badge variant={metrics.isBalanced ? 'success' : 'warning'}>
-                {metrics.isBalanced ? (isRu ? 'Баланс сошёлся' : 'Balans teng') : isRu ? 'Разница' : 'Farq bor'}
-              </Badge>
-            </div>
-            <div
-              style={{
-                fontSize: 'var(--text-lg)',
-                fontWeight: 700,
-                color: metrics.isBalanced ? '#10b981' : '#f59e0b',
-              }}
-              className="tabular-nums"
-            >
-              {formatCurrency(metrics.balanceDifference, locale, docCurrency)}
-            </div>
-            {!metrics.isBalanced && !isReadOnly && (
-              <button
-                type="button"
-                onClick={handleAutoBalance}
-                disabled={actionLoading}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  marginTop: '2px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: 'var(--color-primary-600)',
-                  cursor: 'pointer',
-                }}
-              >
-                <Sparkles size={12} />
-                <span>{isRu ? 'Сбалансировать капиталом' : 'Kapital bilan tenglashtirish'}</span>
-              </button>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* ─── Master Document Control Card ─────────────────────────── */}
-      <Card style={{ padding: 'var(--space-4)' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 'var(--space-4)',
-          }}
-        >
-          {/* Left: Document Selector & Cutoff Date */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-            <div style={{ width: '280px' }}>
-              <Select
-                options={documentOptions}
-                value={selectedDocId}
-                onChange={setSelectedDocId}
-                placeholder={isRu ? 'Выберите документ' : 'Hujjatni tanlang'}
-                size="sm"
-              />
-            </div>
-
-            {currentDoc && getDocStatusBadge(currentDoc.status)}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                {isRu ? 'Дата среза:' : 'Kesim sanasi:'}
-              </span>
-              <div style={{ width: '150px' }}>
-                <DatePicker
-                  value={openingDate}
-                  onChange={setOpeningDate}
-                  disabled={isReadOnly}
-                  size="sm"
-                />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                {currentDoc && !isReadOnly && (
+                  <>
+                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Save size={14} />
+                      <span>{isRu ? 'Сохранить' : 'Saqlash'}</span>
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={handlePost} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle2 size={14} />
+                      <span>{actionLoading ? (isRu ? 'Подождите...' : 'Kuting...') : isRu ? 'Провести' : 'Tasdiqlash'}</span>
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </>
+                )}
+                {currentDoc && isPosted && (
+                  <Button variant="secondary" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
+                    <RotateCcw size={14} />
+                    <span>{isRu ? 'Переоткрыть' : 'Qayta ochish'}</span>
+                  </Button>
+                )}
               </div>
             </div>
+            {ratesWereMixed && !isReadOnly && (
+              <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
+                {isRu
+                  ? 'В строках были разные курсы USD. При сохранении ко всем USD-строкам будет применён один курс документа.'
+                  : 'Qatorlarda turli USD kurslari bor edi. Saqlaganda barcha USD qatorlariga hujjatning bitta kursi qo‘llanadi.'}
+              </p>
+            )}
+          </Card>
 
-            <Badge variant="neutral">
-              {lines.length} {isRu ? 'строк' : 'ta qator'}
-            </Badge>
+          {/* Summary: assets, liabilities, capital (balances itself) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+            <SummaryCard
+              color="#10b981"
+              icon={<TrendingUp size={20} />}
+              title={isRu ? 'Активы' : 'Aktivlar'}
+              value={formatCurrency(totals.totalAssets, locale, docCurrency)}
+              hint={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
+            />
+            <SummaryCard
+              color="#ef4444"
+              icon={<TrendingDown size={20} />}
+              title={isRu ? 'Обязательства' : 'Majburiyatlar'}
+              value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
+              hint={isRu ? 'Долги поставщикам, полученные авансы' : 'Yetkazib beruvchilarga qarz, olingan avanslar'}
+            />
+            <SummaryCard
+              color="#6366f1"
+              icon={<Building2 size={20} />}
+              title={isRu ? 'Капитал (рассчитан)' : 'Kapital (hisoblangan)'}
+              value={formatCurrency(totals.totalEquity, locale, docCurrency)}
+              hint={
+                isRu
+                  ? `Уставный: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Нераспр. прибыль: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
+                  : `Ustav: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Taqsimlanmagan foyda: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
+              }
+            />
           </div>
+          {!totals.hasValidCurrencyRates && !isReadOnly && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
+              <AlertTriangle size={16} />
+              <span>
+                {isRu
+                  ? 'Строки без валюты или USD-строки без курса не входят в итоги.'
+                  : 'Valyutasiz qatorlar yoki kurssiz USD qatorlari jamiga kirmaydi.'}
+              </span>
+            </div>
+          )}
 
-          {/* Right: Operational Status Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            {currentDoc && !isReadOnly && (
-              <>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleSaveLines}
-                  disabled={actionLoading}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Save size={14} />
-                  <span>{actionLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}</span>
-                </Button>
+          {isPosted && <PostedLinks isRu={isRu} />}
 
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handlePost}
-                  disabled={actionLoading || !metrics.isBalanced}
+          {/* Tabs */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border-light)', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: '2px' }}>
+            {navTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    backgroundColor: metrics.isBalanced ? '#10b981' : undefined,
-                    borderColor: metrics.isBalanced ? '#10b981' : undefined,
+                    gap: '8px',
+                    padding: '10px 16px',
+                    border: 'none',
+                    background: 'none',
+                    borderBottom: isActive ? '2px solid var(--color-primary-600)' : '2px solid transparent',
+                    color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
+                    fontWeight: isActive ? 600 : 500,
+                    fontSize: 'var(--text-sm)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <CheckCircle2 size={14} />
-                  <span>{actionLoading ? (isRu ? 'Проведение...' : 'Tasdiqlanmoqda...') : isRu ? 'Провести остатки' : 'Tasdiqlash (Post)'}</span>
-                </Button>
-
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleDeleteDocument}
-                  disabled={actionLoading}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
-                >
-                  <Trash2 size={14} />
-                  <span>{isRu ? 'Удалить' : 'O‘chirish'}</span>
-                </Button>
-              </>
-            )}
-
-            {currentDoc && isReadOnly && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowUnpostModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: 'var(--color-error-600)',
-                  borderColor: 'var(--color-error-100)',
-                }}
-              >
-                <RotateCcw size={14} />
-                <span>{isRu ? 'Переоткрыть (Unpost)' : 'Qayta ochish (Unpost)'}</span>
-              </Button>
-            )}
+                  <Icon size={16} />
+                  <span>{tab.label}</span>
+                  {tab.count > 0 && <Badge variant={isActive ? 'info' : 'neutral'}>{tab.count}</Badge>}
+                </button>
+              );
+            })}
           </div>
-        </div>
-      </Card>
 
-      {/* ─── Underline Tab Navigation Bar (Matches Finance) ────────── */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '1px solid var(--color-border-light)',
-          gap: 'var(--space-2)',
-          overflowX: 'auto',
-          paddingBottom: '2px',
-        }}
-      >
-        {navTabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                border: 'none',
-                background: 'none',
-                borderBottom: isActive ? '2px solid var(--color-primary-600)' : '2px solid transparent',
-                color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                fontWeight: isActive ? 600 : 500,
-                fontSize: 'var(--text-sm)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all var(--transition-fast)',
-              }}
+          {activeTab === 'cash' && (
+            <SubledgerCard
+              title={isRu ? 'Деньги в кассах и на счетах' : 'Kassa va bankdagi pul'}
+              hint={isRu ? 'Попадут на баланс выбранной кассы.' : 'Tanlangan kassa qoldig‘iga qo‘shiladi.'}
+              isReadOnly={isReadOnly}
+              onAdd={() => addLine('CASH')}
+              addText={isRu ? 'Добавить кассу' : 'Kassa qo‘shish'}
             >
-              <Icon size={16} />
-              <span>{tab.label}</span>
-              {tab.count > 0 && (
-                <Badge variant={isActive ? 'info' : 'neutral'}>
-                  {tab.count}
-                </Badge>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              <CashTable {...tableProps} accounts={accounts} />
+            </SubledgerCard>
+          )}
 
-      {/* ─── Sub-Ledger Content Tables ─────────────────────────────── */}
+          {activeTab === 'inventory' && (
+            <SubledgerCard
+              title={isRu ? 'Товары и материалы на складах' : 'Ombordagi tovar va materiallar'}
+              hint={
+                isRu
+                  ? 'Каждая строка станет первой партией FIFO на складе; себестоимость берётся из карточки товара.'
+                  : 'Har bir qator omborda birinchi FIFO partiyasi bo‘ladi; tannarx tovar kartochkasidan olinadi.'
+              }
+              isReadOnly={isReadOnly}
+              onAdd={() => addLine('INVENTORY')}
+              addText={isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
+            >
+              <InventoryTable
+                {...tableProps}
+                products={products}
+                warehouses={warehouses}
+                onCreateProduct={(index) => setQuickCreate({ kind: 'product', index })}
+              />
+            </SubledgerCard>
+          )}
 
-      {/* TAB 1: CASH & BANK */}
-      {activeTab === 'cash' && (
-        <SubledgerCard
-          title={isRu ? 'Денежные средства в кассе и на расчетных счетах' : 'Kassa va bankdagi pul mablag‘lari'}
-          count={tabCounts.cash}
-          isReadOnly={isReadOnly}
-          onAdd={() => addLine('CASH')}
-          addText={isRu ? 'Добавить счет / кассу' : 'Kassa / hisob qo‘shish'}
-        >
-          <CashTable
-            lines={lines}
-            isReadOnly={isReadOnly}
-            accounts={accounts}
-            locale={locale}
-            isRu={isRu}
-            onUpdate={updateLineField}
-            onRemove={removeLine}
-          />
-        </SubledgerCard>
-      )}
+          {activeTab === 'debts' && (
+            <SubledgerCard
+              title={isRu ? 'Долги и авансы контрагентов' : 'Kontragentlar bilan qarz va avanslar'}
+              hint={
+                isRu
+                  ? 'Попадут в расчёты с контрагентом в своей валюте; последующие оплаты закроют их.'
+                  : 'Kontragent hisob-kitobiga o‘z valyutasida tushadi; keyingi to‘lovlar ularni yopadi.'
+              }
+              isReadOnly={isReadOnly}
+              onAdd={() => addLine('CUSTOMER_DEBT')}
+              addText={isRu ? 'Добавить строку' : 'Qator qo‘shish'}
+            >
+              <DebtsTable
+                {...tableProps}
+                counterparties={counterparties}
+                onCreateCounterparty={(index, type) => setQuickCreate({ kind: 'counterparty', index, type })}
+              />
+            </SubledgerCard>
+          )}
 
-      {/* TAB 2: INVENTORY */}
-      {activeTab === 'inventory' && (
-        <SubledgerCard
-          title={isRu ? 'Товарно-материальные ценности на складах' : 'Ombordagi tovar va materiallar qoldiqlari'}
-          count={tabCounts.inventory}
-          isReadOnly={isReadOnly}
-          onAdd={() => addLine('INVENTORY')}
-          addText={isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
-        >
-          <InventoryTable
-            onCreateProduct={(index) => setQuickCreate({ kind: 'product', index })}
-            lines={lines}
-            isReadOnly={isReadOnly}
-            products={products}
-            warehouses={warehouses}
-            locale={locale}
-            isRu={isRu}
-            onUpdate={updateLineField}
-            onRemove={removeLine}
-          />
-        </SubledgerCard>
-      )}
+          {activeTab === 'fixed-assets' && (
+            <SubledgerCard
+              title={isRu ? 'Основные средства' : 'Asosiy vositalar'}
+              hint={null}
+              isReadOnly={isReadOnly}
+              onAdd={() => addLine('FIXED_ASSET')}
+              addText={isRu ? 'Добавить средство' : 'Asosiy vosita qo‘shish'}
+            >
+              {/* B6 / D6: depreciation is not computed by the system after posting. */}
+              <p
+                data-testid="fixed-asset-depreciation-notice"
+                style={{ margin: 'var(--space-3) var(--space-5)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
+              >
+                {isRu
+                  ? 'Амортизация не рассчитывается автоматически. Выберите средство из реестра или создайте новое: стоимость и накопленная амортизация (UZS) берутся из реестра; при создании можно рассчитать амортизацию линейным методом на дату остатков.'
+                  : 'Eskirish tizimda avtomatik hisoblanmaydi. Vositani reyestrdan tanlang yoki yangisini yarating: qiymat va jamg‘arilgan eskirish (UZS) reyestrdan olinadi; yaratishda eskirishni qoldiq sanasiga chiziqli usulda hisoblab olish mumkin.'}
+              </p>
+              <FixedAssetsTable
+                {...tableProps}
+                fixedAssets={fixedAssets}
+                currency={docCurrency}
+                onCreateAsset={(index) => setQuickCreate({ kind: 'fixedAsset', index })}
+              />
+            </SubledgerCard>
+          )}
 
-      {/* TAB 3: CUSTOMER DEBT */}
-      {activeTab === 'customers' && (
-        <SubledgerCard
-          title={isRu ? 'Задолженность покупателей (Дебиторы)' : 'Mijozlar qarzdorligi (Debitorlik)'}
-          count={tabCounts.customers}
-          isReadOnly={isReadOnly}
-          onAdd={() => addLine('CUSTOMER_DEBT')}
-          addText={isRu ? 'Добавить клиента' : 'Mijoz qarzdorligini qo‘shish'}
-        >
-          <CounterpartyTable
-            category="CUSTOMER_DEBT"
-            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'CUSTOMER' })}
-            lines={lines}
-            isReadOnly={isReadOnly}
-            counterparties={counterparties.filter((c) => c.type === 'CUSTOMER' || c.type === 'BOTH')}
-            locale={locale}
-            isRu={isRu}
-            onUpdate={updateLineField}
-            onRemove={removeLine}
-          />
-        </SubledgerCard>
-      )}
-
-      {/* TAB 4: SUPPLIER DEBT */}
-      {activeTab === 'suppliers' && (
-        <SubledgerCard
-          title={isRu ? 'Задолженность поставщикам (Кредиторы)' : 'Yetkazib beruvchilarga qarzlar (Kreditorlik)'}
-          count={tabCounts.suppliers}
-          isReadOnly={isReadOnly}
-          onAdd={() => addLine('SUPPLIER_DEBT')}
-          addText={isRu ? 'Добавить поставщика' : 'Yetkazib beruvchini qo‘shish'}
-        >
-          <CounterpartyTable
-            category="SUPPLIER_DEBT"
-            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'SUPPLIER' })}
-            lines={lines}
-            isReadOnly={isReadOnly}
-            counterparties={counterparties.filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH')}
-            locale={locale}
-            isRu={isRu}
-            onUpdate={updateLineField}
-            onRemove={removeLine}
-          />
-        </SubledgerCard>
-      )}
-
-      {/* TAB 5: ADVANCES */}
-      {activeTab === 'advances' && (
-        <SubledgerCard
-          title={isRu ? 'Авансы: выданные поставщикам и полученные от клиентов' : 'Avanslar: yetkazib beruvchilarga berilgan va mijozlardan olingan'}
-          count={tabCounts.advances}
-          isReadOnly={isReadOnly}
-          onAdd={() => addLine('CUSTOMER_ADVANCE')}
-          addText={isRu ? 'Добавить аванс' : 'Avans qo‘shish'}
-        >
-          <AdvancesTable
-            onCreateCounterparty={(index) => setQuickCreate({ kind: 'counterparty', index, type: 'BOTH' })}
-            lines={lines}
-            isReadOnly={isReadOnly}
-            counterparties={counterparties}
-            locale={locale}
-            isRu={isRu}
-            onUpdate={updateLineField}
-            onRemove={removeLine}
-          />
-        </SubledgerCard>
-      )}
-
-      {/* TAB 6: FIXED ASSETS */}
-      {activeTab === 'fixed-assets' && (
-        <SubledgerCard
-          title={isRu ? 'Основные средства (Оборудование, техника, транспорт)' : 'Asosiy vositalar (Uskunalar, texnika, transport)'}
-          count={tabCounts.fixedAssets}
-          isReadOnly={isReadOnly}
-          onAdd={() => addLine('FIXED_ASSET')}
-          addText={isRu ? 'Добавить объект' : 'Asosiy vosita qo‘shish'}
-        >
-          {/* B6 / D6: depreciation is not computed by the system. */}
-          <p
-            data-testid="fixed-asset-depreciation-notice"
-            style={{ margin: '0 0 var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
-          >
-            {isRu
-              ? 'Амортизация не рассчитывается автоматически. Сначала добавьте средство в реестр основных средств (первоначальная стоимость и накопленная амортизация в UZS), затем выберите его здесь: значения берутся из реестра.'
-              : 'Eskirish tizimda avtomatik hisoblanmaydi. Avval vositani asosiy vositalar reyestriga qo‘shing (boshlang‘ich qiymat va jamg‘arilgan eskirish UZS da), so‘ng shu yerda tanlang: qiymatlar reyestrdan olinadi.'}
-          </p>
-          <FixedAssetsTable
-            lines={lines}
-            isReadOnly={isReadOnly}
-            fixedAssets={fixedAssets}
-            locale={locale}
-            isRu={isRu}
-            currency={docCurrency}
-            onUpdate={updateLineField}
-            onRemove={removeLine}
-          />
-        </SubledgerCard>
-      )}
-
-      {/* TAB 7: OTHER & EQUITY */}
-      {activeTab === 'other' && (
-        <SubledgerCard
-          title={isRu ? 'Собственный капитал и прочие статьи баланса' : 'Ustav kapitali va boshqa balans moddalari'}
-          count={tabCounts.other}
-          isReadOnly={isReadOnly}
-          onAdd={() => addLine('EQUITY')}
-          addText={isRu ? 'Добавить статью' : 'Modda qo‘shish'}
-        >
-          <OtherTable
-            lines={lines}
-            isReadOnly={isReadOnly}
-            locale={locale}
-            isRu={isRu}
-            onUpdate={updateLineField}
-            onRemove={removeLine}
-          />
-        </SubledgerCard>
+          {activeTab === 'other' && (
+            <SubledgerCard
+              title={isRu ? 'Уставный капитал и прочие статьи' : 'Ustav kapitali va boshqa moddalar'}
+              hint={
+                isRu
+                  ? 'Нераспределённую прибыль вводить не нужно — она рассчитывается автоматически.'
+                  : 'Taqsimlanmagan foydani kiritish shart emas — u avtomatik hisoblanadi.'
+              }
+              isReadOnly={isReadOnly}
+              onAdd={() => addLine('EQUITY')}
+              addText={isRu ? 'Добавить статью' : 'Modda qo‘shish'}
+            >
+              <OtherTable {...tableProps} />
+            </SubledgerCard>
+          )}
+        </>
       )}
 
       {quickCreate?.kind === 'product' && (
-        <CreateProductDrawer
-          isOpen
-          onClose={() => setQuickCreate(null)}
-          onSuccess={(created) => {
-            void handleQuickCreated(created.id);
-          }}
-        />
+        <CreateProductDrawer isOpen onClose={() => setQuickCreate(null)} onSuccess={(created) => void handleQuickCreated(created.id)} />
       )}
       {quickCreate?.kind === 'counterparty' && (
         <CreateCounterpartyDrawer
           isOpen
           defaultType={quickCreate.type}
           onClose={() => setQuickCreate(null)}
-          onSuccess={(created) => {
-            void handleQuickCreated(created.id);
-          }}
+          onSuccess={(created) => void handleQuickCreated(created.id)}
+        />
+      )}
+      {quickCreate?.kind === 'fixedAsset' && (
+        <NewFixedAssetModal
+          isRu={isRu}
+          openingDate={openingDate}
+          requestOptions={requestOptions}
+          onClose={() => setQuickCreate(null)}
+          onCreated={handleAssetCreated}
         />
       )}
 
-      {/* ─── Modal: New Document ───────────────────────────────────── */}
-      <Modal
-        isOpen={showNewDocModal}
-        title={isRu ? 'Новый ввод начальных остатков' : 'Yangi boshlang‘ich qoldiq hujjati'}
-        onClose={() => setShowNewDocModal(false)}
-      >
+      {/* New document */}
+      <Modal isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Дата среза остатков' : 'Boshlang‘ich qoldiq sanasi'}
+              {isRu ? 'Дата, на которую вводятся остатки' : 'Qoldiqlar qaysi sanaga kiritiladi'}
             </label>
             <DatePicker value={newDocDate} onChange={setNewDocDate} />
+            <p style={{ margin: '6px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
+              {isRu ? 'Номер документа присваивается автоматически.' : 'Hujjat raqami avtomatik beriladi.'}
+            </p>
           </div>
-
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Номер документа (оставьте пустым для автонумерации)' : 'Hujjat raqami (avtomatik yaratish uchun bo‘sh qoldiring)'}
+              {isRu ? 'Примечание' : 'Izoh'}
             </label>
-            <Input
-              type="text"
-              placeholder="OB-2026-0001"
-              value={newDocNumber}
-              onChange={(e) => setNewDocNumber(e.target.value)}
-            />
+            <Input type="text" value={newDocNotes} onChange={(e) => setNewDocNotes(e.target.value)} placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'} />
           </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Примечание / Основание' : 'Izoh / Asos'}
-            </label>
-            <Input
-              type="text"
-              placeholder={isRu ? 'Основание ввода остатков...' : 'Kiritish asosi...'}
-              value={newDocNotes}
-              onChange={(e) => setNewDocNotes(e.target.value)}
-            />
-          </div>
-
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
             <Button variant="secondary" onClick={() => setShowNewDocModal(false)}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
-              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать документ' : 'Hujjat yaratish'}
+              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать' : 'Yaratish'}
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* ─── Modal: Excel Import ───────────────────────────────────── */}
-      <Modal
-        isOpen={showImportModal}
-        title={isRu ? 'Импорт остатков из Excel' : 'Boshlang‘ich qoldiqlarni Exceldan yuklash'}
-        onClose={closeImportModal}
-      >
+      {/* Excel import (template download included) */}
+      <Modal isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
-          <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {isRu
-              ? 'Заполните скачанный шаблон Excel со всеми вкладками (Деньги, Склад, Клиенты, Поставщики) и выберите файл для загрузки.'
-              : 'Standart Excel shablonini to‘ldiring (Pul, Tovar, Mijozlar, Yetkazib beruvchilar varaqlari bilan) va yuklash uchun faylni tanlang.'}
-          </p>
+          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <li>
+              <button
+                type="button"
+                onClick={handleDownloadTemplate}
+                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary-600)', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <Download size={14} />
+                {isRu ? 'Скачайте шаблон' : 'Shablonni yuklab oling'}
+              </button>
+            </li>
+            <li>{isRu ? 'Заполните листы (деньги, товары, клиенты, поставщики).' : 'Varaqlarni to‘ldiring (pul, tovar, mijozlar, yetkazib beruvchilar).'}</li>
+            <li>{isRu ? 'Выберите файл, проверьте и сохраните.' : 'Faylni tanlang, tekshiring va saqlang.'}</li>
+          </ol>
 
-          <div
-            style={{
-              border: '2px dashed var(--color-border)',
-              borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-6)',
-              textAlign: 'center',
-              backgroundColor: 'var(--color-bg-subtle)',
-            }}
-          >
+          <div style={{ border: '2px dashed var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', textAlign: 'center', backgroundColor: 'var(--color-bg-subtle)' }}>
             <FileSpreadsheet size={36} color="var(--color-primary-600)" style={{ margin: '0 auto 8px' }} />
             <input
               type="file"
@@ -1381,23 +1062,17 @@ export default function OpeningBalancesPage() {
           </div>
 
           {importErrors.length > 0 && (
-            <div
-              style={{
-                backgroundColor: 'var(--color-error-50)',
-                border: '1px solid var(--color-error-100)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--space-3)',
-                maxHeight: '180px',
-                overflowY: 'auto',
-              }}
-            >
+            <div style={{ backgroundColor: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', maxHeight: '180px', overflowY: 'auto' }}>
               <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-error-600)', display: 'block', marginBottom: '4px' }}>
                 {isRu ? 'Ошибки в файле Excel:' : 'Excel fayldagi xatoliklar:'}
               </span>
               <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}>
                 {importErrors.map((err, idx) => (
                   <li key={idx}>
-                    <strong>[{err.sheetName}, Qator {err.rowNumber}]:</strong> {err.errorMessage}
+                    <strong>
+                      [{err.sheetName}, {isRu ? 'строка' : 'qator'} {err.rowNumber}]:
+                    </strong>{' '}
+                    {err.errorMessage}
                   </li>
                 ))}
               </ul>
@@ -1405,17 +1080,7 @@ export default function OpeningBalancesPage() {
           )}
 
           {importSummary && importPreview && (
-            <div
-              style={{
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--space-3)',
-                fontSize: 'var(--text-sm)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-2)',
-              }}
-            >
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: 'var(--text-sm)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               <div>
                 {isRu ? 'Строк в файле' : 'Fayldagi qatorlar'}: <strong>{importPreview.totalRows}</strong>
                 {' · '}
@@ -1450,22 +1115,12 @@ export default function OpeningBalancesPage() {
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             {importSummary?.canCommit ? (
-              <Button
-                variant="primary"
-                onClick={handleCommitImport}
-                disabled={importing}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
+              <Button variant="primary" onClick={handleCommitImport} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Save size={16} />
                 <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
               </Button>
             ) : (
-              <Button
-                variant="primary"
-                onClick={handlePreviewImport}
-                disabled={!importFile || importing}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
+              <Button variant="primary" onClick={handlePreviewImport} disabled={!importFile || importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Upload size={16} />
                 <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
               </Button>
@@ -1474,34 +1129,20 @@ export default function OpeningBalancesPage() {
         </div>
       </Modal>
 
-      {/* ─── Modal: Unpost Confirmation (Rollback Invariant) ────────── */}
-      <Modal
-        isOpen={showUnpostModal}
-        title={isRu ? 'Переоткрыть документ остатков (Unpost)' : 'Boshlang‘ich qoldiqni qayta ochish (Unpost)'}
-        onClose={() => setShowUnpostModal(false)}
-      >
+      {/* Unpost (rollback invariant) */}
+      <Modal isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
-          <div
-            style={{
-              padding: 'var(--space-3)',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--color-warning-50)',
-              border: '1px solid var(--color-warning-100)',
-              display: 'flex',
-              gap: '10px',
-            }}
-          >
+          <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', border: '1px solid var(--color-warning-100)', display: 'flex', gap: '10px' }}>
             <AlertTriangle size={20} color="var(--color-warning-600)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
               {isRu
-                ? 'Внимание! Документ вернется в статус черновика. Будет проверен защитный инвариант: если часть товаров уже продана или деньги сняты из кассы, переоткрытие будет заблокировано.'
-                : 'Diqqat! Hujjat qoralama holatiga qaytariladi. Xavfsizlik qoidasi tekshiriladi: agar dastlabki partiyadagi tovarlar sotilgan bo‘lsa yoki kassa kamaygan bo‘lsa, qayta ochish taqiqlanadi.'}
+                ? 'Документ вернётся в черновик, а кассы, склады, расчёты и журнал — в состояние до проведения. Если товары из начальных партий уже проданы или деньги из кассы потрачены, переоткрыть нельзя.'
+                : 'Hujjat qoralamaga qaytadi, kassa, ombor, hisob-kitob va jurnal tasdiqlashdan oldingi holatiga qaytariladi. Boshlang‘ich partiyadagi tovar sotilgan yoki kassadagi pul sarflangan bo‘lsa, qayta ochib bo‘lmaydi.'}
             </p>
           </div>
-
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Причина переоткрытия' : 'Qayta ochish sababi'}
+              {isRu ? 'Причина' : 'Sabab'}
             </label>
             <Input
               type="text"
@@ -1510,18 +1151,12 @@ export default function OpeningBalancesPage() {
               onChange={(e) => setUnpostReason(e.target.value)}
             />
           </div>
-
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
             <Button variant="secondary" onClick={() => setShowUnpostModal(false)}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleUnpost}
-              disabled={actionLoading}
-              style={{ backgroundColor: 'var(--color-error-600)', borderColor: 'var(--color-error-600)' }}
-            >
-              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Да, переоткрыть' : 'Ha, qayta ochilsin'}
+            <Button variant="primary" onClick={handleUnpost} disabled={actionLoading} style={{ backgroundColor: 'var(--color-error-600)', borderColor: 'var(--color-error-600)' }}>
+              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Переоткрыть' : 'Qayta ochish'}
             </Button>
           </div>
         </div>
@@ -1531,19 +1166,52 @@ export default function OpeningBalancesPage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-Components & Table Sections
+// Building blocks
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SubledgerCard({
-  title,
-  count,
-  isReadOnly,
-  onAdd,
-  addText,
-  children,
-}: {
+function SummaryCard({ color, icon, title, value, hint }: { color: string; icon: React.ReactNode; title: string; value: string; hint: string }) {
+  return (
+    <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', borderLeft: `4px solid ${color}` }}>
+      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: `${color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
+        {icon}
+      </div>
+      <div style={{ overflow: 'hidden' }}>
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
+        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }} className="tabular-nums">
+          {value}
+        </div>
+        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>{hint}</div>
+      </div>
+    </Card>
+  );
+}
+
+/** Where a posted opening balance can be seen in the rest of the system. */
+function PostedLinks({ isRu }: { isRu: boolean }) {
+  const links = [
+    { href: '/finance', label: isRu ? 'Кассы и банк' : 'Kassa va bank' },
+    { href: '/inventory', label: isRu ? 'Остатки на складах' : 'Ombor qoldiqlari' },
+    { href: '/counterparties', label: isRu ? 'Расчёты с контрагентами' : 'Kontragentlar hisob-kitobi' },
+    { href: '/accounting/journal', label: isRu ? 'Журнал проводок' : 'Buxgalteriya jurnali' },
+  ];
+  return (
+    <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }} data-testid="opening-balance-posted-links">
+      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+        {isRu ? 'Остатки проведены и видны в разделах:' : 'Qoldiqlar tasdiqlangan va quyidagi bo‘limlarda ko‘rinadi:'}
+      </span>
+      {links.map((link) => (
+        <Link key={link.href} href={link.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-primary-600)' }}>
+          {link.label}
+          <ArrowRight size={14} />
+        </Link>
+      ))}
+    </Card>
+  );
+}
+
+function SubledgerCard({ title, hint, isReadOnly, onAdd, addText, children }: {
   title: string;
-  count: number;
+  hint: string | null;
   isReadOnly: boolean;
   onAdd: () => void;
   addText: string;
@@ -1551,24 +1219,10 @@ function SubledgerCard({
 }) {
   return (
     <Card style={{ padding: 0, overflow: 'hidden' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: 'var(--space-4) var(--space-5)',
-          borderBottom: '1px solid var(--color-border-light)',
-          flexWrap: 'wrap',
-          gap: 'var(--space-2)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            {title}
-          </h3>
-          <Badge variant="neutral">
-            {count}
-          </Badge>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border-light)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text-primary)' }}>{title}</h3>
+          {hint && <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{hint}</p>}
         </div>
         {!isReadOnly && (
           <Button variant="secondary" size="sm" onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1582,63 +1236,32 @@ function SubledgerCard({
   );
 }
 
-// ─── Table 1: Cash & Bank ──────────────────────────────────────────────────
+// ─── Money ─────────────────────────────────────────────────────────────────
 
-function CashTable({
-  lines,
-  isReadOnly,
-  accounts,
-  locale,
-  isRu,
-  onUpdate,
-  onRemove,
-}: SubledgerTableProps & { accounts: CashAccount[] }) {
-  const filtered = linesWhere(lines, (l) => l.category === 'CASH' || l.category === 'BANK');
-
-  const getAccountName = (acc: CashAccount | undefined) => {
-    if (!acc) return '—';
-    if (typeof acc.name === 'string') return acc.name;
-    return acc.name?.[locale] || acc.name?.uz || acc.name?.ru || 'Kassa';
-  };
+function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemove }: SubledgerTableProps & { accounts: CashAccount[] }) {
+  const filtered = linesWhere(lines, (l) => CASH_CATEGORIES.has(String(l.category)));
+  const usable = accounts.filter((account) => isCashAccountCurrencyValid(account));
 
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+    <table style={tableStyle}>
+      <thead style={theadStyle}>
         <tr>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>{isRu ? 'КАССА / РАСЧЕТНЫЙ СЧЕТ' : 'KASSA / HISOBRAQAM'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '90px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '130px' }}>{isRu ? 'КУРС К UZS' : 'UZS KURSI'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'НАЧАЛЬНЫЙ ОСТАТОК' : 'BOSHLANG‘ICH QOLDIQ'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
-          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+          <th style={th({ width: '40px' })}>#</th>
+          <th style={th({ minWidth: '260px' })}>{isRu ? 'Касса / счёт' : 'Kassa / hisob'}</th>
+          <th style={th({ width: '90px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
+          <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Остаток' : 'Qoldiq'}</th>
+          <th style={th({ minWidth: '200px' })}>{isRu ? 'Примечание' : 'Izoh'}</th>
+          {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <tr>
-            <td colSpan={isReadOnly ? 6 : 7} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Нет добавленных счетов или касс' : 'Kassa yoki hisoblar qo‘shilmagan'}
-            </td>
-          </tr>
+          <EmptyRow colSpan={6} text={isRu ? 'Кассы не добавлены' : 'Kassalar qo‘shilmagan'} />
         ) : (
-          filtered.map(({ line, index }: IndexedLine, pos: number) => (
-            <tr
-              key={index}
-              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
-              <td style={{ padding: '12px 16px' }}>
-                {(() => {
-                  const compatibleAccounts = accounts.filter((account) =>
-                    isCashAccountCurrencyValid(account) &&
-                    (line.category === 'BANK'
-                      ? account.accountType === 'BANK'
-                      : account.accountType !== 'BANK'),
-                  );
-                  return (
+          filtered.map(({ line, index }, pos) => (
+            <tr key={index} style={rowStyle}>
+              <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
+              <td style={td}>
                 <Select
                   value={line.accountId || ''}
                   disabled={isReadOnly}
@@ -1646,96 +1269,40 @@ function CashTable({
                     const account = accounts.find((item) => item.id === value);
                     onUpdate(index, 'accountId', value);
                     if (account) {
-                       onUpdate(index, 'currency', account.currency);
+                      // The kassa decides the currency and whether it is a bank line.
+                      onUpdate(index, 'currency', account.currency);
                       onUpdate(index, 'category', account.accountType === 'BANK' ? 'BANK' : 'CASH');
                     }
                   }}
-                  style={{ width: '100%', maxWidth: '300px' }}
+                  style={{ width: '100%', maxWidth: '320px' }}
                   options={[
                     { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
-                    ...compatibleAccounts.map((account) => ({
+                    ...usable.map((account) => ({
                       value: account.id,
-                      label: `${getAccountName(account)} (${account.accountType}, ${account.currency})`,
+                      label: `${localized(account.name, locale, 'Kassa')} (${account.currency})`,
                     })),
                   ]}
                 />
-                  );
-                })()}
               </td>
-              <td style={{ padding: '12px 16px' }}>
-                <Badge variant="neutral">
-                  {line.currency || '—'}
-                </Badge>
+              <td style={td}>
+                <Badge variant="neutral">{line.currency || '—'}</Badge>
               </td>
-              <td style={{ padding: '12px 16px' }}>
-                {line.currency === 'UZS' ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>1</span>
-                ) : (
-                  <input
-                    type="number"
-                    min="0.0001"
-                    step="any"
-                    value={line.exchangeRate ?? ''}
-                    disabled={isReadOnly}
-                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
-                    placeholder="UZS/USD"
-                    aria-label={isRu ? 'Курс USD к UZS' : 'USD ning UZS kursi'}
-                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
-                  />
-                )}
-              </td>
-              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+              <td style={{ ...td, textAlign: 'right' }}>
                 <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'amount', value)}
                   min={0}
                   decimals={2}
-                  placeholder="0.00"
+                  placeholder="0"
                   className="tabular-nums"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '180px',
-                    fontWeight: 600,
-                    textAlign: 'right',
-                    fontSize: 'var(--text-sm)',
-                  }}
+                  style={field('180px', { fontWeight: 600, textAlign: 'right' })}
                 />
               </td>
-              <td style={{ padding: '12px 16px' }}>
-                <input
-                  type="text"
-                  value={line.notes || ''}
-                  disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-                  placeholder={isRu ? 'Примечание...' : 'Izoh...'}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                />
+              <td style={td}>
+                <NotesInput line={line} index={index} isReadOnly={isReadOnly} isRu={isRu} onUpdate={onUpdate} />
               </td>
-              {!isReadOnly && (
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(index)}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
-                    title={isRu ? 'Удалить' : 'O‘chirish'}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              )}
+              <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
             </tr>
           ))
         )}
@@ -1744,7 +1311,7 @@ function CashTable({
   );
 }
 
-// ─── Table 2: Inventory ───────────────────────────────────────────────────
+// ─── Goods ─────────────────────────────────────────────────────────────────
 
 function InventoryTable({
   lines,
@@ -1759,54 +1326,32 @@ function InventoryTable({
 }: SubledgerTableProps & { products: Product[]; warehouses: Warehouse[]; onCreateProduct: (index: number) => void }) {
   const filtered = linesWhere(lines, (l) => l.category === 'INVENTORY');
 
-  const getProductName = (p: Product | undefined) => {
-    if (!p) return '—';
-    if (typeof p.name === 'string') return p.name;
-    return p.name?.[locale] || p.name?.uz || p.name?.ru || 'Tovar';
-  };
-
-  const getWarehouseName = (w: Warehouse | undefined) => {
-    if (!w) return '—';
-    if (typeof w.name === 'string') return w.name;
-    return w.name?.[locale] || w.name?.uz || w.name?.ru || 'Ombor';
-  };
-
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+    <table style={tableStyle}>
+      <thead style={theadStyle}>
         <tr>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '220px' }}>{isRu ? 'ТОВАР (SKU)' : 'TOVAR (SKU)'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px' }}>{isRu ? 'СКЛАД' : 'OMBOR'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '120px', textAlign: 'right' }}>{isRu ? 'КОЛИЧЕСТВО' : 'MIQDOR'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px', textAlign: 'right' }}>{isRu ? 'ТАННАРХ' : 'TANNARX'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '110px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '120px' }}>{isRu ? 'КУРС' : 'KURS'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px' }}>{isRu ? 'ПАРТИЯ' : 'PARTIYA №'}</th>
-          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+          <th style={th({ width: '40px' })}>#</th>
+          <th style={th({ minWidth: '240px' })}>{isRu ? 'Товар' : 'Tovar'}</th>
+          {warehouses.length > 1 && <th style={th({ minWidth: '180px' })}>{isRu ? 'Склад' : 'Ombor'}</th>}
+          <th style={th({ width: '120px', textAlign: 'right' })}>{isRu ? 'Количество' : 'Miqdor'}</th>
+          <th style={th({ width: '140px', textAlign: 'right' })}>{isRu ? 'Себестоимость' : 'Tannarx'}</th>
+          <th style={th({ width: '110px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
+          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Сумма' : 'Summa'}</th>
+          {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <tr>
-            <td colSpan={10} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Остатки товаров не добавлены' : 'Tovarlar qoldig‘i qo‘shilmagan'}
-            </td>
-          </tr>
+          <EmptyRow colSpan={8} text={isRu ? 'Товары не добавлены' : 'Tovarlar qo‘shilmagan'} />
         ) : (
-          filtered.map(({ line, index }: IndexedLine, pos: number) => (
-            <tr
-              key={index}
-              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
-              <td style={{ padding: '12px 16px' }}>
+          filtered.map(({ line, index }, pos) => (
+            <tr key={index} style={rowStyle}>
+              <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
+              <td style={td}>
                 <Select
                   value={line.productId || ''}
                   disabled={isReadOnly}
+                  searchable
                   onChange={(value) => onUpdate(index, 'productId', value)}
                   onCreateNew={!isReadOnly ? () => onCreateProduct(index) : undefined}
                   createNewLabel={isRu ? 'Новый товар' : 'Yangi tovar qo‘shish'}
@@ -1815,69 +1360,48 @@ function InventoryTable({
                     { value: '', label: isRu ? 'Выберите товар' : 'Tovarni tanlang' },
                     ...products.map((product) => ({
                       value: product.id,
-                      label: `${product.sku ? `[${product.sku}] ` : ''}${getProductName(product)}`,
+                      label: `${product.sku ? `[${product.sku}] ` : ''}${localized(product.name, locale, 'Tovar')}`,
                     })),
                   ]}
                 />
               </td>
-              <td style={{ padding: '12px 16px' }}>
-                <Select
-                  value={line.warehouseId || ''}
-                  disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'warehouseId', value)}
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: '', label: isRu ? 'Выберите склад' : 'Omborni tanlang' },
-                    ...warehouses.map((warehouse) => ({
-                      value: warehouse.id,
-                      label: getWarehouseName(warehouse),
-                    })),
-                  ]}
-                />
-              </td>
-              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <CurrencyInput
+              {warehouses.length > 1 && (
+                <td style={td}>
+                  <Select
+                    value={line.warehouseId || ''}
+                    disabled={isReadOnly}
+                    onChange={(value) => onUpdate(index, 'warehouseId', value)}
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: '', label: isRu ? 'Выберите склад' : 'Omborni tanlang' },
+                      ...warehouses.map((warehouse) => ({ value: warehouse.id, label: localized(warehouse.name, locale, 'Ombor') })),
+                    ]}
+                  />
+                </td>
+              )}
+              <td style={{ ...td, textAlign: 'right' }}>
+                <QuantityInput
+                  unit={products.find((product) => product.id === line.productId)?.unitOfMeasure}
                   value={line.quantity || ''}
                   disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'quantity', value)}
-                  min={0}
-                  decimals={3}
-                  placeholder="0"
-                  className="tabular-nums"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100px',
-                    textAlign: 'right',
-                    fontSize: 'var(--text-sm)',
-                  }}
+                  onValueChange={(value) => onUpdate(index, 'quantity', Number(value) || 0)}
+                  aria-label={isRu ? 'Количество' : 'Miqdor'}
+                  style={field('130px', { textAlign: 'right' })}
                 />
               </td>
-              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+              <td style={{ ...td, textAlign: 'right' }}>
                 <CurrencyInput
                   value={line.unitCost || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'unitCost', value)}
                   min={0}
                   decimals={2}
-                  placeholder="0.00"
+                  placeholder="0"
                   className="tabular-nums"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '120px',
-                    textAlign: 'right',
-                    fontSize: 'var(--text-sm)',
-                  }}
+                  style={field('120px', { textAlign: 'right' })}
                 />
               </td>
-              <td style={{ padding: '12px 16px' }}>
+              <td style={td}>
                 <Select
                   options={CURRENCY_OPTIONS}
                   value={line.currency || ''}
@@ -1887,56 +1411,10 @@ function InventoryTable({
                   aria-label={isRu ? 'Валюта себестоимости' : 'Tannarx valyutasi'}
                 />
               </td>
-              <td style={{ padding: '12px 16px' }}>
-                {line.currency !== 'USD' ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>{line.currency === 'UZS' ? '1' : '—'}</span>
-                ) : (
-                  <input
-                    type="number"
-                    min="0.0001"
-                    step="any"
-                    value={line.exchangeRate ?? ''}
-                    disabled={isReadOnly}
-                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
-                    placeholder="UZS/USD"
-                    aria-label={isRu ? 'Курс валюты к UZS' : 'Valyutaning UZS kursi'}
-                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
-                  />
-                )}
-              </td>
-              <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
+              <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
                 {formatCurrencyIfAvailable(Number(line.amount || 0), locale, line.currency) ?? '—'}
               </td>
-              <td style={{ padding: '12px 16px' }}>
-                <input
-                  type="text"
-                  value={line.batchNumber || ''}
-                  disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'batchNumber', e.target.value)}
-                  placeholder="INIT-BATCH"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                />
-              </td>
-              {!isReadOnly && (
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(index)}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
-                    title={isRu ? 'Удалить' : 'O‘chirish'}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              )}
+              <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
             </tr>
           ))
         )}
@@ -1945,340 +1423,115 @@ function InventoryTable({
   );
 }
 
-// ─── Table 3: Counterparties (Debts) ──────────────────────────────────────
+// ─── Debts & advances (one table) ──────────────────────────────────────────
 
-function CounterpartyTable({
-  category,
+function DebtsTable({
   lines,
   isReadOnly,
   counterparties,
+  locale,
   isRu,
   onUpdate,
   onRemove,
   onCreateCounterparty,
-}: SubledgerTableProps & { category: OpeningBalanceCategory; counterparties: Counterparty[]; onCreateCounterparty: (index: number) => void }) {
-  const filtered = linesWhere(lines, (l) => l.category === category);
-
-  const isCustomer = category === 'CUSTOMER_DEBT';
+}: SubledgerTableProps & {
+  counterparties: Counterparty[];
+  onCreateCounterparty: (index: number, type: 'CUSTOMER' | 'SUPPLIER') => void;
+}) {
+  const filtered = linesWhere(lines, (l) => isCounterpartyLineKind(l.category));
+  const kindOptions = (Object.keys(COUNTERPARTY_LINE_KINDS) as CounterpartyLineKind[]).map((kind) => ({
+    value: kind,
+    label: COUNTERPARTY_LINE_KINDS[kind].label[locale],
+  }));
 
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+    <table style={tableStyle}>
+      <thead style={theadStyle}>
         <tr>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>
-            {isCustomer ? (isRu ? 'КЛИЕНТ / ПОКУПАТЕЛЬ' : 'MIJOZ / XARIDOR') : isRu ? 'ПОСТАВЩИК' : 'YETKAZIB BERUVCHI'}
-          </th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '160px' }}>{isRu ? 'ДОГОВОР №' : 'SHARTNOMA №'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '100px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '130px' }}>{isRu ? 'КУРС К UZS' : 'UZS KURSI'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>
-            {isCustomer ? (isRu ? 'СУММА ДОЛГА (ДЕБИТОР)' : 'QARZ SUMMASI (DEBITOR)') : isRu ? 'НАШ ДОЛГ (КРЕДИТОР)' : 'QARZIMIZ (KREDITOR)'}
-          </th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
-          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+          <th style={th({ width: '40px' })}>#</th>
+          <th style={th({ width: '240px' })}>{isRu ? 'Что это' : 'Turi'}</th>
+          <th style={th({ minWidth: '240px' })}>{isRu ? 'Контрагент' : 'Kontragent'}</th>
+          <th style={th({ width: '100px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
+          <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Сумма' : 'Summa'}</th>
+          <th style={th({ minWidth: '160px' })}>{isRu ? 'Договор №' : 'Shartnoma №'}</th>
+          {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <tr>
-            <td colSpan={isReadOnly ? 7 : 8} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Нет добавленных контрагентов' : 'Kontragentlar qo‘shilmagan'}
-            </td>
-          </tr>
+          <EmptyRow colSpan={7} text={isRu ? 'Долги и авансы не добавлены' : 'Qarz va avanslar qo‘shilmagan'} />
         ) : (
-          filtered.map(({ line, index }: IndexedLine, pos: number) => (
-            <tr
-              key={index}
-              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
-              <td style={{ padding: '12px 16px' }}>
-                <Select
-                  value={line.counterpartyId || ''}
-                  disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'counterpartyId', value)}
-                  onCreateNew={!isReadOnly ? () => onCreateCounterparty(index) : undefined}
-                  createNewLabel={isRu ? 'Новый контрагент' : 'Yangi kontragent qo‘shish'}
-                  style={{ width: '100%', maxWidth: '300px' }}
-                  options={[
-                    { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
-                    ...counterparties.map((counterparty) => ({
-                      value: counterparty.id,
-                      label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
-                    })),
-                  ]}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                <input
-                  type="text"
-                  value={line.contractNumber || ''}
-                  disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'contractNumber', e.target.value)}
-                  placeholder={isRu ? '№ договора...' : 'Shartnoma raqami...'}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                <Select
-                  options={CURRENCY_OPTIONS}
-                  value={line.currency || ''}
-                  placeholder={isRu ? 'Валюта' : 'Valyuta'}
-                  disabled={isReadOnly}
-                  onChange={(currency) => {
-                    onUpdate(index, 'currency', currency);
-                  }}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                {line.currency !== 'USD' ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>{line.currency === 'UZS' ? '1' : '—'}</span>
-                ) : (
-                  <input
-                    type="number"
-                    min="0.0001"
-                    step="any"
-                    value={line.exchangeRate ?? ''}
-                    disabled={isReadOnly}
-                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
-                    placeholder="UZS/USD"
-                    aria-label={isRu ? 'Курс валюты к UZS' : 'Valyutaning UZS kursi'}
-                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
-                  />
-                )}
-              </td>
-              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <CurrencyInput
-                  value={line.amount || ''}
-                  disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'amount', value)}
-                  min={0}
-                  decimals={2}
-                  placeholder="0.00"
-                  className="tabular-nums"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: isCustomer ? '#10b981' : '#ef4444',
-                    width: '180px',
-                    fontWeight: 600,
-                    textAlign: 'right',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                <input
-                  type="text"
-                  value={line.notes || ''}
-                  disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-                  placeholder={isRu ? 'Примечание...' : 'Izoh...'}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                />
-              </td>
-              {!isReadOnly && (
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(index)}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
-                    title={isRu ? 'Удалить' : 'O‘chirish'}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+          filtered.map(({ line, index }, pos) => {
+            const kind = line.category as CounterpartyLineKind;
+            const side = COUNTERPARTY_LINE_KINDS[kind].side;
+            const isAsset = kind === 'CUSTOMER_DEBT' || kind === 'SUPPLIER_ADVANCE';
+            return (
+              <tr key={index} style={rowStyle}>
+                <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
+                <td style={td}>
+                  <Select value={kind} disabled={isReadOnly} onChange={(value) => onUpdate(index, 'category', value)} style={{ width: '100%' }} options={kindOptions} />
                 </td>
-              )}
-            </tr>
-          ))
+                <td style={td}>
+                  <Select
+                    value={line.counterpartyId || ''}
+                    disabled={isReadOnly}
+                    searchable
+                    onChange={(value) => onUpdate(index, 'counterpartyId', value)}
+                    onCreateNew={!isReadOnly ? () => onCreateCounterparty(index, side) : undefined}
+                    createNewLabel={isRu ? 'Новый контрагент' : 'Yangi kontragent qo‘shish'}
+                    style={{ width: '100%', maxWidth: '300px' }}
+                    options={[
+                      { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
+                      ...counterpartiesForKind(kind, counterparties).map((counterparty) => ({
+                        value: counterparty.id,
+                        label: counterparty.name,
+                        description: counterparty.inn ? `STIR: ${counterparty.inn}` : undefined,
+                      })),
+                    ]}
+                  />
+                </td>
+                <td style={td}>
+                  <Select
+                    options={CURRENCY_OPTIONS}
+                    value={line.currency || ''}
+                    placeholder={isRu ? 'Валюта' : 'Valyuta'}
+                    disabled={isReadOnly}
+                    onChange={(currency) => onUpdate(index, 'currency', currency)}
+                  />
+                </td>
+                <td style={{ ...td, textAlign: 'right' }}>
+                  <CurrencyInput
+                    value={line.amount || ''}
+                    disabled={isReadOnly}
+                    onChange={(value) => onUpdate(index, 'amount', value)}
+                    min={0}
+                    decimals={2}
+                    placeholder="0"
+                    className="tabular-nums"
+                    style={field('180px', { fontWeight: 600, textAlign: 'right', color: isAsset ? '#10b981' : '#ef4444' })}
+                  />
+                </td>
+                <td style={td}>
+                  <input
+                    type="text"
+                    value={line.contractNumber || ''}
+                    disabled={isReadOnly}
+                    onChange={(e) => onUpdate(index, 'contractNumber', e.target.value)}
+                    placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'}
+                    style={field('100%')}
+                  />
+                </td>
+                <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
+              </tr>
+            );
+          })
         )}
       </tbody>
     </table>
   );
 }
 
-// ─── Table 4: Advances ────────────────────────────────────────────────────
-
-function AdvancesTable({
-  lines,
-  isReadOnly,
-  counterparties,
-  isRu,
-  onUpdate,
-  onRemove,
-  onCreateCounterparty,
-}: SubledgerTableProps & { counterparties: Counterparty[]; onCreateCounterparty: (index: number) => void }) {
-  const filtered = linesWhere(lines, (l) => l.category === 'CUSTOMER_ADVANCE' || l.category === 'SUPPLIER_ADVANCE');
-
-  return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
-        <tr>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '220px' }}>{isRu ? 'ТИП АВАНСА' : 'AVANS TURI'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '240px' }}>{isRu ? 'КОНТРАГЕНТ' : 'KONTRAGENT'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '100px' }}>{isRu ? 'ВАЛЮТА' : 'VALYUTA'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '130px' }}>{isRu ? 'КУРС К UZS' : 'UZS KURSI'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'СУММА АВАНСА' : 'AVANS SUMMASI'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '200px' }}>{isRu ? 'ПРИМЕЧАНИЕ' : 'IZOH'}</th>
-          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
-        </tr>
-      </thead>
-      <tbody>
-        {filtered.length === 0 ? (
-          <tr>
-            <td colSpan={isReadOnly ? 7 : 8} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Нет добавленных авансов' : 'Avanslar qo‘shilmagan'}
-            </td>
-          </tr>
-        ) : (
-          filtered.map(({ line, index }: IndexedLine, pos: number) => (
-            <tr
-              key={index}
-              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
-              <td style={{ padding: '12px 16px' }}>
-                <Select
-                  value={line.category ?? ''}
-                  disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'category', value)}
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: 'CUSTOMER_ADVANCE', label: isRu ? 'Получен от клиента (Пассив)' : 'Mijozdan olingan (Majburiyat)' },
-                    { value: 'SUPPLIER_ADVANCE', label: isRu ? 'Выдан поставщику (Актив)' : 'Yetkazib beruvchiga berilgan (Aktiv)' },
-                  ]}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                <Select
-                  value={line.counterpartyId || ''}
-                  disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'counterpartyId', value)}
-                  onCreateNew={!isReadOnly ? () => onCreateCounterparty(index) : undefined}
-                  createNewLabel={isRu ? 'Новый контрагент' : 'Yangi kontragent qo‘shish'}
-                  style={{ width: '100%', maxWidth: '300px' }}
-                  options={[
-                    { value: '', label: isRu ? 'Выберите контрагента' : 'Kontragentni tanlang' },
-                    ...counterparties.map((counterparty) => ({
-                      value: counterparty.id,
-                      label: `${counterparty.name} ${counterparty.inn ? `(STIR: ${counterparty.inn})` : ''}`,
-                    })),
-                  ]}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                <Select
-                  options={CURRENCY_OPTIONS}
-                  value={line.currency || ''}
-                  placeholder={isRu ? 'Валюта' : 'Valyuta'}
-                  disabled={isReadOnly}
-                  onChange={(currency) => {
-                    onUpdate(index, 'currency', currency);
-                  }}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                {line.currency !== 'USD' ? (
-                  <span style={{ color: 'var(--color-text-tertiary)' }}>{line.currency === 'UZS' ? '1' : '—'}</span>
-                ) : (
-                  <input
-                    type="number"
-                    min="0.0001"
-                    step="any"
-                    value={line.exchangeRate ?? ''}
-                    disabled={isReadOnly}
-                    onChange={(event) => onUpdate(index, 'exchangeRate', event.target.value)}
-                    placeholder="UZS/USD"
-                    aria-label={isRu ? 'Курс валюты к UZS' : 'Valyutaning UZS kursi'}
-                    style={{ padding: '8px 10px', width: 110, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', textAlign: 'right' }}
-                  />
-                )}
-              </td>
-              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                <CurrencyInput
-                  value={line.amount || ''}
-                  disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'amount', value)}
-                  min={0}
-                  decimals={2}
-                  placeholder="0.00"
-                  className="tabular-nums"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '180px',
-                    fontWeight: 600,
-                    textAlign: 'right',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                />
-              </td>
-              <td style={{ padding: '12px 16px' }}>
-                <input
-                  type="text"
-                  value={line.notes || ''}
-                  disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-                  placeholder={isRu ? 'Примечание...' : 'Izoh...'}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                />
-              </td>
-              {!isReadOnly && (
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(index)}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
-                    title={isRu ? 'Удалить' : 'O‘chirish'}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              )}
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-  );
-}
-
-// ─── Table 5: Fixed Assets ────────────────────────────────────────────────
+// ─── Fixed assets ──────────────────────────────────────────────────────────
 
 function FixedAssetsTable({
   lines,
@@ -2289,132 +1542,71 @@ function FixedAssetsTable({
   fixedAssets,
   onUpdate,
   onRemove,
-}: SubledgerTableProps & { fixedAssets: FixedAsset[]; currency?: string }) {
+  onCreateAsset,
+}: SubledgerTableProps & { fixedAssets: FixedAsset[]; currency?: string; onCreateAsset: (index: number) => void }) {
   const filtered = linesWhere(lines, (l) => l.category === 'FIXED_ASSET');
 
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+    <table style={tableStyle}>
+      <thead style={theadStyle}>
         <tr>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '220px' }}>{isRu ? 'НАИМЕНОВАНИЕ ОС' : 'ASOSIY VOSITA NOMI'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '140px' }}>{isRu ? 'ИНВ. НОМЕР' : 'INV. RAQAM'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'ПЕРВОНАЧ. СТОИМОСТЬ' : 'BOSHLANG‘ICH QIYMAT'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'ИЗНОС (АМОРТИЗАЦИЯ)' : 'ESKIRISH (AMORTIZATSIYA)'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px', textAlign: 'right' }}>{isRu ? 'ОСТАТОЧНАЯ СТОИМОСТЬ' : 'QOLDIQ QIYMAT'}</th>
-          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+          <th style={th({ width: '40px' })}>#</th>
+          <th style={th({ minWidth: '260px' })}>{isRu ? 'Средство из реестра' : 'Reyestrdagi vosita'}</th>
+          <th style={th({ width: '140px' })}>{isRu ? 'Инв. номер' : 'Inv. raqam'}</th>
+          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Стоимость' : 'Boshlang‘ich qiymat'}</th>
+          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Амортизация' : 'Eskirish'}</th>
+          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Остаточная' : 'Qoldiq qiymat'}</th>
+          {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <tr>
-            <td colSpan={7} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Основные средства не добавлены' : 'Asosiy vositalar qo‘shilmagan'}
-            </td>
-          </tr>
+          <EmptyRow colSpan={7} text={isRu ? 'Основные средства не добавлены' : 'Asosiy vositalar qo‘shilmagan'} />
         ) : (
-          filtered.map(({ line, index }: IndexedLine, pos: number) => {
+          filtered.map(({ line, index }, pos) => {
             const initCost = Number(line.amount || 0);
             const accDep = Number(line.accumulatedDepreciation || 0);
             const netBookValue = Math.max(0, initCost - accDep);
             // Rejected by the server as well (B6): never clamp silently.
             const overDepreciated = accDep > initCost;
-
             return (
-              <tr
-                key={index}
-                style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
-                <td style={{ padding: '12px 16px' }}>
+              <tr key={index} style={rowStyle}>
+                <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
+                <td style={td}>
                   <div data-testid="fixed-asset-register-select">
                     <Select
                       value={line.fixedAssetId || ''}
                       disabled={isReadOnly}
                       onChange={(value) => onUpdate(index, 'fixedAssetId', value)}
+                      onCreateNew={!isReadOnly ? () => onCreateAsset(index) : undefined}
+                      createNewLabel={isRu ? 'Новое средство' : 'Yangi asosiy vosita'}
                       searchable
                       style={{ width: '100%' }}
                       options={[
-                        { value: '', label: isRu ? 'Выберите средство из реестра' : 'Reyestrdan vositani tanlang' },
-                        ...fixedAssets.map((asset) => ({
-                          value: asset.id,
-                          label: asset.name,
-                          description: asset.inventoryNumber,
-                        })),
+                        { value: '', label: isRu ? 'Выберите средство' : 'Vositani tanlang' },
+                        ...fixedAssets.map((asset) => ({ value: asset.id, label: asset.name, description: asset.inventoryNumber })),
                       ]}
                     />
                   </div>
                 </td>
-                <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
-                  {line.contractNumber || '—'}
+                <td style={{ ...td, color: 'var(--color-text-secondary)' }}>{line.contractNumber || '—'}</td>
+                {/* Values come from the register (D6): shown, not typed. */}
+                <td style={{ ...td, textAlign: 'right' }} className="tabular-nums">
+                  {line.fixedAssetId ? formatCurrency(initCost, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <CurrencyInput
-                    value={line.amount || ''}
-                    disabled={isReadOnly || Boolean(line.fixedAssetId)}
-                    onChange={(value) => onUpdate(index, 'amount', value)}
-                    min={0}
-                    decimals={2}
-                    placeholder="0"
-                    className="tabular-nums"
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      color: 'var(--color-text-primary)',
-                      width: '140px',
-                      fontWeight: 600,
-                      textAlign: 'right',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  />
+                <td style={{ ...td, textAlign: 'right', color: '#ef4444' }} className="tabular-nums">
+                  {line.fixedAssetId ? formatCurrency(accDep, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <CurrencyInput
-                    value={line.accumulatedDepreciation || ''}
-                    disabled={isReadOnly || Boolean(line.fixedAssetId)}
-                    onChange={(value) => onUpdate(index, 'accumulatedDepreciation', value)}
-                    min={0}
-                    decimals={2}
-                    placeholder="0"
-                    className="tabular-nums"
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--color-border)',
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      color: '#ef4444',
-                      width: '140px',
-                      fontWeight: 600,
-                      textAlign: 'right',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  />
-                </td>
-                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : '#10b981' }} className="tabular-nums">
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : '#10b981' }} className="tabular-nums">
                   {overDepreciated ? (
-                    <span data-testid="fixed-asset-over-depreciated">
-                      {isRu ? 'Амортизация больше стоимости' : 'Eskirish qiymatdan katta'}
-                    </span>
-                  ) : (
+                    <span data-testid="fixed-asset-over-depreciated">{isRu ? 'Амортизация больше стоимости' : 'Eskirish qiymatdan katta'}</span>
+                  ) : line.fixedAssetId ? (
                     formatCurrencyIfAvailable(netBookValue, locale, line.currency, currency) ?? '—'
+                  ) : (
+                    '—'
                   )}
                 </td>
-                {!isReadOnly && (
-                  <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => onRemove(index)}
-                      style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
-                      title={isRu ? 'Удалить' : 'O‘chirish'}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                )}
+                <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
               </tr>
             );
           })
@@ -2424,112 +1616,203 @@ function FixedAssetsTable({
   );
 }
 
-// ─── Table 6: Other & Equity ──────────────────────────────────────────────
-
-function OtherTable({
-  lines,
-  isReadOnly,
+/**
+ * Adds an asset to the fixed-asset register from the opening-balance page
+ * (there is no separate register screen yet) and puts it on the line.
+ * Accumulated depreciation can be suggested by the straight-line method at
+ * the opening date (B6, owner option c); the user may change it.
+ */
+function NewFixedAssetModal({
   isRu,
-  onUpdate,
-  onRemove,
-}: SubledgerTableProps) {
-  const filtered = linesWhere(
-    lines,
-    (l) => l.category === 'EQUITY' || l.category === 'OTHER_ASSET' || l.category === 'OTHER_LIABILITY',
+  openingDate,
+  requestOptions,
+  onClose,
+  onCreated,
+}: {
+  isRu: boolean;
+  openingDate: string;
+  requestOptions: { token?: string; tenantId?: string; locale: Locale };
+  onClose: () => void;
+  onCreated: (asset: FixedAsset) => void;
+}) {
+  const [name, setName] = useState('');
+  const [inventoryNumber, setInventoryNumber] = useState('');
+  const [acquisitionDate, setAcquisitionDate] = useState('');
+  const [initialCost, setInitialCost] = useState<number | ''>('');
+  const [usefulLifeMonths, setUsefulLifeMonths] = useState('60');
+  const [accumulatedDepreciation, setAccumulatedDepreciation] = useState<number | ''>('');
+  const [saving, setSaving] = useState(false);
+
+  const suggestion = suggestedStraightLineDepreciation({
+    cost: Number(initialCost),
+    acquisitionDate,
+    usefulLifeMonths: Number(usefulLifeMonths),
+    asOf: openingDate,
+  });
+  const overDepreciated = Number(accumulatedDepreciation || 0) > Number(initialCost || 0);
+
+  const label = (text: string) => (
+    <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{text}</label>
   );
 
+  const submit = async () => {
+    if (!name.trim() || !inventoryNumber.trim() || !(Number(initialCost) > 0)) {
+      toast.error(isRu ? 'Укажите название, инвентарный номер и стоимость' : 'Nomi, inventar raqami va qiymatini kiriting');
+      return;
+    }
+    if (overDepreciated) {
+      toast.error(isRu ? 'Амортизация не может превышать стоимость' : 'Eskirish qiymatdan katta bo‘lishi mumkin emas');
+      return;
+    }
+    setSaving(true);
+    try {
+      const asset = await apiFetch<FixedAsset>('/fixed-assets', {
+        ...requestOptions,
+        method: 'POST',
+        body: JSON.stringify({
+          name: name.trim(),
+          inventoryNumber: inventoryNumber.trim(),
+          acquisitionDate: acquisitionDate || undefined,
+          initialCost: Number(initialCost),
+          accumulatedDepreciation: Number(accumulatedDepreciation || 0),
+          usefulLifeMonths: Number(usefulLifeMonths) > 0 ? Math.round(Number(usefulLifeMonths)) : undefined,
+          depreciationMethod: 'STRAIGHT_LINE',
+        }),
+      });
+      toast.success(isRu ? 'Средство добавлено в реестр' : 'Vosita reyestrga qo‘shildi');
+      onCreated(asset);
+    } catch (e) {
+      toast.error(errorMessage(e) || (isRu ? 'Не удалось создать средство' : 'Vositani yaratib bo‘lmadi'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-      <thead style={{ backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' }}>
+    <Modal isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          {label(isRu ? 'Название' : 'Nomi')}
+          <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={isRu ? 'Например: лазерный станок' : 'Masalan: lazerli kesish stanogi'} />
+        </div>
+        <div>
+          {label(isRu ? 'Инвентарный номер' : 'Inventar raqami')}
+          <Input type="text" value={inventoryNumber} onChange={(e) => setInventoryNumber(e.target.value)} />
+        </div>
+        <div>
+          {label(isRu ? 'Дата приобретения' : 'Olingan sana')}
+          <DatePicker value={acquisitionDate} onChange={setAcquisitionDate} />
+        </div>
+        <div>
+          {label(isRu ? 'Первоначальная стоимость (UZS)' : 'Boshlang‘ich qiymat (UZS)')}
+          <CurrencyInput value={initialCost} onChange={(v) => setInitialCost(v)} min={0} decimals={2} placeholder="0" style={field('100%', { textAlign: 'right' })} />
+        </div>
+        <div>
+          {label(isRu ? 'Срок службы (мес.)' : 'Foydalanish muddati (oy)')}
+          <QuantityInput
+            unit={isRu ? 'мес.' : 'oy'}
+            value={usefulLifeMonths}
+            onValueChange={setUsefulLifeMonths}
+            decimals={0}
+            aria-label={isRu ? 'Срок службы' : 'Foydalanish muddati'}
+          />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          {label(isRu ? `Накопленная амортизация на ${openingDate} (UZS)` : `${openingDate} holatiga jamg‘arilgan eskirish (UZS)`)}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <CurrencyInput
+              value={accumulatedDepreciation}
+              onChange={(v) => setAccumulatedDepreciation(v)}
+              min={0}
+              decimals={2}
+              placeholder="0"
+              style={field('100%', { textAlign: 'right', borderColor: overDepreciated ? 'var(--color-error-500)' : 'var(--color-border)' })}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={suggestion === null}
+              onClick={() => suggestion !== null && setAccumulatedDepreciation(suggestion)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
+              title={isRu ? 'Линейный метод: стоимость × месяцы использования ÷ срок службы' : 'Chiziqli usul: qiymat × foydalanilgan oylar ÷ foydalanish muddati'}
+            >
+              <Calculator size={14} />
+              {isRu ? 'Рассчитать' : 'Hisoblash'}
+            </Button>
+          </div>
+        </div>
+        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+          <Button variant="secondary" onClick={onClose}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>
+            {saving ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Добавить' : 'Qo‘shish'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Capital & other ───────────────────────────────────────────────────────
+
+function OtherTable({ lines, isReadOnly, isRu, onUpdate, onRemove }: SubledgerTableProps) {
+  const filtered = linesWhere(lines, (l) => OTHER_CATEGORIES.has(String(l.category)));
+
+  return (
+    <table style={tableStyle}>
+      <thead style={theadStyle}>
         <tr>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40px' }}>#</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '240px' }}>{isRu ? 'КАТЕГОРИЯ' : 'KATEGORIYA'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '220px' }}>{isRu ? 'НАИМЕНОВАНИЕ СТАТЬИ' : 'MODDA NOMI'}</th>
-          <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '180px', textAlign: 'right' }}>{isRu ? 'СУММА' : 'SUMMA'}</th>
-          {!isReadOnly && <th style={{ padding: '12px 16px', width: '50px', textAlign: 'center' }}></th>}
+          <th style={th({ width: '40px' })}>#</th>
+          <th style={th({ width: '240px' })}>{isRu ? 'Статья' : 'Modda'}</th>
+          <th style={th({ minWidth: '220px' })}>{isRu ? 'Описание' : 'Tavsif'}</th>
+          <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Сумма (UZS)' : 'Summa (UZS)'}</th>
+          {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <tr>
-            <td colSpan={5} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Нет добавленных статей капитала или прочих остатков' : 'Kapital yoki boshqa moddalar qo‘shilmagan'}
-            </td>
-          </tr>
+          <EmptyRow colSpan={5} text={isRu ? 'Статьи не добавлены' : 'Moddalar qo‘shilmagan'} />
         ) : (
-          filtered.map(({ line, index }: IndexedLine, pos: number) => (
-            <tr
-              key={index}
-              style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            >
-              <td style={{ padding: '12px 16px', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{pos + 1}</td>
-              <td style={{ padding: '12px 16px' }}>
+          filtered.map(({ line, index }, pos) => (
+            <tr key={index} style={rowStyle}>
+              <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
+              <td style={td}>
                 <Select
                   value={line.category ?? ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'category', value)}
                   style={{ width: '100%' }}
                   options={[
-                    { value: 'EQUITY', label: isRu ? 'Собственный капитал (8330)' : 'Ustav kapitali / Taqsimlanmagan foyda' },
-                    { value: 'OTHER_ASSET', label: isRu ? 'Прочие активы' : 'Boshqa aktivlar' },
-                    { value: 'OTHER_LIABILITY', label: isRu ? 'Прочие обязательства' : 'Boshqa majburiyatlar' },
+                    { value: 'EQUITY', label: isRu ? 'Уставный капитал' : 'Ustav kapitali' },
+                    { value: 'OTHER_ASSET', label: isRu ? 'Прочий актив' : 'Boshqa aktiv' },
+                    { value: 'OTHER_LIABILITY', label: isRu ? 'Прочее обязательство' : 'Boshqa majburiyat' },
                   ]}
                 />
               </td>
-              <td style={{ padding: '12px 16px' }}>
-                <input
-                  type="text"
-                  value={line.notes || ''}
-                  disabled={isReadOnly}
-                  onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-                  placeholder={isRu ? 'Например: Уставный фонд или переплата по налогу...' : 'Masalan: Ustav fondi yoki soliq ortiqcha to‘lovi...'}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: 'var(--color-text-primary)',
-                    width: '100%',
-                    fontSize: 'var(--text-sm)',
-                  }}
+              <td style={td}>
+                <NotesInput
+                  line={line}
+                  index={index}
+                  isReadOnly={isReadOnly}
+                  isRu={isRu}
+                  onUpdate={onUpdate}
+                  placeholder={isRu ? 'Например: переплата по налогу...' : 'Masalan: soliq ortiqcha to‘lovi...'}
                 />
               </td>
-              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+              <td style={{ ...td, textAlign: 'right' }}>
                 <CurrencyInput
                   value={line.amount || ''}
                   disabled={isReadOnly}
                   onChange={(value) => onUpdate(index, 'amount', value)}
                   min={0}
                   decimals={2}
-                  placeholder="0.00"
+                  placeholder="0"
                   className="tabular-nums"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-secondary)',
-                    color: line.category === 'EQUITY' ? 'var(--color-primary-600)' : 'var(--color-text-primary)',
-                    width: '180px',
-                    fontWeight: 600,
-                    textAlign: 'right',
-                    fontSize: 'var(--text-sm)',
-                  }}
+                  style={field('180px', { fontWeight: 600, textAlign: 'right' })}
                 />
               </td>
-              {!isReadOnly && (
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(index)}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
-                    title={isRu ? 'Удалить' : 'O‘chirish'}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              )}
+              <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
             </tr>
           ))
         )}

@@ -1,5 +1,7 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -10,7 +12,6 @@ import type { Warehouse } from '@shared/types';
 import type { SalesOrderDetail, StockAvailability } from './order-form/types';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { errorMessage } from '@/lib/utils';
 import { Truck, AlertCircle, Warehouse as WarehouseIcon } from 'lucide-react';
@@ -306,10 +307,10 @@ export function PartialDispatchModal({
                       )}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 500 }}>
-                      {totalQty}
+                      {quantityWithUnit(totalQty, item.product?.unitOfMeasure, locale)}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'center', color: '#10b981', fontWeight: 600 }}>
-                      {shippedQty}
+                      {quantityWithUnit(shippedQty, item.product?.unitOfMeasure, locale)}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                       {loadingStock ? (
@@ -321,28 +322,19 @@ export function PartialDispatchModal({
                             color: physicalStock >= unShipped ? '#10b981' : '#f59e0b',
                           }}
                         >
-                          {physicalStock}
+                          {quantityWithUnit(physicalStock, item.product?.unitOfMeasure, locale)}
                         </span>
                       )}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'right' }}>
-                      <Input
-                        type="number"
-                        min="0"
-                        max={unShipped}
-                        step="0.001"
+                      <QuantityInput
+                        unit={item.product?.unitOfMeasure}
                         value={currentDispatch}
-                        onChange={(e) =>
-                          handleQtyChange(item.id, parseFloat(e.target.value), unShipped)
-                        }
+                        max={unShipped}
                         disabled={unShipped <= 0}
-                        style={{
-                          width: '100%',
-                          textAlign: 'right',
-                          height: '32px',
-                          fontSize: 'var(--text-xs)',
-                          borderColor: isShortage ? '#ef4444' : undefined,
-                        }}
+                        onValueChange={(value) => handleQtyChange(item.id, Number(value) || 0, unShipped)}
+                        aria-label={isRu ? 'Количество к отгрузке' : 'Jo‘natiladigan miqdor'}
+                        invalid={isShortage}
                       />
                     </td>
                   </tr>

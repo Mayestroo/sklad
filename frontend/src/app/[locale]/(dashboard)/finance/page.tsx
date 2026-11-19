@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
@@ -20,6 +21,7 @@ interface OpenDocument {
   paidAmount: number | string;
 }
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
+import { amountForPickedDocument, remainingOnDocument } from '@/lib/open-document';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -1732,7 +1734,7 @@ function FinanceTransactionDrawer({
     }
 
     if (selectedSourceDocument) {
-      const remaining = Number(selectedSourceDocument.totalAmount) - Number(selectedSourceDocument.paidAmount);
+      const remaining = remainingOnDocument(selectedSourceDocument);
       if (Number(amount) > remaining + 0.000001) {
         const remainingText = formatCurrency(remaining, locale, selectedSourceDocument.currency);
         setError(
@@ -1971,17 +1973,14 @@ function FinanceTransactionDrawer({
           >
             {isRu ? 'Сумма' : 'Summa'} ({fromAccount?.currency || currency}) *
           </label>
-          <Input
-            type="number"
-            placeholder="0"
-               value={amount}
-               onChange={(e) => {
-                 setAmount(e.target.value);
-                 if (isMultiCurrency) {
-                  const rate = Number(exchangeRate);
-                  const amt = parseFloat(e.target.value) || 0;
-                  setTargetAmount(targetAmountAtRate(amt, rate));
-                }
+          <MoneyInput
+            aria-label={isRu ? 'Сумма' : 'Summa'}
+            value={amount}
+            onValueChange={(value) => {
+              setAmount(value);
+              if (isMultiCurrency) {
+                setTargetAmount(targetAmountAtRate(Number(value) || 0, Number(exchangeRate)));
+              }
             }}
           />
         </div>
@@ -1991,11 +1990,13 @@ function FinanceTransactionDrawer({
             <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
               {isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
             </label>
-            <Input
-              type="number"
+            <MoneyInput
+              aria-label={isRu ? 'Курс' : 'Kurs'}
               value={exchangeRate}
+              onValueChange={setExchangeRate}
+              decimals={4}
+              placeholder="12,800"
               disabled={Boolean(sourceDocId && selectedSourceDocument?.exchangeRate)}
-              onChange={(e) => setExchangeRate(e.target.value)}
             />
           </div>
         )}
@@ -2005,10 +2006,12 @@ function FinanceTransactionDrawer({
             <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
               {isRu ? 'Учётный курс (1 USD = UZS) *' : 'Hisob kursi (1 USD = UZS) *'}
             </label>
-            <Input
-              type="number"
+            <MoneyInput
+              aria-label={isRu ? 'Учётный курс' : 'Hisob kursi'}
               value={exchangeRate}
-              onChange={(e) => setExchangeRate(e.target.value)}
+              onValueChange={setExchangeRate}
+              decimals={4}
+              placeholder="12,800"
             />
           </div>
         )}
@@ -2034,14 +2037,14 @@ function FinanceTransactionDrawer({
                 <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
                   {isRu ? 'Курс (1 USD = UZS)' : 'Kurs (1 USD = UZS)'}
                 </label>
-                <Input
-                  type="number"
+                <MoneyInput
+                  aria-label={isRu ? 'Курс' : 'Kurs'}
                   value={exchangeRate}
-                  onChange={(e) => {
-                    setExchangeRate(e.target.value);
-                    const rate = Number(e.target.value);
-                    const amt = parseFloat(amount) || 0;
-                    setTargetAmount(targetAmountAtRate(amt, rate));
+                  decimals={4}
+                  placeholder="12,800"
+                  onValueChange={(value) => {
+                    setExchangeRate(value);
+                    setTargetAmount(targetAmountAtRate(parseFloat(amount) || 0, Number(value)));
                   }}
                 />
               </div>
@@ -2049,13 +2052,13 @@ function FinanceTransactionDrawer({
                 <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
                   {isRu ? 'Итоговая сумма' : 'Qabul qilinadigan summa'} ({toAccount?.currency})
                 </label>
-                <Input
-                  type="number"
+                <MoneyInput
+                  aria-label={isRu ? 'Итоговая сумма' : 'Qabul qilinadigan summa'}
                   value={targetAmount}
-                  onChange={(e) => {
-                    setTargetAmount(e.target.value);
+                  onValueChange={(value) => {
+                    setTargetAmount(value);
                     const sourceAmount = Number(amount);
-                    const receivingAmount = Number(e.target.value);
+                    const receivingAmount = Number(value);
                     if (sourceAmount > 0 && receivingAmount > 0 && fromAccount) {
                       const impliedRate = fromAccount.currency === 'USD'
                         ? receivingAmount / sourceAmount
@@ -2124,7 +2127,7 @@ function FinanceTransactionDrawer({
                       : '— FIFO bo‘yicha avtomatik yopish (yoki Avans) —',
                   },
                   ...compatibleOpenDocuments.map((doc) => {
-                    const remaining = Number(doc.totalAmount) - Number(doc.paidAmount);
+                    const remaining = remainingOnDocument(doc);
                     return {
                       value: doc.id,
                       label: `${doc.docNumber || doc.invoiceNumber} — ${formatCurrency(remaining, locale, doc.currency)} qoldi`,
@@ -2136,7 +2139,11 @@ function FinanceTransactionDrawer({
                   setSourceDocId(val);
                   const selectedDocument = compatibleOpenDocuments.find((document) => document.id === val);
                   setExchangeRate(selectedDocument?.exchangeRate == null ? '' : String(selectedDocument.exchangeRate));
-                  if (val) setSettlementSide('');
+                  if (val) {
+                    setSettlementSide('');
+                    // The amount is what is still owed on the picked document (editable for a partial payment).
+                    setAmount(amountForPickedDocument(selectedDocument));
+                  }
                 }}
               />
             )}

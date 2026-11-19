@@ -1,5 +1,7 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -484,26 +486,20 @@ export function CreateSalesReturnModal({
                         />
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                        <div>{item.soldQty}</div>
+                        <div>{quantityWithUnit(item.soldQty, item.unit, locale)}</div>
                         <div style={{ fontSize: '11px', color: item.returnableQty > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                          max: {item.returnableQty}
+                          max: {quantityWithUnit(item.returnableQty, item.unit, locale)}
                         </div>
                       </td>
                       <td style={{ padding: '6px 12px', textAlign: 'center' }}>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={item.returnableQty}
-                          step="any"
-                          disabled={isExhausted}
+                        <QuantityInput
+                          unit={item.unit}
                           value={item.returnQty || ''}
-                          onChange={(e) => handleQtyChange(index, parseFloat(e.target.value) || 0)}
-                          style={{
-                            textAlign: 'center',
-                            height: '32px',
-                            padding: '0 8px',
-                            borderColor: item.returnQty > item.returnableQty ? '#ef4444' : undefined,
-                          }}
+                          max={item.returnableQty}
+                          disabled={isExhausted}
+                          onValueChange={(value) => handleQtyChange(index, Number(value) || 0)}
+                          aria-label={isRu ? 'Количество возврата' : 'Qaytarish miqdori'}
+                          invalid={item.returnQty > item.returnableQty}
                         />
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">

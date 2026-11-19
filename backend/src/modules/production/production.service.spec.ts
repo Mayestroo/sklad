@@ -67,6 +67,84 @@ describe('ProductionService', () => {
     );
   });
 
+  describe('editing a recipe', () => {
+    const dto = {
+      productId: 'finished-1',
+      outputQuantity: 10,
+      materials: [{ productId: rawMaterialId, quantity: 0.25 }],
+    };
+
+    beforeEach(() => {
+      tx.product = {
+        ...tx.product,
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'finished-1', type: 'PRODUCT' }),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: rawMaterialId, type: 'RAW_MATERIAL' }]),
+      };
+      tx.productionRecipe = {
+        create: jest.fn().mockResolvedValue({
+          id: 'recipe-2',
+          productId: 'finished-1',
+          outputQuantity: new Prisma.Decimal(10),
+        }),
+        update: jest.fn(),
+      };
+    });
+
+    it('creates the new version and deactivates the old one in one transaction', async () => {
+      prisma.productionRecipe.findFirst.mockResolvedValue({
+        id: 'recipe-1',
+        isActive: true,
+      });
+
+      const result = await service.updateRecipe(
+        tenantId,
+        userId,
+        'recipe-1',
+        dto,
+      );
+
+      expect(result.id).toBe('recipe-2');
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(tx.productionRecipe.create).toHaveBeenCalled();
+      expect(tx.productionRecipe.update).toHaveBeenCalledWith({
+        where: { tenantId, id: 'recipe-1' },
+        data: { isActive: false },
+      });
+    });
+
+    it('a failed validation leaves the old recipe active', async () => {
+      prisma.productionRecipe.findFirst.mockResolvedValue({
+        id: 'recipe-1',
+        isActive: true,
+      });
+      tx.product.findMany.mockResolvedValue([
+        { id: rawMaterialId, type: 'PRODUCT' },
+      ]);
+
+      await expect(
+        service.updateRecipe(tenantId, userId, 'recipe-1', dto),
+      ).rejects.toThrow(/xomashyo/);
+      expect(tx.productionRecipe.update).not.toHaveBeenCalled();
+      expect(auditService.logAction).not.toHaveBeenCalled();
+    });
+
+    it('refuses to edit an old (inactive) version', async () => {
+      prisma.productionRecipe.findFirst.mockResolvedValue({
+        id: 'recipe-0',
+        isActive: false,
+      });
+
+      await expect(
+        service.updateRecipe(tenantId, userId, 'recipe-0', dto),
+      ).rejects.toThrow(/faol/);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
   it('creates a draft document without changing stock or batch balances', async () => {
     jest.spyOn(service, 'preview').mockResolvedValue({
       recipe: { id: 'recipe-1', productId: 'finished-1' },

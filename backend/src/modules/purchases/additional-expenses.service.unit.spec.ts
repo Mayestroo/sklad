@@ -144,6 +144,11 @@ describe('AdditionalExpensesService Unit Tests', () => {
         update: jest.fn(),
       },
       product: {
+        // A UZS card unless a test says otherwise.
+        findFirst: jest.fn().mockResolvedValue({
+          costPriceCurrency: 'UZS',
+          costPriceExchangeRate: 1,
+        }),
         update: jest.fn(),
       },
       salesInvoiceItem: {
@@ -735,6 +740,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         id: 'exp-1',
         docNumber: 'AE-1',
         status: PurchaseDocStatus.POSTED,
+        currency: 'UZS',
         amount: 500000,
         receiptId,
         isPaid: true,
@@ -772,6 +778,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       prisma.additionalExpense.findFirst.mockResolvedValue({
         id: 'exp-1',
         status: PurchaseDocStatus.POSTED,
+        currency: 'UZS',
         amount: 1000000,
         receiptId,
         isPaid: false,
@@ -841,10 +848,92 @@ describe('AdditionalExpensesService Unit Tests', () => {
       });
     });
 
+    it('cancelling a USD expense removes the same UZS amount posting added, and keeps a USD card in USD', async () => {
+      // 80 USD × 12,500 = 1,000,000 UZS over 10 units → 100,000 UZS per unit.
+      prisma.additionalExpense.findFirst.mockResolvedValue({
+        id: 'exp-usd',
+        status: PurchaseDocStatus.POSTED,
+        currency: 'USD',
+        exchangeRate: 12500,
+        amount: 80,
+        receiptId,
+        isPaid: false,
+        counterpartyId: 'carrier-1',
+        items: [
+          {
+            id: 'ei-usd',
+            productId: 'prod-iphone',
+            allocatedAmount: 80,
+            soldQuantity: 0,
+            remainingQuantity: 10,
+          },
+        ],
+      });
+      prisma.financeTransaction.findFirst.mockResolvedValue(null);
+      prisma.productBatch.findFirst.mockResolvedValue({
+        id: 'batch-1',
+        purchasePrice: 1000000,
+        landedCost: 1100000,
+        consumptions: [],
+      });
+      prisma.product.findFirst.mockResolvedValue({
+        costPriceCurrency: 'USD',
+        costPriceExchangeRate: 12500,
+      });
+      prisma.additionalExpense.update.mockResolvedValue({
+        id: 'exp-usd',
+        status: PurchaseDocStatus.CANCELLED,
+      });
+
+      await service.cancelExpense(tenantId, userId, 'exp-usd');
+
+      // It used to subtract 8 (USD) from a UZS cost and leave 1,099,992.
+      expect(prisma.productBatch.update).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-123', id: 'batch-1' },
+        data: { landedCost: 1000000 },
+      });
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-123', id: 'prod-iphone' },
+        data: {
+          costPrice: 80,
+          costPriceCurrency: 'USD',
+          costPriceExchangeRate: 12500,
+        },
+      });
+    });
+
+    it('refuses an allocation spread over zero units instead of inventing one', async () => {
+      prisma.additionalExpense.findFirst.mockResolvedValue({
+        id: 'exp-zero',
+        status: PurchaseDocStatus.POSTED,
+        currency: 'UZS',
+        amount: 1000,
+        receiptId,
+        isPaid: false,
+        counterpartyId: 'carrier-1',
+        items: [
+          {
+            id: 'ei-zero',
+            productId: 'prod-iphone',
+            allocatedAmount: 1000,
+            soldQuantity: 0,
+            remainingQuantity: 0,
+          },
+        ],
+      });
+      prisma.financeTransaction.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.cancelExpense(tenantId, userId, 'exp-zero'),
+      ).rejects.toThrow(/miqdori 0/);
+      expect(prisma.productBatch.update).not.toHaveBeenCalled();
+    });
+
     it('restores the profit of a USD sale with VAT as net revenue in UZS minus COGS on cancel', async () => {
       prisma.additionalExpense.findFirst.mockResolvedValue({
         id: 'exp-2',
         status: PurchaseDocStatus.POSTED,
+        currency: 'UZS',
         amount: 1000000,
         receiptId,
         isPaid: false,

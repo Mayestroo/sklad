@@ -1,5 +1,7 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, FormEvent } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
@@ -257,28 +259,29 @@ export default function NewProductPage() {
               options={unitOptions}
             />
 
-            <Input
+            <MoneyInput
               id="prod-cost-price"
               label={isRu ? 'Себестоимость' : 'Tannarxi'}
-              type="number"
-              min={0}
-              step="any"
-              value={costPrice}
-              onChange={(e) => setCostPrice(Number(e.target.value))}
+              value={costPrice || ''}
+              onValueChange={(value) => setCostPrice(Number(value) || 0)}
             />
 
             <Select label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'} options={CURRENCY_OPTIONS} value={costPriceCurrency} onChange={(value) => { setCostPriceCurrency(value as 'USD' | 'UZS'); setCostPriceExchangeRate(value === 'UZS' ? '1' : ''); }} placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'} />
             {costPriceCurrency === 'USD' && (
-              <Input label={isRu ? 'Курс к UZS' : 'UZS ga kurs'} type="number" min="0.0001" step="any" value={costPriceExchangeRate} onChange={(event) => setCostPriceExchangeRate(event.target.value)} />
+              <MoneyInput
+                label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
+                value={costPriceExchangeRate}
+                onValueChange={setCostPriceExchangeRate}
+                decimals={4}
+                placeholder="12,800"
+              />
             )}
 
-            <Input
+            <MoneyInput
               id="prod-sale-price"
               label={isRu ? 'Цена продажи' : 'Sotuv narxi'}
-              type="number"
-              min={0}
-              value={salePrice}
-              onChange={(e) => setSalePrice(Number(e.target.value))}
+              value={salePrice || ''}
+              onValueChange={(value) => setSalePrice(Number(value) || 0)}
             />
             <Select label={isRu ? 'Валюта цены продажи' : 'Sotish narxi valyutasi'} options={CURRENCY_OPTIONS} value={salePriceCurrency} onChange={(value) => setSalePriceCurrency(value as 'USD' | 'UZS')} />
 
@@ -292,13 +295,12 @@ export default function NewProductPage() {
               onChange={(e) => setVatRate(Number(e.target.value))}
             />
 
-            <Input
+            <QuantityInput
               id="prod-min-stock"
               label={isRu ? 'Порог мин. остатка' : 'Minimal qoldiq ogohlantirishi'}
-              type="number"
-              min={0}
-              value={minStockAlert}
-              onChange={(e) => setMinStockAlert(Number(e.target.value))}
+              unit={unitOfMeasure}
+              value={minStockAlert || ''}
+              onValueChange={(value) => setMinStockAlert(Number(value) || 0)}
             />
           </div>
         </Card>

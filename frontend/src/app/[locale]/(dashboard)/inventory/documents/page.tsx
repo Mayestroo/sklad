@@ -1,5 +1,8 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
+import { QuantityInput } from '@/components/ui/QuantityInput';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -50,7 +53,7 @@ export default function InventoryDocumentsPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState<number>(1);
   const [unitPrice, setUnitPrice] = useState<number>(0);
-  const [items, setItems] = useState<{ productId: string; productName: string; quantity: number; unitPrice: number }[]>([]);
+  const [items, setItems] = useState<{ productId: string; productName: string; quantity: number; unitPrice: number; unit?: string }[]>([]);
 
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -68,7 +71,7 @@ export default function InventoryDocumentsPage() {
     if (!p) return;
     const name = p.name[locale] || p.name.ru || p.name.uz;
 
-    setItems((prev) => [...prev, { productId: p.id, productName: name, quantity, unitPrice }]);
+    setItems((prev) => [...prev, { productId: p.id, productName: name, quantity, unitPrice, unit: p.unitOfMeasure }]);
     setSelectedProductId('');
     setQuantity(1);
     setUnitPrice(0);
@@ -116,7 +119,7 @@ export default function InventoryDocumentsPage() {
       setComment('');
       fetchData();
     } catch (err) {
-      setCreateError(errorMessage(err) || (isRu ? 'Ошибка создания документа' : 'Failed to post inventory document'));
+      setCreateError(errorMessage(err) || (isRu ? 'Ошибка создания документа' : 'Hujjatni yaratib bo‘lmadi'));
     } finally {
       setCreateLoading(false);
     }
@@ -291,23 +294,19 @@ export default function InventoryDocumentsPage() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Кол-во' : 'Miqdori'}</label>
-                    <input
-                      type="number"
-                      min={0.001}
-                      step={0.01}
-                      value={quantity}
-                      onChange={(e) => setQuantity(Number(e.target.value))}
-                      style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}
+                    <QuantityInput
+                      unit={products.find((p) => p.id === selectedProductId)?.unitOfMeasure}
+                      value={quantity || ''}
+                      onValueChange={(value) => setQuantity(Number(value) || 0)}
+                      aria-label={isRu ? 'Количество' : 'Miqdor'}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={unitPrice}
-                      onChange={(e) => setUnitPrice(Number(e.target.value))}
-                      style={{ width: '100%', padding: '6px 8px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}
+                    <MoneyInput
+                      aria-label={isRu ? 'Цена за ед.' : 'Birlik narxi'}
+                      value={unitPrice || ''}
+                      onValueChange={(value) => setUnitPrice(Number(value) || 0)}
                     />
                   </div>
                   <Button type="button" variant="primary" size="sm" onClick={handleAddItem}>
@@ -333,7 +332,7 @@ export default function InventoryDocumentsPage() {
                       {items.map((item, idx) => (
                         <tr key={idx} style={{ borderTop: '1px solid var(--color-border-light)' }}>
                           <td style={{ padding: '8px' }}>{item.productName}</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>{quantityWithUnit(item.quantity, item.unit, locale)}</td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, INVENTORY_COST_CURRENCY)}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
                             {formatCurrency(item.quantity * item.unitPrice, locale, INVENTORY_COST_CURRENCY)}

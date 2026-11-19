@@ -61,3 +61,30 @@ export function documentUnitPriceFromProductCost(
     documentExchangeRate,
   ) ?? 0;
 }
+
+/**
+ * Markup of the sale price over the card cost, in percent, or null when the
+ * two cannot be compared: no cost, no sale price currency, or a USD sale
+ * price against a UZS cost (no rate on the card to convert with). A UZS sale
+ * price against a USD cost uses the cost's own rate.
+ */
+export function catalogMarkupPercent(product: {
+  costPrice?: number | string | null;
+  costPriceCurrency?: string | null;
+  costPriceExchangeRate?: number | string | null;
+  salePrice?: number | string | null;
+  salePriceCurrency?: string | null;
+}): number | null {
+  const sale = Number(product.salePrice);
+  if (!Number.isFinite(sale) || !isSupportedCurrency(product.salePriceCurrency)) return null;
+  const cost = convertCostPriceToDocumentCurrency(
+    Number(product.costPrice),
+    product.costPriceCurrency,
+    Number(product.costPriceExchangeRate),
+    product.salePriceCurrency,
+    product.salePriceCurrency === 'USD' ? Number(product.costPriceExchangeRate) : 1,
+  );
+  if (cost === null || cost <= 0) return null;
+  if (product.salePriceCurrency === 'USD' && product.costPriceCurrency !== 'USD') return null;
+  return Math.round(((sale - cost) / cost) * 10000) / 100;
+}

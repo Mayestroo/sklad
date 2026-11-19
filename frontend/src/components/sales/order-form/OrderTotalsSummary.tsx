@@ -3,6 +3,7 @@
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { DOCUMENT_STATUS_LABELS, statusLabel } from '@/lib/constants/statuses';
 import { FileText } from 'lucide-react';
 import type { SalesOrderInvoiceRef } from './types';
 
@@ -144,8 +145,8 @@ export function OrderTotalsSummary({
                     <div style={{ fontWeight: 600 }} className="tabular-nums">
                       {formatCurrency(Number(inv.totalAmount), locale, currency)}
                     </div>
-                    <Badge variant="success">
-                      {inv.status}
+                    <Badge variant={statusLabel(DOCUMENT_STATUS_LABELS, inv.status, locale).variant}>
+                      {statusLabel(DOCUMENT_STATUS_LABELS, inv.status, locale).text}
                     </Badge>
                   </div>
                 </div>

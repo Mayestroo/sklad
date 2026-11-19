@@ -1788,6 +1788,7 @@ model ProductBatch {
   warehouseId   String           @map("warehouse_id")
   receiptId     String?          @map("receipt_id")
   productionDocumentId String?    @unique @map("production_document_id")
+  openingBalanceLineId String?    @map("opening_balance_line_id")
   batchNumber   String           @map("batch_number")
   initialQty    Decimal          @db.Decimal(15, 3) @map("initial_qty")
   remainingQty  Decimal          @db.Decimal(15, 3) @map("remaining_qty")
@@ -1800,12 +1801,14 @@ model ProductBatch {
   warehouse     Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   receipt       PurchaseReceipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
   productionDocument ProductionDocument? @relation("ProductionOutputBatch", fields: [productionDocumentId], references: [id], onDelete: SetNull)
+  openingBalanceLine OpeningBalanceLine? @relation(fields: [openingBalanceLineId], references: [id], onDelete: SetNull)
   consumptions  BatchConsumption[]
   productionConsumptions ProductionMaterialBatch[]
   productionMovements ProductionMaterialMovement[]
 
   @@index([tenantId])
   @@index([tenantId, warehouseId, productId])
+  @@index([openingBalanceLineId])
   @@map("product_batches")
 }
 
@@ -2069,6 +2072,7 @@ model OpeningBalanceLine {
   warehouse               Warehouse?             @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
   counterparty            Counterparty?          @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
   fixedAsset              FixedAsset?            @relation(fields: [fixedAssetId], references: [id], onDelete: SetNull)
+  batches                 ProductBatch[]
 
   @@index([tenantId, documentId])
   @@index([tenantId, category])
