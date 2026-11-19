@@ -1990,11 +1990,13 @@ function FinanceTransactionDrawer({
             <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
               {isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
             </label>
-            <Input
-              type="number"
+            <MoneyInput
+              aria-label={isRu ? 'Курс' : 'Kurs'}
               value={exchangeRate}
+              onValueChange={setExchangeRate}
+              decimals={4}
+              placeholder="12,800"
               disabled={Boolean(sourceDocId && selectedSourceDocument?.exchangeRate)}
-              onChange={(e) => setExchangeRate(e.target.value)}
             />
           </div>
         )}
@@ -2004,10 +2006,12 @@ function FinanceTransactionDrawer({
             <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
               {isRu ? 'Учётный курс (1 USD = UZS) *' : 'Hisob kursi (1 USD = UZS) *'}
             </label>
-            <Input
-              type="number"
+            <MoneyInput
+              aria-label={isRu ? 'Учётный курс' : 'Hisob kursi'}
               value={exchangeRate}
-              onChange={(e) => setExchangeRate(e.target.value)}
+              onValueChange={setExchangeRate}
+              decimals={4}
+              placeholder="12,800"
             />
           </div>
         )}
@@ -2033,14 +2037,14 @@ function FinanceTransactionDrawer({
                 <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
                   {isRu ? 'Курс (1 USD = UZS)' : 'Kurs (1 USD = UZS)'}
                 </label>
-                <Input
-                  type="number"
+                <MoneyInput
+                  aria-label={isRu ? 'Курс' : 'Kurs'}
                   value={exchangeRate}
-                  onChange={(e) => {
-                    setExchangeRate(e.target.value);
-                    const rate = Number(e.target.value);
-                    const amt = parseFloat(amount) || 0;
-                    setTargetAmount(targetAmountAtRate(amt, rate));
+                  decimals={4}
+                  placeholder="12,800"
+                  onValueChange={(value) => {
+                    setExchangeRate(value);
+                    setTargetAmount(targetAmountAtRate(parseFloat(amount) || 0, Number(value)));
                   }}
                 />
               </div>

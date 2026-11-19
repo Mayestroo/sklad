@@ -5,6 +5,11 @@ import React, { useState, useEffect, useRef } from 'react';
 export interface CurrencyInputProps {
   value: number | string;
   onChange: (value: number) => void;
+  /**
+   * Called instead of onChange(0) when the user empties the field, so a value
+   * that must be typed (an exchange rate, ADR 0022) stays empty, not 0.
+   */
+  onClear?: () => void;
   decimals?: number;
   placeholder?: string;
   disabled?: boolean;
@@ -17,6 +22,7 @@ export interface CurrencyInputProps {
   id?: string;
   'aria-label'?: string;
   title?: string;
+  autoFocus?: boolean;
 }
 
 /**
@@ -99,6 +105,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     {
       value,
       onChange,
+      onClear,
       decimals = 3,
       placeholder = '0',
       disabled = false,
@@ -111,6 +118,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       id,
       'aria-label': ariaLabel,
       title,
+      autoFocus,
     },
     forwardedRef
   ) => {
@@ -144,6 +152,10 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       setIsFocused(false);
       // Focusing and leaving an empty field must not turn it into 0.
       if (textValue.trim() === '' && (value === '' || value === null || value === undefined)) return;
+      if (textValue.trim() === '' && onClear) {
+        onClear();
+        return;
+      }
       const num = parseCurrencyValue(textValue);
       const clamped = max !== undefined ? Math.min(max, Math.max(min, num)) : Math.max(min, num);
       onChange(clamped);
@@ -157,6 +169,10 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       const { formatted, rawNumber } = formatNumberWithCommas(raw, decimals);
 
       setTextValue(formatted);
+      if (formatted === '' && onClear) {
+        onClear();
+        return;
+      }
       const clamped = max !== undefined ? Math.min(max, Math.max(min, rawNumber)) : Math.max(min, rawNumber);
       onChange(clamped);
 
@@ -186,6 +202,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
           }
         }}
         id={id}
+        autoFocus={autoFocus}
         type="text"
         inputMode="decimal"
         disabled={disabled}

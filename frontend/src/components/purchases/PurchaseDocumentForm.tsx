@@ -1,5 +1,6 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -1441,14 +1442,12 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
                     {/* Quantity */}
                     <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="any"
+                      <QuantityInput
+                        unit={products.find((product) => product.id === item.productId)?.unitOfMeasure}
                         value={item.quantity}
-                        onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value))}
-                        style={{ textAlign: 'right' }}
+                        onValueChange={(value) => handleItemChange(idx, 'quantity', Number(value) || 0)}
                         disabled={isReadOnly}
+                        aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
                       />
                     </td>
 

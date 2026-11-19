@@ -128,7 +128,7 @@ describe('Sales returns page', () => {
     const row = (await screen.findByText('Shampun')).closest('tr') as HTMLElement;
     expect(row.textContent).toContain('-10,0%');
 
-    fireEvent.change(row.querySelector('input[type="number"]') as HTMLInputElement, { target: { value: '2' } });
+    fireEvent.change(row.querySelector('input[inputmode="decimal"]') as HTMLInputElement, { target: { value: '2' } });
 
     const footer = (await screen.findByText('Jami qaytariladigan summa:')).closest('tr') as HTMLElement;
     // 2 x (90 net + 10.80 VAT) = 201.60, not the VAT-free 180.

@@ -7,8 +7,8 @@ import { CurrencyInput } from './CurrencyInput';
  * A labelled money field with thousands separators (muammolar.pdf B5:
  * "1000000" was typed into bare number inputs). Same label and layout as
  * `Input`; the value is reported as text so forms that keep amounts as
- * strings can use it directly. Exchange rates stay plain inputs (an empty
- * rate must not become 0, ADR 0022).
+ * strings can use it directly. Emptying the field reports '' (not "0"), so it
+ * also suits exchange rates, which must be typed (ADR 0022).
  */
 export interface MoneyInputProps {
   label?: string;
@@ -54,6 +54,7 @@ export function MoneyInput({
         aria-label={ariaLabel ?? label}
         value={value ?? ''}
         onChange={(next) => onValueChange(String(next))}
+        onClear={() => onValueChange('')}
         decimals={decimals}
         placeholder={placeholder}
         disabled={disabled}

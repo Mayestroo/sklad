@@ -1,5 +1,7 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -13,6 +15,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrencyIfAvailable, formatDate, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
 import { roundTo } from '@/lib/round';
+import { quantityWithUnit } from '@/lib/units';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import {
   ArrowLeft,
@@ -56,6 +59,8 @@ interface ItemRow {
   sku: string;
   quantity: number;
   maxQty?: number;
+  /** Unit code of the product card, shown next to the quantity. */
+  unit?: string;
   unitPrice: number;
   vatRate: number;
   vatAmount: number;
@@ -254,6 +259,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               productName: getProductName(i.product?.name),
               productType: i.product?.type || 'PRODUCT',
               sku: i.product?.sku || '',
+              unit: i.product?.unitOfMeasure,
               quantity: unreturned,
               maxQty: unreturned,
               unitPrice,
@@ -725,15 +731,13 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
           {currency && currency !== 'UZS' && !receiptId && (
             <div>
-              <Input
+              <MoneyInput
                 label={isRu ? `Курс (UZS за 1 ${currency}) *` : `Kurs (1 ${currency} uchun UZS) *`}
-                type="number"
-                min="0"
-                step="0.0001"
                 value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value)}
+                onValueChange={setExchangeRate}
+                decimals={4}
+                placeholder="12,800"
                 disabled={isReadOnly}
-                placeholder={isRu ? 'Напр: 12650' : 'Masalan: 12650'}
               />
             </div>
           )}
@@ -820,7 +824,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                       )}
                       {row.maxQty !== undefined && (
                         <div style={{ fontSize: '11px', color: 'var(--color-primary-600)', marginTop: '2px' }}>
-                          {isRu ? `Доступно по накладной: ${row.maxQty}` : `Xarid bo‘yicha qoldiq: ${row.maxQty}`}
+                          {isRu ? `Доступно по накладной: ${quantityWithUnit(row.maxQty, row.unit, locale)}` : `Xarid bo‘yicha qoldiq: ${quantityWithUnit(row.maxQty, row.unit, locale)}`}
                         </div>
                       )}
                     </td>
@@ -852,25 +856,15 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       {isReadOnly ? (
-                        <span style={{ fontWeight: 700 }}>{row.quantity}</span>
+                        <span style={{ fontWeight: 700 }}>{quantityWithUnit(row.quantity, row.unit, locale)}</span>
                       ) : (
-                        <input
-                          type="number"
-                          step="any"
-                          min="0.001"
-                          max={row.maxQty}
+                        <QuantityInput
+                          unit={row.unit}
                           value={row.quantity}
-                          onChange={(e) => handleUpdateItem(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                          style={{
-                            width: '90px',
-                            padding: '6px 8px',
-                            textAlign: 'right',
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--color-border-light)',
-                            backgroundColor: 'var(--color-bg-primary)',
-                            color: 'var(--color-text-primary)',
-                            fontWeight: 700,
-                          }}
+                          max={row.maxQty}
+                          onValueChange={(value) => handleUpdateItem(idx, 'quantity', Number(value) || 0)}
+                          aria-label={isRu ? 'Количество возврата' : 'Qaytarish miqdori'}
+                          style={{ width: '130px' }}
                         />
                       )}
                     </td>

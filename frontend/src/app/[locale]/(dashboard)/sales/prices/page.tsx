@@ -1,5 +1,6 @@
 'use client';
 
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -403,21 +404,22 @@ export default function PricesPage() {
                         </td>
                         <td style={{ padding: '10px 14px' }}>
                           {isEditing ? (
-                            <input
-                              id={`price-input-${prod.id}`}
-                              type="number"
-                              min={0}
-                              value={editingPrices[prod.id]}
-                              onChange={(e) => setEditingPrices((prev) => ({ ...prev, [prod.id]: Number(e.target.value) }))}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleSavePrice(prod.id);
-                                }
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSavePrice(prod.id);
                               }}
-                              style={{ width: 120, padding: '5px 8px', border: '1px solid var(--color-primary-400)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
-                              autoFocus
-                            />
+                            >
+                              <CurrencyInput
+                                id={`price-input-${prod.id}`}
+                                aria-label={isRu ? 'Цена' : 'Narx'}
+                                value={editingPrices[prod.id] ?? ''}
+                                decimals={2}
+                                autoFocus
+                                onChange={(value) => setEditingPrices((prev) => ({ ...prev, [prod.id]: value }))}
+                                style={{ width: 140, borderColor: 'var(--color-primary-400)' }}
+                              />
+                            </form>
                           ) : (
                             <span style={{ fontWeight: listPrice > 0 ? 600 : 400, color: listPrice > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
                               {listPrice > 0 ? formatCurrency(listPrice, locale, selectedPL?.currency || defaultCurrency) : '—'}

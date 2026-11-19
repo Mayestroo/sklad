@@ -1,5 +1,6 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Calculator, Plus, Save, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -228,16 +229,12 @@ export function RecipeFormModal({
                 {isRu ? 'Норма выпуска' : 'Ishlab chiqarish normasi'}
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Input
+                <QuantityInput
                   aria-label={isRu ? 'Норма выпуска' : 'Ishlab chiqarish normasi'}
-                  type="number"
-                  min="0.001"
-                  step="0.001"
+                  unit={finished?.unitOfMeasure}
                   value={outputQuantity}
-                  onChange={(e) => setOutputQuantity(e.target.value)}
-                  required
+                  onValueChange={setOutputQuantity}
                 />
-                <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', minWidth: 40 }}>{finished ? finishedUnit : ''}</span>
               </div>
             </div>
           </div>
@@ -295,13 +292,11 @@ export function RecipeFormModal({
                           />
                         </td>
                         <td style={td}>
-                          <Input
+                          <QuantityInput
                             aria-label={`${isRu ? 'Количество' : 'Miqdor'} ${i + 1}`}
-                            type="number"
-                            min="0"
-                            step="any"
+                            unit={material ? entryUnit : undefined}
                             value={row.quantity}
-                            onChange={(e) => updateRow(row.key, { quantity: e.target.value })}
+                            onValueChange={(value) => updateRow(row.key, { quantity: value })}
                           />
                           {material && typed && entryUnit !== cardUnit && converted !== null && (
                             <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 4 }}>

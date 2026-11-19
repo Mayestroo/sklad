@@ -1,5 +1,6 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
@@ -1235,12 +1236,12 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           {/* Exchange Rate */}
           {currency && currency !== 'UZS' && (
             <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
-              <Input
+              <MoneyInput
                 label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
                 value={exchangeRate}
-                type="text"
-                inputMode="decimal"
-                onChange={(e) => handleExchangeRateChange(e.target.value)}
+                onValueChange={(value) => handleExchangeRateChange(value)}
+                decimals={4}
+                placeholder="12,800"
                 disabled={isReadOnly}
               />
             </div>
@@ -1382,23 +1383,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
                     {/* Quantity */}
                     <td style={{ padding: '10px 12px' }}>
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="any"
+                      <QuantityInput
+                        unit={prd?.unitOfMeasure}
                         value={item.quantity}
-                        onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                        onValueChange={(value) => handleItemChange(idx, 'quantity', Number(value) || 0)}
                         disabled={isReadOnly}
                         aria-label={`${isRu ? 'Количество для строки' : 'Miqdor'} ${idx + 1}`}
-                        style={{
-                          textAlign: 'right',
-                          borderColor:
-                            !isReadOnly &&
-                            warehouseStockMap[item.productId] !== undefined &&
-                            qty > warehouseStockMap[item.productId].free
-                              ? '#ef4444'
-                              : undefined,
-                        }}
+                        invalid={!isReadOnly && warehouseStockMap[item.productId] !== undefined && qty > warehouseStockMap[item.productId].free}
                       />
                       {!isReadOnly &&
                         warehouseStockMap[item.productId] !== undefined &&

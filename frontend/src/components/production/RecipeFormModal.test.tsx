@@ -57,7 +57,7 @@ describe('RecipeFormModal', () => {
     apiFetch.mockResolvedValue({ id: 'r2' });
     const onSaved = renderForm();
 
-    fireEvent.change(screen.getByLabelText('Miqdor 1'), { target: { value: '6' } });
+    fireEvent.change(screen.getByLabelText('Miqdor 1, kg'), { target: { value: '6' } });
     expect((screen.getByTestId('recipe-cost-summary').textContent ?? '').replace(/\s/g, '')).toContain('48000');
     fireEvent.click(screen.getByRole('button', { name: /Retsepturani saqlash/ }));
 
@@ -77,7 +77,7 @@ describe('RecipeFormModal', () => {
 
   it('refuses a quantity finer than the 3 decimals a recipe keeps', async () => {
     renderForm();
-    fireEvent.change(screen.getByLabelText('Miqdor 2'), { target: { value: '0.0004' } });
+    fireEvent.change(screen.getByLabelText('Miqdor 2, kg'), { target: { value: '0.0004' } });
     fireEvent.click(screen.getByRole('button', { name: /Retsepturani saqlash/ }));
     expect((await screen.findByRole('alert')).textContent).toContain('2');
     expect(apiFetch).not.toHaveBeenCalled();

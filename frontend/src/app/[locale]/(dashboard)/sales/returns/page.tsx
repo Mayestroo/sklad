@@ -1,5 +1,7 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -838,31 +840,20 @@ export default function SalesReturnsPage() {
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }}>
                             <div style={{ color: item.returnableQuantity > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                              {item.returnableQuantity}
+                              {quantityWithUnit(item.returnableQuantity, item.unit, locale)}
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                              {isRu ? `из ${item.soldQuantity}` : `${item.soldQuantity} dan`}
+                              {isRu ? `из ${quantityWithUnit(item.soldQuantity, item.unit, locale)}` : `${quantityWithUnit(item.soldQuantity, item.unit, locale)} dan`}
                             </div>
                           </td>
                           <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                            <input
-                              type="number"
-                              min={0}
-                              max={item.returnableQuantity}
-                              step="any"
-                              disabled={isExhausted}
+                            <QuantityInput
+                              unit={item.unit}
                               value={item.quantity || ''}
-                              onChange={(e) => handleQtyChange(idx, parseFloat(e.target.value) || 0)}
-                              style={{
-                                width: '100%',
-                                textAlign: 'center',
-                                padding: '6px 8px',
-                                border: '1px solid var(--color-border)',
-                                borderRadius: 'var(--radius-sm)',
-                                background: 'var(--color-bg-input)',
-                                color: 'var(--color-text-primary)',
-                                fontSize: 'var(--text-sm)',
-                              }}
+                              max={item.returnableQuantity}
+                              disabled={isExhausted}
+                              onValueChange={(value) => handleQtyChange(idx, Number(value) || 0)}
+                              aria-label={isRu ? 'Количество возврата' : 'Qaytarish miqdori'}
                             />
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }} className="tabular-nums">

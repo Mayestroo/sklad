@@ -1,5 +1,7 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
@@ -762,19 +764,14 @@ export default function OpeningBalancesPage() {
                   <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
                     {isRu ? 'Курс USD (UZS):' : 'USD kursi (UZS):'}
                   </span>
-                  <input
-                    type="number"
-                    min="0.0001"
-                    step="any"
+                  <MoneyInput
                     value={usdRate}
                     disabled={isReadOnly}
-                    onChange={(event) => setUsdRate(event.target.value)}
+                    onValueChange={setUsdRate}
+                    decimals={4}
                     placeholder={hasUsdLines ? (isRu ? 'обязательно' : 'majburiy') : '—'}
                     aria-label={isRu ? 'Курс USD к UZS на дату остатков' : 'Qoldiq sanasidagi USD ning UZS kursi'}
-                    style={field(120, {
-                      textAlign: 'right',
-                      borderColor: needsUsdRate(lines, usdRate) && !isReadOnly ? 'var(--color-warning-500)' : 'var(--color-border)',
-                    })}
+                    style={{ width: 130, borderColor: needsUsdRate(lines, usdRate) && !isReadOnly ? 'var(--color-warning-500)' : undefined }}
                   />
                 </label>
               </div>
@@ -1383,15 +1380,13 @@ function InventoryTable({
                 </td>
               )}
               <td style={{ ...td, textAlign: 'right' }}>
-                <CurrencyInput
+                <QuantityInput
+                  unit={products.find((product) => product.id === line.productId)?.unitOfMeasure}
                   value={line.quantity || ''}
                   disabled={isReadOnly}
-                  onChange={(value) => onUpdate(index, 'quantity', value)}
-                  min={0}
-                  decimals={3}
-                  placeholder="0"
-                  className="tabular-nums"
-                  style={field('100px', { textAlign: 'right' })}
+                  onValueChange={(value) => onUpdate(index, 'quantity', Number(value) || 0)}
+                  aria-label={isRu ? 'Количество' : 'Miqdor'}
+                  style={field('130px', { textAlign: 'right' })}
                 />
               </td>
               <td style={{ ...td, textAlign: 'right' }}>
@@ -1714,7 +1709,13 @@ function NewFixedAssetModal({
         </div>
         <div>
           {label(isRu ? 'Срок службы (мес.)' : 'Foydalanish muddati (oy)')}
-          <input type="number" min="1" step="1" value={usefulLifeMonths} onChange={(e) => setUsefulLifeMonths(e.target.value)} style={field('100%', { textAlign: 'right' })} />
+          <QuantityInput
+            unit={isRu ? 'мес.' : 'oy'}
+            value={usefulLifeMonths}
+            onValueChange={setUsefulLifeMonths}
+            decimals={0}
+            aria-label={isRu ? 'Срок службы' : 'Foydalanish muddati'}
+          />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           {label(isRu ? `Накопленная амортизация на ${openingDate} (UZS)` : `${openingDate} holatiga jamg‘arilgan eskirish (UZS)`)}

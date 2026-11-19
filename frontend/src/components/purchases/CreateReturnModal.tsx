@@ -1,5 +1,7 @@
 'use client';
 
+import { quantityWithUnit } from '@/lib/units';
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -68,6 +70,7 @@ export function CreateReturnModal({
         return {
           productId: i.productId,
           productName: i.product?.name,
+          unit: i.product?.unitOfMeasure,
           maxQty: unreturned,
           returnQty: typed.qty[index] ?? 0,
           unitPrice: Number(i.unitPrice),
@@ -248,16 +251,14 @@ export function CreateReturnModal({
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)' }}>{item.maxQty}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)' }}>{quantityWithUnit(item.maxQty, item.unit, locale)}</td>
                       <td style={{ padding: '6px' }}>
-                        <Input
-                          type="number"
-                          step="0.001"
-                          min="0"
+                        <QuantityInput
+                          unit={item.unit}
+                          value={item.returnQty || ''}
                           max={item.maxQty}
-                          value={item.returnQty}
-                          onChange={(e) => handleQtyChange(idx, parseFloat(e.target.value) || 0)}
-                          style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)' }}
+                          onValueChange={(value) => handleQtyChange(idx, Number(value) || 0)}
+                          aria-label={isRu ? 'Количество возврата' : 'Qaytarish miqdori'}
                         />
                       </td>
                       <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, receipt.currency)}</td>

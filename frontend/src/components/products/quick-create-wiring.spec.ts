@@ -27,8 +27,12 @@ test('B4: opening-balance counterparty dropdowns can create a counterparty', () 
 
 test('B5: opening-balance amounts are entered with thousands separators', () => {
   assert.doesNotMatch(openingBalances, /parseFloat\(e\.target\.value\)/);
-  // cash, quantity, cost, debt/advance, other; fixed-asset cost and depreciation in the new-asset form
-  assert.equal((openingBalances.match(/<CurrencyInput/g) ?? []).length, 7);
+  // Every number on the page is a formatted field: money (cash, cost, debt/advance, other,
+  // fixed-asset cost and depreciation), the USD rate, and quantities with their unit.
+  assert.doesNotMatch(openingBalances, /type="number"/);
+  assert.equal((openingBalances.match(/<CurrencyInput/g) ?? []).length, 6);
+  assert.equal((openingBalances.match(/<MoneyInput/g) ?? []).length, 1);
+  assert.equal((openingBalances.match(/<QuantityInput/g) ?? []).length, 2);
 });
 
 test('B9: sales invoice product dropdown can create a product', () => {

@@ -40,7 +40,7 @@ import {
   AllocationPreviewResult,
 } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
-import { unitLabel } from '@/lib/units';
+import { unitLabel, quantityWithUnit } from '@/lib/units';
 
 interface Counterparty {
   id: string;
@@ -486,14 +486,12 @@ export default function NewExpensePage() {
 
           {currency === 'USD' && (
             <div style={{ marginTop: 'var(--space-3)' }}>
-              <Input
-                type="number"
-                min="0.0001"
-                step="0.0001"
+              <MoneyInput
                 label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
                 value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value)}
-                placeholder="12800"
+                onValueChange={setExchangeRate}
+                decimals={4}
+                placeholder="12,800"
               />
             </div>
           )}
@@ -1073,7 +1071,7 @@ export default function NewExpensePage() {
                                 color: 'var(--color-success-600)',
                               }}
                             >
-                              {preview.remainingQuantity} omborda
+                              {quantityWithUnit(preview.remainingQuantity, preview.unitOfMeasure, locale)} {isRu ? 'на складе' : 'omborda'}
                             </span>
                             {preview.soldQuantity > 0 && (
                               <span
@@ -1086,7 +1084,7 @@ export default function NewExpensePage() {
                                   color: 'var(--color-warning-600)',
                                 }}
                               >
-                                {preview.soldQuantity} sotilgan
+                                {quantityWithUnit(preview.soldQuantity, preview.unitOfMeasure, locale)} {isRu ? 'продано' : 'sotilgan'}
                               </span>
                             )}
                           </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, FormEvent } from 'react';
 import { useLocale } from 'next-intl';
@@ -267,7 +268,13 @@ export default function NewProductPage() {
 
             <Select label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'} options={CURRENCY_OPTIONS} value={costPriceCurrency} onChange={(value) => { setCostPriceCurrency(value as 'USD' | 'UZS'); setCostPriceExchangeRate(value === 'UZS' ? '1' : ''); }} placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'} />
             {costPriceCurrency === 'USD' && (
-              <Input label={isRu ? 'Курс к UZS' : 'UZS ga kurs'} type="number" min="0.0001" step="any" value={costPriceExchangeRate} onChange={(event) => setCostPriceExchangeRate(event.target.value)} />
+              <MoneyInput
+                label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
+                value={costPriceExchangeRate}
+                onValueChange={setCostPriceExchangeRate}
+                decimals={4}
+                placeholder="12,800"
+              />
             )}
 
             <MoneyInput
@@ -288,13 +295,12 @@ export default function NewProductPage() {
               onChange={(e) => setVatRate(Number(e.target.value))}
             />
 
-            <Input
+            <QuantityInput
               id="prod-min-stock"
               label={isRu ? 'Порог мин. остатка' : 'Minimal qoldiq ogohlantirishi'}
-              type="number"
-              min={0}
-              value={minStockAlert}
-              onChange={(e) => setMinStockAlert(Number(e.target.value))}
+              unit={unitOfMeasure}
+              value={minStockAlert || ''}
+              onValueChange={(value) => setMinStockAlert(Number(value) || 0)}
             />
           </div>
         </Card>

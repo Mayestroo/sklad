@@ -371,14 +371,12 @@ export function QuickAddProductModal({
                 />
               </div>
               {costPriceCurrency === 'USD' && (
-                <Input
-                  className="mt-2"
+                <MoneyInput
                   label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
-                  type="number"
-                  min="0.0001"
-                  step="any"
                   value={costPriceExchangeRate}
-                  onChange={(event) => setCostPriceExchangeRate(event.target.value)}
+                  onValueChange={setCostPriceExchangeRate}
+                  decimals={4}
+                  placeholder="12,800"
                 />
               )}
             </div>

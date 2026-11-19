@@ -343,13 +343,12 @@ export function QuickPaymentModal({
         </div>
 
         {currency === 'USD' && (
-          <Input
+          <MoneyInput
             label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
-            type="number"
             value={exchangeRate}
-            onChange={(e) => setExchangeRate(e.target.value)}
-            placeholder="12800"
-            required
+            onValueChange={setExchangeRate}
+            decimals={4}
+            placeholder="12,800"
           />
         )}
 

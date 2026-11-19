@@ -1,5 +1,6 @@
 'use client';
 
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { Card } from '@/components/ui/Card';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
@@ -174,13 +175,12 @@ export function OrderGeneralInfo({
         {/* Exchange Rate (when currency is not UZS) */}
         {currency && currency !== 'UZS' && (
           <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
-            <Input
+            <MoneyInput
               label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
-              type="text"
-              inputMode="decimal"
-              min={0.0001}
               value={exchangeRate}
-              onChange={(e) => onExchangeRateChange?.(e.target.value)}
+              onValueChange={(value) => onExchangeRateChange?.(value)}
+              decimals={4}
+              placeholder="12,800"
               disabled={isLocked}
             />
           </div>

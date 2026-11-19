@@ -283,14 +283,12 @@ export function PaySalesOrderModal({
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
               {isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
             </label>
-            <Input
-              type="number"
-              min="0.0001"
-              step="0.0001"
+            <MoneyInput
+              aria-label={isRu ? 'Курс оплаты' : 'To‘lov kursi'}
               value={exchangeRate}
-              onChange={(event) => setExchangeRate(event.target.value)}
-              placeholder="12800"
-              required
+              onValueChange={setExchangeRate}
+              decimals={4}
+              placeholder="12,800"
             />
           </div>
         )}

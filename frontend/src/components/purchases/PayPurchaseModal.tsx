@@ -7,7 +7,6 @@ import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { formatCurrency, errorMessage } from '@/lib/utils';
@@ -276,15 +275,12 @@ export function PayPurchaseModal({
         </div>
 
         {receipt.currency === 'USD' && (
-          <Input
+          <MoneyInput
             label={isRu ? 'Курс оплаты (1 USD = UZS) *' : 'To‘lov kursi (1 USD = UZS) *'}
-            type="number"
-            min="0.0001"
-            step="0.0001"
             value={exchangeRate}
-            onChange={(event) => setExchangeRate(event.target.value)}
-            placeholder="12800"
-            required
+            onValueChange={setExchangeRate}
+            decimals={4}
+            placeholder="12,800"
           />
         )}
 

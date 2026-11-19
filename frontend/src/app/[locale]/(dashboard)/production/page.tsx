@@ -1,5 +1,6 @@
 'use client';
 
+import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import {
@@ -486,7 +487,12 @@ export default function ProductionPage() {
           {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <Select label={isRu ? 'Рецептура / продукт' : 'Retseptura / mahsulot'} options={recipeOptions} value={documentRecipeId} onChange={(value) => { setPreview(null); setPreviewError(''); setDocumentRecipeId(value); }} />
-            <Input label={isRu ? 'Планируемое количество' : 'Rejalashtirilgan miqdor'} type="number" min="0.001" step="0.001" value={documentQuantity} onChange={(event) => { setPreview(null); setPreviewError(''); setDocumentQuantity(event.target.value); }} required />
+            <QuantityInput
+              label={isRu ? 'Планируемое количество' : 'Rejalashtirilgan miqdor'}
+              unit={recipes.find((recipe) => recipe.id === documentRecipeId)?.product.unitOfMeasure}
+              value={documentQuantity}
+              onValueChange={(value) => { setPreview(null); setPreviewError(''); setDocumentQuantity(value); }}
+            />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Select label={isRu ? 'Склад' : 'Ombor'} options={warehouseOptions} value={documentWarehouseId} onChange={(value) => { setPreview(null); setPreviewError(''); setDocumentWarehouseId(value); }} />
@@ -553,7 +559,13 @@ export default function ProductionPage() {
                       <td>{formatQuantity(asNumber(line.plannedQuantity))} {unitLabel(line.product.unitOfMeasure, locale)}</td>
                       <td>
                         {selectedDocument.status === 'IN_PROGRESS' ? (
-                          <Input aria-label={`${localName(line.product.name, locale)} actual`} type="number" min="0" step="0.001" value={actualInputs[line.productId] ?? ''} onChange={(event) => setActualInputs((current) => ({ ...current, [line.productId]: event.target.value }))} style={{ width: 135 }} />
+                          <QuantityInput
+                            aria-label={`${localName(line.product.name, locale)} ${isRu ? 'факт' : 'haqiqiy'}`}
+                            unit={line.product.unitOfMeasure}
+                            value={actualInputs[line.productId] ?? ''}
+                            onValueChange={(value) => setActualInputs((current) => ({ ...current, [line.productId]: value }))}
+                            style={{ width: 150 }}
+                          />
                         ) : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`}
                       </td>
                       <td>{selectedDocument.status === 'IN_PROGRESS' && actualInputs[line.productId] !== undefined && actualInputs[line.productId] !== ''
@@ -567,7 +579,12 @@ export default function ProductionPage() {
               </table>
             </div>
             {selectedDocument.status === 'READY' && (
-              <Input label={isRu ? 'Фактически произведено' : 'Amalda ishlab chiqarildi'} type="number" min="0.001" step="0.001" value={producedQuantity} onChange={(event) => setProducedQuantity(event.target.value)} required />
+              <QuantityInput
+                label={isRu ? 'Фактически произведено' : 'Amalda ishlab chiqarildi'}
+                unit={selectedDocument.product.unitOfMeasure}
+                value={producedQuantity}
+                onValueChange={setProducedQuantity}
+              />
             )}
             {selectedDocument.status === 'COMPLETED' && (
               <div style={{ ...alertStyle('success'), display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
