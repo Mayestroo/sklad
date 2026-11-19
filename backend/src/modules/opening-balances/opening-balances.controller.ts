@@ -82,15 +82,6 @@ export class OpeningBalancesController {
     return this.service.updateLines(tenantId, id, dto);
   }
 
-  @Post(':id/balance-equity')
-  @RequirePermissions('accounting:edit')
-  async balanceEquity(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
-    return this.service.balanceEquity(tenantId, id);
-  }
-
   @Post(':id/post')
   @RequirePermissions('accounting:edit')
   async postDocument(

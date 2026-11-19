@@ -170,6 +170,67 @@ export const DEFAULT_NAS_ACCOUNTS = [
     type: 'EXPENSE' as const,
     isSystem: true,
   },
+  // Opening balances (OpeningBalancesService.post): every category posts to
+  // its own account, and the balancing figure goes to 8710 through the
+  // auxiliary account 00, which nets to zero.
+  {
+    code: '00',
+    name: {
+      uz: 'Boshlang‘ich qoldiqlar yordamchi hisobvarag‘i',
+      ru: 'Вспомогательный счёт ввода остатков',
+    },
+    type: 'EQUITY' as const,
+    isSystem: true,
+  },
+  {
+    code: '0100',
+    name: { uz: 'Asosiy vositalar', ru: 'Основные средства' },
+    type: 'ASSET' as const,
+    isSystem: true,
+  },
+  {
+    // Contra-asset: credited with accumulated depreciation.
+    code: '0200',
+    name: {
+      uz: 'Asosiy vositalarning eskirishi',
+      ru: 'Износ основных средств',
+    },
+    type: 'ASSET' as const,
+    isSystem: true,
+  },
+  {
+    code: '4890',
+    name: {
+      uz: 'Boshqa debitorlik qarzlari',
+      ru: 'Прочая дебиторская задолженность',
+    },
+    type: 'ASSET' as const,
+    isSystem: true,
+  },
+  {
+    code: '6990',
+    name: { uz: 'Boshqa majburiyatlar', ru: 'Прочие обязательства' },
+    type: 'LIABILITY' as const,
+    isSystem: true,
+  },
+  {
+    code: '8330',
+    name: {
+      uz: 'Ustav kapitali (pay va ulushlar)',
+      ru: 'Уставный капитал (паи и доли)',
+    },
+    type: 'EQUITY' as const,
+    isSystem: true,
+  },
+  {
+    code: '8710',
+    name: {
+      uz: 'Taqsimlanmagan foyda (qoplanmagan zarar)',
+      ru: 'Нераспределённая прибыль (непокрытый убыток)',
+    },
+    type: 'EQUITY' as const,
+    isSystem: true,
+  },
 ];
 
 @Injectable()

@@ -8,9 +8,9 @@ import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import {
   OpeningBalanceStatus,
   OpeningBalanceCategory,
+  OpeningBalanceLine,
   TransactionDirection,
   TransactionStatus,
-  AccountType,
   CounterpartySettlementSide,
   Prisma,
 } from '@prisma/client';
@@ -19,6 +19,7 @@ import { lockDocumentStatus } from '../../common/prisma/lock-document';
 import { CreateOpeningBalanceDto } from './dto/create-opening-balance.dto';
 import { UpdateOpeningBalanceLinesDto } from './dto/update-opening-balance.dto';
 import { UnpostOpeningBalanceDto } from './dto/unpost-opening-balance.dto';
+import { OpeningBalanceLineDto } from './dto/opening-balance-line.dto';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { SUPPORTED_CURRENCIES } from '../../common/validators/currency.validator';
 import { AccountsService } from '../accounting/accounts/accounts.service';
@@ -26,10 +27,44 @@ import {
   isCashAccountCurrencyValid,
   ledgerAccountCodeForCashAccount,
 } from '../../../../shared/types/cash-account-policy';
+import {
+  computeOpeningBalanceTotals,
+  openingLineAmount,
+  roundMoney,
+  OPENING_AUXILIARY_ACCOUNT,
+  OPENING_BALANCE_LEDGER_ACCOUNT,
+  OPENING_DEPRECIATION_ACCOUNT,
+  OPENING_RETAINED_EARNINGS_ACCOUNT,
+} from '../../../../shared/types/opening-balance-posting';
 import { JournalService } from '../accounting/journal/journal.service';
 import { JournalLineDto } from '../accounting/dto';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+import { createFifoBatch } from '../inventory/fifo/fifo-batches';
+
+const COUNTERPARTY_CATEGORIES: OpeningBalanceCategory[] = [
+  OpeningBalanceCategory.CUSTOMER_DEBT,
+  OpeningBalanceCategory.SUPPLIER_DEBT,
+  OpeningBalanceCategory.CUSTOMER_ADVANCE,
+  OpeningBalanceCategory.SUPPLIER_ADVANCE,
+];
+
+const isCashCategory = (category: OpeningBalanceCategory) =>
+  category === OpeningBalanceCategory.CASH ||
+  category === OpeningBalanceCategory.BANK;
+
+type ValueLine = {
+  category: OpeningBalanceCategory;
+  amount?: Prisma.Decimal | number | null;
+  quantity?: Prisma.Decimal | number | null;
+  unitCost?: Prisma.Decimal | number | null;
+  accumulatedDepreciation?: Prisma.Decimal | number | null;
+  currency: string;
+  exchangeRate?: Prisma.Decimal | number | string | null;
+};
+
+const plain = (v: Prisma.Decimal | number | string | null | undefined) =>
+  v === null || v === undefined ? v : Number(v);
 
 @Injectable()
 export class OpeningBalancesService {
@@ -58,7 +93,7 @@ export class OpeningBalancesService {
     }
   }
 
-  // ─── Calculation Helper ──────────────────────────────────────────
+  // ─── Calculation Helpers ─────────────────────────────────────────
 
   private exchangeRateToUzs(currency: string, exchangeRate: number) {
     if (
@@ -207,6 +242,51 @@ export class OpeningBalancesService {
     }
   }
 
+  /**
+   * Every line must say what it opens, otherwise it would count in the
+   * balance and the journal but reach no kassa, warehouse or counterparty.
+   * Rows are numbered within their tab, as the page shows them.
+   */
+  private assertPostableLines(lines: OpeningBalanceLine[]) {
+    const problems: string[] = [];
+    const seen = { cash: 0, goods: 0, debts: 0 };
+    lines.forEach((line) => {
+      let row = '';
+      if (isCashCategory(line.category)) row = `Pul / Деньги ${++seen.cash}`;
+      else if (line.category === OpeningBalanceCategory.INVENTORY)
+        row = `Tovarlar / Товары ${++seen.goods}`;
+      else if (COUNTERPARTY_CATEGORIES.includes(line.category))
+        row = `Qarzlar / Долги ${++seen.debts}`;
+      if (isCashCategory(line.category)) {
+        if (Number(line.amount) > 0 && !line.accountId)
+          problems.push(`${row}: kassa/bank tanlanmagan / не выбрана касса`);
+      } else if (line.category === OpeningBalanceCategory.INVENTORY) {
+        if (!line.productId || !line.warehouseId)
+          problems.push(
+            `${row}: tovar yoki ombor tanlanmagan / не выбран товар или склад`,
+          );
+        if (!(Number(line.quantity) > 0))
+          problems.push(
+            `${row}: miqdor 0 dan katta bo‘lishi kerak / количество должно быть больше 0`,
+          );
+        if (line.unitCost === null || Number(line.unitCost) < 0)
+          problems.push(
+            `${row}: tannarx kiritilmagan / не указана себестоимость`,
+          );
+      } else if (COUNTERPARTY_CATEGORIES.includes(line.category)) {
+        if (!line.counterpartyId)
+          problems.push(
+            `${row}: kontragent tanlanmagan / не выбран контрагент`,
+          );
+      }
+    });
+    if (problems.length > 0) {
+      throw new BadRequestException(
+        `Qatorlar to‘liq emas / Строки не заполнены — ${problems.join('; ')}`,
+      );
+    }
+  }
+
   private validateLineCurrency(line: {
     currency?: string;
     exchangeRate?: number | string | Prisma.Decimal;
@@ -218,78 +298,82 @@ export class OpeningBalancesService {
     this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
   }
 
-  private calculateMetrics(
-    lines: Array<{
-      category: OpeningBalanceCategory;
-      amount: number;
-      netAmount?: number;
-      accumulatedDepreciation?: number;
-      currency: string;
-      exchangeRate: number;
-    }>,
-  ) {
-    let totalAssets = 0;
-    let totalLiabilities = 0;
-    let totalEquity = 0;
-    const categoryBreakdown: Record<string, number> = {};
-
-    for (const cat of Object.values(OpeningBalanceCategory)) {
-      categoryBreakdown[cat] = 0;
-    }
-
-    for (const line of lines) {
-      const rate = this.exchangeRateToUzs(
-        line.currency,
-        Number(line.exchangeRate),
-      );
-      const amt = Number(line.amount || 0) * rate;
-      categoryBreakdown[line.category] =
-        (categoryBreakdown[line.category] || 0) + amt;
-
-      switch (line.category) {
-        case OpeningBalanceCategory.CASH:
-        case OpeningBalanceCategory.BANK:
-        case OpeningBalanceCategory.INVENTORY:
-        case OpeningBalanceCategory.CUSTOMER_DEBT:
-        case OpeningBalanceCategory.SUPPLIER_ADVANCE:
-        case OpeningBalanceCategory.OTHER_ASSET:
-          totalAssets += amt;
-          break;
-        case OpeningBalanceCategory.FIXED_ASSET: {
-          const net =
-            line.netAmount !== undefined && line.netAmount !== null
-              ? Number(line.netAmount) * rate
-              : Math.max(
-                  0,
-                  amt - Number(line.accumulatedDepreciation || 0) * rate,
-                );
-          totalAssets += net;
-          break;
-        }
-        case OpeningBalanceCategory.SUPPLIER_DEBT:
-        case OpeningBalanceCategory.CUSTOMER_ADVANCE:
-        case OpeningBalanceCategory.OTHER_LIABILITY:
-          totalLiabilities += amt;
-          break;
-        case OpeningBalanceCategory.EQUITY:
-          totalEquity += amt;
-          break;
-      }
-    }
-
-    const suggestedEquity = Math.max(0, totalAssets - totalLiabilities);
-    const balanceDifference = totalAssets - (totalLiabilities + totalEquity);
-    const isBalanced = Math.abs(balanceDifference) < 0.01;
-
+  /** UZS totals; equity is balanced automatically (see opening-balance-posting). */
+  private calculateMetrics(lines: ValueLine[]) {
+    const totals = computeOpeningBalanceTotals(
+      lines.map((l) => ({
+        category: l.category,
+        amount: plain(l.amount),
+        quantity: plain(l.quantity),
+        unitCost: plain(l.unitCost),
+        accumulatedDepreciation: plain(l.accumulatedDepreciation),
+        currency: l.currency,
+        exchangeRate: plain(l.exchangeRate),
+      })),
+    );
     return {
-      totalAssets: Math.round(totalAssets * 100) / 100,
-      totalLiabilities: Math.round(totalLiabilities * 100) / 100,
-      totalEquity: Math.round(totalEquity * 100) / 100,
-      suggestedEquity: Math.round(suggestedEquity * 100) / 100,
-      balanceDifference: Math.round(balanceDifference * 100) / 100,
-      isBalanced,
+      ...totals,
+      // Stored on the document: assets − liabilities − entered capital, i.e.
+      // the part of equity the system posts to 8710.
+      balanceDifference: totals.retainedEarnings,
       currency: 'UZS',
-      categoryBreakdown,
+    };
+  }
+
+  /** The row stored for a line; an inventory amount is quantity × cost. */
+  private lineData(tenantId: string, l: OpeningBalanceLineDto) {
+    this.validateLineCurrency(l);
+    this.validateFixedAssetLine(l);
+    const quantity =
+      l.quantity !== undefined && l.quantity !== null
+        ? Number(l.quantity)
+        : null;
+    const unitCost =
+      l.unitCost !== undefined && l.unitCost !== null
+        ? Number(l.unitCost)
+        : null;
+    const amount = openingLineAmount({
+      category: l.category,
+      amount: l.amount,
+      quantity,
+      unitCost,
+    });
+    const accDep = Number(l.accumulatedDepreciation || 0);
+    return {
+      tenantId,
+      category: l.category,
+      accountId: l.accountId || null,
+      productId: l.productId || null,
+      warehouseId: l.warehouseId || null,
+      counterpartyId: l.counterpartyId || null,
+      fixedAssetId: l.fixedAssetId || null,
+      quantity,
+      unitCost,
+      amount,
+      accumulatedDepreciation: accDep,
+      netAmount:
+        l.category === OpeningBalanceCategory.FIXED_ASSET
+          ? roundMoney(amount - accDep)
+          : amount,
+      currency: l.currency,
+      exchangeRate: this.exchangeRateToUzs(l.currency, Number(l.exchangeRate)),
+      batchNumber: l.batchNumber || null,
+      contractNumber: l.contractNumber || null,
+      notes: l.notes || null,
+    };
+  }
+
+  private documentTotals(metrics: {
+    totalAssets: number;
+    totalLiabilities: number;
+    totalEquity: number;
+    balanceDifference: number;
+  }) {
+    return {
+      totalAssets: metrics.totalAssets,
+      totalLiabilities: metrics.totalLiabilities,
+      totalEquity: metrics.totalEquity,
+      balanceDifference: metrics.balanceDifference,
     };
   }
 
@@ -367,21 +451,9 @@ export class OpeningBalancesService {
     if (!doc)
       throw new NotFoundException('Boshlang‘ich qoldiq hujjati topilmadi');
 
-    const lines = doc.lines || [];
-    const metrics = this.calculateMetrics(
-      lines.map((l) => ({
-        category: l.category,
-        amount: Number(l.amount),
-        netAmount: Number(l.netAmount),
-        accumulatedDepreciation: Number(l.accumulatedDepreciation || 0),
-        currency: l.currency,
-        exchangeRate: Number(l.exchangeRate),
-      })),
-    );
-
     return {
       ...doc,
-      metrics,
+      metrics: this.calculateMetrics(doc.lines || []),
     };
   }
 
@@ -409,16 +481,8 @@ export class OpeningBalancesService {
 
     const lines = dto.lines || [];
     await this.assertLineReferences(tenantId, lines);
-    const metrics = this.calculateMetrics(
-      lines.map((l) => ({
-        category: l.category,
-        amount: Number(l.amount || 0),
-        netAmount: Number(l.netAmount || l.amount || 0),
-        accumulatedDepreciation: Number(l.accumulatedDepreciation || 0),
-        currency: l.currency,
-        exchangeRate: Number(l.exchangeRate),
-      })),
-    );
+    const lineRows = lines.map((l) => this.lineData(tenantId, l));
+    const metrics = this.calculateMetrics(lineRows);
 
     return this.prisma.openingBalanceDocument.create({
       data: {
@@ -428,50 +492,8 @@ export class OpeningBalancesService {
         status: OpeningBalanceStatus.DRAFT,
         notes: dto.notes || null,
         createdById: userId,
-        totalAssets: metrics.totalAssets,
-        totalLiabilities: metrics.totalLiabilities,
-        totalEquity: metrics.totalEquity,
-        balanceDifference: metrics.balanceDifference,
-        lines: {
-          create: lines.map((l) => {
-            this.validateLineCurrency(l);
-            this.validateFixedAssetLine(l);
-            const amt = Number(l.amount || 0);
-            const accDep = Number(l.accumulatedDepreciation || 0);
-            const netAmt =
-              l.category === OpeningBalanceCategory.FIXED_ASSET
-                ? Math.max(0, amt - accDep)
-                : amt;
-            return {
-              tenantId,
-              category: l.category,
-              accountId: l.accountId || null,
-              productId: l.productId || null,
-              warehouseId: l.warehouseId || null,
-              counterpartyId: l.counterpartyId || null,
-              fixedAssetId: l.fixedAssetId || null,
-              quantity:
-                l.quantity !== undefined && l.quantity !== null
-                  ? Number(l.quantity)
-                  : null,
-              unitCost:
-                l.unitCost !== undefined && l.unitCost !== null
-                  ? Number(l.unitCost)
-                  : null,
-              amount: amt,
-              accumulatedDepreciation: accDep,
-              netAmount: netAmt,
-              currency: l.currency,
-              exchangeRate: this.exchangeRateToUzs(
-                l.currency,
-                Number(l.exchangeRate),
-              ),
-              batchNumber: l.batchNumber || null,
-              contractNumber: l.contractNumber || null,
-              notes: l.notes || null,
-            };
-          }),
-        },
+        ...this.documentTotals(metrics),
+        lines: { create: lineRows },
       },
       include: {
         lines: true,
@@ -498,18 +520,9 @@ export class OpeningBalancesService {
     }
 
     const lines = dto.lines || [];
-    lines.forEach((line) => this.validateLineCurrency(line));
     await this.assertLineReferences(tenantId, lines);
-    const metrics = this.calculateMetrics(
-      lines.map((l) => ({
-        category: l.category,
-        amount: Number(l.amount || 0),
-        netAmount: Number(l.netAmount || l.amount || 0),
-        accumulatedDepreciation: Number(l.accumulatedDepreciation || 0),
-        currency: l.currency,
-        exchangeRate: Number(l.exchangeRate),
-      })),
-    );
+    const lineRows = lines.map((l) => this.lineData(tenantId, l));
+    const metrics = this.calculateMetrics(lineRows);
 
     return this.prisma.$transaction(async (tx) => {
       // F9: lock the row and re-check the status inside the transaction; a
@@ -528,62 +541,18 @@ export class OpeningBalancesService {
           'Tasdiqlangan boshlang‘ich qoldiq hujjatini to‘g‘ridan-to‘g‘ri o‘zgartirib bo‘lmaydi. Avval qayta oching (Unpost)',
         );
       }
-      // 1. Delete previous lines
       await tx.openingBalanceLine.deleteMany({
         where: { documentId, tenantId },
       });
 
-      // 2. Insert new lines
-      if (lines.length > 0) {
+      if (lineRows.length > 0) {
         await tx.openingBalanceLine.createMany({
-          data: lines.map((l) => {
-            this.validateLineCurrency(l);
-            this.validateFixedAssetLine(l);
-            const amt = Number(l.amount || 0);
-            const accDep = Number(l.accumulatedDepreciation || 0);
-            const netAmt =
-              l.category === OpeningBalanceCategory.FIXED_ASSET
-                ? Math.max(0, amt - accDep)
-                : amt;
-            return {
-              documentId,
-              tenantId,
-              category: l.category,
-              accountId: l.accountId || null,
-              productId: l.productId || null,
-              warehouseId: l.warehouseId || null,
-              counterpartyId: l.counterpartyId || null,
-              fixedAssetId: l.fixedAssetId || null,
-              quantity:
-                l.quantity !== undefined && l.quantity !== null
-                  ? Number(l.quantity)
-                  : null,
-              unitCost:
-                l.unitCost !== undefined && l.unitCost !== null
-                  ? Number(l.unitCost)
-                  : null,
-              amount: amt,
-              accumulatedDepreciation: accDep,
-              netAmount: netAmt,
-              currency: l.currency,
-              exchangeRate: this.exchangeRateToUzs(
-                l.currency,
-                Number(l.exchangeRate),
-              ),
-              batchNumber: l.batchNumber || null,
-              contractNumber: l.contractNumber || null,
-              notes: l.notes || null,
-            };
-          }),
+          data: lineRows.map((row) => ({ ...row, documentId })),
         });
       }
 
-      // 3. Update master document totals
       const updateData: Prisma.OpeningBalanceDocumentUpdateInput = {
-        totalAssets: metrics.totalAssets,
-        totalLiabilities: metrics.totalLiabilities,
-        totalEquity: metrics.totalEquity,
-        balanceDifference: metrics.balanceDifference,
+        ...this.documentTotals(metrics),
         notes: dto.notes !== undefined ? dto.notes : doc.notes,
         updatedAt: new Date(),
       };
@@ -599,77 +568,19 @@ export class OpeningBalancesService {
     });
   }
 
-  async balanceEquity(tenantId: string, documentId: string) {
-    const document = await this.prisma.openingBalanceDocument.findFirst({
-      where: { id: documentId, tenantId },
-      include: { lines: true },
-    });
-    if (!document) throw new NotFoundException('Hujjat topilmadi');
-    if (document.status === OpeningBalanceStatus.POSTED) {
-      throw new BadRequestException(
-        'Tasdiqlangan hujjat kapitalini qayta hisoblab bo‘lmaydi',
-      );
-    }
-
-    document.lines.forEach((line) => this.validateLineCurrency(line));
-    const metrics = this.calculateMetrics(
-      document.lines.map((line) => ({
-        category: line.category,
-        amount: Number(line.amount),
-        netAmount: Number(line.netAmount),
-        accumulatedDepreciation: Number(line.accumulatedDepreciation),
-        currency: line.currency,
-        exchangeRate: Number(line.exchangeRate),
-      })),
-    );
-    const targetEquity =
-      Math.round((metrics.totalAssets - metrics.totalLiabilities) * 100) / 100;
-    if (targetEquity < 0) {
-      throw new BadRequestException(
-        'Majburiyatlar aktivlardan ko‘p; kapitalni avtomatik tenglashtirib bo‘lmaydi',
-      );
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.openingBalanceLine.deleteMany({
-        where: {
-          documentId,
-          tenantId,
-          category: OpeningBalanceCategory.EQUITY,
-        },
-      });
-      if (targetEquity > 0) {
-        await tx.openingBalanceLine.createMany({
-          data: [
-            {
-              documentId,
-              tenantId,
-              category: OpeningBalanceCategory.EQUITY,
-              amount: targetEquity,
-              netAmount: targetEquity,
-              currency: 'UZS',
-              exchangeRate: 1,
-              accumulatedDepreciation: 0,
-            },
-          ],
-        });
-      }
-      return tx.openingBalanceDocument.update({
-        where: { tenantId, id: documentId },
-        data: {
-          totalAssets: metrics.totalAssets,
-          totalLiabilities: metrics.totalLiabilities,
-          totalEquity: targetEquity,
-          balanceDifference: 0,
-          updatedAt: new Date(),
-        },
-        include: { lines: true },
-      });
-    });
-  }
-
   // ─── Document Posting ─────────────────────────────────────────────
 
+  /**
+   * Posting opens every line in the module that owns it:
+   *  - CASH/BANK      → kassa balance + a POSTED Finance income (5010/5020/5110/5210)
+   *  - INVENTORY      → stock level + a FIFO batch dated the opening date (2910)
+   *  - debts/advances → counterparty settlement in the line currency (4010/6010)
+   *  - FIXED_ASSET    → register asset made ACTIVE (0100, depreciation 0200)
+   *  - OTHER_*        → ledger only (4890 / 6990)
+   *  - EQUITY         → ustav kapitali (8330)
+   * and one journal entry through 00, closed by the computed retained
+   * earnings (8710), so the balance never has to be balanced by hand.
+   */
   async post(tenantId: string, userId: string, documentId: string) {
     const doc = await this.prisma.openingBalanceDocument.findFirst({
       where: { id: documentId, tenantId },
@@ -685,46 +596,34 @@ export class OpeningBalancesService {
         'Faqat qoralama boshlang‘ich qoldiq hujjatini tasdiqlash mumkin',
       );
     }
-
-    doc.lines.forEach((line) => this.validateLineCurrency(line));
-    await this.assertFixedAssetLinks(tenantId, doc.id, doc.lines);
-
-    // Verify balance equality
-    const metrics = this.calculateMetrics(
-      doc.lines.map((l) => ({
-        category: l.category,
-        amount: Number(l.amount),
-        netAmount: Number(l.netAmount),
-        accumulatedDepreciation: Number(l.accumulatedDepreciation || 0),
-        currency: l.currency,
-        exchangeRate: Number(l.exchangeRate),
-      })),
-    );
-
-    if (!metrics.isBalanced) {
+    if (doc.lines.length === 0) {
       throw new BadRequestException(
-        `Balans teng emas! Aktivlar (${metrics.totalAssets}) != Majburiyatlar (${metrics.totalLiabilities}) + Kapital (${metrics.totalEquity}). Farq: ${metrics.balanceDifference} so‘m. Boshlang‘ich balans farqi 0 bo‘lishi shart!`,
+        'Hujjatda qoldiq qatorlari yo‘q / В документе нет строк остатков',
       );
     }
+
+    doc.lines.forEach((line) => this.validateLineCurrency(line));
+    this.assertPostableLines(doc.lines);
+    await this.assertFixedAssetLinks(tenantId, doc.id, doc.lines);
+    const metrics = this.calculateMetrics(doc.lines);
 
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, doc.openingDate, 'post');
+
+      const rateOf = (line: OpeningBalanceLine) =>
+        this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
+      const journal = new OpeningJournal(tx, tenantId);
+
+      // 1. Cash & bank: the kassa balance and a Finance income row.
       for (const line of doc.lines) {
-        if (
-          line.category !== OpeningBalanceCategory.CASH &&
-          line.category !== OpeningBalanceCategory.BANK
-        ) {
-          continue;
-        }
-        if (Number(line.amount) <= 0) continue;
-        if (!line.accountId) {
-          throw new BadRequestException(
-            'Kassa yoki bank qoldig‘i uchun hisobni tanlang',
-          );
-        }
+        if (!isCashCategory(line.category)) continue;
+        const amount = Number(line.amount);
+        if (amount <= 0) continue;
         const account = await tx.cashAccount.findFirst({
-          where: { id: line.accountId, tenantId, isActive: true },
+          where: { id: line.accountId as string, tenantId, isActive: true },
         });
         if (!account)
           throw new NotFoundException(
@@ -739,114 +638,99 @@ export class OpeningBalancesService {
           );
         }
         if (
-          (line.category === OpeningBalanceCategory.BANK &&
-            account.accountType !== 'BANK') ||
-          (line.category === OpeningBalanceCategory.CASH &&
-            account.accountType === 'BANK')
+          (line.category === OpeningBalanceCategory.BANK) !==
+          (account.accountType === 'BANK')
         ) {
           throw new BadRequestException(
             'Tanlangan hisob turi qoldiq qatori turiga mos kelmaydi',
           );
         }
+        const ledgerCode = ledgerAccountCodeForCashAccount(account);
+        if (!ledgerCode)
+          throw new BadRequestException(
+            'Kassa/bank uchun buxgalteriya hisobi topilmadi',
+          );
+
+        await tx.cashAccount.update({
+          where: { tenantId, id: account.id },
+          data: { balance: { increment: amount } },
+        });
+        await tx.financeTransaction.create({
+          data: {
+            tenantId,
+            accountId: account.id,
+            direction: TransactionDirection.INCOME,
+            status: TransactionStatus.POSTED,
+            amount,
+            currency: line.currency,
+            exchangeRate: rateOf(line),
+            comment: line.notes || `Boshlang‘ich qoldiq: ${doc.docNumber}`,
+            sourceDocType: 'OpeningBalanceDocument',
+            sourceDocId: doc.id,
+            responsibleUserId: userId,
+            createdById: userId,
+          },
+        });
+        journal.debit(
+          ledgerCode,
+          amount * rateOf(line),
+          `${account.accountType} (${account.currency}) boshlang‘ich qoldig‘i`,
+        );
       }
 
-      // 1. Process Cash & Bank lines
-      for (const line of doc.lines) {
-        if (
-          (line.category === OpeningBalanceCategory.CASH ||
-            line.category === OpeningBalanceCategory.BANK) &&
-          line.accountId
-        ) {
-          const amt = Number(line.amount);
-          if (amt <= 0) continue;
-          // Increment CashAccount balance
-          await tx.cashAccount.update({
-            where: { tenantId, id: line.accountId },
-            data: { balance: { increment: amt } },
-          });
-
-          // Create non-commercial FinanceTransaction
-          await tx.financeTransaction.create({
-            data: {
-              tenantId,
-              accountId: line.accountId,
-              direction: TransactionDirection.INCOME,
-              status: TransactionStatus.POSTED,
-              amount: amt,
-              currency: line.currency,
-              exchangeRate: this.exchangeRateToUzs(
-                line.currency,
-                Number(line.exchangeRate),
-              ),
-              comment: line.notes || `Boshlang‘ich qoldiq: ${doc.docNumber}`,
-              sourceDocType: 'OpeningBalanceDocument',
-              sourceDocId: doc.id,
-              responsibleUserId: userId,
-              createdById: userId,
-            },
-          });
-        }
-      }
-
-      // 2. Process Inventory lines
+      // 2. Inventory: stock and one FIFO batch per line, oldest layer first.
       let itemIndex = 0;
       for (const line of doc.lines) {
-        if (
-          line.category === OpeningBalanceCategory.INVENTORY &&
-          line.productId &&
-          line.warehouseId
-        ) {
-          itemIndex++;
-          const qty = Number(line.quantity || 0);
-          const unitCost =
-            Number(line.unitCost || 0) *
-            this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
+        if (line.category !== OpeningBalanceCategory.INVENTORY) continue;
+        itemIndex++;
+        const qty = Number(line.quantity);
+        const unitCostUzs = roundMoney(Number(line.unitCost) * rateOf(line));
 
-          if (qty <= 0) continue;
-
-          // Upsert StockLevel
-          await tx.stockLevel.upsert({
-            where: {
-              tenantId_warehouseId_productId: {
-                tenantId,
-                warehouseId: line.warehouseId,
-                productId: line.productId,
-              },
-            },
-            create: {
+        await tx.stockLevel.upsert({
+          where: {
+            tenantId_warehouseId_productId: {
               tenantId,
-              warehouseId: line.warehouseId,
-              productId: line.productId,
-              quantity: qty,
+              warehouseId: line.warehouseId as string,
+              productId: line.productId as string,
             },
-            update: {
-              quantity: { increment: qty },
-            },
-          });
-
-          // Create active ProductBatch with receiptId = null
-          const batchNumber =
-            line.batchNumber || `INIT-${doc.docNumber}-${itemIndex}`;
-          await tx.productBatch.create({
-            data: {
-              tenantId,
-              warehouseId: line.warehouseId,
-              productId: line.productId,
-              batchNumber,
-              initialQty: qty,
-              remainingQty: qty,
-              purchasePrice: unitCost,
-              landedCost: unitCost,
-              receiptId: null,
-            },
-          });
-        }
+          },
+          create: {
+            tenantId,
+            warehouseId: line.warehouseId as string,
+            productId: line.productId as string,
+            quantity: qty,
+          },
+          update: { quantity: { increment: qty } },
+        });
+        await createFifoBatch(tx, {
+          tenantId,
+          warehouseId: line.warehouseId as string,
+          productId: line.productId as string,
+          quantity: qty,
+          unitCost: unitCostUzs,
+          batchNumber: line.batchNumber || `INIT-${doc.docNumber}-${itemIndex}`,
+          createdAt: doc.openingDate,
+          openingBalanceLineId: line.id,
+        });
+        // ADR 0007: a product without a catalog cost takes its opening cost,
+        // so sales margins and suggestions do not start from 0.
+        await tx.product.updateMany({
+          where: { tenantId, id: line.productId as string, costPrice: 0 },
+          data: {
+            costPrice: unitCostUzs,
+            costPriceCurrency: 'UZS',
+            costPriceExchangeRate: 1,
+          },
+        });
+        journal.debit(
+          OPENING_BALANCE_LEDGER_ACCOUNT.INVENTORY,
+          qty * Number(line.unitCost) * rateOf(line),
+          'Tovar-moddiy zaxiralar boshlang‘ich qoldig‘i',
+        );
       }
 
-      // 3. Process opening receivables, payables, and advances by native currency.
+      // 3. Receivables, payables and advances, in the line currency.
       for (const line of doc.lines) {
-        if (!line.counterpartyId) continue;
-
         const settlement = this.getCounterpartyOpeningMovement(
           line.category,
           Number(line.amount),
@@ -855,7 +739,7 @@ export class OpeningBalancesService {
 
         await this.settlementService.recordMovement(tx, {
           tenantId,
-          counterpartyId: line.counterpartyId,
+          counterpartyId: line.counterpartyId as string,
           currency: line.currency,
           side: settlement.side,
           amount: settlement.amount,
@@ -867,146 +751,70 @@ export class OpeningBalancesService {
         });
       }
 
-      // 5. Process Fixed Assets lines
+      // 4. Fixed assets, other items and capital: ledger (and the register).
       for (const line of doc.lines) {
-        if (line.category === OpeningBalanceCategory.FIXED_ASSET) {
-          if (line.fixedAssetId) {
+        const uzs = Number(line.amount) * rateOf(line);
+        switch (line.category) {
+          case OpeningBalanceCategory.FIXED_ASSET:
             await tx.fixedAsset.update({
-              where: { tenantId, id: line.fixedAssetId },
+              where: { tenantId, id: line.fixedAssetId as string },
               data: { status: 'ACTIVE' },
             });
-          }
+            journal.debit(
+              OPENING_BALANCE_LEDGER_ACCOUNT.FIXED_ASSET,
+              uzs,
+              'Asosiy vositalar boshlang‘ich qiymati',
+            );
+            journal.credit(
+              OPENING_DEPRECIATION_ACCOUNT,
+              Number(line.accumulatedDepreciation || 0) * rateOf(line),
+              'Asosiy vositalar jamg‘arilgan eskirishi',
+            );
+            break;
+          case OpeningBalanceCategory.CUSTOMER_DEBT:
+            journal.debit('4010', uzs, 'Xaridorlar qarzdorligi (debitorlik)');
+            break;
+          case OpeningBalanceCategory.SUPPLIER_ADVANCE:
+            journal.debit('6010', uzs, 'Yetkazib beruvchilarga berilgan avans');
+            break;
+          case OpeningBalanceCategory.OTHER_ASSET:
+            journal.debit(
+              OPENING_BALANCE_LEDGER_ACCOUNT.OTHER_ASSET,
+              uzs,
+              'Boshqa aktivlar',
+            );
+            break;
+          case OpeningBalanceCategory.SUPPLIER_DEBT:
+            journal.credit(
+              '6010',
+              uzs,
+              'Yetkazib beruvchilarga qarzdorlik (kreditorlik)',
+            );
+            break;
+          case OpeningBalanceCategory.CUSTOMER_ADVANCE:
+            journal.credit('4010', uzs, 'Mijozlardan olingan avans');
+            break;
+          case OpeningBalanceCategory.OTHER_LIABILITY:
+            journal.credit(
+              OPENING_BALANCE_LEDGER_ACCOUNT.OTHER_LIABILITY,
+              uzs,
+              'Boshqa majburiyatlar',
+            );
+            break;
+          case OpeningBalanceCategory.EQUITY:
+            journal.credit(
+              OPENING_BALANCE_LEDGER_ACCOUNT.EQUITY,
+              uzs,
+              'Ustav kapitali',
+            );
+            break;
+          default:
+            break;
         }
       }
 
-      // 6. Generate double-entry NAS JournalEntry with Account "00"
-      let auxiliaryAccount = await tx.account.findFirst({
-        where: { tenantId, code: '00' },
-      });
-      if (!auxiliaryAccount) {
-        auxiliaryAccount = await tx.account.create({
-          data: {
-            tenantId,
-            code: '00',
-            name: {
-              uz: 'Boshlang‘ich qoldiqlar yordamchi hisobvarag‘i',
-              ru: 'Вспомогательный счет ввода остатков 00',
-            },
-            type: AccountType.EQUITY,
-            isSystem: true,
-          },
-        });
-      }
-
-      const journalLines: JournalLineDto[] = [];
-
-      // Find or link standard asset and liability accounts
-      const acc2910 = await tx.account.findFirst({
-        where: { tenantId, code: '2910' },
-      });
-      const acc4010 = await tx.account.findFirst({
-        where: { tenantId, code: '4010' },
-      });
-      const acc6010 = await tx.account.findFirst({
-        where: { tenantId, code: '6010' },
-      });
-      const acc8330 = await tx.account.findFirst({
-        where: { tenantId, code: '8330' },
-      });
-
-      // Asset journal lines (Debit Asset / Credit 00)
-      for (const line of doc.lines) {
-        if (
-          line.category !== OpeningBalanceCategory.CASH &&
-          line.category !== OpeningBalanceCategory.BANK
-        )
-          continue;
-        if (Number(line.amount) <= 0) continue;
-        if (!line.accountId)
-          throw new BadRequestException(
-            'Kassa yoki bank qoldig‘i uchun hisobni tanlang',
-          );
-        const cashAccount = await tx.cashAccount.findFirst({
-          where: { id: line.accountId, tenantId, isActive: true },
-        });
-        if (
-          !cashAccount ||
-          !isCashAccountCurrencyValid(cashAccount) ||
-          cashAccount.currency !== line.currency
-        ) {
-          throw new BadRequestException(
-            'Boshlang‘ich qoldiq hisobi va valyutasi o‘zaro mos emas',
-          );
-        }
-        const ledgerCode = ledgerAccountCodeForCashAccount(cashAccount);
-        if (!ledgerCode)
-          throw new BadRequestException(
-            'Kassa/bank uchun buxgalteriya hisobi topilmadi',
-          );
-        const ledgerAccount = await tx.account.findFirst({
-          where: { tenantId, code: ledgerCode },
-        });
-        if (!ledgerAccount)
-          throw new BadRequestException(
-            `Buxgalteriya hisobi ${ledgerCode} sozlanmagan`,
-          );
-        const amountInUzs =
-          Number(line.amount) *
-          this.exchangeRateToUzs(line.currency, Number(line.exchangeRate));
-        if (amountInUzs <= 0) continue;
-        journalLines.push({
-          debitAccountId: ledgerAccount.id,
-          creditAccountId: auxiliaryAccount.id,
-          amount: Math.round(amountInUzs * 100) / 100,
-          description: `${cashAccount.accountType} (${cashAccount.currency}) boshlang‘ich qoldig‘i`,
-        });
-      }
-      if (
-        acc2910 &&
-        metrics.categoryBreakdown[OpeningBalanceCategory.INVENTORY] > 0
-      ) {
-        journalLines.push({
-          debitAccountId: acc2910.id,
-          creditAccountId: auxiliaryAccount.id,
-          amount: metrics.categoryBreakdown[OpeningBalanceCategory.INVENTORY],
-          description: 'Tovar-moddiy zaxiralar boshlang‘ich qoldig‘i',
-        });
-      }
-      if (
-        acc4010 &&
-        metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT] > 0
-      ) {
-        journalLines.push({
-          debitAccountId: acc4010.id,
-          creditAccountId: auxiliaryAccount.id,
-          amount:
-            metrics.categoryBreakdown[OpeningBalanceCategory.CUSTOMER_DEBT],
-          description: 'Xaridorlar qarzdorligi (debitorlik)',
-        });
-      }
-
-      // Liability & Equity journal lines (Debit 00 / Credit Liability/Equity)
-      if (
-        acc6010 &&
-        metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT] > 0
-      ) {
-        journalLines.push({
-          debitAccountId: auxiliaryAccount.id,
-          creditAccountId: acc6010.id,
-          amount:
-            metrics.categoryBreakdown[OpeningBalanceCategory.SUPPLIER_DEBT],
-          description: 'Yetkazib beruvchilarga qarzdorlik (kreditorlik)',
-        });
-      }
-      if (acc8330 && metrics.totalEquity > 0) {
-        journalLines.push({
-          debitAccountId: auxiliaryAccount.id,
-          creditAccountId: acc8330.id,
-          amount: metrics.totalEquity,
-          description: 'Boshlang‘ich ustav kapitali / taqsimlanmagan foyda',
-        });
-      }
-
+      // 5. One journal entry; retained earnings close account 00.
+      const journalLines = await journal.lines();
       if (journalLines.length > 0) {
         await this.journalService.createJournalEntry(
           tenantId,
@@ -1021,17 +829,13 @@ export class OpeningBalancesService {
         );
       }
 
-      // 7. Transition document status to POSTED
       return tx.openingBalanceDocument.update({
         where: { tenantId, id: documentId },
         data: {
           status: OpeningBalanceStatus.POSTED,
           approvedById: userId,
           approvedAt: new Date(),
-          totalAssets: metrics.totalAssets,
-          totalLiabilities: metrics.totalLiabilities,
-          totalEquity: metrics.totalEquity,
-          balanceDifference: 0,
+          ...this.documentTotals(metrics),
         },
         include: { lines: true },
       });
@@ -1058,25 +862,46 @@ export class OpeningBalancesService {
       );
     }
 
-    // ─── Enforce Rollback Invariant ───
+    return this.prisma.$transaction(async (tx) => {
+      // D4: nothing dated in a closed accounting period may change.
+      await assertPeriodOpen(tx, tenantId, doc.openingDate, 'unpost');
 
-    // 1. Check Inventory Depletion
-    for (const line of doc.lines) {
-      if (
-        line.category === OpeningBalanceCategory.INVENTORY &&
-        line.productId &&
-        line.warehouseId
-      ) {
-        const batchNumber = line.batchNumber || `INIT-${doc.docNumber}`;
-        const batches = await this.prisma.productBatch.findMany({
-          where: {
-            tenantId,
-            warehouseId: line.warehouseId,
-            productId: line.productId,
-            batchNumber: { startsWith: batchNumber.substring(0, 15) },
-          },
+      // ─── Rollback invariant: nothing opened here may have been used ───
+
+      // 1. The batch of each inventory line must be untouched.
+      const inventoryLines = doc.lines.filter(
+        (l) => l.category === OpeningBalanceCategory.INVENTORY,
+      );
+      const batchIds: string[] = [];
+      let itemIndex = 0;
+      for (const line of inventoryLines) {
+        if (!line.productId || !line.warehouseId) continue;
+        itemIndex++;
+        if (!(Number(line.quantity) > 0)) continue;
+        let batches = await tx.productBatch.findMany({
+          where: { tenantId, openingBalanceLineId: line.id },
         });
-
+        if (batches.length === 0) {
+          // Documents posted before batches were linked to their line.
+          batches = await tx.productBatch.findMany({
+            where: {
+              tenantId,
+              warehouseId: line.warehouseId,
+              productId: line.productId,
+              batchNumber:
+                line.batchNumber || `INIT-${doc.docNumber}-${itemIndex}`,
+              receiptId: null,
+              productionDocumentId: null,
+              openingBalanceLineId: null,
+            },
+          });
+        }
+        if (batches.length === 0) {
+          throw new BadRequestException(
+            `Hujjatni qayta ochib bo‘lmaydi: ${itemIndex}-tovar qatorining partiyasi topilmadi. / ` +
+              `Нельзя переоткрыть: не найдена партия ${itemIndex}-й товарной строки.`,
+          );
+        }
         for (const batch of batches) {
           const initial = Number(batch.initialQty);
           const remaining = Number(batch.remainingQty);
@@ -1085,49 +910,40 @@ export class OpeningBalancesService {
               `Hujjatni qayta ochib bo‘lmaydi! Boshlang‘ich partiyadagi tovarlar allaqachon sotilgan yoki boshqa omborga ko‘chirilgan. (Partiya: ${batch.batchNumber}, Boshlang‘ich: ${initial}, Qoldiq: ${remaining})`,
             );
           }
+          batchIds.push(batch.id);
         }
       }
-    }
 
-    // 2. Check Cash Depletion
-    for (const line of doc.lines) {
-      if (
-        (line.category === OpeningBalanceCategory.CASH ||
-          line.category === OpeningBalanceCategory.BANK) &&
-        line.accountId
-      ) {
-        const account = await this.prisma.cashAccount.findUnique({
-          where: { tenantId, id: line.accountId },
+      // 2. Each kassa must still hold everything this document put in it.
+      const cashByAccount = new Map<string, number>();
+      for (const line of doc.lines) {
+        if (!isCashCategory(line.category) || !line.accountId) continue;
+        if (Number(line.amount) <= 0) continue;
+        cashByAccount.set(
+          line.accountId,
+          (cashByAccount.get(line.accountId) ?? 0) + Number(line.amount),
+        );
+      }
+      for (const [accountId, opened] of cashByAccount) {
+        const account = await tx.cashAccount.findFirst({
+          where: { tenantId, id: accountId },
         });
         const currentBalance = Number(account?.balance || 0);
-        const lineAmount = Number(line.amount);
-        if (currentBalance < lineAmount) {
+        if (currentBalance < opened) {
           throw new BadRequestException(
-            `Hujjatni qayta ochib bo‘lmaydi! Kassadagi mablag‘ boshlang‘ich kiritilgan summadan kamayib ketgan. Kassa: ${account?.currency}, Hozirgi qoldiq: ${currentBalance}, Boshlang‘ich summa: ${lineAmount}`,
+            `Hujjatni qayta ochib bo‘lmaydi! Kassadagi mablag‘ boshlang‘ich kiritilgan summadan kamayib ketgan. Kassa: ${account?.currency}, Hozirgi qoldiq: ${currentBalance}, Boshlang‘ich summa: ${opened}`,
           );
         }
       }
-    }
 
-    // Execute safe atomic rollback
-    return this.prisma.$transaction(async (tx) => {
-      // D4: nothing dated in a closed accounting period may change.
-      await assertPeriodOpen(tx, tenantId, doc.openingDate, 'unpost');
-      // 1. Revert Cash & Bank
-      for (const line of doc.lines) {
-        if (
-          (line.category === OpeningBalanceCategory.CASH ||
-            line.category === OpeningBalanceCategory.BANK) &&
-          line.accountId
-        ) {
-          await tx.cashAccount.update({
-            where: { tenantId, id: line.accountId },
-            data: { balance: { decrement: Number(line.amount) } },
-          });
-        }
+      // ─── Reversal ───
+
+      for (const [accountId, opened] of cashByAccount) {
+        await tx.cashAccount.update({
+          where: { tenantId, id: accountId },
+          data: { balance: { decrement: opened } },
+        });
       }
-
-      // Delete linked FinanceTransactions
       await tx.financeTransaction.deleteMany({
         where: {
           tenantId,
@@ -1136,43 +952,28 @@ export class OpeningBalancesService {
         },
       });
 
-      // 2. Revert Inventory & delete batches
-      for (const line of doc.lines) {
-        if (
-          line.category === OpeningBalanceCategory.INVENTORY &&
-          line.productId &&
-          line.warehouseId
-        ) {
-          const qty = Number(line.quantity || 0);
-          await tx.stockLevel.update({
-            where: {
-              tenantId_warehouseId_productId: {
-                tenantId,
-                warehouseId: line.warehouseId,
-                productId: line.productId,
-              },
-            },
-            data: { quantity: { decrement: qty } },
-          });
-
-          // Delete created batches
-          const batchPrefix = line.batchNumber || `INIT-${doc.docNumber}`;
-          await tx.productBatch.deleteMany({
-            where: {
+      for (const line of inventoryLines) {
+        if (!line.productId || !line.warehouseId) continue;
+        if (!(Number(line.quantity) > 0)) continue;
+        await tx.stockLevel.update({
+          where: {
+            tenantId_warehouseId_productId: {
               tenantId,
               warehouseId: line.warehouseId,
               productId: line.productId,
-              batchNumber: { startsWith: batchPrefix.substring(0, 15) },
-              receiptId: null,
             },
-          });
-        }
+          },
+          data: { quantity: { decrement: Number(line.quantity) } },
+        });
+      }
+      if (batchIds.length > 0) {
+        await tx.productBatch.deleteMany({
+          where: { tenantId, id: { in: batchIds } },
+        });
       }
 
-      // 3. Reverse opening receivables, payables, and advances in the same currency.
       for (const line of doc.lines) {
         if (!line.counterpartyId) continue;
-
         const settlement = this.getCounterpartyOpeningMovement(
           line.category,
           Number(line.amount),
@@ -1193,7 +994,6 @@ export class OpeningBalancesService {
         });
       }
 
-      // 4. Delete Journal Entries
       await this.journalService.deleteEntriesForSource(
         tx,
         tenantId,
@@ -1202,7 +1002,6 @@ export class OpeningBalancesService {
         'unpost',
       );
 
-      // 6. Reset document status to DRAFT
       return tx.openingBalanceDocument.update({
         where: { tenantId, id: documentId },
         data: {
@@ -1253,5 +1052,98 @@ export class OpeningBalancesService {
       );
     }
     return true;
+  }
+}
+
+/**
+ * Collects the opening entry: each amount is booked against account 00 and
+ * summed per ledger account; the rest of 00 goes to retained earnings (8710),
+ * so 00 always closes at zero. A required account that is missing is an
+ * error, never a skipped line.
+ */
+class OpeningJournal {
+  private readonly debits = new Map<string, { amount: number; text: string }>();
+  private readonly credits = new Map<
+    string,
+    { amount: number; text: string }
+  >();
+
+  constructor(
+    private readonly tx: Prisma.TransactionClient,
+    private readonly tenantId: string,
+  ) {}
+
+  debit(code: string, amountUzs: number, text: string) {
+    this.add(this.debits, code, amountUzs, text);
+  }
+
+  credit(code: string, amountUzs: number, text: string) {
+    this.add(this.credits, code, amountUzs, text);
+  }
+
+  private add(
+    side: Map<string, { amount: number; text: string }>,
+    code: string,
+    amountUzs: number,
+    text: string,
+  ) {
+    const amount = roundMoney(amountUzs);
+    if (amount <= 0) return;
+    const current = side.get(code);
+    side.set(code, {
+      amount: roundMoney((current?.amount ?? 0) + amount),
+      text: current?.text ?? text,
+    });
+  }
+
+  private async accountId(code: string) {
+    const account = await this.tx.account.findFirst({
+      where: { tenantId: this.tenantId, code },
+    });
+    if (!account) {
+      throw new BadRequestException(
+        `Buxgalteriya hisobi ${code} sozlanmagan / Счёт ${code} не настроен`,
+      );
+    }
+    return account.id;
+  }
+
+  async lines(): Promise<JournalLineDto[]> {
+    const sum = (side: Map<string, { amount: number }>) =>
+      [...side.values()].reduce((total, v) => total + v.amount, 0);
+    const toRetained = roundMoney(sum(this.debits) - sum(this.credits));
+    if (toRetained > 0) {
+      this.credit(
+        OPENING_RETAINED_EARNINGS_ACCOUNT,
+        toRetained,
+        'Taqsimlanmagan foyda (balanslovchi kapital)',
+      );
+    } else if (toRetained < 0) {
+      this.debit(
+        OPENING_RETAINED_EARNINGS_ACCOUNT,
+        -toRetained,
+        'Qoplanmagan zarar (balanslovchi kapital)',
+      );
+    }
+
+    const aux = await this.accountId(OPENING_AUXILIARY_ACCOUNT);
+    const result: JournalLineDto[] = [];
+    for (const [code, { amount, text }] of this.debits) {
+      result.push({
+        debitAccountId: await this.accountId(code),
+        creditAccountId: aux,
+        amount,
+        description: text,
+      });
+    }
+    for (const [code, { amount, text }] of this.credits) {
+      result.push({
+        debitAccountId: aux,
+        creditAccountId: await this.accountId(code),
+        amount,
+        description: text,
+      });
+    }
+    return result;
   }
 }

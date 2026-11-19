@@ -39,7 +39,17 @@ test('D6: each line picks an asset from the register; cost and depreciation come
   assert.match(body, /value=\{line\.fixedAssetId \|\| ''\}/);
   assert.match(body, /onUpdate\(index, 'fixedAssetId', value\)/);
   assert.match(body, /fixedAssets\.map\(/);
-  // Values come from the register: not typed on a linked line.
-  assert.equal((body.match(/disabled=\{isReadOnly \|\| Boolean\(line\.fixedAssetId\)\}/g) ?? []).length, 2);
+  // Values come from the register: shown, never typed on the line.
+  assert.doesNotMatch(body, /<CurrencyInput/);
   assert.match(page, /withRegisterAsset\(target, fixedAssets\.find\(/);
+});
+
+test('B6: a missing asset is created in the register from the line, with a depreciation suggestion', () => {
+  const body = table.slice(0, table.indexOf('\nfunction ', 10));
+  assert.match(body, /onCreateNew=\{!isReadOnly \? \(\) => onCreateAsset\(index\) : undefined\}/);
+  const modal = page.slice(page.indexOf('function NewFixedAssetModal('));
+  assert.match(modal, /apiFetch<FixedAsset>\('\/fixed-assets'/);
+  assert.match(modal, /suggestedStraightLineDepreciation\(/);
+  // The new asset goes straight onto the line it was created from.
+  assert.match(page, /withRegisterAsset\(line, asset\)/);
 });
