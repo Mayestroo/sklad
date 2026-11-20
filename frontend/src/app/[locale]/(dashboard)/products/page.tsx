@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { usePersistentState } from '@/lib/usePersistentState';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -68,10 +69,11 @@ export default function ProductsPage() {
   const [deleteCatLoading, setDeleteCatLoading] = useState(false);
 
   // Filters
+  // Dropdown filters are remembered per browser; the search box starts empty.
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = usePersistentState<string>('products.category', '');
+  const [selectedType, setSelectedType] = usePersistentState<string>('products.type', '');
+  const [selectedStatus, setSelectedStatus] = usePersistentState<string>('products.status', '');
 
   // Selected product modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -272,7 +274,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Metrics Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-4)' }}>
+      <div className="ux-kpi-grid">
         <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
           <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Package size={24} />
@@ -312,7 +314,6 @@ export default function ProductsPage() {
         <Card
           onClick={() => setIsCategoryModalOpen(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', cursor: 'pointer' }}
-          title={isRu ? 'Управление категориями' : 'Kategoriyalarni boshqarish'}
         >
           <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Tag size={24} />
@@ -400,15 +401,15 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Наименование товара / услуги' : 'Tovar / Xizmat Nomi'}</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Наименование товара / услуги' : 'Tovar / Xizmat nomi'}</th>
                   <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'SKU / Штрихкод' : 'SKU / Barcode'}</th>
                   <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Категория' : 'Kategoriya'}</th>
                   <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Ед. изм.' : 'O‘lchov birligi'}</th>
                   <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Себестоимость' : 'Tannarx'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена продажи' : 'Sotuv Narxi'}</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена продажи' : 'Sotuv narxi'}</th>
                   <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Наценка %' : 'Ustama %'}</th>
                   <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Статус' : 'Holat'}</th>
                   <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', textAlign: 'right' }}>{isRu ? 'Действия' : 'Amallar'}</th>
@@ -431,7 +432,7 @@ export default function ProductsPage() {
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
                       {/* Name & Type */}
-                      <td style={{ padding: '12px 16px' }}>
+                      <td data-primary style={{ padding: '12px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <div
                             style={{
@@ -461,7 +462,7 @@ export default function ProductsPage() {
                       </td>
 
                       {/* SKU & Barcode */}
-                      <td style={{ padding: '12px 16px' }}>
+                      <td data-label={isRu ? 'SKU / Штрихкод' : 'SKU / Barcode'} style={{ padding: '12px 16px' }}>
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-primary)' }}>
                           {p.sku || '—'}
                         </div>
@@ -473,17 +474,17 @@ export default function ProductsPage() {
                       </td>
 
                       {/* Category */}
-                      <td style={{ padding: '12px 16px' }}>
+                      <td data-label={isRu ? 'Категория' : 'Kategoriya'} style={{ padding: '12px 16px' }}>
                         <Badge variant="neutral">{getCategoryName(p.categoryId)}</Badge>
                       </td>
 
                       {/* Unit */}
-                      <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
+                      <td data-label={isRu ? 'Ед. изм.' : 'O‘lchov birligi'} style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
                         {unitLabel(p.unitOfMeasure, locale)}
                       </td>
 
                       {/* Cost price */}
-                      <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
+                      <td data-label={isRu ? 'Себестоимость' : 'Tannarx'} style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
                         {formatPriceOrUnset(Number(p.costPrice || 0), locale, p.costPriceCurrency)}
                         {p.type === 'FINISHED_PRODUCT' && (
                           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
@@ -497,15 +498,15 @@ export default function ProductsPage() {
                       </td>
 
                       {/* Sale price */}
-                      <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+                      <td data-label={isRu ? 'Цена продажи' : 'Sotuv narxi'} style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                         {formatPriceOrUnset(Number(p.salePrice || 0), locale, p.salePriceCurrency)}
                       </td>
 
                       {/* Margin % */}
-                      <td style={{ padding: '12px 16px' }}>
+                      <td data-label={isRu ? 'Наценка %' : 'Ustama %'} style={{ padding: '12px 16px' }}>
                         {markup !== null ? (
                           <Badge variant={markup >= 20 ? 'success' : markup > 0 ? 'warning' : 'error'}>
-                            {markup > 0 ? '+' : ''}{formatPercent(markup)}%
+                            {markup > 0 ? '+' : ''}{formatPercent(markup)}
                           </Badge>
                         ) : (
                           '—'
@@ -513,7 +514,7 @@ export default function ProductsPage() {
                       </td>
 
                       {/* Status */}
-                      <td style={{ padding: '12px 16px' }}>
+                      <td data-label={isRu ? 'Статус' : 'Holat'} style={{ padding: '12px 16px' }}>
                         {p.isActive ? (
                           <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge>
                         ) : (

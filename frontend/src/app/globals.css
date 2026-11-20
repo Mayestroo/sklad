@@ -1082,3 +1082,12 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
 /* ─── Responsive split layouts (main + side) ─── */
 :root { --ux-split-2-1: minmax(0, 2fr) minmax(0, 1fr); --ux-split-side: minmax(240px, 280px) minmax(0, 1fr); }
 @media (max-width: 1023px) { :root { --ux-split-2-1: minmax(0, 1fr); --ux-split-side: minmax(0, 1fr); } }
+
+/* ─── KPI tiles: 2 per row on phones so the list stays in view ─── */
+.ux-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--space-4); }
+@media (max-width: 639px) {
+  .ux-kpi-grid { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+  .ux-kpi-grid > * { padding: var(--space-3) !important; gap: var(--space-2) !important; min-width: 0; }
+  .ux-kpi-grid > * > :first-child:not(:only-child) { width: 32px !important; height: 32px !important; }
+  .ux-kpi-grid > * svg { width: 18px; height: 18px; }
+}
