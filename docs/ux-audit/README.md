@@ -98,3 +98,13 @@ Totals: 597 color-contrast nodes, 4 nested-interactive, 1 label, 1 scrollable-re
 | Landed cost | Tannarx | Себестоимость | |
 | Warehouse | Ombor | Склад | |
 | Receive payment | To‘lov qabul qilish | Принять оплату | "To‘lash" for incoming money |
+
+## After (branch `ux/overnight`, 2026-11-21)
+
+Screenshots: `screens/after/` (same routes, widths and languages; `report.json` alongside).
+
+- Horizontal overflow: **0 px on all 234 captures** (39 routes × 1440/1280/390 × uz/ru); before, every signed-in route overflowed at 390 px (303–1544 px) and Counterparties by 654 px at 1280.
+- axe WCAG 2 A/AA at 1440 px (uz, light): **603 → 0 nodes** after the last fixes (the capture shows 6 nodes on 5 routes; DatePicker nested-interactive, a receipt VAT label and the CRM board were fixed in 02d6a68/3beed57 and re-checked with `e2e/ux/axe-detail.mjs`). Dark mode on /, /sales, /sales/new, /finance, /counterparties, /products: no contrast failures.
+- Console errors: 0 (as before).
+- Large list (400 products, dev server): /products loads in ~1.06 s, typing in search ~119 ms; product picker on /sales/new opens in ~111 ms.
+- Production build passes; client JS ≈ 3.4 MB raw (all routes), CSS 26 KB.
