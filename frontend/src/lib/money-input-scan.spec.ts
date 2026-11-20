@@ -17,7 +17,6 @@ const MONEY_FORMS: Array<[string, number]> = [
   ['components/services/ServiceActDrawer.tsx', 1],
   ['components/products/CreateProductDrawer.tsx', 2],
   ['components/purchases/QuickAddProductModal.tsx', 2],
-  ['components/purchases/AllocateExpenseModal.tsx', 1],
   ['components/sales/SalesInvoiceForm.tsx', 1],
   ['components/sales/SalesOrderForm.tsx', 1],
   ['app/[locale]/(dashboard)/products/new/page.tsx', 2],

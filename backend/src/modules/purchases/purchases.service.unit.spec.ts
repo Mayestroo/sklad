@@ -117,6 +117,8 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       auditLog: {
         create: jest.fn(),
       },
+      // lockDocumentStatus (SELECT ... FOR UPDATE) reads the row status.
+      $queryRaw: jest.fn().mockResolvedValue([{ status: 'DRAFT' }]),
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
 
@@ -293,6 +295,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         id: 'rec-1',
         tenantId: 'tenant-123',
         status: PurchaseDocStatus.DRAFT,
+        currency: 'UZS',
         subtotalAmount: 1000000,
         discountAmount: 0,
         vatAmount: 0,
@@ -324,7 +327,12 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         currency: 'UZS',
       });
       prisma.purchaseExpense.findMany.mockResolvedValue([
-        { id: 'exp-1', amount: 100000 },
+        {
+          id: 'exp-1',
+          amount: 100000,
+          currency: 'UZS',
+          allocationMethod: 'BY_AMOUNT',
+        },
       ]);
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.purchaseReceipt.update.mockImplementation(
@@ -366,6 +374,7 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         id: 'rec-2',
         tenantId: 'tenant-123',
         status: PurchaseDocStatus.DRAFT,
+        currency: 'UZS',
         subtotalAmount: 500000,
         discountAmount: 0,
         vatAmount: 0,
@@ -397,7 +406,12 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
         currency: 'UZS',
       });
       prisma.purchaseExpense.findMany.mockResolvedValue([
-        { id: 'exp-2', amount: 50000 },
+        {
+          id: 'exp-2',
+          amount: 50000,
+          currency: 'UZS',
+          allocationMethod: 'BY_QUANTITY',
+        },
       ]);
       prisma.purchaseReceiptItem.update.mockResolvedValue({});
       prisma.purchaseReceipt.update.mockImplementation(
@@ -431,6 +445,183 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
           allocatedExpenses: 10000,
           landedCost: (100000 + 10000) / 2, // 55,000
         },
+      });
+    });
+
+    // ADR 0002 / 0008 / 0023: a receipt expense is in the receipt currency and
+    // allocated before posting; anything else goes through an Additional
+    // Expense document, which carries its own rate.
+    describe('currency and status guards', () => {
+      const usdDraft = () => ({
+        id: 'rec-usd',
+        tenantId: 'tenant-123',
+        status: PurchaseDocStatus.DRAFT,
+        currency: 'USD',
+        exchangeRate: 12500,
+        subtotalAmount: 1000,
+        discountAmount: 0,
+        vatAmount: 0,
+        additionalExpensesTotal: 0,
+        items: [
+          {
+            id: 'item-1',
+            productId: 'prod-1',
+            quantity: 10,
+            unitPrice: 100,
+            totalPrice: 1000,
+          },
+        ],
+      });
+
+      it('refuses an expense in a currency other than the receipt currency', async () => {
+        prisma.purchaseReceipt.findFirst.mockResolvedValue(usdDraft());
+
+        await expect(
+          service.addExpense('tenant-123', {
+            receiptId: 'rec-usd',
+            expenseType: ExpenseTypeDto.TRANSPORT,
+            amount: 500000,
+            currency: 'UZS',
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.purchaseExpense.create).not.toHaveBeenCalled();
+        expect(prisma.purchaseReceiptItem.update).not.toHaveBeenCalled();
+      });
+
+      it('refuses an expense on a posted receipt and never touches its batches', async () => {
+        prisma.purchaseReceipt.findFirst.mockResolvedValue({
+          ...usdDraft(),
+          status: PurchaseDocStatus.POSTED,
+        });
+
+        await expect(
+          service.addExpense('tenant-123', {
+            receiptId: 'rec-usd',
+            expenseType: ExpenseTypeDto.TRANSPORT,
+            amount: 40,
+            currency: 'USD',
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.purchaseExpense.create).not.toHaveBeenCalled();
+        expect(prisma.productBatch.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the receipt was posted after the first read', async () => {
+        prisma.purchaseReceipt.findFirst.mockResolvedValue(usdDraft());
+        prisma.$queryRaw.mockResolvedValue([{ status: 'POSTED' }]);
+
+        await expect(
+          service.addExpense('tenant-123', {
+            receiptId: 'rec-usd',
+            expenseType: ExpenseTypeDto.TRANSPORT,
+            amount: 40,
+            currency: 'USD',
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.purchaseExpense.create).not.toHaveBeenCalled();
+      });
+
+      it('refuses to sum with an older expense saved in another currency', async () => {
+        prisma.purchaseReceipt.findFirst.mockResolvedValue(usdDraft());
+        prisma.purchaseExpense.create.mockResolvedValue({ id: 'exp-new' });
+        prisma.purchaseExpense.findMany.mockResolvedValue([
+          { amount: 500000, currency: 'UZS', allocationMethod: 'BY_AMOUNT' },
+          { amount: 40, currency: 'USD', allocationMethod: 'BY_AMOUNT' },
+        ]);
+
+        await expect(
+          service.addExpense('tenant-123', {
+            receiptId: 'rec-usd',
+            expenseType: ExpenseTypeDto.TRANSPORT,
+            amount: 40,
+            currency: 'USD',
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(prisma.purchaseReceiptItem.update).not.toHaveBeenCalled();
+      });
+
+      it('keeps a same-currency allocation in the receipt currency for posting to convert', async () => {
+        const receipt = usdDraft();
+        prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+        prisma.purchaseExpense.create.mockResolvedValue({ id: 'exp-new' });
+        prisma.purchaseExpense.findMany.mockResolvedValue([
+          { amount: 40, currency: 'USD', allocationMethod: 'BY_AMOUNT' },
+        ]);
+        prisma.purchaseReceipt.update.mockImplementation(
+          ({ data }: { data: any }) => ({ ...receipt, ...data }),
+        );
+
+        await service.addExpense('tenant-123', {
+          receiptId: 'rec-usd',
+          expenseType: ExpenseTypeDto.TRANSPORT,
+          amount: 40,
+          currency: 'USD',
+        });
+
+        // 1000 USD + 40 USD over 10 units = 104 USD; posting converts at 12,500.
+        expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
+          where: { receipt: { tenantId: 'tenant-123' }, id: 'item-1' },
+          data: { allocatedExpenses: 40, landedCost: 104 },
+        });
+        expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: { additionalExpensesTotal: 40, totalAmount: 1040 },
+          }),
+        );
+        expect(prisma.productBatch.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('spreads each expense by its own method, not the latest one', async () => {
+        const receipt = {
+          ...usdDraft(),
+          currency: 'UZS',
+          exchangeRate: 1,
+          subtotalAmount: 1000000,
+          items: [
+            {
+              id: 'a',
+              productId: 'p1',
+              quantity: 8,
+              unitPrice: 25000,
+              totalPrice: 200000,
+            },
+            {
+              id: 'b',
+              productId: 'p2',
+              quantity: 2,
+              unitPrice: 400000,
+              totalPrice: 800000,
+            },
+          ],
+        };
+        prisma.purchaseReceipt.findFirst.mockResolvedValue(receipt);
+        prisma.purchaseExpense.create.mockResolvedValue({ id: 'exp-2' });
+        prisma.purchaseExpense.findMany.mockResolvedValue([
+          { amount: 100000, currency: 'UZS', allocationMethod: 'BY_AMOUNT' },
+          { amount: 100000, currency: 'UZS', allocationMethod: 'BY_QUANTITY' },
+        ]);
+        prisma.purchaseReceipt.update.mockImplementation(
+          ({ data }: { data: any }) => ({ ...receipt, ...data }),
+        );
+
+        await service.addExpense('tenant-123', {
+          receiptId: 'rec-usd',
+          expenseType: ExpenseTypeDto.CUSTOMS,
+          amount: 100000,
+          currency: 'UZS',
+          allocationMethod: ExpenseAllocationMethodDto.BY_QUANTITY,
+        });
+
+        // a: 20% of the first (20,000) + 80% of the second (80,000) = 100,000
+        expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
+          where: { receipt: { tenantId: 'tenant-123' }, id: 'a' },
+          data: { allocatedExpenses: 100000, landedCost: 300000 / 8 },
+        });
+        // b: 80% of the first (80,000) + 20% of the second (20,000) = 100,000
+        expect(prisma.purchaseReceiptItem.update).toHaveBeenCalledWith({
+          where: { receipt: { tenantId: 'tenant-123' }, id: 'b' },
+          data: { allocatedExpenses: 100000, landedCost: 900000 / 2 },
+        });
       });
     });
   });

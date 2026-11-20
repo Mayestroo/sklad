@@ -52,7 +52,11 @@ import {
   PURCHASE_RETURN_GAIN_ACCOUNT_SETTING,
 } from '../../common/settings/accounting-settings';
 import { startOfBusinessMonth } from '../../common/utils/business-day';
-import { requireUnitWeight } from './expense-allocation.engine';
+import {
+  allocateReceiptExpenses,
+  assertExpenseCurrencyMatchesReceipt,
+  assertReceiptOpenForExpense,
+} from './expense-allocation.engine';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -1264,6 +1268,17 @@ export class PurchasesService {
       throw new NotFoundException('Xarid hujjati topilmadi');
     }
 
+    // ADR 0002: a receipt expense is allocated before posting; posting
+    // converts the lines (allocations included) to UZS at the receipt rate
+    // and locks the batch cost. A posted receipt's batches and journal are
+    // revalued only by an Additional Expense document (ADR 0008), which
+    // carries its own currency and rate.
+    assertReceiptOpenForExpense(receipt.status);
+    // The allocation is added to line totals in the receipt's currency and
+    // converted at the receipt rate; an amount in another currency would be
+    // summed as if it were the same money (ADR 0023).
+    assertExpenseCurrencyMatchesReceipt(dto.currency, receipt.currency);
+
     const allocationMethod =
       dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
     await assertTenantOwned(this.prisma, tenantId, {
@@ -1271,7 +1286,19 @@ export class PurchasesService {
     });
 
     return this.prisma.$transaction(async (tx) => {
-      // Create expense
+      // F9: a post committed after the check above must not get expenses it
+      // never converted.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'purchaseReceipt',
+        receipt.id,
+        tenantId,
+      );
+      if (lockedStatus === null) {
+        throw new NotFoundException('Xarid hujjati topilmadi');
+      }
+      assertReceiptOpenForExpense(lockedStatus);
+
       const expense = await tx.purchaseExpense.create({
         data: {
           tenantId,
@@ -1285,60 +1312,32 @@ export class PurchasesService {
         },
       });
 
-      // Recalculate total additional expenses for this receipt
       const allExpenses = await tx.purchaseExpense.findMany({
         where: { tenantId, receiptId: dto.receiptId },
       });
+      // Rows saved before this guard may be in another currency; refuse
+      // rather than add them up.
+      for (const e of allExpenses) {
+        assertExpenseCurrencyMatchesReceipt(e.currency, receipt.currency);
+      }
 
+      // Each expense is spread by its own method, then the shares are summed.
+      const allocated = allocateReceiptExpenses(
+        receipt.items,
+        allExpenses.map((e) => ({
+          amount: Number(e.amount),
+          allocationMethod: e.allocationMethod,
+        })),
+      );
       const totalExpensesAmount = allExpenses.reduce(
         (sum, e) => sum + Number(e.amount),
         0,
       );
-      const subtotalAmount = Number(receipt.subtotalAmount);
-      const totalQuantity = receipt.items.reduce(
-        (sum, i) => sum + Number(i.quantity),
-        0,
-      );
 
-      // Total weight for BY_WEIGHT allocation
-      // A missing weight is refused, never taken as 1 kg (ADR 0022).
-      const byWeight = allocationMethod === ExpenseAllocationMethod.BY_WEIGHT;
-      const totalWeight = byWeight
-        ? receipt.items.reduce(
-            (sum, i) => sum + Number(i.quantity) * requireUnitWeight(i),
-            0,
-          )
-        : 0;
-
-      // Allocate expenses among items
       for (const item of receipt.items) {
-        let allocatedForItem = 0;
         const itemQty = Number(item.quantity);
         const itemTotal = Number(item.totalPrice);
-        const itemWeightTotal = byWeight
-          ? itemQty * requireUnitWeight(item)
-          : 0;
-
-        if (
-          allocationMethod === ExpenseAllocationMethod.BY_AMOUNT &&
-          subtotalAmount > 0
-        ) {
-          allocatedForItem = (itemTotal / subtotalAmount) * totalExpensesAmount;
-        } else if (
-          allocationMethod === ExpenseAllocationMethod.BY_QUANTITY &&
-          totalQuantity > 0
-        ) {
-          allocatedForItem = (itemQty / totalQuantity) * totalExpensesAmount;
-        } else if (
-          allocationMethod === ExpenseAllocationMethod.BY_WEIGHT &&
-          totalWeight > 0
-        ) {
-          allocatedForItem =
-            (itemWeightTotal / totalWeight) * totalExpensesAmount;
-        } else {
-          allocatedForItem = totalExpensesAmount / receipt.items.length;
-        }
-
+        const allocatedForItem = allocated.get(item.id) ?? 0;
         const newLandedCost =
           itemQty > 0 ? (itemTotal + allocatedForItem) / itemQty : 0;
 
@@ -1349,21 +1348,8 @@ export class PurchasesService {
             landedCost: newLandedCost,
           },
         });
-
-        // Update product batch landed cost if created
-        if (receipt.status === PurchaseDocStatus.POSTED) {
-          await tx.productBatch.updateMany({
-            where: {
-              tenantId,
-              receiptId: receipt.id,
-              productId: item.productId,
-            },
-            data: { landedCost: newLandedCost },
-          });
-        }
       }
 
-      // Update total amount on receipt
       const newTotalAmount =
         Number(receipt.subtotalAmount) -
         Number(receipt.discountAmount) +

@@ -39,7 +39,6 @@ import { PurchaseReceipt } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import { PayPurchaseModal } from './PayPurchaseModal';
-import { AllocateExpenseModal } from './AllocateExpenseModal';
 import { CreateReturnModal } from './CreateReturnModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
@@ -147,7 +146,6 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
   // Action Modals (for POSTED docs)
   const [isPayOpen, setIsPayOpen] = useState(false);
-  const [isExpenseOpen, setIsExpenseOpen] = useState(false);
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [currentReceiptData, setCurrentReceiptData] = useState<PurchaseReceipt | null>(initialData || null);
 
@@ -924,7 +922,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
               <Button
                 variant="secondary"
-                onClick={() => setIsExpenseOpen(true)}
+                // ADR 0008: a posted receipt's cost changes only through an
+                // Additional Expense document (own currency and rate).
+                onClick={() => router.push(`/purchases/expenses/new?receiptId=${currentReceiptData?.id ?? receiptId}`)}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Receipt size={16} /> {isRu ? 'Доп. расходы' : 'Qo‘shimcha xarajat'}
@@ -1594,16 +1594,6 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         />
       )}
 
-      {isExpenseOpen && currentReceiptData && (
-        <AllocateExpenseModal
-          isOpen={isExpenseOpen}
-          onClose={() => setIsExpenseOpen(false)}
-          receipt={currentReceiptData}
-          onSuccess={() => {
-            setIsExpenseOpen(false);
-          }}
-        />
-      )}
 
       {isReturnOpen && currentReceiptData && (
         <CreateReturnModal

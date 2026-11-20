@@ -229,3 +229,64 @@ export class ExpenseAllocationEngine {
     };
   }
 }
+
+/**
+ * Spreads every receipt expense over the lines by its own method and sums the
+ * shares per line (receipt currency). Each expense keeps the remainder rule,
+ * so the line shares add up to the expense total exactly.
+ */
+export function allocateReceiptExpenses(
+  items: AllocationTargetItem[],
+  expenses: { amount: number; allocationMethod: ExpenseAllocationMethod }[],
+): Map<string, number> {
+  const byLine = new Map<string, number>(items.map((i) => [i.id, 0]));
+  for (const expense of expenses) {
+    const { items: shares } = ExpenseAllocationEngine.allocateExpense(
+      items,
+      expense.amount,
+      expense.allocationMethod,
+    );
+    for (const share of shares) {
+      byLine.set(
+        share.receiptItemId,
+        Math.round(
+          ((byLine.get(share.receiptItemId) ?? 0) + share.allocatedAmount) *
+            100,
+        ) / 100,
+      );
+    }
+  }
+  return byLine;
+}
+
+/**
+ * A receipt expense is allocated before posting (ADR 0002); a posted
+ * receipt's cost changes only through an Additional Expense document
+ * (ADR 0008), which converts at its own rate and revalues batches, sales
+ * COGS and the journal.
+ */
+export function assertReceiptOpenForExpense(status: string): void {
+  if (status !== 'DRAFT') {
+    throw new BadRequestException(
+      "Tasdiqlangan xaridga xarajat faqat 'Qo'shimcha xarajat' hujjati orqali qo'shiladi",
+    );
+  }
+}
+
+/**
+ * The allocation is added to line totals in the receipt's currency and
+ * converted to UZS at the receipt rate when posting, so the expense must be
+ * in that currency: amounts in different currencies are never summed
+ * (ADR 0023). An expense in another currency goes through an Additional
+ * Expense document, which carries its own rate (ADR 0008).
+ */
+export function assertExpenseCurrencyMatchesReceipt(
+  expenseCurrency: string,
+  receiptCurrency: string,
+): void {
+  if (expenseCurrency !== receiptCurrency) {
+    throw new BadRequestException(
+      `Xarajat valyutasi (${expenseCurrency}) xarid valyutasiga (${receiptCurrency}) teng bo'lishi shart; boshqa valyutadagi xarajatni 'Qo'shimcha xarajat' hujjati orqali kiriting`,
+    );
+  }
+}

@@ -1,6 +1,5 @@
 'use client';
 
-import { AllocateExpenseModal } from '@/components/purchases/AllocateExpenseModal';
 import { CreateReturnModal } from '@/components/purchases/CreateReturnModal';
 import { PayPurchaseModal } from '@/components/purchases/PayPurchaseModal';
 import { Badge } from '@/components/ui/Badge';
@@ -81,7 +80,6 @@ export default function PurchasesPage() {
   const warehouses = useApiQuery<WarehouseItem[]>('/tenants/warehouses').data ?? [];
 
   // Modals state
-  const [expenseReceipt, setExpenseReceipt] = useState<PurchaseReceipt | null>(null);
   const [returnReceipt, setReturnReceipt] = useState<PurchaseReceipt | null>(null);
   const [payReceipt, setPayReceipt] = useState<PurchaseReceipt | null>(null);
   const [deletingReceipt, setDeletingReceipt] = useState<PurchaseReceipt | null>(null);
@@ -545,18 +543,6 @@ export default function PurchasesPage() {
       </Card>
 
       {/* Modals */}
-
-      {expenseReceipt && (
-        <AllocateExpenseModal
-          isOpen={!!expenseReceipt}
-          onClose={() => setExpenseReceipt(null)}
-          receipt={expenseReceipt}
-          onSuccess={() => {
-            fetchStats();
-            fetchReceipts();
-          }}
-        />
-      )}
 
       {returnReceipt && (
         <CreateReturnModal

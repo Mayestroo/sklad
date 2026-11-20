@@ -119,6 +119,11 @@ export default function NewExpensePage() {
     ])
       .then(([receiptsData, counterpartiesData, cashAccountsData]) => {
         setReceipts(receiptsData || []);
+        // Opened from a posted receipt (?receiptId=...): preselect it.
+        const preselected = new URLSearchParams(window.location.search).get('receiptId');
+        if (preselected && (receiptsData || []).some((r) => r.id === preselected)) {
+          setReceiptId(preselected);
+        }
         setCounterparties(counterpartiesData || []);
         setCashAccounts(cashAccountsData || []);
 
