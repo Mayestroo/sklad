@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdditionalExpensesService,
-  expenseInReceiptCurrency,
+  allocationRows,
 } from './additional-expenses.service';
+import { convertAndAllocate } from './expense-allocation.engine';
 import { PrismaService } from '../../common/prisma';
 import { BadRequestException } from '@nestjs/common';
 import {
+  Prisma,
   ExpenseType,
   ExpenseAllocationMethod,
   PurchaseDocStatus,
@@ -33,6 +35,8 @@ describe('AdditionalExpensesService Unit Tests', () => {
     tenantId,
     docNumber: 'PUR-2026-0001',
     status: PurchaseDocStatus.POSTED,
+    currency: 'UZS',
+    exchangeRate: 1,
     items: [
       {
         id: 'item-1',
@@ -114,6 +118,42 @@ describe('AdditionalExpensesService Unit Tests', () => {
     ],
   };
 
+  /** Matches a Decimal (or number) equal to `n`: posting writes exact Decimals. */
+  const dec = (n: number) => ({
+    asymmetricMatch: (v: unknown) =>
+      v != null && new Prisma.Decimal(v as number).eq(n),
+    toString: () => `Decimal(${n})`,
+  });
+
+  /**
+   * The lines createDraft stores for this expense: the real
+   * convertAndAllocate() output, so posting finds its snapshot unchanged.
+   */
+  const draftLines = (
+    expense: {
+      amount: number;
+      currency: string;
+      exchangeRate?: number;
+      docDate: Date;
+    },
+    selectedItemIds: string[],
+    receipt: { currency: string; exchangeRate: number } = mockReceipt,
+  ) =>
+    allocationRows(
+      convertAndAllocate({
+        items: mockReceipt.items.filter((i) => selectedItemIds.includes(i.id)),
+        amount: expense.amount,
+        allocationMethod: ExpenseAllocationMethod.BY_AMOUNT,
+        expense: {
+          currency: expense.currency,
+          exchangeRate: expense.exchangeRate,
+        },
+        receipt,
+        rateDate: expense.docDate,
+        batches: mockReceipt.batches,
+      }),
+    ).map((row, i) => ({ id: `ei-${i + 1}`, ...row }));
+
   beforeEach(async () => {
     settlementService = {
       recordMovement: jest.fn().mockResolvedValue({ created: true }),
@@ -129,6 +169,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       },
       additionalExpenseItem: {
         create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
@@ -145,6 +186,9 @@ describe('AdditionalExpensesService Unit Tests', () => {
       productBatch: {
         findFirst: jest.fn(),
         update: jest.fn(),
+      },
+      batchConsumption: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       product: {
         // A UZS card unless a test says otherwise.
@@ -205,6 +249,8 @@ describe('AdditionalExpensesService Unit Tests', () => {
       auditLog: {
         create: jest.fn(),
       },
+      // lockDocumentStatus: the posted draft is still a draft.
+      $queryRaw: jest.fn().mockResolvedValue([{ status: 'DRAFT' }]),
       $transaction: jest.fn().mockImplementation((cb) => cb(prisma)),
     };
 
@@ -229,11 +275,13 @@ describe('AdditionalExpensesService Unit Tests', () => {
       const result = await service.calculateAllocationPreview(tenantId, {
         receiptId,
         amount: 2000000,
+        currency: 'UZS',
         allocationMethod: ExpenseAllocationMethod.BY_AMOUNT,
       });
 
       expect(result.expenseAmount).toBe(2000000);
-      expect(result.allocatedTotal).toBe(2000000);
+      expect(result.receiptTotal).toBe(2000000);
+      expect(result.baseTotal).toBe(2000000);
       expect(result.items.length).toBe(3);
 
       // iPhone line: 10,000,000 / 11,200,000 * 2,000,000 = 1,785,714.2857 -> rounded with remainder
@@ -257,11 +305,12 @@ describe('AdditionalExpensesService Unit Tests', () => {
       const result = await service.calculateAllocationPreview(tenantId, {
         receiptId,
         amount: 400000,
+        currency: 'UZS',
         allocationMethod: ExpenseAllocationMethod.BY_QUANTITY,
       });
 
       // Total quantity: 10 + 20 + 10 = 40 items -> 10,000 UZS per item
-      expect(result.allocatedTotal).toBe(400000);
+      expect(result.expenseAmount).toBe(400000);
       const iphone = result.items.find((i) => i.productId === 'prod-iphone');
       const cable = result.items.find((i) => i.productId === 'prod-cable');
 
@@ -273,12 +322,13 @@ describe('AdditionalExpensesService Unit Tests', () => {
       const result = await service.calculateAllocationPreview(tenantId, {
         receiptId,
         amount: 500000,
+        currency: 'UZS',
         selectedItemIds: ['item-1'], // Only iPhone
       });
 
       expect(result.items.length).toBe(1);
       expect(result.items[0].productId).toBe('prod-iphone');
-      expect(result.allocatedTotal).toBe(500000);
+      expect(result.items[0].allocatedAmount).toBe(500000);
     });
   });
 
@@ -408,9 +458,11 @@ describe('AdditionalExpensesService Unit Tests', () => {
         counterpartyId: 'carrier-1',
         counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
         vatAmount: 0,
-        items: [],
+        items: [] as unknown[],
       };
+      expense.items = draftLines(expense, ['item-1']);
       prisma.additionalExpense.findFirst.mockResolvedValue(expense);
+      prisma.additionalExpenseItem.findMany.mockResolvedValue(expense.items);
       prisma.cashAccount.findFirst.mockResolvedValue({
         ...expense.cashAccount,
         tenantId,
@@ -427,7 +479,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       // 100 USD on a UZS receipt: the receipt total grows in UZS.
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
         where: { tenantId, id: receiptId },
-        data: { additionalExpensesTotal: { increment: 1280000 } },
+        data: { additionalExpensesTotal: { increment: dec(1280000) } },
       });
       expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -466,19 +518,15 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receiptId,
         receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
+        vatAmount: 0,
         counterpartyId: 'carrier-1',
         counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
-        items: [
-          {
-            id: 'ei-1',
-            productId: 'prod-iphone',
-            initialLandedCost: 1000000,
-            allocatedAmount: 1000000,
-            soldQuantity: 0,
-            remainingQuantity: 10,
-          },
-        ],
+        items: [] as unknown[],
       };
+      mockExpense.items = draftLines(mockExpense, ['item-1']);
+      prisma.additionalExpenseItem.findMany.mockResolvedValue(
+        mockExpense.items,
+      );
 
       prisma.additionalExpense.findFirst.mockResolvedValue(mockExpense);
       prisma.productBatch.findFirst.mockResolvedValue({
@@ -503,7 +551,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
           tenantId: 'tenant-123',
           id: 'batch-1',
         },
-        data: { landedCost: 1100000 },
+        data: { landedCost: dec(1100000) },
       });
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-123', id: 'prod-iphone' },
@@ -541,19 +589,15 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receiptId,
         receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
+        vatAmount: 0,
         counterpartyId: 'carrier-1',
         counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
-        items: [
-          {
-            id: 'ei-1',
-            productId: 'prod-iphone',
-            initialLandedCost: 1000000,
-            allocatedAmount: 1000000,
-            soldQuantity: 6,
-            remainingQuantity: 4,
-          },
-        ],
+        items: [] as unknown[],
       };
+      mockExpense.items = draftLines(mockExpense, ['item-1']);
+      prisma.additionalExpenseItem.findMany.mockResolvedValue(
+        mockExpense.items,
+      );
 
       prisma.additionalExpense.findFirst.mockResolvedValue(mockExpense);
       prisma.productBatch.findFirst.mockResolvedValue({
@@ -612,8 +656,8 @@ describe('AdditionalExpensesService Unit Tests', () => {
           id: 'inv-item-1',
         },
         data: {
-          unitCogs: 1100000,
-          lineCogs: 6600000,
+          unitCogs: dec(1100000),
+          lineCogs: dec(6600000),
           lineGrossProfit: 2400000,
         },
       });
@@ -621,7 +665,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-123', id: 'inv-1' },
         data: {
-          totalCogs: 6600000,
+          totalCogs: dec(6600000),
           grossProfit: 2400000,
         },
       });
@@ -638,19 +682,15 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receiptId,
         receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
+        vatAmount: 0,
         counterpartyId: 'carrier-1',
         counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
-        items: [
-          {
-            id: 'ei-1',
-            productId: 'prod-iphone',
-            initialLandedCost: 1000000,
-            allocatedAmount: 1000000,
-            soldQuantity: 6,
-            remainingQuantity: 4,
-          },
-        ],
+        items: [] as unknown[],
       };
+      mockExpense.items = draftLines(mockExpense, ['item-1']);
+      prisma.additionalExpenseItem.findMany.mockResolvedValue(
+        mockExpense.items,
+      );
       // 6 sold for 672 USD = 600 net + 72 VAT at 12,500 UZS/USD.
       const invoice = {
         id: 'inv-usd',
@@ -707,12 +747,17 @@ describe('AdditionalExpensesService Unit Tests', () => {
       );
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-123', id: 'inv-usd' },
-        data: { totalCogs: 6600000, grossProfit: 900000 },
+        data: { totalCogs: dec(6600000), grossProfit: 900000 },
       });
     });
   });
 
   describe('cancelExpense & Rollback Guardrail', () => {
+    // lockDocumentStatus: the expense being cancelled is posted.
+    beforeEach(() => {
+      prisma.$queryRaw.mockResolvedValue([{ status: 'POSTED' }]);
+    });
+    const docDate = new Date('2026-11-01T00:00:00Z');
     it('blocks cancellation if active linked cash payment exists', async () => {
       prisma.additionalExpense.findFirst.mockResolvedValue({
         id: 'exp-1',
@@ -798,15 +843,9 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
-        items: [
-          {
-            id: 'ei-1',
-            productId: 'prod-iphone',
-            allocatedAmount: 1000000,
-            soldQuantity: 6,
-            remainingQuantity: 4,
-          },
-        ],
+        items: draftLines({ amount: 1000000, currency: 'UZS', docDate }, [
+          'item-1',
+        ]),
       });
       prisma.financeTransaction.findFirst.mockResolvedValue(null);
       prisma.productBatch.findFirst.mockResolvedValue({
@@ -851,13 +890,13 @@ describe('AdditionalExpensesService Unit Tests', () => {
           tenantId: 'tenant-123',
           id: 'batch-1',
         },
-        data: { landedCost: 1000000 }, // Restored to initial
+        data: { landedCost: dec(1000000) }, // Restored to initial
       });
       expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
         where: { invoice: { tenantId: 'tenant-123' }, id: 'inv-item-1' },
         data: {
-          unitCogs: 1000000, // Restored to 1,000,000
-          lineCogs: 6000000,
+          unitCogs: dec(1000000), // Restored to 1,000,000
+          lineCogs: dec(6000000),
           lineGrossProfit: 3000000,
         },
       });
@@ -875,15 +914,10 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
-        items: [
-          {
-            id: 'ei-usd',
-            productId: 'prod-iphone',
-            allocatedAmount: 80,
-            soldQuantity: 0,
-            remainingQuantity: 10,
-          },
-        ],
+        items: draftLines(
+          { amount: 80, currency: 'USD', exchangeRate: 12500, docDate },
+          ['item-1'],
+        ),
       });
       prisma.financeTransaction.findFirst.mockResolvedValue(null);
       prisma.productBatch.findFirst.mockResolvedValue({
@@ -906,7 +940,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
       // It used to subtract 8 (USD) from a UZS cost and leave 1,099,992.
       expect(prisma.productBatch.update).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-123', id: 'batch-1' },
-        data: { landedCost: 1000000 },
+        data: { landedCost: dec(1000000) },
       });
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-123', id: 'prod-iphone' },
@@ -918,32 +952,37 @@ describe('AdditionalExpensesService Unit Tests', () => {
       });
     });
 
-    it('refuses an allocation spread over zero units instead of inventing one', async () => {
+    it('refuses to cancel a posted row without a stored conversion instead of using a fresh rate', async () => {
+      // A row posted before the snapshot whose rate could not be backfilled.
       prisma.additionalExpense.findFirst.mockResolvedValue({
-        id: 'exp-zero',
+        id: 'exp-legacy',
         status: PurchaseDocStatus.POSTED,
-        currency: 'UZS',
-        amount: 1000,
+        currency: 'USD',
+        exchangeRate: 0,
+        amount: 5,
         receiptId,
-        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         items: [
           {
-            id: 'ei-zero',
+            id: 'ei-legacy',
             productId: 'prod-iphone',
-            allocatedAmount: 1000,
-            soldQuantity: 0,
-            remainingQuantity: 0,
+            receiptItemId: 'item-1',
+            allocatedAmount: 5,
+            originalCurrency: null,
+            baseUnitDelta: null,
+            receiptAmount: null,
+            receiptUnitDelta: null,
           },
         ],
       });
       prisma.financeTransaction.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.cancelExpense(tenantId, userId, 'exp-zero'),
-      ).rejects.toThrow(/miqdori 0/);
+        service.cancelExpense(tenantId, userId, 'exp-legacy'),
+      ).rejects.toThrow(/kurs ma'lumotlari saqlanmagan/);
       expect(prisma.productBatch.update).not.toHaveBeenCalled();
+      expect(prisma.purchaseReceipt.update).not.toHaveBeenCalled();
     });
 
     it('a USD expense on a USD receipt adds and removes the same USD amount on the receipt total (ADR 0023)', async () => {
@@ -959,7 +998,11 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receipt: { currency: 'USD', exchangeRate: 12000 },
         isPaid: false,
         counterpartyId: 'carrier-1',
-        items: [],
+        items: draftLines(
+          { amount: 6, currency: 'USD', exchangeRate: 12000, docDate },
+          ['item-1'],
+          { currency: 'USD', exchangeRate: 12000 },
+        ),
       };
       prisma.additionalExpense.findFirst.mockResolvedValue(expense);
       prisma.financeTransaction.findFirst.mockResolvedValue(null);
@@ -972,7 +1015,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
 
       expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
         where: { tenantId, id: receiptId },
-        data: { additionalExpensesTotal: { decrement: 6 } },
+        data: { additionalExpensesTotal: { decrement: dec(6) } },
       });
     });
 
@@ -986,15 +1029,9 @@ describe('AdditionalExpensesService Unit Tests', () => {
         receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
-        items: [
-          {
-            id: 'ei-1',
-            productId: 'prod-iphone',
-            allocatedAmount: 1000000,
-            soldQuantity: 6,
-            remainingQuantity: 4,
-          },
-        ],
+        items: draftLines({ amount: 1000000, currency: 'UZS', docDate }, [
+          'item-1',
+        ]),
       });
       prisma.financeTransaction.findFirst.mockResolvedValue(null);
       prisma.productBatch.findFirst.mockResolvedValue({
@@ -1038,51 +1075,15 @@ describe('AdditionalExpensesService Unit Tests', () => {
       expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
         where: { invoice: { tenantId: 'tenant-123' }, id: 'inv-item-usd' },
         data: {
-          unitCogs: 1000000,
-          lineCogs: 6000000,
+          unitCogs: dec(1000000),
+          lineCogs: dec(6000000),
           lineGrossProfit: 1500000,
         },
       });
       expect(prisma.salesInvoice.update).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-123', id: 'inv-usd' },
-        data: { totalCogs: 6000000, grossProfit: 1500000 },
+        data: { totalCogs: dec(6000000), grossProfit: 1500000 },
       });
     });
-  });
-});
-
-describe('expenseInReceiptCurrency', () => {
-  it('keeps the amount when the expense and the receipt share a currency', () => {
-    expect(
-      expenseInReceiptCurrency(
-        { amount: 6, currency: 'USD', exchangeRate: 12000 },
-        { currency: 'USD', exchangeRate: 12500 },
-      ),
-    ).toBe(6);
-  });
-
-  it('converts through UZS at each document rate when currencies differ', () => {
-    expect(
-      expenseInReceiptCurrency(
-        { amount: 6, currency: 'USD', exchangeRate: 12000 },
-        { currency: 'UZS', exchangeRate: 1 },
-      ),
-    ).toBe(72000);
-    expect(
-      expenseInReceiptCurrency(
-        { amount: 72000, currency: 'UZS', exchangeRate: 1 },
-        { currency: 'USD', exchangeRate: 12000 },
-      ),
-    ).toBe(6);
-  });
-
-  it('refuses a missing receipt or a foreign receipt without a rate', () => {
-    const usd = { amount: 1, currency: 'UZS', exchangeRate: 1 };
-    expect(() => expenseInReceiptCurrency(usd, null)).toThrow(
-      BadRequestException,
-    );
-    expect(() =>
-      expenseInReceiptCurrency(usd, { currency: 'USD', exchangeRate: null }),
-    ).toThrow(BadRequestException);
   });
 });

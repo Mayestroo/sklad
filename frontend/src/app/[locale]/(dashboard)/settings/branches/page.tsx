@@ -24,7 +24,6 @@ interface WarehouseRow {
   name: { uz: string; ru: string };
   address?: string | null;
   phone?: string | null;
-  isMain?: boolean;
 }
 
 interface BranchRow {
@@ -368,7 +367,6 @@ export default function BranchesPage() {
                           )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {wh.isMain && <Badge variant="neutral">{isRu ? 'Главный склад' : 'Asosiy Ombor'}</Badge>}
                           <button
                             type="button"
                             onClick={() => handleOpenEditWarehouse(wh)}

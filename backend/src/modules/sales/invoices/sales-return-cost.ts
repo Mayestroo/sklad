@@ -56,5 +56,6 @@ function assertCost(unitCost: number): number {
       "Asl sotuv tannarxi noto'g'ri, qaytarishni rasmiylashtirib bo'lmaydi",
     );
   }
-  return Math.round(unitCost * 100) / 100;
+  // Per-unit cost: 4 decimals (DECIMAL(17,4)), like the batches it came from.
+  return Math.round(unitCost * 10000) / 10000;
 }

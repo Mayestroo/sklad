@@ -1,8 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AdditionalExpensesService } from './additional-expenses.service';
+import {
+  AdditionalExpensesService,
+  allocationRows,
+} from './additional-expenses.service';
+import { convertAndAllocate } from './expense-allocation.engine';
 import { PrismaService } from '../../common/prisma';
 import { BadRequestException } from '@nestjs/common';
-import { ExpenseAllocationMethod, PurchaseDocStatus } from '@prisma/client';
+import {
+  ExpenseAllocationMethod,
+  Prisma,
+  PurchaseDocStatus,
+} from '@prisma/client';
 import { CounterpartySettlementService } from '../settlements/counterparty-settlement.service';
 import { AccountsService } from '../accounting/accounts/accounts.service';
 import { JournalService } from '../accounting/journal/journal.service';
@@ -18,6 +26,45 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
   const userId = 'user-admin-1';
   const receiptId = 'receipt-inbound-1';
 
+  /** A posted UZS receipt: 10 iPhones at 1,000,000. */
+  const receipt = {
+    id: receiptId,
+    currency: 'UZS',
+    exchangeRate: 1,
+    items: [
+      {
+        id: 'line-iphone',
+        productId: 'prod-iphone',
+        quantity: 10,
+        unitPrice: 1000000,
+        totalPrice: 10000000,
+        landedCost: 1000000,
+        product: { sku: 'IPH' },
+      },
+    ],
+    batches: [],
+  };
+
+  /** Matches a Decimal (or number) equal to `n`: posting writes exact Decimals. */
+  const dec = (n: number) => ({
+    asymmetricMatch: (v: unknown) =>
+      v != null && new Prisma.Decimal(v as number).eq(n),
+    toString: () => `Decimal(${n})`,
+  });
+
+  /** What createDraft stores for the expense (real convertAndAllocate output). */
+  const draftLines = (expense: { amount: number; docDate: Date }) =>
+    allocationRows(
+      convertAndAllocate({
+        items: receipt.items,
+        amount: expense.amount,
+        allocationMethod: ExpenseAllocationMethod.BY_AMOUNT,
+        expense: { currency: 'UZS', exchangeRate: 1 },
+        receipt,
+        rateDate: expense.docDate,
+      }),
+    ).map((row, i) => ({ id: `ei-${i + 1}`, ...row }));
+
   beforeEach(async () => {
     prisma = {
       additionalExpense: {
@@ -30,11 +77,12 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       },
       additionalExpenseItem: {
         create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       purchaseReceipt: {
-        findFirst: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(receipt),
         update: jest.fn(),
       },
       purchaseReceiptItem: {
@@ -47,6 +95,9 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         findFirst: jest.fn(),
         update: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
+      },
+      batchConsumption: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       product: {
         update: jest.fn(),
@@ -102,6 +153,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       auditLog: {
         create: jest.fn(),
       },
+      $queryRaw: jest.fn().mockResolvedValue([{ status: 'DRAFT' }]),
       $transaction: jest.fn().mockImplementation((cb) => cb(prisma)),
     };
 
@@ -138,20 +190,15 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       currency: 'UZS',
       receiptId,
       receipt: { currency: 'UZS', exchangeRate: 1 },
+      allocationMethod: ExpenseAllocationMethod.BY_AMOUNT,
       isPaid: false,
+      vatAmount: 0,
       counterpartyId: 'carrier-1',
       counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
-      items: [
-        {
-          id: 'ei-1',
-          productId: 'prod-iphone',
-          initialLandedCost: 1000000,
-          allocatedAmount: 2000000,
-          soldQuantity: 0,
-          remainingQuantity: 10,
-        },
-      ],
+      items: [] as unknown[],
     };
+    mockExpense.items = draftLines(mockExpense);
+    prisma.additionalExpenseItem.findMany.mockResolvedValue(mockExpense.items);
 
     prisma.additionalExpense.findFirst.mockResolvedValue(mockExpense);
     prisma.productBatch.findFirst.mockResolvedValue({
@@ -176,7 +223,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         tenantId: 'tenant-invariant-1',
         id: 'batch-1',
       },
-      data: { landedCost: 1200000 },
+      data: { landedCost: dec(1200000) },
     });
     expect(prisma.product.update).toHaveBeenCalledWith({
       where: { tenantId: 'tenant-invariant-1', id: 'prod-iphone' },
@@ -215,20 +262,15 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       currency: 'UZS',
       receiptId,
       receipt: { currency: 'UZS', exchangeRate: 1 },
+      allocationMethod: ExpenseAllocationMethod.BY_AMOUNT,
       isPaid: false,
+      vatAmount: 0,
       counterpartyId: 'carrier-1',
       counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
-      items: [
-        {
-          id: 'ei-2',
-          productId: 'prod-iphone',
-          initialLandedCost: 1000000,
-          allocatedAmount: 2000000,
-          soldQuantity: 6,
-          remainingQuantity: 4,
-        },
-      ],
+      items: [] as unknown[],
     };
+    mockExpense.items = draftLines(mockExpense);
+    prisma.additionalExpenseItem.findMany.mockResolvedValue(mockExpense.items);
 
     prisma.additionalExpense.findFirst.mockResolvedValue(mockExpense);
     prisma.productBatch.findFirst.mockResolvedValue({
@@ -281,7 +323,17 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         tenantId: 'tenant-invariant-1',
         id: 'batch-1',
       },
-      data: { landedCost: 1200000 },
+      data: { landedCost: dec(1200000) },
+    });
+    // The sale's consumptions carry the same +200,000 per unit, so a sales
+    // return re-enters stock at 1,200,000 (only sales consumptions).
+    expect(prisma.batchConsumption.updateMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-invariant-1',
+        batchId: 'batch-1',
+        salesInvoiceItemId: { not: null },
+      },
+      data: { unitCost: { increment: dec(200000) } },
     });
 
     // 6 sold units * 200,000 = +1,200,000 COGS delta
@@ -290,8 +342,8 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
       where: { invoice: { tenantId: 'tenant-invariant-1' }, id: 'inv-item-1' },
       data: {
-        unitCogs: 1200000,
-        lineCogs: 7200000,
+        unitCogs: dec(1200000),
+        lineCogs: dec(7200000),
         lineGrossProfit: 1800000,
       },
     });
@@ -321,6 +373,8 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
   it('Invariant 3: Allocation Remainder Rule guarantees exact sum matching without tiyin drift', async () => {
     prisma.purchaseReceipt.findFirst.mockResolvedValue({
       id: receiptId,
+      currency: 'UZS',
+      exchangeRate: 1,
       items: [
         {
           id: 'i-1',
@@ -353,10 +407,11 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
     const preview = await service.calculateAllocationPreview(tenantId, {
       receiptId,
       amount: 100000, // 100,000 UZS split across 50k, 30k, 20k -> 50%, 30%, 20%
+      currency: 'UZS',
       allocationMethod: ExpenseAllocationMethod.BY_AMOUNT,
     });
 
-    expect(preview.allocatedTotal).toBe(100000);
+    expect(preview.expenseAmount).toBe(100000);
     const sum = preview.items.reduce((s, it) => s + it.allocatedAmount, 0);
     expect(sum).toBe(100000);
   });
@@ -382,6 +437,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
 
   // ─── INVARIANT 5: SAFE CANCELLATION RESTORES BATCH COSTS & COGS ─────────────
   it('Invariant 5: Cancellation cleanly reverts batch landed cost and retroactive COGS adjustments', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ status: 'POSTED' }]);
     prisma.additionalExpense.findFirst.mockResolvedValue({
       id: 'exp-inv-5',
       status: PurchaseDocStatus.POSTED,
@@ -391,15 +447,8 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       receipt: { currency: 'UZS', exchangeRate: 1 },
       isPaid: false,
       counterpartyId: 'carrier-1',
-      items: [
-        {
-          id: 'ei-5',
-          productId: 'prod-iphone',
-          allocatedAmount: 2000000,
-          soldQuantity: 6,
-          remainingQuantity: 4,
-        },
-      ],
+      // The lines as posting stored them: 200,000 UZS per unit.
+      items: draftLines({ amount: 2000000, docDate: new Date() }),
     });
     prisma.financeTransaction.findFirst.mockResolvedValue(null);
     prisma.productBatch.findFirst.mockResolvedValue({
@@ -448,13 +497,13 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         tenantId: 'tenant-invariant-1',
         id: 'batch-1',
       },
-      data: { landedCost: 1000000 }, // Restored to initial cost
+      data: { landedCost: dec(1000000) }, // Restored to initial cost
     });
     expect(prisma.salesInvoiceItem.update).toHaveBeenCalledWith({
       where: { invoice: { tenantId: 'tenant-invariant-1' }, id: 'inv-item-1' },
       data: {
-        unitCogs: 1000000,
-        lineCogs: 6000000,
+        unitCogs: dec(1000000),
+        lineCogs: dec(6000000),
         lineGrossProfit: 3000000,
       },
     });

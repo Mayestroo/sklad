@@ -1,6 +1,6 @@
 'use client';
 
-import { quantityWithUnit } from '@/lib/units';
+import { quantityWithUnit, unitLabel } from '@/lib/units';
 import { useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter, useParams } from 'next/navigation';
@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatPercent, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
+import { formatCurrency, formatUnitCost, formatPercent, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -23,6 +23,7 @@ import {
   ExternalLink,
   AlertTriangle,
   TrendingDown,
+  RefreshCw,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -75,6 +76,34 @@ export default function ExpenseDetailPage() {
       fetchExpense();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /**
+   * Saves the draft again unchanged: the server converts it once more at the
+   * documents' current rates and keeps its lines. Posting asks for this when
+   * the receipt or a rate changed after the draft was saved.
+   */
+  const handleResave = async () => {
+    setActionLoading(true);
+    try {
+      await apiFetch(`/purchases/additional-expenses/${id}`, {
+        token: token || undefined,
+        tenantId: company?.id || undefined,
+        method: 'PUT',
+        body: JSON.stringify({}),
+        locale,
+      });
+      toast.success(
+        isRu
+          ? 'Распределение пересчитано по текущим курсам — проверьте его перед проведением'
+          : 'Taqsimot joriy kurslar bo‘yicha qayta hisoblandi — tasdiqlashdan oldin tekshiring',
+      );
+      fetchExpense();
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Ошибка при пересчёте' : 'Qayta hisoblashda xatolik'));
     } finally {
       setActionLoading(false);
     }
@@ -212,6 +241,20 @@ export default function ExpenseDetailPage() {
     );
   }
 
+  // Landed costs are in the receipt's currency, expense shares in the
+  // expense's, sales COGS in UZS: each is labelled with its own (ADR 0010/0023).
+  const receiptCurrency = expense.receipt?.currency;
+  const items = expense.items ?? [];
+  const hasSnapshot = items.length > 0 && items.every((i) => i.originalCurrency != null);
+  const receiptTotal = hasSnapshot
+    ? Math.round(items.reduce((sum, i) => sum + Number(i.receiptAmount), 0) * 100) / 100
+    : null;
+  const usdRate = hasSnapshot
+    ? expense.currency === 'USD'
+      ? Number(items[0].expenseRate)
+      : Number(items[0].receiptRate)
+    : null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
       {/* Header & Actions */}
@@ -239,6 +282,13 @@ export default function ExpenseDetailPage() {
             <Printer size={16} style={{ marginRight: '6px' }} />
             {isRu ? 'Печать' : 'Chop etish'}
           </Button>
+
+          {expense.status === 'DRAFT' && (
+            <Button variant="outline" disabled={actionLoading} onClick={handleResave}>
+              <RefreshCw size={16} style={{ marginRight: '6px' }} />
+              {isRu ? 'Пересчитать и сохранить' : 'Qayta hisoblash va saqlash'}
+            </Button>
+          )}
 
           {expense.status === 'DRAFT' && (
             <Button disabled={actionLoading} onClick={handlePost}>
@@ -305,6 +355,17 @@ export default function ExpenseDetailPage() {
                 {formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}
               </span>
             </div>
+            {receiptTotal != null && receiptCurrency && receiptCurrency !== expense.currency && (
+              <div style={{ marginTop: '4px' }} className="tabular-nums">
+                <strong>{isRu ? 'В валюте закупки:' : 'Xarid valyutasida:'}</strong>{' '}
+                {formatCurrency(receiptTotal, locale, receiptCurrency)}
+                {usdRate != null && (
+                  <span style={{ color: 'var(--color-text-secondary)' }}>
+                    {' '}(1 USD = {formatCurrency(usdRate, locale, 'UZS')})
+                  </span>
+                )}
+              </div>
+            )}
             <div style={{ marginTop: '4px' }}>
               <strong>{isRu ? 'Статус оплаты:' : 'To‘lov holati:'}</strong>{' '}
               {expense.isPaid ? (
@@ -330,6 +391,30 @@ export default function ExpenseDetailPage() {
         </Card>
       </div>
 
+      {expense.status === 'DRAFT' && items.length > 0 && !hasSnapshot && (
+        <div
+          role="status"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 'var(--space-3)',
+            padding: 'var(--space-3) var(--space-4)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-warning-200)',
+            backgroundColor: 'var(--color-warning-50)',
+            color: 'var(--color-warning-700)',
+            fontSize: 'var(--text-sm)',
+          }}
+        >
+          <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+          <span>
+            {isRu
+              ? 'Этот черновик сохранён до хранения курсов: суммы ниже не пересчитаны в валюту закупки. Нажмите «Пересчитать и сохранить» и проверьте распределение перед проведением.'
+              : 'Bu qoralama kurslar saqlanishidan oldin yozilgan: quyidagi summalar xarid valyutasiga o‘tkazilmagan. «Qayta hisoblash va saqlash» tugmasini bosing va tasdiqlashdan oldin taqsimotni tekshiring.'}
+          </span>
+        </div>
+      )}
+
       {/* Card 3: Item Allocation Breakdown */}
       <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
@@ -353,30 +438,45 @@ export default function ExpenseDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {expense.items?.map((item) => {
-                const totalQty = Number(item.soldQuantity) + Number(item.remainingQuantity) || 1;
-                const perUnit = Number(item.allocatedAmount) / totalQty;
+              {items.map((item) => {
+                const unit = unitLabel(item.product?.unitOfMeasure, locale);
+                const snapshot = item.originalCurrency != null;
                 const oldCost = Number(item.initialLandedCost);
-                const newCost = Number(item.newLandedCost) || (oldCost + perUnit);
-                const percent = oldCost > 0 ? (perUnit / oldCost) * 100 : 0;
+                const perUnit = snapshot ? Number(item.receiptUnitDelta) : null;
+                const percent = perUnit != null && oldCost > 0 ? (perUnit / oldCost) * 100 : null;
+                const money = (amount: number | null, currency: string | undefined) =>
+                  amount != null && currency ? formatCurrency(amount, locale, currency) : '—';
+                // Per-unit costs keep their 3rd/4th decimal (formatUnitCost).
+                const unitCost = (amount: number | null, currency: string | undefined) =>
+                  amount != null && currency ? formatUnitCost(amount, locale, currency) : '—';
 
                 return (
                   <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
                     <td style={{ padding: '8px 12px', fontWeight: 'var(--font-medium)' }}>
                       {(item.product?.name ? getLocalizedName(item.product?.name, locale) : '—')}
-                      <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(oldCost, locale, expense.currency)}
+                      {unitCost(oldCost, receiptCurrency)}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                      {formatCurrency(Number(item.allocatedAmount) || 0, locale, expense.currency)} (+{formatCurrency(perUnit, locale, expense.currency)}/dona)
+                      {money(Number(item.allocatedAmount), expense.currency)}
+                      {snapshot && receiptCurrency !== expense.currency && (
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)' }}>
+                          = {money(Number(item.receiptAmount), receiptCurrency)}
+                        </div>
+                      )}
+                      {perUnit != null && (
+                        <div style={{ fontSize: '11px', fontWeight: 'var(--font-medium)' }}>
+                          +{unitCost(perUnit, receiptCurrency)} / {unit}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                      {formatCurrency(newCost, locale, expense.currency)}
+                      {snapshot ? unitCost(Number(item.newLandedCost), receiptCurrency) : '—'}
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                      +{formatPercent(percent)}
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
+                      {percent != null ? `+${formatPercent(percent)}` : '—'}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       <span style={{ color: 'var(--color-success-600)', fontWeight: 'var(--font-medium)' }}>
@@ -430,7 +530,7 @@ export default function ExpenseDetailPage() {
                     </td>
                     <td style={{ padding: '6px 10px' }}>{impact.customerName || '—'}</td>
                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-700)' }} className="tabular-nums">
-                      +{formatCurrency(Number(impact.totalDeltaCogs) || 0, locale, expense.currency)}
+                      +{formatCurrency(Number(impact.totalDeltaCogs) || 0, locale, 'UZS')}
                     </td>
                   </tr>
                 ))}

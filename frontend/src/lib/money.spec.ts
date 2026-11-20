@@ -7,6 +7,7 @@ import {
   formatNumber,
   formatPercent,
   formatQuantity,
+  formatUnitCost,
 } from '../../../shared/format/money.ts';
 
 // Non-breaking space: the thousands separator and the gap before the code.
@@ -120,4 +121,40 @@ describe('formatCompactNumber (chart axes)', () => {
       assert.strictEqual(formatCompactNumber(value), expected);
     });
   }
+});
+
+describe('formatUnitCost (per-unit costs keep 4 decimals)', () => {
+  const cases: Array<[number | string, string, string]> = [
+    [100, 'USD', `100,00${_}USD`],
+    [100.002, 'USD', `100,002${_}USD`],
+    ['100.0020', 'USD', `100,002${_}USD`],
+    [0.002, 'USD', `0,002${_}USD`],
+    [1234.56, 'USD', `1${_}234,56${_}USD`],
+    [25, 'UZS', `25${_}UZS`],
+    [8000.5, 'UZS', `8${_}000,50${_}UZS`],
+    [10000.1429, 'UZS', `10${_}000,1429${_}UZS`],
+    [0.1429, 'UZS', `0,1429${_}UZS`],
+    [5333.3333, 'UZS', `5${_}333,3333${_}UZS`],
+    [-0.0001, 'USD', `-0,0001${_}USD`],
+  ];
+  for (const [amount, currency, expected] of cases) {
+    test(`${amount} ${currency} -> ${expected}`, () => {
+      assert.strictEqual(formatUnitCost(amount, currency), expected);
+    });
+  }
+
+  test('a whole or 2-decimal cost reads the same as formatMoney', () => {
+    const same: Array<[number, string]> = [
+      [8000, 'UZS'],
+      [8000.5, 'UZS'],
+      [12.3, 'USD'],
+    ];
+    for (const [amount, currency] of same) {
+      assert.strictEqual(formatUnitCost(amount, currency), formatMoney(amount, currency));
+    }
+  });
+
+  test('rejects a missing currency', () => {
+    assert.throws(() => formatUnitCost(1, ''), TypeError);
+  });
 });

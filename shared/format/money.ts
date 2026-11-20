@@ -108,6 +108,26 @@ export function formatMoney(amount: number | string, currency: string): string {
   return `${number}${GROUP_SEPARATOR}${currency.trim().toUpperCase()}`;
 }
 
+/**
+ * A per-unit cost with its ISO code. Like `formatMoney`, but a cost with a
+ * 3rd or 4th decimal keeps it (`100,002 USD`, `10 000,1429 UZS`), so a small
+ * per-unit amount is not shown as 0. Per-unit costs are stored with 4
+ * decimals; totals and amounts use `formatMoney`.
+ */
+export function formatUnitCost(amount: number | string, currency: string): string {
+  const n = toFiniteNumber(amount, 'formatUnitCost');
+  if (typeof currency !== 'string' || currency.trim() === '') {
+    throw new TypeError(
+      `formatUnitCost: currency must be a non-empty string, received ${String(currency)}`,
+    );
+  }
+  const code = currency.trim().toUpperCase();
+  if (!hasFraction(n, 4) || !hasFraction(n * 100, 2)) {
+    return formatMoney(n, code);
+  }
+  return `${formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}${GROUP_SEPARATOR}${code}`;
+}
+
 /** A quantity with only the decimals it needs (at most three). */
 export function formatQuantity(value: number | string): string {
   return formatNumber(toFiniteNumber(value, 'formatQuantity'), {

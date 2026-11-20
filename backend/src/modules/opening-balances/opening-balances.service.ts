@@ -684,7 +684,9 @@ export class OpeningBalancesService {
         if (line.category !== OpeningBalanceCategory.INVENTORY) continue;
         itemIndex++;
         const qty = Number(line.quantity);
-        const unitCostUzs = roundMoney(Number(line.unitCost) * rateOf(line));
+        // Per-unit UZS cost: 4 decimals (DECIMAL(17,4) batch cost).
+        const unitCostUzs =
+          Math.round(Number(line.unitCost) * rateOf(line) * 10000) / 10000;
 
         await tx.stockLevel.upsert({
           where: {

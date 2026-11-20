@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { PurchaseReceipt } from '@shared/types';
-import { formatCurrency, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatUnitCost, errorMessage, type LocalizedName } from '@/lib/utils';
 
 interface CreateReturnModalProps {
   isOpen: boolean;
@@ -66,7 +66,8 @@ export function CreateReturnModal({
     () =>
       (receipt?.items ?? []).map((i, index) => {
         const unreturned = Math.max(0, Number(i.quantity) - Number(i.returnedQuantity || 0));
-        const landedUnit = Number(i.quantity) > 0 && Number(i.landedCost) > 0 ? Number(i.landedCost) / Number(i.quantity) : Number(i.unitPrice);
+        // landedCost is already per unit (receipt currency): never divide it by the quantity.
+        const landedUnit = Number(i.landedCost) > 0 ? Number(i.landedCost) : Number(i.unitPrice);
         return {
           productId: i.productId,
           productName: i.product?.name,
@@ -247,7 +248,7 @@ export function CreateReturnModal({
                         <div>{getProductName(item.productName)}</div>
                         {item.landedCost > item.unitPrice && (
                           <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
-                            {isRu ? `Себестоимость: ${formatCurrency(item.landedCost, locale, receipt.currency)}` : `Tannarxi: ${formatCurrency(item.landedCost, locale, receipt.currency)}`}
+                            {isRu ? `Себестоимость: ${formatUnitCost(item.landedCost, locale, receipt.currency)}` : `Tannarxi: ${formatUnitCost(item.landedCost, locale, receipt.currency)}`}
                           </div>
                         )}
                       </td>

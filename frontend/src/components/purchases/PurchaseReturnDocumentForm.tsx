@@ -35,7 +35,6 @@ interface CounterpartyOption {
   id: string;
   name: string;
   type: string;
-  currency?: string;
   balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
 }
 
@@ -217,13 +216,6 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
     setCounterpartyId(chosenId);
     setReceiptId('');
     setSelectedReceipt(null);
-    if (!chosenId) return;
-
-    const supp = counterparties.find((c) => c.id === chosenId);
-    const supplierCurrency = supp?.currency?.trim();
-    if (!currency.trim() && supplierCurrency) {
-      setCurrency(supplierCurrency);
-    }
   };
 
   // Handle Receipt selection
@@ -635,7 +627,6 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                     currentSupplierDebt,
                     locale,
                     currency,
-                    selectedSupplier.currency,
                   ) || '—'}
                 </strong>
               </div>

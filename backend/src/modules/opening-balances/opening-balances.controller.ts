@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Res,
+  Req,
   BadRequestException,
 } from '@nestjs/common';
 import { type Response } from 'express';
@@ -131,8 +132,10 @@ export class OpeningBalancesController {
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
+    @Req() req: { locale?: string },
   ) {
     if (!file) throw new BadRequestException('Excel fayli yuklanmadi');
+    const isRu = req.locale === 'ru';
     const result = await this.importService.validateAndParse(
       tenantId,
       file.buffer,
@@ -142,8 +145,9 @@ export class OpeningBalancesController {
     if (result.errors.length > 0) {
       return {
         success: false,
-        message:
-          'Faylda xatoliklar mavjud. Iltimos, xatoliklarni to‘g‘rilab qayta yuklang.',
+        message: isRu
+          ? 'В файле есть ошибки. Исправьте их и загрузите файл снова.'
+          : 'Faylda xatoliklar mavjud. Iltimos, xatoliklarni to‘g‘rilab qayta yuklang.',
         errors: result.errors,
       };
     }
@@ -155,7 +159,9 @@ export class OpeningBalancesController {
 
     return {
       success: true,
-      message: `${lines.length} ta boshlang‘ich qoldiq qatori muvaffaqiyatli saqlandi`,
+      message: isRu
+        ? `Сохранено строк начальных остатков: ${lines.length}`
+        : `${lines.length} ta boshlang‘ich qoldiq qatori muvaffaqiyatli saqlandi`,
       document: updated,
     };
   }

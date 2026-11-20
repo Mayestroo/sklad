@@ -37,7 +37,7 @@ describe('allocateFifoCost', () => {
       { batchId: 'b2', quantity: 2, unitCost: 200 },
     ]);
     expect(result.totalCost).toBe(900);
-    expect(result.unitCost).toBe(128.57);
+    expect(result.unitCost).toBe(128.5714); // per-unit cost: 4 decimals
   });
 
   it('uses the per-unit landed cost, falling back to purchase price only when it is zero', () => {

@@ -24,8 +24,19 @@ describe('CounterpartiesService', () => {
     counterpartyBalance: { findMany: jest.fn().mockResolvedValue([]) },
     counterpartySettlementEntry: { findMany: jest.fn().mockResolvedValue([]) },
     financeTransaction: { findMany: jest.fn().mockResolvedValue([]) },
-    salesInvoice: { count: jest.fn() },
-    purchaseReceipt: { count: jest.fn() },
+    salesInvoice: {
+      count: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    purchaseReceipt: {
+      count: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    salesReturn: { findMany: jest.fn().mockResolvedValue([]) },
+    purchaseReturn: { findMany: jest.fn().mockResolvedValue([]) },
+    serviceAct: { findMany: jest.fn().mockResolvedValue([]) },
+    additionalExpense: { findMany: jest.fn().mockResolvedValue([]) },
+    salesOrder: { findMany: jest.fn().mockResolvedValue([]) },
     payment: { count: jest.fn() },
     deal: { count: jest.fn() },
   };
@@ -642,6 +653,13 @@ describe('CounterpartiesService', () => {
         },
       ]);
 
+      mockPrisma.salesInvoice.findMany.mockResolvedValue([
+        { id: 'inv-1', invoiceNumber: 'SF-2026-00012' },
+      ]);
+      mockPrisma.purchaseReceipt.findMany.mockResolvedValue([
+        { id: 'rec-1', docNumber: 'PR-2026-00003' },
+      ]);
+
       const res = await service.getStatement(tenantId, id);
 
       expect(res.counterparty.id).toBe(id);
@@ -661,6 +679,16 @@ describe('CounterpartiesService', () => {
       expect(res.transactions[0].credit).toBe(2000000);
       expect(res.transactions[1].type).toBe('PURCHASE_RECEIPT');
       expect(res.transactions[2].type).toBe('SALES_INVOICE');
+      // The act prints document numbers, not a type and a UUID.
+      expect(res.transactions.map((t) => t.docNumber)).toEqual([
+        'TX-001',
+        'PR-2026-00003',
+        'SF-2026-00012',
+      ]);
+      expect(mockPrisma.salesInvoice.findMany).toHaveBeenCalledWith({
+        where: { tenantId, id: { in: ['inv-1'] } },
+        select: { id: true, invoiceNumber: true },
+      });
     });
   });
 });

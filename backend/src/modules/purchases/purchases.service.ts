@@ -708,10 +708,11 @@ export class PurchasesService {
             ? undefined
             : Number(receipt.exchangeRate),
         );
+        // Per-unit UZS costs keep 4 decimals (DECIMAL(17,4)).
         const purchasePriceInBase =
-          Math.round(Number(item.unitPrice) * rate * 100) / 100;
+          Math.round(Number(item.unitPrice) * rate * 10000) / 10000;
         const landedCostInBase =
-          Math.round(Number(item.landedCost) * rate * 100) / 100;
+          Math.round(Number(item.landedCost) * rate * 10000) / 10000;
 
         // Create product batch record
         await tx.productBatch.create({

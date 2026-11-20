@@ -16,6 +16,7 @@ import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { toast } from '@/context/ToastContext';
 import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import type { Category } from '@shared/types';
+import { editedProductName } from '@/lib/product-name';
 
 /** The saved product handed back to the caller (the API returns more). */
 interface CreatedProduct {
@@ -219,10 +220,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       let res: CreatedProduct;
       if (productToEdit) {
         const payload = {
-          name: {
-            uz: finalName,
-            ru: finalName,
-          },
+          // Keep the other language's name: this drawer edits one name field.
+          name: editedProductName(productToEdit.name, locale, finalName),
           sku: sku.trim() || undefined,
           barcode: barcode.trim() || null,
           categoryId: categoryId || null,

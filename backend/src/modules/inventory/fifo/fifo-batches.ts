@@ -95,7 +95,8 @@ export function allocateFifoCost(
 
   totalCost = round(totalCost, 2);
   return {
-    unitCost: round(totalCost / requestedQuantity, 2),
+    // Per-unit cost: 4 decimals (DECIMAL(17,4)); the total is money (2).
+    unitCost: round(totalCost / requestedQuantity, 4),
     totalCost,
     batches: allocations,
   };
@@ -271,7 +272,8 @@ export async function createFifoBatch(
       'Partiya tannarxi 0 yoki undan katta bo‘lishi shart',
     );
   }
-  const cost = round(unitCost, 2);
+  // Per-unit cost: 4 decimals, so a transfer or return keeps the source cost.
+  const cost = round(unitCost, 4);
   return db.productBatch.create({
     data: {
       tenantId: params.tenantId,

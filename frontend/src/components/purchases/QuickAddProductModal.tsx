@@ -2,9 +2,10 @@
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { CURRENCY_OPTIONS } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -23,6 +24,7 @@ interface QuickAddProductModalProps {
     costPriceCurrency?: 'USD' | 'UZS';
     costPriceExchangeRate?: number;
     salePrice?: number;
+    salePriceCurrency?: 'USD' | 'UZS' | null;
     unitOfMeasure?: string;
     type?: string;
   }) => void;
@@ -40,6 +42,9 @@ export function QuickAddProductModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const t = useTranslations('inventory');
+  // The tenant's sales default currency, or blank when none is set (ADR 0022).
+  const salesDefault = useSalesDefaultCurrency();
 
   const [itemType, setItemType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>(initialType);
   const [nameUz, setNameUz] = useState('');
@@ -52,6 +57,7 @@ export function QuickAddProductModal({
   const [costPriceCurrency, setCostPriceCurrency] = useState<'USD' | 'UZS' | ''>('');
   const [costPriceExchangeRate, setCostPriceExchangeRate] = useState('');
   const [salePrice, setSalePrice] = useState<number>(0);
+  const [salePriceCurrency, setSalePriceCurrency] = useState<string>(salesDefault ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +104,10 @@ export function QuickAddProductModal({
       setError(isRu ? 'Укажите положительный курс себестоимости' : 'Xarid tannarxi uchun 0 dan katta kursni kiriting');
       return;
     }
+    if (salePrice > 0 && !salePriceCurrency) {
+      setError(t('salePriceCurrencyRequired'));
+      return;
+    }
     const resolvedSku = sku.trim() || undefined;
 
     setLoading(true);
@@ -124,6 +134,7 @@ export function QuickAddProductModal({
           costPriceExchangeRate:
             costPriceCurrency === 'UZS' ? 1 : Number(costPriceExchangeRate) > 0 ? Number(costPriceExchangeRate) : undefined,
           salePrice: Number(salePrice) || 0,
+          salePriceCurrency: salePriceCurrency || undefined,
         }),
       });
 
@@ -136,6 +147,7 @@ export function QuickAddProductModal({
         setBarcode('');
         setCostPrice(0);
         setSalePrice(0);
+        setSalePriceCurrency(salesDefault ?? '');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : undefined;
@@ -389,6 +401,15 @@ export function QuickAddProductModal({
                 value={salePrice || ''}
                 onValueChange={(value) => setSalePrice(Number(value) || 0)}
               />
+              <div className="mt-2">
+                <Select
+                  label={t('salePriceCurrency')}
+                  options={CURRENCY_OPTIONS}
+                  value={salePriceCurrency}
+                  onChange={setSalePriceCurrency}
+                  placeholder={t('selectCurrency')}
+                />
+              </div>
             </div>
           </div>
 

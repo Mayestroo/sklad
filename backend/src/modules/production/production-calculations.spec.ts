@@ -41,7 +41,7 @@ describe('production calculations', () => {
     ]);
 
     expect(allocation).toEqual({
-      unitCost: 5333.33,
+      unitCost: 5333.3333, // per-unit cost: 4 decimals
       totalCost: 16000,
       batches: [
         { batchId: 'old', quantity: 2, unitCost: 5000 },
