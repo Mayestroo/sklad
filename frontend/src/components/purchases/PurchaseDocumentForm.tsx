@@ -1176,7 +1176,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           </button>
 
           {showGtd && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
                   {isRu ? '№ ГТД' : 'GTD №'}

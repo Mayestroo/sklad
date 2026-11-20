@@ -215,7 +215,7 @@ export function AktSverkaDrawer({
                 return (
                   <>
                     {/* Financial Balance Overview Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-3)' }}>
                       <div
                         style={{
                           padding: 'var(--space-4)',

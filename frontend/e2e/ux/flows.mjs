@@ -4,6 +4,7 @@
 import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getAuth } from './auth.mjs';
 
 const [flow = 'sale', locale = 'uz', width = '1440'] = process.argv.slice(2);
 const BASE = 'http://localhost:3000';
@@ -21,8 +22,7 @@ const log = (...a) => console.log(`[${flow} ${locale} ${width}]`, ...a);
 const isRu = locale === 'ru';
 
 async function signIn() {
-  const r = await page.request.post('http://localhost:3001/api/auth/login', { data: { email: 'admin@orient.uz', password: 'Admin123!' } });
-  const b = await r.json();
+    const b = await getAuth(page.request);
   await page.goto(BASE + '/login');
   await page.evaluate((b) => {
     localStorage.setItem('crm_access_token', b.tokens.accessToken);

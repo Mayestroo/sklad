@@ -96,7 +96,7 @@ export function SupplierProfileDrawer({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
                     gap: 'var(--space-4)',
                   }}
                 >
@@ -243,7 +243,7 @@ export function SupplierProfileDrawer({
 
             {/* Tab Contents */}
             {activeTab === 'info' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
                 <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
                   <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>ИНН / STIR</div>
                   <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{data.supplier.inn || '—'}</strong>

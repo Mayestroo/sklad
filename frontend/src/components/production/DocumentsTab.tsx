@@ -93,7 +93,7 @@ export function DocumentsTab(props: DocumentsTabProps) {
           <Filter size={16} aria-hidden /> {t('filtrlar')}
           {chips.length > 0 && <Badge variant="info">{chips.length}</Badge>}
         </button>
-        <div className="prod-filters" data-open={filtersOpen} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, alignItems: 'end' }}>
+        <div className="prod-filters" data-open={filtersOpen} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 12, alignItems: 'end' }}>
           <div>
             <label htmlFor="doc-search" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
               {t('hujjatRaqami')}

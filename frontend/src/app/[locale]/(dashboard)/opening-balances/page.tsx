@@ -810,7 +810,7 @@ export default function OpeningBalancesPage() {
           </Card>
 
           {/* Summary: assets, liabilities, capital (balances itself) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
             <SummaryCard
               color="var(--color-success-600)"
               icon={<TrendingUp size={20} />}

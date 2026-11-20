@@ -198,7 +198,7 @@ export default function ProductionPage() {
 
       {failed && <LoadError error={failed.error} onRetry={() => queries.forEach((q) => q.isError && void q.refetch())} />}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
         {tab === 'documents' ? (
           <>
             <Kpi icon={<Clock3 size={20} aria-hidden />} title={t('jarayonda')} value={stats ? String(stats.inProgress) : '…'} color="var(--color-warning-600)" active={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })} />

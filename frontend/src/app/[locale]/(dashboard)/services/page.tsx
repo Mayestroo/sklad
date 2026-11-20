@@ -306,7 +306,8 @@ export default function ServicesPage() {
             border: activeType === 'PROVIDED' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
-            whiteSpace: 'nowrap',
+            minWidth: 0,
+            textAlign: 'center',
           }}
         >
           <ArrowUpRight className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -335,7 +336,8 @@ export default function ServicesPage() {
             border: activeType === 'RECEIVED' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
-            whiteSpace: 'nowrap',
+            minWidth: 0,
+            textAlign: 'center',
           }}
         >
           <ArrowDownRight className="w-4 h-4 text-blue-600 shrink-0" />
@@ -347,7 +349,7 @@ export default function ServicesPage() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
           gap: 'var(--space-4)',
         }}
       >
@@ -510,7 +512,7 @@ export default function ServicesPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
             gap: 'var(--space-3)',
             alignItems: 'center',
           }}

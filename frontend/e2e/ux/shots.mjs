@@ -8,6 +8,7 @@
 import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getAuth } from './auth.mjs';
 
 const args = Object.fromEntries(process.argv.slice(3).map((a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -51,10 +52,7 @@ async function newContext(locale, width) {
 async function loginState() {
   const ctx = await newContext('uz', 1440);
   const page = await ctx.newPage();
-  const r = await page.request.post('http://localhost:3001/api/auth/login', {
-    data: { email: EMAIL, password: PASSWORD },
-  });
-  const body = await r.json();
+  const body = await getAuth(page.request);
   await page.goto(BASE + '/login');
   await page.evaluate((b) => {
     localStorage.setItem('crm_access_token', b.tokens.accessToken);

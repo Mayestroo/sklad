@@ -416,7 +416,7 @@ export default function NewExpensePage() {
             {isStep1Done && <Badge variant="success">{isRu ? 'Готово' : 'Tayyor'}</Badge>}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)' }}>
             <div>
               <DatePicker
                 label={isRu ? 'Дата расхода' : 'Xarajat sanasi'}
@@ -462,7 +462,7 @@ export default function NewExpensePage() {
           </div>
 
           {/* Amount & Currency */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(96px, 1fr)', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
                 {isRu ? 'Сумма расхода *' : 'Xarajat summasi *'}

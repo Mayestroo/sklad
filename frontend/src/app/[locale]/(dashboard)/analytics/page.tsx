@@ -73,10 +73,12 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Range Selector & Action Buttons */}
-        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
           <div
             style={{
               display: 'flex',
+              maxWidth: '100%',
+              overflowX: 'auto',
               backgroundColor: 'var(--color-segmented-bg)',
               padding: '2px',
               borderRadius: 'var(--radius-md)',
@@ -132,7 +134,7 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
             <Card style={{ background: 'linear-gradient(135deg, rgba(79,70,229,0.05) 0%, rgba(79,70,229,0.01) 100%)', borderLeft: '4px solid var(--color-primary-600)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)' }}>
@@ -200,7 +202,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Analytics Charts Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-6)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--ux-split-2-1)', gap: 'var(--space-6)' }}>
             {/* Sales Trend Bar Chart */}
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -283,7 +285,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Top 10 Bestsellers & Top Clients Row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-6)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'var(--ux-split-2-1)', gap: 'var(--space-6)' }}>
             {/* Top 10 Best-Selling Products Table */}
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div>

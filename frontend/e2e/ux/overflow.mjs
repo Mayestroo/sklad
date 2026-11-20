@@ -1,14 +1,14 @@
 // Lists the outermost elements that stick out past the viewport (horizontal overflow culprits).
 // Usage: node e2e/ux/overflow.mjs /route [width] [locale]
 import { chromium } from '@playwright/test';
+import { getAuth } from './auth.mjs';
 const [route = '/', width = '390', locale = 'uz'] = process.argv.slice(2);
 const BASE = 'http://localhost:3000';
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: Number(width), height: 844 } });
 await ctx.addCookies([{ name: 'NEXT_LOCALE', value: locale, url: BASE }]);
 const page = await ctx.newPage();
-const r = await page.request.post('http://localhost:3001/api/auth/login', { data: { email: 'admin@orient.uz', password: 'Admin123!' } });
-const b = await r.json();
+const b = await getAuth(page.request);
 await page.goto(BASE + '/login');
 await page.evaluate((b) => {
   localStorage.setItem('crm_access_token', b.tokens.accessToken);
@@ -19,7 +19,7 @@ await page.evaluate((b) => {
 await page.goto(BASE + route, { waitUntil: 'networkidle' });
 await page.waitForTimeout(500);
 const out = await page.evaluate(() => {
-  const vw = window.innerWidth; const process_all = true;
+  const vw = window.innerWidth; const process_all = false;
   const res = [];
   for (const el of document.querySelectorAll('body *')) {
     const rc = el.getBoundingClientRect();

@@ -390,7 +390,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Core KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
         {/* Bank and cash balances */}
         {data?.finance?.accounts.map((account) => {
           const isBank = account.accountType === 'BANK';
@@ -489,7 +489,7 @@ export default function DashboardPage() {
 
       {(data?.finance.summaryByAccount ?? []).length > 0 && (
       <Card title={isRu ? 'Движение по каждой кассе и банковскому счёту' : 'Har bir kassa va bank hisobi harakati'}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 'var(--space-3)' }}>
           {(data?.finance.summaryByAccount ?? []).map((account) => (
             <div
               key={account.accountId}
@@ -536,7 +536,7 @@ export default function DashboardPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
               gap: 'var(--space-3)',
               marginTop: 'var(--space-2)',
             }}

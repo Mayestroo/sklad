@@ -496,8 +496,8 @@ export default function SalesReturnsPage() {
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Filter size={15} style={{ color: 'var(--color-text-secondary)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Filter size={15} aria-hidden style={{ color: 'var(--color-text-secondary)' }} />
             {['ALL', 'DRAFT', 'POSTED', 'CANCELLED'].map((st) => (
               <button
                 key={st}
@@ -709,7 +709,7 @@ export default function SalesReturnsPage() {
           )}
 
           {/* Form Fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-3)' }}>
             <Select id="ret-counterparty" label={isRu ? 'Клиент *' : 'Mijoz *'} value={counterpartyId} onChange={handleCounterpartyChange} options={cpOptions} />
             <Select id="ret-invoice" label={isRu ? 'Исходная продажа *' : 'Asl sotuv hujjati *'} value={invoiceId} onChange={handleInvoiceChange} options={invoiceOptions} />
             <Select id="ret-warehouse" label={isRu ? 'Склад (из продажи)' : 'Ombor (sotuvdagi)'} value={selectedInvoice?.warehouseId ?? ''} onChange={() => {}} options={whOptions} disabled />
@@ -896,7 +896,7 @@ export default function SalesReturnsPage() {
           size="md"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', padding: 14, borderRadius: 'var(--radius-md)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', padding: 14, borderRadius: 'var(--radius-md)' }}>
               <div>
                 <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', display: 'block' }}>{isRu ? 'Статус:' : 'Holati:'}</span>
                 <div style={{ marginTop: 2 }}>{getStatusBadge(selectedReturn.status)}</div>

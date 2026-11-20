@@ -609,7 +609,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
           {isRu ? 'Основные реквизиты' : 'Asosiy rekvizitlar'}
         </h3>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
           {/* Supplier */}
           <div>
             <Select
@@ -681,7 +681,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         </div>
 
         {/* Second Row: Reason, Act Number, Currency */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)', marginTop: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)', marginTop: '8px' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Причина возврата' : 'Qaytarish sababi'}
@@ -912,7 +912,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
       </Card>
 
       {/* Summary Totals and Actions Footer */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 'var(--space-6)' }}>
         {/* Counterparty Settlement Impact Card */}
         <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>

@@ -271,7 +271,7 @@ export default function PricesPage() {
         </Card>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 'var(--space-5)', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'var(--ux-split-side)', gap: 'var(--space-5)', alignItems: 'start' }}>
         {/* Price list tabs */}
         <Card style={{ padding: 'var(--space-3)' }}>
           <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>

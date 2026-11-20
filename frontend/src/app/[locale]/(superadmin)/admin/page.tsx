@@ -382,7 +382,7 @@ export default function SuperAdminTenantsPage() {
       </div>
 
       {/* KPI Metric Cards using official Card component */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
         {/* Card 1: Total MRR */}
         <Card>
           <div data-mrr-card>

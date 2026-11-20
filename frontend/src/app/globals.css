@@ -47,15 +47,15 @@
   --color-success-50: #f0fdf4;
   --color-success-100: #dcfce7;
   --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
+  --color-success-600: #15803d; /* AA as text on white and on -50 tints */
   --color-warning-50: #fffbeb;
   --color-warning-100: #fef3c7;
   --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
+  --color-warning-600: #b45309; /* AA as text */
   --color-error-50: #fef2f2;
   --color-error-100: #fee2e2;
   --color-error-500: #ef4444;
-  --color-error-600: #dc2626;
+  --color-error-600: #b91c1c; /* AA as text */
   --color-info-50: #eff6ff;
   --color-info-100: #dbeafe;
   --color-info-500: #3b82f6;
@@ -65,19 +65,19 @@
   --color-danger-50: #fef2f2;
   --color-danger-100: #fee2e2;
   --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
+  --color-danger-600: #b91c1c;
 
   /* Status tones used for borders (200) and text on tinted backgrounds (700+) */
   --color-success-200: #bbf7d0;
-  --color-success-700: #15803d;
+  --color-success-700: #166534;
   --color-warning-200: #fde68a;
-  --color-warning-700: #b45309;
+  --color-warning-700: #92400e;
   --color-warning-800: #92400e;
   --color-warning-900: #78350f;
   --color-error-200: #fecaca;
-  --color-error-700: #b91c1c;
+  --color-error-700: #991b1b;
   --color-danger-200: #fecaca;
-  --color-danger-700: #b91c1c;
+  --color-danger-700: #991b1b;
 
   /* Aliases used by components (follow the theme automatically) */
   --color-primary: var(--color-primary-600);
@@ -1074,3 +1074,11 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
 @media (max-width: 639px) {
   .doc-banner { padding: var(--space-3); }
 }
+
+/* ─── Counterparties: folders + list ─── */
+.cp-layout { display: grid; grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+@media (max-width: 1023px) { .cp-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* ─── Responsive split layouts (main + side) ─── */
+:root { --ux-split-2-1: minmax(0, 2fr) minmax(0, 1fr); --ux-split-side: minmax(240px, 280px) minmax(0, 1fr); }
+@media (max-width: 1023px) { :root { --ux-split-2-1: minmax(0, 1fr); --ux-split-side: minmax(0, 1fr); } }

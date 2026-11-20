@@ -203,7 +203,7 @@ export default function NewProductPage() {
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         {/* Basic Info */}
         <Card title={isRu ? 'Основная информация' : 'Asosiy Ma\'lumotlar'}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
             <Input
               id="prod-name-uz"
               label={isRu ? 'Название товара (узбекский)' : 'Tovar nomi (O‘zbekcha) *'}
@@ -258,7 +258,7 @@ export default function NewProductPage() {
 
         {/* Pricing & Units */}
         <Card title={isRu ? 'Цены и единицы измерения' : 'Narx va O\'lchov Birliklari'}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 'var(--space-4)' }}>
             <Select
               id="prod-unit"
               label={isRu ? 'Единица измерения' : 'O\'lchov birligi'}

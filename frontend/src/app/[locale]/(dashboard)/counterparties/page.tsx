@@ -411,12 +411,12 @@ export default function CounterpartiesPage() {
         </div>
         <Button onClick={handleOpenCreateModal} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Plus size={16} />
-          {isRu ? 'Новый контрагент' : 'Yangi Kontragent'}
+          {isRu ? 'Новый контрагент' : 'Yangi kontragent'}
         </Button>
       </div>
 
       {/* Main Two-Column Content Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px, 260px) 1fr', gap: 'var(--space-5)', alignItems: 'start' }}>
+      <div className="cp-layout">
         
         {/* Left Sidebar: Folders Panel */}
         <Card style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -579,9 +579,9 @@ export default function CounterpartiesPage() {
         </Card>
 
         {/* Right Main Panel: KPIs, Filters, Table */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 0 }}>
           {/* KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 'var(--space-3)' }}>
             {/* Customers */}
             <div
               style={{
@@ -740,6 +740,8 @@ export default function CounterpartiesPage() {
             borderRadius: 'var(--radius-lg, 10px)',
             padding: 4,
             width: 'fit-content',
+            maxWidth: '100%',
+            overflowX: 'auto',
           }}>
             {[
               {
@@ -1238,7 +1240,7 @@ export default function CounterpartiesPage() {
       {detailItem && (
         <Modal isOpen={true} onClose={() => setDetailItem(null)} title={`${isRu ? 'Профиль:' : 'Kontragent Profili:'} ${detailItem.name}`} size="lg">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-subtle)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 'var(--space-4)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-subtle)' }}>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Тип' : 'Turi'}</div>
                 <div style={{ marginTop: 4 }}>{getTypeBadge(detailItem.type)}</div>

@@ -245,7 +245,7 @@ export default function ProductsPage() {
           </h1>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <Button variant="ghost" size="sm" onClick={fetchCatalogData} disabled={productsQuery.isFetching}>
             <RefreshCw size={16} style={{ animation: productsQuery.isFetching ? 'spin 1s linear infinite' : undefined }} />
             {isRu ? 'Обновить' : 'Yangilash'}
@@ -272,7 +272,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Metrics Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-4)' }}>
         <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
           <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Package size={24} />
