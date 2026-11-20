@@ -1,7 +1,9 @@
 'use client';
 
 import { QuantityInput } from '@/components/ui/QuantityInput';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { readRemembered, remember } from '@/lib/usePersistentState';
+import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -160,6 +162,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [activeRowIndexForNewProduct, setActiveRowIndexForNewProduct] = useState<number | null>(null);
 
   const isReadOnly = docStatus === 'POSTED' || docStatus === 'CANCELLED';
+  /** Set on the first save/post attempt: missing required fields are then marked next to the field. */
+  const [attempted, setAttempted] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  // Bring a new error into view: the save buttons are in the sticky header, the message may be off-screen.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [error]);
 
   // Mark form as dirty on modification
   const markDirty = () => {
@@ -242,13 +251,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       .then(([suppliersRes, warehousesRes, productsRes]) => {
         const suppliers = (suppliersRes || []).filter((c) => c.type === 'SUPPLIER' || c.type === 'BOTH');
         setCounterparties(suppliers);
-        if (suppliers.length > 0 && !counterpartyId && !initialData) {
-          setCounterpartyId(suppliers[0].id);
-        }
+        // The supplier is always chosen by the user: a silent default books the debt to the wrong supplier.
 
         setWarehouses(warehousesRes || []);
         if (warehousesRes && warehousesRes.length > 0 && !warehouseId && !initialData) {
-          setWarehouseId(warehousesRes[0].id);
+          // Last warehouse used for a receipt on this browser, else the first one.
+          const last = readRemembered<string>('purchases.warehouseId', '');
+          setWarehouseId(warehousesRes.some((w) => w.id === last) ? last : warehousesRes[0].id);
         }
 
         // TZ "Ishlab chiqarish" 7: a finished product is never bought.
@@ -368,6 +377,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   // Save Document API call
   const saveDocument = async (): Promise<PurchaseReceipt | null> => {
     if (!token || !company) return null;
+    setAttempted(true);
     if (!counterpartyId) {
       setError(isRu ? 'Выберите контрагента' : 'Kontragentni tanlang');
       return null;
@@ -792,6 +802,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     }
   };
 
+  // Ctrl+S saves the draft, Ctrl+Enter posts and closes (only while the document is editable).
+  useDocumentShortcuts({ enabled: !isReadOnly && !loading, onSave: handleSaveDraft, onPost: () => handlePost(true) });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'var(--space-12)' }}>
       {/* Sticky Top Header & Toolbar */}
@@ -810,7 +823,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap', minWidth: 0 }}>
           <Button
             variant="ghost"
             size="sm"
@@ -821,17 +834,22 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           </Button>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2) var(--space-3)', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {mode === 'create' && !docNumber
                   ? isRu
                     ? 'Новый приходный документ'
-                    : 'Yangi Xarid Hujjati'
+                    : 'Yangi xarid hujjati'
                   : `${isRu ? 'Приходный документ' : 'Xarid hujjati'} ${docNumber}`}
               </h1>
               {getDocStatusBadge(docStatus)}
               {getPaymentBadge(paymentStatus)}
             </div>
+            {currency && totals.grandTotal > 0 && (
+              <div className="doc-live-total" aria-live="polite">
+                {isRu ? 'Итого' : 'Jami'}: <strong className="tabular-nums">{formatCurrency(totals.grandTotal, locale, currency)}</strong>
+              </div>
+            )}
           </div>
         </div>
 
@@ -839,13 +857,25 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           {!isReadOnly && (
             <>
+              {mode === 'edit' && receiptId && (
+                <Button
+                  variant="ghost"
+                  onClick={handleDeleteReceipt}
+                  disabled={loading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
+                >
+                  <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 onClick={handleSaveDraft}
-                disabled={loading}
+                loading={loading}
+                title="Ctrl+S"
+                aria-keyshortcuts="Control+S"
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <Save size={16} /> {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+                {!loading && <Save size={16} aria-hidden />} {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
               </Button>
               <Button
                 variant="secondary"
@@ -853,26 +883,18 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 disabled={loading}
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <CheckCircle2 size={16} /> {isRu ? 'Провести' : 'Tasdiqlash'}
+                <CheckCircle2 size={16} aria-hidden /> {isRu ? 'Провести' : 'Tasdiqlash'}
               </Button>
               <Button
                 onClick={() => handlePost(true)}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+                loading={loading}
+                loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}
+                title="Ctrl+Enter"
+                aria-keyshortcuts="Control+Enter"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-700)' }}
               >
-                <CheckCircle2 size={16} /> {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
+                {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
               </Button>
-
-              {mode === 'edit' && receiptId && (
-                <Button
-                  variant="danger"
-                  onClick={handleDeleteReceipt}
-                  disabled={loading}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Trash2 size={16} /> {isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
-                </Button>
-              )}
             </>
           )}
 
@@ -890,10 +912,18 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           {docStatus === 'POSTED' && (
             <>
               <Button
+                variant="ghost"
+                onClick={handleDeleteReceipt}
+                disabled={loading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
+              >
+                <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
+              <Button
                 variant="secondary"
                 onClick={handleUnpostToEdit}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-warning-600)', borderColor: 'var(--color-warning-600)', fontWeight: 600 }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-warning-700)', borderColor: 'var(--color-warning-600)', fontWeight: 600 }}
               >
                 <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
               </Button>
@@ -912,14 +942,14 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 onClick={() => setIsPayOpen(true)}
                 style={{
                   backgroundColor: 'var(--color-success-50)',
-                  color: 'var(--color-success-600)',
+                  color: 'var(--color-success-700)',
                   border: '1px solid var(--color-success-200)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
                 }}
               >
-                <CreditCard size={16} /> {isRu ? 'Оплатить' : 'To‘lash'}
+                <CreditCard size={16} aria-hidden /> {isRu ? 'Оплатить поставщику' : 'Yetkazib beruvchiga to‘lash'}
               </Button>
 
               <Button
@@ -940,20 +970,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 <RotateCcw size={16} /> {isRu ? 'Возврат' : 'Qaytarish'}
               </Button>
 
-              <Button
-                variant="danger"
-                onClick={handleDeleteReceipt}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Trash2 size={16} /> {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
             </>
           )}
 
           <Button
             variant="ghost"
             onClick={() => window.print()}
+            className="app-header-hide-sm"
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <Printer size={16} /> {isRu ? 'Печать' : 'Chop etish'}
@@ -981,7 +1004,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-500)', color: '#fff', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-700)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -990,16 +1013,16 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
       {/* Error notification banner */}
       {error && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <AlertCircle size={20} />
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
-        </Card>
+        <div ref={errorRef} role="alert" tabIndex={-1} className="doc-banner is-error">
+          <AlertCircle size={20} aria-hidden />
+          <span>{error}</span>
+        </div>
       )}
 
       {/* Document Primary Metadata Form Card */}
       <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-          {isRu ? 'Основная информация' : 'Asosiy Hujjat Ma’lumotlari'}
+          {isRu ? 'Основная информация' : 'Asosiy ma’lumotlar'}
         </h3>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
@@ -1011,6 +1034,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               value={counterpartyId}
               onChange={(val) => { markDirty(); setCounterpartyId(val); }}
               placeholder={isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}
+              error={attempted && !counterpartyId ? (isRu ? 'Выберите поставщика — на него запишется долг' : 'Yetkazib beruvchini tanlang — qarz shunga yoziladi') : undefined}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickSupplierOpen(true) : undefined}
               createNewLabel={isRu ? 'Добавить контрагента' : 'Kontragent qo‘shish'}
@@ -1043,8 +1067,9 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               label={isRu ? 'Склад *' : 'Ombor *'}
               options={warehouseOptions}
               value={warehouseId}
-              onChange={(val) => { markDirty(); setWarehouseId(val); }}
+              onChange={(val) => { markDirty(); setWarehouseId(val); remember('purchases.warehouseId', val); }}
               placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
+              error={attempted && !warehouseId ? (isRu ? 'Выберите склад' : 'Omborni tanlang') : undefined}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickWarehouseOpen(true) : undefined}
               createNewLabel={isRu ? 'Создать новый склад' : 'Yangi ombor qo‘shish'}
@@ -1089,6 +1114,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               options={CURRENCY_OPTIONS}
               value={currency}
               placeholder={isRu ? 'Валюта' : 'Valyuta'}
+              error={attempted && !currency ? (isRu ? 'Выберите валюту' : 'Valyutani tanlang') : undefined}
               onChange={(val) => {
                 markDirty();
                 setCurrency(val);
@@ -1195,13 +1221,16 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           </h3>
 
           {!isReadOnly && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <div style={{ position: 'relative', width: '240px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', flex: '1 1 280px', justifyContent: 'flex-end', minWidth: 0 }}>
+              <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: '1 1 240px', maxWidth: 360, minWidth: 0 }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                   <Input
                     value={barcodeSearch}
                     onChange={(e) => setBarcodeSearch(e.target.value)}
                     placeholder={isRu ? 'Штрих-код или SKU...' : 'Shtrix-kod yoki SKU...'}
+                    aria-label={isRu ? 'Штрих-код или SKU — Enter добавит товар' : 'Shtrix-kod yoki SKU — Enter tovarni qo‘shadi'}
+                    autoComplete="off"
+                    enterKeyHint="search"
                     style={{ paddingLeft: '32px' }}
                   />
                   <Barcode size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
@@ -1387,19 +1416,19 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>
-                  {isRu ? `Цена за ед. (${currency})` : `Birlik narxi (${currency})`}
+                  {isRu ? `Цена за ед.${currency ? ` (${currency})` : ''}` : `Birlik narxi${currency ? ` (${currency})` : ''}`}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '130px', whiteSpace: 'nowrap' }}>
-                  {isRu ? `Скидка (${currency})` : `Chegirma (${currency})`}
+                  {isRu ? `Скидка${currency ? ` (${currency})` : ''}` : `Chegirma${currency ? ` (${currency})` : ''}`}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px', whiteSpace: 'nowrap' }}>
-                  {isRu ? `Сумма НДС (${currency})` : `QQS summasi (${currency})`}
+                  {isRu ? `Сумма НДС${currency ? ` (${currency})` : ''}` : `QQS summasi${currency ? ` (${currency})` : ''}`}
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '180px', whiteSpace: 'nowrap' }}>
-                  {isRu ? `Итого (${currency})` : `Jami Summa (${currency})`}
+                  {isRu ? `Итого${currency ? ` (${currency})` : ''}` : `Jami Summa${currency ? ` (${currency})` : ''}`}
                 </th>
                 {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}></th>}
               </tr>
@@ -1552,13 +1581,13 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            <span>{isRu ? 'НДС total:' : 'QQS total:'}</span>
+            <span>{isRu ? 'Сумма НДС:' : 'QQS summasi:'}</span>
             <span className="tabular-nums" style={{ fontWeight: 500 }}>{currency ? formatCurrency(totals.vat, locale, currency) : '—'}</span>
           </div>
 
           <div style={{ borderTop: '2px solid var(--color-border-light)', paddingTop: 'var(--space-3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {isRu ? 'ИТОГО К ОПЛАТЕ:' : 'JAMI TO‘LANISHI KERAK:'}
+              {isRu ? 'Итого к оплате:' : 'Jami to‘lanishi kerak:'}
             </span>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
