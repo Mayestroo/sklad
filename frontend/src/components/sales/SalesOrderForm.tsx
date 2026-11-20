@@ -2,7 +2,8 @@
 
 import { productTypeLabel, semiFinishedLabel } from '@/lib/product-types';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import { type ComponentProps, useState, useEffect, useMemo } from 'react';
+import { type ComponentProps, useState, useEffect, useMemo, useRef } from 'react';
+import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -174,13 +175,11 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const effectiveWarehouseId =
     warehouseId || (mode === 'create' ? (warehouses[0]?.id ?? '') : '');
 
-  // Set default counterparty if empty in create mode
+  // The customer is always chosen by the user: a silent default puts the order on the wrong client.
+  const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!counterpartyId && counterparties.length > 0 && mode === 'create') {
-      const defaultCp = counterparties[0];
-      setCounterpartyId(defaultCp.id);
-    }
-  }, [counterpartyId, counterparties, mode]);
+    if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [error]);
 
   // Drawer handlers
   const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; balancesByCurrency?: CounterpartyDropdownItem['balancesByCurrency'] }) => {
@@ -363,6 +362,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   // Save Order
   const handleSave = async () => {
     setError(null);
+    if (!counterpartyId) {
+      setError(isRu ? 'Выберите клиента' : 'Mijozni tanlang');
+      return;
+    }
     if (!effectiveWarehouseId) {
       setError(isRu ? 'Выберите склад' : 'Omborni tanlang');
       return;
@@ -665,6 +668,9 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     description: `${productTypeLabel(p.type, locale)}${p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}`,
   }));
 
+  // Ctrl+S saves the order while it can be edited.
+  useDocumentShortcuts({ enabled: !isLocked && !loading, onSave: () => void handleSave() });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'var(--space-12)' }}>
       {/* Sticky Top Header & Toolbar */}
@@ -694,12 +700,12 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           </Button>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2) var(--space-3)', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {mode === 'create' && !orderNumber
                   ? isRu
                     ? 'Новый заказ покупателя'
-                    : 'Yangi Xaridor Buyurtmasi'
+                    : 'Yangi xaridor buyurtmasi'
                   : `${isRu ? 'Заказ покупателя' : 'Xaridor buyurtmasi'} ${orderNumber}`}
               </h1>
               <Badge variant={statusMeta.variant as ComponentProps<typeof Badge>['variant']}>
@@ -889,10 +895,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
       {/* Error Banner */}
       {error && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <AlertCircle size={20} />
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
-        </Card>
+        <div ref={errorRef} role="alert" tabIndex={-1} className="doc-banner is-error">
+          <AlertCircle size={20} aria-hidden />
+          <span>{error}</span>
+        </div>
       )}
 
       {/* Primary General Info */}

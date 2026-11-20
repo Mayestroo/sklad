@@ -166,6 +166,25 @@ try {
     log('posted, url:', new URL(page.url()).pathname);
     await shot('3-posted');
   }
+
+  if (flow === 'order') {
+    await signIn();
+    await page.goto(BASE + '/sales/orders/new', { waitUntil: 'networkidle' });
+    await shot('1-new');
+    await page.keyboard.press('Control+s');
+    await page.waitForTimeout(500);
+    log('empty save error:', (await page.locator('main [role=alert]').first().textContent().catch(() => 'none'))?.trim());
+    await pick(isRu ? 'Клиент' : 'Mijoz', 'Oila');
+    await pick(isRu ? 'Валюта' : 'Valyuta', 'UZS');
+    await pick(isRu ? 'Выберите товар' : 'Tovarni tanlang', isRu ? 'Мука' : 'Un oliy');
+    await page.getByLabel(isRu ? 'Количество для строки 1' : 'Miqdor 1').fill('4');
+    await page.waitForTimeout(300);
+    await shot('2-filled');
+    await page.keyboard.press('Control+s');
+    await page.waitForURL(/sales\/orders\/[0-9a-f-]{36}/, { timeout: 20000 });
+    log('saved order url:', new URL(page.url()).pathname);
+    await shot('3-saved');
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');
