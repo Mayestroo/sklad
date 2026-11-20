@@ -235,7 +235,7 @@ export default function StockTransfersPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
                   <th style={{ padding: '12px' }}>{isRu ? '№ ТРАНСФЕРА' : 'TRANSFER №'}</th>
@@ -249,19 +249,19 @@ export default function StockTransfersPage() {
               <tbody>
                 {transfers.map((tr) => (
                   <tr key={tr.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>
+                    <td data-primary style={{ padding: '12px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>
                       {tr.transferNumber}
                     </td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
+                    <td data-label={isRu ? 'ДАТА' : 'SANA'} style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
                       {formatDate(tr.transferDate, locale)}
                     </td>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
+                    <td data-label={isRu ? 'СКЛАД ОТПРАВИТЕЛЬ' : 'CHIQUVCHI OMBOR'} style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
                       {tr.sourceWarehouse?.name?.[locale] || tr.sourceWarehouse?.name?.ru || tr.sourceWarehouse?.name?.uz || 'Chiquvchi ombor'}
                     </td>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)', color: 'var(--color-primary-600)' }}>
+                    <td data-label={isRu ? 'СКЛАД ПОЛУЧАТЕЛЬ' : 'KIRUVCHI OMBOR'} style={{ padding: '12px', fontWeight: 'var(--font-medium)', color: 'var(--color-primary-600)' }}>
                       {tr.targetWarehouse?.name?.[locale] || tr.targetWarehouse?.name?.ru || tr.targetWarehouse?.name?.uz || 'Kiruvchi ombor'}
                     </td>
-                    <td style={{ padding: '12px' }}>{getStatusBadge(tr.status)}</td>
+                    <td data-label={isRu ? 'СТАТУС' : 'HOLATI'} style={{ padding: '12px' }}>{getStatusBadge(tr.status)}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
                       {tr.status === 'DRAFT' && (
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>

@@ -159,7 +159,7 @@ export default function SuppliersPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-xs)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-xs)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}>
                   <th style={{ padding: '12px' }}>{isRu ? 'НАИМЕНОВАНИЕ' : 'NOMI'}</th>
@@ -174,7 +174,7 @@ export default function SuppliersPage() {
                   const balances = (s.balancesByCurrency || []).filter((balance) => balance.supplierDebt !== 0);
                   return (
                     <tr key={s.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td style={{ padding: '12px', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
+                      <td data-primary style={{ padding: '12px', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
                         {s.name}
                         {s.type === 'BOTH' && (
                           <span style={{ marginLeft: '6px' }}>
@@ -182,11 +182,11 @@ export default function SuppliersPage() {
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: '12px', fontFamily: 'var(--font-mono)' }}>{s.inn || '—'}</td>
-                      <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
+                      <td data-label={isRu ? 'ИНН (STIR)' : 'STIR (INN)'} style={{ padding: '12px', fontFamily: 'var(--font-mono)' }}>{s.inn || '—'}</td>
+                      <td data-label={isRu ? 'ТЕЛЕФОН / АДРЕС' : 'TELEFON / MANZIL'} style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
                         {s.phone || '—'} {s.address ? `(${s.address})` : ''}
                       </td>
-                      <td
+                      <td data-label={isRu ? 'НАШ ДОЛГ' : 'BIZNING QARZIMIZ'}
                         style={{
                           padding: '12px',
                           textAlign: 'right',

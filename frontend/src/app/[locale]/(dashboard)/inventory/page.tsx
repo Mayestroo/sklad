@@ -280,7 +280,7 @@ export default function InventoryPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
                   <th style={{ padding: '12px' }}>MAHSULOT NOMI</th>
@@ -302,39 +302,39 @@ export default function InventoryPage() {
                   const isLow = product.isLowStock;
                   return (
                     <tr key={product.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)' }}>
+                      <td data-primary style={{ padding: '12px', fontWeight: 'var(--font-semibold)' }}>
                         {getLocalizedName(product.name)}
                         <div style={{ fontSize: 'var(--text-xs)', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
                           {productTypeLabel(product.type, locale)}
                           {product.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}
                         </div>
                       </td>
-                      <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+                      <td data-label="SKU" style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
                         {product.sku}
                       </td>
-                      <td style={{ padding: '12px', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                      <td data-label="SHTRIX-KOD" style={{ padding: '12px', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
                         {product.barcode || '—'}
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label="KATEGORIYA" style={{ padding: '12px' }}>
                         {product.category ? (
                           <Badge variant="neutral">{getLocalizedName(product.category.name)}</Badge>
                         ) : (
                           '—'
                         )}
                       </td>
-                      <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
+                      <td data-label="O&apos;LCHOV BIRLIGI" style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
                         {unitLabel(product.unitOfMeasure, locale)}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
+                      <td data-label="TAN NARXI" style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency)}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
+                      <td data-label="SOTUV NARXI" style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
                         {formatPriceOrUnset(Number(product.salePrice), locale, product.salePriceCurrency)}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
+                      <td data-label="JAMI QOLDIQ" style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
                         {formatQuantity(Number(product.totalStock ?? 0))} {unitLabel(product.unitOfMeasure, locale)}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <td data-label="HOLAT" style={{ padding: '12px', textAlign: 'center' }}>
                         {isLow ? (
                           <Badge variant="warning">Kam qoldiq</Badge>
                         ) : (

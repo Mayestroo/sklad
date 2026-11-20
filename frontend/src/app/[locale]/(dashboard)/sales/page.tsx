@@ -24,6 +24,7 @@ import {
   Pencil,
   RotateCcw,
   Filter,
+  ChevronDown,
   Search,
   RefreshCw,
   TrendingUp,
@@ -60,6 +61,7 @@ export default function SalesPage() {
 
   // Filters
   const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [counterpartyId, setCounterpartyId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [status, setStatus] = useState('');
@@ -220,7 +222,7 @@ export default function SalesPage() {
       </div>
 
       {/* Summary KPI Cards (Purchases style) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
+      <div className="ux-kpi-grid">
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ShoppingCart size={24} />
@@ -308,6 +310,7 @@ export default function SalesPage() {
             <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
             <input
               placeholder={isRu ? 'Введите № накладной, договор или комментарий...' : 'Qidirish uchun faktura raqami yoki izohni kiriting...'}
+              aria-label={isRu ? 'Поиск' : 'Qidiruv'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -324,8 +327,22 @@ export default function SalesPage() {
           </div>
         </div>
 
+        {/* Phones: filters fold away so the list is in view */}
+        <button
+          type="button"
+          className="ux-filters-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="list-filters"
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <Filter size={15} aria-hidden /> {isRu ? 'Фильтры' : 'Filtrlar'}
+          <ChevronDown size={15} aria-hidden style={{ marginLeft: 'auto', transform: filtersOpen ? 'rotate(180deg)' : 'none' }} />
+        </button>
+
         {/* Row 2: Filters Grid */}
         <div
+          id="list-filters"
+          className={`ux-filters${filtersOpen ? ' is-open' : ''}`}
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 180px), 1fr))',
@@ -427,7 +444,7 @@ export default function SalesPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -465,7 +482,7 @@ export default function SalesPage() {
                       transition: 'background-color 0.15s ease',
                     }}
                   >
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-primary style={{ padding: '12px 16px' }}>
                       <Link href={`/sales/${inv.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
                         {inv.invoiceNumber || (inv as { docNumber?: string } | null | undefined)?.docNumber}
                       </Link>
@@ -474,29 +491,29 @@ export default function SalesPage() {
                       </div>
                     </td>
 
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-label={isRu ? 'КЛИЕНТ' : 'MIJOZ'} style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
                         {inv.counterparty?.name || '—'}
                       </div>
                     </td>
 
-                    <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
+                    <td data-label={isRu ? 'СКЛАД' : 'OMBOR'} style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
                       {getLocalizedName(inv.warehouse?.name)}
                     </td>
 
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
+                    <td data-label={isRu ? 'ОБЩАЯ СУММА' : 'JAMI SUMMA'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
                       {formatCurrency(Number(inv.totalAmount || 0), locale, inv.currency)}
                     </td>
 
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
+                    <td data-label={isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'} style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
                       {formatCurrency(Number(inv.paidAmount || 0), locale, inv.currency)}
                     </td>
 
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <td data-label={isRu ? 'СТАТУС' : 'HOLATI'} style={{ padding: '12px 16px', textAlign: 'center' }}>
                       {getDocStatusBadge(inv.status)}
                     </td>
 
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <td data-label={isRu ? 'ОПЛАТА' : 'TO‘LOV'} style={{ padding: '12px 16px', textAlign: 'center' }}>
                       {getPaymentBadge(inv.paymentStatus || 'UNPAID')}
                     </td>
 

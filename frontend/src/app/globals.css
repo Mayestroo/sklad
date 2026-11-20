@@ -1088,6 +1088,21 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
 @media (max-width: 639px) {
   .ux-kpi-grid { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
   .ux-kpi-grid > * { padding: var(--space-3) !important; gap: var(--space-2) !important; min-width: 0; }
-  .ux-kpi-grid > * > :first-child:not(:only-child) { width: 32px !important; height: 32px !important; }
-  .ux-kpi-grid > * svg { width: 18px; height: 18px; }
+  /* decorative tile icons make room for the figures */
+  .ux-kpi-grid div:has(> svg:only-child) { display: none !important; }
+}
+
+/* ─── List filters: folded on phones ─── */
+.ux-filters-toggle { display: none; }
+@media (max-width: 639px) {
+  .ux-filters-toggle {
+    display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 40px;
+    padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md);
+    background: var(--color-bg-tertiary); color: var(--color-text-primary); font-weight: var(--font-medium); cursor: pointer;
+  }
+  .ux-filters:not(.is-open) { display: none !important; }
+}
+@media (max-width: 639px) {
+  .ux-kpi-grid * { min-width: 0; overflow-wrap: break-word; }
+  .ux-kpi-grid [style*='--text-xl'], .ux-kpi-grid [style*='--text-2xl'], .ux-kpi-grid [style*='--text-lg'] { font-size: var(--text-base) !important; line-height: 1.3; }
 }

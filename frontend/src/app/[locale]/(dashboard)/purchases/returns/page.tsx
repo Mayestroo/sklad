@@ -289,7 +289,7 @@ export default function ReturnsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
+      <div className="ux-kpi-grid">
         <Card style={{ padding: 'var(--space-4)' }}>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {isRu ? 'Всего возвращено (Проведено)' : 'Jami Qaytarilgan (Tasdiqlangan)'}
@@ -388,7 +388,7 @@ export default function ReturnsPage() {
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+                <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
                       <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
@@ -428,7 +428,7 @@ export default function ReturnsPage() {
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
-                        <td style={{ padding: '12px 16px' }}>
+                        <td data-primary style={{ padding: '12px 16px' }}>
                           <Link href={`/purchases/returns/${ret.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
                             {ret.returnNumber}
                           </Link>
@@ -436,16 +436,16 @@ export default function ReturnsPage() {
                             {formatDate(ret.returnDate, locale)}
                           </div>
                         </td>
-                        <td style={{ padding: '12px 16px', color: ret.actNumber ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>
+                        <td data-label={isRu ? 'Номер акта' : 'Akt raqami'} style={{ padding: '12px 16px', color: ret.actNumber ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>
                           {ret.actNumber || '—'}
                         </td>
-                        <td style={{ padding: '12px 16px', fontWeight: 500 }}>
+                        <td data-label={isRu ? 'Поставщик' : 'Yetkazib beruvchi'} style={{ padding: '12px 16px', fontWeight: 500 }}>
                           {ret.counterparty?.name || '—'}
                         </td>
-                        <td style={{ padding: '12px 16px' }}>
+                        <td data-label={isRu ? 'Склад' : 'Ombor'} style={{ padding: '12px 16px' }}>
                           {getProductName(ret.warehouse?.name)}
                         </td>
-                        <td style={{ padding: '12px 16px' }}>
+                        <td data-label={isRu ? 'Основание' : 'Asos xarid'} style={{ padding: '12px 16px' }}>
                           {ret.receipt ? (
                             <Link href={`/purchases/${ret.receipt.id}`} style={{ fontSize: '12px', color: 'var(--color-primary-600)' }}>
                               № {ret.receipt.docNumber}
@@ -456,15 +456,15 @@ export default function ReturnsPage() {
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: '12px 16px', maxWidth: '200px' }}>
+                        <td data-label={isRu ? 'Причина' : 'Sababi'} style={{ padding: '12px 16px', maxWidth: '200px' }}>
                           <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                             {ret.reason || '—'}
                           </span>
                         </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>
+                        <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>
                           {formatCurrency(Number(ret.totalAmount), locale, ret.currency)}
                         </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                        <td data-label={isRu ? 'Статус' : 'Holati'} style={{ padding: '12px 16px', textAlign: 'center' }}>
                           {renderStatusBadge(ret.status)}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'right' }}>

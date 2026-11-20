@@ -313,7 +313,7 @@ export default function SalesOrdersPage() {
       </div>
 
       {/* Summary KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-4)' }}>
+      <div className="ux-kpi-grid">
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
           <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ClipboardList size={22} />
@@ -506,7 +506,7 @@ export default function SalesOrdersPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -543,7 +543,7 @@ export default function SalesOrdersPage() {
                         transition: 'background-color 0.15s ease',
                       }}
                     >
-                      <td style={{ padding: '12px 16px' }}>
+                      <td data-primary style={{ padding: '12px 16px' }}>
                         <Link href={`/sales/orders/${ord.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
                           {ord.orderNumber}
                         </Link>
@@ -552,13 +552,13 @@ export default function SalesOrdersPage() {
                         </div>
                       </td>
 
-                      <td style={{ padding: '12px 16px' }}>
+                      <td data-label={isRu ? 'КЛИЕНТ' : 'MIJOZ'} style={{ padding: '12px 16px' }}>
                         <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
                           {ord.counterparty?.name || '—'}
                         </div>
                       </td>
 
-                      <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <td data-label={isRu ? 'СТАТУС' : 'HOLAT'} style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'inline-block', position: 'relative' }}>
                           {/* Clickable badge — opens dropdown if operator and has next statuses */}
                           <button
@@ -655,15 +655,15 @@ export default function SalesOrdersPage() {
                       </td>
 
 
-                      <td style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                      <td data-label={isRu ? 'УСЛОВИЕ ОПЛАТЫ' : 'TO‘LOV SHARTI'} style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                         {ord.paymentCondition === 'PREPAID_100' ? (isRu ? '100% Предоплата' : '100% Oldindan') : ord.paymentCondition === 'PARTIAL' ? `${ord.requiredPaymentPercent}% ${isRu ? 'Предоплата' : 'Avans'}` : (isRu ? 'Кредит' : 'Kredit')}
                       </td>
 
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
+                      <td data-label={isRu ? 'СУММА ЗАКАЗА' : 'JAMI SUMMA'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
                         {formatCurrency(Number(ord.totalAmount || 0), locale, ord.currency)}
                       </td>
 
-                      <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
+                      <td data-label={isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'} style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
                         {formatCurrency(Number(ord.paidAmount || 0), locale, ord.currency)}
                       </td>
 

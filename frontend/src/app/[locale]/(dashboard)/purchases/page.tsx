@@ -20,6 +20,7 @@ import {
   CreditCard,
   Eye,
   Filter,
+  ChevronDown,
   Pencil,
   Plus,
   RefreshCw,
@@ -60,6 +61,7 @@ export default function PurchasesPage() {
 
   // Filters
   const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [counterpartyId, setCounterpartyId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [status, setStatus] = useState('');
@@ -216,7 +218,7 @@ export default function PurchasesPage() {
       </div>
 
       {/* Summary KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
+      <div className="ux-kpi-grid">
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ShoppingBag size={24} />
@@ -302,6 +304,7 @@ export default function PurchasesPage() {
             <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
             <input
               placeholder={isRu ? 'Введите № документа, ГТД или комментарий...' : 'Qidirish uchun hujjat raqami, GTD yoki izohni kiriting...'}
+              aria-label={isRu ? 'Поиск' : 'Qidiruv'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{
@@ -319,8 +322,22 @@ export default function PurchasesPage() {
           </div>
         </div>
 
+        {/* Phones: filters fold away so the list is in view */}
+        <button
+          type="button"
+          className="ux-filters-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="list-filters"
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <Filter size={15} aria-hidden /> {isRu ? 'Фильтры' : 'Filtrlar'}
+          <ChevronDown size={15} aria-hidden style={{ marginLeft: 'auto', transform: filtersOpen ? 'rotate(180deg)' : 'none' }} />
+        </button>
+
         {/* Row 2: Filters Grid */}
         <div
+          id="list-filters"
+          className={`ux-filters${filtersOpen ? ' is-open' : ''}`}
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 190px), 1fr))',
@@ -411,7 +428,7 @@ export default function PurchasesPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
                   <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -454,7 +471,7 @@ export default function PurchasesPage() {
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-primary style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-primary-600)' }}>
                         {r.docNumber}
                       </div>
@@ -462,7 +479,7 @@ export default function PurchasesPage() {
                         {formatDate(r.docDate, locale)}
                       </div>
                     </td>
-                    <td style={{ padding: '12px 16px' }}>
+                    <td data-label={isRu ? 'ПОСТАВЩИК' : 'YETKAZIB BERUVCHI'} style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{r.counterparty?.name || '—'}</div>
                       {r.contractNumber && (
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
@@ -470,29 +487,29 @@ export default function PurchasesPage() {
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
+                    <td data-label={isRu ? 'СКЛАД' : 'OMBOR'} style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
                       {getProductName(r.warehouse?.name)}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <td data-label={isRu ? 'ГТД / ИМПОРТ' : 'GTD / IMPORT'} style={{ padding: '12px 16px', textAlign: 'center' }}>
                       {r.gtdNumber ? (
                         <Badge variant="warning">{r.gtdNumber}</Badge>
                       ) : (
                         <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
+                    <td data-label={isRu ? 'ОБЩАЯ СУММА' : 'JAMI SUMMA'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
                       {formatCurrency(Number(r.totalAmount), locale, r.currency)}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? 'var(--color-warning-600)' : 'var(--color-text-tertiary)' }} className="tabular-nums">
+                    <td data-label={isRu ? 'ДОП. РАСХОДЫ' : 'XARAJATLAR'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? 'var(--color-warning-600)' : 'var(--color-text-tertiary)' }} className="tabular-nums">
                       {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), locale, r.currency)}` : '—'}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <td data-label={isRu ? 'СТАТУС' : 'HOLATI'} style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                         {getDocStatusBadge(r.status)}
                         {r.returnStatus && getReturnBadge(r.returnStatus)}
                       </div>
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <td data-label={isRu ? 'ОПЛАТА' : 'TO‘LOV'} style={{ padding: '12px 16px', textAlign: 'center' }}>
                       {getPaymentBadge(r.paymentStatus)}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
