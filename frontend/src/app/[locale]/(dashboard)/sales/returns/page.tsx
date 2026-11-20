@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { localIsoDate } from '@/lib/date-range';
 
 interface SalesReturnRow {
   id: string;
@@ -134,7 +135,7 @@ export default function SalesReturnsPage() {
   // A return is booked in the invoice's own warehouse and currency
   const selectedInvoice = invoices.find((inv) => inv.id === invoiceId);
   const returnCurrency = selectedInvoice?.currency;
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
+  const [returnDate, setReturnDate] = useState(localIsoDate(new Date()));
   const [reason, setReason] = useState('');
   const [items, setItems] = useState<ReturnableItemRow[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);

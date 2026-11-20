@@ -31,6 +31,7 @@ import { Link } from '@/i18n/navigation';
 import { ReturnActModal } from '@/components/purchases/ReturnActModal';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { localIsoDate } from '@/lib/date-range';
 
 export default function ReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -197,7 +198,7 @@ export default function ReturnsPage() {
     link.setAttribute('href', encodedUri);
     link.setAttribute(
       'download',
-      `purchase_returns_${new Date().toISOString().split('T')[0]}.csv`,
+      `purchase_returns_${localIsoDate(new Date())}.csv`,
     );
     document.body.appendChild(link);
     link.click();

@@ -13,6 +13,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { PurchaseReceipt } from '@shared/types';
 import { formatCurrency, formatUnitCost, errorMessage, type LocalizedName } from '@/lib/utils';
+import { localIsoDate } from '@/lib/date-range';
 
 interface CreateReturnModalProps {
   isOpen: boolean;
@@ -31,7 +32,7 @@ export function CreateReturnModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnDate, setReturnDate] = useState(localIsoDate(new Date()));
   const [actNumber, setActNumber] = useState('');
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');

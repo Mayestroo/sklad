@@ -49,6 +49,7 @@ import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
 import { convertCostPriceToDocumentCurrency } from '@/lib/inventory-cost';
 import { unitLabel } from '@/lib/units';
 import { stockLabel } from '@/lib/stock-label';
+import { localIsoDate } from '@/lib/date-range';
 
 interface CounterpartyOption {
   id: string;
@@ -154,7 +155,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [docDate, setDocDate] = useState(
-    initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))
+    initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : localIsoDate(new Date()))
   );
   const [currency, setCurrency] = useState(initialDocumentCurrency(initialData?.currency, salesDefault));
   const [exchangeRate, setExchangeRate] = useState<number | string>(

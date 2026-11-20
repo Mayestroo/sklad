@@ -14,6 +14,7 @@ import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import { CreditCard } from 'lucide-react';
+import { localIsoDate } from '@/lib/date-range';
 
 interface PayPurchaseModalProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export function PayPurchaseModal({
   const [amount, setAmount] = useState<number>(0);
   const [exchangeRate, setExchangeRate] = useState('');
   const [paymentDate, setPaymentDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
+    localIsoDate(new Date())
   );
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,7 +56,7 @@ export function PayPurchaseModal({
       setAmount(remaining);
       setExchangeRate('');
       setNote('');
-      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentDate(localIsoDate(new Date()));
       setError('');
     }
 

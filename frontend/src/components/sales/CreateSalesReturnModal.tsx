@@ -31,6 +31,7 @@ interface ReturnableItemRow {
   vatRate?: number | string | null;
 }
 import { RotateCcw, AlertCircle, Barcode, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { localIsoDate } from '@/lib/date-range';
 
 interface CreateSalesReturnModalProps {
   isOpen: boolean;
@@ -72,7 +73,7 @@ export function CreateSalesReturnModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnDate, setReturnDate] = useState(localIsoDate(new Date()));
   const [reason, setReason] = useState('');
   const [returnItems, setReturnItems] = useState<ReturnableItemState[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);

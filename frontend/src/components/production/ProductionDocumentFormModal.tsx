@@ -19,6 +19,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { DateRangeField } from '@/components/ui/DateRangeField';
 import { COST_TYPES, localName, type CostType, type Locale, type ProductionDocument, type Recipe } from './types';
 import { thStyle } from './TableParts';
+import { localIsoDate } from '@/lib/date-range';
 
 interface PreviewMaterial {
   productId: string;
@@ -56,7 +57,7 @@ export interface ProductionDocumentFormModalProps {
   onSaved: (document: ProductionDocument, message: string) => void | Promise<void>;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localIsoDate(new Date());
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 /** «+ Ishlab chiqarish hujjati» (TZ "Ishlab chiqarish" 5.1). */

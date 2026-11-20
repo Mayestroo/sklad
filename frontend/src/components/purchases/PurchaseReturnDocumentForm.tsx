@@ -30,6 +30,7 @@ import { PurchaseReceipt, PurchaseReturn } from '@shared/types';
 import { ReturnActModal } from './ReturnActModal';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { localIsoDate } from '@/lib/date-range';
 
 interface CounterpartyOption {
   id: string;
@@ -85,7 +86,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
   const [returnDate, setReturnDate] = useState(
     initialData?.returnDate
       ? new Date(initialData.returnDate).toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0],
+      : localIsoDate(new Date()),
   );
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');

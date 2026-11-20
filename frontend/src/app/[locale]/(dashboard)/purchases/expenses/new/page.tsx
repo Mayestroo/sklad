@@ -42,6 +42,7 @@ import {
 } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import { unitLabel, quantityWithUnit } from '@/lib/units';
+import { localIsoDate } from '@/lib/date-range';
 
 interface Counterparty {
   id: string;
@@ -72,7 +73,7 @@ export default function NewExpensePage() {
   const [, setLoadingRefs] = useState(true);
 
   // Form State
-  const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
+  const [docDate, setDocDate] = useState(localIsoDate(new Date()));
   const [expenseType, setExpenseType] = useState<ExpenseType>('TRANSPORT');
   const [counterpartyId, setCounterpartyId] = useState('');
   const [quickSupplierOpen, setQuickSupplierOpen] = useState(false);

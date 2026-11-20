@@ -46,6 +46,7 @@ import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCoun
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { isPurchasable } from '@/lib/product-types';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
+import { localIsoDate } from '@/lib/date-range';
 
 interface CounterpartyOption {
   id: string;
@@ -108,7 +109,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [docDate, setDocDate] = useState(
-    initialData?.docDate ? initialData.docDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
+    initialData?.docDate ? initialData.docDate.slice(0, 10) : localIsoDate(new Date())
   );
   const [currency, setCurrency] = useState(initialData?.currency || '');
   const [exchangeRate, setExchangeRate] = useState(Number(initialData?.exchangeRate) || 1);

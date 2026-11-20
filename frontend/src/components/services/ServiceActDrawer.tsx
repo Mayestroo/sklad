@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import type { ServiceActDetail } from '@/lib/service-act';
 import type { Counterparty, Product } from '@shared/types';
+import { localIsoDate } from '@/lib/date-range';
 
 interface ServiceActDrawerProps {
   isOpen: boolean;
@@ -58,7 +59,7 @@ export function ServiceActDrawer({
 
   const [type, setType] = useState<'PROVIDED' | 'RECEIVED'>(defaultType);
   const [counterpartyId, setCounterpartyId] = useState('');
-  const [actDate, setActDate] = useState(new Date().toISOString().split('T')[0]);
+  const [actDate, setActDate] = useState(localIsoDate(new Date()));
   const [currency, setCurrency] = useState(initialData?.currency || '');
   // Empty until the user enters a rate: a foreign-currency act must never default to 1
   const [exchangeRate, setExchangeRate] = useState<number | ''>('');
@@ -110,7 +111,7 @@ export function ServiceActDrawer({
       setActDate(
         initialData.actDate
           ? new Date(initialData.actDate).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0],
+          : localIsoDate(new Date()),
       );
       setCurrency(initialData.currency || '');
       setExchangeRate(initialData.exchangeRate != null ? Number(initialData.exchangeRate) : '');
@@ -138,7 +139,7 @@ export function ServiceActDrawer({
     } else {
       setType(defaultType);
       setCounterpartyId('');
-      setActDate(new Date().toISOString().split('T')[0]);
+      setActDate(localIsoDate(new Date()));
       setCurrency('');
       setExchangeRate('');
       setExternalNumber('');
