@@ -185,6 +185,19 @@ try {
     log('saved order url:', new URL(page.url()).pathname);
     await shot('3-saved');
   }
+
+  if (flow === 'product') {
+    await signIn();
+    await page.goto(BASE + '/products/new', { waitUntil: 'networkidle' });
+    log('name focused:', await page.locator('#prod-name-uz').evaluate((el) => el === document.activeElement));
+    await page.keyboard.type(isRu ? 'Тест товар ' + Date.now() % 1000 : 'Test tovar ' + Date.now() % 1000);
+    await page.getByRole('button', { name: isRu ? 'Сохранить и добавить ещё' : 'Saqlash va yana qo‘shish' }).click();
+    await page.waitForTimeout(1500);
+    log('toast:', (await page.locator('.app-toast-region').textContent().catch(() => 'none'))?.trim());
+    log('name cleared + focused:', await page.locator('#prod-name-uz').evaluate((el) => el.value === '' && el === document.activeElement));
+    log('error:', (await page.locator('main [role=alert]').first().textContent().catch(() => 'none'))?.trim());
+    await shot('1-after-save');
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');

@@ -2,7 +2,8 @@
 
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
+import { toast } from '@/context/ToastContext';
 import { useLocale } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -53,6 +54,8 @@ export default function NewProductPage() {
   const [salePriceCurrency, setSalePriceCurrency] = useState<'USD' | 'UZS' | ''>(salesDefault ?? '');
   const [vatRate, setVatRate] = useState<number>(12);
   const [minStockAlert, setMinStockAlert] = useState<number>(5);
+  /** "Save and add another": stay on the form for the next item (category, unit, currencies kept). */
+  const addAnother = useRef(false);
 
   useEffect(() => {
     if (!token || !company) return;
@@ -140,6 +143,20 @@ export default function NewProductPage() {
         }),
       });
 
+      const savedName = nameUz || nameRu;
+      if (addAnother.current) {
+        addAnother.current = false;
+        toast.success(isRu ? `Товар «${savedName}» сохранён. Введите следующий.` : `«${savedName}» saqlandi. Keyingisini kiriting.`);
+        setNameUz('');
+        setNameRu('');
+        setSku('');
+        setBarcode('');
+        setCostPrice(0);
+        setSalePrice(0);
+        document.getElementById('prod-name-uz')?.focus();
+        return;
+      }
+      toast.success(isRu ? `Товар «${savedName}» создан` : `«${savedName}» tovari yaratildi`);
       router.push('/products');
     } catch (err) {
       setError(errorMessage(err) || (isRu ? 'Ошибка создания товара' : 'Tovar yaratishda xatolik'));
@@ -185,24 +202,24 @@ export default function NewProductPage() {
         </Link>
         <div>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Карточка нового товара' : 'Yangi Mahsulot Kartochkasi'}
+            {isRu ? 'Карточка нового товара' : 'Yangi tovar kartochkasi'}
           </h1>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {isRu ? 'Создание номенклатурной карточки (на узбекском и русском)' : 'Nomenklatura kartasini yaratish (O‘zbek va Rus tillarida)'}
+            {isRu ? 'Название на двух языках; поля со * обязательны' : 'Nom ikki tilda; * belgili maydonlar majburiy'}
           </p>
         </div>
       </div>
 
       {error && (
-        <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', border: '1px solid var(--color-error-100)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <AlertCircle size={18} />
+        <div role="alert" className="doc-banner is-error">
+          <AlertCircle size={18} aria-hidden />
           <span>{error}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         {/* Basic Info */}
-        <Card title={isRu ? 'Основная информация' : 'Asosiy Ma\'lumotlar'}>
+        <Card title={isRu ? 'Основная информация' : 'Asosiy ma’lumotlar'}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
             <Input
               id="prod-name-uz"
@@ -210,7 +227,8 @@ export default function NewProductPage() {
               required={!isRu}
               value={nameUz}
               onChange={(e) => setNameUz(e.target.value)}
-              placeholder="Например: Paxta yog'i 5L"
+              placeholder={isRu ? 'Например: Paxta yog‘i 5L' : 'Masalan: Paxta yog‘i 5L'}
+              autoFocus
             />
             <Input
               id="prod-name-ru"
@@ -218,7 +236,7 @@ export default function NewProductPage() {
               required={isRu}
               value={nameRu}
               onChange={(e) => setNameRu(e.target.value)}
-              placeholder="Например: Хлопковое масло 5Л"
+              placeholder={isRu ? 'Например: Хлопковое масло 5Л' : 'Masalan: Хлопковое масло 5Л'}
             />
 
             <Select
@@ -244,20 +262,20 @@ export default function NewProductPage() {
               label={isRu ? 'SKU (Артикул / Код) (необязательно)' : 'SKU (Artikul / Kodu) (ixtiyoriy)'}
               value={sku}
               onChange={(e) => setSku(e.target.value)}
-              placeholder="Например: OIL-5L-001"
+              placeholder={isRu ? 'Например: OIL-5L-001' : 'Masalan: OIL-5L-001'}
             />
             <Input
               id="prod-barcode"
               label={isRu ? 'Штрихкод (Barcode)' : 'Shtrix-kod (Barcode)'}
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
-              placeholder="Например: 4780012345678"
+              placeholder={isRu ? 'Например: 4780012345678' : 'Masalan: 4780012345678'}
             />
           </div>
         </Card>
 
         {/* Pricing & Units */}
-        <Card title={isRu ? 'Цены и единицы измерения' : 'Narx va O\'lchov Birliklari'}>
+        <Card title={isRu ? 'Цены и единицы измерения' : 'Narx va o‘lchov birliklari'}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 'var(--space-4)' }}>
             <Select
               id="prod-unit"
@@ -328,15 +346,18 @@ export default function NewProductPage() {
         </Card>
 
         {/* Submit */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <Link href="/products">
             <Button variant="secondary" type="button">
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
           </Link>
-          <Button variant="primary" type="submit" disabled={loading}>
-            <Save size={18} />
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+          <Button variant="secondary" type="submit" disabled={loading} onClick={() => { addAnother.current = true; }}>
+            {isRu ? 'Сохранить и добавить ещё' : 'Saqlash va yana qo‘shish'}
+          </Button>
+          <Button variant="primary" type="submit" loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} onClick={() => { addAnother.current = false; }}>
+            {!loading && <Save size={18} aria-hidden />}
+            {isRu ? 'Сохранить' : 'Saqlash'}
           </Button>
         </div>
       </form>
