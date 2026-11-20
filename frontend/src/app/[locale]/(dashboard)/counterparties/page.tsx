@@ -679,7 +679,7 @@ export default function CounterpartiesPage() {
                   {summary?.receivables.count ?? 0} {isRu ? 'кл.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-success-600)', fontWeight: 600, marginBottom: 2 }}>+ HAQDORLIK</div>
+              <div style={{ fontSize: '11px', color: 'var(--color-success-600)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '+ Дебиторка' : '+ Haqdorlik'}</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-success-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.receivables.byCurrency}
@@ -720,7 +720,7 @@ export default function CounterpartiesPage() {
                   {summary?.payables.count ?? 0} {isRu ? 'пост.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-error-600)', fontWeight: 600, marginBottom: 2 }}>− QARZDORLIK</div>
+              <div style={{ fontSize: '11px', color: 'var(--color-error-600)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '− Кредиторка' : '− Qarzdorlik'}</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-error-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.payables.byCurrency}
@@ -894,7 +894,7 @@ export default function CounterpartiesPage() {
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Папка' : 'Papka'}</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'ИНН / STIR' : 'STIR / INN'}</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Телефон' : 'Telefon'}</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Qarz balansi' : 'Qarz balansi'}</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Баланс расчётов' : 'Qarz balansi'}</th>
                       <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Amallar' : 'Amallar'}</th>
                     </tr>
                   </thead>
@@ -948,20 +948,24 @@ export default function CounterpartiesPage() {
                                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
                                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                               >
-                                {balances.map((balance) => (
-                                  <div key={balance.currency} style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto', gap: 8, fontSize: 'var(--text-xs)' }}>
-                                    <strong>{balance.currency}</strong>
-                                    <span title={isRu ? 'Клиентская сторона' : 'Mijoz tomoni'} style={{ color: balance.customerDebt >= 0 ? 'var(--color-success-600)' : 'var(--color-info-600)' }}>
-                                      {isRu ? 'Кл.' : 'M.'} {formatCurrency(balance.customerDebt, locale, balance.currency)}
-                                    </span>
-                                    <span title={isRu ? 'Сторона поставщика' : 'Ta’minotchi tomoni'} style={{ color: balance.supplierDebt >= 0 ? 'var(--color-error-600)' : 'var(--color-info-600)' }}>
-                                      {isRu ? 'Пост.' : 'T.'} {formatCurrency(balance.supplierDebt, locale, balance.currency)}
-                                    </span>
-                                    <strong style={{ color: balance.netBalance >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
-                                      {isRu ? 'Нетто' : 'Net'} {formatCurrency(balance.netBalance, locale, balance.currency)}
-                                    </strong>
-                                  </div>
-                                ))}
+                                {balances.map((balance) => {
+                                  // One plain line per currency (ADR 0023: never summed across currencies);
+                                  // the customer/supplier split stays in the tooltip.
+                                  const net = Number(balance.netBalance) || 0;
+                                  const detail = `${isRu ? 'Как клиент' : 'Mijoz sifatida'}: ${formatCurrency(balance.customerDebt, locale, balance.currency)} · ${isRu ? 'Как поставщик' : 'Yetkazib beruvchi sifatida'}: ${formatCurrency(balance.supplierDebt, locale, balance.currency)}`;
+                                  return (
+                                    <div key={balance.currency} title={detail} style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 'var(--text-xs)', whiteSpace: 'nowrap' }}>
+                                      <span style={{ color: 'var(--color-text-secondary)' }}>
+                                        {net > 0 ? (isRu ? 'Нам должны' : 'Bizga qarz') : net < 0 ? (isRu ? 'Мы должны' : 'Bizning qarz') : (isRu ? 'Расчёты закрыты' : 'Hisob yopiq')}
+                                      </span>
+                                      {net !== 0 && (
+                                        <strong className="tabular-nums" style={{ fontSize: 'var(--text-sm)', color: net > 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
+                                          {formatCurrency(Math.abs(net), locale, balance.currency)}
+                                        </strong>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             );
                           })()}
