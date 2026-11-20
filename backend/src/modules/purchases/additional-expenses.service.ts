@@ -846,11 +846,14 @@ export class AdditionalExpensesService {
         });
       }
 
-      // Update PurchaseReceipt total additional expenses
+      // The receipt total is in the receipt currency (ADR 0023): add the
+      // expense converted to it, the same amount cancelling removes.
       await tx.purchaseReceipt.update({
         where: { tenantId, id: expense.receiptId },
         data: {
-          additionalExpensesTotal: { increment: capitalizedTotal },
+          additionalExpensesTotal: {
+            increment: expenseInReceiptCurrency(expense, expense.receipt),
+          },
         },
       });
 
@@ -1051,6 +1054,7 @@ export class AdditionalExpensesService {
       include: {
         items: true,
         counterparty: true,
+        receipt: { select: { currency: true, exchangeRate: true } },
       },
     });
 
@@ -1266,11 +1270,15 @@ export class AdditionalExpensesService {
         }
       }
 
-      // Revert PurchaseReceipt additionalExpensesTotal
+      // Revert PurchaseReceipt additionalExpensesTotal by exactly what
+      // posting added, in the receipt currency (posting used to add the UZS
+      // figure and this used to subtract the expense-currency figure).
       await tx.purchaseReceipt.update({
         where: { tenantId, id: expense.receiptId },
         data: {
-          additionalExpensesTotal: { decrement: totalAmount },
+          additionalExpensesTotal: {
+            decrement: expenseInReceiptCurrency(expense, expense.receipt),
+          },
         },
       });
 
@@ -1364,4 +1372,34 @@ function allocationQuantity(item: {
     );
   }
   return quantity;
+}
+
+/**
+ * An Additional Expense amount in its receipt's currency, for the receipt's
+ * `additionalExpensesTotal` (ADR 0023: one document, one currency). Same
+ * currency → the amount itself; otherwise it is converted explicitly through
+ * UZS at the two documents' own rates. Posting and cancelling both use it, so
+ * the receipt total returns to where it was.
+ */
+export function expenseInReceiptCurrency(
+  expense: { amount: unknown; currency: string; exchangeRate: unknown },
+  receipt: { currency: string; exchangeRate: unknown } | null | undefined,
+): number {
+  if (!receipt) {
+    throw new BadRequestException(
+      "Qo'shimcha xarajatning xaridi topilmadi / Приход для дополнительного расхода не найден",
+    );
+  }
+  const amount = Number(expense.amount);
+  if (expense.currency === receipt.currency) {
+    return Math.round(amount * 100) / 100;
+  }
+  const rateOf = (doc: { currency: string; exchangeRate: unknown }) =>
+    requireExchangeRateForCurrency(
+      doc.currency,
+      doc.currency === 'UZS' || doc.exchangeRate == null
+        ? undefined
+        : Number(doc.exchangeRate),
+    );
+  return Math.round(((amount * rateOf(expense)) / rateOf(receipt)) * 100) / 100;
 }
