@@ -27,9 +27,10 @@ describe('financeQuickAction (B13)', () => {
 /** No DOM test runner in this project: the wiring is checked in the source. */
 describe('B13 wiring', () => {
   test('the Sales menu has a selling-expense entry pointing to finance, not to purchase landed cost', () => {
-    const sidebar = read('../components/layout/Sidebar.tsx');
-    const sales = sidebar.slice(sidebar.indexOf('const salesSubItems'), sidebar.indexOf('const settingsSubItems'));
-    assert.match(sales, /href: SALES_EXPENSE_HREF, label: t\('salesExpenses'\)/);
+    // The sidebar renders the shared navigation config (lib/navigation.ts).
+    const nav = read('./navigation.ts');
+    const sales = nav.slice(nav.indexOf("prefix: '/sales'"), nav.indexOf("prefix: '/purchases'"));
+    assert.match(sales, /href: SALES_EXPENSE_HREF, label: 'salesExpenses'/);
     assert.doesNotMatch(sales, /purchases\/expenses/);
   });
 

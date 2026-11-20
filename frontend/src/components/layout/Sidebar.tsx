@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { SALES_EXPENSE_HREF } from '@/lib/finance-quick-action';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -22,14 +21,57 @@ import {
   Receipt,
   RotateCcw,
   ChevronDown,
-  ChevronRight,
   GitBranch,
   ShieldCheck,
   CreditCard,
   Briefcase,
   Scale,
+  Tags,
+  Handshake,
+  ArrowLeftRight,
+  FileText,
+  Calculator,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import {
+  NAV_SECTIONS,
+  isLeafActive,
+  isNavGroup,
+  type NavGroup,
+  type NavIconName,
+  type NavLeaf,
+} from '@/lib/navigation';
+
+export const NAV_ICONS: Record<NavIconName, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  analytics: BarChart3,
+  sales: ShoppingCart,
+  orders: ClipboardList,
+  returns: RotateCcw,
+  prices: Tags,
+  customers: UserCheck,
+  crm: Handshake,
+  expenses: Receipt,
+  purchases: ShoppingBag,
+  suppliers: UserCheck,
+  counterparties: Users,
+  products: PackageCheck,
+  services: Briefcase,
+  stock: Package,
+  transfers: ArrowLeftRight,
+  documents: FileText,
+  production: Factory,
+  finance: Wallet,
+  accounting: BookOpen,
+  opening: Scale,
+  users: UserCheck,
+  settings: Settings,
+  branches: GitBranch,
+  cost: Calculator,
+  security: ShieldCheck,
+  billing: CreditCard,
+};
 
 /**
  * Open state of a menu group: open when the current route is inside it, and
@@ -47,119 +89,66 @@ function useGroupOpen(active: boolean) {
   return [open, setOpen] as const;
 }
 
-export function Sidebar() {
+function NavItem({ leaf, nested, onNavigate }: { leaf: NavLeaf; nested?: boolean; onNavigate?: () => void }) {
   const t = useTranslations('nav');
-  const locale = useLocale() as 'uz' | 'ru';
-  const isRu = locale === 'ru';
   const pathname = usePathname();
-  const { company } = useAuth();
-
-  // Dropdown states
-  const isPurchasesActive = pathname.startsWith('/purchases');
-  const [isPurchasesOpen, setIsPurchasesOpen] = useGroupOpen(isPurchasesActive);
-
-  const isSalesActive = pathname.startsWith('/sales');
-  const [isSalesOpen, setIsSalesOpen] = useGroupOpen(isSalesActive);
-
-  const isSettingsActive = pathname.startsWith('/settings');
-  const [isSettingsOpen, setIsSettingsOpen] = useGroupOpen(isSettingsActive);
-
-  // Sub-items for Purchases
-  const purchasesSubItems = [
-    { href: '/purchases', label: t('purchases'), icon: ShoppingBag },
-    { href: '/purchases/expenses', label: t('purchasesExpenses'), icon: Receipt },
-    { href: '/purchases/returns', label: t('purchasesReturns'), icon: RotateCcw },
-    { href: '/purchases/suppliers', label: t('suppliers'), icon: UserCheck },
-  ];
-
-  // Sub-items for Sales
-  const salesSubItems = [
-    { href: '/sales/orders', label: t('salesOrders'), icon: ClipboardList },
-    { href: '/sales', label: t('salesOverview'), icon: ShoppingCart },
-    { href: '/sales/returns', label: t('salesReturns'), icon: RotateCcw },
-    { href: '/sales/customers', label: t('customers'), icon: UserCheck },
-    // B13: selling expenses are period expenses booked in Finance, not
-    // purchase landed cost.
-    { href: SALES_EXPENSE_HREF, label: t('salesExpenses'), icon: Receipt },
-  ];
-
-  // Sub-items for Settings
-  const settingsSubItems = [
-    { href: '/settings/branches', label: isRu ? 'Филиалы и склады' : 'Filial va omborlar', icon: GitBranch },
-    { href: '/settings/sales', label: isRu ? 'Настройки продаж' : 'Savdo sozlamalari', icon: ShoppingCart },
-    { href: '/settings/production', label: isRu ? 'Себестоимость' : 'Tannarx sozlamasi', icon: Factory },
-    { href: '/settings/security', label: isRu ? 'Безопасность' : 'Xavfsizlik', icon: ShieldCheck },
-    { href: '/settings/billing', label: isRu ? 'Тариф и оплата' : 'Tarif va to‘lov', icon: CreditCard },
-  ];
-
-  const itemBaseStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-sans)',
-    fontSize: 'var(--text-sm)',
-    lineHeight: 'var(--leading-normal)',
-    borderRadius: 'var(--radius-md)',
-    transition: 'all var(--transition-fast)',
-  };
-
-  const renderNavLink = (href: string, label: string, Icon: LucideIcon, exact = false) => {
-    const isActive = exact ? pathname === href : pathname === href || (href !== '/' && pathname.startsWith(href));
-
-    return (
-      <Link
-        key={href}
-        href={href}
-        style={{
-          ...itemBaseStyle,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          padding: '9px 14px',
-          fontWeight: isActive ? 'var(--font-semibold)' : 'var(--font-medium)',
-          color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-          backgroundColor: isActive ? 'var(--color-primary-50)' : 'transparent',
-          textDecoration: 'none',
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive) {
-            e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-            e.currentTarget.style.color = 'var(--color-text-primary)';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = 'var(--color-text-secondary)';
-          }
-        }}
-      >
-        <Icon
-          size={18}
-          style={{
-            color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)',
-            flexShrink: 0,
-          }}
-        />
-        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {label}
-        </span>
-      </Link>
-    );
-  };
-
-  const renderSectionHeader = (title: string) => (
-    <div
-      style={{
-        padding: '14px 14px 4px 14px',
-        fontSize: '11px',
-        fontWeight: 'var(--font-bold)',
-        color: 'var(--color-text-tertiary)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        userSelect: 'none',
-      }}
+  const active = isLeafActive(leaf, pathname);
+  const Icon = NAV_ICONS[leaf.icon];
+  return (
+    <Link
+      href={leaf.href}
+      className={`app-nav-link${active ? ' is-active' : ''}${nested ? ' is-nested' : ''}`}
+      aria-current={active ? 'page' : undefined}
+      onClick={onNavigate}
     >
-      {title}
+      <Icon size={nested ? 16 : 18} aria-hidden className="app-nav-icon" />
+      <span className="app-nav-label">{t(leaf.label)}</span>
+    </Link>
+  );
+}
+
+function NavGroupItem({ group, onNavigate }: { group: NavGroup; onNavigate?: () => void }) {
+  const t = useTranslations('nav');
+  const pathname = usePathname();
+  const active = pathname === group.prefix || pathname.startsWith(`${group.prefix}/`);
+  const [open, setOpen] = useGroupOpen(active);
+  const Icon = NAV_ICONS[group.icon];
+  const listId = `nav-group-${group.prefix.replace(/\W/g, '')}`;
+  return (
+    <div>
+      <button
+        type="button"
+        className={`app-nav-link app-nav-group${active ? ' is-group-active' : ''}${active && !open ? ' is-active' : ''}`}
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <Icon size={18} aria-hidden className="app-nav-icon" />
+        <span className="app-nav-label">{t(group.label)}</span>
+        <ChevronDown size={15} aria-hidden className="app-nav-chevron" style={{ transform: open ? 'none' : 'rotate(-90deg)' }} />
+      </button>
+      {open && (
+        <div id={listId} className="app-nav-sub">
+          {group.items.map((leaf) => (
+            <NavItem key={leaf.href} leaf={leaf} nested onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+interface SidebarProps {
+  /** Phone/tablet drawer state (ignored on wide screens, where it is always shown). */
+  mobileOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
+  const t = useTranslations('nav');
+  const tUx = useTranslations('ux');
+  const locale = useLocale() as 'uz' | 'ru';
+  const { company } = useAuth();
 
   const companyDisplayName =
     typeof company?.name === 'string'
@@ -167,385 +156,32 @@ export function Sidebar() {
       : company?.name?.[locale] || company?.name?.uz || company?.slug || 'Sklad ERP';
 
   return (
-    <aside
-      style={{
-        width: 'var(--sidebar-width)',
-        height: '100vh',
-        backgroundColor: 'var(--color-bg-sidebar)',
-        borderRight: '1px solid var(--color-border-light)',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        zIndex: 30,
-      }}
-    >
-      {/* Brand Header */}
-      <div
-        style={{
-          height: 'var(--header-height)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          padding: '0 var(--space-5)',
-          borderBottom: '1px solid var(--color-border-light)',
-        }}
-      >
-        <div
-          style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--color-primary-600)',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 'var(--font-bold)',
-            fontSize: 'var(--text-base)',
-            boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
-            flexShrink: 0,
-          }}
-        >
+    <aside className={`app-sidebar${mobileOpen ? ' is-open' : ''}`} aria-label={tUx('mainNav')}>
+      <div className="app-sidebar-brand">
+        <div className="app-sidebar-logo" aria-hidden>
           <Package size={20} />
         </div>
-        <div style={{ minWidth: 0, overflow: 'hidden' }}>
-          <div
-            style={{
-              fontWeight: 'var(--font-bold)',
-              fontSize: 'var(--text-base)',
-              color: 'var(--color-text-primary)',
-              lineHeight: 1.2,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {companyDisplayName}
-          </div>
+        <div className="app-sidebar-company" title={companyDisplayName}>
+          {companyDisplayName}
         </div>
+        <button type="button" className="app-sidebar-close" onClick={onClose} aria-label={tUx('closeMenu')} title={tUx('closeMenu')}>
+          <X size={18} aria-hidden />
+        </button>
       </div>
 
-      {/* Navigation List organized into logical ERP sections */}
-      <nav
-        style={{
-          flex: 1,
-          padding: 'var(--space-3) var(--space-3)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '2px',
-          overflowY: 'auto',
-        }}
-      >
-        {/* ─── 1. ASOSIY / MAIN ───────────────────────── */}
-        {renderSectionHeader(isRu ? 'Основное' : 'Asosiy')}
-        {renderNavLink('/', t('dashboard'), LayoutDashboard, true)}
-        {renderNavLink('/analytics', t('analytics'), BarChart3)}
-
-        {/* ─── 2. SAVDO VA XARID / COMMERCIAL ──────────── */}
-        {renderSectionHeader(isRu ? 'Торговля и Закупки' : 'Savdo va Xarid')}
-
-        {/* Sales Dropdown */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setIsSalesOpen((prev) => !prev)}
-            style={{
-              ...itemBaseStyle,
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '9px 14px',
-              fontWeight: isSalesActive ? 'var(--font-semibold)' : 'var(--font-medium)',
-              color: isSalesActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-              backgroundColor: isSalesActive && !isSalesOpen ? 'var(--color-primary-50)' : 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              if (!isSalesActive || isSalesOpen) {
-                e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSalesActive || isSalesOpen) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <ShoppingCart size={18} style={{ color: isSalesActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-              <span>{t('sales')}</span>
-            </div>
-            {isSalesOpen ? (
-              <ChevronDown size={15} style={{ color: 'var(--color-text-tertiary)' }} />
-            ) : (
-              <ChevronRight size={15} style={{ color: 'var(--color-text-tertiary)' }} />
+      <nav className="app-nav">
+        {NAV_SECTIONS.map((section) => (
+          <div key={section.title} className="app-nav-section">
+            <div className="app-nav-section-title">{t(section.title)}</div>
+            {section.entries.map((entry) =>
+              isNavGroup(entry) ? (
+                <NavGroupItem key={entry.prefix} group={entry} onNavigate={onClose} />
+              ) : (
+                <NavItem key={entry.href} leaf={entry} onNavigate={onClose} />
+              ),
             )}
-          </button>
-
-          {/* Sales Sub-items */}
-          {isSalesOpen && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-                marginTop: '2px',
-                marginLeft: '14px',
-                paddingLeft: '12px',
-                borderLeft: '2px solid var(--color-border-light)',
-              }}
-            >
-              {salesSubItems.map((sub) => {
-                const SubIcon = sub.icon;
-                const isSubActive =
-                  sub.href === '/sales'
-                    ? pathname === '/sales'
-                    : pathname === sub.href || pathname.startsWith(`${sub.href}/`);
-
-                return (
-                  <Link
-                    key={sub.href}
-                    href={sub.href}
-                    style={{
-                      ...itemBaseStyle,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: '7px 10px',
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
-                      color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                      backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
-                      textDecoration: 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSubActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSubActive) e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <SubIcon size={14} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-                    <span>{sub.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Purchases Dropdown */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setIsPurchasesOpen((prev) => !prev)}
-            style={{
-              ...itemBaseStyle,
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '9px 14px',
-              fontWeight: isPurchasesActive ? 'var(--font-semibold)' : 'var(--font-medium)',
-              color: isPurchasesActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-              backgroundColor: isPurchasesActive && !isPurchasesOpen ? 'var(--color-primary-50)' : 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              if (!isPurchasesActive || isPurchasesOpen) {
-                e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isPurchasesActive || isPurchasesOpen) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <ShoppingBag size={18} style={{ color: isPurchasesActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-              <span>{t('purchases')}</span>
-            </div>
-            {isPurchasesOpen ? (
-              <ChevronDown size={15} style={{ color: 'var(--color-text-tertiary)' }} />
-            ) : (
-              <ChevronRight size={15} style={{ color: 'var(--color-text-tertiary)' }} />
-            )}
-          </button>
-
-          {/* Purchases Sub-items */}
-          {isPurchasesOpen && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-                marginTop: '2px',
-                marginLeft: '14px',
-                paddingLeft: '12px',
-                borderLeft: '2px solid var(--color-border-light)',
-              }}
-            >
-              {purchasesSubItems.map((sub) => {
-                const SubIcon = sub.icon;
-                const isSubActive =
-                  sub.href === '/purchases'
-                    ? pathname === '/purchases'
-                    : pathname === sub.href || pathname.startsWith(`${sub.href}/`);
-
-                return (
-                  <Link
-                    key={sub.href}
-                    href={sub.href}
-                    style={{
-                      ...itemBaseStyle,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: '7px 10px',
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
-                      color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                      backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
-                      textDecoration: 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSubActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSubActive) e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <SubIcon size={14} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-                    <span>{sub.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Counterparties */}
-        {renderNavLink('/counterparties', t('counterparties'), Users)}
-
-        {/* ─── 3. OMBOR VA MAHSULOTLAR / INVENTORY ─────── */}
-        {renderSectionHeader(isRu ? 'Склад и Товары' : 'Ombor va Mahsulotlar')}
-        {renderNavLink('/products', t('products'), PackageCheck)}
-        {renderNavLink('/services', t('services'), Briefcase)}
-        {renderNavLink('/inventory', t('inventory'), Package)}
-        {renderNavLink('/production', t('production'), Factory)}
-
-        {/* ─── 4. MOLIYA VA BUXGALTERIYA / FINANCE ─────── */}
-        {renderSectionHeader(isRu ? 'Финансы и Бухгалтерия' : 'Moliya va Buxgalteriya')}
-        {renderNavLink('/finance', t('finance'), Wallet)}
-        {renderNavLink('/accounting', t('accounting'), BookOpen)}
-        {renderNavLink(
-          '/opening-balances',
-          isRu ? 'Начальные остатки' : 'Boshlang‘ich qoldiqlar',
-          Scale,
-        )}
-
-        {/* ─── 5. BOSHQARUV VA SOZLAMALAR / SETTINGS ───── */}
-        {renderSectionHeader(isRu ? 'Управление и Настройки' : 'Boshqaruv va Sozlamalar')}
-        {renderNavLink('/users', t('users'), UserCheck)}
-
-        {/* Settings Dropdown Group */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setIsSettingsOpen((prev) => !prev)}
-            style={{
-              ...itemBaseStyle,
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '9px 14px',
-              fontWeight: isSettingsActive ? 'var(--font-semibold)' : 'var(--font-medium)',
-              color: isSettingsActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-              backgroundColor: isSettingsActive && !isSettingsOpen ? 'var(--color-primary-50)' : 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              if (!isSettingsActive || isSettingsOpen) {
-                e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isSettingsActive || isSettingsOpen) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <Settings size={18} style={{ color: isSettingsActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-              <span>{t('settings')}</span>
-            </div>
-            {isSettingsOpen ? (
-              <ChevronDown size={15} style={{ color: 'var(--color-text-tertiary)' }} />
-            ) : (
-              <ChevronRight size={15} style={{ color: 'var(--color-text-tertiary)' }} />
-            )}
-          </button>
-
-          {/* Settings Sub-items */}
-          {isSettingsOpen && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-                marginTop: '2px',
-                marginLeft: '14px',
-                paddingLeft: '12px',
-                borderLeft: '2px solid var(--color-border-light)',
-              }}
-            >
-              {settingsSubItems.map((sub) => {
-                const SubIcon = sub.icon;
-                const isSubActive =
-                  pathname === sub.href || pathname.startsWith(`${sub.href}/`);
-
-                return (
-                  <Link
-                    key={sub.href}
-                    href={sub.href}
-                    style={{
-                      ...itemBaseStyle,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: '7px 10px',
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: isSubActive ? 'var(--font-semibold)' : 'var(--font-medium)',
-                      color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                      backgroundColor: isSubActive ? 'var(--color-primary-50)' : 'transparent',
-                      textDecoration: 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSubActive) e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSubActive) e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <SubIcon size={14} style={{ color: isSubActive ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)' }} />
-                    <span>{sub.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          </div>
+        ))}
       </nav>
     </aside>
   );

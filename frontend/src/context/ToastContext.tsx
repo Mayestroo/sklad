@@ -3,7 +3,15 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { ToastContainer, ToastItem, ToastType } from '@/components/ui/Toast';
 
-type ToastInput = string | { message: string; title?: string; duration?: number };
+type ToastInput =
+  | string
+  | {
+      message: string;
+      title?: string;
+      duration?: number;
+      /** Optional button, e.g. "Undo": runs and closes the toast. */
+      action?: { label: string; onClick: () => void };
+    };
 
 interface ToastContextType {
   toasts: ToastItem[];
@@ -40,7 +48,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const item: ToastItem =
       typeof input === 'string'
         ? { id, type, message: input }
-        : { id, type, message: input.message, title: input.title, duration: input.duration };
+        : { id, type, message: input.message, title: input.title, duration: input.duration, action: input.action };
 
     setToasts((prev) => [...prev, item]);
     return id;

@@ -1,11 +1,14 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { ImpersonationBanner } from './ImpersonationBanner';
+import { GoToPalette } from './GoToPalette';
+import { ShortcutsHelp, isTypingTarget } from './ShortcutsHelp';
 import LoginPage from '@/app/[locale]/(auth)/login/page';
 
 interface AppShellProps {
@@ -15,6 +18,33 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
+  const tUx = useTranslations('ux');
+  const [navOpen, setNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // Close the phone drawer when the route changes (adjusted during render).
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
+    if (navOpen) setNavOpen(false);
+  }
+
+  // Global shortcuts: Ctrl/⌘+K opens "Go to"; Esc closes the phone drawer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K' || e.code === 'KeyK')) {
+        e.preventDefault();
+        setPaletteOpen(true);
+      } else if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTypingTarget(e.target) && !document.querySelector('[role="dialog"]')) {
+        e.preventDefault();
+        setHelpOpen(true);
+      } else if (e.key === 'Escape' && navOpen) {
+        setNavOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
 
   const isAuthPage = pathname?.includes('/login') || pathname?.includes('/register');
   const isAdminPage = pathname?.includes('/admin');
@@ -28,6 +58,7 @@ export function AppShell({ children }: AppShellProps) {
   if (isLoading) {
     return (
       <div
+        role="status"
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -39,7 +70,7 @@ export function AppShell({ children }: AppShellProps) {
           fontWeight: 'var(--font-medium)',
         }}
       >
-        Yuklanmoqda...
+        {tUx('loading')}
       </div>
     );
   }
@@ -54,20 +85,23 @@ export function AppShell({ children }: AppShellProps) {
     return <>{children}</>;
   }
 
-  // Main Platform Layout (renders only when authenticated on tenant pages)
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-bg-primary)' }}>
-      {/* Fixed Sidebar */}
-      <Sidebar />
+    <div className="app-shell">
+      <a href="#main-content" className="app-skip-link">
+        {tUx('skipToContent')}
+      </a>
+      <Sidebar mobileOpen={navOpen} onClose={() => setNavOpen(false)} />
+      {navOpen && <div className="app-nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden />}
 
-      {/* Main Content Area */}
-      <div style={{ marginLeft: 'var(--sidebar-width)', flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className="app-shell-main">
         <ImpersonationBanner />
-        <Header />
-        <main style={{ flex: 1, padding: 'var(--space-6)', maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}>
+        <Header onOpenMenu={() => setNavOpen(true)} onOpenGoTo={() => setPaletteOpen(true)} />
+        <main id="main-content" tabIndex={-1} className="app-shell-content">
           {children}
         </main>
       </div>
+      <GoToPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

@@ -1,11 +1,15 @@
 'use client';
 
 import { ButtonHTMLAttributes, ReactNode } from 'react';
+import { Loader2 } from 'lucide-react';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   children: ReactNode;
+  /** Request in flight: disables the button, shows a spinner and, if given, `loadingText`. */
+  loading?: boolean;
+  loadingText?: ReactNode;
 }
 
 export function Button({
@@ -13,9 +17,12 @@ export function Button({
   size = 'md',
   children,
   style,
-  disabled,
+  disabled: disabledProp,
+  loading = false,
+  loadingText,
   ...props
 }: ButtonProps) {
+  const disabled = disabledProp || loading;
   const getVariantStyles = () => {
     switch (variant) {
       case 'primary':
@@ -45,7 +52,7 @@ export function Button({
       case 'danger':
         return {
           backgroundColor: 'var(--color-error-600)',
-          color: '#ffffff',
+          color: 'var(--color-text-inverse)',
           border: 'none',
         };
     }
@@ -67,6 +74,7 @@ export function Button({
       type={props.type || 'button'}
       disabled={disabled}
       aria-disabled={disabled}
+      aria-busy={loading || undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -84,7 +92,8 @@ export function Button({
       }}
       {...props}
     >
-      {children}
+      {loading && <Loader2 size={size === 'sm' ? 14 : 16} className="app-spinner" aria-hidden />}
+      {loading && loadingText ? loadingText : children}
     </button>
   );
 }
