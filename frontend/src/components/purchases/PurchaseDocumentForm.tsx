@@ -1510,6 +1510,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         min="0"
                         max="100"
                         value={item.vatRate}
+                        aria-label={`${isRu ? 'НДС % для строки' : 'QQS %'} ${idx + 1}`}
                         onChange={(e) => handleItemChange(idx, 'vatRate', Number(e.target.value))}
                         style={{ textAlign: 'right' }}
                         disabled={isReadOnly}
