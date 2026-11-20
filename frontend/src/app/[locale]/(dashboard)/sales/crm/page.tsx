@@ -238,7 +238,7 @@ export default function CrmKanbanPage() {
           {tCommon('loading')}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)', overflowX: 'auto', paddingBottom: 'var(--space-4)' }}>
+        <div tabIndex={0} role="region" aria-label={isRu ? 'Воронка сделок' : 'Bitimlar voronkasi'} style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)', overflowX: 'auto', paddingBottom: 'var(--space-4)' }}>
           {STAGES.map((stg) => {
             const deals = kanbanData[stg.slug] || [];
             // Per currency (ADR 0023); legacy deals without a currency stay apart.
