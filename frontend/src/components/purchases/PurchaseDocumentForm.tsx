@@ -42,6 +42,7 @@ import { PayPurchaseModal } from './PayPurchaseModal';
 import { CreateReturnModal } from './CreateReturnModal';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
+import { isPurchasable } from '@/lib/product-types';
 import { CreateWarehouseDrawer } from '@/components/warehouses/CreateWarehouseDrawer';
 
 interface CounterpartyOption {
@@ -250,7 +251,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           setWarehouseId(warehousesRes[0].id);
         }
 
-        setProducts(productsRes || []);
+        // TZ "Ishlab chiqarish" 7: a finished product is never bought.
+        setProducts((productsRes || []).filter(isPurchasable));
       })
       .catch((err) => console.error('Data load error:', err));
   }, [token, company, locale, counterpartyId, warehouseId, initialData]);
@@ -1630,6 +1632,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           onClose={() => setIsQuickProductOpen(false)}
           initialSkuOrBarcode={quickProductSearch}
           initialType={quickProductType}
+          allowedTypes={['PRODUCT', 'RAW_MATERIAL', 'SERVICE']}
           onSuccess={handleProductAdded}
         />
       )}

@@ -31,6 +31,12 @@ describe('ProductsService', () => {
     productBatch: {
       count: jest.fn(),
     },
+    productionRecipe: { count: jest.fn().mockResolvedValue(0) },
+    productionRecipeItem: { count: jest.fn().mockResolvedValue(0) },
+    productionDocument: { count: jest.fn().mockResolvedValue(0) },
+    productionMaterialLine: { count: jest.fn().mockResolvedValue(0) },
+    productUnit: { deleteMany: jest.fn(), createMany: jest.fn() },
+    $transaction: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -43,6 +49,17 @@ describe('ProductsService', () => {
 
     service = module.get<ProductsService>(ProductsService);
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(
+      (callback: (tx: typeof mockPrisma) => unknown) => callback(mockPrisma),
+    );
+    for (const model of [
+      mockPrisma.productionRecipe,
+      mockPrisma.productionRecipeItem,
+      mockPrisma.productionDocument,
+      mockPrisma.productionMaterialLine,
+    ]) {
+      model.count.mockResolvedValue(0);
+    }
   });
 
   it('should be defined', () => {
@@ -371,6 +388,91 @@ describe('ProductsService', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('finished products and units (TZ Ishlab chiqarish 3, 8)', () => {
+    beforeEach(() => {
+      mockPrisma.company.findUnique.mockResolvedValue({ settings: {} });
+      mockPrisma.product.create.mockImplementation((args: unknown) => args);
+    });
+
+    it('a finished product never takes a typed cost', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      const created = (await service.create('t-1', {
+        name: { uz: 'Osh', ru: 'Плов' },
+        type: 'FINISHED_PRODUCT',
+        costPrice: 5000,
+        costPriceCurrency: 'UZS',
+        isSemiFinished: true,
+      })) as unknown as { data: Record<string, unknown> };
+      expect(created.data).toEqual(
+        expect.objectContaining({
+          type: 'FINISHED_PRODUCT',
+          costPrice: 0,
+          costPriceCurrency: 'UZS',
+          isSemiFinished: true,
+        }),
+      );
+      expect(String(created.data.sku)).toMatch(/^FIN-/);
+    });
+
+    it('the semi-finished flag only exists on finished products', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      const created = (await service.create('t-1', {
+        name: { uz: 'Un', ru: 'Мука' },
+        type: 'RAW_MATERIAL',
+        isSemiFinished: true,
+      })) as unknown as { data: Record<string, unknown> };
+      expect(created.data.isSemiFinished).toBe(false);
+    });
+
+    it('stores extra units and refuses a duplicate of the base unit', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      const created = (await service.create('t-1', {
+        name: { uz: 'Un', ru: 'Мука' },
+        type: 'RAW_MATERIAL',
+        unitOfMeasure: 'kg',
+        units: [{ name: 'qop', factor: 50 }],
+      })) as unknown as { data: { units: { create: unknown[] } } };
+      expect(created.data.units.create).toEqual([
+        { name: 'qop', factor: 50, tenantId: 't-1' },
+      ]);
+      await expect(
+        service.create('t-1', {
+          name: { uz: 'Un', ru: 'Мука' },
+          unitOfMeasure: 'kg',
+          units: [{ name: 'g', factor: 0.001 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('the type cannot change once there is a recipe or a stock movement', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue({
+        id: 'p-1',
+        type: 'PRODUCT',
+        unitOfMeasure: 'piece',
+        costPrice: 0,
+        costPriceCurrency: 'UZS',
+        costPriceExchangeRate: 1,
+        salePrice: 0,
+      });
+      mockPrisma.productionRecipe.count.mockResolvedValue(1);
+      mockPrisma.productBatch.count.mockResolvedValue(0);
+      mockPrisma.purchaseReceiptItem.count.mockResolvedValue(0);
+      mockPrisma.salesInvoiceItem.count.mockResolvedValue(0);
+      (mockPrisma.stockLevel as Record<string, jest.Mock>).count = jest
+        .fn()
+        .mockResolvedValue(0);
+      await expect(
+        service.update('t-1', 'p-1', { type: 'FINISHED_PRODUCT' }),
+      ).rejects.toThrow(/retsepturasi bor/);
+
+      mockPrisma.productionRecipe.count.mockResolvedValue(0);
+      mockPrisma.productBatch.count.mockResolvedValue(2);
+      await expect(
+        service.update('t-1', 'p-1', { type: 'FINISHED_PRODUCT' }),
+      ).rejects.toThrow(/ombor harakati/);
     });
   });
 });

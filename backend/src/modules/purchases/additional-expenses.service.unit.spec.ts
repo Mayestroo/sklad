@@ -251,6 +251,8 @@ describe('AdditionalExpensesService Unit Tests', () => {
       },
       // lockDocumentStatus: the posted draft is still a draft.
       $queryRaw: jest.fn().mockResolvedValue([{ status: 'DRAFT' }]),
+      // No posted sales return blocks a cancel unless a test says so.
+      salesReturn: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn().mockImplementation((cb) => cb(prisma)),
     };
 

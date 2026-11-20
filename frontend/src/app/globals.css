@@ -575,3 +575,71 @@ textarea:focus-visible,
     min-height: 40px;
   }
 }
+
+/* Dialogs on phones fill the screen; the pinned footer stays at the bottom
+   (TZ "Ishlab chiqarish" 11.7). */
+@media (max-width: 767px) {
+  .app-modal-backdrop {
+    padding: 0 !important;
+  }
+  .app-modal {
+    max-width: 100% !important;
+    max-height: 100dvh !important;
+    min-height: 100dvh;
+    border-radius: 0 !important;
+  }
+  .app-modal-footer button {
+    min-height: 44px;
+  }
+}
+
+/* Production lists: a table on wide screens, cards on phones (TZ 11.7). */
+.prod-cards {
+  display: none;
+}
+@media (max-width: 767px) {
+  .prod-table {
+    display: none;
+  }
+  .prod-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .prod-filter-toggle {
+    display: inline-flex !important;
+  }
+  .prod-filters[data-open='false'] {
+    display: none !important;
+  }
+}
+.prod-row-highlight {
+  animation: prod-row-flash 2.4s ease-out;
+}
+@keyframes prod-row-flash {
+  0%,
+  40% {
+    background: var(--color-primary-50);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prod-row-highlight {
+    animation: none;
+    background: var(--color-primary-50);
+  }
+}
+.prod-skeleton {
+  display: block;
+  height: 14px;
+  border-radius: 6px;
+  background: var(--color-bg-tertiary);
+  animation: prod-skeleton-pulse 1.2s ease-in-out infinite;
+}
+@keyframes prod-skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}

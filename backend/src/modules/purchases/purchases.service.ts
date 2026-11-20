@@ -45,6 +45,11 @@ import {
   restoreBatchConsumptions,
 } from '../inventory/fifo/fifo-batches';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
+import {
+  assertNoFinishedProducts,
+  assertPurchasableProducts,
+} from '../inventory/products/finished-product-guard';
+import { refreshEstimatedCosts } from '../production/estimated-cost';
 import { formatMoney } from '../../../../shared/format/money';
 import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
 import {
@@ -282,6 +287,11 @@ export class PurchasesService {
       warehouse: dto.warehouseId,
       product: dto.items.map((item) => item.productId),
     });
+    await assertPurchasableProducts(
+      this.prisma,
+      tenantId,
+      dto.items.map((item) => item.productId),
+    );
 
     const docNumber = await this.generateDocNumber(tenantId);
 
@@ -391,6 +401,11 @@ export class PurchasesService {
       warehouse: dto.warehouseId,
       product: dto.items?.map((item) => item.productId),
     });
+    await assertPurchasableProducts(
+      this.prisma,
+      tenantId,
+      dto.items?.map((item) => item.productId) ?? [],
+    );
 
     const targetCurrency = dto.currency || existing.currency;
     if (!isSupportedCurrency(targetCurrency)) {
@@ -605,6 +620,7 @@ export class PurchasesService {
         'Ushbu hujjat allaqachon tasdiqlangan yoki bekor qilingan',
       );
     }
+    assertNoFinishedProducts(receipt.items.map((item) => item.product));
 
     // Each receipt expense is owed to its own supplier. The receipt total is
     // recomputed here so a draft saved before this rule does not book another
@@ -751,6 +767,17 @@ export class PurchasesService {
           });
         }
       }
+
+      // TZ "Ishlab chiqarish" 7: the new cost reaches the average (when the
+      // company chose it) and every recipe estimate that uses these items.
+      await refreshEstimatedCosts(
+        tx,
+        tenantId,
+        receipt.items
+          .filter((item) => item.product?.type !== 'SERVICE')
+          .map((item) => item.productId),
+        { applyAverage: true },
+      );
 
       // 2. Accrue supplier payables in the receipt's native currency: the
       // receipt supplier for its lines and its own expenses, and each other
@@ -1001,6 +1028,29 @@ export class PurchasesService {
     return this.prisma.$transaction(async (tx) => {
       // D4: nothing dated in a closed accounting period may change.
       await assertPeriodOpen(tx, tenantId, receipt.docDate, 'unpost');
+      // TZ "Ishlab chiqarish" 7 (test J): goods already taken from this
+      // receipt's batches (production, sale, transfer) keep the receipt.
+      if (typeof tx.productBatch?.findMany === 'function') {
+        const batches = await tx.productBatch.findMany({
+          where: { tenantId, receiptId: id },
+          include: { product: { select: { name: true } } },
+        });
+        const used = (batches ?? []).filter(
+          (batch) =>
+            Number(batch.remainingQty) + 0.0005 < Number(batch.initialQty),
+        );
+        if (used.length) {
+          const names = used
+            .map((batch) => {
+              const name = batch.product?.name as Record<string, string> | null;
+              return `${name?.uz ?? name?.ru ?? batch.productId} (${Number(batch.initialQty) - Number(batch.remainingQty)})`;
+            })
+            .join(', ');
+          throw new BadRequestException(
+            `Xaridni bekor qilib bo'lmaydi: ushbu kirimdagi tovar/xomashyo allaqachon ishlatilgan (ishlab chiqarish, sotuv yoki ko'chirish): ${names}. Avval o'sha hujjatlarni bekor qiling. / Нельзя отменить закупку: товар/сырьё из этого прихода уже использовано (производство, продажа или перемещение): ${names}. Сначала отмените эти документы.`,
+          );
+        }
+      }
       // 1. Decrement stock levels & delete batches
       for (const item of receipt.items) {
         const itemType = item.product?.type || 'PRODUCT';
@@ -1039,6 +1089,14 @@ export class PurchasesService {
       await tx.productBatch.deleteMany({
         where: { tenantId, receiptId: id },
       });
+      await refreshEstimatedCosts(
+        tx,
+        tenantId,
+        receipt.items
+          .filter((item) => item.product?.type !== 'SERVICE')
+          .map((item) => item.productId),
+        { applyAverage: true },
+      );
 
       // 2. Reverse the supplier payable without deleting its history.
       await this.settlementService.recordMovement(tx, {

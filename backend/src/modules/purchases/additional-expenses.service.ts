@@ -1,4 +1,5 @@
 import { catalogCostFromUzs } from '../inventory/products/catalog-cost';
+import { refreshEstimatedCosts } from '../production/estimated-cost';
 import {
   Injectable,
   NotFoundException,
@@ -19,6 +20,7 @@ import {
   TransactionDirection,
   CounterpartySettlementSide,
   SettlementAllocationTarget,
+  SalesReturnDocStatus,
 } from '@prisma/client';
 
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
@@ -695,6 +697,9 @@ export class AdditionalExpensesService {
       where: { tenantId, id: productId },
       data: catalogCostFromUzs(landedCostUzs, card),
     });
+    await refreshEstimatedCosts(tx, tenantId, [productId], {
+      applyAverage: true,
+    });
   }
 
   /**
@@ -1145,6 +1150,69 @@ export class AdditionalExpensesService {
 
   // ─── SAFE CANCELLATION & ROLLBACK GUARDRAIL (TICKET 4) ────────
 
+  /**
+   * A posted sales return re-entered stock and reversed 9110 at the
+   * consumption cost the expense raised (ADR 0012). Cancelling the expense
+   * takes that delta off the sale but not off the return, so it is refused
+   * while such a return is posted: cancel the return first. Draft and
+   * cancelled returns do not block (a draft reads its cost when confirmed).
+   *
+   * The sales consumptions are locked first: a return being confirmed at the
+   * same time locks them too (FOR SHARE), so either it commits first and is
+   * found here, or it waits and then reads the restored cost.
+   */
+  private async assertNoPostedReturnOfRevaluedSales(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    receiptId: string,
+    productIds: string[],
+  ) {
+    if (productIds.length === 0) return;
+    const sold = await tx.$queryRaw<
+      { invoice_id: string; product_id: string }[]
+    >(Prisma.sql`
+      SELECT sii.invoice_id, b.product_id
+      FROM batch_consumptions c
+      JOIN product_batches b ON b.id = c.batch_id AND b.tenant_id = c.tenant_id
+      JOIN sales_invoice_items sii ON sii.id = c.sales_invoice_item_id
+      WHERE c.tenant_id = ${tenantId}
+        AND b.receipt_id = ${receiptId}
+        AND b.product_id IN (${Prisma.join(productIds)})
+        AND c.sales_invoice_item_id IS NOT NULL
+      FOR UPDATE OF c`);
+    if (sold.length === 0) return;
+
+    // Returns are per product of an invoice, so (invoice, product) is the key.
+    const revalued = new Set(
+      sold.map((r) => `${r.invoice_id}:${r.product_id}`),
+    );
+    const returns = await tx.salesReturn.findMany({
+      where: {
+        tenantId,
+        status: SalesReturnDocStatus.POSTED,
+        invoiceId: { in: [...new Set(sold.map((r) => r.invoice_id))] },
+      },
+      select: {
+        id: true,
+        returnNumber: true,
+        invoiceId: true,
+        items: { select: { productId: true } },
+      },
+      orderBy: { returnNumber: 'asc' },
+    });
+    const blocking = returns.filter((r) =>
+      r.items.some((i) => revalued.has(`${r.invoiceId}:${i.productId}`)),
+    );
+    if (blocking.length > 0) {
+      const list = blocking
+        .map((r) => `${r.returnNumber} (${r.id})`)
+        .join(', ');
+      throw new BadRequestException(
+        `Bu xarajat tannarxini oshirgan sotuvlar bo'yicha tasdiqlangan qaytarishlar bor: ${list}. Avval ularni bekor qiling. / По продажам, себестоимость которых увеличил этот расход, есть проведённые возвраты: ${list}. Сначала отмените их.`,
+      );
+    }
+  }
+
   async cancelExpense(tenantId: string, userId: string, id: string) {
     const expense = await this.prisma.additionalExpense.findFirst({
       where: { id, tenantId },
@@ -1233,6 +1301,12 @@ export class AdditionalExpensesService {
       }
       // D4: nothing dated in a closed accounting period may change.
       await assertPeriodOpen(tx, tenantId, expense.docDate, 'cancel');
+      await this.assertNoPostedReturnOfRevaluedSales(
+        tx,
+        tenantId,
+        expense.receiptId,
+        expense.items.map((i) => i.productId),
+      );
 
       // Return the cash paid when the expense was posted as paid. Its credit
       // to cash sits in the expense's own journal entry, deleted below.

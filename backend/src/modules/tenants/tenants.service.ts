@@ -15,6 +15,7 @@ interface StoredCompanySettings {
   sales?: Prisma.JsonObject;
   inventory?: Prisma.JsonObject;
   accounting?: Prisma.JsonObject;
+  production?: Prisma.JsonObject;
 }
 
 @Injectable()
@@ -284,6 +285,10 @@ export class TenantsService {
       },
       inventory: settings.inventory || {},
       accounting: settings.accounting || {},
+      production: {
+        estimatedCostMethod: 'LAST',
+        ...(settings.production || {}),
+      },
     };
   }
 
@@ -319,6 +324,10 @@ export class TenantsService {
       accounting: {
         ...current.accounting,
         ...(dto.accounting || {}),
+      },
+      production: {
+        ...current.production,
+        ...(dto.production || {}),
       },
     };
 

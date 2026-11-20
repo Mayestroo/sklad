@@ -1170,8 +1170,11 @@ export class SalesInvoicesService {
       currency: string;
       reason?: string | null;
       totalAmount: number;
+      /** Preview only: the cost is read again inside the posting transaction. */
       totalCogs: number;
       preparedItems: Array<{
+        /** The draft's line, when confirming an existing return. */
+        id?: string;
         productId: string;
         quantity: number;
         unitPrice: number;
@@ -1186,12 +1189,33 @@ export class SalesInvoicesService {
     },
   ) {
     return this.prisma.$transaction(async (tx) => {
+      // The cost is the sale's consumption cost now, not when a draft was
+      // saved: an Additional Expense posted or cancelled in between moved it.
+      const costed = await this.costReturnAtPosting(
+        tx,
+        tenantId,
+        params.invoiceId,
+        params.preparedItems,
+      );
+      const preparedItems = costed.items;
+      const totalCogs = costed.totalCogs;
+
       let salesReturn;
       if (params.existingReturnId) {
+        for (const item of preparedItems) {
+          if (!item.id) {
+            throw new BadRequestException('Qaytarish qatori topilmadi');
+          }
+          await tx.salesReturnItem.update({
+            where: { id: item.id, return: { tenantId } },
+            data: { unitCogs: item.unitCogs, lineCogs: item.lineCogs },
+          });
+        }
         salesReturn = await tx.salesReturn.update({
           where: { tenantId, id: params.existingReturnId },
           data: {
             status: SalesReturnDocStatus.POSTED,
+            totalCogs,
           },
           include: {
             counterparty: true,
@@ -1218,9 +1242,9 @@ export class SalesInvoicesService {
             reason: params.reason || null,
             status: SalesReturnDocStatus.POSTED,
             totalAmount: params.totalAmount,
-            totalCogs: params.totalCogs,
+            totalCogs,
             createdById: userId,
-            items: { create: params.preparedItems },
+            items: { create: preparedItems },
           },
           include: {
             counterparty: true,
@@ -1236,7 +1260,7 @@ export class SalesInvoicesService {
       }
 
       // Restock inventory and create product batches with defect warehouse routing
-      for (const item of params.preparedItems) {
+      for (const item of preparedItems) {
         const targetWarehouseId =
           item.isDefective && params.defectWarehouseId
             ? params.defectWarehouseId
@@ -1341,7 +1365,7 @@ export class SalesInvoicesService {
           "Asl sotuv fakturasining valyuta kursi noto'g'ri",
         );
       }
-      const returnedVat = params.preparedItems.reduce((sum, item) => {
+      const returnedVat = preparedItems.reduce((sum, item) => {
         const invoiceItem = originalInvoice.items.find(
           (candidate) => candidate.productId === item.productId,
         );
@@ -1393,11 +1417,11 @@ export class SalesInvoicesService {
           description: `Chiquvchi QQS qaytarilishi № ${params.returnNumber}`,
         });
       }
-      if (cogsAcc && inventoryAcc && params.totalCogs > 0) {
+      if (cogsAcc && inventoryAcc && totalCogs > 0) {
         journalLines.push({
           debitAccountId: inventoryAcc.id,
           creditAccountId: cogsAcc.id,
-          amount: params.totalCogs,
+          amount: totalCogs,
           description: `Sotuv qaytarilishi tannarxi № ${params.returnNumber}`,
         });
       }
@@ -1426,7 +1450,7 @@ export class SalesInvoicesService {
           newValue: {
             returnNumber: params.returnNumber,
             totalAmount: params.totalAmount,
-            totalCogs: params.totalCogs,
+            totalCogs,
             status: SalesReturnDocStatus.POSTED,
           },
         },
@@ -1434,6 +1458,60 @@ export class SalesInvoicesService {
 
       return salesReturn;
     });
+  }
+
+  /**
+   * Costs the return lines at the sale's consumption cost as it stands in
+   * this transaction (ADR 0012). The consumptions are locked FOR SHARE
+   * first: an Additional Expense posting or cancelling at the same time
+   * updates them, so this waits for it and reads the committed cost, and a
+   * cancel that locks them first sees this return once it commits.
+   */
+  private async costReturnAtPosting<
+    T extends { productId: string; quantity: number },
+  >(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    invoiceId: string | null | undefined,
+    items: T[],
+  ): Promise<{
+    items: Array<T & { unitCogs: number; lineCogs: number }>;
+    totalCogs: number;
+  }> {
+    if (!invoiceId) {
+      throw new BadRequestException(
+        'Qaytarish faqat asl sotuv fakturasiga biriktirilishi mumkin',
+      );
+    }
+    await tx.$queryRaw(Prisma.sql`
+      SELECT c.id
+      FROM batch_consumptions c
+      JOIN sales_invoice_items sii ON sii.id = c.sales_invoice_item_id
+      WHERE c.tenant_id = ${tenantId} AND sii.invoice_id = ${invoiceId}
+      FOR SHARE OF c`);
+    const lines = await tx.salesInvoiceItem.findMany({
+      where: { invoiceId, invoice: { tenantId } },
+      include: {
+        batchConsumptions: {
+          where: { tenantId },
+          select: { quantity: true, unitCost: true },
+        },
+      },
+    });
+    const costed = items.map((item) => {
+      const unitCogs = originalSaleUnitCost(
+        lines.filter((l) => l.productId === item.productId),
+      );
+      return {
+        ...item,
+        unitCogs,
+        lineCogs: roundMoney(Number(item.quantity) * unitCogs),
+      };
+    });
+    return {
+      items: costed,
+      totalCogs: roundMoney(costed.reduce((s, i) => s + i.lineCogs, 0)),
+    };
   }
 
   async confirmReturn(tenantId: string, userId: string, returnId: string) {
@@ -1496,6 +1574,7 @@ export class SalesInvoicesService {
     }
 
     const preparedItems = existing.items.map((i) => ({
+      id: i.id,
       productId: i.productId,
       quantity: Number(i.quantity),
       unitPrice: Number(i.unitPrice),

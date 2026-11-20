@@ -28,6 +28,32 @@ export const PERMISSION_DESCRIPTIONS: Readonly<
       ru: 'Удаление складских документов',
     },
   },
+  // Production (TZ 9.3): create, complete and cancel are separate rights.
+  // Also inserted for existing databases by migration
+  // 20261121000100_production_tz_data (keep the texts in sync).
+  production: {
+    VIEW: { uz: "Ishlab chiqarishni ko'rish", ru: 'Просмотр производства' },
+    CREATE: {
+      uz: 'Retseptura va ishlab chiqarish hujjatlarini yaratish',
+      ru: 'Создание рецептур и производственных документов',
+    },
+    EDIT: {
+      uz: 'Retseptura va hujjatlarni tahrirlash, ishlab chiqarishni boshlash',
+      ru: 'Редактирование рецептур и документов, запуск производства',
+    },
+    DELETE: {
+      uz: "Retsepturalarni o'chirish va arxivlash",
+      ru: 'Удаление и архивирование рецептур',
+    },
+    COMPLETE: {
+      uz: 'Ishlab chiqarishni yakunlash',
+      ru: 'Завершение производства',
+    },
+    CANCEL: {
+      uz: 'Ishlab chiqarish hujjatini bekor qilish (storno)',
+      ru: 'Отмена производственного документа (сторно)',
+    },
+  },
   sales: {
     VIEW: { uz: "Sotuvni ko'rish", ru: 'Просмотр продаж' },
     CREATE: {
@@ -168,6 +194,7 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       (p.module === 'accounting' && p.action !== 'REOPEN') ||
       ['dashboard', 'analytics'].includes(p.module) ||
       (p.module === 'inventory' && p.action === 'VIEW') ||
+      (p.module === 'production' && p.action === 'VIEW') ||
       (p.module === 'sales' && p.action === 'VIEW'),
   },
   {
@@ -175,6 +202,7 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     name: { uz: 'Ombor menejeri', ru: 'Менеджер склада' },
     grants: (p) =>
       p.module === 'inventory' ||
+      p.module === 'production' ||
       p.module === 'dashboard' ||
       (p.module === 'sales' && p.action === 'VIEW'),
   },
@@ -184,7 +212,7 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     grants: (p) =>
       p.module === 'sales' ||
       p.module === 'dashboard' ||
-      (p.module === 'inventory' && p.action === 'VIEW'),
+      (['inventory', 'production'].includes(p.module) && p.action === 'VIEW'),
   },
   {
     slug: 'cashier',

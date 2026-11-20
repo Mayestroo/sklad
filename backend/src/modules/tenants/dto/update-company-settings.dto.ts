@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
@@ -36,7 +37,20 @@ export class AccountingSettingsDto {
   purchaseReturnGainAccountCode?: string | null;
 }
 
+/** `Company.settings.production` (TZ 8.3: one company-wide costing setting). */
+export class ProductionSettingsDto {
+  /** Catalog (estimated) cost: last receipt price (default) or the average. */
+  @IsOptional()
+  @IsIn(['LAST', 'AVERAGE'])
+  estimatedCostMethod?: 'LAST' | 'AVERAGE';
+}
+
 export class UpdateCompanySettingsDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProductionSettingsDto)
+  production?: ProductionSettingsDto;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => SalesSettingsDto)

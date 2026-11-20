@@ -39,6 +39,17 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       salesInvoiceItem: {
         update: jest.fn(),
         updateMany: jest.fn(),
+        // A return reads the sale lines again inside its posting transaction:
+        // mirror the invoice the test set up, without recording a call.
+        findMany: jest.fn(async () => {
+          const impl = prisma.salesInvoice.findFirst.getMockImplementation();
+          const invoice = impl ? await impl({}) : undefined;
+          return invoice?.items ?? [];
+        }),
+      },
+      salesReturnItem: {
+        update: jest.fn(),
+        deleteMany: jest.fn(),
       },
       salesReturn: {
         count: jest.fn(),
@@ -107,6 +118,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
       company: {
         findUnique: jest.fn(),
       },
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn(async (cb) => cb(prisma)),
     };
 
@@ -1313,6 +1325,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         invoiceId: 'inv-1',
         items: [
           {
+            id: 'sret-item-1',
             productId: 'prod-1',
             quantity: 1,
             unitPrice: 100000,
@@ -1322,6 +1335,7 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
             isDefective: false,
           },
           {
+            id: 'sret-item-2',
             productId: 'prod-2',
             quantity: 1,
             unitPrice: 100000,

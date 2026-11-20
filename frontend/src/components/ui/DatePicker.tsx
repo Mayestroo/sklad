@@ -36,7 +36,8 @@ function formatDisplayDate(dateStr: string): string {
   if (parts.length !== 3) return dateStr;
   const [y, m, d] = parts;
   if (!y || !m || !d) return dateStr;
-  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  // dd.MM.yyyy (TZ Ishlab chiqarish 11.5): never mm/dd/yyyy.
+  return `${d.padStart(2, '0')}.${m.padStart(2, '0')}.${y}`;
 }
 
 export function DatePicker({

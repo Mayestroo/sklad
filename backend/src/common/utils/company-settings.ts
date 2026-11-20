@@ -7,6 +7,10 @@ export interface CompanySettings {
     allowSellerPriceOverride?: boolean;
     defaultCurrency?: string;
   };
+  production?: {
+    /** TZ 8.3: catalog cost from the last receipt (default) or the average. */
+    estimatedCostMethod?: 'LAST' | 'AVERAGE';
+  };
 }
 
 /** Reads `Company.settings`; a missing or null value reads as no settings. */

@@ -1,687 +1,395 @@
 'use client';
 
-import { QuantityInput } from '@/components/ui/QuantityInput';
-import { useEffect, useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
-import {
-  CheckCircle2,
-  Clock3,
-  Factory,
-  FileText,
-  Layers3,
-  Pencil,
-  Plus,
-  Save,
-  XCircle,
-} from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
+import { AlertTriangle, CheckCircle2, Clock3, Factory, FileText, Layers3, ListChecks, Plus } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from '@/context/ToastContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { errorMessage, formatCurrency } from '@/lib/utils';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatDate, formatQuantity, formatUnitCost } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
-import { Select, SelectOption } from '@/components/ui/Select';
-import { unitLabel } from '@/lib/units';
-import { estimateRecipeCost } from '@/lib/production-recipe';
+import type { SelectOption } from '@/components/ui/Select';
+import type { MaterialCard } from '@/lib/production-recipe';
 import { RecipeFormModal, type RecipeProduct } from '@/components/production/RecipeFormModal';
+import { RecipesTab } from '@/components/production/RecipesTab';
+import { DocumentsTab, EMPTY_FILTERS, type DocumentFilters, type DocumentSortField } from '@/components/production/DocumentsTab';
+import { ProductionDocumentFormModal } from '@/components/production/ProductionDocumentFormModal';
+import { ProductionDocumentDetailsModal } from '@/components/production/ProductionDocumentDetailsModal';
+import type { SortDir } from '@/components/production/TableParts';
+import { localName, personName, type DocumentsResponse, type Named, type ProductionDocument, type Recipe, type StaffOption } from '@/components/production/types';
 
-type ProductionStatus = 'DRAFT' | 'PLANNED' | 'IN_PROGRESS' | 'READY' | 'COMPLETED' | 'CANCELLED';
-type ProductOption = RecipeProduct;
-type RecipeMaterial = { id?: string; productId: string; quantity: number | string; product?: ProductOption };
-type Recipe = {
-  id: string;
-  productId: string;
-  outputQuantity: number | string;
-  note?: string | null;
-  product: ProductOption;
-  items: RecipeMaterial[];
-};
-type ProductionMaterial = {
-  id: string;
-  productId: string;
-  plannedQuantity: number | string;
-  actualQuantity: number | string | null;
-  unitCost: number | string;
-  totalCost: number | string;
-  product: ProductOption;
-};
-type ProductionDocument = {
-  id: string;
-  docNumber: string;
-  docDate: string;
-  status: ProductionStatus;
-  plannedQuantity: number | string;
-  producedQuantity: number | string | null;
-  plannedMaterialCost: number | string;
-  actualMaterialCost: number | string;
-  unitCost: number | string;
-  product: ProductOption;
-  warehouse: { id: string; name: unknown };
-  responsible?: { id: string; firstName: string; lastName: string } | null;
-  materials: ProductionMaterial[];
-  note?: string | null;
-};
-type WarehouseOption = { id: string; name: unknown };
-type StaffOption = { id: string; firstName: string; lastName: string };
-type PreviewMaterial = {
-  productId: string;
-  plannedQuantity: number;
-  physicalQuantity: number;
-  freeQuantity: number;
-  shortage: number;
-  estimatedUnitCost: number;
-  estimatedTotalCost: number;
-  product: ProductOption;
-};
-type ProductionPreview = {
-  plannedMaterialCost: number;
-  materials: PreviewMaterial[];
-};
+type Tab = 'documents' | 'recipes';
+const PAGE_SIZE = 20;
 
-const statusLabels: Record<ProductionStatus, { uz: string; ru: string; variant: 'neutral' | 'info' | 'warning' | 'success' | 'error' }> = {
-  DRAFT: { uz: 'Qoralama', ru: 'Черновик', variant: 'neutral' },
-  PLANNED: { uz: 'Rejalashtirilgan', ru: 'Запланировано', variant: 'info' },
-  IN_PROGRESS: { uz: 'Ishlab chiqarishda', ru: 'В производстве', variant: 'warning' },
-  READY: { uz: 'Tayyor', ru: 'Готово', variant: 'success' },
-  COMPLETED: { uz: 'Yakunlangan', ru: 'Завершено', variant: 'success' },
-  CANCELLED: { uz: 'Bekor qilingan', ru: 'Отменено', variant: 'error' },
-};
-
-const asList = <T,>(value: unknown): T[] => (Array.isArray(value) ? value as T[] : []);
-const asNumber = (value: number | string | null | undefined): number => Number(value ?? 0);
 
 export default function ProductionPage() {
   const locale = useLocale() as 'uz' | 'ru';
-  const isRu = locale === 'ru';
+  const t = useTranslations('production');
   const { token, company, user, hasPermission } = useAuth();
-  const canCreate = hasPermission('inventory:create');
-  const canEdit = hasPermission('inventory:edit');
+  const confirm = useConfirm();
+  const invalidateApi = useInvalidateApi();
+  // Rights are separate (TZ 9.3). A session saved before production:* existed
+  // still carries the inventory rights they were granted from (the server
+  // checks the real ones).
+  const allowed = (slug: string, legacy: string) => hasPermission(slug) || hasPermission(legacy);
+  const can = {
+    create: allowed('production:create', 'inventory:create'),
+    edit: allowed('production:edit', 'inventory:edit'),
+    delete: allowed('production:delete', 'inventory:delete'),
+    complete: allowed('production:complete', 'inventory:create'),
+    cancel: allowed('production:cancel', 'inventory:edit'),
+  };
   const canViewStaff = Boolean(user?.roles.some((role) => ['super_admin', 'company_admin'].includes(role)) || user?.permissions.includes('users:view'));
 
-  const [activeTab, setActiveTab] = useState<'documents' | 'recipes'>('documents');
-  const [busy, setBusy] = useState(false);
-  const [pageError, setPageError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [productFilter, setProductFilter] = useState('');
-  const [warehouseFilter, setWarehouseFilter] = useState('');
-  const [responsibleFilter, setResponsibleFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  // The active tab lives in the URL (?tab=recipes), so a reload keeps it (TZ 11.3).
+  const searchParams = useSearchParams();
+  const [tabOverride, setTabOverride] = useState<Tab | null>(null);
+  const tab: Tab = tabOverride ?? (searchParams?.get('tab') === 'recipes' ? 'recipes' : 'documents');
+  const setTab = (next: Tab) => {
+    setTabOverride(next);
+    const url = new URL(window.location.href);
+    if (next === 'recipes') url.searchParams.set('tab', 'recipes');
+    else url.searchParams.delete('tab');
+    window.history.replaceState(window.history.state, '', url.toString());
+  };
 
-  // Filters go into the documents endpoint (the query key); the typed search
-  // waits for a pause. Reference lists load once and are not refetched by a
-  // filter change.
-  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  // ── Documents: filters, sorting, paging (server side) ────────────────
+  const [filters, setFilters] = useState<DocumentFilters>(EMPTY_FILTERS);
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<DocumentSortField>('docDate');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const debouncedSearch = useDebouncedValue(filters.search.trim(), 300);
   const documentsEndpoint = useMemo(() => {
     const query = new URLSearchParams();
     if (debouncedSearch) query.set('search', debouncedSearch);
-    if (statusFilter) query.set('status', statusFilter);
-    if (productFilter) query.set('productId', productFilter);
-    if (warehouseFilter) query.set('warehouseId', warehouseFilter);
-    if (responsibleFilter) query.set('responsibleId', responsibleFilter);
-    if (dateFrom) query.set('dateFrom', dateFrom);
-    if (dateTo) query.set('dateTo', dateTo);
-    const suffix = query.size ? `?${query.toString()}` : '';
-    return `/production/documents${suffix}`;
-  }, [debouncedSearch, statusFilter, productFilter, warehouseFilter, responsibleFilter, dateFrom, dateTo]);
-  const documentsQuery = useApiQuery<ProductionDocument[]>(documentsEndpoint, { keepPrevious: true });
-  const recipesQuery = useApiQuery<Recipe[]>('/production/recipes');
-  const productsQuery = useApiQuery<ProductOption[]>('/inventory/products?type=PRODUCT');
-  const rawMaterialsQuery = useApiQuery<ProductOption[]>('/inventory/products?type=RAW_MATERIAL');
-  const warehousesQuery = useApiQuery<WarehouseOption[]>('/tenants/warehouses');
+    if (filters.status) query.set('status', filters.status);
+    if (filters.productId) query.set('productId', filters.productId);
+    if (filters.warehouseId) query.set('warehouseId', filters.warehouseId);
+    if (filters.responsibleId) query.set('responsibleId', filters.responsibleId);
+    if (filters.dateFrom) query.set('dateFrom', filters.dateFrom);
+    if (filters.dateTo) query.set('dateTo', filters.dateTo);
+    if (page > 1) query.set('page', String(page));
+    if (sortBy !== 'docDate' || sortDir !== 'desc') {
+      query.set('sortBy', sortBy);
+      query.set('sortDir', sortDir);
+    }
+    query.set('pageSize', String(PAGE_SIZE));
+    return `/production/documents?${query.toString()}`;
+  }, [debouncedSearch, filters.status, filters.productId, filters.warehouseId, filters.responsibleId, filters.dateFrom, filters.dateTo, page, sortBy, sortDir]);
+  const documentsQuery = useApiQuery<DocumentsResponse>(documentsEndpoint, { keepPrevious: true });
+
+  // ── Recipes and reference lists ──────────────────────────────────────
+  const [recipeStatus, setRecipeStatus] = useState('all');
+  const [uncostedOnly, setUncostedOnly] = useState(false);
+  const recipesQuery = useApiQuery<Recipe[]>('/production/recipes?status=all');
+  const archivedQuery = useApiQuery<Recipe[]>(recipeStatus === 'archived' ? '/production/recipes?status=archived' : null);
+  const finishedQuery = useApiQuery<RecipeProduct[]>('/production/finished-products');
+  const materialsQuery = useApiQuery<MaterialCard[]>('/production/materials');
+  const warehousesQuery = useApiQuery<Named[]>('/tenants/warehouses');
   const staffQuery = useApiQuery<StaffOption[]>(canViewStaff ? '/users/staff' : null);
-  const invalidateApi = useInvalidateApi();
 
-  const documents = asList<ProductionDocument>(documentsQuery.data);
-  const recipes = asList<Recipe>(recipesQuery.data);
-  const products = asList<ProductOption>(productsQuery.data);
-  const rawMaterials = asList<ProductOption>(rawMaterialsQuery.data);
-  const warehouses = asList<WarehouseOption>(warehousesQuery.data);
-  const staff = asList<StaffOption>(staffQuery.data);
-  const pageQueries = [documentsQuery, recipesQuery, productsQuery, rawMaterialsQuery, warehousesQuery, staffQuery];
-  const failedQuery = pageQueries.find((query) => query.isError);
-  const retryFailed = () => {
-    for (const query of pageQueries) if (query.isError) void query.refetch();
-  };
-  const documentsLoading = documentsQuery.isPending;
-  const recipesLoading = recipesQuery.isPending;
+  const list = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+  const documentsData = documentsQuery.data;
+  const documents = list<ProductionDocument>(documentsData?.items);
+  const recipes = list<Recipe>(recipesQuery.data);
+  const archived = list<Recipe>(archivedQuery.data);
+  const finished = list<RecipeProduct>(finishedQuery.data);
+  const materials = list<MaterialCard>(materialsQuery.data);
+  const warehouses = list<Named>(warehousesQuery.data);
+  const staff = list<StaffOption>(staffQuery.data);
+  const queries = [documentsQuery, recipesQuery, finishedQuery, materialsQuery, warehousesQuery, staffQuery];
+  const failed = queries.find((q) => q.isError);
 
-  // Recipe form: closed (null), new ('new') or editing a recipe.
+  const productOptions: SelectOption[] = useMemo(() => finished.map((p) => ({ value: p.id, label: localName(p.name, locale) })), [finished, locale]);
+  const warehouseOptions: SelectOption[] = useMemo(() => warehouses.map((w) => ({ value: w.id, label: localName(w.name, locale) })), [warehouses, locale]);
+  const staffOptions: SelectOption[] = useMemo(() => staff.map((s) => ({ value: s.id, label: personName(s) })), [staff]);
+
+  // ── Dialogs ──────────────────────────────────────────────────────────
   const [recipeForm, setRecipeForm] = useState<'new' | Recipe | null>(null);
+  const [docForm, setDocForm] = useState<{ document: ProductionDocument | null; recipeId?: string } | null>(null);
+  const [openDoc, setOpenDoc] = useState<ProductionDocument | null>(null);
+  const [highlightRecipe, setHighlightRecipe] = useState<string | null>(null);
+  const [highlightDoc, setHighlightDoc] = useState<string | null>(null);
 
-  const [documentModalOpen, setDocumentModalOpen] = useState(false);
-  const [documentRecipeId, setDocumentRecipeId] = useState('');
-  const [documentQuantity, setDocumentQuantity] = useState('');
-  const [documentWarehouseId, setDocumentWarehouseId] = useState('');
-  const [documentResponsibleId, setDocumentResponsibleId] = useState('');
-  const [documentNote, setDocumentNote] = useState('');
-  const [preview, setPreview] = useState<ProductionPreview | null>(null);
-  const [previewError, setPreviewError] = useState('');
+  const refresh = useCallback(async () => {
+    await Promise.all([invalidateApi('/production'), invalidateApi('/inventory/products')]);
+  }, [invalidateApi]);
 
-  const [selectedDocument, setSelectedDocument] = useState<ProductionDocument | null>(null);
-  const [actualInputs, setActualInputs] = useState<Record<string, string>>({});
-  const [producedQuantity, setProducedQuantity] = useState('');
-
-  const productOptions = useMemo<SelectOption[]>(() => products.map((item) => ({
-    value: item.id,
-    label: localName(item.name, locale),
-  })), [products, locale]);
-  const warehouseOptions = useMemo<SelectOption[]>(() => warehouses.map((item) => ({
-    value: item.id,
-    label: localName(item.name, locale),
-  })), [warehouses, locale]);
-  const staffOptions = useMemo<SelectOption[]>(() => staff.map((item) => ({
-    value: item.id,
-    label: `${item.firstName} ${item.lastName}`,
-  })), [staff]);
-  const recipeOptions = useMemo<SelectOption[]>(() => recipes.map((recipe) => ({
-    value: recipe.id,
-    label: `${localName(recipe.product.name, locale)} · ${formatQuantity(asNumber(recipe.outputQuantity))} ${unitLabel(recipe.product.unitOfMeasure, locale)}`,
-  })), [recipes, locale]);
-
-  useEffect(() => {
-    if (!documentModalOpen || !token || !company || !documentRecipeId || !documentWarehouseId || Number(documentQuantity) <= 0) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      const query = new URLSearchParams({ quantity: documentQuantity, warehouseId: documentWarehouseId });
-      apiFetch<ProductionPreview>(`/production/recipes/${documentRecipeId}/preview?${query.toString()}`, {
-        token,
-        tenantId: company.id,
-        locale,
-      })
-        .then((result) => {
-          setPreview(result);
-          setPreviewError('');
-        })
-        .catch((error: unknown) => {
-          setPreview(null);
-          setPreviewError(error instanceof Error ? error.message : isRu ? 'Не удалось рассчитать сырьё' : 'Xomashyo hisobini olib bo‘lmadi');
-        });
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [documentModalOpen, documentRecipeId, documentWarehouseId, documentQuantity, token, company, locale, isRu]);
-
-  const activeCount = documents.filter((document) => document.status === 'IN_PROGRESS').length;
-  const completedCount = documents.filter((document) => document.status === 'COMPLETED').length;
-  const totalCompletedCost = documents
-    .filter((document) => document.status === 'COMPLETED')
-    .reduce((sum, document) => sum + asNumber(document.actualMaterialCost), 0);
-
-  function openDocumentModal() {
-    setPageError('');
-    setDocumentRecipeId('');
-    setDocumentQuantity('');
-    setDocumentWarehouseId(warehouses[0]?.id ?? '');
-    setDocumentResponsibleId(staff.some((member) => member.id === user?.id) ? user?.id ?? '' : '');
-    setDocumentNote('');
-    setPreview(null);
-    setDocumentModalOpen(true);
-  }
-
-  async function createDocument(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !company) return;
-    setBusy(true);
-    setPageError('');
-    try {
-      const created = await apiFetch<ProductionDocument>('/production/documents', {
-        method: 'POST',
-        token,
-        tenantId: company.id,
-        locale,
-        body: JSON.stringify({
-          recipeId: documentRecipeId,
-          plannedQuantity: Number(documentQuantity),
-          warehouseId: documentWarehouseId,
-          responsibleId: documentResponsibleId || undefined,
-          note: documentNote || undefined,
-        }),
-      });
-      setDocumentModalOpen(false);
-      setNotice(isRu ? 'Черновик производственного документа создан' : 'Ishlab chiqarish hujjati qoralamasi yaratildi');
-      await invalidateApi('/production');
-      if (created?.id) await openDocument(created.id);
-    } catch (error) {
-      setPageError(error instanceof Error ? error.message : isRu ? 'Не удалось создать документ' : 'Hujjatni yaratib bo‘lmadi');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function openDocument(id: string) {
+  const loadDocument = async (id: string) => {
     if (!token || !company) return;
     try {
-      const document = await apiFetch<ProductionDocument>(`/production/documents/${id}`, { token, tenantId: company.id, locale });
-      setSelectedDocument(document);
-      setProducedQuantity(document.producedQuantity == null ? '' : String(document.producedQuantity));
-      setActualInputs(Object.fromEntries(document.materials.map((line) => [
-        line.productId,
-        line.actualQuantity == null ? '' : String(line.actualQuantity),
-      ])));
+      setOpenDoc(await apiFetch<ProductionDocument>(`/production/documents/${id}`, { token, tenantId: company.id, locale }));
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : isRu ? 'Не удалось открыть документ' : 'Hujjatni ochib bo‘lmadi');
+      toast.error(errorMessage(error) || t('hujjatniOchibBolmadi'));
     }
-  }
+  };
 
-  async function runDocumentAction(action: 'plan' | 'start' | 'ready' | 'complete' | 'cancel') {
-    if (!token || !company || !selectedDocument) return;
-    setBusy(true);
-    setPageError('');
+  const recipeAction = async (path: string, method: 'POST' | 'DELETE', body: unknown, message: string) => {
+    if (!token || !company) return null;
     try {
-      let updated: ProductionDocument;
-      if (action === 'ready') {
-        updated = await apiFetch<ProductionDocument>(`/production/documents/${selectedDocument.id}/materials/actual`, {
-          method: 'PUT',
-          token,
-          tenantId: company.id,
-          locale,
-          body: JSON.stringify({
-            materials: selectedDocument.materials.map((line) => ({
-              productId: line.productId,
-              actualQuantity: Number(actualInputs[line.productId]),
-            })),
-          }),
-        });
-        setSelectedDocument(updated);
-        updated = await apiFetch<ProductionDocument>(`/production/documents/${selectedDocument.id}/ready`, {
-          method: 'POST', token, tenantId: company.id, locale,
-        });
-      } else if (action === 'complete') {
-        updated = await apiFetch<ProductionDocument>(`/production/documents/${selectedDocument.id}/complete`, {
-          method: 'POST',
-          token,
-          tenantId: company.id,
-          locale,
-          body: JSON.stringify({ producedQuantity: Number(producedQuantity) }),
-        });
-      } else {
-        updated = await apiFetch<ProductionDocument>(`/production/documents/${selectedDocument.id}/${action}`, {
-          method: 'POST', token, tenantId: company.id, locale,
-        });
-      }
-      setSelectedDocument(updated);
-      setNotice(actionNotice(action, isRu));
-      await invalidateApi('/production');
+      const result = await apiFetch<Recipe>(`/production/recipes/${path}`, { method, token, tenantId: company.id, locale, ...(body ? { body: JSON.stringify(body) } : {}) });
+      toast.success(message);
+      await refresh();
+      return result;
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : isRu ? 'Действие не выполнено' : 'Amal bajarilmadi');
-    } finally {
-      setBusy(false);
+      toast.error(errorMessage(error) || t('amalBajarilmadi'));
+      return null;
     }
-  }
+  };
 
-  const statusOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
-    ...Object.entries(statusLabels).map(([value, label]) => ({ value, label: isRu ? label.ru : label.uz })),
-  ];
+  const archiveRecipe = async (recipe: Recipe) => {
+    const ok = await confirm({
+      title: t('retsepturaniArxivgaOlish'),
+      description: t('arxivdagiRetsepturaHujjatlardaTanlanmaydiVa'),
+      variant: 'warning',
+      confirmText: t('arxivgaOlish'),
+      cancelText: t('bekorQilish'),
+    });
+    if (ok) await recipeAction(`${recipe.id}/archive`, 'POST', null, t('retsepturaArxivgaOlindi'));
+  };
+  const deleteRecipe = async (recipe: Recipe) => {
+    const ok = await confirm({
+      title: t('retsepturaniOchirish'),
+      description: t('retsepturaButunlayOchiriladi'),
+      variant: 'danger',
+      confirmText: t('ochirish'),
+      cancelText: t('bekorQilish'),
+    });
+    if (ok) await recipeAction(recipe.id, 'DELETE', null, t('retsepturaOchirildi'));
+  };
+
+  // ── Statistics cards follow the tab (TZ 11.3) ────────────────────────
+  const stats = documentsData?.stats;
+  const recipeStats = {
+    total: recipes.length,
+    active: recipes.filter((r) => r.isActive).length,
+    uncosted: recipes.filter((r) => r.estimate.missingPrice).length,
+  };
+  const setDocFilter = (patch: Partial<DocumentFilters>) => {
+    setFilters((current) => ({ ...current, ...patch }));
+    setPage(1);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ margin: 0, color: 'var(--color-text-primary)', fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)' }}>
-            {isRu ? 'Производство' : 'Ishlab chiqarish'}
-          </h1>
-          <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)', marginTop: 4 }}>
-            {isRu ? 'Рецептуры, расход материалов и себестоимость выпуска' : 'Retseptura, xomashyo sarfi va tayyor mahsulot tannarxi'}
-          </div>
+          <h1 style={{ margin: 0, color: 'var(--color-text-primary)', fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)' }}>{t('ishlabChiqarish')}</h1>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', margin: '4px 0 0' }}>
+            {t('retsepturaXomashyoSarfiVaTayyor')}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {canCreate && activeTab === 'recipes' && (
-            <Button onClick={() => setRecipeForm('new')}>
-              <Plus size={16} /> {isRu ? 'Новая рецептура' : 'Yangi retseptura'}
-            </Button>
-          )}
-          {canCreate && activeTab === 'documents' && (
-            <Button onClick={openDocumentModal} disabled={recipes.length === 0 || warehouses.length === 0}>
-              <Plus size={16} /> {isRu ? 'Производственный документ' : 'Ishlab chiqarish hujjati'}
-            </Button>
-          )}
+        {tab === 'documents' && can.create && (
+          <Button onClick={() => setDocForm({ document: null })} disabled={warehouses.length === 0}>
+            <Plus size={16} aria-hidden /> {t('ishlabChiqarishHujjati')}
+          </Button>
+        )}
+        {tab === 'recipes' && can.create && (
+          <Button onClick={() => setRecipeForm('new')}>
+            <Plus size={16} aria-hidden /> {t('yangiRetseptura')}
+          </Button>
+        )}
+      </div>
+
+      {failed && <LoadError error={failed.error} onRetry={() => queries.forEach((q) => q.isError && void q.refetch())} />}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+        {tab === 'documents' ? (
+          <>
+            <Kpi icon={<Clock3 size={20} aria-hidden />} title={t('jarayonda')} value={stats ? String(stats.inProgress) : '…'} color="var(--color-warning-600)" active={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })} />
+            <Kpi icon={<CheckCircle2 size={20} aria-hidden />} title={t('yakunlangan')} value={stats ? String(stats.completed) : '…'} color="var(--color-success-600)" active={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })} />
+            <Kpi icon={<Factory size={20} aria-hidden />} title={t('ishlabChiqarishTannarxi')} hint={t('yakunlanganHujjatlarTanlanganDavrVa')} value={stats ? formatCurrency(stats.completedCost, locale, 'UZS') : '…'} color="var(--color-primary-600)" active={false} onClick={() => setDocFilter({ status: 'COMPLETED' })} />
+          </>
+        ) : (
+          <>
+            <Kpi icon={<Layers3 size={20} aria-hidden />} title={t('jamiRetseptura')} value={String(recipeStats.total)} color="var(--color-primary-600)" active={recipeStatus === 'all' && !uncostedOnly} onClick={() => { setRecipeStatus('all'); setUncostedOnly(false); }} />
+            <Kpi icon={<ListChecks size={20} aria-hidden />} title={t('faol')} value={String(recipeStats.active)} color="var(--color-success-600)" active={recipeStatus === 'active'} onClick={() => setRecipeStatus(recipeStatus === 'active' ? 'all' : 'active')} />
+            <Kpi icon={<AlertTriangle size={20} aria-hidden />} title={t('tannarxiHisoblanmagan')} hint={t('narxsizXomashyoBor')} value={String(recipeStats.uncosted)} color="var(--color-warning-600)" active={uncostedOnly} onClick={() => setUncostedOnly(!uncostedOnly)} />
+          </>
+        )}
+      </div>
+
+      <div role="tablist" aria-label={t('ishlabChiqarishBolimlari')} style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--color-border-light)' }}>
+        <TabButton id="tab-documents" controls="panel-documents" active={tab === 'documents'} onClick={() => setTab('documents')}>
+          <FileText size={15} aria-hidden /> {t('hujjatlar')}
+        </TabButton>
+        <TabButton id="tab-recipes" controls="panel-recipes" active={tab === 'recipes'} onClick={() => setTab('recipes')}>
+          <Layers3 size={15} aria-hidden /> {t('retsepturalar')}
+        </TabButton>
+      </div>
+
+      {tab === 'documents' ? (
+        <div role="tabpanel" id="panel-documents" aria-labelledby="tab-documents">
+          <DocumentsTab
+            locale={locale}
+            documents={documents}
+            total={documentsData?.total ?? 0}
+            loading={documentsQuery.isPending || documentsQuery.isPlaceholderData}
+            filters={filters}
+            onFilters={setDocFilter}
+            onClearFilters={() => {
+              setFilters(EMPTY_FILTERS);
+              setPage(1);
+            }}
+            page={page}
+            pageSize={PAGE_SIZE}
+            onPage={setPage}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={(field) => {
+              if (field === sortBy) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+              else {
+                setSortBy(field);
+                setSortDir(field === 'docDate' || field === 'totalCost' ? 'desc' : 'asc');
+              }
+              setPage(1);
+            }}
+            productOptions={productOptions}
+            warehouseOptions={warehouseOptions}
+            staffOptions={canViewStaff ? staffOptions : null}
+            canCreate={can.create && warehouses.length > 0}
+            onCreate={() => setDocForm({ document: null })}
+            onOpen={(doc) => void loadDocument(doc.id)}
+            highlightId={highlightDoc}
+          />
         </div>
-      </div>
-
-      {failedQuery && <LoadError error={failedQuery.error} onRetry={retryFailed} />}
-      {pageError && !documentModalOpen && !selectedDocument && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
-      {notice && <div role="status" style={alertStyle('success')}>{notice}</div>}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 'var(--space-4)' }}>
-        <Kpi icon={<Clock3 size={20} />} title={isRu ? 'В производстве' : 'Jarayonda'} value={`${activeCount}`} color="var(--color-warning-600)" />
-        <Kpi icon={<CheckCircle2 size={20} />} title={isRu ? 'Завершено' : 'Yakunlangan'} value={`${completedCount}`} color="var(--color-success-600)" />
-        <Kpi icon={<Factory size={20} />} title={isRu ? 'Себестоимость выпуска' : 'Ishlab chiqarish tannarxi'} value={formatCurrency(totalCompletedCost, locale, 'UZS')} color="var(--color-primary-600)" />
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--color-border-light)' }}>
-        <TabButton active={activeTab === 'documents'} onClick={() => setActiveTab('documents')}>
-          <FileText size={15} /> {isRu ? 'Документы' : 'Hujjatlar'}
-        </TabButton>
-        <TabButton active={activeTab === 'recipes'} onClick={() => setActiveTab('recipes')}>
-          <Layers3 size={15} /> {isRu ? 'Рецептуры' : 'Retsepturalar'}
-        </TabButton>
-      </div>
-
-      {activeTab === 'documents' ? (
-        <Card style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end', borderBottom: '1px solid var(--color-border-light)' }}>
-            <Input aria-label={isRu ? 'Поиск документов' : 'Hujjatlarni qidirish'} placeholder={isRu ? 'Номер документа...' : 'Hujjat raqami...'} value={search} onChange={(event) => setSearch(event.target.value)} style={{ width: 210 }} />
-            <Select label={isRu ? 'Статус' : 'Holat'} options={statusOptions} value={statusFilter} onChange={setStatusFilter} style={{ minWidth: 170 }} />
-            <Select label={isRu ? 'Продукт' : 'Mahsulot'} options={[{ value: '', label: isRu ? 'Все продукты' : 'Barcha mahsulotlar' }, ...productOptions]} value={productFilter} onChange={setProductFilter} style={{ minWidth: 190 }} />
-            <Select label={isRu ? 'Склад' : 'Ombor'} options={[{ value: '', label: isRu ? 'Все склады' : 'Barcha omborlar' }, ...warehouseOptions]} value={warehouseFilter} onChange={setWarehouseFilter} style={{ minWidth: 170 }} />
-            {canViewStaff && <Select label={isRu ? 'Ответственный' : 'Mas’ul'} options={[{ value: '', label: isRu ? 'Все сотрудники' : 'Barcha xodimlar' }, ...staffOptions]} value={responsibleFilter} onChange={setResponsibleFilter} style={{ minWidth: 180 }} />}
-            <Input label={isRu ? 'С даты' : 'Boshlanish'} type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} style={{ width: 160 }} />
-            <Input label={isRu ? 'По дату' : 'Tugash'} type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} style={{ width: 160 }} />
-          </div>
-          {documentsLoading ? <EmptyState text={isRu ? 'Загрузка...' : 'Yuklanmoqda...'} /> : documents.length === 0 ? (
-            <EmptyState text={isRu ? 'Производственных документов пока нет' : 'Hozircha ishlab chiqarish hujjatlari yo‘q'} />
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={tableStyle}>
-                <thead><tr>
-                  <th>{isRu ? 'Документ №' : 'Hujjat №'}</th>
-                  <th>{isRu ? 'Дата' : 'Sana'}</th>
-                  <th>{isRu ? 'Продукт' : 'Mahsulot'}</th>
-                  <th>{isRu ? 'Количество' : 'Miqdor'}</th>
-                  <th>{isRu ? 'Склад' : 'Ombor'}</th>
-                  <th>{isRu ? 'Ответственный' : 'Mas’ul xodim'}</th>
-                  <th>{isRu ? 'Себестоимость' : 'Tannarx'}</th>
-                  <th>{isRu ? 'Статус' : 'Holat'}</th>
-                  <th />
-                </tr></thead>
-                <tbody>
-                  {documents.map((document) => (
-                    <tr key={document.id}>
-                      <td style={{ fontWeight: 600 }}>{document.docNumber}</td>
-                      <td>{formatDate(document.docDate, locale)}</td>
-                      <td>{localName(document.product.name, locale)}</td>
-                      <td>{formatQuantity(asNumber(document.plannedQuantity))} {unitLabel(document.product.unitOfMeasure, locale)}</td>
-                      <td>{localName(document.warehouse.name, locale)}</td>
-                      <td>{document.responsible ? `${document.responsible.firstName} ${document.responsible.lastName}` : '—'}</td>
-                      <td>{formatCurrency(asNumber(['DRAFT', 'PLANNED'].includes(document.status) ? document.plannedMaterialCost : document.actualMaterialCost), locale, 'UZS')}</td>
-                      <td><StatusBadge status={document.status} isRu={isRu} /></td>
-                      <td style={{ textAlign: 'right' }}><Button size="sm" variant="secondary" onClick={() => void openDocument(document.id)}>{isRu ? 'Открыть' : 'Ochish'}</Button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
       ) : (
-        <Card style={{ padding: 0, overflow: 'hidden' }}>
-          {recipesLoading ? <EmptyState text={isRu ? 'Загрузка...' : 'Yuklanmoqda...'} /> : recipes.length === 0 ? (
-            <EmptyState text={isRu ? 'Рецептуры еще не созданы' : 'Hali retsepturalar yaratilmagan'} />
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={tableStyle}>
-                <thead><tr>
-                  <th>{isRu ? 'Готовый продукт' : 'Tayyor mahsulot'}</th>
-                  <th>{isRu ? 'Норма выпуска' : 'Ishlab chiqarish normasi'}</th>
-                  <th>{isRu ? 'Состав' : 'Tarkibi'}</th>
-                  <th>{isRu ? 'Сырьё на норму' : 'Norma uchun xomashyo'}</th>
-                  <th>{isRu ? 'Себестоимость ед.' : 'Birlik tannarxi'}</th>
-                  <th>{isRu ? 'Комментарий' : 'Izoh'}</th>
-                  <th />
-                </tr></thead>
-                <tbody>
-                  {recipes.map((recipe) => {
-                    // Estimate from the material cards (UZS); the real cost comes from FIFO at start.
-                    const estimate = estimateRecipeCost(
-                      recipe.items.map((line) => ({ quantity: asNumber(line.quantity), card: line.product })),
-                      recipe.outputQuantity,
-                    );
-                    return (
-                      <tr key={recipe.id}>
-                        <td style={{ fontWeight: 600 }}>{localName(recipe.product.name, locale)}</td>
-                        <td>{formatQuantity(asNumber(recipe.outputQuantity))} {unitLabel(recipe.product.unitOfMeasure, locale)}</td>
-                        <td>{recipe.items.map((line) => `${localName(line.product?.name, locale)} — ${formatQuantity(asNumber(line.quantity))} ${line.product ? unitLabel(line.product.unitOfMeasure, locale) : ''}`).join(', ')}</td>
-                        <td className="tabular-nums">
-                          {formatCurrency(estimate.total, locale, 'UZS')}
-                          {estimate.incomplete && <span title={isRu ? 'У части сырья нет цены' : 'Ba’zi xomashyoda tannarx yo‘q'} style={{ color: 'var(--color-warning-700)' }}> *</span>}
-                        </td>
-                        <td className="tabular-nums">{estimate.perUnit === null ? '—' : `${formatCurrency(estimate.perUnit, locale, 'UZS')} / ${unitLabel(recipe.product.unitOfMeasure, locale)}`}</td>
-                        <td>{recipe.note || '—'}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          {canEdit && (
-                            <Button size="sm" variant="secondary" onClick={() => setRecipeForm(recipe)}>
-                              <Pencil size={14} /> {isRu ? 'Изменить' : 'Tahrirlash'}
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+        <div role="tabpanel" id="panel-recipes" aria-labelledby="tab-recipes">
+          <RecipesTab
+            recipes={recipes}
+            archived={archived}
+            loading={recipesQuery.isPending || (recipeStatus === 'archived' && archivedQuery.isPending)}
+            locale={locale}
+            highlightId={highlightRecipe}
+            canCreate={can.create}
+            canEdit={can.edit}
+            canDelete={can.delete}
+            canCreateDocument={can.create}
+            status={recipeStatus}
+            onStatusChange={setRecipeStatus}
+            uncostedOnly={uncostedOnly}
+            onUncostedChange={setUncostedOnly}
+            onCreate={() => setRecipeForm('new')}
+            onEdit={(recipe) => setRecipeForm(recipe)}
+            onCopy={async (recipe) => {
+              const copy = await recipeAction(`${recipe.id}/copy`, 'POST', null, t('nusxaYaratildiNofaolTahrirlang'));
+              if (copy) {
+                setHighlightRecipe(copy.id);
+                setRecipeForm(copy);
+              }
+            }}
+            onToggleActive={(recipe) =>
+              void recipeAction(`${recipe.id}/active`, 'POST', { isActive: !recipe.isActive }, recipe.isActive ? t('retsepturaNofaolQilindi') : t('retsepturaFaolQilindi'))
+            }
+            onArchive={(recipe) => void archiveRecipe(recipe)}
+            onDelete={(recipe) => void deleteRecipe(recipe)}
+            onCreateDocument={(recipe) => setDocForm({ document: null, recipeId: recipe.id })}
+          />
+        </div>
       )}
 
       {recipeForm !== null && (
-      <RecipeFormModal
-        key={recipeForm === 'new' ? 'new' : recipeForm.id}
-        isOpen
-        recipe={recipeForm && recipeForm !== 'new' ? recipeForm : null}
-        products={products}
-        rawMaterials={rawMaterials}
-        existingRecipes={recipes}
-        locale={locale}
-        onClose={() => setRecipeForm(null)}
-        onProductsChanged={() => invalidateApi('/inventory/products')}
-        onSaved={async (message) => {
-          setRecipeForm(null);
-          setNotice(message);
-          await invalidateApi('/production');
-        }}
-      />
+        <RecipeFormModal
+          key={recipeForm === 'new' ? 'new' : recipeForm.id}
+          isOpen
+          recipe={recipeForm === 'new' ? null : recipeForm}
+          products={finished}
+          materials={materials}
+          existingRecipes={recipes}
+          locale={locale}
+          onClose={() => setRecipeForm(null)}
+          onProductsChanged={refresh}
+          onSaved={async (id, message) => {
+            setRecipeForm(null);
+            toast.success(message);
+            setHighlightRecipe(id);
+            await refresh();
+          }}
+        />
       )}
 
-      <Modal isOpen={documentModalOpen} onClose={() => setDocumentModalOpen(false)} title={isRu ? 'Новый производственный документ' : 'Yangi ishlab chiqarish hujjati'} size="2xl">
-        <form onSubmit={createDocument} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-            <Select label={isRu ? 'Рецептура / продукт' : 'Retseptura / mahsulot'} options={recipeOptions} value={documentRecipeId} onChange={(value) => { setPreview(null); setPreviewError(''); setDocumentRecipeId(value); }} />
-            <QuantityInput
-              label={isRu ? 'Планируемое количество' : 'Rejalashtirilgan miqdor'}
-              unit={recipes.find((recipe) => recipe.id === documentRecipeId)?.product.unitOfMeasure}
-              value={documentQuantity}
-              onValueChange={(value) => { setPreview(null); setPreviewError(''); setDocumentQuantity(value); }}
-            />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Select label={isRu ? 'Склад' : 'Ombor'} options={warehouseOptions} value={documentWarehouseId} onChange={(value) => { setPreview(null); setPreviewError(''); setDocumentWarehouseId(value); }} />
-            <Select label={isRu ? 'Ответственный' : 'Mas’ul xodim'} options={staffOptions} value={documentResponsibleId} onChange={setDocumentResponsibleId} placeholder={isRu ? 'Не выбран' : 'Tanlanmagan'} />
-          </div>
-          <Input label={isRu ? 'Комментарий' : 'Izoh'} value={documentNote} onChange={(event) => setDocumentNote(event.target.value)} />
-          {preview && (
-            <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              <div style={{ padding: 12, background: 'var(--color-bg-tertiary)', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <strong>{isRu ? 'Расчет сырья' : 'Xomashyo hisobi'}</strong>
-                <span>{isRu ? 'Оценка сырьевой себестоимости' : 'Xomashyo tannarxi taxmini'}: <b>{formatCurrency(preview.plannedMaterialCost, locale, 'UZS')}</b></span>
-              </div>
-              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {preview.materials.map((material) => (
-                  <div key={material.productId} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 'var(--text-sm)' }}>
-                    <span>{localName(material.product.name, locale)}</span>
-                    <span>{formatQuantity(material.plannedQuantity)} {unitLabel(material.product.unitOfMeasure, locale)}</span>
-                    <span>{isRu ? 'Доступно' : 'Mavjud'}: {formatQuantity(material.freeQuantity)}</span>
-                    {material.shortage > 0 && <Badge variant="error">{isRu ? 'Не хватает' : 'Yetishmaydi'}: {formatQuantity(material.shortage)}</Badge>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {previewError && <div style={alertStyle('error')}>{previewError}</div>}
-          <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-            {isRu ? 'Создание документа не списывает сырье. Списание происходит при запуске.' : 'Hujjatni yaratish xomashyoni chiqim qilmaydi. Chiqim ishlab chiqarish boshlanganda amalga oshadi.'}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Button type="button" variant="outline" onClick={() => setDocumentModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" disabled={busy || !preview || recipes.length === 0 || warehouses.length === 0}><Save size={15} /> {isRu ? 'Создать черновик' : 'Qoralama yaratish'}</Button>
-          </div>
-        </form>
-      </Modal>
+      {docForm && (
+        <ProductionDocumentFormModal
+          locale={locale}
+          document={docForm.document}
+          initialRecipeId={docForm.recipeId}
+          recipes={recipes}
+          warehouseOptions={warehouseOptions}
+          staffOptions={staffOptions}
+          defaultResponsibleId={staff.some((s) => s.id === user?.id) ? user?.id : undefined}
+          onClose={() => setDocForm(null)}
+          onSaved={async (saved, message) => {
+            setDocForm(null);
+            setTab('documents');
+            toast.success(message);
+            setHighlightDoc(saved.id);
+            await refresh();
+            await loadDocument(saved.id);
+          }}
+        />
+      )}
 
-      <Modal isOpen={Boolean(selectedDocument)} onClose={() => setSelectedDocument(null)} title={selectedDocument ? `${selectedDocument.docNumber} · ${localName(selectedDocument.product.name, locale)}` : ''} size="3xl">
-        {selectedDocument && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {pageError && <div role="alert" style={alertStyle('error')}>{pageError}</div>}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-              <Detail label={isRu ? 'Дата' : 'Sana'} value={formatDate(selectedDocument.docDate, locale)} />
-              <Detail label={isRu ? 'План' : 'Reja'} value={`${formatQuantity(asNumber(selectedDocument.plannedQuantity))} ${unitLabel(selectedDocument.product.unitOfMeasure, locale)}`} />
-              <Detail label={isRu ? 'Склад' : 'Ombor'} value={localName(selectedDocument.warehouse.name, locale)} />
-              <Detail label={isRu ? 'Статус' : 'Holat'} value={<StatusBadge status={selectedDocument.status} isRu={isRu} />} />
-              <Detail label={isRu ? 'Ответственный' : 'Mas’ul xodim'} value={selectedDocument.responsible ? `${selectedDocument.responsible.firstName} ${selectedDocument.responsible.lastName}` : '—'} />
-              <Detail label={isRu ? 'Материалы по плану' : 'Reja xomashyo tannarxi'} value={formatCurrency(asNumber(selectedDocument.plannedMaterialCost), locale, 'UZS')} />
-              <Detail label={isRu ? 'Фактическая себестоимость сырья' : 'Haqiqiy xomashyo tannarxi'} value={formatCurrency(asNumber(selectedDocument.actualMaterialCost), locale, 'UZS')} />
-            </div>
-            {selectedDocument.note && <div style={{ color: 'var(--color-text-secondary)' }}>{selectedDocument.note}</div>}
-            <div style={{ overflowX: 'auto', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>
-              <table style={tableStyle}>
-                <thead><tr>
-                  <th>{isRu ? 'Сырье' : 'Xomashyo'}</th>
-                  <th>{isRu ? 'Плановый расход' : 'Rejalashtirilgan sarf'}</th>
-                  <th>{isRu ? 'Фактический расход' : 'Haqiqiy sarf'}</th>
-                  <th>{isRu ? 'Разница' : 'Farq'}</th>
-                  <th>{isRu ? 'Цена за единицу' : 'Birlik tannarxi'}</th>
-                  <th>{isRu ? 'Итого' : 'Jami tannarx'}</th>
-                </tr></thead>
-                <tbody>
-                  {selectedDocument.materials.map((line) => (
-                    <tr key={line.id}>
-                      <td>{localName(line.product.name, locale)}</td>
-                      <td>{formatQuantity(asNumber(line.plannedQuantity))} {unitLabel(line.product.unitOfMeasure, locale)}</td>
-                      <td>
-                        {selectedDocument.status === 'IN_PROGRESS' ? (
-                          <QuantityInput
-                            aria-label={`${localName(line.product.name, locale)} ${isRu ? 'факт' : 'haqiqiy'}`}
-                            unit={line.product.unitOfMeasure}
-                            value={actualInputs[line.productId] ?? ''}
-                            onValueChange={(value) => setActualInputs((current) => ({ ...current, [line.productId]: value }))}
-                            style={{ width: 150 }}
-                          />
-                        ) : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`}
-                      </td>
-                      <td>{selectedDocument.status === 'IN_PROGRESS' && actualInputs[line.productId] !== undefined && actualInputs[line.productId] !== ''
-                        ? `${formatQuantity(Number(actualInputs[line.productId]) - asNumber(line.plannedQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`
-                        : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity) - asNumber(line.plannedQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`}</td>
-                      <td>{formatUnitCost(asNumber(line.unitCost), locale, 'UZS')}</td>
-                      <td>{formatCurrency(asNumber(line.totalCost), locale, 'UZS')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {selectedDocument.status === 'READY' && (
-              <QuantityInput
-                label={isRu ? 'Фактически произведено' : 'Amalda ishlab chiqarildi'}
-                unit={selectedDocument.product.unitOfMeasure}
-                value={producedQuantity}
-                onValueChange={setProducedQuantity}
-              />
-            )}
-            {selectedDocument.status === 'COMPLETED' && (
-              <div style={{ ...alertStyle('success'), display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                <span>{isRu ? 'Принято на склад' : 'Omborga kirim qilindi'}: <b>{formatQuantity(asNumber(selectedDocument.producedQuantity))} {unitLabel(selectedDocument.product.unitOfMeasure, locale)}</b></span>
-                <span>{isRu ? 'Себестоимость единицы' : 'Birlik tannarxi'}: <b>{formatUnitCost(asNumber(selectedDocument.unitCost), locale, 'UZS')}</b></span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <div>
-                {['DRAFT', 'PLANNED', 'IN_PROGRESS', 'READY'].includes(selectedDocument.status) && canEdit && (
-                  <Button variant="danger" onClick={() => void runDocumentAction('cancel')} disabled={busy}><XCircle size={15} /> {isRu ? 'Отменить' : 'Bekor qilish'}</Button>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {selectedDocument.status === 'DRAFT' && canCreate && <Button onClick={() => void runDocumentAction('plan')} disabled={busy}>{isRu ? 'Запланировать' : 'Rejalashtirish'}</Button>}
-                {selectedDocument.status === 'PLANNED' && canCreate && <Button onClick={() => void runDocumentAction('start')} disabled={busy}><Factory size={15} /> {isRu ? 'Начать производство' : 'Ishlab chiqarishni boshlash'}</Button>}
-                {selectedDocument.status === 'IN_PROGRESS' && canEdit && <Button onClick={() => void runDocumentAction('ready')} disabled={busy || selectedDocument.materials.some((line) => actualInputs[line.productId] === undefined || actualInputs[line.productId] === '')}><CheckCircle2 size={15} /> {isRu ? 'Сохранить расход и отметить готовым' : 'Sarfni saqlash va tayyorlash'}</Button>}
-                {selectedDocument.status === 'READY' && canCreate && <Button onClick={() => void runDocumentAction('complete')} disabled={busy || Number(producedQuantity) <= 0}><CheckCircle2 size={15} /> {isRu ? 'Принять на склад' : 'Omborga kirim qilish'}</Button>}
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+      {openDoc && (
+        <ProductionDocumentDetailsModal
+          key={`${openDoc.id}-${openDoc.status}-${String(openDoc.totalCost)}`}
+          locale={locale}
+          document={openDoc}
+          canEdit={can.edit}
+          canDelete={can.delete}
+          canComplete={can.complete}
+          canCancel={can.cancel}
+          onClose={() => setOpenDoc(null)}
+          onEdit={() => {
+            setDocForm({ document: openDoc });
+            setOpenDoc(null);
+          }}
+          onChanged={async (updated, message) => {
+            toast.success(message);
+            setHighlightDoc(updated?.id ?? null);
+            setOpenDoc(updated);
+            await refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function localName(value: unknown, locale: 'uz' | 'ru'): string {
-  if (typeof value === 'string') return value;
-  if (!value || typeof value !== 'object') return '';
-  const localized = value as Record<string, unknown>;
-  return String(localized[locale] ?? localized.uz ?? localized.ru ?? '');
-}
-
-function actionNotice(action: 'plan' | 'start' | 'ready' | 'complete' | 'cancel', isRu: boolean): string {
-  const messages = {
-    plan: ['Ishlab chiqarish rejalashtirildi', 'Производство запланировано'],
-    start: ['Ishlab chiqarish boshlandi, xomashyo FIFO bo‘yicha sarflandi', 'Производство начато, сырье списано по FIFO'],
-    ready: ['Haqiqiy sarf saqlandi, hujjat tayyor', 'Фактический расход сохранен, документ готов'],
-    complete: ['Tayyor mahsulot tannarx bilan omborga kirim qilindi', 'Готовый продукт принят на склад с рассчитанной себестоимостью'],
-    cancel: ['Ishlab chiqarish hujjati bekor qilindi', 'Производственный документ отменен'],
-  };
-  return messages[action][isRu ? 1 : 0];
-}
-
-function Kpi({ icon, title, value, color }: { icon: React.ReactNode; title: string; value: string; color: string }) {
+function Kpi({ icon, title, value, color, active, onClick, hint }: { icon: React.ReactNode; title: string; value: string; color: string; active: boolean; onClick: () => void; hint?: string }) {
   return (
-    <Card style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, height: 42, borderRadius: 12, color, background: 'var(--color-bg-tertiary)' }}>{icon}</div>
-      <div>
-        <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>{title}</div>
-        <div style={{ color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 'var(--text-lg)' }}>{value}</div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={hint}
+      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 16, minHeight: 76, textAlign: 'left', cursor: 'pointer', borderRadius: 'var(--radius-lg)', border: `1px solid ${active ? 'var(--color-primary-500)' : 'var(--color-border-light)'}`, background: 'var(--color-bg-secondary)', boxShadow: 'var(--shadow-sm)' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 12, color, background: 'var(--color-bg-tertiary)', flexShrink: 0 }}>{icon}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>{title}</div>
+        <div className="tabular-nums" style={{ color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 'var(--text-lg)' }}>{value}</div>
       </div>
-    </Card>
-  );
-}
-
-function StatusBadge({ status, isRu }: { status: ProductionStatus; isRu: boolean }) {
-  const label = statusLabels[status];
-  return <Badge variant={label.variant}>{isRu ? label.ru : label.uz}</Badge>;
-}
-
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 12px', border: 0, borderBottom: active ? '2px solid var(--color-primary-600)' : '2px solid transparent', background: 'transparent', color: active ? 'var(--color-primary-700)' : 'var(--color-text-secondary)', fontWeight: active ? 600 : 500, cursor: 'pointer' }}>
-      {children}
     </button>
   );
 }
 
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+function TabButton({ id, controls, active, onClick, children }: { id: string; controls: string; active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <div style={{ padding: 10, border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>
-      <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: 5 }}>{label}</div>
-      <div style={{ color: 'var(--color-text-primary)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{value}</div>
-    </div>
+    <button
+      id={id}
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
+      onClick={onClick}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 44, padding: '10px 14px', border: 0, borderBottom: active ? '2px solid var(--color-primary-600)' : '2px solid transparent', background: 'transparent', color: active ? 'var(--color-primary-700)' : 'var(--color-text-secondary)', fontWeight: active ? 600 : 500, cursor: 'pointer' }}
+    >
+      {children}
+    </button>
   );
 }
-
-function EmptyState({ text }: { text: string }) {
-  return <div style={{ padding: 36, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>{text}</div>;
-}
-
-function alertStyle(kind: 'error' | 'success'): React.CSSProperties {
-  return {
-    padding: '10px 14px',
-    borderRadius: 'var(--radius-md)',
-    fontSize: 'var(--text-sm)',
-    color: kind === 'error' ? 'var(--color-error-700)' : 'var(--color-success-700)',
-    background: kind === 'error' ? 'var(--color-error-50)' : 'var(--color-success-50)',
-    border: `1px solid ${kind === 'error' ? 'var(--color-error-100)' : 'var(--color-success-100)'}`,
-  };
-}
-
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  textAlign: 'left',
-  fontSize: 'var(--text-sm)',
-};

@@ -4,10 +4,12 @@
  * database. Data is written under a fresh tenant.
  *
  * A sales return re-enters stock, and reverses 9110, at the cost recorded on
- * the sale's batch consumptions (ADR 0012). An Additional Expense posted
- * after the sale raises that sale's COGS (ADR 0008), so it must raise the
- * consumption cost by the same stored per-unit delta, and cancelling must
- * take exactly that back.
+ * the sale's batch consumptions (ADR 0012), read when the return is posted
+ * (a draft reads it when confirmed). An Additional Expense posted after the
+ * sale raises that sale's COGS (ADR 0008), so it must raise the consumption
+ * cost by the same stored per-unit delta, and cancelling must take exactly
+ * that back. Cancelling is refused while a posted return of a revalued sale
+ * exists: the return's restock and 9110 credit would keep the delta.
  *
  * Receipt: 7 units at 10,000 UZS. Sale: 3 units. Expense: 100 UZS by
  * quantity, so 14.2857 UZS per unit (4 decimals) and 42.86 UZS of COGS.
@@ -16,7 +18,14 @@ import { useTestDatabase } from '../../../test/use-test-database';
 useTestDatabase();
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExpenseAllocationMethod, ExpenseType, Prisma } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+import {
+  ExpenseAllocationMethod,
+  ExpenseType,
+  Prisma,
+  PurchaseDocStatus,
+  SalesReturnDocStatus,
+} from '@prisma/client';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../../common/prisma';
@@ -181,14 +190,36 @@ describe('Additional Expense then sales return (integration)', () => {
     return draft.id;
   }
 
-  const returnAll = (f: Awaited<ReturnType<typeof receiptAndSale>>) =>
+  const returnAll = (
+    f: Awaited<ReturnType<typeof receiptAndSale>>,
+    status?: SalesReturnDocStatus,
+  ) =>
     sales.createReturn(tenantId, userId, {
       invoiceId: f.invoiceId,
       counterpartyId: customerId,
       warehouseId,
       currency: 'UZS',
       items: [{ productId: f.productId, quantity: 3, unitPrice: 15000 }],
+      ...(status ? { status } : {}),
     });
+
+  /** The bilingual refusal, naming the blocking return by number and id. */
+  async function expectCancelRefused(
+    expenseId: string,
+    ret: { id: string; returnNumber: string },
+  ) {
+    const error: unknown = await expenses
+      .cancelExpense(tenantId, userId, expenseId)
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(error).toBeInstanceOf(BadRequestException);
+    const message = (error as BadRequestException).message;
+    expect(message).toContain(ret.returnNumber + ' (' + ret.id + ')');
+    expect(message).toContain('qaytarishlar bor'); // uz
+    expect(message).toContain('проведённые возвраты'); // ru
+  }
 
   /** Every figure the expense touches, as exact strings. */
   async function state(f: Awaited<ReturnType<typeof receiptAndSale>>) {
@@ -309,10 +340,53 @@ describe('Additional Expense then sales return (integration)', () => {
     // 9110: sale 30,000.00 + expense 42.86 − return 30,042.86 = 0.
     expect(await cogsSince()).toBe('0.00');
 
-    // Cancel the expense: every figure it changed is back exactly.
+    // Cancelling the expense now would take 42.86 off the sale but leave it
+    // on the return's restock and 9110 credit (9110 at −42.86): refused,
+    // naming the return, and nothing changes.
+    await expectCancelRefused(expenseId, ret);
+    expect(await state(f)).toEqual(posted);
+    expect(
+      (
+        await prisma.additionalExpense.findUniqueOrThrow({
+          where: { id: expenseId },
+        })
+      ).status,
+    ).toBe(PurchaseDocStatus.POSTED);
+    expect((await returnBatch(ret.returnNumber)).landedCost.toFixed(4)).toBe(
+      '10014.2857',
+    );
+    expect(await cogsSince()).toBe('0.00');
+  });
+
+  it('once the return is cancelled and deleted, cancelling the expense restores everything exactly', async () => {
+    const base = new D(await netDebit('9110'));
+    const cogsSince = async () =>
+      new D(await netDebit('9110')).sub(base).toFixed(2);
+    const f = await receiptAndSale();
+    const beforeExpense = await state(f);
+    const expenseId = await postExpense(f.receiptId);
+    const ret = await returnAll(f);
+    await expectCancelRefused(expenseId, ret);
+
+    await sales.cancelReturn(tenantId, userId, ret.id);
+    await sales.deleteReturn(tenantId, userId, ret.id);
+    expect(
+      await prisma.salesReturn.count({ where: { tenantId, id: ret.id } }),
+    ).toBe(0);
+    expect(
+      await prisma.productBatch.count({
+        where: {
+          tenantId,
+          batchNumber: { startsWith: `RET-${ret.returnNumber}` },
+        },
+      }),
+    ).toBe(0);
+
     await expenses.cancelExpense(tenantId, userId, expenseId);
-    const cancelled = await state(f);
-    expect(cancelled).toEqual(beforeExpense);
+    expect(await state(f)).toEqual(beforeExpense);
+    // 9110 holds the sale only: the return and its cancel net out, and so
+    // do the expense and its cancel.
+    expect(await cogsSince()).toBe('30000.00');
     expect(
       await prisma.journalEntry.count({
         where: {
@@ -322,25 +396,62 @@ describe('Additional Expense then sales return (integration)', () => {
         },
       }),
     ).toBe(0);
-    const settlement = await prisma.counterpartySettlementEntry.findMany({
-      where: {
-        tenantId,
-        sourceDocType: 'AdditionalExpense',
-        sourceDocId: expenseId,
-      },
-    });
-    expect(
-      settlement.reduce((s, e) => s.add(e.amount), new D(0)).toFixed(2),
-    ).toBe('0.00');
+  });
 
-    // Known gap (follow-up, not changed here): the return is a separate
-    // posted document, so its stock layer keeps the post-expense cost and
-    // its 9110 credit stays, leaving 9110 at −42.86 once the expense is
-    // cancelled.
-    expect((await returnBatch(ret.returnNumber)).landedCost.toFixed(4)).toBe(
-      '10014.2857',
+  it('a draft return does not block the cancel, and a posted return of another sale does not either', async () => {
+    const other = await receiptAndSale();
+    const otherExpense = await postExpense(other.receiptId);
+    const otherReturn = await returnAll(other);
+
+    const f = await receiptAndSale();
+    const beforeExpense = await state(f);
+    const expenseId = await postExpense(f.receiptId);
+    const draft = await returnAll(f, SalesReturnDocStatus.DRAFT);
+
+    await expenses.cancelExpense(tenantId, userId, expenseId);
+    expect(await state(f)).toEqual(beforeExpense);
+
+    // Confirmed after the cancel, the draft takes the restored cost.
+    const confirmed = await sales.confirmReturn(tenantId, userId, draft.id);
+    expect(new D(confirmed.totalCogs).toFixed(2)).toBe('30000.00');
+    expect((await returnBatch(draft.returnNumber)).landedCost.toFixed(4)).toBe(
+      '10000.0000',
     );
-    expect(await cogsSince()).toBe('-42.86');
+
+    // The other sale's expense is still blocked by its own return.
+    await expectCancelRefused(otherExpense, otherReturn);
+  });
+
+  it('a draft saved before the expense reads the cost when it is confirmed', async () => {
+    const base = new D(await netDebit('9110'));
+    const cogsSince = async () =>
+      new D(await netDebit('9110')).sub(base).toFixed(2);
+    const f = await receiptAndSale();
+    const draft = await returnAll(f, SalesReturnDocStatus.DRAFT);
+    // The draft's figure is a preview at the cost when it was saved.
+    expect(new D(draft.totalCogs).toFixed(2)).toBe('30000.00');
+
+    await postExpense(f.receiptId);
+    const posted = await state(f);
+    expect(posted.lineCogs).toBe('30042.86');
+
+    const confirmed = await sales.confirmReturn(tenantId, userId, draft.id);
+    // COGS reversed = the sale line COGS after the expense.
+    expect(new D(confirmed.totalCogs).toFixed(2)).toBe(posted.lineCogs);
+    const stored = await prisma.salesReturn.findUniqueOrThrow({
+      where: { id: draft.id },
+      include: { items: true },
+    });
+    expect(stored.status).toBe(SalesReturnDocStatus.POSTED);
+    expect(stored.totalCogs.toFixed(2)).toBe('30042.86');
+    expect(stored.items[0].unitCogs.toFixed(4)).toBe('10014.2857');
+    expect(stored.items[0].lineCogs.toFixed(2)).toBe('30042.86');
+    // Goods come back at the post-expense cost.
+    const back = await returnBatch(draft.returnNumber);
+    expect(back.landedCost.toFixed(4)).toBe('10014.2857');
+    expect(back.remainingQty.toFixed(3)).toBe('3.000');
+    // The journal reverses the same figure: 9110 nets to 0.
+    expect(await cogsSince()).toBe('0.00');
   });
 
   it('expense posted then cancelled before the return: the return uses the original cost', async () => {

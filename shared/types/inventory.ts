@@ -1,6 +1,8 @@
 import { TranslatableField } from './i18n';
 
-export type ProductType = 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE' | 'BUNDLE';
+export type ProductType = 'PRODUCT' | 'RAW_MATERIAL' | 'FINISHED_PRODUCT' | 'SERVICE' | 'BUNDLE';
+/** Where the card cost comes from (TZ "Ishlab chiqarish" 3.4). */
+export type ProductCostSource = 'MANUAL' | 'PURCHASE' | 'RECIPE_ESTIMATE' | 'PRODUCTION_ACTUAL';
 export type UnitOfMeasure = 'piece' | 'kg' | 'liter' | 'meter' | 'box' | 'pack';
 export type InventoryDocType = 'INBOUND' | 'OUTBOUND' | 'STOCKTAKING' | 'TRANSFER';
 export type InventoryDocStatus = 'DRAFT' | 'POSTED' | 'CANCELLED' | 'IN_TRANSIT' | 'RECEIVED';
@@ -32,6 +34,11 @@ export interface Product {
   vatRate: number;
   minStockAlert: number;
   isActive: boolean;
+  /** FINISHED_PRODUCT used as a material by other recipes. */
+  isSemiFinished?: boolean;
+  costSource?: ProductCostSource;
+  /** Extra units: 1 `name` = `factor` base units. */
+  units?: { id?: string; name: string; factor: number | string }[];
   createdAt: string;
   updatedAt: string;
   category?: Category;

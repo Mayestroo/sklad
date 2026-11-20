@@ -154,6 +154,8 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         create: jest.fn(),
       },
       $queryRaw: jest.fn().mockResolvedValue([{ status: 'DRAFT' }]),
+      // No posted sales return blocks a cancel unless a test says so.
+      salesReturn: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn().mockImplementation((cb) => cb(prisma)),
     };
 

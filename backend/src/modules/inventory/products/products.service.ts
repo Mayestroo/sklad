@@ -12,6 +12,43 @@ import { CreateProductDto, UpdateProductDto } from '../dto';
 import { SUPPORTED_CURRENCIES } from '../../../common/validators/currency.validator';
 import { readCompanySettings } from '../../../common/utils/company-settings';
 import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
+import { unitOptionsFor } from '../../../../../shared/production/costing';
+import { refreshEstimatedCosts } from '../../production/estimated-cost';
+
+const productInclude = {
+  category: true,
+  units: { orderBy: { createdAt: 'asc' } },
+} satisfies Prisma.ProductInclude;
+
+/**
+ * Extra units of a product (TZ 8.1): a name not used by the base unit or its
+ * standard sub-units, a positive factor, no duplicates. Factors keep the 12
+ * decimals the column stores.
+ */
+function normalizeUnits(
+  baseUnit: string,
+  units: Array<{ name: string; factor: number }> | undefined,
+): Array<{ name: string; factor: number }> | undefined {
+  if (units === undefined) return undefined;
+  const reserved = new Set(unitOptionsFor(baseUnit).map((u) => u.code));
+  const seen = new Set<string>();
+  return units.map((unit) => {
+    const name = unit.name.trim();
+    const factor = Number(unit.factor);
+    if (!name || reserved.has(name) || seen.has(name.toLowerCase())) {
+      throw new BadRequestException(
+        `«${name}» o'lchov birligi takrorlanmoqda yoki asosiy birlik bilan bir xil / Единица «${name}» повторяется или совпадает с основной`,
+      );
+    }
+    if (!Number.isFinite(factor) || factor <= 0) {
+      throw new BadRequestException(
+        `«${name}» birligi koeffitsiyenti 0 dan katta bo'lishi kerak / Коэффициент единицы «${name}» должен быть больше 0`,
+      );
+    }
+    seen.add(name.toLowerCase());
+    return { name, factor: Number(factor.toFixed(12)) };
+  });
+}
 
 @Injectable()
 export class ProductsService {
@@ -93,6 +130,10 @@ export class ProductsService {
       );
     }
 
+    const isFinished = dto.type === 'FINISHED_PRODUCT';
+    const unitOfMeasure = dto.unitOfMeasure || 'piece';
+    const units = normalizeUnits(unitOfMeasure, dto.units) ?? [];
+
     return this.prisma.product.create({
       data: {
         tenantId,
@@ -102,25 +143,35 @@ export class ProductsService {
         type: dto.type || 'PRODUCT',
         sku,
         barcode: dto.barcode || null,
-        unitOfMeasure: dto.unitOfMeasure || 'piece',
-        costPrice: dto.costPrice || 0,
-        costPriceCurrency,
-        costPriceExchangeRate,
+        unitOfMeasure,
+        // TZ 3.3: a finished product's cost comes from its recipe and
+        // production, never typed in.
+        costPrice: isFinished ? 0 : dto.costPrice || 0,
+        costPriceCurrency: isFinished ? 'UZS' : costPriceCurrency,
+        costPriceExchangeRate: isFinished ? 1 : costPriceExchangeRate,
+        isSemiFinished: isFinished && Boolean(dto.isSemiFinished),
+        ...(units.length
+          ? { units: { create: units.map((u) => ({ ...u, tenantId })) } }
+          : {}),
         salePrice: dto.salePrice || 0,
         salePriceCurrency,
         vatRate: dto.vatRate !== undefined ? dto.vatRate : 12,
         minStockAlert: dto.minStockAlert || 0,
         isActive: true,
       },
-      include: {
-        category: true,
-      },
+      include: productInclude,
     });
   }
 
   private generateSku(type?: CreateProductDto['type']): string {
     const prefix =
-      type === 'RAW_MATERIAL' ? 'RAW' : type === 'SERVICE' ? 'SRV' : 'PRD';
+      type === 'RAW_MATERIAL'
+        ? 'RAW'
+        : type === 'SERVICE'
+          ? 'SRV'
+          : type === 'FINISHED_PRODUCT'
+            ? 'FIN'
+            : 'PRD';
     return `${prefix}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
   }
 
@@ -137,13 +188,15 @@ export class ProductsService {
     }
 
     if (type && type !== 'ALL') {
-      where.type = type as ProductType;
+      const types = type.split(',').filter(Boolean) as ProductType[];
+      where.type = types.length > 1 ? { in: types } : types[0];
     }
 
     let products = await this.prisma.product.findMany({
       where,
       include: {
         category: true,
+        units: { orderBy: { createdAt: 'asc' } },
         stockLevels: {
           include: { warehouse: true },
         },
@@ -197,6 +250,14 @@ export class ProductsService {
           include: { warehouse: true },
         },
         variants: true,
+        units: { orderBy: { createdAt: 'asc' } },
+        _count: {
+          select: {
+            productionRecipes: true,
+            recipeMaterialLines: true,
+            productBatches: true,
+          },
+        },
         productPrices: {
           select: {
             id: true,
@@ -302,6 +363,22 @@ export class ProductsService {
       category: dto.categoryId,
     });
 
+    const nextType = dto.type ?? product.type;
+    if (dto.type && dto.type !== product.type) {
+      await this.assertTypeChangeable(tenantId, id);
+    }
+    const isFinished = nextType === 'FINISHED_PRODUCT';
+    // TZ 3.3: a finished product's cost is read-only (recipe / production).
+    if (isFinished) {
+      delete dto.costPrice;
+      delete dto.costPriceCurrency;
+      delete dto.costPriceExchangeRate;
+    }
+    const units = normalizeUnits(
+      dto.unitOfMeasure ?? product.unitOfMeasure,
+      dto.units,
+    );
+
     const costPriceCurrency =
       dto.costPriceCurrency ?? product.costPriceCurrency;
     const nextCostPrice =
@@ -376,38 +453,136 @@ export class ProductsService {
       }
     }
 
-    return this.prisma.product.update({
-      where: { tenantId, id },
-      data: {
-        name: dto.name ? asJson(dto.name) : undefined,
-        description:
-          dto.description !== undefined ? asJson(dto.description) : undefined,
-        categoryId: dto.categoryId !== undefined ? dto.categoryId : undefined,
-        type: dto.type ?? undefined,
-        sku: dto.sku ?? undefined,
-        barcode: dto.barcode !== undefined ? dto.barcode : undefined,
-        unitOfMeasure: dto.unitOfMeasure ?? undefined,
-        costPrice: dto.costPrice !== undefined ? dto.costPrice : undefined,
-        costPriceCurrency,
-        costPriceExchangeRate,
-        salePrice: dto.salePrice !== undefined ? dto.salePrice : undefined,
-        salePriceCurrency: salePriceCurrency ?? undefined,
-        vatRate: dto.vatRate !== undefined ? dto.vatRate : undefined,
-        minStockAlert:
-          dto.minStockAlert !== undefined ? dto.minStockAlert : undefined,
-        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
-      },
-      include: {
-        category: true,
-        productPrices: {
-          select: {
-            id: true,
-            priceListId: true,
-            price: true,
-            updatedAt: true,
+    const costChanged =
+      !isFinished &&
+      (nextCostPrice !== Number(product.costPrice) ||
+        costPriceCurrency !== product.costPriceCurrency ||
+        costPriceExchangeRate !== Number(product.costPriceExchangeRate));
+
+    return this.prisma.$transaction(async (tx) => {
+      if (units !== undefined) {
+        await tx.productUnit.deleteMany({ where: { tenantId, productId: id } });
+        if (units.length) {
+          await tx.productUnit.createMany({
+            data: units.map((unit) => ({ ...unit, tenantId, productId: id })),
+          });
+        }
+      }
+      const updated = await tx.product.update({
+        where: { tenantId, id },
+        data: {
+          name: dto.name ? asJson(dto.name) : undefined,
+          description:
+            dto.description !== undefined ? asJson(dto.description) : undefined,
+          categoryId: dto.categoryId !== undefined ? dto.categoryId : undefined,
+          type: dto.type ?? undefined,
+          sku: dto.sku ?? undefined,
+          barcode: dto.barcode !== undefined ? dto.barcode : undefined,
+          unitOfMeasure: dto.unitOfMeasure ?? undefined,
+          costPrice: dto.costPrice !== undefined ? dto.costPrice : undefined,
+          costPriceCurrency,
+          costPriceExchangeRate,
+          salePrice: dto.salePrice !== undefined ? dto.salePrice : undefined,
+          salePriceCurrency: salePriceCurrency ?? undefined,
+          vatRate: dto.vatRate !== undefined ? dto.vatRate : undefined,
+          minStockAlert:
+            dto.minStockAlert !== undefined ? dto.minStockAlert : undefined,
+          isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+          isSemiFinished: isFinished
+            ? (dto.isSemiFinished ?? product.isSemiFinished)
+            : false,
+          ...(isFinished && product.type !== 'FINISHED_PRODUCT'
+            ? {
+                costPrice: 0,
+                costPriceCurrency: 'UZS',
+                costPriceExchangeRate: 1,
+                costSource: 'MANUAL' as const,
+              }
+            : {}),
+        },
+        include: {
+          category: true,
+          units: { orderBy: { createdAt: 'asc' } },
+          productPrices: {
+            select: {
+              id: true,
+              priceListId: true,
+              price: true,
+              updatedAt: true,
+            },
           },
         },
+      });
+      // TZ 4.3 / 7: a new material price reaches the recipe estimates.
+      if (costChanged) await refreshEstimatedCosts(tx, tenantId, [id]);
+      return updated;
+    });
+  }
+
+  /**
+   * TZ 3.1: the type is fixed once the product has a recipe or any stock
+   * movement (its accounting depends on it).
+   */
+  private async assertTypeChangeable(tenantId: string, id: string) {
+    const [
+      recipes,
+      recipeLines,
+      batches,
+      receiptItems,
+      invoiceItems,
+      productionLines,
+      stock,
+    ] = await Promise.all([
+      this.prisma.productionRecipe.count({
+        where: { tenantId, productId: id },
+      }),
+      this.prisma.productionRecipeItem.count({
+        where: { recipe: { tenantId }, productId: id },
+      }),
+      this.prisma.productBatch.count({ where: { tenantId, productId: id } }),
+      this.prisma.purchaseReceiptItem.count({
+        where: { receipt: { tenantId }, productId: id },
+      }),
+      this.prisma.salesInvoiceItem.count({
+        where: { invoice: { tenantId }, productId: id },
+      }),
+      this.prisma.productionMaterialLine.count({
+        where: { productionDocument: { tenantId }, productId: id },
+      }),
+      this.prisma.stockLevel.count({
+        where: { tenantId, productId: id, quantity: { not: 0 } },
+      }),
+    ]);
+    if (recipes + recipeLines > 0) {
+      throw new BadRequestException(
+        "Mahsulotning retsepturasi bor, uning turini o'zgartirib bo'lmaydi / У продукта есть рецептура, его тип менять нельзя",
+      );
+    }
+    if (batches + receiptItems + invoiceItems + productionLines + stock > 0) {
+      throw new BadRequestException(
+        "Mahsulot bo'yicha ombor harakati bor, uning turini o'zgartirib bo'lmaydi / По продукту есть складские движения, его тип менять нельзя",
+      );
+    }
+  }
+
+  /**
+   * Products whose name equals `name` (either language, case-insensitive) —
+   * for the duplicate-name warning of the quick-create form (TZ 3.2).
+   */
+  async findByName(tenantId: string, name: string, excludeId?: string) {
+    const q = name.trim().toLowerCase();
+    if (!q) return [];
+    const products = await this.prisma.product.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
       },
+      select: { id: true, name: true, sku: true, type: true },
+    });
+    return products.filter((p) => {
+      const n = (p.name ?? {}) as Record<string, string>;
+      return [n.uz, n.ru].some((v) => v?.trim().toLowerCase() === q);
     });
   }
 
@@ -421,17 +596,40 @@ export class ProductsService {
     }
 
     // Check if product has transaction references
-    const [receiptItems, invoiceItems, batches] = await Promise.all([
-      this.prisma.purchaseReceiptItem.count({
-        where: { receipt: { tenantId }, productId: id },
-      }),
-      this.prisma.salesInvoiceItem.count({
-        where: { invoice: { tenantId }, productId: id },
-      }),
-      this.prisma.productBatch.count({ where: { tenantId, productId: id } }),
-    ]);
+    const [receiptItems, invoiceItems, batches, recipeUses, productionUses] =
+      await Promise.all([
+        this.prisma.purchaseReceiptItem.count({
+          where: { receipt: { tenantId }, productId: id },
+        }),
+        this.prisma.salesInvoiceItem.count({
+          where: { invoice: { tenantId }, productId: id },
+        }),
+        this.prisma.productBatch.count({ where: { tenantId, productId: id } }),
+        // TZ 7: a product used by a recipe is archived, never deleted.
+        Promise.all([
+          this.prisma.productionRecipe.count({
+            where: { tenantId, productId: id },
+          }),
+          this.prisma.productionRecipeItem.count({
+            where: { recipe: { tenantId }, productId: id },
+          }),
+        ]).then(([a, b]) => a + b),
+        Promise.all([
+          this.prisma.productionDocument.count({
+            where: { tenantId, productId: id },
+          }),
+          this.prisma.productionMaterialLine.count({
+            where: { productionDocument: { tenantId }, productId: id },
+          }),
+        ]).then(([a, b]) => a + b),
+      ]);
 
-    const hasTransactions = receiptItems > 0 || invoiceItems > 0 || batches > 0;
+    const hasTransactions =
+      receiptItems > 0 ||
+      invoiceItems > 0 ||
+      batches > 0 ||
+      recipeUses > 0 ||
+      productionUses > 0;
 
     if (hasTransactions) {
       // Soft-delete (archive) to preserve accounting and batch invariants
