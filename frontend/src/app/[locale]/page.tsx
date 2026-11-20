@@ -378,7 +378,7 @@ export default function DashboardPage() {
               cursor: 'pointer',
               fontSize: 'var(--text-sm)',
               fontWeight: period === p.value ? 'var(--font-semibold)' : 'var(--font-regular)',
-              background: period === p.value ? 'var(--color-primary-600)' : 'transparent',
+              background: period === p.value ? 'var(--color-btn-primary-bg, var(--color-primary-600))' : 'transparent',
               color: period === p.value ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
               minHeight: 32,
               transition: 'all var(--transition-fast)',
@@ -554,7 +554,7 @@ export default function DashboardPage() {
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                 {isRu ? 'В производстве' : 'Ishlab chiqarishda'}
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-warning-600)' }}>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-warning-700)' }}>
                 {(orderStats.pipeline?.SENT_TO_PRODUCTION || 0) + (orderStats.pipeline?.IN_PRODUCTION || 0) + (orderStats.pipeline?.PARTIALLY_READY || 0)}
               </div>
             </div>
@@ -563,7 +563,7 @@ export default function DashboardPage() {
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                 {isRu ? 'Ожидают оплаты' : 'To‘lov kutilmoqda'}
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-error-600)' }}>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-error-700)' }}>
                 {orderStats.pipeline?.AWAITING_PAYMENT || 0}
               </div>
             </div>
@@ -572,7 +572,7 @@ export default function DashboardPage() {
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                 {isRu ? 'Готовы к отгрузке' : 'Jo‘natishga tayyor'}
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-success-600)' }}>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-success-700)' }}>
                 {orderStats.pipeline?.READY_TO_SHIP || 0}
               </div>
             </div>
@@ -581,7 +581,7 @@ export default function DashboardPage() {
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                 {isRu ? 'Отгружены' : 'Jo‘natilgan'}
               </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-info-600)' }}>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-info-700)' }}>
                 {orderStats.pipeline?.SHIPPED || 0}
               </div>
             </div>
@@ -601,20 +601,20 @@ export default function DashboardPage() {
               <MultiCurrencyValue
                 items={data?.debts?.receivable?.byCurrency}
                 locale={locale}
-                color="var(--color-success-600)"
+                color="var(--color-success-700)"
               />
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                 {data?.debts?.receivable?.count ?? 0} {isRu ? 'контрагентов' : 'ta kontragent'}
               </div>
             </div>
             <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-full)', background: 'var(--color-success-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowDownRight size={24} style={{ color: 'var(--color-success-600)' }} />
+              <ArrowDownRight size={24} style={{ color: 'var(--color-success-700)' }} />
             </div>
           </div>
           {data?.debts?.receivable?.topDebtors?.slice(0, 3).map((d) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{d.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, d.currency)}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-700)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, d.currency)}</span>
             </div>
           ))}
         </Card>
@@ -629,20 +629,20 @@ export default function DashboardPage() {
               <MultiCurrencyValue
                 items={data?.debts?.payable?.byCurrency}
                 locale={locale}
-                color="var(--color-error-600)"
+                color="var(--color-error-700)"
               />
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                 {data?.debts?.payable?.count ?? 0} {isRu ? 'контрагентов' : 'ta kontragent'}
               </div>
             </div>
             <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-full)', background: 'var(--color-error-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowUpRight size={24} style={{ color: 'var(--color-error-600)' }} />
+              <ArrowUpRight size={24} style={{ color: 'var(--color-error-700)' }} />
             </div>
           </div>
           {data?.debts?.payable?.topCreditors?.slice(0, 3).map((c) => (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{c.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, c.currency)}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-700)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, c.currency)}</span>
             </div>
           ))}
         </Card>
@@ -670,7 +670,7 @@ export default function DashboardPage() {
                   cursor: 'pointer',
                   fontSize: 'var(--text-xs)',
                   fontWeight: cashFlowGranularity === g ? 'var(--font-semibold)' : 'var(--font-regular)',
-                  background: cashFlowGranularity === g ? 'var(--color-primary-600)' : 'var(--color-bg-secondary)',
+                  background: cashFlowGranularity === g ? 'var(--color-btn-primary-bg, var(--color-primary-600))' : 'var(--color-bg-secondary)',
                   color: cashFlowGranularity === g ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
                   minHeight: 32,
                   transition: 'all var(--transition-fast)',
@@ -686,11 +686,11 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего приход (UZS)' : 'Jami kirim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalIncome, 'UZS')}</div>
+              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalIncome, 'UZS')}</div>
             </div>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего расход (UZS)' : 'Jami chiqim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalExpense, 'UZS')}</div>
+              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-error-700)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalExpense, 'UZS')}</div>
             </div>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистый поток (UZS)' : 'Sof oqim (UZS)'}</div>
@@ -750,9 +750,9 @@ export default function DashboardPage() {
                       justifyContent: 'center',
                       background: tx.direction === 'INCOME' ? 'var(--color-success-50)' : tx.direction === 'EXPENSE' ? 'var(--color-error-50)' : 'var(--color-info-50)',
                     }}>
-                      {tx.direction === 'INCOME' && <TrendingUp size={16} style={{ color: 'var(--color-success-600)' }} />}
-                      {tx.direction === 'EXPENSE' && <TrendingDown size={16} style={{ color: 'var(--color-error-600)' }} />}
-                      {tx.direction === 'TRANSFER' && <ArrowRight size={16} style={{ color: 'var(--color-info-600)' }} />}
+                      {tx.direction === 'INCOME' && <TrendingUp size={16} style={{ color: 'var(--color-success-700)' }} />}
+                      {tx.direction === 'EXPENSE' && <TrendingDown size={16} style={{ color: 'var(--color-error-700)' }} />}
+                      {tx.direction === 'TRANSFER' && <ArrowRight size={16} style={{ color: 'var(--color-info-700)' }} />}
                     </div>
                     <div>
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>

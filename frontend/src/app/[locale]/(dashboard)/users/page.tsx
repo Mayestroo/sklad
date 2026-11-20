@@ -306,7 +306,7 @@ export default function UsersPage() {
                               setDeletingUser(user);
                               setDeleteError(null);
                             }}
-                            style={{ color: 'var(--color-error-600)', padding: '4px 8px' }}
+                            style={{ color: 'var(--color-error-700)', padding: '4px 8px' }}
                             title={isRu ? 'Удалить' : "O'chirish"}
                           >
                             <Trash2 size={15} />
@@ -326,7 +326,7 @@ export default function UsersPage() {
       <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md">
 
         {createError && (
-          <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
+          <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
             {createError}
           </div>
         )}
@@ -430,7 +430,7 @@ export default function UsersPage() {
       <Modal isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md">
 
         {editError && (
-          <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+          <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
             <AlertCircle size={16} />
             <span>{editError}</span>
           </div>
@@ -535,7 +535,7 @@ export default function UsersPage() {
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-700)' }}>
               <Trash2 size={24} />
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Удалить сотрудника?' : 'Foydalanuvchini o‘chirish?'}
@@ -543,7 +543,7 @@ export default function UsersPage() {
             </div>
 
             {deleteError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
                 <AlertCircle size={16} />
                 <span>{deleteError}</span>
               </div>

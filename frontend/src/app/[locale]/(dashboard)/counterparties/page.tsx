@@ -604,10 +604,10 @@ export default function CounterpartiesPage() {
                   {isRu ? 'Клиенты' : 'Mijozlar'}
                 </span>
                 <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Users size={15} style={{ color: 'var(--color-info-600)' }} />
+                  <Users size={15} style={{ color: 'var(--color-info-700)' }} />
                 </div>
               </div>
-              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-info-600)' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-info-700)' }}>
                 {summary?.total_customers ?? totalCustomers}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
@@ -637,10 +637,10 @@ export default function CounterpartiesPage() {
                   {isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
                 </span>
                 <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Tag size={15} style={{ color: 'var(--color-warning-600)' }} />
+                  <Tag size={15} style={{ color: 'var(--color-warning-700)' }} />
                 </div>
               </div>
-              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-warning-600)' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-warning-700)' }}>
                 {summary?.total_suppliers ?? totalSuppliers}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
@@ -672,19 +672,19 @@ export default function CounterpartiesPage() {
                 <span style={{
                   fontSize: '11px', fontWeight: 700,
                   background: 'rgba(16,185,129,0.15)',
-                  color: 'var(--color-success-600)',
+                  color: 'var(--color-success-700)',
                   padding: '3px 9px', borderRadius: 20,
                   border: '1px solid rgba(16,185,129,0.25)',
                 }}>
                   {summary?.receivables.count ?? 0} {isRu ? 'кл.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-success-600)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '+ Дебиторка' : '+ Haqdorlik'}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-success-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-success-700)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '+ Дебиторка' : '+ Haqdorlik'}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-success-700)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.receivables.byCurrency}
                   locale={locale}
-                  color="var(--color-success-600)"
+                  color="var(--color-success-700)"
                 />
               </div>
             </div>
@@ -713,19 +713,19 @@ export default function CounterpartiesPage() {
                 <span style={{
                   fontSize: '11px', fontWeight: 700,
                   background: 'rgba(239,68,68,0.12)',
-                  color: 'var(--color-error-600)',
+                  color: 'var(--color-error-700)',
                   padding: '3px 9px', borderRadius: 20,
                   border: '1px solid rgba(239,68,68,0.22)',
                 }}>
                   {summary?.payables.count ?? 0} {isRu ? 'пост.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-error-600)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '− Кредиторка' : '− Qarzdorlik'}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-error-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-error-700)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '− Кредиторка' : '− Qarzdorlik'}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-error-700)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.payables.byCurrency}
                   locale={locale}
-                  color="var(--color-error-600)"
+                  color="var(--color-error-700)"
                 />
               </div>
             </div>
@@ -759,7 +759,7 @@ export default function CounterpartiesPage() {
                 activeBg: 'rgba(16, 185, 129, 0.22)',
                 activeBorder: 'rgba(16, 185, 129, 0.55)',
                 activeColor: 'var(--color-success-600)',
-                color: 'var(--color-success-600)',
+                color: 'var(--color-success-700)',
                 dot: 'var(--color-success-500)',
               },
               {
@@ -769,7 +769,7 @@ export default function CounterpartiesPage() {
                 activeBg: 'rgba(239, 68, 68, 0.22)',
                 activeBorder: 'rgba(239, 68, 68, 0.55)',
                 activeColor: 'var(--color-error-600)',
-                color: 'var(--color-error-600)',
+                color: 'var(--color-error-700)',
                 dot: 'var(--color-error-500)',
               },
               {
@@ -1064,7 +1064,7 @@ export default function CounterpartiesPage() {
                             <Button
                               size="sm"
                               variant="secondary"
-                              style={{ color: 'var(--color-error-600)' }}
+                              style={{ color: 'var(--color-error-700)' }}
                               onClick={() => setDeletingCounterparty(item)}
                               title={isRu ? 'Удалить' : 'O\'chirish'}
                             >
@@ -1292,8 +1292,8 @@ export default function CounterpartiesPage() {
                     ? detailItem.balancesByCurrency?.map((balance) => (
                         <div key={balance.currency} style={{ fontSize: 'var(--text-xs)', display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <strong>{balance.currency} · {isRu ? 'Нетто' : 'Net'} {formatCurrency(balance.netBalance, locale, balance.currency)}</strong>
-                          <span style={{ color: 'var(--color-success-600)' }}>{isRu ? 'Клиент' : 'Mijoz'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}</span>
-                          <span style={{ color: 'var(--color-error-600)' }}>{isRu ? 'Поставщик' : 'Ta’minotchi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}</span>
+                          <span style={{ color: 'var(--color-success-700)' }}>{isRu ? 'Клиент' : 'Mijoz'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}</span>
+                          <span style={{ color: 'var(--color-error-700)' }}>{isRu ? 'Поставщик' : 'Ta’minotchi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}</span>
                         </div>
                       ))
                     : <span style={{ color: 'var(--color-text-secondary)' }}>—</span>}

@@ -75,7 +75,7 @@ export default function AccountingPage() {
             {isRu ? `Оборотно-сальдовая ведомость (ОСВ) — ${new Date().getFullYear()} г.` : `Oborotno-Saldovaya Vedomost (OSV) — ${new Date().getFullYear()} y.`}
           </h3>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <ShieldCheck size={16} style={{ color: 'var(--color-success-600)' }} />
+            <ShieldCheck size={16} style={{ color: 'var(--color-success-700)' }} />
             <span>{isRu ? 'Автоматический сбалансированный баланс по стандартам РУз' : 'O‘zbekiston Standartlari bo‘yicha Avtomatik Balanslangan'}</span>
           </div>
         </div>

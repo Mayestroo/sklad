@@ -59,7 +59,7 @@ function MrrValue({ metrics, locale }: { metrics: GlobalMetrics | null; locale: 
   const state = readMrr(metrics);
   if (state.kind === 'missing-currency') {
     return (
-      <span role="alert" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-danger-600)' }}>
+      <span role="alert" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-danger-700)' }}>
         {isRu ? 'Валюта не указана — сумму показать нельзя' : "Valyuta ko'rsatilmagan — summani ko'rsatib bo'lmaydi"}
       </span>
     );
@@ -396,7 +396,7 @@ export default function SuperAdminTenantsPage() {
                 height: '36px',
                 borderRadius: 'var(--radius-md)',
                 backgroundColor: 'var(--color-success-50)',
-                color: 'var(--color-success-600)',
+                color: 'var(--color-success-700)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -449,7 +449,7 @@ export default function SuperAdminTenantsPage() {
                 height: '36px',
                 borderRadius: 'var(--radius-md)',
                 backgroundColor: 'var(--color-info-50)',
-                color: 'var(--color-info-600)',
+                color: 'var(--color-info-700)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -611,7 +611,7 @@ export default function SuperAdminTenantsPage() {
                       <td style={{ padding: '14px 20px' }}>
                         <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{companyName}</div>
                         {t.trialEndsAt && (
-                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-600)', marginTop: '2px' }}>
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-700)', marginTop: '2px' }}>
                             {isRu ? 'Пробный до:' : 'Sinov muddati:'} {formatDate(t.trialEndsAt, locale)}
                           </div>
                         )}
@@ -832,7 +832,7 @@ export default function SuperAdminTenantsPage() {
       >
         {createdCredentials && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start', color: 'var(--color-warning-600)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start', color: 'var(--color-warning-700)' }}>
               <AlertTriangle size={18} style={{ flexShrink: 0 }} />
               <span style={{ fontSize: 'var(--text-sm)' }}>
                 {isRu

@@ -46,7 +46,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <span id={errorId} role="alert" style={{ fontSize: '11px', color: 'var(--color-error-600)' }}>
+          <span id={errorId} role="alert" style={{ fontSize: '11px', color: 'var(--color-error-700)' }}>
             {error}
           </span>
         )}

@@ -340,7 +340,7 @@ export default function BranchesPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setDeletingBranch(branch)}
-                    style={{ padding: '6px', height: 'auto', color: 'var(--color-error-600)' }}
+                    style={{ padding: '6px', height: 'auto', color: 'var(--color-error-700)' }}
                     title={isRu ? 'Удалить филиал' : 'Filialni o‘chirish'}
                   >
                     <Trash2 size={15} />

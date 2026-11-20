@@ -162,14 +162,14 @@ export default function CustomersPage() {
         <Card style={{ padding: 'var(--space-4)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <DollarSign size={18} color="var(--color-warning-600)" />
+              <DollarSign size={18} color="var(--color-warning-700)" />
             </div>
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Общий долг' : 'Umumiy qarz'}</span>
           </div>
           <MultiCurrencyValue
             items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
             locale={locale}
-            color="var(--color-warning-600)"
+            color="var(--color-warning-700)"
           />
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{customersWithDebt} {isRu ? 'клиентов' : 'ta mijozda'}</div>
         </Card>
@@ -292,12 +292,12 @@ export default function CustomersPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 150px), 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
                   {[
                     { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatByCurrency(profile.metrics.totalSalesByCurrency), color: undefined },
-                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatByCurrency(profile.metrics.totalPaidByCurrency), color: 'var(--color-success-600)' },
+                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatByCurrency(profile.metrics.totalPaidByCurrency), color: 'var(--color-success-700)' },
                     { label: isRu ? 'Долг по валютам' : 'Valyuta bo‘yicha qarz', value: profile.metrics.balancesByCurrency
                       .filter((balance) => balance.customerDebt !== 0)
                       .map((balance) => `${balance.currency}: ${formatCurrency(balance.customerDebt, locale, balance.currency)}`)
-                      .join(' · ') || '—', color: 'var(--color-warning-600)' },
-                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency), color: 'var(--color-error-600)' },
+                      .join(' · ') || '—', color: 'var(--color-warning-700)' },
+                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency), color: 'var(--color-error-700)' },
                     { label: isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)', value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'), color: profile.metrics.grossProfit >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' },
                   ].map((m) => (
                     <div key={m.label} style={{ textAlign: 'center' }}>

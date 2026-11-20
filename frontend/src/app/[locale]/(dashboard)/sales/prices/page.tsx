@@ -350,7 +350,7 @@ export default function PricesPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      style={{ color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 6 }}
+                      style={{ color: 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: 6 }}
                       onClick={() => setDeletingPL(selectedPL)}
                     >
                       <Trash2 size={14} /> {isRu ? 'Удалить' : 'O‘chirish'}
@@ -450,7 +450,7 @@ export default function PricesPage() {
                               disabled={isSaving}
                               style={{
                                 background: 'var(--color-success-50)',
-                                color: 'var(--color-success-600)',
+                                color: 'var(--color-success-700)',
                                 border: '1px solid var(--color-success-100)',
                                 borderRadius: 'var(--radius-sm)',
                                 padding: '5px 10px',

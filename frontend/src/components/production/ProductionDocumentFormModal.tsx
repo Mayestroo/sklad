@@ -205,7 +205,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
   );
   const err = (key: string) =>
     errors[key] ? (
-      <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', marginTop: 4 }}>
+      <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', marginTop: 4 }}>
         <AlertTriangle size={12} aria-hidden /> {errors[key]}
       </div>
     ) : null;
@@ -373,7 +373,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
                       </td>
                       <td style={{ padding: '10px 16px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(m.estimatedTotalCost, locale, 'UZS')}
-                        {!m.hasPrice && <AlertTriangle size={13} aria-label={t('narxYoq')} style={{ marginLeft: 4, color: 'var(--color-warning-600)' }} />}
+                        {!m.hasPrice && <AlertTriangle size={13} aria-label={t('narxYoq')} style={{ marginLeft: 4, color: 'var(--color-warning-700)' }} />}
                       </td>
                     </tr>
                   ))}
@@ -426,7 +426,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
                   touch();
                   setCosts((rows) => rows.filter((r) => r.key !== cost.key));
                 }}
-                style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-600)', cursor: 'pointer' }}
+                style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-700)', cursor: 'pointer' }}
               >
                 <Trash2 size={16} aria-hidden />
               </button>

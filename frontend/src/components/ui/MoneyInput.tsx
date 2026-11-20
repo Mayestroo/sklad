@@ -62,7 +62,7 @@ export function MoneyInput({
         style={{ width: '100%', ...(error ? { borderColor: 'var(--color-error-600)' } : {}), ...style }}
       />
       {error && (
-        <span role="alert" style={{ fontSize: '11px', color: 'var(--color-error-600)' }}>
+        <span role="alert" style={{ fontSize: '11px', color: 'var(--color-error-700)' }}>
           {error}
         </span>
       )}

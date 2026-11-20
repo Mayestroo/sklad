@@ -177,11 +177,11 @@ export default function InventoryPage() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-warning-100)', color: 'var(--color-warning-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-warning-100)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <AlertTriangle size={20} />
             </div>
             <div>
-              <div style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)', color: 'var(--color-warning-600)' }}>
+              <div style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
                 {lowStockAlerts.length} ta mahsulot bo&apos;yicha kam qoldiq ogohlantirishi!
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
@@ -397,7 +397,7 @@ export default function InventoryPage() {
             </div>
 
             {scanError && (
-              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
+              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
                 {scanError}
               </div>
             )}

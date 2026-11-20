@@ -39,7 +39,7 @@ export default function SalesInvoiceDetailPage({ params }: PageProps) {
 
   if (!invoice) {
     return (
-      <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-error-600)' }}>
+      <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-error-700)' }}>
         {isRu ? 'Документ не найден' : 'Hujjat topilmadi'}
       </Card>
     );

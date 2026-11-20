@@ -855,7 +855,7 @@ export function DatePicker({
       )}
 
       {error && (
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 500 }}>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 500 }}>
           {error}
         </span>
       )}

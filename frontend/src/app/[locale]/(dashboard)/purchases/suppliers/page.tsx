@@ -116,16 +116,16 @@ export default function SuppliersPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-danger-50)', color: 'var(--color-danger-600)' }}>
+          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-danger-50)', color: 'var(--color-danger-700)' }}>
             <Building2 size={24} />
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Наш общий долг' : 'Umumiy Bizning Qarzimiz'}</div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-600)' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-700)' }} className="tabular-nums">
               <MultiCurrencyValue
                 items={Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
                 locale={locale}
-                color="var(--color-danger-600)"
+                color="var(--color-danger-700)"
               />
             </div>
           </div>
@@ -211,7 +211,7 @@ export default function SuppliersPage() {
                           <Button size="sm" variant="secondary" onClick={() => setEditingSupplier(s)} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
                             <Pencil size={14} />
                           </Button>
-                          <Button size="sm" variant="secondary" style={{ color: 'var(--color-error-600)' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
+                          <Button size="sm" variant="secondary" style={{ color: 'var(--color-error-700)' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
                             <Trash2 size={14} />
                           </Button>
                         </div>

@@ -594,7 +594,7 @@ export default function SalesReturnsPage() {
                     <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)' }}>
                       <div>{getLocalizedName(ret.warehouse?.name)}</div>
                       {ret.defectWarehouse && (
-                        <div style={{ fontSize: '11px', color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <div style={{ fontSize: '11px', color: 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: 3 }}>
                           <span>Brak: {getLocalizedName(ret.defectWarehouse.name)}</span>
                         </div>
                       )}
@@ -639,7 +639,7 @@ export default function SalesReturnsPage() {
                             onClick={() => handleCancelReturn(ret)}
                             disabled={actionLoadingId === ret.id}
                             title={isRu ? 'Отменить' : 'Bekor qilish'}
-                            style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
+                            style={{ padding: '4px 8px', color: 'var(--color-error-700)' }}
                           >
                             <XCircle size={14} />
                           </Button>
@@ -654,7 +654,7 @@ export default function SalesReturnsPage() {
                               setDeleteError(null);
                             }}
                             title={isRu ? 'Удалить' : "O'chirish"}
-                            style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
+                            style={{ padding: '4px 8px', color: 'var(--color-error-700)' }}
                           >
                             <Trash2 size={14} />
                           </Button>
@@ -874,7 +874,7 @@ export default function SalesReturnsPage() {
                       <td colSpan={5} style={{ padding: '10px', textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                         {isRu ? 'Итого к возврату:' : 'Jami qaytariladigan summa:'}
                       </td>
-                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--color-warning-600)' }} className="tabular-nums">
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--color-warning-700)' }} className="tabular-nums">
                         {(formatCurrencyIfAvailable(totalReturnAmount, locale, returnCurrency) ?? '—')}
                       </td>
                     </tr>
@@ -912,8 +912,8 @@ export default function SalesReturnsPage() {
               </div>
               {selectedReturn.defectWarehouse && (
                 <div>
-                  <span style={{ fontSize: '12px', color: 'var(--color-error-600)', display: 'block' }}>{isRu ? 'Склад брака:' : 'Brak ombori:'}</span>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-error-600)' }}>{getLocalizedName(selectedReturn.defectWarehouse.name)}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--color-error-700)', display: 'block' }}>{isRu ? 'Склад брака:' : 'Brak ombori:'}</span>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-error-700)' }}>{getLocalizedName(selectedReturn.defectWarehouse.name)}</span>
                 </div>
               )}
               <div style={{ gridColumn: 'span 2' }}>
@@ -947,7 +947,7 @@ export default function SalesReturnsPage() {
                         </td>
                         <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                           {item.isDefective ? (
-                            <span style={{ fontSize: '11px', color: 'var(--color-error-600)', fontWeight: 600 }}>{isRu ? 'Да' : 'Ha'}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--color-error-700)', fontWeight: 600 }}>{isRu ? 'Да' : 'Ha'}</span>
                           ) : (
                             <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>—</span>
                           )}
@@ -961,7 +961,7 @@ export default function SalesReturnsPage() {
                   <tfoot>
                     <tr style={{ background: 'var(--color-bg-subtle)' }}>
                       <td colSpan={4} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{isRu ? 'Итого:' : 'Jami:'}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--color-warning-600)' }} className="tabular-nums">
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--color-warning-700)' }} className="tabular-nums">
                         {formatCurrency(Number(selectedReturn.totalAmount), locale, selectedReturn.currency)}
                       </td>
                     </tr>
@@ -977,7 +977,7 @@ export default function SalesReturnsPage() {
                 </Button>
               )}
               {selectedReturn.status !== 'CANCELLED' && (
-                <Button variant="secondary" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }} style={{ color: 'var(--color-error-600)' }}>
+                <Button variant="secondary" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }} style={{ color: 'var(--color-error-700)' }}>
                   <XCircle size={16} /> {isRu ? 'Отменить документ' : 'Hujjatni bekor qilish'}
                 </Button>
               )}

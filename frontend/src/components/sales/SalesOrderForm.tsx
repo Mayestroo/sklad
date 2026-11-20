@@ -723,7 +723,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               onClick={() => setIsPayOpen(true)}
               style={{
                 backgroundColor: 'var(--color-success-50)',
-                color: 'var(--color-success-600)',
+                color: 'var(--color-success-700)',
                 border: '1px solid var(--color-success-200)',
                 display: 'flex',
                 alignItems: 'center',
@@ -757,7 +757,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                 variant="secondary"
                 onClick={() => handleTransition('REJECT')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
               >
                 <XCircle size={16} /> {isRu ? 'Отклонить' : 'Rad etish'}
               </Button>
@@ -833,7 +833,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={() => setIsDeliveryNoteOpen(true)}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-success-700)' }}
             >
               <Printer size={16} /> {isRu ? 'Накладная' : 'Yuk xati'}
             </Button>
@@ -854,7 +854,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={() => handleTransition('CANCEL')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
             >
               <XCircle size={16} /> {isRu ? 'Отменить' : 'Bekor qilish'}
             </Button>
@@ -876,7 +876,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="ghost"
               onClick={handleDeleteOrder}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
               title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
             >
               <Trash2 size={16} /> {isRu ? 'Удалить' : "O'chirish"}

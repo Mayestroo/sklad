@@ -275,7 +275,7 @@ export default function StockTransfersPage() {
                               setDeleteConfirmTransfer(tr);
                               setDeleteError(null);
                             }}
-                            style={{ color: 'var(--color-error-600)', padding: '4px 8px' }}
+                            style={{ color: 'var(--color-error-700)', padding: '4px 8px' }}
                             title={isRu ? 'Удалить перемещение' : "O'chirish"}
                           >
                             <Trash2 size={15} />
@@ -288,7 +288,7 @@ export default function StockTransfersPage() {
                         </Button>
                       )}
                       {tr.status === 'RECEIVED' && (
-                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', fontWeight: 'bold' }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-700)', fontWeight: 'bold' }}>
                           ✓ {isRu ? 'Завершено' : 'Yakunlandi'}
                         </span>
                       )}
@@ -372,7 +372,7 @@ export default function StockTransfersPage() {
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {deleteError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
+              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
                 {deleteError}
               </div>
             )}

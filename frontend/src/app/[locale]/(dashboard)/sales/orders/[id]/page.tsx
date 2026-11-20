@@ -39,7 +39,7 @@ export default function SalesOrderDetailPage({ params }: PageProps) {
 
   if (!order) {
     return (
-      <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-error-600)' }}>
+      <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-error-700)' }}>
         {isRu ? 'Заказ не найден' : 'Buyurtma topilmadi'}
       </Card>
     );

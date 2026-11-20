@@ -176,7 +176,7 @@ export default function BillingSettingsPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
                       {plan.features.map((feat, idx) => (
                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                          <CheckCircle size={14} style={{ color: 'var(--color-success-600)', flexShrink: 0 }} />
+                          <CheckCircle size={14} style={{ color: 'var(--color-success-700)', flexShrink: 0 }} />
                           <span>{feat[locale] || feat.uz}</span>
                         </div>
                       ))}
@@ -288,7 +288,7 @@ export default function BillingSettingsPage() {
 
           {checkoutResult ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <div style={{ padding: '12px', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', fontWeight: 'bold' }}>
+              <div style={{ padding: '12px', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', fontWeight: 'bold' }}>
                 ✓ To&apos;lov hisobi shakllantirildi (Invoiced № {checkoutResult.paymentNumber})
               </div>
               <a href={checkoutResult.checkoutUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>

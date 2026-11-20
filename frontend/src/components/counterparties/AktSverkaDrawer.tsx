@@ -231,10 +231,10 @@ export function AktSverkaDrawer({
                           {cp?.balancesByCurrency.map((balance) => (
                             <div key={balance.currency} style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 8 }}>
                               <strong>{balance.currency}</strong>
-                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 4, color: 'var(--color-success-600)' }}>
+                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 4, color: 'var(--color-success-700)' }}>
                                 {isRu ? 'Баланс клиента' : 'Mijoz balansi'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}
                               </div>
-                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, color: 'var(--color-error-600)' }}>
+                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, color: 'var(--color-error-700)' }}>
                                 {isRu ? 'Баланс поставщика' : 'Ta’minotchi balansi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                               </div>
                               <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, fontWeight: 700 }}>

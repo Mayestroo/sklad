@@ -288,7 +288,7 @@ export default function ProductsPage() {
         </Card>
 
         <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <CheckCircle2 size={24} />
           </div>
           <div>
@@ -300,7 +300,7 @@ export default function ProductsPage() {
         </Card>
 
         <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-info-50)', color: 'var(--color-info-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-info-50)', color: 'var(--color-info-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Zap size={24} />
           </div>
           <div>
@@ -315,7 +315,7 @@ export default function ProductsPage() {
           onClick={() => setIsCategoryModalOpen(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', cursor: 'pointer' }}
         >
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Tag size={24} />
           </div>
           <div>
@@ -545,7 +545,7 @@ export default function ProductsPage() {
                             size="sm"
                             onClick={() => setDeletingProduct(p)}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
-                            style={{ color: 'var(--color-error-600)' }}
+                            style={{ color: 'var(--color-error-700)' }}
                           >
                             <Trash2 size={16} />
                           </Button>
@@ -614,7 +614,7 @@ export default function ProductsPage() {
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Порог мин. остатка' : 'Minimal qoldiq chegarasi'}</div>
-                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }}>
                   {selectedProduct.minStockAlert} {unitLabel(selectedProduct.unitOfMeasure, locale)}
                 </div>
               </div>

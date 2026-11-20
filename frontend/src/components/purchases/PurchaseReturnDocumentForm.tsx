@@ -922,7 +922,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
             <span>{isRu ? 'Текущий долг перед поставщиком:' : 'Yetkazib beruvchiga joriy qarz:'}</span>
             <span style={{ fontWeight: 600 }}>{formatCurrencyIfAvailable(currentSupplierDebt, locale, currency) || '—'}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-danger-600)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-danger-700)' }}>
             <span>{isRu ? 'Сумма возврата (уменьшение долга):' : 'Qaytarish summasi (qarz kamayishi):'}</span>
             <span style={{ fontWeight: 600 }}>- {formatCurrencyIfAvailable(totalAmount, locale, currency) || '—'}</span>
           </div>
@@ -932,7 +932,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
             <span style={{ color: projectedSupplierDebt >= 0 ? 'var(--color-text-primary)' : 'var(--color-success-600)' }}>
               {formatCurrencyIfAvailable(projectedSupplierDebt, locale, currency) || '—'}
               {projectedSupplierDebt < 0 && (
-                <span style={{ fontSize: '11px', display: 'block', color: 'var(--color-success-600)', fontWeight: 500 }}>
+                <span style={{ fontSize: '11px', display: 'block', color: 'var(--color-success-700)', fontWeight: 500 }}>
                   ({isRu ? 'Аванс поставщику' : 'Yetkazib beruvchiga avans'})
                 </span>
               )}

@@ -41,7 +41,7 @@ export function OrderTotalsSummary({
 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 600, padding: 'var(--space-2) 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, padding: 'var(--space-2) 0' }}>
         <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
       </div>
 
@@ -79,7 +79,7 @@ export function OrderTotalsSummary({
           <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.grandTotal, locale, currency) : '—'}</span>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-success-600)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-success-700)' }}>
           <span>{isRu ? 'Оплачено (Аванс):' : 'To‘langan (Avans):'}</span>
           <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.paid, locale, currency) : '—'}</span>
         </div>
@@ -103,11 +103,11 @@ export function OrderTotalsSummary({
           </div>
 
           {calculations.minNeededForDispatch > 0 && paymentCondition !== 'CREDIT' ? (
-            <div style={{ fontSize: '11px', color: 'var(--color-error-600)', marginTop: 4, fontWeight: 600 }}>
+            <div style={{ fontSize: '11px', color: 'var(--color-error-700)', marginTop: 4, fontWeight: 600 }}>
               {isRu ? `Необходимо оплатить еще: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}` : `Jo‘natish uchun yana to‘lanishi kerak: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}`}
             </div>
           ) : (
-            <div style={{ fontSize: '11px', color: 'var(--color-success-600)', marginTop: 4, fontWeight: 600 }}>
+            <div style={{ fontSize: '11px', color: 'var(--color-success-700)', marginTop: 4, fontWeight: 600 }}>
               {isRu ? 'Условие для отгрузки выполнено' : 'Jo‘natish sharti bajarilgan'}
             </div>
           )}

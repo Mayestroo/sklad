@@ -130,7 +130,7 @@ export function RecipesTab(props: RecipesTabProps) {
     <span title={t('xomashyoKartalaridagiNarxBoyicha')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
       {t('taxminiy')}
       {recipe.estimate.missingPrice && (
-        <AlertTriangle size={14} aria-label={t('narxiYoqXomashyoBor')} style={{ color: 'var(--color-warning-600)' }} />
+        <AlertTriangle size={14} aria-label={t('narxiYoqXomashyoBor')} style={{ color: 'var(--color-warning-700)' }} />
       )}
     </span>
   );
@@ -181,7 +181,7 @@ export function RecipesTab(props: RecipesTabProps) {
           <tr key={line.productId}>
             <td style={{ ...tdStyle, height: 44 }}>
               {localName(line.product?.name, locale)}
-              {line.product?.isSemiFinished && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--color-info-600)' }}>{semiFinishedLabel(locale)}</span>}
+              {line.product?.isSemiFinished && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--color-info-700)' }}>{semiFinishedLabel(locale)}</span>}
             </td>
             <td style={{ ...tdStyle, height: 44, textAlign: 'right' }} className="tabular-nums">{formatQuantity(Number(line.quantity))}</td>
             <td style={{ ...tdStyle, height: 44 }}>{lineUnit(line)}</td>

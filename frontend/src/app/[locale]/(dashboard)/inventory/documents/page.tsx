@@ -258,7 +258,7 @@ export default function InventoryDocumentsPage() {
             </div>
 
             {createError && (
-              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
+              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
                 {createError}
               </div>
             )}
@@ -346,7 +346,7 @@ export default function InventoryDocumentsPage() {
                             {formatCurrency(item.quantity * item.unitPrice, locale, INVENTORY_COST_CURRENCY)}
                           </td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
-                            <button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'} type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-600)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+                            <button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'} type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-700)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
                           </td>
                         </tr>
                       ))}

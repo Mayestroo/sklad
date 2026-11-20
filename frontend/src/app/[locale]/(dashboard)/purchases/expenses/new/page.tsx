@@ -575,7 +575,7 @@ export default function NewExpensePage() {
                   borderRadius: 'var(--radius-md)',
                   backgroundColor: 'var(--color-warning-50)',
                   border: '1px solid var(--color-warning-100)',
-                  color: 'var(--color-warning-600)',
+                  color: 'var(--color-warning-700)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -723,7 +723,7 @@ export default function NewExpensePage() {
                           padding: '1px 6px',
                           borderRadius: 'var(--radius-full)',
                           backgroundColor: 'var(--color-success-50)',
-                          color: 'var(--color-success-600)',
+                          color: 'var(--color-success-700)',
                           fontWeight: 'var(--font-bold)',
                         }}
                       >
@@ -898,7 +898,7 @@ export default function NewExpensePage() {
                   padding: '3px 10px',
                   borderRadius: 'var(--radius-full)',
                   backgroundColor: 'var(--color-warning-50)',
-                  color: 'var(--color-warning-600)',
+                  color: 'var(--color-warning-700)',
                   fontSize: '11px',
                   fontWeight: 'var(--font-medium)',
                 }}
@@ -998,10 +998,10 @@ export default function NewExpensePage() {
                   <th style={{ padding: '10px 12px', textAlign: 'right' }}>{isRu ? 'Цена закупки' : 'Xarid narxi'}</th>
                   <th style={{ padding: '10px 12px', textAlign: 'right' }}>{isRu ? 'Сумма' : 'Jami xarid'}</th>
                   <th style={{ padding: '10px 12px', textAlign: 'right' }}>{isRu ? 'Тек. себестоимость' : 'Amaldagi tannarx'}</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-700)' }}>
                     {isRu ? '+Расход на поз.' : '+Taqsimlangan xarajat'}
                   </th>
-                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-700)' }}>
                     {isRu ? '+Расход / ед.' : '+Xarajat / dona'}
                   </th>
                   <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-primary-600)', fontWeight: 'var(--font-bold)' }}>
@@ -1055,7 +1055,7 @@ export default function NewExpensePage() {
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
                         {formatUnitCost(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
                         {preview && previewResult ? (
                           <>
                             {formatCurrency(preview.allocatedAmount, locale, previewResult.currency)}
@@ -1067,7 +1067,7 @@ export default function NewExpensePage() {
                           </>
                         ) : '—'}
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-700)', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
                         {preview && previewResult ? `+${formatUnitCost(preview.receiptUnitDelta, locale, previewResult.receiptCurrency)}` : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', fontSize: 'var(--text-sm)' }} className="tabular-nums">
@@ -1082,7 +1082,7 @@ export default function NewExpensePage() {
                               fontSize: '11px',
                               fontWeight: 'var(--font-bold)',
                               backgroundColor: 'var(--color-warning-50)',
-                              color: 'var(--color-warning-600)',
+                              color: 'var(--color-warning-700)',
                               border: '1px solid var(--color-warning-100)',
                             }}
                           >
@@ -1102,7 +1102,7 @@ export default function NewExpensePage() {
                                 fontSize: '10px',
                                 fontWeight: 'var(--font-medium)',
                                 backgroundColor: 'var(--color-success-50)',
-                                color: 'var(--color-success-600)',
+                                color: 'var(--color-success-700)',
                               }}
                             >
                               {quantityWithUnit(preview.remainingQuantity, preview.unitOfMeasure, locale)} {isRu ? 'на складе' : 'omborda'}
@@ -1115,7 +1115,7 @@ export default function NewExpensePage() {
                                   fontSize: '10px',
                                   fontWeight: 'var(--font-medium)',
                                   backgroundColor: 'var(--color-warning-50)',
-                                  color: 'var(--color-warning-600)',
+                                  color: 'var(--color-warning-700)',
                                 }}
                               >
                                 {quantityWithUnit(preview.soldQuantity, preview.unitOfMeasure, locale)} {isRu ? 'продано' : 'sotilgan'}

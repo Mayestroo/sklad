@@ -210,7 +210,7 @@ export function PartialDispatchModal({
               backgroundColor: 'rgba(239, 68, 68, 0.1)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: 'var(--radius-md)',
-              color: 'var(--color-error-600)',
+              color: 'var(--color-error-700)',
               fontSize: 'var(--text-sm)',
               display: 'flex',
               alignItems: 'center',
@@ -309,7 +309,7 @@ export function PartialDispatchModal({
                     <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 500 }}>
                       {quantityWithUnit(totalQty, item.product?.unitOfMeasure, locale)}
                     </td>
-                    <td style={{ padding: '8px 10px', textAlign: 'center', color: 'var(--color-success-600)', fontWeight: 600 }}>
+                    <td style={{ padding: '8px 10px', textAlign: 'center', color: 'var(--color-success-700)', fontWeight: 600 }}>
                       {quantityWithUnit(shippedQty, item.product?.unitOfMeasure, locale)}
                     </td>
                     <td style={{ padding: '8px 10px', textAlign: 'center' }}>

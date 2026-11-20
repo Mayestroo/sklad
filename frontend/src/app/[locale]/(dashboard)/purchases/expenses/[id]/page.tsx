@@ -298,7 +298,7 @@ export default function ExpenseDetailPage() {
           )}
 
           {expense.status === 'POSTED' && (
-            <Button variant="outline" disabled={actionLoading} onClick={() => setCancelModalOpen(true)} style={{ color: 'var(--color-danger-600)', borderColor: 'var(--color-danger-200)' }}>
+            <Button variant="outline" disabled={actionLoading} onClick={() => setCancelModalOpen(true)} style={{ color: 'var(--color-danger-700)', borderColor: 'var(--color-danger-200)' }}>
               <XCircle size={16} style={{ marginRight: '6px' }} />
               {isRu ? 'Отменить проведение' : 'Bekor qilish'}
             </Button>
@@ -308,7 +308,7 @@ export default function ExpenseDetailPage() {
             variant="outline"
             disabled={actionLoading}
             onClick={handleDeleteExpense}
-            style={{ color: 'var(--color-danger-600)', borderColor: 'var(--color-danger-200)' }}
+            style={{ color: 'var(--color-danger-700)', borderColor: 'var(--color-danger-200)' }}
           >
             <Trash2 size={16} style={{ marginRight: '6px' }} />
             {isRu ? 'Удалить' : 'O‘chirish'}
@@ -427,7 +427,7 @@ export default function ExpenseDetailPage() {
               <tr style={{ borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'left', color: 'var(--color-text-secondary)' }}>
                 <th style={{ padding: '8px 12px', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Товар' : 'Tovar'}</th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Старая себестоимость' : 'Eski tannarx'}</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }}>
+                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }}>
                   {isRu ? 'Доп. расход' : 'Taqsimlangan xarajat'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
@@ -479,11 +479,11 @@ export default function ExpenseDetailPage() {
                       {percent != null ? `+${formatPercent(percent)}` : '—'}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                      <span style={{ color: 'var(--color-success-600)', fontWeight: 'var(--font-medium)' }}>
+                      <span style={{ color: 'var(--color-success-700)', fontWeight: 'var(--font-medium)' }}>
                         {quantityWithUnit(item.remainingQuantity, item.product?.unitOfMeasure, locale)} {isRu ? 'на складе' : 'omborda'}
                       </span>
                       {Number(item.soldQuantity) > 0 && (
-                        <span style={{ color: 'var(--color-warning-600)', marginLeft: '4px' }}>
+                        <span style={{ color: 'var(--color-warning-700)', marginLeft: '4px' }}>
                           / {quantityWithUnit(item.soldQuantity, item.product?.unitOfMeasure, locale)} {isRu ? 'продано' : 'sotilgan'}
                         </span>
                       )}
@@ -548,7 +548,7 @@ export default function ExpenseDetailPage() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-            <AlertTriangle size={24} color="var(--color-danger-600)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <AlertTriangle size={24} color="var(--color-danger-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {isRu
                 ? 'Вы действительно хотите отменить этот расход? Себестоимость складских остатков и ретроактивные корректировки счетов продаж будут возвращены в исходное состояние.'

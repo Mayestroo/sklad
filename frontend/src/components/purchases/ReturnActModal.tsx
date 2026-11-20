@@ -136,7 +136,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
             <span style={{ fontWeight: 600, color: '#1e40af' }}>{isRu ? 'Причина возврата: ' : 'Qaytarish sababi: '}</span>
             <span style={{ color: '#1e3a8a' }}>{purchaseReturn.reason || (isRu ? 'Не указана' : 'Ko‘rsatilmadi')}</span>
             {purchaseReturn.comment && (
-              <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--color-info-600)' }}>
+              <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--color-info-700)' }}>
                 {isRu ? 'Примечание: ' : 'Izoh: '}{purchaseReturn.comment}
               </div>
             )}

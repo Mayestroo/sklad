@@ -340,7 +340,7 @@ export default function SalesOrdersPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'В производстве' : 'Ishlab chiqarilmoqda'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)', marginTop: '2px' }} className="tabular-nums">
               {(stats?.inProduction || 0) + (stats?.sentToProduction || 0)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -357,7 +357,7 @@ export default function SalesOrdersPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Готовы к отгрузке' : 'Jo‘natishga tayyor'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)', marginTop: '2px' }} className="tabular-nums">
               {stats?.readyToShip || 0}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -374,7 +374,7 @@ export default function SalesOrdersPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Завершено' : 'Bajarilgan'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-info-600)', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-info-700)', marginTop: '2px' }} className="tabular-nums">
               {stats?.completed || 0}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -664,7 +664,7 @@ export default function SalesOrdersPage() {
                         {formatCurrency(Number(ord.totalAmount || 0), locale, ord.currency)}
                       </td>
 
-                      <td data-label={isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'} style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
+                      <td data-label={isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'} style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-700)', fontWeight: 500 }} className="tabular-nums">
                         {formatCurrency(Number(ord.paidAmount || 0), locale, ord.currency)}
                       </td>
 
@@ -697,7 +697,7 @@ export default function SalesOrdersPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setDeliveryNoteOrder(ord)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-600)' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-700)' }}
                               title={isRu ? 'Накладная (Yuk xati)' : 'Yuk xati (Nakladnaya)'}
                             >
                               <Printer size={14} />
@@ -708,7 +708,7 @@ export default function SalesOrdersPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setPayOrder(ord)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-600)' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-700)' }}
                               title={isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
                             >
                               <CreditCard size={14} />
@@ -722,7 +722,7 @@ export default function SalesOrdersPage() {
                                 setDeleteConfirmOrder(ord);
                                 setDeleteError(null);
                               }}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)' }}
                               title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
                             >
                               <Trash2 size={14} />

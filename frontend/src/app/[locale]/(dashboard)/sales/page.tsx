@@ -252,7 +252,7 @@ export default function SalesPage() {
             <MultiCurrencyValue
               items={stats?.totalCustomerDebtByCurrency}
               locale={locale}
-              color="var(--color-error-600)"
+              color="var(--color-error-700)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.customersWithDebtCount || 0} {isRu ? 'клиентов' : 'ta mijoz qarzdor'}
@@ -271,7 +271,7 @@ export default function SalesPage() {
             <MultiCurrencyValue
               items={stats?.monthlyReturnsByCurrency}
               locale={locale}
-              color="var(--color-warning-600)"
+              color="var(--color-warning-700)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {isRu ? 'Сумма возвратов' : 'Qaytarilgan tovarlar'}
@@ -290,7 +290,7 @@ export default function SalesPage() {
             <MultiCurrencyValue
               items={stats?.monthlyGrossProfitByCurrency}
               locale={locale}
-              color="var(--color-success-600)"
+              color="var(--color-success-700)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {isRu ? 'Маржинальность:' : 'Marja:'} {formatPercent(Number(stats?.monthlyGrossProfitMargin || 0))}
@@ -505,7 +505,7 @@ export default function SalesPage() {
                       {formatCurrency(Number(inv.totalAmount || 0), locale, inv.currency)}
                     </td>
 
-                    <td data-label={isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'} style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
+                    <td data-label={isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'} style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-700)', fontWeight: 500 }} className="tabular-nums">
                       {formatCurrency(Number(inv.paidAmount || 0), locale, inv.currency)}
                     </td>
 
@@ -536,7 +536,7 @@ export default function SalesPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setPayInvoice(inv)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-600)' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-700)' }}
                               title={isRu ? 'Принять оплату' : 'To‘lov olish'}
                             >
                               <CreditCard size={14} />
@@ -544,7 +544,7 @@ export default function SalesPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setReturnInvoice(inv)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-warning-600)' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}
                               title={isRu ? 'Оформить возврат' : 'Qaytaruv'}
                             >
                               <RotateCcw size={14} />
@@ -555,7 +555,7 @@ export default function SalesPage() {
                         <Button
                           variant="secondary"
                           onClick={() => setDeletingInvoice(inv)}
-                          style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}
+                          style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)' }}
                           title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
                         >
                           <Trash2 size={14} />

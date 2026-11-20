@@ -37,9 +37,9 @@ const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] 
   { slug: 'LEAD', nameUz: 'Lidlar (Yangi)', nameRu: 'Лиды (Новые)', color: 'var(--color-primary-600)' },
   { slug: 'QUALIFICATION', nameUz: 'Saralash', nameRu: 'Квалификация', color: '#8b5cf6' },
   { slug: 'PROPOSAL', nameUz: 'Tijorat Taklifi', nameRu: 'Коммерческое предл.', color: '#ec4899' },
-  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', color: 'var(--color-warning-600)' },
-  { slug: 'WON', nameUz: 'G\'alaba (Shartnoma)', nameRu: 'Успешно (Выиграно)', color: 'var(--color-success-600)' },
-  { slug: 'LOST', nameUz: 'Mag\'lubiyat', nameRu: 'Проиграно', color: 'var(--color-error-600)' },
+  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', color: 'var(--color-warning-700)' },
+  { slug: 'WON', nameUz: 'G\'alaba (Shartnoma)', nameRu: 'Успешно (Выиграно)', color: 'var(--color-success-700)' },
+  { slug: 'LOST', nameUz: 'Mag\'lubiyat', nameRu: 'Проиграно', color: 'var(--color-error-700)' },
 ];
 
 export default function CrmKanbanPage() {

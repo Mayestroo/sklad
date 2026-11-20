@@ -113,7 +113,7 @@ export default function RegisterPage() {
             gap: 'var(--space-3)',
           }}
         >
-          <MailCheck size={22} aria-hidden style={{ color: 'var(--color-success-600)', flexShrink: 0 }} />
+          <MailCheck size={22} aria-hidden style={{ color: 'var(--color-success-700)', flexShrink: 0 }} />
           <div>
             <div style={{ fontWeight: 'var(--font-semibold)', marginBottom: '4px' }}>{t('checkInboxTitle')}</div>
             <div>{t('checkInboxText', { email: sentTo })}</div>

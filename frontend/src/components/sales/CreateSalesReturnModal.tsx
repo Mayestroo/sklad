@@ -318,7 +318,7 @@ export function CreateSalesReturnModal({
               backgroundColor: 'rgba(239, 68, 68, 0.1)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: 'var(--radius-md)',
-              color: 'var(--color-error-600)',
+              color: 'var(--color-error-700)',
               fontSize: 'var(--text-sm)',
               display: 'flex',
               alignItems: 'center',
@@ -546,13 +546,13 @@ export function CreateSalesReturnModal({
               </div>
             )}
             {hasDefectiveItems && (
-              <div style={{ fontSize: '12px', color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <AlertCircle size={13} />
                 <span>{isRu ? 'Бракованные товары будут направлены на склад брака' : 'Brak tovarlar alohida brak omboriga kirim qilinadi'}</span>
               </div>
             )}
           </div>
-          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-warning-600)' }} className="tabular-nums">
+          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-warning-700)' }} className="tabular-nums">
             {formatCurrency(returnTotal, locale, invoice.currency)}
           </span>
         </div>

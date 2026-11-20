@@ -47,7 +47,7 @@ export function ConfirmRegistration({ token }: { token: string | null }) {
         borderRadius: 'var(--radius-md)',
         backgroundColor: 'var(--color-error-50)',
         border: '1px solid var(--color-error-100)',
-        color: 'var(--color-error-600)',
+        color: 'var(--color-error-700)',
         fontSize: 'var(--text-sm)',
         display: 'flex',
         alignItems: 'center',

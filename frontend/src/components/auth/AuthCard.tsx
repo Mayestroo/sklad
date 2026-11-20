@@ -102,7 +102,7 @@ export function AuthField({ label, icon: Icon, hint, error, password = false, id
     <div>
       <label htmlFor={inputId} style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-primary)', marginBottom: '6px' }}>
         {label}
-        {required && <span aria-hidden style={{ color: 'var(--color-error-600)' }}> *</span>}
+        {required && <span aria-hidden style={{ color: 'var(--color-error-700)' }}> *</span>}
       </label>
       <div style={{ position: 'relative' }}>
         {Icon && (

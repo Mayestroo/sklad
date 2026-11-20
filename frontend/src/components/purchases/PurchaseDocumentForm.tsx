@@ -716,7 +716,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             padding: '1px 6px',
             borderRadius: '4px',
             backgroundColor: 'rgba(16, 185, 129, 0.12)',
-            color: 'var(--color-success-600)',
+            color: 'var(--color-success-700)',
             border: '1px solid rgba(16, 185, 129, 0.3)',
             lineHeight: '14px',
             whiteSpace: 'nowrap',
@@ -738,7 +738,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             padding: '1px 6px',
             borderRadius: '4px',
             backgroundColor: 'rgba(245, 158, 11, 0.12)',
-            color: 'var(--color-warning-600)',
+            color: 'var(--color-warning-700)',
             border: '1px solid rgba(245, 158, 11, 0.3)',
             lineHeight: '14px',
             whiteSpace: 'nowrap',
@@ -759,7 +759,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           padding: '1px 6px',
           borderRadius: '4px',
           backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          color: 'var(--color-info-600)',
+          color: 'var(--color-info-700)',
           border: '1px solid rgba(59, 130, 246, 0.3)',
           lineHeight: '14px',
           whiteSpace: 'nowrap',
@@ -989,7 +989,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       {docStatus === 'POSTED' && (
         <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <AlertTriangle size={20} color="var(--color-warning-600)" />
+            <AlertTriangle size={20} color="var(--color-warning-700)" />
             <div>
               <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                 {isRu ? 'Документ проведён и заблокирован от изменений' : 'Hujjat tasdiqlangan va o‘zgarishlardan qulflangan'}

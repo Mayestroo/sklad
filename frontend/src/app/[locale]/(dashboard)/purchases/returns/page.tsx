@@ -522,7 +522,7 @@ export default function ReturnsPage() {
                                   setDeleteError(null);
                                 }}
                                 title={isRu ? 'Удалить' : "O'chirish"}
-                                style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
+                                style={{ padding: '4px 8px', color: 'var(--color-error-700)' }}
                               >
                                 <Trash2 size={15} />
                               </Button>

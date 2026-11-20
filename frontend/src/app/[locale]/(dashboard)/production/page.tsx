@@ -201,15 +201,15 @@ export default function ProductionPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
         {tab === 'documents' ? (
           <>
-            <Kpi icon={<Clock3 size={20} aria-hidden />} title={t('jarayonda')} value={stats ? String(stats.inProgress) : '…'} color="var(--color-warning-600)" active={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })} />
-            <Kpi icon={<CheckCircle2 size={20} aria-hidden />} title={t('yakunlangan')} value={stats ? String(stats.completed) : '…'} color="var(--color-success-600)" active={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })} />
+            <Kpi icon={<Clock3 size={20} aria-hidden />} title={t('jarayonda')} value={stats ? String(stats.inProgress) : '…'} color="var(--color-warning-700)" active={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })} />
+            <Kpi icon={<CheckCircle2 size={20} aria-hidden />} title={t('yakunlangan')} value={stats ? String(stats.completed) : '…'} color="var(--color-success-700)" active={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })} />
             <Kpi icon={<Factory size={20} aria-hidden />} title={t('ishlabChiqarishTannarxi')} hint={t('yakunlanganHujjatlarTanlanganDavrVa')} value={stats ? formatCurrency(stats.completedCost, locale, 'UZS') : '…'} color="var(--color-primary-600)" active={false} onClick={() => setDocFilter({ status: 'COMPLETED' })} />
           </>
         ) : (
           <>
             <Kpi icon={<Layers3 size={20} aria-hidden />} title={t('jamiRetseptura')} value={String(recipeStats.total)} color="var(--color-primary-600)" active={recipeStatus === 'all' && !uncostedOnly} onClick={() => { setRecipeStatus('all'); setUncostedOnly(false); }} />
-            <Kpi icon={<ListChecks size={20} aria-hidden />} title={t('faol')} value={String(recipeStats.active)} color="var(--color-success-600)" active={recipeStatus === 'active'} onClick={() => setRecipeStatus(recipeStatus === 'active' ? 'all' : 'active')} />
-            <Kpi icon={<AlertTriangle size={20} aria-hidden />} title={t('tannarxiHisoblanmagan')} hint={t('narxsizXomashyoBor')} value={String(recipeStats.uncosted)} color="var(--color-warning-600)" active={uncostedOnly} onClick={() => setUncostedOnly(!uncostedOnly)} />
+            <Kpi icon={<ListChecks size={20} aria-hidden />} title={t('faol')} value={String(recipeStats.active)} color="var(--color-success-700)" active={recipeStatus === 'active'} onClick={() => setRecipeStatus(recipeStatus === 'active' ? 'all' : 'active')} />
+            <Kpi icon={<AlertTriangle size={20} aria-hidden />} title={t('tannarxiHisoblanmagan')} hint={t('narxsizXomashyoBor')} value={String(recipeStats.uncosted)} color="var(--color-warning-700)" active={uncostedOnly} onClick={() => setUncostedOnly(!uncostedOnly)} />
           </>
         )}
       </div>

@@ -53,7 +53,7 @@ export default function SuperAdminSecurityPage() {
       >
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <HardDrive size={18} style={{ color: 'var(--color-success-600)' }} />
+            <HardDrive size={18} style={{ color: 'var(--color-success-700)' }} />
             <span>{isRu ? 'Резервные копии' : 'Zaxira nusxalar'}</span>
           </div>
         </div>

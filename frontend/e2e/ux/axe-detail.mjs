@@ -16,7 +16,7 @@ await page.evaluate(([b, theme]) => {
   localStorage.setItem('crm_refresh_token', b.tokens.refreshToken);
   localStorage.setItem('crm_user', JSON.stringify(b.user));
   if (b.company) localStorage.setItem('crm_company', JSON.stringify(b.company));
-  if (theme === 'dark') localStorage.setItem('theme', 'dark');
+  if (theme === 'dark') localStorage.setItem('crm_theme', 'dark');
 }, [b, theme]);
 await page.goto(BASE + route, { waitUntil: 'networkidle' });
 await page.waitForTimeout(500);

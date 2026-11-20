@@ -148,7 +148,7 @@ export default function AnalyticsPage() {
                   locale={locale}
                 />
               </div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-700)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <ArrowUpRight size={14} /> <span>{isRu ? 'Сумма по документам реализации' : 'Shartnomalar bo\'yicha yig\'indi'}</span>
               </div>
             </Card>
@@ -160,11 +160,11 @@ export default function AnalyticsPage() {
                 </div>
                 <Badge variant="success">+{kpi?.netProfitMargin || 0}% Margin</Badge>
               </div>
-              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '8px' }} className="tabular-nums">
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)', marginTop: '8px' }} className="tabular-nums">
                 <MultiCurrencyValue
                   items={kpi?.grossProfitByCurrency}
                   locale={locale}
-                  color="var(--color-success-600)"
+                  color="var(--color-success-700)"
                 />
               </div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
@@ -179,7 +179,7 @@ export default function AnalyticsPage() {
               <MultiCurrencyValue
                 items={kpi?.receivablesByCurrency}
                 locale={locale}
-                color="var(--color-warning-600)"
+                color="var(--color-warning-700)"
               />
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Ожидаемые поступления от клиентов' : 'Mijozlardan kelib tushishi kutilayotgan mablag\''}
@@ -193,7 +193,7 @@ export default function AnalyticsPage() {
               <MultiCurrencyValue
                 items={kpi?.payablesByCurrency}
                 locale={locale}
-                color="var(--color-error-600)"
+                color="var(--color-error-700)"
               />
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
                 {isRu ? 'Задолженность перед поставщиками' : 'Yetkazib beruvchilar oldidagi qarzimiz'}
@@ -360,7 +360,7 @@ export default function AnalyticsPage() {
                             {client.invoiceCount} {isRu ? 'счетов' : 'ta faktura'} {client.inn ? `| ИНН: ${client.inn}` : ''}
                           </div>
                         </div>
-                        <div style={{ fontWeight: 'bold', color: 'var(--color-success-600)' }} className="tabular-nums">
+                        <div style={{ fontWeight: 'bold', color: 'var(--color-success-700)' }} className="tabular-nums">
                           {formatCurrency(client.totalSpent, locale, client.currency)}
                         </div>
                       </div>
@@ -400,7 +400,7 @@ export default function AnalyticsPage() {
                     <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
                       {isRu ? 'ПЕРИОД СБОРА ДЕБИТОРКИ (ДНЕЙ)' : 'QARZDORLIK YIG\'ISH MUDDATI (AR DAYS)'}
                     </div>
-                    <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
+                    <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
                       {ratios && ratios.arCollectionDays !== null ? `${ratios.arCollectionDays} ${isRu ? 'дн.' : 'kun'}` : notComputable}
                     </div>
                   </div>

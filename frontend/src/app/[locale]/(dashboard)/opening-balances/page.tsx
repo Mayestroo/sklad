@@ -787,13 +787,13 @@ export default function OpeningBalancesPage() {
                       <CheckCircle2 size={14} />
                       <span>{actionLoading ? (isRu ? 'Подождите...' : 'Kuting...') : isRu ? 'Провести' : 'Tasdiqlash'}</span>
                     </Button>
-                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
+                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}>
                       <Trash2 size={14} />
                     </Button>
                   </>
                 )}
                 {currentDoc && isPosted && (
-                  <Button variant="secondary" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
+                  <Button variant="secondary" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}>
                     <RotateCcw size={14} />
                     <span>{isRu ? 'Переоткрыть' : 'Qayta ochish'}</span>
                   </Button>
@@ -812,14 +812,14 @@ export default function OpeningBalancesPage() {
           {/* Summary: assets, liabilities, capital (balances itself) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
             <SummaryCard
-              color="var(--color-success-600)"
+              color="var(--color-success-700)"
               icon={<TrendingUp size={20} />}
               title={isRu ? 'Активы' : 'Aktivlar'}
               value={formatCurrency(totals.totalAssets, locale, docCurrency)}
               hint={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
             />
             <SummaryCard
-              color="var(--color-error-600)"
+              color="var(--color-error-700)"
               icon={<TrendingDown size={20} />}
               title={isRu ? 'Обязательства' : 'Majburiyatlar'}
               value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
@@ -1063,10 +1063,10 @@ export default function OpeningBalancesPage() {
 
           {importErrors.length > 0 && (
             <div style={{ backgroundColor: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', maxHeight: '180px', overflowY: 'auto' }}>
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-error-600)', display: 'block', marginBottom: '4px' }}>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-error-700)', display: 'block', marginBottom: '4px' }}>
                 {isRu ? 'Ошибки в файле Excel:' : 'Excel fayldagi xatoliklar:'}
               </span>
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)' }}>
                 {importErrors.map((err, idx) => (
                   <li key={idx}>
                     <strong>
@@ -1098,7 +1098,7 @@ export default function OpeningBalancesPage() {
                 </div>
               )}
               {importSummary.canCommit && (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', color: 'var(--color-warning-600)' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', color: 'var(--color-warning-700)' }}>
                   <AlertTriangle size={16} style={{ flexShrink: 0 }} />
                   <span>
                     {isRu
@@ -1133,7 +1133,7 @@ export default function OpeningBalancesPage() {
       <Modal isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', border: '1px solid var(--color-warning-100)', display: 'flex', gap: '10px' }}>
-            <AlertTriangle size={20} color="var(--color-warning-600)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <AlertTriangle size={20} color="var(--color-warning-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
               {isRu
                 ? 'Документ вернётся в черновик, а кассы, склады, расчёты и журнал — в состояние до проведения. Если товары из начальных партий уже проданы или деньги из кассы потрачены, переоткрыть нельзя.'
@@ -1594,7 +1594,7 @@ function FixedAssetsTable({
                 <td style={{ ...td, textAlign: 'right' }} className="tabular-nums">
                   {line.fixedAssetId ? formatCurrency(initCost, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ ...td, textAlign: 'right', color: 'var(--color-error-600)' }} className="tabular-nums">
+                <td style={{ ...td, textAlign: 'right', color: 'var(--color-error-700)' }} className="tabular-nums">
                   {line.fixedAssetId ? formatCurrency(accDep, locale, 'UZS') : '—'}
                 </td>
                 <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : 'var(--color-success-600)' }} className="tabular-nums">

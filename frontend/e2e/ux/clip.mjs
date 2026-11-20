@@ -5,11 +5,13 @@ const [route = '/', width = '390', locale = 'uz', out = 'clip.png'] = process.ar
 const BASE = 'http://localhost:3000';
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: Number(width), height: 700 } });
+const theme = process.argv[6] || 'light';
 await ctx.addCookies([{ name: 'NEXT_LOCALE', value: locale, url: BASE }]);
 const page = await ctx.newPage();
 const b = await getAuth(page.request);
 await page.goto(BASE + '/login');
 await applyAuth(page, b);
+if (theme === 'dark') await page.evaluate(() => localStorage.setItem('crm_theme', 'dark'));
 await page.goto(BASE + route, { waitUntil: 'networkidle' });
 await page.waitForTimeout(400);
 await page.screenshot({ path: out });

@@ -77,7 +77,7 @@ export default function JournalPage() {
                     </td>
                     <td style={{ padding: '12px' }}>
                       {(entry.lines || []).map((line, idx) => (
-                        <div key={idx} style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)', fontFamily: 'var(--font-mono)' }}>
+                        <div key={idx} style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)', fontFamily: 'var(--font-mono)' }}>
                           Kt {line.creditAccount?.code} — {line.creditAccount?.name?.[locale] || line.creditAccount?.name?.uz}
                         </div>
                       ))}

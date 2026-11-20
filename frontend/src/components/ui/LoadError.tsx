@@ -20,7 +20,7 @@ export function LoadError({
       style={{
         padding: 'var(--space-6)',
         textAlign: 'center',
-        color: 'var(--color-error-600)',
+        color: 'var(--color-error-700)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',

@@ -301,7 +301,7 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
             style={{
               background: 'none',
               border: 'none',
-              color: 'var(--color-error-600)',
+              color: 'var(--color-error-700)',
               cursor: 'pointer',
               padding: '8px',
               borderRadius: 'var(--radius-md)',

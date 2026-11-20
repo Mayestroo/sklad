@@ -248,7 +248,7 @@ export default function PurchasesPage() {
             <MultiCurrencyValue
               items={stats?.totalSupplierDebtByCurrency}
               locale={locale}
-              color="var(--color-error-600)"
+              color="var(--color-error-700)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.suppliersWithDebtCount || 0} {isRu ? 'контрагентам' : 'ta kontragent oldida'}
@@ -267,7 +267,7 @@ export default function PurchasesPage() {
             <MultiCurrencyValue
               items={stats?.monthlyReturnsByCurrency}
               locale={locale}
-              color="var(--color-warning-600)"
+              color="var(--color-warning-700)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.monthlyReturnsCount || 0} {isRu ? 'возвратов' : 'ta qaytaruv'}
@@ -283,7 +283,7 @@ export default function PurchasesPage() {
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Активные поставщики' : 'Faol Yetkazib Beruvchilar'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)', marginTop: '2px' }} className="tabular-nums">
               {stats?.activeSuppliersCount || 0} {isRu ? 'пост.' : 'ta'}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -520,7 +520,7 @@ export default function PurchasesPage() {
                             onClick={() => setPayReceipt(r)}
                             style={{
                               backgroundColor: 'var(--color-success-50)',
-                              color: 'var(--color-success-600)',
+                              color: 'var(--color-success-700)',
                               border: '1px solid var(--color-success-100)',
                               display: 'flex',
                               alignItems: 'center',
@@ -543,7 +543,7 @@ export default function PurchasesPage() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          style={{ color: 'var(--color-error-600)', display: 'flex', alignItems: 'center' }}
+                          style={{ color: 'var(--color-error-700)', display: 'flex', alignItems: 'center' }}
                           onClick={() => setDeletingReceipt(r)}
                           title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
                         >

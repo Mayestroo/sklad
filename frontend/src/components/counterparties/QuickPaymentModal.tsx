@@ -327,14 +327,14 @@ export function QuickPaymentModal({
             }))}
           />
           {currency && accountsLoaded && matchingAccounts.length === 0 && (
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', marginTop: 4 }}>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', marginTop: 4 }}>
               {isRu
                 ? `Нет кассы или счёта в валюте ${currency}`
                 : `${currency} valyutasida kassa yoki hisob mavjud emas`}
             </div>
           )}
           {selectedAccount && !isIncome && Number(selectedAccount.balance) < Number(amount || 0) && (
-            <div style={{ fontSize: '11px', color: 'var(--color-error-600)', marginTop: 4 }}>
+            <div style={{ fontSize: '11px', color: 'var(--color-error-700)', marginTop: 4 }}>
               {isRu
                 ? `Внимание: остаток на счете (${formatCurrency(selectedAccount.balance, locale, selectedAccount.currency)}) меньше суммы выплаты!`
                 : `Diqqat: kassadagi qoldiq (${formatCurrency(selectedAccount.balance, locale, selectedAccount.currency)}) to'lov summasidan kam!`}
