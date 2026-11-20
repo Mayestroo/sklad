@@ -204,7 +204,7 @@ export function PayPurchaseModal({
               borderRadius: 'var(--radius-md)',
               backgroundColor: 'rgba(245, 158, 11, 0.15)',
               border: '1px solid #f59e0b',
-              color: '#b45309',
+              color: 'var(--color-warning-700)',
               fontSize: 'var(--text-xs)',
               fontWeight: 500,
             }}

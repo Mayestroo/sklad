@@ -178,7 +178,7 @@ export function PaySalesInvoiceModal({
               backgroundColor: 'rgba(239, 68, 68, 0.1)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: 'var(--radius-md)',
-              color: '#ef4444',
+              color: 'var(--color-error-600)',
               fontSize: 'var(--text-sm)',
               display: 'flex',
               alignItems: 'center',
@@ -211,13 +211,13 @@ export function PaySalesInvoiceModal({
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Оплачено' : 'To‘langan'}</div>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#10b981', marginTop: 2 }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-success-600)', marginTop: 2 }} className="tabular-nums">
               {formatCurrency(Number(invoice.paidAmount || 0), locale, invoice.currency)}
             </div>
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Остаток долга' : 'Qoldiq qarz'}</div>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#ef4444', marginTop: 2 }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-error-600)', marginTop: 2 }} className="tabular-nums">
               {formatCurrency(remaining, locale, invoice.currency)}
             </div>
           </div>
@@ -315,7 +315,7 @@ export function PaySalesInvoiceModal({
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, paddingTop: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 600, paddingTop: '4px' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
 

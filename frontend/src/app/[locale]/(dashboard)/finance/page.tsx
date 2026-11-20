@@ -106,7 +106,7 @@ function AccountNetRows({
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
             {account.name[locale]} · {account.currency}
           </span>
-          <span style={{ color: account.netCashFlow >= 0 ? '#10b981' : '#ef4444' }}>
+          <span style={{ color: account.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
             {formatCurrency(account.netCashFlow, locale, account.currency)}
           </span>
         </div>
@@ -139,14 +139,14 @@ function AccountFlowRows({
       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
       {items.map((account) => (
         <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : '#dc2626' }}>
+          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : 'var(--color-error-600)' }}>
             {account.name[locale]} · {account.currency}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
             {[
-              { label: isRu ? 'Поступления' : 'Kirim', amount: account.income, color: '#10b981' },
-              { label: isRu ? 'Расходы' : 'Chiqim', amount: account.expense, color: '#ef4444' },
-              { label: isRu ? 'Перевод входящий' : 'O‘tkazma kirim', amount: account.transferIn, color: '#2563eb' },
+              { label: isRu ? 'Поступления' : 'Kirim', amount: account.income, color: 'var(--color-success-600)' },
+              { label: isRu ? 'Расходы' : 'Chiqim', amount: account.expense, color: 'var(--color-error-600)' },
+              { label: isRu ? 'Перевод входящий' : 'O‘tkazma kirim', amount: account.transferIn, color: 'var(--color-info-600)' },
               { label: isRu ? 'Перевод исходящий' : 'O‘tkazma chiqim', amount: account.transferOut, color: '#7c3aed' },
             ].map((movement) => (
               <div key={movement.label} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 'var(--text-xs)' }}>
@@ -437,8 +437,8 @@ export default function FinancePage() {
             variant="primary"
             onClick={() => handleOpenDrawer('income')}
             style={{
-              backgroundColor: '#10b981',
-              borderColor: '#10b981',
+              backgroundColor: 'var(--color-success-500)',
+              borderColor: 'var(--color-success-500)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -452,8 +452,8 @@ export default function FinancePage() {
             variant="primary"
             onClick={() => handleOpenDrawer('expense')}
             style={{
-              backgroundColor: '#ef4444',
-              borderColor: '#ef4444',
+              backgroundColor: 'var(--color-error-500)',
+              borderColor: 'var(--color-error-500)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -501,7 +501,7 @@ export default function FinancePage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#10b981',
+              color: 'var(--color-success-600)',
               flexShrink: 0,
             }}
           >
@@ -513,7 +513,7 @@ export default function FinancePage() {
                 ? `Долларовая касса (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`
                 : `Dollar kassa (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`}
             </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#10b981' }}>
+            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-success-600)' }}>
               {formatCurrency(
                 dashboardMetrics?.balances.dollarKassa || 0,
                 locale,
@@ -542,7 +542,7 @@ export default function FinancePage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#3b82f6',
+              color: 'var(--color-info-600)',
               flexShrink: 0,
             }}
           >
@@ -760,7 +760,7 @@ export default function FinancePage() {
                     border: '1px solid rgba(16, 185, 129, 0.2)',
                   }}
                 >
-                  <div style={{ fontSize: 'var(--text-xs)', color: '#059669', fontWeight: 500 }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', fontWeight: 500 }}>
                     {isRu ? 'Ожидаемые поступления (Дебиторка)' : 'Kutilayotgan tushumlar (Debitorlik)'}
                   </div>
                   <MultiCurrencyValue
@@ -790,7 +790,7 @@ export default function FinancePage() {
                     border: '1px solid rgba(239, 68, 68, 0.2)',
                   }}
                 >
-                  <div style={{ fontSize: 'var(--text-xs)', color: '#dc2626', fontWeight: 500 }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 500 }}>
                     {isRu ? 'К оплате поставщикам (Кредиторка)' : 'Bizning qarzlarimiz (Kreditorlik)'}
                   </div>
                   <MultiCurrencyValue
@@ -1016,7 +1016,7 @@ export default function FinancePage() {
                 borderRadius: 'var(--radius-md)',
                 backgroundColor:
                   debtsSubTab === 'receivables' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                color: debtsSubTab === 'receivables' ? '#059669' : 'var(--color-text-secondary)',
+                color: debtsSubTab === 'receivables' ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
                 fontWeight: debtsSubTab === 'receivables' ? 600 : 500,
                 border: 'none',
                 cursor: 'pointer',
@@ -1031,7 +1031,7 @@ export default function FinancePage() {
                 borderRadius: 'var(--radius-md)',
                 backgroundColor:
                   debtsSubTab === 'payables' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                color: debtsSubTab === 'payables' ? '#dc2626' : 'var(--color-text-secondary)',
+                color: debtsSubTab === 'payables' ? 'var(--color-error-600)' : 'var(--color-text-secondary)',
                 fontWeight: debtsSubTab === 'payables' ? 600 : 500,
                 border: 'none',
                 cursor: 'pointer',
@@ -1077,7 +1077,7 @@ export default function FinancePage() {
                             {cp.inn && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>STIR: {cp.inn}</span>}
                           </td>
                           <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{cp.phone || '—'}</td>
-                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? '#059669' : '#dc2626' }}>
+                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
                             {formatCurrency(amount, locale, balance.currency)}
                           </td>
                           <td style={{ padding: '12px', textAlign: 'center' }}>
@@ -1236,7 +1236,7 @@ export default function FinancePage() {
                 variant="primary"
                 onClick={handleStorno}
                 disabled={stornoLoading}
-                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
               >
                 {stornoLoading
                   ? isRu
@@ -1449,15 +1449,15 @@ function TransactionsTable({
                 >
                   {tx.direction === 'TRANSFER' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-                      <span style={{ color: '#ef4444' }}>
+                      <span style={{ color: 'var(--color-error-600)' }}>
                         −{formatCurrency(Number(tx.amount), locale, tx.currency)}
                       </span>
                       {tx.transferToAccount && tx.transferToAmount != null ? (
-                        <span style={{ color: '#10b981' }}>
+                        <span style={{ color: 'var(--color-success-600)' }}>
                           +{formatCurrency(Number(tx.transferToAmount), locale, tx.transferToAccount.currency)}
                         </span>
                       ) : (
-                        <span style={{ color: '#dc2626', fontSize: 'var(--text-xs)' }}>
+                        <span style={{ color: 'var(--color-error-600)', fontSize: 'var(--text-xs)' }}>
                           {isRu ? 'Нет суммы зачисления' : 'Kirim summasi aniqlanmagan'}
                         </span>
                       )}
@@ -1543,7 +1543,7 @@ function TransactionsTable({
                               size="sm"
                               variant="secondary"
                               onClick={() => onStorno(tx)}
-                              style={{ color: '#ef4444' }}
+                              style={{ color: 'var(--color-error-600)' }}
                               aria-label={isRu ? 'Аннулировать операцию' : 'Operatsiyani bekor qilish'}
                             >
                               <XCircle size={14} />
@@ -1554,7 +1554,7 @@ function TransactionsTable({
                           size="sm"
                           variant="secondary"
                           onClick={() => onDelete(tx)}
-                          style={{ color: '#ef4444' }}
+                          style={{ color: 'var(--color-error-600)' }}
                           aria-label={isRu ? 'Переместить в корзину' : 'Savatga ko‘chirish'}
                         >
                           <Trash2 size={14} />

@@ -356,7 +356,7 @@ export default function ServicesPage() {
             >
               {isRu ? 'Общая сумма услуг' : 'Jami xizmatlar summasi'}
             </span>
-            <Clock style={{ width: 16, height: 16, color: '#3b82f6' }} />
+            <Clock style={{ width: 16, height: 16, color: 'var(--color-info-600)' }} />
           </div>
           <p
             style={{
@@ -403,13 +403,13 @@ export default function ServicesPage() {
             >
               {isRu ? 'Оплачено через Финансы' : 'Moliya orqali to‘langan'}
             </span>
-            <CheckCircle2 style={{ width: 16, height: 16, color: '#10b981' }} />
+            <CheckCircle2 style={{ width: 16, height: 16, color: 'var(--color-success-600)' }} />
           </div>
           <p
             style={{
               fontSize: 'var(--text-2xl)',
               fontWeight: 'var(--font-bold)',
-              color: '#10b981',
+              color: 'var(--color-success-600)',
               marginTop: 'var(--space-2)',
             }}
           >
@@ -458,13 +458,13 @@ export default function ServicesPage() {
                 ? 'Наш долг поставщикам'
                 : 'Yetkazib beruvchilarga qarzimiz'}
             </span>
-            <AlertCircle style={{ width: 16, height: 16, color: '#f59e0b' }} />
+            <AlertCircle style={{ width: 16, height: 16, color: 'var(--color-warning-600)' }} />
           </div>
           <p
             style={{
               fontSize: 'var(--text-2xl)',
               fontWeight: 'var(--font-bold)',
-              color: totalDebtSum > 0 ? '#ef4444' : 'var(--color-text-primary)',
+              color: totalDebtSum > 0 ? 'var(--color-error-600)' : 'var(--color-text-primary)',
               marginTop: 'var(--space-2)',
             }}
           >
@@ -767,7 +767,7 @@ export default function ServicesPage() {
                           padding: '12px 16px',
                           textAlign: 'right',
                           fontWeight: 'var(--font-medium)',
-                          color: '#10b981',
+                          color: 'var(--color-success-600)',
                         }}
                       >
                         {formatCurrency(Number(act.paidAmount), locale, act.currency)}

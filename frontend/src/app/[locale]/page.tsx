@@ -509,7 +509,7 @@ export default function DashboardPage() {
                 {account.name[locale]} · {account.currency}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 'var(--text-xs)' }}>
-                <span style={{ color: '#047857' }}>
+                <span style={{ color: 'var(--color-success-700)' }}>
                   {isRu ? 'Приход' : 'Kirim'}: {formatCurrency(account.totalIncome, locale, account.currency)}
                 </span>
                 <span style={{ color: '#b91c1c' }}>

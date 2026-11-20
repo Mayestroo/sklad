@@ -242,7 +242,7 @@ export default function SalesPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Building2 size={24} />
           </div>
           <div>
@@ -263,7 +263,7 @@ export default function SalesPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: 'var(--color-warning-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RotateCcw size={24} />
           </div>
           <div>
@@ -284,7 +284,7 @@ export default function SalesPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--color-success-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <TrendingUp size={24} />
           </div>
           <div>
@@ -496,7 +496,7 @@ export default function SalesPage() {
                       {formatCurrency(Number(inv.totalAmount || 0), locale, inv.currency)}
                     </td>
 
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#10b981', fontWeight: 500 }} className="tabular-nums">
+                    <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
                       {formatCurrency(Number(inv.paidAmount || 0), locale, inv.currency)}
                     </td>
 
@@ -527,7 +527,7 @@ export default function SalesPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setPayInvoice(inv)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#10b981' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-600)' }}
                               title={isRu ? 'Принять оплату' : 'To‘lov olish'}
                             >
                               <CreditCard size={14} />
@@ -535,7 +535,7 @@ export default function SalesPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setReturnInvoice(inv)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#f59e0b' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-warning-600)' }}
                               title={isRu ? 'Оформить возврат' : 'Qaytaruv'}
                             >
                               <RotateCcw size={14} />
@@ -546,7 +546,7 @@ export default function SalesPage() {
                         <Button
                           variant="secondary"
                           onClick={() => setDeletingInvoice(inv)}
-                          style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#ef4444' }}
+                          style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}
                           title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
                         >
                           <Trash2 size={14} />

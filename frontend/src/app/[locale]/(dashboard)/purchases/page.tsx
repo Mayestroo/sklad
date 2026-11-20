@@ -240,7 +240,7 @@ export default function PurchasesPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Building2 size={24} />
           </div>
           <div>
@@ -261,7 +261,7 @@ export default function PurchasesPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: 'var(--color-warning-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RotateCcw size={24} />
           </div>
           <div>
@@ -282,14 +282,14 @@ export default function PurchasesPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--color-success-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Truck size={24} />
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Активные поставщики' : 'Faol Yetkazib Beruvchilar'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#10b981', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '2px' }} className="tabular-nums">
               {stats?.activeSuppliersCount || 0} {isRu ? 'пост.' : 'ta'}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -491,7 +491,7 @@ export default function PurchasesPage() {
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
                       {formatCurrency(Number(r.totalAmount), locale, r.currency)}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? '#f59e0b' : 'var(--color-text-tertiary)' }} className="tabular-nums">
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? 'var(--color-warning-600)' : 'var(--color-text-tertiary)' }} className="tabular-nums">
                       {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), locale, r.currency)}` : '—'}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -534,7 +534,7 @@ export default function PurchasesPage() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          style={{ color: '#ef4444', display: 'flex', alignItems: 'center' }}
+                          style={{ color: 'var(--color-error-600)', display: 'flex', alignItems: 'center' }}
                           onClick={() => setDeletingReceipt(r)}
                           title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
                         >

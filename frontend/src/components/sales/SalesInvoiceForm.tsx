@@ -1018,7 +1018,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 variant="secondary"
                 onClick={handleUnpostToEdit}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#d97706', borderColor: '#f59e0b', fontWeight: 600 }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-warning-600)', borderColor: 'var(--color-warning-600)', fontWeight: 600 }}
               >
                 <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
               </Button>
@@ -1078,7 +1078,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       {/* Posted Document Locked Banner */}
       {docStatus === 'POSTED' && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: '#f59e0b', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <AlertTriangle size={20} color="#f59e0b" />
             <div>
@@ -1096,7 +1096,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f59e0b', color: '#fff', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-500)', color: '#fff', fontWeight: 600 }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -1105,7 +1105,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       {/* Error notification banner */}
       {error && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertCircle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
         </Card>
@@ -1113,7 +1113,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       {/* Insufficient free stock alert */}
       {!isReadOnly && calculations.insufficientStockCount > 0 && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertCircle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
             {isRu
@@ -1125,7 +1125,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       {/* Below-cost alert */}
       {calculations.belowCostCount > 0 && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: '#f59e0b', color: '#d97706', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-600)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertTriangle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
             {isRu
@@ -1166,7 +1166,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                   <span
                     style={{
                       fontWeight: 600,
-                      color: debt > 0 ? '#ef4444' : debt < 0 ? '#10b981' : 'var(--color-text-secondary)',
+                      color: debt > 0 ? 'var(--color-error-600)' : debt < 0 ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
                     }}
                   >
                     {currency ? formatCurrency(debt, locale, currency) : '—'}
@@ -1370,7 +1370,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                               <span
                                 style={{
                                   fontWeight: 600,
-                                  color: warehouseStockMap[item.productId].free >= qty ? '#10b981' : '#ef4444',
+                                  color: warehouseStockMap[item.productId].free >= qty ? 'var(--color-success-600)' : 'var(--color-error-600)',
                                 }}
                               >
                                 {isRu ? 'Свободный остаток' : 'Erkin qoldiq'}: {warehouseStockMap[item.productId].free}
@@ -1394,7 +1394,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       {!isReadOnly &&
                         warehouseStockMap[item.productId] !== undefined &&
                         qty > warehouseStockMap[item.productId].free && (
-                          <div style={{ fontSize: '10px', color: '#ef4444', marginTop: 2, textAlign: 'right', fontWeight: 600 }}>
+                          <div style={{ fontSize: '10px', color: 'var(--color-error-600)', marginTop: 2, textAlign: 'right', fontWeight: 600 }}>
                             {isRu ? 'Недостаточно!' : 'Yetarli emas!'}
                           </div>
                         )}
@@ -1409,8 +1409,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         title={!isPriceOverrideAllowed ? (isRu ? 'Ручное изменение цены запрещено настройками' : 'Narxni qo‘lda o‘zgartirish taqiqlangan') : undefined}
                         aria-label={`${isRu ? 'Цена продажи для строки' : 'Sotish narxi'} ${idx + 1}`}
                         style={{
-                          borderColor: isBelowCost ? '#ef4444' : undefined,
-                          color: isBelowCost ? '#ef4444' : undefined,
+                          borderColor: isBelowCost ? 'var(--color-error-500)' : undefined,
+                          color: isBelowCost ? 'var(--color-error-600)' : undefined,
                           ...(!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : {}),
                         }}
                       />
@@ -1515,7 +1515,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       {/* Summary Footer Panel with Required notice */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, padding: 'var(--space-2) 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 600, padding: 'var(--space-2) 0' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
 
@@ -1530,7 +1530,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           </div>
 
           {calculations.totalDiscount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#10b981' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-success-600)' }}>
               <span>{isRu ? 'Сумма скидки:' : 'Chegirma summasi:'}</span>
               <span className="tabular-nums font-medium">- {currency ? formatCurrency(calculations.totalDiscount, locale, currency) : '—'}</span>
             </div>
@@ -1565,13 +1565,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Валовая прибыль:' : 'Yalpi foyda:'}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? '#10b981' : '#ef4444' }} className="tabular-nums">
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }} className="tabular-nums">
                  {formatCurrency(calculations.estimatedProfit, locale, 'UZS')}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Маржа (%):' : 'Marja (%):'}</span>
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: calculations.marginPercent >= 0 ? '#10b981' : '#ef4444' }} className="tabular-nums">
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: calculations.marginPercent >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }} className="tabular-nums">
                 {formatPercent(calculations.marginPercent)}
               </span>
             </div>

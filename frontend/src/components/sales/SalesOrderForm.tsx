@@ -748,7 +748,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                 variant="secondary"
                 onClick={() => handleTransition('REJECT')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
               >
                 <XCircle size={16} /> {isRu ? 'Отклонить' : 'Rad etish'}
               </Button>
@@ -780,7 +780,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleStatusUpdate('PROCESSING')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f59e0b', color: '#fff' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-500)', color: '#fff' }}
             >
               <PackageCheck size={16} /> {isRu ? 'В сборку' : 'Yig‘uvga olish'}
             </Button>
@@ -824,7 +824,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={() => setIsDeliveryNoteOpen(true)}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#059669' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-success-600)' }}
             >
               <Printer size={16} /> {isRu ? 'Накладная' : 'Yuk xati'}
             </Button>
@@ -845,7 +845,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={() => handleTransition('CANCEL')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
             >
               <XCircle size={16} /> {isRu ? 'Отменить' : 'Bekor qilish'}
             </Button>
@@ -867,7 +867,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="ghost"
               onClick={handleDeleteOrder}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
               title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
             >
               <Trash2 size={16} /> {isRu ? 'Удалить' : "O'chirish"}
@@ -886,7 +886,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
       {/* Error Banner */}
       {error && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertCircle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
         </Card>

@@ -594,7 +594,7 @@ export default function SalesReturnsPage() {
                     <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)' }}>
                       <div>{getLocalizedName(ret.warehouse?.name)}</div>
                       {ret.defectWarehouse && (
-                        <div style={{ fontSize: '11px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <div style={{ fontSize: '11px', color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 3 }}>
                           <span>Brak: {getLocalizedName(ret.defectWarehouse.name)}</span>
                         </div>
                       )}
@@ -626,7 +626,7 @@ export default function SalesReturnsPage() {
                             onClick={() => handleConfirmReturn(ret.id)}
                             disabled={actionLoadingId === ret.id}
                             title={isRu ? 'Провести' : 'Tasdiqlash'}
-                            style={{ padding: '4px 8px', background: '#10b981' }}
+                            style={{ padding: '4px 8px', background: 'var(--color-success-500)' }}
                           >
                             <PackageCheck size={14} />
                           </Button>
@@ -639,7 +639,7 @@ export default function SalesReturnsPage() {
                             onClick={() => handleCancelReturn(ret)}
                             disabled={actionLoadingId === ret.id}
                             title={isRu ? 'Отменить' : 'Bekor qilish'}
-                            style={{ padding: '4px 8px', color: '#ef4444' }}
+                            style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
                           >
                             <XCircle size={14} />
                           </Button>
@@ -654,7 +654,7 @@ export default function SalesReturnsPage() {
                               setDeleteError(null);
                             }}
                             title={isRu ? 'Удалить' : "O'chirish"}
-                            style={{ padding: '4px 8px', color: '#ef4444' }}
+                            style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
                           >
                             <Trash2 size={14} />
                           </Button>
@@ -704,7 +704,7 @@ export default function SalesReturnsPage() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {formError && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: '#ef4444', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--color-error-500)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={16} /> {formError}
             </div>
           )}
@@ -770,7 +770,7 @@ export default function SalesReturnsPage() {
           )}
 
           {barcodeNotice && (
-            <div style={{ fontSize: 'var(--text-xs)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', background: barcodeNotice.includes('+1') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: barcodeNotice.includes('+1') ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 'var(--text-xs)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', background: barcodeNotice.includes('+1') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: barcodeNotice.includes('+1') ? 'var(--color-success-500)' : 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: 6 }}>
               {barcodeNotice.includes('+1') ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
               <span>{barcodeNotice}</span>
             </div>
@@ -839,7 +839,7 @@ export default function SalesReturnsPage() {
                             />
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }}>
-                            <div style={{ color: item.returnableQuantity > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                            <div style={{ color: item.returnableQuantity > 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontWeight: 600 }}>
                               {quantityWithUnit(item.returnableQuantity, item.unit, locale)}
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
@@ -874,7 +874,7 @@ export default function SalesReturnsPage() {
                       <td colSpan={5} style={{ padding: '10px', textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                         {isRu ? 'Итого к возврату:' : 'Jami qaytariladigan summa:'}
                       </td>
-                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: '#f59e0b' }} className="tabular-nums">
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--color-warning-600)' }} className="tabular-nums">
                         {formatCurrency(totalReturnAmount, locale, activeReturnCurrency)}
                       </td>
                     </tr>
@@ -912,8 +912,8 @@ export default function SalesReturnsPage() {
               </div>
               {selectedReturn.defectWarehouse && (
                 <div>
-                  <span style={{ fontSize: '12px', color: '#ef4444', display: 'block' }}>{isRu ? 'Склад брака:' : 'Brak ombori:'}</span>
-                  <span style={{ fontSize: 'var(--text-sm)', color: '#ef4444' }}>{getLocalizedName(selectedReturn.defectWarehouse.name)}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--color-error-600)', display: 'block' }}>{isRu ? 'Склад брака:' : 'Brak ombori:'}</span>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-error-600)' }}>{getLocalizedName(selectedReturn.defectWarehouse.name)}</span>
                 </div>
               )}
               <div style={{ gridColumn: 'span 2' }}>
@@ -947,7 +947,7 @@ export default function SalesReturnsPage() {
                         </td>
                         <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                           {item.isDefective ? (
-                            <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 600 }}>{isRu ? 'Да' : 'Ha'}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--color-error-600)', fontWeight: 600 }}>{isRu ? 'Да' : 'Ha'}</span>
                           ) : (
                             <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>—</span>
                           )}
@@ -961,7 +961,7 @@ export default function SalesReturnsPage() {
                   <tfoot>
                     <tr style={{ background: 'var(--color-bg-subtle)' }}>
                       <td colSpan={4} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{isRu ? 'Итого:' : 'Jami:'}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#f59e0b' }} className="tabular-nums">
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--color-warning-600)' }} className="tabular-nums">
                         {formatCurrency(Number(selectedReturn.totalAmount), locale, selectedReturn.currency)}
                       </td>
                     </tr>
@@ -977,7 +977,7 @@ export default function SalesReturnsPage() {
                 </Button>
               )}
               {selectedReturn.status !== 'CANCELLED' && (
-                <Button variant="secondary" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }} style={{ color: '#ef4444' }}>
+                <Button variant="secondary" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }} style={{ color: 'var(--color-error-600)' }}>
                   <XCircle size={16} /> {isRu ? 'Отменить документ' : 'Hujjatni bekor qilish'}
                 </Button>
               )}
@@ -1010,7 +1010,7 @@ export default function SalesReturnsPage() {
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: '#ef4444' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
               <Trash2 size={24} />
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
@@ -1037,7 +1037,7 @@ export default function SalesReturnsPage() {
                 type="button"
                 onClick={handleDeleteReturn}
                 disabled={deleteLoading}
-                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

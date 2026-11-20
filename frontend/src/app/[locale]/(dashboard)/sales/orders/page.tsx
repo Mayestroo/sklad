@@ -335,14 +335,14 @@ export default function SalesOrdersPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: 'var(--color-warning-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Factory size={22} />
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'В производстве' : 'Ishlab chiqarilmoqda'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#f59e0b', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)', marginTop: '2px' }} className="tabular-nums">
               {(stats?.inProduction || 0) + (stats?.sentToProduction || 0)}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -352,14 +352,14 @@ export default function SalesOrdersPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--color-success-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Truck size={22} />
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Готовы к отгрузке' : 'Jo‘natishga tayyor'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#10b981', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '2px' }} className="tabular-nums">
               {stats?.readyToShip || 0}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -369,14 +369,14 @@ export default function SalesOrdersPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(59, 130, 246, 0.12)', color: 'var(--color-info-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <CheckCircle size={22} />
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
               {isRu ? 'Завершено' : 'Bajarilgan'}
             </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: '#3b82f6', marginTop: '2px' }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-info-600)', marginTop: '2px' }} className="tabular-nums">
               {stats?.completed || 0}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -640,7 +640,7 @@ export default function SalesOrdersPage() {
                                     textAlign: 'left',
                                     padding: '8px 14px',
                                     fontSize: 'var(--text-sm)',
-                                    color: s.status === 'CANCELLED' ? '#dc2626' : 'var(--color-text-primary)',
+                                    color: s.status === 'CANCELLED' ? 'var(--color-error-600)' : 'var(--color-text-primary)',
                                     background: 'none',
                                     border: 'none',
                                     borderBottom: '1px solid var(--color-border-light)',
@@ -666,7 +666,7 @@ export default function SalesOrdersPage() {
                         {formatCurrency(Number(ord.totalAmount || 0), locale, ord.currency)}
                       </td>
 
-                      <td style={{ padding: '12px 16px', textAlign: 'right', color: '#10b981', fontWeight: 500 }} className="tabular-nums">
+                      <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
                         {formatCurrency(Number(ord.paidAmount || 0), locale, ord.currency)}
                       </td>
 
@@ -699,7 +699,7 @@ export default function SalesOrdersPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setDeliveryNoteOrder(ord)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#059669' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-600)' }}
                               title={isRu ? 'Накладная (Yuk xati)' : 'Yuk xati (Nakladnaya)'}
                             >
                               <Printer size={14} />
@@ -710,7 +710,7 @@ export default function SalesOrdersPage() {
                             <Button
                               variant="secondary"
                               onClick={() => setPayOrder(ord)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#10b981' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-600)' }}
                               title={isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
                             >
                               <CreditCard size={14} />
@@ -724,7 +724,7 @@ export default function SalesOrdersPage() {
                                 setDeleteConfirmOrder(ord);
                                 setDeleteError(null);
                               }}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: '#ef4444' }}
+                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}
                               title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
                             >
                               <Trash2 size={14} />
@@ -813,7 +813,7 @@ export default function SalesOrdersPage() {
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: '#ef4444' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
               <Trash2 size={24} />
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Удалить заказ?' : 'Buyurtmani o‘chirish?'}
@@ -840,7 +840,7 @@ export default function SalesOrdersPage() {
                 type="button"
                 onClick={handleDeleteOrder}
                 disabled={deleteLoading}
-                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

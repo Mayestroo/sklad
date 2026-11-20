@@ -200,7 +200,7 @@ export default function SuppliersPage() {
                       >
                         {balances.length > 0
                           ? balances.map((balance) => (
-                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : '#2563eb' }}>
+                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-info-600)' }}>
                                 {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                               </div>
                             ))
@@ -214,7 +214,7 @@ export default function SuppliersPage() {
                           <Button size="sm" variant="secondary" onClick={() => setEditingSupplier(s)} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
                             <Pencil size={14} />
                           </Button>
-                          <Button size="sm" variant="secondary" style={{ color: '#ef4444' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
+                          <Button size="sm" variant="secondary" style={{ color: 'var(--color-error-600)' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
                             <Trash2 size={14} />
                           </Button>
                         </div>

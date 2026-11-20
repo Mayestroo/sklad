@@ -268,7 +268,7 @@ export function QuickPaymentModal({
                 width: 36,
                 height: 36,
                 borderRadius: '50%',
-                backgroundColor: !settlementSide || !currency ? 'var(--color-text-tertiary)' : isIncome ? '#10b981' : '#ef4444',
+                backgroundColor: !settlementSide || !currency ? 'var(--color-text-tertiary)' : isIncome ? 'var(--color-success-500)' : 'var(--color-error-500)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -297,7 +297,7 @@ export function QuickPaymentModal({
               style={{
                 fontSize: 'var(--text-base)',
                 fontWeight: 700,
-                color: !settlementSide || !currency ? 'var(--color-text-primary)' : isIncome ? '#10b981' : '#ef4444',
+                color: !settlementSide || !currency ? 'var(--color-text-primary)' : isIncome ? 'var(--color-success-600)' : 'var(--color-error-600)',
               }}
             >
               {settlementSide && currency ? formatCurrency(selectedBalance, locale, currency) : '—'}
@@ -327,14 +327,14 @@ export function QuickPaymentModal({
             }))}
           />
           {currency && accountsLoaded && matchingAccounts.length === 0 && (
-            <div style={{ fontSize: 'var(--text-xs)', color: '#ef4444', marginTop: 4 }}>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', marginTop: 4 }}>
               {isRu
                 ? `Нет кассы или счёта в валюте ${currency}`
                 : `${currency} valyutasida kassa yoki hisob mavjud emas`}
             </div>
           )}
           {selectedAccount && !isIncome && Number(selectedAccount.balance) < Number(amount || 0) && (
-            <div style={{ fontSize: '11px', color: '#ef4444', marginTop: 4 }}>
+            <div style={{ fontSize: '11px', color: 'var(--color-error-600)', marginTop: 4 }}>
               {isRu
                 ? `Внимание: остаток на счете (${formatCurrency(selectedAccount.balance, locale, selectedAccount.currency)}) меньше суммы выплаты!`
                 : `Diqqat: kassadagi qoldiq (${formatCurrency(selectedAccount.balance, locale, selectedAccount.currency)}) to'lov summasidan kam!`}
@@ -371,8 +371,8 @@ export function QuickPaymentModal({
             type="submit"
             disabled={loading || !settlementSide || !currency || !selectedAccount?.id}
             style={{
-              backgroundColor: isIncome ? '#10b981' : '#ef4444',
-              borderColor: isIncome ? '#10b981' : '#ef4444',
+              backgroundColor: isIncome ? 'var(--color-success-500)' : 'var(--color-error-500)',
+              borderColor: isIncome ? 'var(--color-success-500)' : 'var(--color-error-500)',
               color: '#fff',
             }}
           >

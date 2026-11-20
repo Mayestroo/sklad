@@ -341,7 +341,7 @@ export default function BranchesPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setDeletingBranch(branch)}
-                    style={{ padding: '6px', height: 'auto', color: '#ef4444' }}
+                    style={{ padding: '6px', height: 'auto', color: 'var(--color-error-600)' }}
                     title={isRu ? 'Удалить филиал' : 'Filialni o‘chirish'}
                   >
                     <Trash2 size={15} />
@@ -380,7 +380,7 @@ export default function BranchesPage() {
                           <button
                             type="button"
                             onClick={() => setDeletingWarehouse(wh)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: '#ef4444' }}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-error-500)' }}
                             title={isRu ? 'Удалить склад' : 'Omborxonani o‘chirish'}
                           >
                             <Trash2 size={14} />
@@ -453,7 +453,7 @@ export default function BranchesPage() {
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
               <Button type="button" variant="outline" onClick={() => setDeletingBranch(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button type="button" variant="primary" style={{ backgroundColor: '#ef4444' }} onClick={handleDeleteBranch} disabled={deleteBranchLoading}>
+              <Button type="button" variant="primary" style={{ backgroundColor: 'var(--color-error-500)' }} onClick={handleDeleteBranch} disabled={deleteBranchLoading}>
                 {deleteBranchLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
               </Button>
             </div>
@@ -516,7 +516,7 @@ export default function BranchesPage() {
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
               <Button type="button" variant="outline" onClick={() => setDeletingWarehouse(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button type="button" variant="primary" style={{ backgroundColor: '#ef4444' }} onClick={handleDeleteWarehouse} disabled={deleteWarehouseLoading}>
+              <Button type="button" variant="primary" style={{ backgroundColor: 'var(--color-error-500)' }} onClick={handleDeleteWarehouse} disabled={deleteWarehouseLoading}>
                 {deleteWarehouseLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
               </Button>
             </div>

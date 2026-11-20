@@ -705,7 +705,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             padding: '1px 6px',
             borderRadius: '4px',
             backgroundColor: 'rgba(16, 185, 129, 0.12)',
-            color: '#059669',
+            color: 'var(--color-success-600)',
             border: '1px solid rgba(16, 185, 129, 0.3)',
             lineHeight: '14px',
             whiteSpace: 'nowrap',
@@ -727,7 +727,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             padding: '1px 6px',
             borderRadius: '4px',
             backgroundColor: 'rgba(245, 158, 11, 0.12)',
-            color: '#d97706',
+            color: 'var(--color-warning-600)',
             border: '1px solid rgba(245, 158, 11, 0.3)',
             lineHeight: '14px',
             whiteSpace: 'nowrap',
@@ -748,7 +748,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           padding: '1px 6px',
           borderRadius: '4px',
           backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          color: '#2563eb',
+          color: 'var(--color-info-600)',
           border: '1px solid rgba(59, 130, 246, 0.3)',
           lineHeight: '14px',
           whiteSpace: 'nowrap',
@@ -893,7 +893,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 variant="secondary"
                 onClick={handleUnpostToEdit}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#d97706', borderColor: '#f59e0b', fontWeight: 600 }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-warning-600)', borderColor: 'var(--color-warning-600)', fontWeight: 600 }}
               >
                 <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
               </Button>
@@ -961,7 +961,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
       {/* Posted Document Locked Banner */}
       {docStatus === 'POSTED' && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: '#f59e0b', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <AlertTriangle size={20} color="#f59e0b" />
             <div>
@@ -979,7 +979,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f59e0b', color: '#fff', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-500)', color: '#fff', fontWeight: 600 }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -988,7 +988,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
       {/* Error notification banner */}
       {error && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertCircle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
         </Card>
@@ -1025,7 +1025,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                   <span
                     style={{
                       fontWeight: 600,
-                      color: debt > 0 ? '#ef4444' : debt < 0 ? '#10b981' : 'var(--color-text-secondary)',
+                      color: debt > 0 ? 'var(--color-error-600)' : debt < 0 ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
                     }}
                   >
                     {currency ? formatCurrency(debt, locale, currency) : '—'}
@@ -1303,7 +1303,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#2563eb' }} />
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-info-600)' }} />
                         {isRu ? '+ Новый товар' : '+ Yangi Tovar'}
                       </button>
                       <button
@@ -1332,7 +1332,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#059669' }} />
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-success-600)' }} />
                         {isRu ? '+ Новое сырьё' : '+ Yangi Xomashyo'}
                       </button>
                       <button
@@ -1361,7 +1361,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#d97706' }} />
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-warning-600)' }} />
                         {isRu ? '+ Новая услуга' : '+ Yangi Xizmat'}
                       </button>
                     </div>
@@ -1510,7 +1510,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                             background: 'none',
                             border: 'none',
                             cursor: items.length <= 1 ? 'not-allowed' : 'pointer',
-                            color: items.length <= 1 ? 'var(--color-text-tertiary)' : '#ef4444',
+                            color: items.length <= 1 ? 'var(--color-text-tertiary)' : 'var(--color-error-600)',
                             padding: '4px',
                           }}
                         >

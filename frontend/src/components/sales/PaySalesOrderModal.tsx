@@ -199,7 +199,7 @@ export function PaySalesOrderModal({
               backgroundColor: 'rgba(239, 68, 68, 0.1)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: 'var(--radius-md)',
-              color: '#ef4444',
+              color: 'var(--color-error-600)',
               fontSize: 'var(--text-sm)',
               display: 'flex',
               alignItems: 'center',
@@ -232,13 +232,13 @@ export function PaySalesOrderModal({
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Оплачено' : 'To‘langan'}</div>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#10b981', marginTop: 2 }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-success-600)', marginTop: 2 }} className="tabular-nums">
               {formatCurrency(paid, locale, order.currency)}
             </div>
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Остаток' : 'Qoldiq'}</div>
-            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#ef4444', marginTop: 2 }} className="tabular-nums">
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-error-600)', marginTop: 2 }} className="tabular-nums">
               {formatCurrency(remaining, locale, order.currency)}
             </div>
           </div>
@@ -246,7 +246,7 @@ export function PaySalesOrderModal({
 
         {/* Condition Alert */}
         {order.paymentCondition === 'PARTIAL' && (
-          <div style={{ padding: '8px 12px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#d97706', fontSize: 'var(--text-xs)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ padding: '8px 12px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning-600)', fontSize: 'var(--text-xs)', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Percent size={14} />
             <span>
               {isRu
@@ -366,7 +366,7 @@ export function PaySalesOrderModal({
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, paddingTop: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 600, paddingTop: '4px' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
 

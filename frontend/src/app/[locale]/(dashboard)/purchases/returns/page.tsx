@@ -517,7 +517,7 @@ export default function ReturnsPage() {
                                   setDeleteError(null);
                                 }}
                                 title={isRu ? 'Удалить' : "O'chirish"}
-                                style={{ padding: '4px 8px', color: '#ef4444' }}
+                                style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
                               >
                                 <Trash2 size={15} />
                               </Button>
@@ -602,7 +602,7 @@ export default function ReturnsPage() {
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: '#ef4444' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
               <Trash2 size={24} />
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
@@ -629,7 +629,7 @@ export default function ReturnsPage() {
                 type="button"
                 onClick={handleDeleteReturn}
                 disabled={deleteLoading}
-                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

@@ -537,7 +537,7 @@ export default function ProductsPage() {
                             size="sm"
                             onClick={() => setDeletingProduct(p)}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
-                            style={{ color: '#ef4444' }}
+                            style={{ color: 'var(--color-error-600)' }}
                           >
                             <Trash2 size={16} />
                           </Button>
@@ -643,7 +643,7 @@ export default function ProductsPage() {
                 variant="primary"
                 onClick={handleDeleteProduct}
                 disabled={deleteLoading}
-                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>
@@ -750,7 +750,7 @@ export default function ProductsPage() {
                         <button
                           type="button"
                           onClick={() => setDeletingCategory(c)}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: '#ef4444' }}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-error-500)' }}
                           title={isRu ? 'Удалить' : 'O‘chirish'}
                         >
                           <Trash2 size={14} />
@@ -837,7 +837,7 @@ export default function ProductsPage() {
                 variant="primary"
                 onClick={handleDeleteCategory}
                 disabled={deleteCatLoading}
-                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444' }}
+                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
               >
                 {deleteCatLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
               </Button>

@@ -37,7 +37,7 @@ const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] 
   { slug: 'LEAD', nameUz: 'Lidlar (Yangi)', nameRu: 'Лиды (Новые)', color: 'var(--color-primary-600)' },
   { slug: 'QUALIFICATION', nameUz: 'Saralash', nameRu: 'Квалификация', color: '#8b5cf6' },
   { slug: 'PROPOSAL', nameUz: 'Tijorat Taklifi', nameRu: 'Коммерческое предл.', color: '#ec4899' },
-  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', color: '#f59e0b' },
+  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', color: 'var(--color-warning-600)' },
   { slug: 'WON', nameUz: 'G\'alaba (Shartnoma)', nameRu: 'Успешно (Выиграно)', color: 'var(--color-success-600)' },
   { slug: 'LOST', nameUz: 'Mag\'lubiyat', nameRu: 'Проиграно', color: 'var(--color-error-600)' },
 ];
@@ -263,7 +263,7 @@ export default function CrmKanbanPage() {
                           <button
                             type="button"
                             onClick={() => setDeletingDeal(deal)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: '#ef4444' }}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: 'var(--color-error-500)' }}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
                           >
                             <Trash2 size={13} />
@@ -422,7 +422,7 @@ export default function CrmKanbanPage() {
               </Button>
               <Button
                 variant="primary"
-                style={{ backgroundColor: '#ef4444' }}
+                style={{ backgroundColor: 'var(--color-error-500)' }}
                 onClick={handleDeleteDeal}
                 disabled={deleteLoading}
               >

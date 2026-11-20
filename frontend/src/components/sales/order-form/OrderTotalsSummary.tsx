@@ -41,7 +41,7 @@ export function OrderTotalsSummary({
 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: '#ef4444', fontWeight: 600, padding: 'var(--space-2) 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 600, padding: 'var(--space-2) 0' }}>
         <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
       </div>
 
@@ -79,14 +79,14 @@ export function OrderTotalsSummary({
           <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.grandTotal, locale, currency) : '—'}</span>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#10b981' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-success-600)' }}>
           <span>{isRu ? 'Оплачено (Аванс):' : 'To‘langan (Avans):'}</span>
           <span className="tabular-nums font-medium">{currency ? formatCurrency(calculations.paid, locale, currency) : '—'}</span>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
           <span>{isRu ? 'ОСТАТОК К ОПЛАТЕ:' : 'QOLDIQ TO‘LOV:'}</span>
-          <span className="tabular-nums" style={{ color: calculations.remaining > 0 ? '#ef4444' : '#10b981' }}>
+          <span className="tabular-nums" style={{ color: calculations.remaining > 0 ? 'var(--color-error-600)' : 'var(--color-success-600)' }}>
             {currency ? formatCurrency(calculations.remaining, locale, currency) : '—'}
           </span>
         </div>
@@ -103,11 +103,11 @@ export function OrderTotalsSummary({
           </div>
 
           {calculations.minNeededForDispatch > 0 && paymentCondition !== 'CREDIT' ? (
-            <div style={{ fontSize: '11px', color: '#ef4444', marginTop: 4, fontWeight: 600 }}>
+            <div style={{ fontSize: '11px', color: 'var(--color-error-600)', marginTop: 4, fontWeight: 600 }}>
               {isRu ? `Необходимо оплатить еще: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}` : `Jo‘natish uchun yana to‘lanishi kerak: ${formatCurrency(calculations.minNeededForDispatch, locale, currency)}`}
             </div>
           ) : (
-            <div style={{ fontSize: '11px', color: '#10b981', marginTop: 4, fontWeight: 600 }}>
+            <div style={{ fontSize: '11px', color: 'var(--color-success-600)', marginTop: 4, fontWeight: 600 }}>
               {isRu ? 'Условие для отгрузки выполнено' : 'Jo‘natish sharti bajarilgan'}
             </div>
           )}

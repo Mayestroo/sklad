@@ -159,7 +159,7 @@ export function AllocateExpenseModal({
             padding: '12px 14px',
             backgroundColor: 'rgba(239, 68, 68, 0.08)',
             border: '1px solid #ef4444',
-            color: '#ef4444',
+            color: 'var(--color-error-600)',
             borderRadius: 'var(--radius-md)',
             fontSize: 'var(--text-xs)',
             display: 'flex',

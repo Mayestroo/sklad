@@ -43,7 +43,7 @@ export default function PurchaseDetailPage({ params }: PageProps) {
 
   if (!receipt) {
     return (
-      <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: '#ef4444' }}>
+      <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-error-600)' }}>
         {isRu ? 'Документ не найден' : 'Hujjat topilmadi'}
       </Card>
     );

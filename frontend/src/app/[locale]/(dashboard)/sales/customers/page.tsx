@@ -232,7 +232,7 @@ export default function CustomersPage() {
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                         {balances.length > 0
                           ? balances.map((balance) => (
-                              <div key={balance.currency} style={{ color: balance.customerDebt > 0 ? '#f59e0b' : '#2563eb', fontWeight: 600 }}>
+                              <div key={balance.currency} style={{ color: balance.customerDebt > 0 ? 'var(--color-warning-600)' : 'var(--color-info-600)', fontWeight: 600 }}>
                                 {balance.currency}: {formatCurrency(balance.customerDebt, locale, balance.currency)}
                               </div>
                             ))
@@ -265,7 +265,7 @@ export default function CustomersPage() {
                             id={`delete-customer-${c.id}`}
                             onClick={() => setDeletingCustomer(c)}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: '#ef4444' }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-error-500)' }}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -296,13 +296,13 @@ export default function CustomersPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
                   {[
                     { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatByCurrency(profile.metrics.totalSalesByCurrency), color: undefined },
-                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatByCurrency(profile.metrics.totalPaidByCurrency), color: '#10b981' },
+                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatByCurrency(profile.metrics.totalPaidByCurrency), color: 'var(--color-success-600)' },
                     { label: isRu ? 'Долг по валютам' : 'Valyuta bo‘yicha qarz', value: profile.metrics.balancesByCurrency
                       .filter((balance) => balance.customerDebt !== 0)
                       .map((balance) => `${balance.currency}: ${formatCurrency(balance.customerDebt, locale, balance.currency)}`)
-                      .join(' · ') || '—', color: '#f59e0b' },
-                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency), color: '#ef4444' },
-                    { label: isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)', value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'), color: profile.metrics.grossProfit >= 0 ? '#10b981' : '#ef4444' },
+                      .join(' · ') || '—', color: 'var(--color-warning-600)' },
+                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency), color: 'var(--color-error-600)' },
+                    { label: isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)', value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'), color: profile.metrics.grossProfit >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' },
                   ].map((m) => (
                     <div key={m.label} style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</div>

@@ -350,7 +350,7 @@ export default function PricesPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}
+                      style={{ color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 6 }}
                       onClick={() => setDeletingPL(selectedPL)}
                     >
                       <Trash2 size={14} /> {isRu ? 'Удалить' : 'O‘chirish'}

@@ -537,7 +537,7 @@ export default function CounterpartiesPage() {
                           width: 10,
                           height: 10,
                           borderRadius: '50%',
-                          backgroundColor: f.color || '#3b82f6',
+                          backgroundColor: f.color || 'var(--color-info-500)',
                           flexShrink: 0,
                         }}
                       />
@@ -563,7 +563,7 @@ export default function CounterpartiesPage() {
                           setDeleteFolderId(f.id);
                         }}
                         title={isRu ? 'Удалить' : 'O\'chirish'}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444', padding: 2 }}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 2 }}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -601,10 +601,10 @@ export default function CounterpartiesPage() {
                   {isRu ? 'Клиенты' : 'Mijozlar'}
                 </span>
                 <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Users size={15} style={{ color: '#3b82f6' }} />
+                  <Users size={15} style={{ color: 'var(--color-info-600)' }} />
                 </div>
               </div>
-              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: '#3b82f6' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-info-600)' }}>
                 {summary?.total_customers ?? totalCustomers}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
@@ -634,10 +634,10 @@ export default function CounterpartiesPage() {
                   {isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
                 </span>
                 <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Tag size={15} style={{ color: '#f59e0b' }} />
+                  <Tag size={15} style={{ color: 'var(--color-warning-600)' }} />
                 </div>
               </div>
-              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: '#d97706' }}>
+              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-warning-600)' }}>
                 {summary?.total_suppliers ?? totalSuppliers}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
@@ -669,15 +669,15 @@ export default function CounterpartiesPage() {
                 <span style={{
                   fontSize: '11px', fontWeight: 700,
                   background: 'rgba(16,185,129,0.15)',
-                  color: '#059669',
+                  color: 'var(--color-success-600)',
                   padding: '3px 9px', borderRadius: 20,
                   border: '1px solid rgba(16,185,129,0.25)',
                 }}>
                   {summary?.receivables.count ?? 0} {isRu ? 'кл.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: 2 }}>+ HAQDORLIK</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#059669', lineHeight: 1.2, wordBreak: 'break-all' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-success-600)', fontWeight: 600, marginBottom: 2 }}>+ HAQDORLIK</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-success-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.receivables.byCurrency}
                   fallbackAmount={summary?.receivables.total_amount ?? 0}
@@ -712,15 +712,15 @@ export default function CounterpartiesPage() {
                 <span style={{
                   fontSize: '11px', fontWeight: 700,
                   background: 'rgba(239,68,68,0.12)',
-                  color: '#dc2626',
+                  color: 'var(--color-error-600)',
                   padding: '3px 9px', borderRadius: 20,
                   border: '1px solid rgba(239,68,68,0.22)',
                 }}>
                   {summary?.payables.count ?? 0} {isRu ? 'пост.' : 'ta'}
                 </span>
               </div>
-              <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600, marginBottom: 2 }}>− QARZDORLIK</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', lineHeight: 1.2, wordBreak: 'break-all' }}>
+              <div style={{ fontSize: '11px', color: 'var(--color-error-600)', fontWeight: 600, marginBottom: 2 }}>− QARZDORLIK</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-error-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.payables.byCurrency}
                   fallbackAmount={summary?.payables.total_amount ?? 0}
@@ -758,7 +758,7 @@ export default function CounterpartiesPage() {
                 activeBg: 'rgba(16, 185, 129, 0.22)',
                 activeBorder: 'rgba(16, 185, 129, 0.55)',
                 activeColor: '#10b981',
-                color: '#059669',
+                color: 'var(--color-success-600)',
                 dot: '#10b981',
               },
               {
@@ -768,7 +768,7 @@ export default function CounterpartiesPage() {
                 activeBg: 'rgba(239, 68, 68, 0.22)',
                 activeBorder: 'rgba(239, 68, 68, 0.55)',
                 activeColor: '#ef4444',
-                color: '#dc2626',
+                color: 'var(--color-error-600)',
                 dot: '#ef4444',
               },
               {
@@ -918,12 +918,12 @@ export default function CounterpartiesPage() {
                                 borderRadius: 12,
                                 fontSize: 'var(--text-xs)',
                                 background: `${item.folder.color || '#3b82f6'}15`,
-                                color: item.folder.color || '#3b82f6',
+                                color: item.folder.color || 'var(--color-info-600)',
                                 border: `1px solid ${item.folder.color || '#3b82f6'}40`,
                                 fontWeight: 600,
                               }}
                             >
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: item.folder.color || '#3b82f6' }} />
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: item.folder.color || 'var(--color-info-500)' }} />
                               {item.folder.name}
                             </span>
                           ) : (
@@ -947,13 +947,13 @@ export default function CounterpartiesPage() {
                                 {balances.map((balance) => (
                                   <div key={balance.currency} style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto', gap: 8, fontSize: 'var(--text-xs)' }}>
                                     <strong>{balance.currency}</strong>
-                                    <span title={isRu ? 'Клиентская сторона' : 'Mijoz tomoni'} style={{ color: balance.customerDebt >= 0 ? '#059669' : '#2563eb' }}>
+                                    <span title={isRu ? 'Клиентская сторона' : 'Mijoz tomoni'} style={{ color: balance.customerDebt >= 0 ? 'var(--color-success-600)' : 'var(--color-info-600)' }}>
                                       {isRu ? 'Кл.' : 'M.'} {formatCurrency(balance.customerDebt, locale, balance.currency)}
                                     </span>
-                                    <span title={isRu ? 'Сторона поставщика' : 'Ta’minotchi tomoni'} style={{ color: balance.supplierDebt >= 0 ? '#dc2626' : '#2563eb' }}>
+                                    <span title={isRu ? 'Сторона поставщика' : 'Ta’minotchi tomoni'} style={{ color: balance.supplierDebt >= 0 ? 'var(--color-error-600)' : 'var(--color-info-600)' }}>
                                       {isRu ? 'Пост.' : 'T.'} {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                                     </span>
-                                    <strong style={{ color: balance.netBalance >= 0 ? '#059669' : '#dc2626' }}>
+                                    <strong style={{ color: balance.netBalance >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
                                       {isRu ? 'Нетто' : 'Net'} {formatCurrency(balance.netBalance, locale, balance.currency)}
                                     </strong>
                                   </div>
@@ -978,7 +978,7 @@ export default function CounterpartiesPage() {
                                       : isRu ? 'Вернуть клиентский аванс' : 'Mijoz avansini qaytarish'}
                                     style={{
                                       backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                      color: isIncome ? '#059669' : '#dc2626',
+                                      color: isIncome ? 'var(--color-success-600)' : 'var(--color-error-600)',
                                       borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
                                       padding: '0 8px',
                                     }}
@@ -1000,7 +1000,7 @@ export default function CounterpartiesPage() {
                                       : isRu ? 'Оплатить поставщику' : 'Ta’minotchiga to‘lash'}
                                     style={{
                                       backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                      color: isIncome ? '#059669' : '#dc2626',
+                                      color: isIncome ? 'var(--color-success-600)' : 'var(--color-error-600)',
                                       borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
                                       padding: '0 8px',
                                     }}
@@ -1056,7 +1056,7 @@ export default function CounterpartiesPage() {
                             <Button
                               size="sm"
                               variant="secondary"
-                              style={{ color: '#ef4444' }}
+                              style={{ color: 'var(--color-error-600)' }}
                               onClick={() => setDeletingCounterparty(item)}
                               title={isRu ? 'Удалить' : 'O\'chirish'}
                             >
@@ -1102,7 +1102,7 @@ export default function CounterpartiesPage() {
         >
           <form onSubmit={handleSaveFolder} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {folderError && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: 'var(--text-sm)' }}>
+              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error-500)', fontSize: 'var(--text-sm)' }}>
                 {folderError}
               </div>
             )}
@@ -1245,7 +1245,7 @@ export default function CounterpartiesPage() {
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Папка' : 'Papka'}</div>
                 <div style={{ marginTop: 4 }}>
                   {detailItem.folder ? (
-                    <span style={{ color: detailItem.folder.color || '#3b82f6', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+                    <span style={{ color: detailItem.folder.color || 'var(--color-info-600)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                       {detailItem.folder.name}
                     </span>
                   ) : (
@@ -1273,7 +1273,7 @@ export default function CounterpartiesPage() {
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Постоянная скидка' : 'Doimiy chegirma'}</div>
-                <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginTop: 4, color: Number(detailItem.discountPercent || 0) > 0 ? '#10b981' : 'inherit' }}>
+                <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginTop: 4, color: Number(detailItem.discountPercent || 0) > 0 ? 'var(--color-success-600)' : 'inherit' }}>
                   {Number(detailItem.discountPercent || 0)}%
                 </div>
               </div>
@@ -1284,8 +1284,8 @@ export default function CounterpartiesPage() {
                     ? detailItem.balancesByCurrency?.map((balance) => (
                         <div key={balance.currency} style={{ fontSize: 'var(--text-xs)', display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <strong>{balance.currency} · {isRu ? 'Нетто' : 'Net'} {formatCurrency(balance.netBalance, locale, balance.currency)}</strong>
-                          <span style={{ color: '#059669' }}>{isRu ? 'Клиент' : 'Mijoz'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}</span>
-                          <span style={{ color: '#dc2626' }}>{isRu ? 'Поставщик' : 'Ta’minotchi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}</span>
+                          <span style={{ color: 'var(--color-success-600)' }}>{isRu ? 'Клиент' : 'Mijoz'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}</span>
+                          <span style={{ color: 'var(--color-error-600)' }}>{isRu ? 'Поставщик' : 'Ta’minotchi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}</span>
                         </div>
                       ))
                     : <span style={{ color: 'var(--color-text-secondary)' }}>—</span>}
