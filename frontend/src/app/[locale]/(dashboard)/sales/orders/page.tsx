@@ -9,6 +9,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Badge } from '@/components/ui/Badge';
@@ -786,65 +787,32 @@ export default function SalesOrdersPage() {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmOrder && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--color-bg-primary)',
-              borderRadius: 'var(--radius-lg)',
-              maxWidth: '440px',
-              width: '100%',
-              padding: 'var(--space-6)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
-              <Trash2 size={24} />
-              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                {isRu ? 'Удалить заказ?' : 'Buyurtmani o‘chirish?'}
-              </h2>
-            </div>
-
-            {deleteError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
-                {deleteError}
-              </div>
-            )}
-
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
-              {isRu
-                ? `Вы действительно хотите удалить заказ № ${deleteConfirmOrder.orderNumber}? Все связанные позиции и бронь товаров будут аннулированы.`
-                : `Haqiqatan ham № ${deleteConfirmOrder.orderNumber} raqamli buyurtmani o‘chirmoqchimisiz? Undagi tovarlar va zaxira (bron) bekor qilinadi.`}
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button type="button" variant="secondary" onClick={() => setDeleteConfirmOrder(null)} disabled={deleteLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button
-                type="button"
-                onClick={handleDeleteOrder}
-                disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
-              >
-                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
-              </Button>
-            </div>
+      {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
+      <Modal
+        isOpen={Boolean(deleteConfirmOrder)}
+        onClose={() => { if (!deleteLoading) setDeleteConfirmOrder(null); }}
+        title={isRu ? 'Удалить заказ?' : 'Buyurtmani o‘chirish?'}
+        size="sm"
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setDeleteConfirmOrder(null)} disabled={deleteLoading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button type="button" variant="danger" onClick={handleDeleteOrder} loading={deleteLoading} loadingText={isRu ? 'Удаление…' : 'O‘chirilmoqda…'}>
+              {isRu ? 'Да, удалить' : 'Ha, o‘chirish'}
+            </Button>
+          </>
+        }
+      >
+        {deleteError && (
+          <div role="alert" className="doc-banner is-error" style={{ marginBottom: 'var(--space-4)' }}>
+            {deleteError}
           </div>
-        </div>
-      )}
+        )}
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+          {deleteConfirmOrder && (isRu ? `Заказ № ${deleteConfirmOrder.orderNumber} будет удалён, позиции и бронь товаров аннулированы.` : `№ ${deleteConfirmOrder.orderNumber} buyurtma o‘chiriladi, tovarlar va bron bekor qilinadi.`)}
+        </p>
+      </Modal>
     </div>
   );
 }

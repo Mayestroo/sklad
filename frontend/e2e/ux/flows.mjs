@@ -198,6 +198,28 @@ try {
     log('error:', (await page.locator('main [role=alert]').first().textContent().catch(() => 'none'))?.trim());
     await shot('1-after-save');
   }
+
+  if (flow === 'delorder') {
+    await signIn();
+    await page.goto(BASE + '/sales/orders', { waitUntil: 'networkidle' });
+    const del = page.getByTitle(isRu ? 'Удалить заказ' : "Buyurtmani o'chirish").first();
+    const before = await page.getByTitle(isRu ? 'Удалить заказ' : "Buyurtmani o'chirish").count();
+    await del.click();
+    const dlg = page.getByRole('dialog');
+    await dlg.waitFor();
+    log('dialog title:', (await dlg.locator('h3').first().textContent())?.trim());
+    log('focus inside dialog:', await page.evaluate(() => !!document.activeElement?.closest('[role=dialog]')));
+    await shot('1-dialog');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    log('closed by Esc:', !(await dlg.isVisible().catch(() => false)));
+    await del.click();
+    await dlg.waitFor();
+    await page.getByRole('button', { name: isRu ? 'Да, удалить' : 'Ha, o‘chirish' }).click();
+    await page.waitForTimeout(1500);
+    const after = await page.getByTitle(isRu ? 'Удалить заказ' : "Buyurtmani o'chirish").count();
+    log('rows with delete before/after:', before, after);
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');
