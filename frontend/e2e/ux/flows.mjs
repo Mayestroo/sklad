@@ -236,6 +236,21 @@ try {
     await page.waitForTimeout(300);
     log('closed by Esc:', !(await page.getByRole('dialog').isVisible().catch(() => false)));
   }
+
+  if (flow === 'users') {
+    await signIn();
+    await page.goto(BASE + '/users', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: isRu ? 'Добавить сотрудника' : 'Xodim qo‘shish' }).first().click();
+    const dlg = page.getByRole('dialog');
+    await dlg.waitFor();
+    await page.waitForTimeout(200);
+    log('dialog title:', (await dlg.locator('h3').first().textContent())?.trim());
+    log('focus in first field:', await page.evaluate(() => document.activeElement?.tagName + ' in dialog=' + !!document.activeElement?.closest('[role=dialog]')));
+    await shot('1-invite');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    log('closed by Esc:', !(await dlg.isVisible().catch(() => false)));
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');

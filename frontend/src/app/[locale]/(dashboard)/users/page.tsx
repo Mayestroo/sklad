@@ -8,6 +8,7 @@ import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
@@ -322,263 +323,192 @@ export default function UsersPage() {
       </Card>
 
       {/* Invite User Modal */}
-      {showModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '480px',
-              backgroundColor: 'var(--color-bg-secondary)',
-              borderRadius: 'var(--radius-xl)',
-              boxShadow: 'var(--shadow-xl)',
-              padding: 'var(--space-6)',
-              position: 'relative',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>
-                {isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'}
-              </h3>
-              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
-                type="button"
-                onClick={() => setShowModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md">
 
-            {createError && (
-              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
-                {createError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Имя' : 'Ism'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Jasur"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Фамилия' : 'Familiya'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Karimov"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jasur@company.uz"
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                  {isRu ? 'Временный пароль' : 'Vaqtinchalik Parol'}
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <Select
-                  label={isRu ? 'Системная роль' : 'Tizim Roli'}
-                  options={[
-                    { value: 'company_admin', label: 'Company Admin' },
-                    { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
-                    { value: 'cashier', label: isRu ? 'Кассир (Cashier)' : 'Kassir (Cashier)' },
-                    { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
-                    { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
-                    { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
-                  ]}
-                  value={roleSlug}
-                  onChange={(val) => setRoleSlug(val)}
-                />
-
-                <Select
-                  label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
-                  options={[
-                    { value: 'uz', label: 'O\'zbekcha (UZ)' },
-                    { value: 'ru', label: 'Русский (RU)' },
-                  ]}
-                  value={preferredLanguage}
-                  onChange={(val) => setPreferredLanguage(val as typeof preferredLanguage)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button type="submit" variant="primary" disabled={createLoading}>
-                  {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
-                </Button>
-              </div>
-            </form>
+        {createError && (
+          <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
+            {createError}
           </div>
-        </div>
-      )}
+        )}
+
+        <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Имя' : 'Ism'}
+              </label>
+              <input
+                type="text"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Jasur"
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Фамилия' : 'Familiya'}
+              </label>
+              <input
+                type="text"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Karimov"
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="jasur@company.uz"
+              style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+              {isRu ? 'Временный пароль' : 'Vaqtinchalik Parol'}
+            </label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <Select
+              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              options={[
+                { value: 'company_admin', label: 'Company Admin' },
+                { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
+                { value: 'cashier', label: isRu ? 'Кассир (Cashier)' : 'Kassir (Cashier)' },
+                { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
+                { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
+                { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
+              ]}
+              value={roleSlug}
+              onChange={(val) => setRoleSlug(val)}
+            />
+
+            <Select
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              options={[
+                { value: 'uz', label: 'O\'zbekcha (UZ)' },
+                { value: 'ru', label: 'Русский (RU)' },
+              ]}
+              value={preferredLanguage}
+              onChange={(val) => setPreferredLanguage(val as typeof preferredLanguage)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button type="submit" variant="primary" disabled={createLoading}>
+              {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--color-bg-primary)',
-              borderRadius: 'var(--radius-lg)',
-              maxWidth: '500px',
-              width: '100%',
-              padding: 'var(--space-6)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>
-                {isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'}
-              </h2>
-              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
-                type="button"
-                onClick={() => setEditingUser(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <Modal isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md">
 
-            {editError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
-                <AlertCircle size={16} />
-                <span>{editError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Имя' : 'Ism'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editFirstName}
-                    onChange={(e) => setEditFirstName(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Фамилия' : 'Familiya'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editLastName}
-                    onChange={(e) => setEditLastName(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
-                <input
-                  type="email"
-                  disabled
-                  value={editingUser.email}
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-subtle)', color: 'var(--color-text-tertiary)', outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <Select
-                  label={isRu ? 'Системная роль' : 'Tizim Roli'}
-                  options={[
-                    { value: 'company_admin', label: 'Company Admin' },
-                    { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
-                    { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
-                    { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
-                    { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
-                  ]}
-                  value={editRoleSlug}
-                  onChange={(val) => setEditRoleSlug(val)}
-                />
-
-                <Select
-                  label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
-                  options={[
-                    { value: 'uz', label: 'O\'zbekcha (UZ)' },
-                    { value: 'ru', label: 'Русский (RU)' },
-                  ]}
-                  value={editPreferredLanguage}
-                  onChange={(val) => setEditPreferredLanguage(val as typeof editPreferredLanguage)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button type="submit" variant="primary" disabled={editLoading}>
-                  {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
-                </Button>
-              </div>
-            </form>
+        {editError && (
+          <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+            <AlertCircle size={16} />
+            <span>{editError}</span>
           </div>
-        </div>
+        )}
+
+        <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Имя' : 'Ism'}
+              </label>
+              <input
+                type="text"
+                required
+                value={editFirstName}
+                onChange={(e) => setEditFirstName(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Фамилия' : 'Familiya'}
+              </label>
+              <input
+                type="text"
+                required
+                value={editLastName}
+                onChange={(e) => setEditLastName(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
+            <input
+              type="email"
+              disabled
+              value={editingUser.email}
+              style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-subtle)', color: 'var(--color-text-tertiary)', outline: 'none' }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <Select
+              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              options={[
+                { value: 'company_admin', label: 'Company Admin' },
+                { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
+                { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
+                { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
+                { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
+              ]}
+              value={editRoleSlug}
+              onChange={(val) => setEditRoleSlug(val)}
+            />
+
+            <Select
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              options={[
+                { value: 'uz', label: 'O\'zbekcha (UZ)' },
+                { value: 'ru', label: 'Русский (RU)' },
+              ]}
+              value={editPreferredLanguage}
+              onChange={(val) => setEditPreferredLanguage(val as typeof editPreferredLanguage)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
+            <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button type="submit" variant="primary" disabled={editLoading}>
+              {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
       )}
 
       {/* Delete Confirmation Modal */}
