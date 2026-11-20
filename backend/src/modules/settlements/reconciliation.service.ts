@@ -12,6 +12,10 @@ import {
   CounterpartySettlementService,
   RecordSettlementMovementInput,
 } from './counterparty-settlement.service';
+import {
+  receiptSupplierTotal,
+  splitReceiptExpensesByPayee,
+} from '../purchases/expense-allocation.engine';
 
 type ReconciliationException = {
   sourceType: string;
@@ -117,7 +121,12 @@ export class ReconciliationService {
       tx.salesInvoice.findMany({ where: { tenantId, status: 'POSTED' } }),
       tx.salesOrder.findMany({ where: { tenantId } }),
       tx.salesReturn.findMany({ where: { tenantId, status: 'POSTED' } }),
-      tx.purchaseReceipt.findMany({ where: { tenantId, status: 'POSTED' } }),
+      tx.purchaseReceipt.findMany({
+        where: { tenantId, status: 'POSTED' },
+        include: {
+          expenses: { select: { id: true, supplierId: true, amount: true } },
+        },
+      }),
       tx.purchaseReturn.findMany({ where: { tenantId, status: 'POSTED' } }),
       tx.additionalExpense.findMany({ where: { tenantId, status: 'POSTED' } }),
       tx.serviceAct.findMany({ where: { tenantId, status: 'POSTED' } }),
@@ -403,6 +412,36 @@ export class ReconciliationService {
         sourceDocId: receipt.id,
         idempotencyKey: `Legacy:PurchaseReceipt:${receipt.id}:POSTED`,
       });
+      // An expense owed to another supplier is that supplier's payable. A
+      // receipt posted before expenses were split still carries it in its
+      // total (already booked to the receipt supplier), so it is added only
+      // when the total leaves it out.
+      const expenses = receipt.expenses ?? [];
+      const { thirdParty } = splitReceiptExpensesByPayee(
+        expenses,
+        receipt.counterpartyId,
+      );
+      const totalExcludesThirdParty =
+        Math.abs(
+          Number(receipt.totalAmount) -
+            receiptSupplierTotal(receipt, expenses, receipt.counterpartyId),
+        ) < 0.005;
+      if (totalExcludesThirdParty) {
+        for (const expense of thirdParty) {
+          addMovement({
+            tenantId,
+            counterpartyId: expense.supplierId,
+            currency: receipt.currency,
+            side: CounterpartySettlementSide.SUPPLIER,
+            amount: expense.amount,
+            entryType: 'PURCHASE_EXPENSE_POSTED',
+            effectiveAt: receipt.docDate,
+            sourceDocType: 'PurchaseExpense',
+            sourceDocId: expense.expenseId,
+            idempotencyKey: `Legacy:PurchaseExpense:${expense.expenseId}:POSTED`,
+          });
+        }
+      }
       addTarget(SettlementAllocationTarget.PURCHASE_RECEIPT, {
         id: receipt.id,
         counterpartyId: receipt.counterpartyId,

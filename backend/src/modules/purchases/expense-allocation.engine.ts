@@ -290,3 +290,125 @@ export function assertExpenseCurrencyMatchesReceipt(
     );
   }
 }
+
+export interface ReceiptExpensePayeeInput {
+  id: string;
+  supplierId: string | null;
+  amount: Numeric;
+}
+
+export interface ThirdPartyReceiptExpense {
+  expenseId: string;
+  supplierId: string;
+  amount: number;
+}
+
+/**
+ * Who is owed each receipt expense. An expense with no supplier, or with the
+ * receipt's own supplier, is on that supplier's invoice and adds to its
+ * payable; an expense with another supplier (a carrier, a customs broker) is
+ * owed to that supplier. Every expense still goes into landed cost.
+ */
+export function splitReceiptExpensesByPayee(
+  expenses: ReceiptExpensePayeeInput[],
+  receiptSupplierId: string,
+): { receiptSupplierAmount: number; thirdParty: ThirdPartyReceiptExpense[] } {
+  let receiptSupplierAmount = 0;
+  const thirdParty: ThirdPartyReceiptExpense[] = [];
+  for (const expense of expenses) {
+    const amount = Number(expense.amount);
+    if (!expense.supplierId || expense.supplierId === receiptSupplierId) {
+      receiptSupplierAmount += amount;
+    } else {
+      thirdParty.push({
+        expenseId: expense.id,
+        supplierId: expense.supplierId,
+        amount,
+      });
+    }
+  }
+  return {
+    receiptSupplierAmount: Math.round(receiptSupplierAmount * 100) / 100,
+    thirdParty,
+  };
+}
+
+/**
+ * The receipt total: what the receipt's own supplier is owed (lines after
+ * discount, VAT, and the expenses on its invoice). Expenses owed to other
+ * suppliers are in `additionalExpensesTotal` (landed cost) but not here.
+ */
+export function receiptSupplierTotal(
+  amounts: {
+    subtotalAmount: Numeric;
+    discountAmount: Numeric;
+    vatAmount: Numeric;
+  },
+  expenses: ReceiptExpensePayeeInput[],
+  receiptSupplierId: string,
+): number {
+  const { receiptSupplierAmount } = splitReceiptExpensesByPayee(
+    expenses,
+    receiptSupplierId,
+  );
+  return (
+    Math.round(
+      (Number(amounts.subtotalAmount) -
+        Number(amounts.discountAmount) +
+        Number(amounts.vatAmount) +
+        receiptSupplierAmount) *
+        100,
+    ) / 100
+  );
+}
+
+export interface ReceiptLineAllocation {
+  allocatedExpenses: number;
+  landedCost: number;
+}
+
+/**
+ * Each line's share of the receipt expenses and its landed unit cost (line
+ * total after discount and VAT plus the share, per unit; receipt currency).
+ * Lines whose `allocatedExpenses` no longer add up to the expenses (a draft
+ * whose lines were replaced) are brought back in line with this.
+ */
+export function allocateReceiptLines(
+  items: (AllocationTargetItem & { totalPrice: Numeric })[],
+  expenses: { amount: Numeric; allocationMethod: ExpenseAllocationMethod }[],
+): Map<string, ReceiptLineAllocation> {
+  const shares =
+    expenses.length > 0
+      ? allocateReceiptExpenses(
+          items,
+          expenses.map((e) => ({
+            amount: Number(e.amount),
+            allocationMethod: e.allocationMethod,
+          })),
+        )
+      : new Map<string, number>();
+  const result = new Map<string, ReceiptLineAllocation>();
+  for (const item of items) {
+    const qty = Number(item.quantity);
+    const allocatedExpenses = shares.get(item.id) ?? 0;
+    result.set(item.id, {
+      allocatedExpenses,
+      landedCost:
+        qty > 0 ? (Number(item.totalPrice) + allocatedExpenses) / qty : 0,
+    });
+  }
+  return result;
+}
+
+/** True when the lines' shares add up to the receipt expenses (to the tiyin). */
+export function lineAllocationsMatchExpenses(
+  items: { allocatedExpenses?: Numeric | null }[],
+  expenses: { amount: Numeric }[],
+): boolean {
+  const allocated = items.reduce(
+    (sum, i) => sum + Number(i.allocatedExpenses ?? 0),
+    0,
+  );
+  const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  return Math.abs(allocated - total) < 0.005;
+}

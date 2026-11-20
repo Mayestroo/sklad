@@ -56,6 +56,10 @@ import {
   allocateReceiptExpenses,
   assertExpenseCurrencyMatchesReceipt,
   assertReceiptOpenForExpense,
+  allocateReceiptLines,
+  lineAllocationsMatchExpenses,
+  receiptSupplierTotal,
+  splitReceiptExpensesByPayee,
 } from './expense-allocation.engine';
 
 type Numeric = number | string | Prisma.Decimal;
@@ -369,6 +373,7 @@ export class PurchasesService {
   ) {
     const existing = await this.prisma.purchaseReceipt.findFirst({
       where: { id, tenantId },
+      include: { expenses: true },
     });
 
     if (!existing) {
@@ -469,11 +474,59 @@ export class PurchasesService {
       };
     });
 
-    const totalAmount =
-      subtotalAmount -
-      discountAmount +
-      vatAmount +
-      Number(existing.additionalExpensesTotal);
+    // The lines are replaced, so the receipt expenses are spread again over
+    // the new lines (ADR 0002); otherwise the batch cost would lose them while
+    // the journal (additionalExpensesTotal) still carries them.
+    const existingExpenses = existing.expenses ?? [];
+    for (const e of existingExpenses) {
+      assertExpenseCurrencyMatchesReceipt(e.currency, targetCurrency);
+    }
+    const productWeights =
+      existingExpenses.length > 0
+        ? new Map(
+            (
+              await this.prisma.product.findMany({
+                where: {
+                  tenantId,
+                  id: { in: preparedItems.map((i) => i.productId) },
+                },
+                select: { id: true, sku: true, weight: true },
+              })
+            ).map((p) => [p.id, p]),
+          )
+        : new Map<string, { id: string; sku: string; weight: unknown }>();
+    const lineAllocations = allocateReceiptLines(
+      preparedItems.map((item, index) => ({
+        id: String(index),
+        productId: item.productId,
+        product: (productWeights.get(item.productId) ?? null) as {
+          sku?: string;
+          weight?: Prisma.Decimal | null;
+        } | null,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        weight: item.weight,
+      })),
+      existingExpenses,
+    );
+    preparedItems.forEach((item, index) => {
+      const allocation = lineAllocations.get(String(index))!;
+      item.allocatedExpenses = allocation.allocatedExpenses;
+      item.landedCost = allocation.landedCost;
+    });
+    const additionalExpensesTotal =
+      Math.round(
+        existingExpenses.reduce((sum, e) => sum + Number(e.amount), 0) * 100,
+      ) / 100;
+
+    // The supplier may change: an expense owed to the new supplier joins its
+    // payable, one owed to the old supplier stays with that supplier.
+    const totalAmount = receiptSupplierTotal(
+      { subtotalAmount, discountAmount, vatAmount },
+      existing.expenses ?? [],
+      dto.counterpartyId,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       // F9: lock the row and re-check the status inside the transaction; a
@@ -515,6 +568,7 @@ export class PurchasesService {
           subtotalAmount,
           discountAmount,
           vatAmount,
+          additionalExpensesTotal,
           totalAmount,
           items: {
             create: preparedItems,
@@ -552,7 +606,65 @@ export class PurchasesService {
       );
     }
 
+    // Each receipt expense is owed to its own supplier. The receipt total is
+    // recomputed here so a draft saved before this rule does not book another
+    // supplier's expense to the receipt supplier.
+    const receiptExpenses = receipt.expenses ?? [];
+    for (const e of receiptExpenses) {
+      assertExpenseCurrencyMatchesReceipt(e.currency, receipt.currency);
+    }
+    // A draft whose lines were replaced before edits re-spread its expenses
+    // has lines without their shares: spread them again so the batch cost and
+    // the journal both carry every expense.
+    const expensesTotal =
+      Math.round(
+        receiptExpenses.reduce((sum, e) => sum + Number(e.amount), 0) * 100,
+      ) / 100;
+    const reallocatedLines = !lineAllocationsMatchExpenses(
+      receipt.items,
+      receiptExpenses,
+    )
+      ? allocateReceiptLines(receipt.items, receiptExpenses)
+      : null;
+    if (reallocatedLines) {
+      for (const item of receipt.items) {
+        const allocation = reallocatedLines.get(item.id)!;
+        item.allocatedExpenses = new Prisma.Decimal(
+          allocation.allocatedExpenses,
+        );
+        item.landedCost = new Prisma.Decimal(allocation.landedCost);
+      }
+    }
+    // A draft carries only its own receipt expenses: Additional Expense
+    // documents apply to posted receipts and must be cancelled before unposting.
+    if (
+      Math.abs(Number(receipt.additionalExpensesTotal) - expensesTotal) >= 0.005
+    ) {
+      receipt.additionalExpensesTotal = new Prisma.Decimal(expensesTotal);
+    }
+    const supplierPayable = receiptSupplierTotal(
+      receipt,
+      receiptExpenses,
+      receipt.counterpartyId,
+    );
+    const { thirdParty: thirdPartyExpenses } = splitReceiptExpensesByPayee(
+      receiptExpenses,
+      receipt.counterpartyId,
+    );
+
     return this.prisma.$transaction(async (tx) => {
+      if (reallocatedLines) {
+        for (const item of receipt.items) {
+          await tx.purchaseReceiptItem.update({
+            where: { receipt: { tenantId }, id: item.id },
+            data: {
+              allocatedExpenses: item.allocatedExpenses,
+              landedCost: item.landedCost,
+            },
+          });
+        }
+      }
+
       // 1. Update stock levels & create batches (physical items only)
       for (const item of receipt.items) {
         const itemType = item.product?.type || 'PRODUCT';
@@ -639,19 +751,36 @@ export class PurchasesService {
         }
       }
 
-      // 2. Accrue supplier payable in the receipt's native currency.
+      // 2. Accrue supplier payables in the receipt's native currency: the
+      // receipt supplier for its lines and its own expenses, and each other
+      // expense supplier for its expense.
       await this.settlementService.recordMovement(tx, {
         tenantId,
         counterpartyId: receipt.counterpartyId,
         currency: receipt.currency,
         side: CounterpartySettlementSide.SUPPLIER,
-        amount: Number(receipt.totalAmount),
+        amount: supplierPayable,
         entryType: 'PURCHASE_RECEIPT_POSTED',
         effectiveAt: receipt.docDate,
         sourceDocType: 'PurchaseReceipt',
         sourceDocId: receipt.id,
         idempotencyKey: `PurchaseReceipt:${receipt.id}:POSTED:${receipt.updatedAt.toISOString()}`,
       });
+      for (const expense of thirdPartyExpenses) {
+        if (expense.amount === 0) continue;
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: expense.supplierId,
+          currency: receipt.currency,
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: expense.amount,
+          entryType: 'PURCHASE_EXPENSE_POSTED',
+          effectiveAt: receipt.docDate,
+          sourceDocType: 'PurchaseExpense',
+          sourceDocId: expense.expenseId,
+          idempotencyKey: `PurchaseExpense:${expense.expenseId}:POSTED:${receipt.updatedAt.toISOString()}`,
+        });
+      }
 
       // 3. Accounting journal entries according to BHMS / NAS Standard
       // Debit 2910 (Finished Goods / Tovarlar): Net product cost + allocated expenses
@@ -804,6 +933,8 @@ export class PurchasesService {
           status: PurchaseDocStatus.POSTED,
           postedById: userId,
           postedAt: new Date(),
+          totalAmount: supplierPayable,
+          additionalExpensesTotal: receipt.additionalExpensesTotal,
         },
         include: {
           counterparty: true,
@@ -826,6 +957,7 @@ export class PurchasesService {
           },
         },
         counterparty: true,
+        expenses: { select: { id: true } },
       },
     });
 
@@ -920,6 +1052,7 @@ export class PurchasesService {
         sourceDocId: receipt.id,
         idempotencyKey: `PurchaseReceipt:${receipt.id}:UNPOSTED:${receipt.updatedAt.toISOString()}`,
       });
+      await this.reverseThirdPartyExpensePayables(tx, tenantId, receipt);
 
       // 3. Remove journal entries
       await this.journalService.deleteEntriesForSource(
@@ -1223,6 +1356,73 @@ export class PurchasesService {
     });
   }
 
+  /**
+   * Reverses what posting actually booked to other expense suppliers. A
+   * receipt posted before expenses were split has no such entries, so the
+   * reversal reads the ledger instead of recomputing from the expenses.
+   */
+  private async reverseThirdPartyExpensePayables(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    receipt: {
+      docDate: Date;
+      updatedAt: Date;
+      expenses?: { id: string }[];
+    },
+  ) {
+    const expenseIds = (receipt.expenses ?? []).map((e) => e.id);
+    if (expenseIds.length === 0) return;
+    const entries = await tx.counterpartySettlementEntry.findMany({
+      where: {
+        tenantId,
+        sourceDocType: 'PurchaseExpense',
+        sourceDocId: { in: expenseIds },
+        side: CounterpartySettlementSide.SUPPLIER,
+      },
+      select: {
+        sourceDocId: true,
+        counterpartyId: true,
+        currency: true,
+        amount: true,
+      },
+    });
+    const open = new Map<
+      string,
+      {
+        expenseId: string;
+        counterpartyId: string;
+        currency: string;
+        amount: number;
+      }
+    >();
+    for (const entry of entries) {
+      const key = `${entry.sourceDocId}|${entry.counterpartyId}|${entry.currency}`;
+      const row = open.get(key) ?? {
+        expenseId: entry.sourceDocId,
+        counterpartyId: entry.counterpartyId,
+        currency: entry.currency,
+        amount: 0,
+      };
+      row.amount = Math.round((row.amount + Number(entry.amount)) * 100) / 100;
+      open.set(key, row);
+    }
+    for (const row of open.values()) {
+      if (row.amount === 0) continue;
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: row.counterpartyId,
+        currency: row.currency,
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -row.amount,
+        entryType: 'PURCHASE_EXPENSE_UNPOSTED',
+        effectiveAt: receipt.docDate,
+        sourceDocType: 'PurchaseExpense',
+        sourceDocId: row.expenseId,
+        idempotencyKey: `PurchaseExpense:${row.expenseId}:${row.counterpartyId}:UNPOSTED:${receipt.updatedAt.toISOString()}`,
+      });
+    }
+  }
+
   async deleteReceipt(tenantId: string, id: string) {
     const receipt = await this.prisma.purchaseReceipt.findFirst({
       where: { id, tenantId },
@@ -1350,11 +1550,13 @@ export class PurchasesService {
         });
       }
 
-      const newTotalAmount =
-        Number(receipt.subtotalAmount) -
-        Number(receipt.discountAmount) +
-        Number(receipt.vatAmount) +
-        totalExpensesAmount;
+      // Landed cost takes every expense; the receipt total (the receipt
+      // supplier's payable) takes only the expenses owed to that supplier.
+      const newTotalAmount = receiptSupplierTotal(
+        receipt,
+        allExpenses,
+        receipt.counterpartyId,
+      );
 
       const updatedReceipt = await tx.purchaseReceipt.update({
         where: { tenantId, id: receipt.id },

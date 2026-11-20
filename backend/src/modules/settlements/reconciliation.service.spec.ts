@@ -405,4 +405,47 @@ describe('ReconciliationService', () => {
     expect(result.balanceRowsRebuilt).toBe(1);
     expect(result.differences.after).toHaveLength(0);
   });
+  it('plans a receipt expense owed to another supplier only when the receipt total leaves it out', async () => {
+    const receipt = (id: string, totalAmount: number) => ({
+      id,
+      counterpartyId: 'supp-1',
+      currency: 'UZS',
+      subtotalAmount: 1000,
+      discountAmount: 0,
+      vatAmount: 0,
+      totalAmount,
+      paidAmount: 0,
+      docDate: new Date('2025-02-01'),
+      expenses: [
+        { id: `${id}-own`, supplierId: null, amount: 50 },
+        { id: `${id}-carrier`, supplierId: 'carrier-1', amount: 30 },
+      ],
+    });
+    prisma.purchaseReceipt.findMany.mockResolvedValue([
+      // Posted with the split: the carrier's 30 is not in the total.
+      receipt('split', 1050),
+      // Posted before the split: the carrier's 30 was booked to supp-1.
+      receipt('legacy', 1080),
+    ]);
+
+    const result = await service.reconcileCounterpartyLedger('tenant-1', {
+      apply: false,
+    });
+    const byId = new Map(
+      result.plannedEntries.map((entry) => [entry.sourceDocId, entry]),
+    );
+
+    expect(byId.get('split')?.amount).toBe(1050);
+    expect(byId.get('split-carrier')).toMatchObject({
+      counterpartyId: 'carrier-1',
+      currency: 'UZS',
+      side: CounterpartySettlementSide.SUPPLIER,
+      amount: 30,
+      sourceDocType: 'PurchaseExpense',
+      entryType: 'PURCHASE_EXPENSE_POSTED',
+    });
+    expect(byId.get('legacy')?.amount).toBe(1080);
+    expect(byId.has('legacy-carrier')).toBe(false);
+    expect(byId.has('split-own')).toBe(false);
+  });
 });
