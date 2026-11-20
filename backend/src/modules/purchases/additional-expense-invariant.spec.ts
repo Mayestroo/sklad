@@ -96,6 +96,9 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         update: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      batchConsumption: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       product: {
         update: jest.fn(),
         findFirst: jest.fn().mockResolvedValue({
@@ -321,6 +324,16 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         id: 'batch-1',
       },
       data: { landedCost: dec(1200000) },
+    });
+    // The sale's consumptions carry the same +200,000 per unit, so a sales
+    // return re-enters stock at 1,200,000 (only sales consumptions).
+    expect(prisma.batchConsumption.updateMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-invariant-1',
+        batchId: 'batch-1',
+        salesInvoiceItemId: { not: null },
+      },
+      data: { unitCost: { increment: dec(200000) } },
     });
 
     // 6 sold units * 200,000 = +1,200,000 COGS delta

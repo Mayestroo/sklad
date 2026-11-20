@@ -187,6 +187,9 @@ describe('AdditionalExpensesService Unit Tests', () => {
         findFirst: jest.fn(),
         update: jest.fn(),
       },
+      batchConsumption: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       product: {
         // A UZS card unless a test says otherwise.
         findFirst: jest.fn().mockResolvedValue({

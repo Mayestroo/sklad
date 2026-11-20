@@ -235,6 +235,16 @@ function makeClient(db: FakeDb): any {
           };
         }),
       },
+      batchConsumption: {
+        ...simple('batchConsumption'),
+        updateMany: jest.fn(async ({ where, data }: any) => {
+          const rows = db.tables.batchConsumption.filter((r) =>
+            matches(r, where),
+          );
+          rows.forEach((r) => applyData(r, data));
+          return { count: rows.length };
+        }),
+      },
       salesInvoice: simple('salesInvoice'),
       salesInvoiceItem: simple('salesInvoiceItem'),
       cashAccount: simple('cashAccount'),
@@ -564,9 +574,11 @@ function seedSale(db: FakeDb) {
   });
   db.insert('batchConsumption', {
     id: 'cons-1',
+    tenantId,
     batchId: 'batch-line-b',
     salesInvoiceItemId: 'inv-item-1',
     quantity: 2,
+    unitCost: new D(1250000),
   });
   const batch = db.tables.productBatch.find((b) => b.id === 'batch-line-b')!;
   batch.remainingQty = new D(1);
@@ -707,6 +719,7 @@ function ledgerState(db: FakeDb) {
       'lineGrossProfit',
     ]),
     sales: pick('salesInvoice', ['totalCogs', 'grossProfit']),
+    consumptions: pick('batchConsumption', ['unitCost']),
   };
 }
 
@@ -865,6 +878,7 @@ describe('Additional Expense currency trace: cancelling', () => {
       totalCogs: new D(20000),
       grossProfit: new D(3730000),
     });
+    row(db, 'batchConsumption', 'cons-1').unitCost = new D(10000);
     const fixed = (table: string, id: string, field: string, dp: number) =>
       new D(row(db, table, id)[field] as Prisma.Decimal).toFixed(dp);
 
@@ -888,6 +902,7 @@ describe('Additional Expense currency trace: cancelling', () => {
       batch: fixed('productBatch', 'batch-line-b', 'landedCost', 4),
       unitCogs: fixed('salesInvoiceItem', 'inv-item-1', 'unitCogs', 4),
       lineCogs: fixed('salesInvoiceItem', 'inv-item-1', 'lineCogs', 2),
+      consumption: fixed('batchConsumption', 'cons-1', 'unitCost', 4),
       cogsAdjustment: new D(item.cogsAdjustment as Prisma.Decimal).toFixed(2),
     };
     await service.cancelExpense(tenantId, userId, draft.id);
@@ -899,15 +914,46 @@ describe('Additional Expense currency trace: cancelling', () => {
       batch: '10000.1429',
       unitCogs: '10000.1429',
       lineCogs: '20000.29', // 2 × 0.1429 = 0.2858 → money 0.29
+      // a sales return re-enters stock at this cost
+      consumption: '10000.1429',
       cogsAdjustment: '0.29',
     });
     expect(ledgerState(db)).toEqual(before);
+    expect(fixed('batchConsumption', 'cons-1', 'unitCost', 4)).toBe(
+      '10000.0000',
+    );
     expect(fixed('purchaseReceiptItem', 'line-b', 'landedCost', 4)).toBe(
       '10000.0000',
     );
     expect(fixed('salesInvoiceItem', 'inv-item-1', 'unitCogs', 4)).toBe(
       '10000.0000',
     );
+  });
+
+  it('an expense posted before consumptions were revalued cancels without touching them', async () => {
+    const db = new FakeDb();
+    seedUsdReceipt(db, 12500);
+    seedSale(db);
+    const { service } = await makeService(db);
+    const draft = await service.createDraft(tenantId, userId, {
+      ...draftDto,
+      amount: 1000,
+      currency: 'UZS',
+      selectedItemIds: ['line-b'],
+    });
+    await service.postExpense(tenantId, userId, draft.id);
+    // What the old code left behind: the consumption kept the sale-time
+    // cost and the expense carries no flag.
+    row(db, 'batchConsumption', 'cons-1').unitCost = new D(1250000);
+    row(db, 'additionalExpense', draft.id).consumptionCostRevalued = false;
+
+    await service.cancelExpense(tenantId, userId, draft.id);
+
+    expect(
+      new D(
+        row(db, 'batchConsumption', 'cons-1').unitCost as Prisma.Decimal,
+      ).toFixed(4),
+    ).toBe('1250000.0000');
   });
 
   it('a mixed-currency expense posted and cancelled twice leaves no drift', async () => {

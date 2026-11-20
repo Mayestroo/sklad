@@ -703,6 +703,10 @@ export class AdditionalExpensesService {
    * Posting passes +1 and cancelling -1 with the same stored delta, and every
    * figure is rounded the same way, so the two cancel out exactly. Returns
    * the change in sales COGS (UZS).
+   *
+   * With `revalueConsumptions`, the sales' batch consumptions get the same
+   * per-unit delta: a sales return re-enters stock at the consumption cost
+   * (ADR 0012), so it must be the cost the sale is now charged.
    */
   private async revalueBatch(
     tx: Prisma.TransactionClient,
@@ -711,6 +715,7 @@ export class AdditionalExpensesService {
     productId: string,
     unitDelta: Prisma.Decimal,
     sign: 1 | -1,
+    revalueConsumptions: boolean,
   ): Promise<Prisma.Decimal> {
     const toMoney = (d: Prisma.Decimal) =>
       d.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
@@ -733,6 +738,20 @@ export class AdditionalExpensesService {
       where: { tenantId, id: batch.id },
       data: { landedCost: newLandedCost },
     });
+    if (revalueConsumptions) {
+      // Only sales consumptions, the same rows whose COGS changes below. A
+      // stock transfer's consumptions must keep the cost its shipment posted
+      // (receiving rebuilds the layers from them so 2920 nets to zero), and
+      // purchase returns / inventory documents are not revalued.
+      await tx.batchConsumption.updateMany({
+        where: {
+          tenantId,
+          batchId: batch.id,
+          salesInvoiceItemId: { not: null },
+        },
+        data: { unitCost: { increment: delta } },
+      });
+    }
     // Sync the product card cost (ADR 0007), keeping the card's currency.
     await this.syncCatalogCost(
       tx,
@@ -896,6 +915,7 @@ export class AdditionalExpensesService {
           item.productId,
           new Prisma.Decimal(item.baseUnitDelta!),
           1,
+          true,
         );
         totalCogsAdjustment = totalCogsAdjustment.add(cogsAdjustment);
 
@@ -1097,6 +1117,7 @@ export class AdditionalExpensesService {
           status: PurchaseDocStatus.POSTED,
           postedById: userId,
           postedAt: new Date(),
+          consumptionCostRevalued: true,
         },
         include: {
           counterparty: true,
@@ -1262,6 +1283,9 @@ export class AdditionalExpensesService {
           item.productId,
           new Prisma.Decimal(item.baseUnitDelta!),
           -1,
+          // Postings from before consumptions were revalued added nothing
+          // to them: subtract only what this posting added.
+          expense.consumptionCostRevalued,
         );
         // Rows posted before the snapshot existed never had their line
         // revalued in the receipt currency (receiptUnitDelta NULL): leave it.

@@ -1848,6 +1848,8 @@ model AdditionalExpense {
   createdById      String?                 @map("created_by_id")
   postedById       String?                 @map("posted_by_id")
   postedAt         DateTime?               @map("posted_at")
+  // Posting also revalued the sales batch consumptions (cancel reverses only then).
+  consumptionCostRevalued Boolean           @default(false) @map("consumption_cost_revalued")
   createdAt        DateTime                @default(now()) @map("created_at")
   updatedAt        DateTime                @updatedAt @map("updated_at")
 
