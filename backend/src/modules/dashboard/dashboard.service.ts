@@ -590,7 +590,10 @@ export class DashboardService {
         READY: counts['READY'] || 0,
         AWAITING_PAYMENT: counts['AWAITING_PAYMENT'] || 0,
         PAYMENT_CONFIRMED: counts['PAYMENT_CONFIRMED'] || 0,
-        READY_TO_SHIP: counts['READY_TO_SHIP'] || 0,
+        // Both statuses mean "ready to ship" (sales flow vs warehouse flow,
+        // ADR 0018), counted together as /sales/orders/stats does.
+        READY_TO_SHIP:
+          (counts['READY_TO_SHIP'] || 0) + (counts['READY_FOR_SHIPMENT'] || 0),
         SHIPPED: counts['SHIPPED'] || 0,
         COMPLETED: counts['COMPLETED'] || 0,
         CANCELLED: counts['CANCELLED'] || 0,

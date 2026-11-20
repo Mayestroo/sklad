@@ -178,7 +178,23 @@ export interface AdditionalExpenseItem {
   newLandedCost: number;
   soldQuantity: number;
   remainingQuantity: number;
+  /** UZS. */
   cogsAdjustment: number;
+  // Conversion snapshot (see convertAndAllocate). NULL on drafts saved before
+  // it existed: such a draft must be saved again before posting.
+  originalCurrency?: string | null;
+  expenseRate?: number | null;
+  receiptRate?: number | null;
+  rateDate?: string | null;
+  rateSource?: ExpenseRateSource | null;
+  /** Share in the receipt currency. */
+  receiptAmount?: number | null;
+  /** Share in UZS. */
+  baseAmount?: number | null;
+  /** Receipt currency, per unit. */
+  receiptUnitDelta?: number | null;
+  /** UZS, per unit. */
+  baseUnitDelta?: number | null;
   product?: {
     id: string;
     name: any;
@@ -249,6 +265,9 @@ export interface BatchConsumption {
   batch?: any;
 }
 
+export type ExpenseRateSource = 'SAME_CURRENCY' | 'DOCUMENT';
+
+/** One allocation line; each amount is labelled with its currency. */
 export interface AllocationPreviewItem {
   receiptItemId: string;
   productId: string;
@@ -259,22 +278,44 @@ export interface AllocationPreviewItem {
   unitPrice: number;
   totalPrice: number;
   weight: number;
+  /** Receipt currency, per unit. */
   initialLandedCost: number;
+  /** Share in the expense currency. */
   allocatedAmount: number;
-  allocatedPerUnit: number;
+  /** Share in the receipt currency. */
+  receiptAmount: number;
+  /** Share in UZS. */
+  baseAmount: number;
+  /** Receipt currency, per unit. */
+  receiptUnitDelta: number;
+  /** UZS, per unit. */
+  baseUnitDelta: number;
+  /** Receipt currency, per unit. */
   newLandedCost: number;
   costIncreasePercent: number;
   soldQuantity: number;
   remainingQuantity: number;
+  /** UZS. */
   cogsAdjustment: number;
+  /** UZS. */
   stockAdjustment: number;
 }
 
 export interface AllocationPreviewResult {
-  expenseAmount: number;
   allocationMethod: ExpenseAllocationMethod;
-  allocatedTotal: number;
-  remainder: number;
+  /** Expense currency. */
+  currency: string;
+  receiptCurrency: string;
+  baseCurrency: 'UZS';
+  expenseRate: number;
+  receiptRate: number;
+  rateDate: string;
+  rateSource: ExpenseRateSource;
+  /** Totals; each column of items adds up to its total exactly. */
+  expenseAmount: number;
+  receiptTotal: number;
+  baseTotal: number;
+  remainderReceiptItemId: string;
   items: AllocationPreviewItem[];
 }
 

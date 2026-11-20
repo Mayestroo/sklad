@@ -23,7 +23,11 @@ import {
 
 import { nextDocumentNumber } from '../../common/sequences/document-sequence';
 import { grossProfitInUzs } from '../sales/sales-calculations';
-import { ExpenseAllocationEngine } from './expense-allocation.engine';
+import {
+  allocationSnapshotDifferences,
+  convertAndAllocate,
+  type ConvertedAllocation,
+} from './expense-allocation.engine';
 import {
   SUPPORTED_CURRENCIES,
   isSupportedCurrency,
@@ -34,12 +38,23 @@ import {
   isCashAccountCurrencyValid,
   ledgerAccountCodeForCashAccount,
 } from '../../../../shared/types/cash-account-policy';
-import { requireExchangeRateForCurrency } from '../../common/utils/transaction-exchange-rate';
 import { JournalService } from '../accounting/journal/journal.service';
 import type { JournalLineDto } from '../accounting/dto';
 import { assertTenantOwned } from '../../common/prisma/assert-tenant-owned';
 import { formatMoney } from '../../../../shared/format/money';
 import { assertPeriodOpen } from '../../common/accounting-period/period-lock';
+import {
+  assertNoUzsLandedCost,
+  usdReceiptLinesWithUzsLandedCost,
+} from './usd-receipt-landed-cost';
+
+/** The user fields an expense response may carry: never the password hash. */
+const USER_SUMMARY = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+} as const;
 
 /** A posted sales invoice whose COGS a posted expense changed retroactively. */
 export interface RetroactiveSalesImpact {
@@ -77,45 +92,67 @@ export class AdditionalExpensesService {
   async calculateAllocationPreview(
     tenantId: string,
     dto: CalculateAllocationDto,
-  ) {
-    const receipt = await this.prisma.purchaseReceipt.findFirst({
-      where: { id: dto.receiptId, tenantId },
+  ): Promise<ConvertedAllocation> {
+    return this.allocate(this.prisma, tenantId, {
+      receiptId: dto.receiptId,
+      amount: dto.amount,
+      currency: dto.currency,
+      exchangeRate: dto.exchangeRate,
+      allocationMethod:
+        dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT,
+      selectedItemIds: dto.selectedItemIds,
+      rateDate: dto.docDate ? new Date(dto.docDate) : new Date(),
+    });
+  }
+
+  /**
+   * Loads the receipt and runs convertAndAllocate(): the one path the
+   * preview, draft save and posting take, so they cannot disagree.
+   */
+  private async allocate(
+    db: Prisma.TransactionClient | PrismaService,
+    tenantId: string,
+    args: {
+      receiptId: string;
+      amount: Prisma.Decimal | number;
+      currency: string;
+      exchangeRate: Prisma.Decimal | number | null | undefined;
+      allocationMethod: ExpenseAllocationMethod;
+      selectedItemIds?: string[];
+      rateDate: Date;
+    },
+  ): Promise<ConvertedAllocation> {
+    const receipt = await db.purchaseReceipt.findFirst({
+      where: { id: args.receiptId, tenantId },
       include: {
-        items: {
-          include: { product: true },
-        },
-        batches: {
-          include: { consumptions: true },
-        },
+        items: { include: { product: true } },
+        batches: true,
       },
     });
-
     if (!receipt) {
       throw new NotFoundException('Xarid hujjati topilmadi');
     }
 
     let targetItems = receipt.items;
-    if (dto.selectedItemIds && dto.selectedItemIds.length > 0) {
-      const selectedSet = new Set(dto.selectedItemIds);
+    if (args.selectedItemIds && args.selectedItemIds.length > 0) {
+      const selectedSet = new Set(args.selectedItemIds);
       targetItems = receipt.items.filter((i) => selectedSet.has(i.id));
+      if (targetItems.length !== selectedSet.size) {
+        throw new BadRequestException(
+          'Tanlangan tovar ushbu xaridga tegishli emas / Выбранный товар не относится к этому приходу',
+        );
+      }
     }
 
-    if (targetItems.length === 0) {
-      throw new BadRequestException(
-        'Taqsimlash uchun kamida bitta tovar tanlanishi shart',
-      );
-    }
-
-    const allocationMethod =
-      dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
-    const totalAmount = Number(dto.amount);
-
-    return ExpenseAllocationEngine.allocateExpense(
-      targetItems,
-      totalAmount,
-      allocationMethod,
-      receipt.batches,
-    );
+    return convertAndAllocate({
+      items: targetItems,
+      amount: args.amount,
+      allocationMethod: args.allocationMethod,
+      expense: { currency: args.currency, exchangeRate: args.exchangeRate },
+      receipt,
+      rateDate: args.rateDate,
+      batches: receipt.batches,
+    });
   }
 
   // ─── DRAFT CRUD ─────────────────────────────────────────────
@@ -160,15 +197,19 @@ export class AdditionalExpensesService {
       cashAccount: dto.cashAccountId,
     });
 
-    const docNumber = await this.generateDocNumber(tenantId);
-    const allocation = await this.calculateAllocationPreview(tenantId, {
+    const docDate = dto.docDate ? new Date(dto.docDate) : new Date();
+    const allocation = await this.allocate(this.prisma, tenantId, {
       receiptId: dto.receiptId,
       amount: dto.amount,
-      allocationMethod: dto.allocationMethod,
+      currency: dto.currency,
+      exchangeRate,
+      allocationMethod:
+        dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT,
       selectedItemIds: dto.selectedItemIds,
+      rateDate: docDate,
     });
+    const docNumber = await this.generateDocNumber(tenantId);
 
-    const docDate = dto.docDate ? new Date(dto.docDate) : new Date();
     const vatRate = dto.vatRate || 0;
     const vatAmount =
       vatRate > 0 ? (Number(dto.amount) * vatRate) / (100 + vatRate) : 0;
@@ -195,23 +236,14 @@ export class AdditionalExpensesService {
           comment: dto.comment || null,
           createdById: userId,
           items: {
-            create: allocation.items.map((i) => ({
-              receiptItemId: i.receiptItemId,
-              productId: i.productId,
-              initialLandedCost: i.initialLandedCost,
-              allocatedAmount: i.allocatedAmount,
-              newLandedCost: i.newLandedCost,
-              soldQuantity: i.soldQuantity,
-              remainingQuantity: i.remainingQuantity,
-              cogsAdjustment: i.cogsAdjustment,
-            })),
+            create: allocationRows(allocation),
           },
         },
         include: {
           counterparty: true,
           receipt: { include: { counterparty: true, warehouse: true } },
           cashAccount: true,
-          createdBy: true,
+          createdBy: { select: USER_SUMMARY },
           items: {
             include: { product: true },
           },
@@ -298,11 +330,22 @@ export class AdditionalExpensesService {
 
     const allocationMethod = dto.allocationMethod || existing.allocationMethod;
 
-    const allocation = await this.calculateAllocationPreview(tenantId, {
+    const docDate = dto.docDate ? new Date(dto.docDate) : existing.docDate;
+    // No new selection: keep the draft's own lines (it used to fall back to
+    // every line of the receipt). A different receipt starts from all lines.
+    const selectedItemIds =
+      dto.selectedItemIds ??
+      (receiptId === existing.receiptId
+        ? existing.items.map((i) => i.receiptItemId)
+        : undefined);
+    const allocation = await this.allocate(this.prisma, tenantId, {
       receiptId,
       amount,
+      currency: targetCurrency,
+      exchangeRate,
       allocationMethod,
-      selectedItemIds: dto.selectedItemIds,
+      selectedItemIds,
+      rateDate: docDate,
     });
 
     const vatRate =
@@ -333,12 +376,12 @@ export class AdditionalExpensesService {
       const updated = await tx.additionalExpense.update({
         where: { tenantId, id },
         data: {
-          docDate: dto.docDate ? new Date(dto.docDate) : existing.docDate,
+          docDate,
           expenseType: dto.expenseType || existing.expenseType,
           counterpartyId: dto.counterpartyId || existing.counterpartyId,
           receiptId,
           amount,
-          currency: dto.currency || existing.currency,
+          currency: targetCurrency,
           exchangeRate,
           vatRate,
           vatAmount,
@@ -350,16 +393,7 @@ export class AdditionalExpensesService {
               : existing.cashAccountId,
           comment: dto.comment !== undefined ? dto.comment : existing.comment,
           items: {
-            create: allocation.items.map((i) => ({
-              receiptItemId: i.receiptItemId,
-              productId: i.productId,
-              initialLandedCost: i.initialLandedCost,
-              allocatedAmount: i.allocatedAmount,
-              newLandedCost: i.newLandedCost,
-              soldQuantity: i.soldQuantity,
-              remainingQuantity: i.remainingQuantity,
-              cogsAdjustment: i.cogsAdjustment,
-            })),
+            create: allocationRows(allocation),
           },
         },
         include: {
@@ -474,8 +508,8 @@ export class AdditionalExpensesService {
             include: { counterparty: true, warehouse: true },
           },
           cashAccount: true,
-          createdBy: true,
-          postedBy: true,
+          createdBy: { select: USER_SUMMARY },
+          postedBy: { select: USER_SUMMARY },
           items: {
             include: { product: true },
           },
@@ -541,8 +575,8 @@ export class AdditionalExpensesService {
           },
         },
         cashAccount: true,
-        createdBy: true,
-        postedBy: true,
+        createdBy: { select: USER_SUMMARY },
+        postedBy: { select: USER_SUMMARY },
         items: {
           include: {
             product: true,
@@ -559,11 +593,8 @@ export class AdditionalExpensesService {
     // Query retroactive sales impact if posted
     let retroactiveSalesImpact: RetroactiveSalesImpact[] = [];
     if (expense.status === PurchaseDocStatus.POSTED) {
-      // Sales costs are in UZS: convert the allocation like posting did.
-      const impactRate = requireExchangeRateForCurrency(
-        expense.currency,
-        expense.currency === 'UZS' ? undefined : Number(expense.exchangeRate),
-      );
+      // Sales costs are in UZS: the stored per-unit UZS delta posting
+      // applied, rounded per sale line the same way (no fresh conversion).
       const productIds = expense.items.map((i) => i.productId);
       const batches = await this.prisma.productBatch.findMany({
         where: {
@@ -592,10 +623,10 @@ export class AdditionalExpensesService {
         const itemExpense = expense.items.find(
           (i) => i.productId === batch.productId,
         );
-        const unitExpense = itemExpense
-          ? (Number(itemExpense.allocatedAmount) * impactRate) /
-            allocationQuantity(itemExpense)
-          : 0;
+        // A row without a stored conversion has no known impact: skip it
+        // rather than recompute it at today's rate.
+        if (itemExpense?.baseUnitDelta == null) continue;
+        const unitExpense = Number(itemExpense.baseUnitDelta);
 
         for (const c of batch.consumptions) {
           const invItem = c.salesInvoiceItem;
@@ -603,7 +634,10 @@ export class AdditionalExpensesService {
 
           const key = invItem.invoiceId;
           const consumedQty = Number(c.quantity);
-          const cogsDelta = consumedQty * unitExpense;
+          const cogsDelta = new Prisma.Decimal(itemExpense.baseUnitDelta)
+            .mul(c.quantity)
+            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+            .toNumber();
 
           const existing = impactMap.get(key);
           if (!existing) {
@@ -663,6 +697,107 @@ export class AdditionalExpensesService {
     });
   }
 
+  /**
+   * Adds `sign × unitDelta` (UZS per unit) to the receipt batch's landed
+   * cost, its product card and the COGS of every sale from it (ADR 0008).
+   * Posting passes +1 and cancelling -1 with the same stored delta, and every
+   * figure is rounded the same way, so the two cancel out exactly. Returns
+   * the change in sales COGS (UZS).
+   */
+  private async revalueBatch(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    receiptId: string,
+    productId: string,
+    unitDelta: Prisma.Decimal,
+    sign: 1 | -1,
+  ): Promise<Prisma.Decimal> {
+    const toMoney = (d: Prisma.Decimal) =>
+      d.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    const delta = unitDelta.mul(sign);
+    let cogsChange = new Prisma.Decimal(0);
+
+    const batch = await tx.productBatch.findFirst({
+      where: { tenantId, receiptId, productId },
+      include: { consumptions: { include: { salesInvoiceItem: true } } },
+    });
+    if (!batch) return cogsChange;
+
+    // A batch without a landed cost starts from its purchase price (posting only).
+    const current =
+      sign > 0 && new Prisma.Decimal(batch.landedCost).lte(0)
+        ? new Prisma.Decimal(batch.purchasePrice)
+        : new Prisma.Decimal(batch.landedCost);
+    const newLandedCost = current.add(delta);
+    await tx.productBatch.update({
+      where: { tenantId, id: batch.id },
+      data: { landedCost: newLandedCost },
+    });
+    // Sync the product card cost (ADR 0007), keeping the card's currency.
+    await this.syncCatalogCost(
+      tx,
+      tenantId,
+      productId,
+      newLandedCost.toNumber(),
+    );
+
+    for (const consumption of batch.consumptions) {
+      // Only sales consumptions are COGS; goods returned to the supplier
+      // (purchase-return consumptions) are not.
+      const saleLine = consumption.salesInvoiceItem;
+      if (!saleLine) continue;
+      const lineCogsDelta = toMoney(delta.mul(consumption.quantity));
+      cogsChange = cogsChange.add(lineCogsDelta);
+
+      const newUnitCogs = new Prisma.Decimal(saleLine.unitCogs ?? 0).add(delta);
+      const newLineCogs = new Prisma.Decimal(saleLine.lineCogs ?? 0).add(
+        lineCogsDelta,
+      );
+      const invoice = await tx.salesInvoice.findUnique({
+        where: { tenantId, id: saleLine.invoiceId },
+      });
+      if (!invoice) {
+        throw new BadRequestException(
+          'Sotuv hujjati topilmadi (tannarxni qayta hisoblash)',
+        );
+      }
+      await tx.salesInvoiceItem.update({
+        where: { invoice: { tenantId }, id: saleLine.id },
+        data: {
+          unitCogs: newUnitCogs,
+          lineCogs: newLineCogs,
+          lineGrossProfit: salesProfitInUzs(
+            invoice,
+            Number(saleLine.totalPrice) - Number(saleLine.vatAmount || 0),
+            newLineCogs.toNumber(),
+          ),
+        },
+      });
+
+      // Recalculate the invoice's total COGS and gross profit.
+      const invoiceItems = await tx.salesInvoiceItem.findMany({
+        where: { invoice: { tenantId }, invoiceId: saleLine.invoiceId },
+      });
+      const invoiceTotalCogs = sumDecimal(
+        invoiceItems.map((it) =>
+          it.id === saleLine.id ? newLineCogs : (it.lineCogs ?? 0),
+        ),
+      );
+      await tx.salesInvoice.update({
+        where: { tenantId, id: saleLine.invoiceId },
+        data: {
+          totalCogs: invoiceTotalCogs,
+          grossProfit: salesProfitInUzs(
+            invoice,
+            Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
+            invoiceTotalCogs.toNumber(),
+          ),
+        },
+      });
+    }
+    return cogsChange;
+  }
+
   async postExpense(tenantId: string, userId: string, id: string) {
     const expense = await this.prisma.additionalExpense.findFirst({
       where: { id, tenantId },
@@ -693,166 +828,101 @@ export class AdditionalExpensesService {
     await this.accountsService.ensureDefaultAccounts(tenantId);
 
     const totalAmount = Number(expense.amount);
-    // Inventory, COGS, and the general ledger are maintained in UZS base currency.
-    const capitalizationRate = requireExchangeRateForCurrency(
-      expense.currency,
-      expense.currency === 'UZS' ? undefined : Number(expense.exchangeRate),
-    );
-    const capitalizedTotal = totalAmount * capitalizationRate;
 
     return this.prisma.$transaction(async (tx) => {
-      let totalCogsAdjustment = 0;
+      // Lock the draft so a concurrent save cannot replace its lines while
+      // they are being posted.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'additionalExpense',
+        id,
+        tenantId,
+      );
+      if (lockedStatus !== PurchaseDocStatus.DRAFT) {
+        throw new BadRequestException(
+          'Faqat qoralama holatidagi xarajatlarni tasdiqlash mumkin',
+        );
+      }
+      const storedItems = await tx.additionalExpenseItem.findMany({
+        where: { expense: { tenantId }, expenseId: id },
+      });
 
-      // 1. Update ProductBatch landed cost & Retroactive COGS
-      for (const item of expense.items) {
-        const allocatedAmount =
-          Number(item.allocatedAmount) * capitalizationRate;
-        const allocatedPerUnit = allocatedAmount / allocationQuantity(item);
+      // A USD receipt line still holding a UZS landed cost (old posting bug)
+      // is repaired first: never add a USD amount on top of a UZS figure.
+      assertNoUzsLandedCost(
+        expense.receipt,
+        await usdReceiptLinesWithUzsLandedCost(
+          tx,
+          tenantId,
+          expense.receipt,
+          storedItems.map((i) => i.receiptItemId),
+        ),
+      );
 
-        // Find or verify batch
-        const batch = await tx.productBatch.findFirst({
-          where: {
-            tenantId,
-            receiptId: expense.receiptId,
-            productId: item.productId,
-          },
-          include: {
-            consumptions: {
-              include: { salesInvoiceItem: true },
-            },
-          },
+      // Posting recomputes with the one conversion function and applies the
+      // result only if it is what the user saw when the draft was saved: a
+      // changed receipt, rate or line is refused, never silently applied.
+      const allocation = await this.allocate(tx, tenantId, {
+        receiptId: expense.receiptId,
+        amount: expense.amount,
+        currency: expense.currency,
+        exchangeRate: expense.exchangeRate,
+        allocationMethod: expense.allocationMethod,
+        selectedItemIds: storedItems.map((i) => i.receiptItemId),
+        rateDate: expense.docDate,
+      });
+      const differences = allocationSnapshotDifferences(
+        storedItems,
+        allocation,
+      );
+      if (differences.length > 0) {
+        throw new BadRequestException(
+          `Qoralama saqlangandan keyin xarid yoki kurs o'zgargan — qoralamani qayta saqlang va taqsimotni tekshiring / После сохранения черновика изменились приход или курс — сохраните черновик заново и проверьте распределение (${differences.slice(0, 5).join('; ')})`,
+        );
+      }
+
+      // 1. Apply the stored per-unit amounts: UZS to the batch, its product
+      // card and the COGS of sales from it; receipt currency to the receipt
+      // line. Cancelling subtracts the same stored values.
+      let totalCogsAdjustment = new Prisma.Decimal(0);
+      for (const item of storedItems) {
+        const line = allocation.items.find(
+          (l) => l.receiptItemId === item.receiptItemId,
+        )!;
+        const cogsAdjustment = await this.revalueBatch(
+          tx,
+          tenantId,
+          expense.receiptId,
+          item.productId,
+          new Prisma.Decimal(item.baseUnitDelta!),
+          1,
+        );
+        totalCogsAdjustment = totalCogsAdjustment.add(cogsAdjustment);
+
+        await tx.purchaseReceiptItem.update({
+          where: { receipt: { tenantId }, id: item.receiptItemId },
+          data: { landedCost: { increment: item.receiptUnitDelta! } },
         });
 
-        if (batch) {
-          const currentBatchLandedCost =
-            Number(batch.landedCost) > 0
-              ? Number(batch.landedCost)
-              : Number(batch.purchasePrice);
-          const newBatchLandedCost = currentBatchLandedCost + allocatedPerUnit;
-
-          await tx.productBatch.update({
-            where: { tenantId, id: batch.id },
-            data: { landedCost: newBatchLandedCost },
-          });
-
-          // Receipt-linked returns use the receipt line as their historical source.
-          // Keep it synchronized with the revalued batch cost.
-          const receiptItem = await tx.purchaseReceiptItem.findFirst({
-            where: {
-              receipt: { tenantId },
-              receiptId: expense.receiptId,
-              productId: item.productId,
-            },
-          });
-          if (receiptItem) {
-            await tx.purchaseReceiptItem.update({
-              where: { receipt: { tenantId }, id: receiptItem.id },
-              data: { landedCost: newBatchLandedCost },
-            });
-          }
-
-          // Sync the product card cost (ADR 0007), keeping the card's currency.
-          await this.syncCatalogCost(
-            tx,
-            tenantId,
-            item.productId,
-            newBatchLandedCost,
-          );
-
-          // Retroactive COGS Recalibration for all downstream consumptions (ADR 0008)
-          for (const consumption of batch.consumptions) {
-            const consumedQty = Number(consumption.quantity);
-            const lineCogsDelta = consumedQty * allocatedPerUnit;
-
-            // Only sales consumptions are COGS; goods returned to the supplier
-            // (purchase-return consumptions) are not.
-            if (consumption.salesInvoiceItem) {
-              totalCogsAdjustment += lineCogsDelta;
-              const currentUnitCogs = Number(
-                consumption.salesInvoiceItem.unitCogs || 0,
-              );
-              const currentLineCogs = Number(
-                consumption.salesInvoiceItem.lineCogs || 0,
-              );
-              const newUnitCogs = currentUnitCogs + allocatedPerUnit;
-              const newLineCogs = currentLineCogs + lineCogsDelta;
-              const invoice = await tx.salesInvoice.findUnique({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-              });
-              if (!invoice) {
-                throw new BadRequestException(
-                  'Sotuv hujjati topilmadi (tannarxni qayta hisoblash)',
-                );
-              }
-              const newGrossProfit = salesProfitInUzs(
-                invoice,
-                Number(consumption.salesInvoiceItem.totalPrice) -
-                  Number(consumption.salesInvoiceItem.vatAmount || 0),
-                newLineCogs,
-              );
-
-              await tx.salesInvoiceItem.update({
-                where: {
-                  invoice: { tenantId },
-                  id: consumption.salesInvoiceItem.id,
-                },
-                data: {
-                  unitCogs: newUnitCogs,
-                  lineCogs: newLineCogs,
-                  lineGrossProfit: newGrossProfit,
-                },
-              });
-
-              // Recalculate parent sales invoice total cogs & gross profit
-              const allInvoiceItems = await tx.salesInvoiceItem.findMany({
-                where: {
-                  invoice: { tenantId },
-                  invoiceId: consumption.salesInvoiceItem.invoiceId,
-                },
-              });
-              const invoiceTotalCogs = allInvoiceItems.reduce((s, it) => {
-                if (it.id === consumption.salesInvoiceItemId) {
-                  return s + newLineCogs;
-                }
-                return s + Number(it.lineCogs || 0);
-              }, 0);
-
-              const newInvoiceGrossProfit = salesProfitInUzs(
-                invoice,
-                Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
-                invoiceTotalCogs,
-              );
-
-              await tx.salesInvoice.update({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-                data: {
-                  totalCogs: invoiceTotalCogs,
-                  grossProfit: newInvoiceGrossProfit,
-                },
-              });
-            }
-          }
-        }
-
-        // Update item fields
+        // Sold / remaining quantities and the COGS change are facts of the
+        // posting moment (sales may have happened since the draft was saved).
         await tx.additionalExpenseItem.update({
           where: { expense: { tenantId }, id: item.id },
           data: {
-            newLandedCost: Number(item.initialLandedCost) + allocatedPerUnit,
-            cogsAdjustment:
-              (Number(item.soldQuantity) / allocationQuantity(item)) *
-              allocatedAmount,
+            soldQuantity: line.soldQuantity,
+            remainingQuantity: line.remainingQuantity,
+            cogsAdjustment,
           },
         });
       }
 
       // The receipt total is in the receipt currency (ADR 0023): add the
-      // expense converted to it, the same amount cancelling removes.
+      // stored receipt-currency shares, the same amount cancelling removes.
       await tx.purchaseReceipt.update({
         where: { tenantId, id: expense.receiptId },
         data: {
           additionalExpensesTotal: {
-            increment: expenseInReceiptCurrency(expense, expense.receipt),
+            increment: sumDecimal(storedItems.map((i) => i.receiptAmount!)),
           },
         },
       });
@@ -907,7 +977,7 @@ export class AdditionalExpensesService {
             direction: TransactionDirection.EXPENSE,
             amount: totalAmount,
             currency: cashAcc.currency,
-            exchangeRate: capitalizationRate,
+            exchangeRate: allocation.expenseRate,
             transactionDate: expense.docDate,
             comment:
               expense.comment ||
@@ -963,12 +1033,18 @@ export class AdditionalExpensesService {
 
       if (creditAcc) {
         const journalLines: JournalLineDto[] = [];
-        const netStock = Math.max(
+        // UZS amounts from the stored snapshot (the expense's own rate,
+        // ADR 0008). The VAT share is left as it was posted before (see
+        // the 2910 / batch VAT note in the report): out of scope here.
+        const baseTotal = sumDecimal(storedItems.map((i) => i.baseAmount!));
+        const vatBase = new Prisma.Decimal(expense.vatAmount)
+          .mul(allocation.expenseRate)
+          .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+        const netStock = Prisma.Decimal.max(
           0,
-          capitalizedTotal -
-            totalCogsAdjustment -
-            Number(expense.vatAmount || 0) * capitalizationRate,
-        );
+          baseTotal.sub(totalCogsAdjustment).sub(vatBase),
+        ).toNumber();
+        const cogsTotal = totalCogsAdjustment.toNumber();
 
         if (inventoryAcc && netStock > 0) {
           journalLines.push({
@@ -980,11 +1056,11 @@ export class AdditionalExpensesService {
           });
         }
 
-        if (cogsAcc && totalCogsAdjustment > 0) {
+        if (cogsAcc && cogsTotal > 0) {
           journalLines.push({
             debitAccountId: cogsAcc.id,
             creditAccountId: creditAcc.id,
-            amount: totalCogsAdjustment,
+            amount: cogsTotal,
             description:
               'Sotilgan tovarlar tannarxiga (COGS) retroaktiv xarajat taqsimoti',
           });
@@ -994,7 +1070,7 @@ export class AdditionalExpensesService {
           journalLines.push({
             debitAccountId: vatAcc.id,
             creditAccountId: creditAcc.id,
-            amount: Number(expense.vatAmount) * capitalizationRate,
+            amount: vatBase.toNumber(),
             description: 'Qo‘shimcha xizmat bo‘yicha kiruvchi QQS',
           });
         }
@@ -1054,7 +1130,6 @@ export class AdditionalExpensesService {
       include: {
         items: true,
         counterparty: true,
-        receipt: { select: { currency: true, exchangeRate: true } },
       },
     });
 
@@ -1103,9 +1178,38 @@ export class AdditionalExpensesService {
       );
     }
 
+    // Cancelling reverses the stored conversion. A posted row without one
+    // (its rate could not be read when the snapshot was backfilled) is
+    // refused: a fresh rate would not undo what posting did.
+    if (
+      expense.items.some(
+        (i) =>
+          i.baseUnitDelta == null ||
+          i.receiptAmount == null ||
+          i.originalCurrency == null,
+      )
+    ) {
+      throw new BadRequestException(
+        "Bu xarajatning kurs ma'lumotlari saqlanmagan, uni aniq bekor qilib bo'lmaydi — administratorga murojaat qiling / У расхода не сохранены данные о курсе, его нельзя точно отменить — обратитесь к администратору",
+      );
+    }
+
     const totalAmount = Number(expense.amount);
 
     return this.prisma.$transaction(async (tx) => {
+      // Lock the row: a second cancel running at the same time must not
+      // reverse the expense twice.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'additionalExpense',
+        id,
+        tenantId,
+      );
+      if (lockedStatus !== PurchaseDocStatus.POSTED) {
+        throw new BadRequestException(
+          'Faqat tasdiqlangan holatidagi xarajatlarni bekor qilish mumkin',
+        );
+      }
       // D4: nothing dated in a closed accounting period may change.
       await assertPeriodOpen(tx, tenantId, expense.docDate, 'cancel');
 
@@ -1146,138 +1250,33 @@ export class AdditionalExpensesService {
           );
         }
       }
-      // 1. Revert ProductBatch landed cost & Retroactive COGS. Posting added
-      // the allocation converted to UZS; the reversal removes the same UZS
-      // amount (it used to subtract the raw USD figure from a UZS cost).
-      const capitalizationRate = requireExchangeRateForCurrency(
-        expense.currency,
-        expense.currency === 'UZS' ? undefined : Number(expense.exchangeRate),
-      );
+      // 1. Reverse exactly what posting applied, from the stored snapshot
+      // only (never a fresh rate): the same revalueBatch() with -1, the
+      // stored receipt-currency delta off the receipt line, and the stored
+      // receipt-currency shares off the receipt total.
       for (const item of expense.items) {
-        const allocatedAmount =
-          Number(item.allocatedAmount) * capitalizationRate;
-        const allocatedPerUnit = allocatedAmount / allocationQuantity(item);
-
-        const batch = await tx.productBatch.findFirst({
-          where: {
-            tenantId,
-            receiptId: expense.receiptId,
-            productId: item.productId,
-          },
-          include: {
-            consumptions: {
-              include: { salesInvoiceItem: true },
-            },
-          },
-        });
-
-        if (batch) {
-          const currentBatchLandedCost = Number(batch.landedCost);
-          const restoredBatchLandedCost = Math.max(
-            Number(batch.purchasePrice),
-            currentBatchLandedCost - allocatedPerUnit,
-          );
-
-          await tx.productBatch.update({
-            where: { tenantId, id: batch.id },
-            data: { landedCost: restoredBatchLandedCost },
+        await this.revalueBatch(
+          tx,
+          tenantId,
+          expense.receiptId,
+          item.productId,
+          new Prisma.Decimal(item.baseUnitDelta!),
+          -1,
+        );
+        // Rows posted before the snapshot existed never had their line
+        // revalued in the receipt currency (receiptUnitDelta NULL): leave it.
+        if (item.receiptUnitDelta != null) {
+          await tx.purchaseReceiptItem.update({
+            where: { receipt: { tenantId }, id: item.receiptItemId },
+            data: { landedCost: { decrement: item.receiptUnitDelta } },
           });
-
-          // Sync the product card cost, keeping the card's currency.
-          await this.syncCatalogCost(
-            tx,
-            tenantId,
-            item.productId,
-            restoredBatchLandedCost,
-          );
-
-          // Revert retroactive COGS on downstream sales invoices
-          for (const consumption of batch.consumptions) {
-            const consumedQty = Number(consumption.quantity);
-            const lineCogsDelta = consumedQty * allocatedPerUnit;
-
-            if (consumption.salesInvoiceItem) {
-              const currentUnitCogs = Number(
-                consumption.salesInvoiceItem.unitCogs || 0,
-              );
-              const currentLineCogs = Number(
-                consumption.salesInvoiceItem.lineCogs || 0,
-              );
-              const restoredUnitCogs = Math.max(
-                0,
-                currentUnitCogs - allocatedPerUnit,
-              );
-              const restoredLineCogs = Math.max(
-                0,
-                currentLineCogs - lineCogsDelta,
-              );
-              const invoice = await tx.salesInvoice.findUnique({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-              });
-              if (!invoice) {
-                throw new BadRequestException(
-                  'Sotuv hujjati topilmadi (tannarxni qayta hisoblash)',
-                );
-              }
-              const restoredGrossProfit = salesProfitInUzs(
-                invoice,
-                Number(consumption.salesInvoiceItem.totalPrice) -
-                  Number(consumption.salesInvoiceItem.vatAmount || 0),
-                restoredLineCogs,
-              );
-
-              await tx.salesInvoiceItem.update({
-                where: {
-                  invoice: { tenantId },
-                  id: consumption.salesInvoiceItem.id,
-                },
-                data: {
-                  unitCogs: restoredUnitCogs,
-                  lineCogs: restoredLineCogs,
-                  lineGrossProfit: restoredGrossProfit,
-                },
-              });
-
-              // Recalculate parent invoice
-              const allInvoiceItems = await tx.salesInvoiceItem.findMany({
-                where: {
-                  invoice: { tenantId },
-                  invoiceId: consumption.salesInvoiceItem.invoiceId,
-                },
-              });
-              const invoiceTotalCogs = allInvoiceItems.reduce((s, it) => {
-                if (it.id === consumption.salesInvoiceItemId) {
-                  return s + restoredLineCogs;
-                }
-                return s + Number(it.lineCogs || 0);
-              }, 0);
-
-              const newInvoiceGrossProfit = salesProfitInUzs(
-                invoice,
-                Number(invoice.totalAmount) - Number(invoice.vatAmount || 0),
-                invoiceTotalCogs,
-              );
-
-              await tx.salesInvoice.update({
-                where: { tenantId, id: consumption.salesInvoiceItem.invoiceId },
-                data: {
-                  totalCogs: invoiceTotalCogs,
-                  grossProfit: newInvoiceGrossProfit,
-                },
-              });
-            }
-          }
         }
       }
-
-      // Revert PurchaseReceipt additionalExpensesTotal by exactly what
-      // posting added, in the receipt currency (posting used to add the UZS
-      // figure and this used to subtract the expense-currency figure).
       await tx.purchaseReceipt.update({
         where: { tenantId, id: expense.receiptId },
         data: {
           additionalExpensesTotal: {
-            decrement: expenseInReceiptCurrency(expense, expense.receipt),
+            decrement: sumDecimal(expense.items.map((i) => i.receiptAmount!)),
           },
         },
       });
@@ -1331,6 +1330,39 @@ export class AdditionalExpensesService {
   }
 }
 
+/** Sums Decimal (or numeric) values exactly. */
+function sumDecimal(
+  values: (Prisma.Decimal | number | string)[],
+): Prisma.Decimal {
+  return values.reduce<Prisma.Decimal>(
+    (sum, v) => sum.add(new Prisma.Decimal(v)),
+    new Prisma.Decimal(0),
+  );
+}
+
+/** The stored allocation lines: convertAndAllocate() output, unchanged. */
+export function allocationRows(allocation: ConvertedAllocation) {
+  return allocation.items.map((i) => ({
+    receiptItemId: i.receiptItemId,
+    productId: i.productId,
+    initialLandedCost: i.initialLandedCost,
+    allocatedAmount: i.allocatedAmount,
+    newLandedCost: i.newLandedCost,
+    soldQuantity: i.soldQuantity,
+    remainingQuantity: i.remainingQuantity,
+    cogsAdjustment: i.cogsAdjustment,
+    originalCurrency: allocation.currency,
+    expenseRate: allocation.expenseRate,
+    receiptRate: allocation.receiptRate,
+    rateDate: allocation.rateDate,
+    rateSource: allocation.rateSource,
+    receiptAmount: i.receiptAmount,
+    baseAmount: i.baseAmount,
+    receiptUnitDelta: i.receiptUnitDelta,
+    baseUnitDelta: i.baseUnitDelta,
+  }));
+}
+
 /**
  * Gross profit of a sales invoice (or line) after its COGS is recalibrated
  * (ADR 0008): net revenue excluding VAT, converted to UZS at the invoice's
@@ -1355,51 +1387,4 @@ function salesProfitInUzs(
         : 'Yalpi foydani hisoblab bo‘lmadi',
     );
   }
-}
-
-/**
- * Units an allocation is spread over. Zero would divide the expense over a
- * made-up single unit (it used to fall back to 1), so it is refused.
- */
-function allocationQuantity(item: {
-  soldQuantity: unknown;
-  remainingQuantity: unknown;
-}): number {
-  const quantity = Number(item.soldQuantity) + Number(item.remainingQuantity);
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    throw new BadRequestException(
-      "Qo'shimcha xarajat taqsimlangan tovar miqdori 0 — xarajatni qayta taqsimlang / Количество товара для распределения расхода равно 0",
-    );
-  }
-  return quantity;
-}
-
-/**
- * An Additional Expense amount in its receipt's currency, for the receipt's
- * `additionalExpensesTotal` (ADR 0023: one document, one currency). Same
- * currency → the amount itself; otherwise it is converted explicitly through
- * UZS at the two documents' own rates. Posting and cancelling both use it, so
- * the receipt total returns to where it was.
- */
-export function expenseInReceiptCurrency(
-  expense: { amount: unknown; currency: string; exchangeRate: unknown },
-  receipt: { currency: string; exchangeRate: unknown } | null | undefined,
-): number {
-  if (!receipt) {
-    throw new BadRequestException(
-      "Qo'shimcha xarajatning xaridi topilmadi / Приход для дополнительного расхода не найден",
-    );
-  }
-  const amount = Number(expense.amount);
-  if (expense.currency === receipt.currency) {
-    return Math.round(amount * 100) / 100;
-  }
-  const rateOf = (doc: { currency: string; exchangeRate: unknown }) =>
-    requireExchangeRateForCurrency(
-      doc.currency,
-      doc.currency === 'UZS' || doc.exchangeRate == null
-        ? undefined
-        : Number(doc.exchangeRate),
-    );
-  return Math.round(((amount * rateOf(expense)) / rateOf(receipt)) * 100) / 100;
 }

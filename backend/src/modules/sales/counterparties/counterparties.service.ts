@@ -568,6 +568,10 @@ export class CounterpartiesService {
     const financeById = new Map(
       financeTransactions.map((transaction) => [transaction.id, transaction]),
     );
+    const documentNumbers = await this.statementDocumentNumbers(
+      tenantId,
+      entries,
+    );
     const balancesByCurrency = counterparty.balances.map((balance) => ({
       currency: balance.currency,
       customerDebt: Number(balance.customerDebt),
@@ -624,7 +628,9 @@ export class CounterpartiesService {
         id: entry.id,
         date: entry.effectiveAt.toISOString(),
         docNumber:
-          finance?.docNumber || `${entry.sourceDocType} ${entry.sourceDocId}`,
+          finance?.docNumber ||
+          documentNumbers.get(entry.sourceDocId) ||
+          `${entry.sourceDocType} ${entry.sourceDocId}`,
         type,
         entryType: entry.entryType,
         side: entry.side,
@@ -666,5 +672,73 @@ export class CounterpartiesService {
       },
       transactions,
     };
+  }
+
+  /**
+   * The printed number of each statement entry's source document (invoice,
+   * receipt, return, act, ...), keyed by document id, so the reconciliation
+   * act shows "SF-2026-00012" rather than a type and a UUID.
+   */
+  private async statementDocumentNumbers(
+    tenantId: string,
+    entries: Array<{ sourceDocType: string; sourceDocId: string }>,
+  ): Promise<Map<string, string>> {
+    const idsOf = (...types: string[]) => [
+      ...new Set(
+        entries
+          .filter((entry) => types.includes(entry.sourceDocType))
+          .map((entry) => entry.sourceDocId),
+      ),
+    ];
+    const [
+      invoices,
+      receipts,
+      salesReturns,
+      purchaseReturns,
+      acts,
+      expenses,
+      orders,
+    ] = await Promise.all([
+      this.prisma.salesInvoice.findMany({
+        where: { tenantId, id: { in: idsOf('SalesInvoice') } },
+        select: { id: true, invoiceNumber: true },
+      }),
+      this.prisma.purchaseReceipt.findMany({
+        where: { tenantId, id: { in: idsOf('PurchaseReceipt') } },
+        select: { id: true, docNumber: true },
+      }),
+      this.prisma.salesReturn.findMany({
+        where: {
+          tenantId,
+          id: { in: idsOf('SalesReturn', 'SalesReturnCancel') },
+        },
+        select: { id: true, returnNumber: true },
+      }),
+      this.prisma.purchaseReturn.findMany({
+        where: { tenantId, id: { in: idsOf('PurchaseReturn') } },
+        select: { id: true, returnNumber: true },
+      }),
+      this.prisma.serviceAct.findMany({
+        where: { tenantId, id: { in: idsOf('ServiceAct') } },
+        select: { id: true, actNumber: true },
+      }),
+      this.prisma.additionalExpense.findMany({
+        where: { tenantId, id: { in: idsOf('AdditionalExpense') } },
+        select: { id: true, docNumber: true },
+      }),
+      this.prisma.salesOrder.findMany({
+        where: { tenantId, id: { in: idsOf('SalesOrder') } },
+        select: { id: true, orderNumber: true },
+      }),
+    ]);
+    return new Map<string, string>([
+      ...invoices.map((d) => [d.id, d.invoiceNumber] as [string, string]),
+      ...receipts.map((d) => [d.id, d.docNumber] as [string, string]),
+      ...salesReturns.map((d) => [d.id, d.returnNumber] as [string, string]),
+      ...purchaseReturns.map((d) => [d.id, d.returnNumber] as [string, string]),
+      ...acts.map((d) => [d.id, d.actNumber] as [string, string]),
+      ...expenses.map((d) => [d.id, d.docNumber] as [string, string]),
+      ...orders.map((d) => [d.id, d.orderNumber] as [string, string]),
+    ]);
   }
 }

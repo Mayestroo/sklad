@@ -253,6 +253,13 @@ enum ExpenseAllocationMethod {
   BY_WEIGHT
 }
 
+/// Where an Additional Expense allocation took its rates from. There is no
+/// rate feed: rates are typed on the documents.
+enum ExpenseRateSource {
+  SAME_CURRENCY // expense and receipt in one currency
+  DOCUMENT // the expense and receipt documents own exchange rates
+}
+
 enum SalesDocStatus {
   DRAFT
   POSTED
@@ -1167,7 +1174,7 @@ model ProductionDocument {
   note                String?
   plannedMaterialCost Decimal            @default(0) @db.Decimal(15, 2) @map("planned_material_cost")
   actualMaterialCost  Decimal            @default(0) @db.Decimal(15, 2) @map("actual_material_cost")
-  unitCost            Decimal            @default(0) @db.Decimal(15, 2) @map("unit_cost")
+  unitCost            Decimal            @default(0) @db.Decimal(17, 4) @map("unit_cost")
   createdById         String?            @map("created_by_id")
   startedAt           DateTime?          @map("started_at")
   completedAt         DateTime?          @map("completed_at")
@@ -1196,7 +1203,7 @@ model ProductionMaterialLine {
   productId            String   @map("product_id")
   plannedQuantity      Decimal  @db.Decimal(15, 3) @map("planned_quantity")
   actualQuantity       Decimal? @db.Decimal(15, 3) @map("actual_quantity")
-  unitCost             Decimal  @default(0) @db.Decimal(15, 2) @map("unit_cost")
+  unitCost             Decimal  @default(0) @db.Decimal(17, 4) @map("unit_cost")
   totalCost            Decimal  @default(0) @db.Decimal(15, 2) @map("total_cost")
 
   productionDocument   ProductionDocument @relation(fields: [productionDocumentId], references: [id], onDelete: Cascade)
@@ -1213,7 +1220,7 @@ model ProductionMaterialBatch {
   lineId     String   @map("line_id")
   batchId    String   @map("batch_id")
   quantity   Decimal  @db.Decimal(15, 3)
-  unitCost   Decimal  @db.Decimal(15, 2) @map("unit_cost")
+  unitCost   Decimal  @db.Decimal(17, 4) @map("unit_cost")
   createdAt  DateTime @default(now()) @map("created_at")
 
   line       ProductionMaterialLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
@@ -1232,7 +1239,7 @@ model ProductionMaterialMovement {
   batchId              String                          @map("batch_id")
   movementType         ProductionMaterialMovementType  @map("movement_type")
   quantity             Decimal                         @db.Decimal(15, 3)
-  unitCost             Decimal                         @db.Decimal(15, 2) @map("unit_cost")
+  unitCost             Decimal                         @db.Decimal(17, 4) @map("unit_cost")
   createdById          String?                         @map("created_by_id")
   createdAt            DateTime                        @default(now()) @map("created_at")
 
@@ -1309,7 +1316,7 @@ model SalesInvoiceItem {
   vatRate         Decimal      @default(0) @db.Decimal(5, 2) @map("vat_rate")
   vatAmount       Decimal      @default(0) @db.Decimal(15, 2) @map("vat_amount")
   totalPrice      Decimal      @db.Decimal(15, 2) @map("total_price")
-  unitCogs        Decimal      @default(0) @db.Decimal(15, 2) @map("unit_cogs")
+  unitCogs        Decimal      @default(0) @db.Decimal(17, 4) @map("unit_cogs")
   lineCogs        Decimal      @default(0) @db.Decimal(15, 2) @map("line_cogs")
   lineGrossProfit Decimal      @default(0) @db.Decimal(15, 2) @map("line_gross_profit")
   isBelowCost     Boolean      @default(false) @map("is_below_cost")
@@ -1364,7 +1371,7 @@ model SalesReturnItem {
   vatRate     Decimal     @default(0) @db.Decimal(5, 2) @map("vat_rate")
   vatAmount   Decimal     @default(0) @db.Decimal(15, 2) @map("vat_amount")
   totalPrice  Decimal     @db.Decimal(15, 2) @map("total_price")
-  unitCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("unit_cogs")
+  unitCogs    Decimal     @default(0) @db.Decimal(17, 4) @map("unit_cogs")
   lineCogs    Decimal     @default(0) @db.Decimal(15, 2) @map("line_cogs")
   isDefective Boolean     @default(false) @map("is_defective")
 
@@ -1708,7 +1715,7 @@ model PurchaseReceiptItem {
   vatAmount         Decimal         @default(0) @db.Decimal(15, 2) @map("vat_amount")
   totalPrice        Decimal         @db.Decimal(15, 2) @map("total_price")
   allocatedExpenses Decimal         @default(0) @db.Decimal(15, 2) @map("allocated_expenses")
-  landedCost        Decimal         @default(0) @db.Decimal(15, 2) @map("landed_cost")
+  landedCost        Decimal         @default(0) @db.Decimal(17, 4) @map("landed_cost")
 
   receipt           PurchaseReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -1796,8 +1803,8 @@ model ProductBatch {
   batchNumber   String           @map("batch_number")
   initialQty    Decimal          @db.Decimal(15, 3) @map("initial_qty")
   remainingQty  Decimal          @db.Decimal(15, 3) @map("remaining_qty")
-  purchasePrice Decimal          @db.Decimal(15, 2) @map("purchase_price")
-  landedCost    Decimal          @db.Decimal(15, 2) @map("landed_cost")
+  purchasePrice Decimal          @db.Decimal(17, 4) @map("purchase_price")
+  landedCost    Decimal          @db.Decimal(17, 4) @map("landed_cost")
   createdAt     DateTime         @default(now()) @map("created_at")
 
   company       Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1864,12 +1871,26 @@ model AdditionalExpenseItem {
   expenseId         String            @map("expense_id")
   receiptItemId     String            @map("receipt_item_id")
   productId         String            @map("product_id")
-  initialLandedCost Decimal           @default(0) @db.Decimal(15, 2) @map("initial_landed_cost")
+  initialLandedCost Decimal           @default(0) @db.Decimal(17, 4) @map("initial_landed_cost")
   allocatedAmount   Decimal           @default(0) @db.Decimal(15, 2) @map("allocated_amount")
-  newLandedCost     Decimal           @default(0) @db.Decimal(15, 2) @map("new_landed_cost")
+  newLandedCost     Decimal           @default(0) @db.Decimal(17, 4) @map("new_landed_cost")
   soldQuantity      Decimal           @default(0) @db.Decimal(15, 3) @map("sold_quantity")
   remainingQuantity Decimal           @default(0) @db.Decimal(15, 3) @map("remaining_quantity")
   cogsAdjustment    Decimal           @default(0) @db.Decimal(15, 2) @map("cogs_adjustment")
+
+  // Conversion snapshot, written only by convertAndAllocate() (draft save and
+  // posting). Cancelling reverses these stored values, never a fresh rate.
+  // All set or all NULL (additional_expense_items_snapshot_check); legacy
+  // posted rows have no receiptUnitDelta and leave the receipt line alone.
+  originalCurrency  String?            @map("original_currency")
+  expenseRate       Decimal?           @db.Decimal(15, 4) @map("expense_rate")
+  receiptRate       Decimal?           @db.Decimal(15, 4) @map("receipt_rate")
+  rateDate          DateTime?          @map("rate_date")
+  rateSource        ExpenseRateSource? @map("rate_source")
+  receiptAmount     Decimal?           @db.Decimal(15, 2) @map("receipt_amount")
+  baseAmount        Decimal?           @db.Decimal(15, 2) @map("base_amount")
+  receiptUnitDelta  Decimal?           @db.Decimal(17, 4) @map("receipt_unit_delta")
+  baseUnitDelta     Decimal?           @db.Decimal(17, 4) @map("base_unit_delta")
 
   expense           AdditionalExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   receiptItem       PurchaseReceiptItem @relation(fields: [receiptItemId], references: [id], onDelete: Cascade)
@@ -1888,7 +1909,7 @@ model BatchConsumption {
   stockTransferItemId  String?             @map("stock_transfer_item_id")
   batchId            String           @map("batch_id")
   quantity           Decimal          @db.Decimal(15, 3)
-  unitCost           Decimal          @db.Decimal(15, 2) @map("unit_cost")
+  unitCost           Decimal          @db.Decimal(17, 4) @map("unit_cost")
   createdAt          DateTime         @default(now()) @map("created_at")
 
   company            Company          @relation(fields: [tenantId], references: [id], onDelete: Cascade)

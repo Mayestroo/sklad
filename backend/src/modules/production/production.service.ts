@@ -576,7 +576,7 @@ export class ProductionService {
           where: { productionDocument: { tenantId }, id: line.id },
           data: {
             actualQuantity: desiredQuantity,
-            unitCost: quantity > 0 ? roundMoney(totalCost / quantity) : 0,
+            unitCost: quantity > 0 ? roundUnitCost(totalCost / quantity) : 0,
             totalCost,
           },
         });
@@ -677,7 +677,7 @@ export class ProductionService {
           0,
         ),
       );
-      const unitCost = roundMoney(actualMaterialCost / producedQuantity);
+      const unitCost = roundUnitCost(actualMaterialCost / producedQuantity);
 
       await tx.stockLevel.upsert({
         where: {
@@ -995,6 +995,11 @@ export class ProductionService {
 
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/** Per-unit costs keep 4 decimals (DECIMAL(17,4) columns). */
+function roundUnitCost(value: number): number {
+  return Math.round((value + Number.EPSILON) * 10000) / 10000;
 }
 
 function roundQuantity(value: number): number {

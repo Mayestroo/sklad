@@ -86,30 +86,7 @@ export class SalesOrdersController {
     @CurrentTenant() tenantId: string,
     @Param('counterpartyId') counterpartyId: string,
   ) {
-    const result = await this.service.findAll(tenantId, { counterpartyId });
-    const orderList = result.data || [];
-    const totalOrders = result.total ?? orderList.length;
-    // One total per currency: amounts in different currencies are never
-    // added together (ADR 0023).
-    const byCurrency = new Map<string, number>();
-    for (const order of orderList as Array<{
-      currency: string;
-      totalAmount?: unknown;
-    }>) {
-      byCurrency.set(
-        order.currency,
-        (byCurrency.get(order.currency) ?? 0) + Number(order.totalAmount || 0),
-      );
-    }
-    return {
-      orders: orderList,
-      summary: {
-        totalOrders,
-        totalsByCurrency: [...byCurrency.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([currency, totalAmount]) => ({ currency, totalAmount })),
-      },
-    };
+    return this.service.findByCounterparty(tenantId, counterpartyId);
   }
 
   @Get()

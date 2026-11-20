@@ -23,6 +23,8 @@ const ALLOWLIST: Record<string, string> = {
   'OpeningBalancesService.lineData':
     'Maps a line to its row; create and updateLines call assertLineReferences on the same lines first',
   'FinanceService.listTransactions': READ_FILTER,
+  'CounterpartiesService.statementDocumentNumbers':
+    'Ids come from settlement entries already read with tenantId; every lookup filters { tenantId, id: { in } }',
   'FinanceService.resolveSettlementContext':
     'Checks counterparty with findFirst({ id, tenantId }) and loads the source document within the tenant',
   'FinanceService.createTransfer':
@@ -43,7 +45,9 @@ const ALLOWLIST: Record<string, string> = {
     'Product ids must equal the materials of the tenant-scoped document',
   'ProductionService.consumeMaterial': INTERNAL,
   'AdditionalExpensesService.calculateAllocationPreview':
-    'Receipt is loaded with tenantId; selected item ids are intersected with that receipt’s items',
+    'Passes the ids to allocate(), which loads the receipt with tenantId',
+  'AdditionalExpensesService.allocate':
+    'Receipt is loaded with tenantId; selected item ids must all be lines of that receipt (refused otherwise)',
   'AdditionalExpensesService.findAll': READ_FILTER,
   'PurchasesService.findAllReceipts': READ_FILTER,
   'PurchasesService.payPurchaseReceipt':

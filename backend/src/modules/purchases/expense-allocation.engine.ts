@@ -230,6 +230,296 @@ export class ExpenseAllocationEngine {
   }
 }
 
+// ─── ADDITIONAL EXPENSE: ONE CONVERSION + ALLOCATION FUNCTION ────────────
+
+const Decimal = Prisma.Decimal;
+type Decimal = Prisma.Decimal;
+
+/** Money is kept to 2 decimals, halves rounded up (away from zero). */
+function toMoney(value: Decimal): Decimal {
+  return value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}
+
+/** Per-unit costs are kept to 4 decimals (DECIMAL(17,4) columns). */
+function toUnitCost(value: Decimal): Decimal {
+  return value.toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
+}
+
+/** A document's currency and its typed rate to UZS. */
+export interface AllocationDocument {
+  currency: string;
+  exchangeRate: Numeric | null | undefined;
+}
+
+/**
+ * A document's rate to UZS as stored (4 decimals). UZS is 1; USD needs its
+ * own positive rate. A missing rate is an error, never 1 (ADR 0022).
+ */
+export function documentRateToUzs(
+  doc: AllocationDocument,
+  label: 'expense' | 'receipt',
+): Decimal {
+  const who =
+    label === 'expense'
+      ? "Qo'shimcha xarajat / Дополнительный расход"
+      : 'Xarid / Приход';
+  if (doc.currency === 'UZS') return new Decimal(1);
+  if (doc.currency !== 'USD') {
+    throw new BadRequestException(
+      `${who}: valyuta USD yoki UZS bo'lishi shart / валюта должна быть USD или UZS (${doc.currency})`,
+    );
+  }
+  const raw = doc.exchangeRate;
+  let rate: Decimal | null = null;
+  try {
+    rate =
+      raw == null || raw === ''
+        ? null
+        : new Decimal(raw).toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
+  } catch {
+    rate = null;
+  }
+  if (!rate || !rate.isFinite() || rate.lte(0)) {
+    throw new BadRequestException(
+      `${who}: ${doc.currency} kursi ko'rsatilmagan yoki 0 / курс ${doc.currency} не указан или равен 0`,
+    );
+  }
+  return rate;
+}
+
+export interface ConvertAndAllocateInput {
+  /** The receipt lines to spread over, in receipt order (ties go to the first). */
+  items: AllocationTargetItem[];
+  /** Expense total in the expense currency. */
+  amount: Numeric;
+  allocationMethod: ExpenseAllocationMethod;
+  expense: AllocationDocument;
+  receipt: AllocationDocument;
+  /** The date the rates belong to: the expense document date. */
+  rateDate: Date;
+  /** The receipt's batches, for sold / remaining quantities. */
+  batches?: BatchInfo[];
+}
+
+export interface ConvertedAllocationLine {
+  receiptItemId: string;
+  productId: string;
+  productName: Prisma.JsonValue | undefined;
+  sku: string;
+  unitOfMeasure: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  weight: number;
+  /** Receipt currency, per unit. */
+  initialLandedCost: number;
+  /** Share in the expense currency. */
+  allocatedAmount: number;
+  /** Share in the receipt currency. */
+  receiptAmount: number;
+  /** Share in UZS, at the expense's own rate (ADR 0008). */
+  baseAmount: number;
+  /** Added to the receipt line's landed cost (receipt currency, per unit). */
+  receiptUnitDelta: number;
+  /** Added to the batch landed cost and to sold units' COGS (UZS, per unit). */
+  baseUnitDelta: number;
+  /** Receipt currency, per unit. */
+  newLandedCost: number;
+  costIncreasePercent: number;
+  soldQuantity: number;
+  remainingQuantity: number;
+  /** UZS. */
+  cogsAdjustment: number;
+  /** UZS. */
+  stockAdjustment: number;
+}
+
+export interface ConvertedAllocation {
+  allocationMethod: ExpenseAllocationMethod;
+  currency: string;
+  receiptCurrency: string;
+  baseCurrency: 'UZS';
+  /** Expense rate to UZS. */
+  expenseRate: number;
+  /** Receipt rate to UZS; equal to expenseRate when both share a currency. */
+  receiptRate: number;
+  rateDate: Date;
+  rateSource: 'SAME_CURRENCY' | 'DOCUMENT';
+  /** Totals: each column of `items` adds up to its total exactly. */
+  expenseAmount: number;
+  receiptTotal: number;
+  baseTotal: number;
+  /** The line that took the rounding leftover. */
+  remainderReceiptItemId: string;
+  items: ConvertedAllocationLine[];
+}
+
+/** Each line's allocation basis under the method (Decimal, never float). */
+function allocationBases(
+  items: AllocationTargetItem[],
+  method: ExpenseAllocationMethod,
+): Decimal[] {
+  const bases = items.map((item) => {
+    if (method === ExpenseAllocationMethod.BY_QUANTITY) {
+      return new Decimal(Number(item.quantity));
+    }
+    if (method === ExpenseAllocationMethod.BY_WEIGHT) {
+      return new Decimal(Number(item.quantity)).mul(requireUnitWeight(item));
+    }
+    return new Decimal(Number(item.totalPrice) || 0);
+  });
+  const sum = bases.reduce((s, b) => s.add(b), new Decimal(0));
+  // Nothing to weigh by (e.g. free goods by amount): equal shares, as before.
+  return sum.lte(0) ? items.map(() => new Decimal(1)) : bases;
+}
+
+/**
+ * Splits a 2-decimal total by the bases; the rounding leftover goes on
+ * `remainderIndex`, so the shares add up to the total exactly.
+ */
+function splitExactly(
+  total: Decimal,
+  bases: Decimal[],
+  remainderIndex: number,
+): Decimal[] {
+  const basisSum = bases.reduce((s, b) => s.add(b), new Decimal(0));
+  const shares = bases.map((b) => toMoney(total.mul(b).div(basisSum)));
+  const allocated = shares.reduce((s, x) => s.add(x), new Decimal(0));
+  shares[remainderIndex] = shares[remainderIndex].add(total.sub(allocated));
+  return shares;
+}
+
+/**
+ * The single conversion + allocation used by the Additional Expense preview,
+ * draft save and posting (cancelling only reads what it stored).
+ *
+ * - Rates: each document's own rate to UZS (`documentRateToUzs`), 4 decimals.
+ *   One currency converts 1:1 (the receipt rate is taken equal to the
+ *   expense rate). A missing rate is an error.
+ * - Totals: converted once from the expense total and rounded to 2 decimals,
+ *   halves up: receipt = amount × expenseRate / receiptRate, UZS = amount ×
+ *   expenseRate.
+ * - Lines: every column (expense, receipt, UZS currency) is split by the same
+ *   bases and rounded the same way; the leftover goes on the line with the
+ *   largest basis (ties: the first line), so each column adds up exactly.
+ * - Per unit: the receipt and UZS shares divided by the line quantity,
+ *   rounded to 4 decimals (the scale of the per-unit cost columns they are
+ *   added to), so cancelling subtracts exactly what posting added. Amounts
+ *   (shares, COGS changes) stay at 2.
+ */
+export function convertAndAllocate(
+  input: ConvertAndAllocateInput,
+): ConvertedAllocation {
+  const { items, allocationMethod, batches = [] } = input;
+  if (items.length === 0) {
+    throw new BadRequestException(
+      'Taqsimlash uchun kamida bitta tovar tanlanishi shart / Выберите хотя бы один товар для распределения',
+    );
+  }
+  const amountNumber = Number(input.amount);
+  if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+    throw new BadRequestException(
+      "Xarajat summasi (amount) 0 dan katta bo'lishi shart / Сумма расхода должна быть больше 0",
+    );
+  }
+  for (const item of items) {
+    const qty = Number(item.quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      // A receipt line always has a positive quantity; never assume 1 (ADR 0022).
+      throw new BadRequestException(
+        'A receipt line has no positive quantity to allocate on',
+      );
+    }
+  }
+
+  const expenseRate = documentRateToUzs(input.expense, 'expense');
+  const sameCurrency = input.expense.currency === input.receipt.currency;
+  const receiptRate = sameCurrency
+    ? expenseRate
+    : documentRateToUzs(input.receipt, 'receipt');
+
+  const expenseTotal = toMoney(new Decimal(amountNumber));
+  const receiptTotal = sameCurrency
+    ? expenseTotal
+    : toMoney(expenseTotal.mul(expenseRate).div(receiptRate));
+  const baseTotal = toMoney(expenseTotal.mul(expenseRate));
+
+  const bases = allocationBases(items, allocationMethod);
+  let remainderIndex = 0;
+  bases.forEach((b, i) => {
+    if (b.gt(bases[remainderIndex])) remainderIndex = i;
+  });
+
+  const original = splitExactly(expenseTotal, bases, remainderIndex);
+  const inReceipt = splitExactly(receiptTotal, bases, remainderIndex);
+  const inBase = splitExactly(baseTotal, bases, remainderIndex);
+
+  const lines = items.map((item, i): ConvertedAllocationLine => {
+    const qty = new Decimal(Number(item.quantity));
+    const receiptUnitDelta = toUnitCost(inReceipt[i].div(qty));
+    const baseUnitDelta = toUnitCost(inBase[i].div(qty));
+
+    const batch = batches.find((b) => b.productId === item.productId);
+    const remainingQty = batch ? Number(batch.remainingQty) : qty.toNumber();
+    const soldQty = Math.max(0, qty.toNumber() - remainingQty);
+    const cogsAdjustment = toMoney(baseUnitDelta.mul(soldQty));
+
+    const initialLandedCost =
+      Number(item.landedCost) > 0
+        ? Number(item.landedCost)
+        : Number(item.unitPrice);
+    const unitWeight =
+      allocationMethod === ExpenseAllocationMethod.BY_WEIGHT
+        ? requireUnitWeight(item)
+        : (knownUnitWeight(item) ?? 0);
+
+    return {
+      receiptItemId: item.id,
+      productId: item.productId,
+      productName: item.product?.name,
+      sku: item.product?.sku || '',
+      unitOfMeasure: item.product?.unitOfMeasure || 'piece',
+      quantity: qty.toNumber(),
+      unitPrice: Number(item.unitPrice),
+      totalPrice: Number(item.totalPrice) || 0,
+      weight: unitWeight,
+      initialLandedCost,
+      allocatedAmount: original[i].toNumber(),
+      receiptAmount: inReceipt[i].toNumber(),
+      baseAmount: inBase[i].toNumber(),
+      receiptUnitDelta: receiptUnitDelta.toNumber(),
+      baseUnitDelta: baseUnitDelta.toNumber(),
+      newLandedCost: new Decimal(initialLandedCost)
+        .add(receiptUnitDelta)
+        .toNumber(),
+      costIncreasePercent:
+        initialLandedCost > 0
+          ? receiptUnitDelta.div(initialLandedCost).mul(100).toNumber()
+          : 0,
+      soldQuantity: soldQty,
+      remainingQuantity: remainingQty,
+      cogsAdjustment: cogsAdjustment.toNumber(),
+      stockAdjustment: inBase[i].sub(cogsAdjustment).toNumber(),
+    };
+  });
+
+  return {
+    allocationMethod,
+    currency: input.expense.currency,
+    receiptCurrency: input.receipt.currency,
+    baseCurrency: 'UZS',
+    expenseRate: expenseRate.toNumber(),
+    receiptRate: receiptRate.toNumber(),
+    rateDate: input.rateDate,
+    rateSource: sameCurrency ? 'SAME_CURRENCY' : 'DOCUMENT',
+    expenseAmount: expenseTotal.toNumber(),
+    receiptTotal: receiptTotal.toNumber(),
+    baseTotal: baseTotal.toNumber(),
+    remainderReceiptItemId: items[remainderIndex].id,
+    items: lines,
+  };
+}
+
 /**
  * Spreads every receipt expense over the lines by its own method and sums the
  * shares per line (receipt currency). Each expense keeps the remainder rule,
@@ -411,4 +701,83 @@ export function lineAllocationsMatchExpenses(
   );
   const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   return Math.abs(allocated - total) < 0.005;
+}
+
+/** An allocation line as stored on an Additional Expense (snapshot columns). */
+export interface StoredAllocationLine {
+  receiptItemId: string;
+  originalCurrency: string | null;
+  expenseRate: Numeric | null;
+  receiptRate: Numeric | null;
+  rateSource: string | null;
+  rateDate: Date | null;
+  initialLandedCost: Numeric;
+  allocatedAmount: Numeric;
+  newLandedCost: Numeric;
+  receiptAmount: Numeric | null;
+  baseAmount: Numeric | null;
+  receiptUnitDelta: Numeric | null;
+  baseUnitDelta: Numeric | null;
+}
+
+/**
+ * What differs between a draft's stored snapshot and a fresh
+ * convertAndAllocate() result, field by field and exactly (the fresh values
+ * are already at the stored precision, so no tolerance is needed). Sold and
+ * remaining quantities are not compared: they are facts of the posting
+ * moment. A draft without a snapshot (saved before it existed) differs.
+ */
+export function allocationSnapshotDifferences(
+  stored: StoredAllocationLine[],
+  fresh: ConvertedAllocation,
+): string[] {
+  const differences: string[] = [];
+  if (stored.length !== fresh.items.length) {
+    differences.push(`lines ${stored.length} → ${fresh.items.length}`);
+  }
+  const sameNumber = (a: Numeric | null, b: number) =>
+    a != null && new Decimal(a).eq(b);
+
+  for (const row of stored) {
+    const line = fresh.items.find((l) => l.receiptItemId === row.receiptItemId);
+    if (!line) {
+      differences.push(`line ${row.receiptItemId} is no longer allocated`);
+      continue;
+    }
+    if (row.originalCurrency == null) {
+      differences.push(`line ${row.receiptItemId} has no saved conversion`);
+      continue;
+    }
+    const checks: [string, boolean][] = [
+      ['currency', row.originalCurrency === fresh.currency],
+      ['expenseRate', sameNumber(row.expenseRate, fresh.expenseRate)],
+      ['receiptRate', sameNumber(row.receiptRate, fresh.receiptRate)],
+      ['rateSource', row.rateSource === fresh.rateSource],
+      [
+        'rateDate',
+        row.rateDate != null &&
+          new Date(row.rateDate).getTime() === fresh.rateDate.getTime(),
+      ],
+      [
+        'initialLandedCost',
+        sameNumber(row.initialLandedCost, line.initialLandedCost),
+      ],
+      [
+        'allocatedAmount',
+        sameNumber(row.allocatedAmount, line.allocatedAmount),
+      ],
+      ['receiptAmount', sameNumber(row.receiptAmount, line.receiptAmount)],
+      ['baseAmount', sameNumber(row.baseAmount, line.baseAmount)],
+      [
+        'receiptUnitDelta',
+        sameNumber(row.receiptUnitDelta, line.receiptUnitDelta),
+      ],
+      ['baseUnitDelta', sameNumber(row.baseUnitDelta, line.baseUnitDelta)],
+      ['newLandedCost', sameNumber(row.newLandedCost, line.newLandedCost)],
+    ];
+    for (const [field, same] of checks) {
+      if (!same) differences.push(`${row.receiptItemId}.${field}`);
+    }
+  }
+  return differences;
 }

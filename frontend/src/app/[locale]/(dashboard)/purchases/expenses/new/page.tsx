@@ -7,7 +7,7 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatCurrency, formatPercent, formatDate, CURRENCY_OPTIONS, errorMessage, getLocalizedName, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatUnitCost, formatPercent, formatDate, CURRENCY_OPTIONS, errorMessage, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -149,9 +149,13 @@ export default function NewExpensePage() {
     }
   }, [selectedReceipt]);
 
-  // Recalculate preview whenever amount, allocationMethod, receipt, or selectedItemIds change
+  // The preview converts from the expense currency, so it waits for the
+  // currency (and, for USD, its rate): nothing is assumed (ADR 0022).
+  const rateReady = currency === 'UZS' || (currency === 'USD' && Number(exchangeRate) > 0);
+
+  // Recalculate preview whenever amount, currency, rate, date, allocationMethod, receipt, or selectedItemIds change
   useEffect(() => {
-    if (!token || !company || !receiptId || !amount || Number(amount) <= 0 || selectedItemIds.length === 0) {
+    if (!token || !company || !receiptId || !amount || Number(amount) <= 0 || selectedItemIds.length === 0 || !rateReady) {
       setPreviewResult(null);
       return;
     }
@@ -164,6 +168,9 @@ export default function NewExpensePage() {
       body: JSON.stringify({
         receiptId,
         amount: Number(amount),
+        currency,
+        exchangeRate: currency === 'USD' ? Number(exchangeRate) : undefined,
+        docDate,
         allocationMethod,
         selectedItemIds,
       }),
@@ -175,7 +182,7 @@ export default function NewExpensePage() {
         setPreviewResult(null);
       })
       .finally(() => setIsCalculating(false));
-  }, [token, company, receiptId, amount, allocationMethod, selectedItemIds, locale]);
+  }, [token, company, receiptId, amount, currency, exchangeRate, rateReady, docDate, allocationMethod, selectedItemIds, locale]);
 
   const handleToggleItem = (itemId: string) => {
     if (selectedItemIds.includes(itemId)) {
@@ -1046,16 +1053,25 @@ export default function NewExpensePage() {
                         {formatCurrency(Number(item.totalPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency)}
+                        {formatUnitCost(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                        {preview ? formatCurrency(Number(preview.allocatedAmount) || 0, locale, selectedReceipt.currency) : '—'}
+                        {preview && previewResult ? (
+                          <>
+                            {formatCurrency(preview.allocatedAmount, locale, previewResult.currency)}
+                            {previewResult.currency !== previewResult.receiptCurrency && (
+                              <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)' }}>
+                                = {formatCurrency(preview.receiptAmount, locale, previewResult.receiptCurrency)}
+                              </div>
+                            )}
+                          </>
+                        ) : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {preview ? `+${formatCurrency(Number(preview.allocatedPerUnit) || 0, locale, selectedReceipt.currency)}` : '—'}
+                        {preview && previewResult ? `+${formatUnitCost(preview.receiptUnitDelta, locale, previewResult.receiptCurrency)}` : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                        {preview ? formatCurrency(Number(preview.newLandedCost) || 0, locale, selectedReceipt.currency) : formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency)}
+                        {preview ? formatUnitCost(Number(preview.newLandedCost) || 0, locale, selectedReceipt.currency) : formatUnitCost(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'center' }} className="tabular-nums">
                         {preview && preview.costIncreasePercent > 0 ? (
@@ -1174,8 +1190,15 @@ export default function NewExpensePage() {
                   {isRu ? 'Итого распределено' : 'Jami taqsimlandi'}
                 </span>
                 <strong style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-900)' }} className="tabular-nums">
-                  {currency && previewResult ? formatCurrency(Number(previewResult.allocatedTotal) || 0, locale, currency) : '—'}
+                  {formatCurrency(previewResult.expenseAmount, locale, previewResult.currency)}
                 </strong>
+                {previewResult.currency !== previewResult.receiptCurrency && (
+                  <span style={{ fontSize: '11px', color: 'var(--color-primary-700)', display: 'block' }} className="tabular-nums">
+                    = {formatCurrency(previewResult.receiptTotal, locale, previewResult.receiptCurrency)}
+                    {' '}
+                    (1 USD = {formatCurrency(previewResult.currency === 'USD' ? previewResult.expenseRate : previewResult.receiptRate, locale, 'UZS')})
+                  </span>
+                )}
               </div>
             </div>
           </div>

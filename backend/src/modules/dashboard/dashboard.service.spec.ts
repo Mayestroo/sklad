@@ -214,4 +214,24 @@ describe('DashboardService debt projection', () => {
       }),
     ]);
   });
+
+  it('counts both ready-to-ship statuses in the pipeline (ADR 0018)', async () => {
+    const prisma: any = {
+      salesOrder: {
+        groupBy: jest.fn().mockResolvedValue([
+          { status: 'READY_TO_SHIP', _count: { _all: 2 } },
+          { status: 'READY_FOR_SHIPMENT', _count: { _all: 3 } },
+          { status: 'NEW', _count: { _all: 1 } },
+        ]),
+        findMany: jest.fn().mockResolvedValue([]),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { totalAmount: 0 } }),
+      },
+    };
+    const service = new DashboardService(prisma);
+
+    const result = await service.getSalesOrderStats('tenant-1');
+
+    expect(result.pipeline.READY_TO_SHIP).toBe(5);
+    expect(result.pipeline.NEW).toBe(1);
+  });
 });

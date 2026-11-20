@@ -19,7 +19,7 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatDate, formatQuantity } from '@/lib/utils';
+import { formatCurrency, formatDate, formatQuantity, formatUnitCost } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -571,7 +571,7 @@ export default function ProductionPage() {
                       <td>{selectedDocument.status === 'IN_PROGRESS' && actualInputs[line.productId] !== undefined && actualInputs[line.productId] !== ''
                         ? `${formatQuantity(Number(actualInputs[line.productId]) - asNumber(line.plannedQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`
                         : line.actualQuantity == null ? '—' : `${formatQuantity(asNumber(line.actualQuantity) - asNumber(line.plannedQuantity))} ${unitLabel(line.product.unitOfMeasure, locale)}`}</td>
-                      <td>{formatCurrency(asNumber(line.unitCost), locale, 'UZS')}</td>
+                      <td>{formatUnitCost(asNumber(line.unitCost), locale, 'UZS')}</td>
                       <td>{formatCurrency(asNumber(line.totalCost), locale, 'UZS')}</td>
                     </tr>
                   ))}
@@ -589,7 +589,7 @@ export default function ProductionPage() {
             {selectedDocument.status === 'COMPLETED' && (
               <div style={{ ...alertStyle('success'), display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <span>{isRu ? 'Принято на склад' : 'Omborga kirim qilindi'}: <b>{formatQuantity(asNumber(selectedDocument.producedQuantity))} {unitLabel(selectedDocument.product.unitOfMeasure, locale)}</b></span>
-                <span>{isRu ? 'Себестоимость единицы' : 'Birlik tannarxi'}: <b>{formatCurrency(asNumber(selectedDocument.unitCost), locale, 'UZS')}</b></span>
+                <span>{isRu ? 'Себестоимость единицы' : 'Birlik tannarxi'}: <b>{formatUnitCost(asNumber(selectedDocument.unitCost), locale, 'UZS')}</b></span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>

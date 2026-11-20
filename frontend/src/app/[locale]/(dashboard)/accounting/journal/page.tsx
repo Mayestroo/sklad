@@ -63,7 +63,7 @@ export default function JournalPage() {
                       {entry.entryNumber}
                     </td>
                     <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {formatDate(entry.createdAt, locale)}
+                      {formatDate(entry.entryDate, locale)}
                     </td>
                     <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
                       {entry.description}

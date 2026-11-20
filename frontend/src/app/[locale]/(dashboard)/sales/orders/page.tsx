@@ -134,16 +134,13 @@ export default function SalesOrdersPage() {
     }
   };
 
+  // Role slugs are lowercase (common/auth/permission-catalog.ts SYSTEM_ROLES);
+  // lifecycle actions are <module>:edit, there is no sales:post permission.
   const isWarehouseOperator = Boolean(
-    hasRole('ADMIN') ||
-    hasRole('SUPER_ADMIN') ||
-    hasRole('MANAGER') ||
-    hasRole('WAREHOUSE') ||
-    hasRole('WAREHOUSE_MANAGER') ||
-    hasRole('STOREKEEPER') ||
-    hasRole('OMBORCHI') ||
-    hasPermission('inventory:create') ||
-    hasPermission('sales:post')
+    hasRole('super_admin') ||
+    hasRole('company_admin') ||
+    hasRole('warehouse_manager') ||
+    hasPermission('inventory:create')
   );
 
   const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
@@ -717,7 +714,7 @@ export default function SalesOrdersPage() {
                             </Button>
                           )}
 
-                          {(hasPermission('sales:delete') || hasRole('ADMIN') || hasRole('SUPER_ADMIN') || hasRole('company_admin') || hasRole('MANAGER')) && ord.status !== 'SHIPPED' && ord.status !== 'COMPLETED' && (
+                          {(hasPermission('sales:delete') || hasRole('super_admin') || hasRole('company_admin')) && ord.status !== 'SHIPPED' && ord.status !== 'COMPLETED' && (
                             <Button
                               variant="secondary"
                               onClick={() => {

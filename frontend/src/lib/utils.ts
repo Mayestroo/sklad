@@ -3,7 +3,7 @@
  * Supporting Uzbek (uz-UZ) and Russian (ru-RU) locales
  */
 
-import { formatMoney, formatNumber as formatPlainNumber } from '../../../shared/format/money.ts';
+import { formatMoney, formatNumber as formatPlainNumber, formatUnitCost as formatUnitCostShared } from '../../../shared/format/money.ts';
 
 export {
   formatAmount,
@@ -44,6 +44,16 @@ export function formatCurrency(amount: number | string, _locale: string = 'uz', 
   // One display format for the whole app (D8): `8 000 UZS`, `8 000,50 UZS`,
   // `1 234,56 USD`. See shared/format/money.ts.
   return formatMoney(numericAmount, currency);
+}
+
+/**
+ * A per-unit cost (landed cost, unit COGS, per-unit expense) with its ISO
+ * code. Keeps a 3rd/4th decimal when the cost has one (`100,002 USD`), so a
+ * small per-unit amount is not shown as 0; otherwise the same as
+ * formatCurrency. Totals and amounts use formatCurrency.
+ */
+export function formatUnitCost(amount: number | string, _locale: string = 'uz', currency: string): string {
+  return formatUnitCostShared(amount, currency);
 }
 
 /**

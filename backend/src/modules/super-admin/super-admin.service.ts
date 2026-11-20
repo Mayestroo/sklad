@@ -404,7 +404,9 @@ export class SuperAdminService {
     return this.prisma.supportTicket.findMany({
       include: {
         company: true,
-        user: true,
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
         messages: { orderBy: { createdAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
@@ -457,7 +459,11 @@ export class SuperAdminService {
   async getAuditLogs(tenantId?: string) {
     return this.prisma.auditLog.findMany({
       where: tenantId ? { tenantId } : {},
-      include: { user: true },
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });

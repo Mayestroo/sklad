@@ -281,6 +281,33 @@ export class SalesOrdersService {
 
   // ─── STATS / PIPELINE COUNTERS ────────────────────────────────
 
+  /**
+   * A customer's latest orders plus totals over ALL their orders. The totals
+   * come from the database, not from the page of orders shown, and stay one
+   * per currency (ADR 0023).
+   */
+  async findByCounterparty(tenantId: string, counterpartyId: string) {
+    const [page, sums] = await Promise.all([
+      this.findAll(tenantId, { counterpartyId }),
+      this.prisma.salesOrder.groupBy({
+        by: ['currency'],
+        where: { tenantId, counterpartyId },
+        _sum: { totalAmount: true },
+        orderBy: { currency: 'asc' },
+      }),
+    ]);
+    return {
+      orders: page.data,
+      summary: {
+        totalOrders: page.total,
+        totalsByCurrency: sums.map((row) => ({
+          currency: row.currency,
+          totalAmount: Number(row._sum.totalAmount ?? 0),
+        })),
+      },
+    };
+  }
+
   async getStats(tenantId: string) {
     const [byStatus, financials] = await Promise.all([
       this.prisma.salesOrder.groupBy({
