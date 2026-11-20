@@ -229,8 +229,6 @@ export default function PurchasesPage() {
             </div>
             <MultiCurrencyValue
               items={stats?.monthlyPurchasesByCurrency}
-              fallbackAmount={stats?.monthlyPurchasesTotal || 0}
-              fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -249,8 +247,6 @@ export default function PurchasesPage() {
             </div>
             <MultiCurrencyValue
               items={stats?.totalSupplierDebtByCurrency}
-              fallbackAmount={stats?.totalSupplierDebt || 0}
-              fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
               color="var(--color-error-600)"
             />
@@ -270,8 +266,6 @@ export default function PurchasesPage() {
             </div>
             <MultiCurrencyValue
               items={stats?.monthlyReturnsByCurrency}
-              fallbackAmount={stats?.monthlyReturnsTotal || 0}
-              fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
               color="var(--color-warning-600)"
             />

@@ -9,8 +9,7 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { salesReturnHeaderFromInvoice } from '@/lib/sales-return';
-import { formatCurrency, formatDate, formatPercent, errorMessage, type LocalizedName } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { formatCurrency, formatCurrencyIfAvailable, formatDate, formatPercent, errorMessage, type LocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
@@ -108,7 +107,6 @@ export default function SalesReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const confirm = useConfirm();
-  const defaultCurrency = useDefaultCurrency();
 
   const invalidateApi = useInvalidateApi();
   const returnsQuery = useApiQuery<SalesReturnRow[]>('/sales/returns');
@@ -135,7 +133,7 @@ export default function SalesReturnsPage() {
   const [invoiceId, setInvoiceId] = useState('');
   // A return is booked in the invoice's own warehouse and currency
   const selectedInvoice = invoices.find((inv) => inv.id === invoiceId);
-  const activeReturnCurrency = selectedInvoice?.currency || defaultCurrency;
+  const returnCurrency = selectedInvoice?.currency;
   const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState('');
   const [items, setItems] = useState<ReturnableItemRow[]>([]);
@@ -745,7 +743,7 @@ export default function SalesReturnsPage() {
           </div>
 
           {/* Barcode Fast Scanner Input */}
-          {invoiceId && items.length > 0 && (
+          {invoiceId && returnCurrency && items.length > 0 && (
             <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--color-bg-subtle)', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
               <Barcode size={20} style={{ color: 'var(--color-text-secondary)' }} />
               <input
@@ -857,13 +855,13 @@ export default function SalesReturnsPage() {
                             />
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                            {formatCurrency(item.unitPrice, locale, activeReturnCurrency)}
+                            {(formatCurrencyIfAvailable(item.unitPrice, locale, returnCurrency) ?? '—')}
                             {item.discount > 0 && (
                               <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>-{formatPercent(item.discount)}</div>
                             )}
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }} className="tabular-nums">
-                            {formatCurrency(item.quantity * item.unitTotalPrice, locale, activeReturnCurrency)}
+                            {(formatCurrencyIfAvailable(item.quantity * item.unitTotalPrice, locale, returnCurrency) ?? '—')}
                           </td>
                         </tr>
                       );
@@ -875,7 +873,7 @@ export default function SalesReturnsPage() {
                         {isRu ? 'Итого к возврату:' : 'Jami qaytariladigan summa:'}
                       </td>
                       <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                        {formatCurrency(totalReturnAmount, locale, activeReturnCurrency)}
+                        {(formatCurrencyIfAvailable(totalReturnAmount, locale, returnCurrency) ?? '—')}
                       </td>
                     </tr>
                   </tfoot>

@@ -594,7 +594,7 @@ export default function NewExpensePage() {
               placeholder={isRu ? 'Выберите или найдите партию закупки...' : 'Xarid hujjatini qidiring yoki tanlang...'}
               options={receipts.map((r) => ({
                 value: r.id,
-                label: `${r.docNumber} — ${r.counterparty?.name || 'Yetkazib beruvchi'} (${formatDate(r.docDate, locale)}) [${formatCurrency(Number(r.totalAmount) || 0, locale, r.currency || 'UZS')}]`,
+                label: `${r.docNumber} — ${r.counterparty?.name || 'Yetkazib beruvchi'} (${formatDate(r.docDate, locale)}) [${formatCurrency(Number(r.totalAmount) || 0, locale, r.currency)}]`,
               }))}
             />
           </div>
@@ -632,7 +632,7 @@ export default function NewExpensePage() {
                   {isRu ? 'Сумма закупки' : 'Xarid summasi'}
                 </span>
                 <strong style={{ color: 'var(--color-primary-600)' }}>
-                  {formatCurrency(Number(selectedReceipt.totalAmount) || 0, locale, selectedReceipt.currency || 'UZS')}
+                  {formatCurrency(Number(selectedReceipt.totalAmount) || 0, locale, selectedReceipt.currency)}
                 </strong>
               </div>
               <div>
@@ -1035,22 +1035,22 @@ export default function NewExpensePage() {
                         {Number(item.quantity) || 0} {unitLabel(item.product?.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(Number(item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
+                        {formatCurrency(Number(item.unitPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(Number(item.totalPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
+                        {formatCurrency(Number(item.totalPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
-                        {formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
+                        {formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                        {preview ? formatCurrency(Number(preview.allocatedAmount) || 0, locale, selectedReceipt.currency || 'UZS') : '—'}
+                        {preview ? formatCurrency(Number(preview.allocatedAmount) || 0, locale, selectedReceipt.currency) : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--color-warning-600)', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {preview ? `+${formatCurrency(Number(preview.allocatedPerUnit) || 0, locale, selectedReceipt.currency || 'UZS')}` : '—'}
+                        {preview ? `+${formatCurrency(Number(preview.allocatedPerUnit) || 0, locale, selectedReceipt.currency)}` : '—'}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                        {preview ? formatCurrency(Number(preview.newLandedCost) || 0, locale, selectedReceipt.currency || 'UZS') : formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency || 'UZS')}
+                        {preview ? formatCurrency(Number(preview.newLandedCost) || 0, locale, selectedReceipt.currency) : formatCurrency(Number(item.landedCost || item.unitPrice) || 0, locale, selectedReceipt.currency)}
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'center' }} className="tabular-nums">
                         {preview && preview.costIncreasePercent > 0 ? (

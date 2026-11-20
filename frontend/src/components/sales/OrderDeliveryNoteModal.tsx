@@ -26,7 +26,7 @@ interface OrderDeliveryNoteModalProps {
     orderNumber: string;
     orderDate?: string | Date;
     createdAt: string | Date;
-    currency?: string;
+    currency: string;
     subtotalAmount?: number | string;
     discountAmount?: number | string;
     totalAmount?: number | string;
@@ -63,7 +63,7 @@ export function OrderDeliveryNoteModal({
   if (!isOpen || !order) return null;
 
   const items = order.items || order.orderItems || [];
-  const currency = order.currency || 'UZS';
+  const currency = order.currency;
 
   const warehouseName =
     typeof order.warehouse?.name === 'object'

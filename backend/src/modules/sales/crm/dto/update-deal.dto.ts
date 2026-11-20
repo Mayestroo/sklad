@@ -1,6 +1,7 @@
 import { DealStageSlug } from '@prisma/client';
 import {
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -8,6 +9,10 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  SUPPORTED_CURRENCIES,
+  type SupportedCurrency,
+} from '../../../../common/validators/currency.validator';
 
 export class UpdateDealStageDto {
   @IsEnum(DealStageSlug)
@@ -25,6 +30,13 @@ export class UpdateDealDto {
   @IsNumber()
   @Min(0)
   amount?: number;
+
+  /** Required with a nonzero amount (ADR 0022). */
+  @IsOptional()
+  @IsIn(SUPPORTED_CURRENCIES, {
+    message: `currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}`,
+  })
+  currency?: SupportedCurrency;
 
   @IsOptional()
   @IsString()

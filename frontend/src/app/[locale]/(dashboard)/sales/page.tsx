@@ -231,8 +231,6 @@ export default function SalesPage() {
             </div>
             <MultiCurrencyValue
               items={stats?.monthlySalesByCurrency}
-              fallbackAmount={stats?.monthlySalesTotal || 0}
-              fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
@@ -251,8 +249,6 @@ export default function SalesPage() {
             </div>
             <MultiCurrencyValue
               items={stats?.totalCustomerDebtByCurrency}
-              fallbackAmount={stats?.totalCustomerDebt || 0}
-              fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
               color="var(--color-error-600)"
             />
@@ -272,8 +268,6 @@ export default function SalesPage() {
             </div>
             <MultiCurrencyValue
               items={stats?.monthlyReturnsByCurrency}
-              fallbackAmount={stats?.monthlyReturnsTotal || 0}
-              fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
               color="var(--color-warning-600)"
             />
@@ -293,8 +287,6 @@ export default function SalesPage() {
             </div>
             <MultiCurrencyValue
               items={stats?.monthlyGrossProfitByCurrency}
-              fallbackAmount={stats?.monthlyGrossProfit || 0}
-              fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
               color="var(--color-success-600)"
             />

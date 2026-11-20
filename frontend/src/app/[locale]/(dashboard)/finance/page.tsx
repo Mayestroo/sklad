@@ -6,7 +6,6 @@ import { useLocale } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { financeQuickAction } from '@/lib/finance-quick-action';
 import { useAuth } from '@/context/AuthContext';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { apiFetch } from '@/lib/api';
 import { formatDate, formatCurrency, errorMessage, getLocalizedName } from '@/lib/utils';
 
@@ -172,7 +171,6 @@ export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
 
   // Active Tab: dashboard | journal | income | expense | transfers | debts | deleted
   const [activeTab, setActiveTab] = useState<
@@ -510,15 +508,13 @@ export default function FinancePage() {
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
               {isRu
-                ? `Долларовая касса (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`
-                : `Dollar kassa (${dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD'})`}
+                ? 'Долларовая касса'
+                : 'Dollar kassa'}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-success-600)' }}>
-              {formatCurrency(
-                dashboardMetrics?.balances.dollarKassa || 0,
-                locale,
-                dashboardMetrics?.balances.accountCurrencies.dollarKassa || 'USD',
-              )}
+              {dashboardMetrics
+                ? formatCurrency(dashboardMetrics.balances.dollarKassa, locale, dashboardMetrics.balances.accountCurrencies.dollarKassa)
+                : '—'}
             </div>
           </div>
         </Card>
@@ -551,15 +547,13 @@ export default function FinancePage() {
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
               {isRu
-                ? `Наличная касса (${dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS'})`
-                : `Naqd kassa (${dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS'})`}
+                ? 'Наличная касса'
+                : 'Naqd kassa'}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(
-                dashboardMetrics?.balances.naqdKassa || 0,
-                locale,
-                dashboardMetrics?.balances.accountCurrencies.naqdKassa || 'UZS',
-              )}
+              {dashboardMetrics
+                ? formatCurrency(dashboardMetrics.balances.naqdKassa, locale, dashboardMetrics.balances.accountCurrencies.naqdKassa)
+                : '—'}
             </div>
           </div>
         </Card>
@@ -592,15 +586,13 @@ export default function FinancePage() {
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
               {isRu
-                ? `Расчетный счет (${dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS'})`
-                : `Hisobraqam (${dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS'})`}
+                ? 'Расчетный счет'
+                : 'Hisobraqam'}
             </div>
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {formatCurrency(
-                dashboardMetrics?.balances.hisobRaqam || 0,
-                locale,
-                dashboardMetrics?.balances.accountCurrencies.hisobRaqam || 'UZS',
-              )}
+              {dashboardMetrics
+                ? formatCurrency(dashboardMetrics.balances.hisobRaqam, locale, dashboardMetrics.balances.accountCurrencies.hisobRaqam)
+                : '—'}
             </div>
           </div>
         </Card>
@@ -765,8 +757,6 @@ export default function FinancePage() {
                   </div>
                   <MultiCurrencyValue
                     items={dashboardMetrics?.debts.receivablesByCurrency}
-                    fallbackAmount={dashboardMetrics?.debts.receivables || 0}
-                    fallbackCurrency={defaultCurrency}
                     locale={locale}
                     color="var(--color-success-600)"
                   />
@@ -795,8 +785,6 @@ export default function FinancePage() {
                   </div>
                   <MultiCurrencyValue
                     items={dashboardMetrics?.debts.payablesByCurrency}
-                    fallbackAmount={dashboardMetrics?.debts.payables || 0}
-                    fallbackCurrency={defaultCurrency}
                     locale={locale}
                     color="var(--color-error-600)"
                   />

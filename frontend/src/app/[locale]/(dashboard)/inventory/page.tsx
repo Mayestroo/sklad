@@ -309,7 +309,7 @@ export default function InventoryPage() {
                         {unitLabel(product.unitOfMeasure, locale)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                        {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency || 'UZS')}
+                        {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
                         {formatPriceOrUnset(Number(product.salePrice), locale, product.salePriceCurrency)}

@@ -18,7 +18,7 @@ function respond(endpoint: string): unknown {
   if (endpoint.startsWith('/analytics/kpi-summary')) {
     return { currency: 'UZS', totalRevenue: 1000, totalProfit: 100, totalOrders: 3, averageOrderValue: 333 };
   }
-  if (endpoint.startsWith('/analytics/financial-ratios')) return {};
+  if (endpoint.startsWith('/analytics/financial-ratios')) return { currency: 'UZS', workingCapital: null, inventoryTurnoverDays: null, arCollectionDays: null };
   return [];
 }
 

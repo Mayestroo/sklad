@@ -10,7 +10,6 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, errorMessage } from '@/lib/utils';
 import { ORDER_STATUS_LABELS, statusLabel } from '@/lib/constants/statuses';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -132,7 +131,6 @@ export default function CounterpartiesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const defaultCurrency = useDefaultCurrency();
 
   const invalidateApi = useInvalidateApi();
   // List, summary and folders all live under /sales/counterparties.
@@ -685,8 +683,6 @@ export default function CounterpartiesPage() {
               <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-success-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.receivables.byCurrency}
-                  fallbackAmount={summary?.receivables.total_amount ?? 0}
-                  fallbackCurrency={defaultCurrency}
                   locale={locale}
                   color="var(--color-success-600)"
                 />
@@ -728,8 +724,6 @@ export default function CounterpartiesPage() {
               <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-error-600)', lineHeight: 1.2, wordBreak: 'break-all' }}>
                 <MultiCurrencyValue
                   items={summary?.payables.byCurrency}
-                  fallbackAmount={summary?.payables.total_amount ?? 0}
-                  fallbackCurrency={defaultCurrency}
                   locale={locale}
                   color="var(--color-error-600)"
                 />

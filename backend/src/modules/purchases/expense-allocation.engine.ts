@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ExpenseAllocationMethod, Prisma } from '@prisma/client';
 
 /** Inputs are read through Number(), so Prisma Decimals are accepted as-is. */
@@ -53,6 +54,35 @@ export interface AllocationPreviewResult {
   items: AllocationPreviewItem[];
 }
 
+/** A line's unit weight: its own, else the product card's; null when neither is set. */
+export function knownUnitWeight(item: {
+  weight?: Numeric | null;
+  product?: { weight?: Numeric | null } | null;
+}): number | null {
+  const own = Number(item.weight);
+  if (Number.isFinite(own) && own > 0) return own;
+  const card = Number(item.product?.weight);
+  return Number.isFinite(card) && card > 0 ? card : null;
+}
+
+/**
+ * BY_WEIGHT needs every line's weight (ADR 0022): a missing weight is
+ * refused, never taken as 1 kg.
+ */
+export function requireUnitWeight(item: {
+  weight?: Numeric | null;
+  product?: { weight?: Numeric | null; sku?: string } | null;
+}): number {
+  const weight = knownUnitWeight(item);
+  if (weight === null) {
+    const sku = item.product?.sku ? ` ${item.product.sku}` : '';
+    throw new BadRequestException(
+      `Weight is not set for product${sku}: set it or allocate by amount or quantity`,
+    );
+  }
+  return weight;
+}
+
 /**
  * Pure Mathematical Engine for Expense Allocation across Inventory Items
  * Handles BY_AMOUNT, BY_QUANTITY, BY_WEIGHT methods and enforces the Allocation Remainder Rule.
@@ -71,13 +101,10 @@ export class ExpenseAllocationEngine {
     } else if (method === ExpenseAllocationMethod.BY_QUANTITY) {
       basisSum = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
     } else if (method === ExpenseAllocationMethod.BY_WEIGHT) {
-      basisSum = items.reduce((sum, i) => {
-        const unitWeight =
-          Number(i.weight) > 0
-            ? Number(i.weight)
-            : Number(i.product?.weight) || 1;
-        return sum + (Number(i.quantity) || 0) * unitWeight;
-      }, 0);
+      basisSum = items.reduce(
+        (sum, i) => sum + (Number(i.quantity) || 0) * requireUnitWeight(i),
+        0,
+      );
     }
 
     return basisSum <= 0 ? items.length : basisSum;
@@ -100,12 +127,19 @@ export class ExpenseAllocationEngine {
 
     const previewItems: AllocationPreviewItem[] = targetItems.map(
       (item, index) => {
-        const qty = Number(item.quantity) || 1;
+        const qty = Number(item.quantity);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          // A receipt line always has a positive quantity; never assume 1 (ADR 0022).
+          throw new BadRequestException(
+            'A receipt line has no positive quantity to allocate on',
+          );
+        }
         const lineTotal = Number(item.totalPrice) || 0;
+        // Shown on every line; required (never 1 kg) only for BY_WEIGHT.
         const unitWeight =
-          Number(item.weight) > 0
-            ? Number(item.weight)
-            : Number(item.product?.weight) || 1;
+          allocationMethod === ExpenseAllocationMethod.BY_WEIGHT
+            ? requireUnitWeight(item)
+            : (knownUnitWeight(item) ?? 0);
 
         if (lineTotal > maxLineItemValue) {
           maxLineItemValue = lineTotal;

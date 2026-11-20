@@ -37,6 +37,8 @@ export interface DashboardSalesKPIs {
 export interface TopDebtor {
   id: string;
   name: string;
+  /** One row per counterparty and currency (ADR 0023). */
+  currency: string;
   amount: number;
 }
 

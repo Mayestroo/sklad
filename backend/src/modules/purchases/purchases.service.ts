@@ -52,6 +52,7 @@ import {
   PURCHASE_RETURN_GAIN_ACCOUNT_SETTING,
 } from '../../common/settings/accounting-settings';
 import { startOfBusinessMonth } from '../../common/utils/business-day';
+import { requireUnitWeight } from './expense-allocation.engine';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -1300,24 +1301,23 @@ export class PurchasesService {
       );
 
       // Total weight for BY_WEIGHT allocation
-      const totalWeight = receipt.items.reduce((sum, i) => {
-        const unitWeight =
-          Number(i.weight) > 0
-            ? Number(i.weight)
-            : Number(i.product?.weight) || 1;
-        return sum + Number(i.quantity) * unitWeight;
-      }, 0);
+      // A missing weight is refused, never taken as 1 kg (ADR 0022).
+      const byWeight = allocationMethod === ExpenseAllocationMethod.BY_WEIGHT;
+      const totalWeight = byWeight
+        ? receipt.items.reduce(
+            (sum, i) => sum + Number(i.quantity) * requireUnitWeight(i),
+            0,
+          )
+        : 0;
 
       // Allocate expenses among items
       for (const item of receipt.items) {
         let allocatedForItem = 0;
         const itemQty = Number(item.quantity);
         const itemTotal = Number(item.totalPrice);
-        const unitWeight =
-          Number(item.weight) > 0
-            ? Number(item.weight)
-            : Number(item.product?.weight) || 1;
-        const itemWeightTotal = itemQty * unitWeight;
+        const itemWeightTotal = byWeight
+          ? itemQty * requireUnitWeight(item)
+          : 0;
 
         if (
           allocationMethod === ExpenseAllocationMethod.BY_AMOUNT &&
@@ -2360,15 +2360,43 @@ export class PurchasesService {
       orderBy: { transactionDate: 'desc' },
     });
 
-    const totalPurchased = receipts.reduce(
-      (sum, r) => sum + Number(r.totalAmount),
-      0,
+    // ADR 0023: totals per currency over posted documents; never one sum
+    // across USD and UZS.
+    const byCurrency = (
+      rows: Array<{ currency: string; amount: unknown }>,
+    ): Array<{ currency: string; amount: number }> => {
+      const map = new Map<string, number>();
+      for (const row of rows) {
+        map.set(
+          row.currency,
+          (map.get(row.currency) ?? 0) + Number(row.amount),
+        );
+      }
+      return [...map.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([currency, amount]) => ({
+          currency,
+          amount: Math.round(amount * 100) / 100,
+        }));
+    };
+    const totalPurchasedByCurrency = byCurrency(
+      receipts
+        .filter((r) => r.status === 'POSTED')
+        .map((r) => ({ currency: r.currency, amount: r.totalAmount })),
     );
-    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalReturned = returns.reduce(
-      (sum, ret) => sum + Number(ret.totalAmount),
-      0,
+    const totalPaidByCurrency = byCurrency(
+      payments.map((p) => ({ currency: p.currency, amount: p.amount })),
     );
+    const totalReturnedByCurrency = byCurrency(
+      returns
+        .filter((ret) => ret.status === 'POSTED')
+        .map((ret) => ({ currency: ret.currency, amount: ret.totalAmount })),
+    );
+    const singleTotal = (totals: Array<{ amount: number }>) =>
+      totals.length === 1 ? totals[0].amount : 0;
+    const totalPurchased = singleTotal(totalPurchasedByCurrency);
+    const totalPaid = singleTotal(totalPaidByCurrency);
+    const totalReturned = singleTotal(totalReturnedByCurrency);
     const balances = await this.prisma.counterpartyBalance.findMany({
       where: { tenantId, counterpartyId: supplierId },
       select: { currency: true, customerDebt: true, supplierDebt: true },
@@ -2399,6 +2427,9 @@ export class PurchasesService {
         totalPurchased,
         totalPaid,
         totalReturned,
+        totalPurchasedByCurrency,
+        totalPaidByCurrency,
+        totalReturnedByCurrency,
         balancesByCurrency,
         supplierAdvancesByCurrency,
       },

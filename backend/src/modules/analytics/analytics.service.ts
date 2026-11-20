@@ -1,14 +1,26 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma';
+import { analyticsRangeStart, toUzsRate } from './analytics-range';
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
 @Injectable()
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getKpiSummary(tenantId: string) {
-    const [invoices, returns, balances, stockLevels] = await Promise.all([
+  /**
+   * Revenue and profit cover the selected period; debts and inventory are
+   * balances as of now. Inventory is valued at its FIFO landed cost (UZS).
+   */
+  async getKpiSummary(tenantId: string, range?: string) {
+    const since = analyticsRangeStart(range);
+    const [invoices, returns, balances, batches] = await Promise.all([
       this.prisma.salesInvoice.findMany({
-        where: { tenantId, status: 'POSTED' },
+        where: {
+          tenantId,
+          status: 'POSTED',
+          ...(since ? { invoiceDate: { gte: since } } : {}),
+        },
         select: {
           totalAmount: true,
           vatAmount: true,
@@ -19,7 +31,11 @@ export class AnalyticsService {
         },
       }),
       this.prisma.salesReturn.findMany({
-        where: { tenantId, status: 'POSTED' },
+        where: {
+          tenantId,
+          status: 'POSTED',
+          ...(since ? { returnDate: { gte: since } } : {}),
+        },
         include: {
           invoice: { select: { currency: true, exchangeRate: true } },
           items: { select: { vatAmount: true } },
@@ -34,39 +50,38 @@ export class AnalyticsService {
           supplierDebt: true,
         },
       }),
-      this.prisma.stockLevel.findMany({
-        where: { tenantId },
-        include: { product: true },
+      this.prisma.productBatch.findMany({
+        where: { tenantId, remainingQty: { gt: 0 } },
+        select: { remainingQty: true, landedCost: true },
       }),
     ]);
 
     const revenueByCurrencyMap: Record<string, number> = {};
     let totalNetRevenueUzs = 0;
     let grossProfit = 0;
+    let totalCogsUzs = 0;
     for (const invoice of invoices) {
       const invoiceCurrency = invoice.currency;
-      const rate = invoiceCurrency === 'UZS' ? 1 : Number(invoice.exchangeRate);
-      if (!Number.isFinite(rate) || rate <= 0) {
-        throw new BadRequestException(
-          `Posted sales invoice has an invalid ${invoiceCurrency} exchange rate`,
-        );
-      }
+      const rate = toUzsRate(
+        invoiceCurrency,
+        invoice.exchangeRate,
+        'Posted sales invoice',
+      );
       const amount = Number(invoice.totalAmount);
       const netRevenue = amount - Number(invoice.vatAmount || 0);
       revenueByCurrencyMap[invoiceCurrency] =
         (revenueByCurrencyMap[invoiceCurrency] || 0) + amount;
       totalNetRevenueUzs += netRevenue * rate;
       grossProfit += Number(invoice.grossProfit || 0);
+      totalCogsUzs += Number(invoice.totalCogs || 0);
     }
     for (const salesReturn of returns) {
       const currency = salesReturn.currency;
-      const rate =
-        currency === 'UZS' ? 1 : Number(salesReturn.invoice?.exchangeRate);
-      if (!Number.isFinite(rate) || rate <= 0) {
-        throw new BadRequestException(
-          `Posted sales return has an invalid ${currency} exchange rate`,
-        );
-      }
+      const rate = toUzsRate(
+        currency,
+        salesReturn.invoice?.exchangeRate,
+        'Posted sales return',
+      );
       const amount = Number(salesReturn.totalAmount);
       const vat = salesReturn.items.reduce(
         (sum, item) => sum + Number(item.vatAmount || 0),
@@ -78,6 +93,7 @@ export class AnalyticsService {
         (revenueByCurrencyMap[currency] || 0) - amount;
       totalNetRevenueUzs -= netRevenue * rate;
       grossProfit -= netRevenue * rate - cogs;
+      totalCogsUzs -= cogs;
     }
     const totalRevenueByCurrency = Object.entries(revenueByCurrencyMap)
       .sort(([left], [right]) => left.localeCompare(right))
@@ -140,13 +156,12 @@ export class AnalyticsService {
     if (payablesByCurrency.length === 1)
       totalAccountsPayable = payablesByCurrency[0].amount;
 
-    const inventoryValuation = stockLevels.reduce(
-      (sum, stock) =>
-        sum +
-        Number(stock.quantity) *
-          Number(stock.product?.costPrice || 0) *
-          Number(stock.product?.costPriceExchangeRate || 1),
-      0,
+    const inventoryValuation = round2(
+      batches.reduce(
+        (sum, batch) =>
+          sum + Number(batch.remainingQty) * Number(batch.landedCost),
+        0,
+      ),
     );
     const reportCurrency =
       totalRevenueByCurrency.length === 1
@@ -157,8 +172,9 @@ export class AnalyticsService {
       currency: reportCurrency,
       totalRevenue,
       totalRevenueByCurrency,
-      grossProfit: Math.round(grossProfit * 100) / 100,
+      grossProfit: round2(grossProfit),
       grossProfitByCurrency,
+      totalCogs: round2(totalCogsUzs),
       netProfitMargin: Math.round(netProfitMargin * 10) / 10,
       totalAccountsReceivable,
       totalAccountsPayable,
@@ -171,52 +187,97 @@ export class AnalyticsService {
     };
   }
 
-  async getSalesTrend(tenantId: string) {
+  /** Posted invoices of the period with their rate to UZS. */
+  private async postedInvoices(tenantId: string, range?: string) {
+    const since = analyticsRangeStart(range);
     const invoices = await this.prisma.salesInvoice.findMany({
-      where: { tenantId },
-      include: { items: { include: { product: true } } },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        tenantId,
+        status: 'POSTED',
+        ...(since ? { invoiceDate: { gte: since } } : {}),
+      },
+      select: {
+        id: true,
+        invoiceDate: true,
+        totalAmount: true,
+        vatAmount: true,
+        totalCogs: true,
+        currency: true,
+        exchangeRate: true,
+        counterparty: { select: { id: true, name: true, inn: true } },
+      },
+      orderBy: { invoiceDate: 'asc' },
     });
+    return invoices.map((invoice) => ({
+      ...invoice,
+      rate: toUzsRate(
+        invoice.currency,
+        invoice.exchangeRate,
+        'Posted sales invoice',
+      ),
+    }));
+  }
 
+  /** Monthly revenue, COGS and profit of posted invoices, in UZS. */
+  async getSalesTrend(tenantId: string, range?: string) {
+    const invoices = await this.postedInvoices(tenantId, range);
     const monthMap: Record<
       string,
       { revenue: number; cogs: number; profit: number }
     > = {};
 
-    invoices.forEach((inv) => {
+    for (const inv of invoices) {
       const date = new Date(inv.invoiceDate);
       const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-
-      if (!monthMap[monthKey]) {
-        monthMap[monthKey] = { revenue: 0, cogs: 0, profit: 0 };
-      }
-
-      const rev = Number(inv.totalAmount);
-      let cogs = 0;
-      inv.items.forEach((i) => {
-        cogs += Number(i.quantity) * (Number(i.product?.costPrice) || 0);
-      });
-
-      monthMap[monthKey].revenue += rev;
+      monthMap[monthKey] ??= { revenue: 0, cogs: 0, profit: 0 };
+      const revenue = Number(inv.totalAmount) * inv.rate;
+      const netRevenue =
+        (Number(inv.totalAmount) - Number(inv.vatAmount || 0)) * inv.rate;
+      const cogs = Number(inv.totalCogs || 0);
+      monthMap[monthKey].revenue += revenue;
       monthMap[monthKey].cogs += cogs;
-      monthMap[monthKey].profit += rev - cogs;
-    });
+      monthMap[monthKey].profit += netRevenue - cogs;
+    }
 
-    const trend = Object.keys(monthMap).map((key) => ({
-      period: key,
-      ...monthMap[key],
+    return Object.keys(monthMap).map((period) => ({
+      period,
+      currency: 'UZS' as const,
+      revenue: round2(monthMap[period].revenue),
+      cogs: round2(monthMap[period].cogs),
+      profit: round2(monthMap[period].profit),
     }));
-
-    return trend;
   }
 
-  async getCategoryBreakdown(tenantId: string) {
-    const invoiceItems = await this.prisma.salesInvoiceItem.findMany({
-      where: { invoice: { tenantId } },
+  /** Posted invoice lines of the period with their rate to UZS. */
+  private async postedInvoiceItems(tenantId: string, range?: string) {
+    const since = analyticsRangeStart(range);
+    const items = await this.prisma.salesInvoiceItem.findMany({
+      where: {
+        invoice: {
+          tenantId,
+          status: 'POSTED',
+          ...(since ? { invoiceDate: { gte: since } } : {}),
+        },
+      },
       include: {
+        invoice: { select: { currency: true, exchangeRate: true } },
         product: { include: { category: true } },
       },
     });
+    return items.map((item) => ({
+      ...item,
+      revenueUzs:
+        Number(item.totalPrice) *
+        toUzsRate(
+          item.invoice.currency,
+          item.invoice.exchangeRate,
+          'Posted sales invoice',
+        ),
+    }));
+  }
+
+  async getCategoryBreakdown(tenantId: string, range?: string) {
+    const invoiceItems = await this.postedInvoiceItems(tenantId, range);
 
     const catMap: Record<
       string,
@@ -224,38 +285,33 @@ export class AnalyticsService {
     > = {};
     let totalRevenue = 0;
 
-    invoiceItems.forEach((item) => {
+    for (const item of invoiceItems) {
       const cat = item.product?.category;
       const catId = cat ? cat.id : 'uncategorized';
-      const catName = cat
-        ? cat.name
-        : { uz: 'Kategoriyasiz', ru: 'Без категории' };
+      catMap[catId] ??= {
+        categoryId: catId,
+        categoryName: cat
+          ? cat.name
+          : { uz: 'Kategoriyasiz', ru: 'Без категории' },
+        revenue: 0,
+      };
+      catMap[catId].revenue += item.revenueUzs;
+      totalRevenue += item.revenueUzs;
+    }
 
-      if (!catMap[catId]) {
-        catMap[catId] = {
-          categoryId: catId,
-          categoryName: catName,
-          revenue: 0,
-        };
-      }
-
-      const itemRev = Number(item.totalPrice);
-      catMap[catId].revenue += itemRev;
-      totalRevenue += itemRev;
-    });
-
-    return Object.values(catMap).map((c) => ({
-      ...c,
-      percentage:
-        totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 100) : 0,
-    }));
+    return Object.values(catMap)
+      .sort((a, b) => b.revenue - a.revenue)
+      .map((c) => ({
+        ...c,
+        currency: 'UZS' as const,
+        revenue: round2(c.revenue),
+        percentage:
+          totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 100) : 0,
+      }));
   }
 
-  async getTopProducts(tenantId: string, limit = 10) {
-    const invoiceItems = await this.prisma.salesInvoiceItem.findMany({
-      where: { invoice: { tenantId } },
-      include: { product: true },
-    });
+  async getTopProducts(tenantId: string, limit = 10, range?: string) {
+    const invoiceItems = await this.postedInvoiceItems(tenantId, range);
 
     const prodMap: Record<
       string,
@@ -269,35 +325,33 @@ export class AnalyticsService {
       }
     > = {};
 
-    invoiceItems.forEach((item) => {
+    for (const item of invoiceItems) {
       const p = item.product;
-      if (!p) return;
-
-      if (!prodMap[p.id]) {
-        prodMap[p.id] = {
-          productId: p.id,
-          productName: p.name,
-          sku: p.sku,
-          unitOfMeasure: p.unitOfMeasure,
-          totalQuantity: 0,
-          totalRevenue: 0,
-        };
-      }
-
+      if (!p) continue;
+      prodMap[p.id] ??= {
+        productId: p.id,
+        productName: p.name,
+        sku: p.sku,
+        unitOfMeasure: p.unitOfMeasure,
+        totalQuantity: 0,
+        totalRevenue: 0,
+      };
       prodMap[p.id].totalQuantity += Number(item.quantity);
-      prodMap[p.id].totalRevenue += Number(item.totalPrice);
-    });
+      prodMap[p.id].totalRevenue += item.revenueUzs;
+    }
 
     return Object.values(prodMap)
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map((p) => ({
+        ...p,
+        currency: 'UZS' as const,
+        totalRevenue: round2(p.totalRevenue),
+      }));
   }
 
-  async getTopClients(tenantId: string, limit = 5) {
-    const invoices = await this.prisma.salesInvoice.findMany({
-      where: { tenantId },
-      include: { counterparty: true },
-    });
+  async getTopClients(tenantId: string, limit = 5, range?: string) {
+    const invoices = await this.postedInvoices(tenantId, range);
 
     const clientMap: Record<
       string,
@@ -310,53 +364,79 @@ export class AnalyticsService {
       }
     > = {};
 
-    invoices.forEach((inv) => {
+    for (const inv of invoices) {
       const c = inv.counterparty;
-      if (!c) return;
-
-      if (!clientMap[c.id]) {
-        clientMap[c.id] = {
-          counterpartyId: c.id,
-          name: c.name,
-          inn: c.inn,
-          totalSpent: 0,
-          invoiceCount: 0,
-        };
-      }
-
-      clientMap[c.id].totalSpent += Number(inv.totalAmount);
+      if (!c) continue;
+      clientMap[c.id] ??= {
+        counterpartyId: c.id,
+        name: c.name,
+        inn: c.inn,
+        totalSpent: 0,
+        invoiceCount: 0,
+      };
+      clientMap[c.id].totalSpent += Number(inv.totalAmount) * inv.rate;
       clientMap[c.id].invoiceCount += 1;
-    });
+    }
 
     return Object.values(clientMap)
       .sort((a, b) => b.totalSpent - a.totalSpent)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map((c) => ({
+        ...c,
+        currency: 'UZS' as const,
+        totalSpent: round2(c.totalSpent),
+      }));
   }
 
+  /**
+   * Ratios for the calendar year so far, in UZS. A ratio that cannot be
+   * computed honestly is null (shown as "—"), never a made-up default:
+   * - working capital needs every debt in UZS (a USD debt has no rate here);
+   * - inventory days need COGS;
+   * - AR days need receivables and revenue in the same single currency.
+   */
   async getFinancialRatios(tenantId: string) {
-    const kpi = await this.getKpiSummary(tenantId);
+    const kpi = await this.getKpiSummary(tenantId, 'year');
+    const dayOfYear =
+      Math.floor(
+        (Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) /
+          86_400_000,
+      ) + 1;
 
-    // Working Capital = (Cash/Bank + Inventory + AR) - AP
-    const workingCapital =
-      kpi.inventoryValuation +
-      kpi.totalAccountsReceivable -
-      kpi.totalAccountsPayable;
+    const debtsInUzsOnly = [
+      ...kpi.receivablesByCurrency,
+      ...kpi.payablesByCurrency,
+    ].every((debt) => debt.currency === 'UZS');
+    const workingCapital = debtsInUzsOnly
+      ? round2(
+          kpi.inventoryValuation +
+            kpi.totalAccountsReceivable -
+            kpi.totalAccountsPayable,
+        )
+      : null;
+
     const inventoryTurnoverDays =
-      kpi.grossProfit > 0
-        ? Math.round(
-            (kpi.inventoryValuation / (kpi.totalRevenue - kpi.grossProfit)) *
-              365,
-          )
-        : 0;
+      kpi.totalCogs > 0
+        ? Math.round((kpi.inventoryValuation / kpi.totalCogs) * dayOfYear)
+        : null;
+
+    const revenue = kpi.totalRevenueByCurrency;
+    const receivables = kpi.receivablesByCurrency;
     const arCollectionDays =
-      kpi.totalRevenue > 0
-        ? Math.round((kpi.totalAccountsReceivable / kpi.totalRevenue) * 365)
-        : 0;
+      receivables.length === 0
+        ? 0
+        : revenue.length === 1 &&
+            receivables.length === 1 &&
+            revenue[0].currency === receivables[0].currency &&
+            revenue[0].amount > 0
+          ? Math.round((receivables[0].amount / revenue[0].amount) * dayOfYear)
+          : null;
 
     return {
+      currency: 'UZS' as const,
       workingCapital,
-      inventoryTurnoverDays: Math.min(inventoryTurnoverDays || 30, 365),
-      arCollectionDays: Math.min(arCollectionDays || 15, 365),
+      inventoryTurnoverDays,
+      arCollectionDays,
     };
   }
 }

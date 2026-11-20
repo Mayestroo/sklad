@@ -49,14 +49,15 @@ export interface TrialBalanceItem {
 export interface TrialBalanceReport {
   periodStart: string;
   periodEnd: string;
-  currency?: string;
+  /** Journal lines are always UZS (ADR 0006). */
+  currency: 'UZS';
   items: TrialBalanceItem[];
   totalDebitTurnover: number;
   totalCreditTurnover: number;
 }
 
 export interface FinancialStatements {
-  currency?: string;
+  currency: 'UZS';
   balanceSheet: {
     totalAssets: number;
     totalLiabilities: number;

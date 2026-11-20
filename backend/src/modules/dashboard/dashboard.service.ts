@@ -435,14 +435,16 @@ export class DashboardService {
     return {
       receivable: {
         total: receivableTotal,
-        count: debtors.length,
+        // Counterparties, not counterparty+currency rows.
+        count: new Set(debtors.map((row) => row.id)).size,
         byCurrency: receivableByCurrency,
         advancesByCurrency: customerAdvancesByCurrency,
         topDebtors: debtors.slice(0, 5),
       },
       payable: {
         total: payableTotal,
-        count: creditors.length,
+        // Counterparties, not counterparty+currency rows.
+        count: new Set(creditors.map((row) => row.id)).size,
         byCurrency: payableByCurrency,
         advancesByCurrency: supplierAdvancesByCurrency,
         topCreditors: creditors.slice(0, 5),

@@ -7,7 +7,6 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -49,7 +48,6 @@ export default function CustomersPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const defaultCurrency = useDefaultCurrency();
 
   const customersQuery = useApiQuery<Customer[]>('/sales/counterparties?type=CUSTOMER');
   const customers = customersQuery.data ?? [];
@@ -170,7 +168,6 @@ export default function CustomersPage() {
           </div>
           <MultiCurrencyValue
             items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
-            fallbackCurrency={defaultCurrency}
             locale={locale}
             color="var(--color-warning-600)"
           />
@@ -282,11 +279,10 @@ export default function CustomersPage() {
 
       {/* Customer Profile Modal */}
       {selectedCustomer && (() => {
-        const custCurrency = profile?.invoices?.[0]?.currency || (selectedCustomer as { currency?: string } | null | undefined)?.currency || defaultCurrency;
         const formatByCurrency = (items: Array<{ currency: string; amount: number }>) =>
           items.length > 0
             ? items.map((item) => formatCurrency(item.amount, locale, item.currency)).join(' · ')
-            : formatCurrency(0, locale, defaultCurrency);
+            : '0';
         return (
           <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`${isRu ? 'Профиль клиента' : 'Mijoz'}: ${selectedCustomer.name}`} size="xl">
             {profileLoading ? (
@@ -328,7 +324,7 @@ export default function CustomersPage() {
                             <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                               <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{inv.invoiceNumber}</td>
                               <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate, locale)}</td>
-                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(inv.totalAmount), locale, inv.currency || custCurrency)}</td>
+                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(inv.totalAmount), locale, inv.currency)}</td>
                               <td style={{ padding: '8px 12px' }}>
                                 <Badge variant={inv.status === 'POSTED' ? 'success' : inv.status === 'DRAFT' ? 'warning' : 'error'}>
                                   {inv.status === 'POSTED' ? (isRu ? 'Проведён' : 'Tasdiqlangan') : inv.status === 'DRAFT' ? (isRu ? 'Черновик' : 'Qoralama') : inv.status}

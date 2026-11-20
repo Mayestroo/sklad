@@ -13,32 +13,47 @@ export class AnalyticsController {
 
   @Get('kpi-summary')
   @RequirePermissions('analytics:view')
-  getKpiSummaryAlias(@CurrentTenant() tenantId: string) {
-    return this.analyticsService.getKpiSummary(tenantId);
+  getKpiSummaryAlias(
+    @CurrentTenant() tenantId: string,
+    @Query('range') range?: string,
+  ) {
+    return this.analyticsService.getKpiSummary(tenantId, range);
   }
 
   @Get('kpi')
   @RequirePermissions('analytics:view')
-  getKpiSummary(@CurrentTenant() tenantId: string) {
-    return this.analyticsService.getKpiSummary(tenantId);
+  getKpiSummary(
+    @CurrentTenant() tenantId: string,
+    @Query('range') range?: string,
+  ) {
+    return this.analyticsService.getKpiSummary(tenantId, range);
   }
 
   @Get('sales-trend')
   @RequirePermissions('analytics:view')
-  getSalesTrend(@CurrentTenant() tenantId: string) {
-    return this.analyticsService.getSalesTrend(tenantId);
+  getSalesTrend(
+    @CurrentTenant() tenantId: string,
+    @Query('range') range?: string,
+  ) {
+    return this.analyticsService.getSalesTrend(tenantId, range);
   }
 
   @Get('category-breakdown')
   @RequirePermissions('analytics:view')
-  getCategoryBreakdownAlias(@CurrentTenant() tenantId: string) {
-    return this.analyticsService.getCategoryBreakdown(tenantId);
+  getCategoryBreakdownAlias(
+    @CurrentTenant() tenantId: string,
+    @Query('range') range?: string,
+  ) {
+    return this.analyticsService.getCategoryBreakdown(tenantId, range);
   }
 
   @Get('categories')
   @RequirePermissions('analytics:view')
-  getCategoryBreakdown(@CurrentTenant() tenantId: string) {
-    return this.analyticsService.getCategoryBreakdown(tenantId);
+  getCategoryBreakdown(
+    @CurrentTenant() tenantId: string,
+    @Query('range') range?: string,
+  ) {
+    return this.analyticsService.getCategoryBreakdown(tenantId, range);
   }
 
   @Get('top-products')
@@ -46,10 +61,12 @@ export class AnalyticsController {
   getTopProducts(
     @CurrentTenant() tenantId: string,
     @Query('limit') limit?: number,
+    @Query('range') range?: string,
   ) {
     return this.analyticsService.getTopProducts(
       tenantId,
       limit ? Number(limit) : 10,
+      range,
     );
   }
 
@@ -58,10 +75,12 @@ export class AnalyticsController {
   getTopClients(
     @CurrentTenant() tenantId: string,
     @Query('limit') limit?: number,
+    @Query('range') range?: string,
   ) {
     return this.analyticsService.getTopClients(
       tenantId,
       limit ? Number(limit) : 5,
+      range,
     );
   }
 

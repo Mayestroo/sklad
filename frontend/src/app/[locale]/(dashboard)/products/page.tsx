@@ -589,7 +589,7 @@ export default function ProductsPage() {
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Себестоимость' : 'Tannarxi'}</div>
                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>
-                  {formatCurrency(selectedProduct.costPrice, locale, selectedProduct.costPriceCurrency || 'UZS')}
+                  {formatCurrency(selectedProduct.costPrice, locale, selectedProduct.costPriceCurrency)}
                 </div>
               </div>
               <div>

@@ -12,7 +12,7 @@ import { SupplierProfileDrawer } from './SupplierProfileDrawer';
 
 const profile = {
   supplier: { id: 's1', name: 'Javox-BRO LLC', inn: '301234567', phone: '+998901234567' },
-  metrics: { totalPurchased: 0, totalPaid: 0, balancesByCurrency: [] },
+  metrics: { totalPurchased: 0, totalPaid: 0, totalPurchasedByCurrency: [], totalPaidByCurrency: [], totalReturnedByCurrency: [], balancesByCurrency: [] },
   receipts: [], payments: [], returns: [],
 };
 const callsTo = (url: string) => apiFetch.mock.calls.filter(([u]) => u === url).length;

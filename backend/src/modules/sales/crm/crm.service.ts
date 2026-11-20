@@ -1,14 +1,32 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma';
 import { CreateDealDto } from '../dto';
 import { DealStageSlug } from '@prisma/client';
 import { assertTenantOwned } from '../../../common/prisma/assert-tenant-owned';
+
+/** ADR 0022: a nonzero deal amount without a currency is refused. */
+function assertDealCurrency(
+  amount: number,
+  currency: string | null | undefined,
+) {
+  if (amount > 0 && !currency) {
+    throw new BadRequestException(
+      'Set the deal currency before saving a nonzero amount',
+    );
+  }
+}
 
 @Injectable()
 export class CrmService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createDeal(tenantId: string, dto: CreateDealDto) {
+    const amount = Number(dto.amount ?? 0);
+    assertDealCurrency(amount, dto.currency);
     await assertTenantOwned(this.prisma, tenantId, {
       counterparty: dto.counterpartyId,
       user: dto.assignedUserId,
@@ -19,7 +37,8 @@ export class CrmService {
         counterpartyId: dto.counterpartyId,
         title: dto.title,
         stage: (dto.stage as DealStageSlug) || DealStageSlug.LEAD,
-        amount: dto.amount || 0,
+        amount,
+        currency: dto.currency ?? null,
         assignedUserId: dto.assignedUserId || null,
       },
       include: {
@@ -87,6 +106,7 @@ export class CrmService {
     dto: {
       title?: string;
       amount?: number;
+      currency?: 'USD' | 'UZS';
       counterpartyId?: string;
       stage?: DealStageSlug;
       assignedUserId?: string | null;
@@ -104,12 +124,17 @@ export class CrmService {
       counterparty: dto.counterpartyId,
       user: dto.assignedUserId,
     });
+    assertDealCurrency(
+      dto.amount !== undefined ? Number(dto.amount) : Number(deal.amount),
+      dto.currency ?? deal.currency,
+    );
 
     return this.prisma.deal.update({
       where: { tenantId, id: dealId },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.amount !== undefined && { amount: Number(dto.amount) }),
+        ...(dto.currency !== undefined && { currency: dto.currency }),
         ...(dto.counterpartyId !== undefined && {
           counterpartyId: dto.counterpartyId,
         }),

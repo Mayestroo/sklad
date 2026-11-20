@@ -1,5 +1,6 @@
 'use client';
 
+import { totalsByCurrency, type CurrencyTotal } from '@/lib/currency-totals';
 import { activateOnKey } from '@/lib/a11y';
 import React, { useState, useMemo } from 'react';
 import { useLocale } from 'next-intl';
@@ -8,7 +9,6 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -43,7 +43,6 @@ export default function ServicesPage() {
   const isRu = locale === 'ru';
   const confirm = useConfirm();
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
 
   // Active Tab: PROVIDED vs RECEIVED
   const [activeType, setActiveType] = useState<'PROVIDED' | 'RECEIVED'>('PROVIDED');
@@ -85,20 +84,38 @@ export default function ServicesPage() {
   };
 
   // Aggregate Metrics for Active Tab
-  const { totalAmountSum, totalPaidSum, totalDebtSum, totalPages } = useMemo(() => {
-    const totalAmount = acts.reduce((s, a) => s + (Number(a.totalAmount) || 0), 0);
-    const totalPaid = acts.reduce((s, a) => s + (Number(a.paidAmount) || 0), 0);
-    const totalDebt = Math.max(0, totalAmount - totalPaid);
-    const pages = Math.max(1, Math.ceil(total / pageSize));
+  // Per currency (ADR 0023): a USD act and a UZS act are never added together.
+  const { amountByCurrency, paidByCurrency, debtByCurrency, totalPages } = useMemo(() => {
+    const amounts = totalsByCurrency(acts, (a) => a.currency, (a) => a.totalAmount);
+    const paid = totalsByCurrency(acts, (a) => a.currency, (a) => a.paidAmount);
+    const debt = amounts
+      .map((t) => ({
+        currency: t.currency,
+        amount: Math.max(0, t.amount - (paid.find((p) => p.currency === t.currency)?.amount ?? 0)),
+      }))
+      .filter((t) => t.amount > 0);
     return {
-      totalAmountSum: totalAmount,
-      totalPaidSum: totalPaid,
-      totalDebtSum: totalDebt,
-      totalPages: pages,
+      amountByCurrency: amounts,
+      paidByCurrency: paid,
+      debtByCurrency: debt,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
     };
   }, [acts, total, pageSize]);
-
-  const pageCurrency = acts[0]?.currency || defaultCurrency;
+  const moneyLines = (totals: CurrencyTotal[]) =>
+    totals.length === 0
+      ? '0'
+      : totals.map((t) => (
+          <span key={t.currency} style={{ display: 'block' }}>
+            {formatCurrency(t.amount, locale, t.currency)}
+          </span>
+        ));
+  // Share paid compares one currency with itself; with several currencies it is not shown.
+  const paidShare =
+    amountByCurrency.length === 1 && amountByCurrency[0].amount > 0
+      ? `${Math.round(((paidByCurrency[0]?.amount ?? 0) / amountByCurrency[0].amount) * 100)}% ${isRu ? 'погашено' : 'so‘ndirilgan'}`
+      : amountByCurrency.length > 1
+      ? (isRu ? 'по каждой валюте отдельно' : 'har bir valyuta alohida')
+      : '0%';
 
   const handleOpenCreate = () => {
     setEditingAct(null);
@@ -367,7 +384,7 @@ export default function ServicesPage() {
               marginTop: 'var(--space-2)',
             }}
           >
-            {formatCurrency(totalAmountSum, locale, pageCurrency)}
+            {moneyLines(amountByCurrency)}
           </p>
           <span
             style={{
@@ -414,7 +431,7 @@ export default function ServicesPage() {
               marginTop: 'var(--space-2)',
             }}
           >
-            {formatCurrency(totalPaidSum, locale, pageCurrency)}
+            {moneyLines(paidByCurrency)}
           </p>
           <span
             style={{
@@ -424,9 +441,7 @@ export default function ServicesPage() {
               display: 'block',
             }}
           >
-            {totalAmountSum > 0
-              ? `${Math.round((totalPaidSum / totalAmountSum) * 100)}% ${isRu ? 'погашено' : 'so‘ndirilgan'}`
-              : '0%'}
+            {paidShare}
           </span>
         </div>
 
@@ -465,11 +480,11 @@ export default function ServicesPage() {
             style={{
               fontSize: 'var(--text-2xl)',
               fontWeight: 'var(--font-bold)',
-              color: totalDebtSum > 0 ? 'var(--color-error-600)' : 'var(--color-text-primary)',
+              color: debtByCurrency.length > 0 ? 'var(--color-error-600)' : 'var(--color-text-primary)',
               marginTop: 'var(--space-2)',
             }}
           >
-            {formatCurrency(totalDebtSum, locale, pageCurrency)}
+            {moneyLines(debtByCurrency)}
           </p>
           <span
             style={{
@@ -479,7 +494,7 @@ export default function ServicesPage() {
               display: 'block',
             }}
           >
-            {totalDebtSum > 0
+            {debtByCurrency.length > 0
               ? isRu
                 ? 'Ожидается погашение через кассу/банк'
                 : 'Moliya to‘lovi orqali yopilishi kutilmoqda'

@@ -10,13 +10,17 @@ export interface KpiSummary {
   totalAccountsPayable: number;    // Kreditorlik
   receivablesByCurrency: Array<{ currency: string; amount: number }>;
   payablesByCurrency: Array<{ currency: string; amount: number }>;
-  inventoryValuation: number;      // Ombor qiymati
+  /** COGS of the period, UZS. */
+  totalCogs: number;
+  inventoryValuation: number;      // Ombor qiymati (FIFO landed cost)
   inventoryCurrency: 'UZS';
   currency: string;
 }
 
 export interface SalesTrendDataPoint {
   period: string; // e.g. "2026-01" or "Mon"
+  /** Amounts are converted at each invoice's posted rate (ADR 0023). */
+  currency: 'UZS';
   revenue: number;
   cogs: number;
   profit: number;
@@ -25,6 +29,7 @@ export interface SalesTrendDataPoint {
 export interface CategoryBreakdownItem {
   categoryId: string;
   categoryName: TranslatableField;
+  currency: 'UZS';
   revenue: number;
   percentage: number;
 }
@@ -34,12 +39,25 @@ export interface TopProductItem {
   productName: TranslatableField;
   sku: string;
   totalQuantity: number;
+  currency: 'UZS';
   totalRevenue: number;
   unitOfMeasure: string;
 }
 
+/** GET /analytics/top-clients — posted invoices, converted at each invoice's rate. */
+export interface TopClientItem {
+  counterpartyId: string;
+  name: string;
+  inn?: string | null;
+  invoiceCount: number;
+  currency: 'UZS';
+  totalSpent: number;
+}
+
 export interface FinancialRatios {
-  workingCapital: number;
-  inventoryTurnoverDays: number;
-  arCollectionDays: number;
+  currency: 'UZS';
+  /** null when it cannot be computed honestly (e.g. debts in USD). */
+  workingCapital: number | null;
+  inventoryTurnoverDays: number | null;
+  arCollectionDays: number | null;
 }

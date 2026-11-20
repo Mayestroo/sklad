@@ -408,7 +408,7 @@ export default function ExpensesPage() {
                         </div>
                       </td>
                       <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {formatCurrency(Number(item.amount) || 0, locale, item.currency || 'UZS')}
+                        {formatCurrency(Number(item.amount) || 0, locale, item.currency)}
                       </td>
                       <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center' }}>
                         {item.isPaid ? (
@@ -544,7 +544,7 @@ export default function ExpensesPage() {
                           {getExpenseTypeBadge(expense.expenseType)}
                         </td>
                         <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                          {formatCurrency(Number(expense.amount) || 0, locale, expense.currency || 'UZS')}
+                          {formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}
                         </td>
                         <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                           {expense.allocationMethod === 'BY_AMOUNT' ? (isRu ? 'По стоимости' : 'Qiymatiga mutanosib') : expense.allocationMethod === 'BY_QUANTITY' ? (isRu ? 'По количеству' : 'Miqdoriga mutanosib') : (isRu ? 'По весу' : 'Vazniga mutanosib')}

@@ -23,6 +23,7 @@ const product = (name: string) => ({
   sku: `SKU-${name}`,
   unit: 'piece',
   costPrice: 100,
+  costPriceCurrency: 'UZS',
   salePrice: 150,
   currency: 'UZS',
   totalStock: 5,
