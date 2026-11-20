@@ -1,5 +1,6 @@
 'use client';
 
+import { isSellable } from '@/lib/product-types';
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch, listOf, type ListResponse } from '@/lib/api';
 import { getApiCache, setApiCache } from '@/lib/cache';
@@ -33,6 +34,8 @@ export interface ProductDropdownItem {
   vatRate?: number;
   unitOfMeasure?: string;
   currency?: string;
+  type?: string | null;
+  isSemiFinished?: boolean | null;
   stockQty?: number;
 }
 
@@ -119,7 +122,8 @@ export function useDocumentDropdowns({ token, tenantId, locale = 'uz' }: UseDocu
       ]);
 
       const cpList: CounterpartyDropdownItem[] = listOf(cpRes);
-      const prdList: ProductDropdownItem[] = listOf(prdRes);
+      // TZ "Ishlab chiqarish" 4.6: a semi-finished product is sold only with a sale price.
+      const prdList: ProductDropdownItem[] = listOf(prdRes).filter(isSellable);
       const usrList: UserDropdownItem[] = listOf(usrRes);
       const whList: WarehouseDropdownItem[] = listOf(whRes);
       const plList: PriceListDropdownItem[] = listOf(plRes);

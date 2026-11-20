@@ -43,9 +43,13 @@ export class PrismaService
     const isCloudDb =
       connectionString.includes('neon.tech') ||
       connectionString.includes('sslmode=require');
+    // DATABASE_POOL_MAX caps the pool (e.g. 1 for a single-connection test
+    // server); unset keeps the driver default.
+    const poolMax = Number(process.env.DATABASE_POOL_MAX);
     const pool = new Pool({
       connectionString,
       ssl: isCloudDb ? { rejectUnauthorized: false } : undefined,
+      ...(Number.isInteger(poolMax) && poolMax > 0 ? { max: poolMax } : {}),
     });
     const adapter = new PrismaPg(pool);
     super({

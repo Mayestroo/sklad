@@ -11,6 +11,7 @@ const auth: { token: string; company: { id: string; settings: unknown }; hasPerm
 };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
 vi.mock('next-intl', () => ({ useLocale: () => 'uz', useTranslations: () => (key: string) => key }));
+vi.mock('@/context/ConfirmContext', () => ({ useConfirm: () => async () => true }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { CreateProductDrawer } from './CreateProductDrawer';
@@ -102,5 +103,38 @@ describe('CreateProductDrawer cost-price currency (F8, ADR 0022)', () => {
     fireEvent.click(screen.getByText('Tovarni saqlash (Ctrl+Enter)'));
     await waitFor(() => expect(postedProductBodies()).toHaveLength(1));
     expect(postedProductBodies()[0]).toMatchObject({ costPrice: 5000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 });
+  });
+});
+
+describe("CreateProductDrawer finished product (TZ Ishlab chiqarish 3.2, 3.3)", () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue([]);
+  });
+
+  it("quick create from a recipe: type locked, name from the search, no purchase price or quantity", async () => {
+    renderPage(<CreateProductDrawer isOpen onClose={vi.fn()} initialType="FINISHED_PRODUCT" lockType initialSkuOrBarcode="Osh" />);
+    expect(screen.getByRole("radio", { name: /Tayyor mahsulot/ }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("radio", { name: /^Tovar/ })).toBeNull();
+    expect((screen.getByDisplayValue("Osh") as HTMLInputElement).value).toBe("Osh");
+    expect(screen.queryByLabelText("Xarid narxi")).toBeNull();
+    expect(screen.queryByText("Xarid tannarxi valyutasi")).toBeNull();
+    expect(screen.queryByLabelText("Soni *")).toBeNull();
+    expect(screen.getByText("Retseptura va ishlab chiqarishdan avtomatik hisoblanadi")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Yarim tayyor mahsulot"));
+    fireEvent.click(screen.getByText("Mahsulotni saqlash (Ctrl+Enter)"));
+    await waitFor(() => expect(postedProductBodies()).toHaveLength(1));
+    const body = postedProductBodies()[0];
+    expect(body).toMatchObject({ type: "FINISHED_PRODUCT", isSemiFinished: true });
+    expect(body.costPrice).toBeUndefined();
+  });
+
+  it("warns about a product with the same name", async () => {
+    apiFetch.mockImplementation(async (url: string) =>
+      String(url).startsWith("/inventory/products/name-check") ? [{ id: "x", name: { uz: "Osh" }, type: "FINISHED_PRODUCT" }] : [],
+    );
+    renderPage(<CreateProductDrawer isOpen onClose={vi.fn()} initialType="FINISHED_PRODUCT" lockType initialSkuOrBarcode="Osh" />);
+    expect(await screen.findByText(/Bunday nomli pozitsiya allaqachon bor/)).toBeTruthy();
   });
 });

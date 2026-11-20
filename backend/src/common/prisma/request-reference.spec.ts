@@ -34,15 +34,23 @@ const ALLOWLIST: Record<string, string> = {
   'FinanceService.reversePostedTransaction': INTERNAL,
   'FinanceService.deleteLegacyPurchasePaymentEntry': INTERNAL,
   'StockReservationService.reserveStockForOrder': INTERNAL,
-  'ProductionService.insertRecipe':
-    'Product and materials are loaded with tenantId and their count compared with the request',
-  'ProductionService.logRecipeCreated':
-    'Audit of a recipe insertRecipe already checked',
+  'ProductionService.validateRecipe':
+    'Product and materials are loaded with tenantId and their count compared with the request; recipe ids of the current version come from a tenant-scoped row',
+  'ProductionService.createRecipe':
+    'Calls validateRecipe (tenant-scoped loads) inside the same transaction before writing',
+  'ProductionService.updateRecipe':
+    'The recipe is loaded with tenantId and validateRecipe checks product and materials',
+  'ProductionService.findRecipes': READ_FILTER,
   'ProductionService.createDocument':
     'Recipe (preview), warehouse (requireWarehouse) and responsible user (requireTenantUser) are each loaded with tenantId',
-  'ProductionService.findDocuments': READ_FILTER,
+  'ProductionService.updateDocument':
+    'Document is loaded with tenantId; a new recipe or warehouse goes through preview/requireWarehouse and the responsible user through requireTenantUser',
+  'ProductionService.documentWhere': READ_FILTER,
   'ProductionService.updateActualMaterials':
     'Product ids must equal the materials of the tenant-scoped document',
+  'ProductionService.applyActualMaterials':
+    'Product ids must match lines of the tenant-scoped document (refused otherwise)',
+  'ProductionService.adjustLine': INTERNAL,
   'ProductionService.consumeMaterial': INTERNAL,
   'AdditionalExpensesService.calculateAllocationPreview':
     'Passes the ids to allocate(), which loads the receipt with tenantId',

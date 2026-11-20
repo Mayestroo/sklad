@@ -30,6 +30,7 @@ import { Product, Category } from '@shared/types';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { toast } from '@/context/ToastContext';
 import { unitLabel } from '@/lib/units';
+import { productTypeLabel, productTypeOptions, semiFinishedLabel } from '@/lib/product-types';
 
 /** Product name in the UI language (falls back to the other language). */
 function productName(p: Product, locale: 'uz' | 'ru'): string {
@@ -225,12 +226,8 @@ export default function ProductsPage() {
     })),
   ];
 
-  const typeOptions = [
-    { value: '', label: isRu ? 'Все типы' : 'Barcha turlar' },
-    { value: 'PRODUCT', label: isRu ? 'Товар (Продукт)' : 'Mahsulot (Tovar)' },
-    { value: 'SERVICE', label: isRu ? 'Услуга' : 'Xizmat' },
-    { value: 'BUNDLE', label: isRu ? 'Комплект (Набор)' : 'To‘plam (Komplekt)' },
-  ];
+  // TZ "Ishlab chiqarish" 3.1: Tovar | Xomashyo | Tayyor mahsulot | Xizmat.
+  const typeOptions = productTypeOptions(locale, isRu ? 'Все типы' : 'Barcha turlar');
 
   const statusOptions = [
     { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
@@ -456,7 +453,8 @@ export default function ProductsPage() {
                               {getProductName(p)}
                             </div>
                             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                              {p.type === 'SERVICE' ? (isRu ? 'Услуга' : 'Xizmat') : p.type === 'BUNDLE' ? (isRu ? 'Комплект' : 'To‘plam') : (isRu ? 'Товар' : 'Mahsulot')}
+                              {productTypeLabel(p.type, locale)}
+                              {p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}
                             </div>
                           </div>
                         </div>
@@ -487,6 +485,15 @@ export default function ProductsPage() {
                       {/* Cost price */}
                       <td style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
                         {formatPriceOrUnset(Number(p.costPrice || 0), locale, p.costPriceCurrency)}
+                        {p.type === 'FINISHED_PRODUCT' && (
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                            {p.costSource === 'PRODUCTION_ACTUAL'
+                              ? isRu ? 'Фактическая (производство)' : 'Haqiqiy (ishlab chiqarish)'
+                              : p.costSource === 'RECIPE_ESTIMATE'
+                                ? isRu ? 'Оценка (рецептура)' : 'Taxminiy (retseptura)'
+                                : isRu ? 'Рецептура не создана' : 'Retseptura yaratilmagan'}
+                          </div>
+                        )}
                       </td>
 
                       {/* Sale price */}

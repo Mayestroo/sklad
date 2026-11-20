@@ -1,5 +1,6 @@
 'use client';
 
+import { productTypeLabel, semiFinishedLabel } from '@/lib/product-types';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { type ComponentProps, useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
@@ -660,6 +661,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const productOptions: SelectOption[] = products.map((p) => ({
     value: p.id,
     label: `${getLocalizedName(p.name, locale)} ${p.sku ? `(${p.sku})` : ''}`,
+    // TZ "Ishlab chiqarish" 3.1: the type is shown and searchable.
+    description: `${productTypeLabel(p.type, locale)}${p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}`,
   }));
 
   return (

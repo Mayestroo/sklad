@@ -71,8 +71,28 @@ An inline creation dialog enabling operators to create new products, categories,
 _Avoid_: Context switch, background registration, external entity setup
 
 **Nomenclature Item Type**:
-The classification of an item in the unified catalog as either a finished good (`PRODUCT`), raw material or industrial input (`RAW_MATERIAL`), or service (`SERVICE`).
+The classification of an item in the unified catalog: merchandise bought for resale (`PRODUCT`, "Tovar"), raw material or industrial input (`RAW_MATERIAL`, "Xomashyo"), an item made by production (`FINISHED_PRODUCT`, "Tayyor mahsulot"), or service (`SERVICE`). See ADR 0026.
 _Avoid_: Stock category, item status, billing tag
+
+**Finished Product (Tayyor mahsulot)**:
+A catalog item of type `FINISHED_PRODUCT`, made by a Production Document from a Recipe. It cannot be purchased; its card cost is read-only (recipe estimate until produced, then the actual FIFO unit cost). With the Semi-Finished flag it is also a material of other recipes.
+_Avoid_: Ready product, output item, manufactured goods
+
+**Semi-Finished Product (Yarim tayyor mahsulot)**:
+A Finished Product with `isSemiFinished`: produced by its own document, then consumed FIFO like any material by another recipe (up to 3 nested levels, no cycles).
+_Avoid_: Intermediate, sub-assembly, blank
+
+**Recipe (Retseptura)**:
+The materials (each in an entry unit, with a loss percent) needed to make an output norm of one Finished Product. Active or inactive; archived instead of deleted once used. Its cost is an estimate from the material cards, never frozen.
+_Avoid_: BOM, formula, specification
+
+**Production Document (Ishlab chiqarish hujjati)**:
+Makes a planned quantity by a chosen recipe: Qoralama → Jarayonda (materials issued FIFO) → Yakunlangan (output batch at actual cost) or Bekor qilingan (storno). Carries manual extra costs.
+_Avoid_: Manufacturing order, work order, job
+
+**Product Unit**:
+An extra unit of a catalog item with a factor to its base unit (1 qop = 50 kg); conversion goes through `shared/production/costing.ts` only.
+_Avoid_: Packaging, alt unit, UOM2
 
 **Raw Material Inbound**:
 Inbound processing of raw materials (`RAW_MATERIAL`) within a purchase receipt, increasing warehouse stock and establishing FIFO batches under National Accounting Standards Account 1010 (Materials & Supplies) rather than merchandise Account 2910.
@@ -102,7 +122,7 @@ The system-enforced block preventing warehouse staff from posting an OUTBOUND in
 _Avoid_: Release lock, payment block, shipment hold
 
 **Production Order (stub)**:
-A lightweight task record automatically created when a Sales Order is sent to production. Tracks `requiredQty`, `readyQty`, and `status` (`PENDING` / `IN_PROGRESS` / `DONE` / `CANCELLED`) for a single product line within an order. The full production workflow (steps, materials, BOM) is a separate future module; this stub is the minimum interface between the Orders and Production contexts.
+A lightweight task record automatically created when a Sales Order is sent to production. Tracks `requiredQty`, `readyQty`, and `status` (`PENDING` / `IN_PROGRESS` / `DONE` / `CANCELLED`) for a single product line within an order. The production workflow itself is the Production Document (ADR 0026); this stub is the minimum interface between the Orders and Production contexts.
 _Avoid_: Manufacturing order, work order, production task
 
 **Order Payment**:

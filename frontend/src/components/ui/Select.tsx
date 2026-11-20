@@ -4,7 +4,14 @@ import { useState, useRef, useEffect, useMemo, useLayoutEffect, useId, useCallba
 import { createPortal } from 'react-dom';
 import { useLocale } from 'next-intl';
 import { ChevronDown, Check, Search, X, Plus } from 'lucide-react';
-import { getInitialActiveOptionIndex, getNextActiveOptionIndex } from './select-keyboard';
+import {
+  getInitialActiveOptionIndex,
+  getNextActiveOptionIndex,
+  scrollTopForRow,
+  VIRTUAL_ROW_HEIGHT,
+  VIRTUAL_THRESHOLD,
+  virtualWindow,
+} from './select-keyboard';
 
 export interface SelectOption {
   value: string;
@@ -78,6 +85,8 @@ export function Select({
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [listScrollTop, setListScrollTop] = useState(0);
   const listboxId = useId();
 
   const selectedOption = options.find((opt) => opt.value === value);
@@ -140,10 +149,25 @@ export function Select({
       ? activeIndex
       : initialActiveIndex;
 
+  // Long lists render only the visible rows (virtual scroll).
+  const isVirtual = filteredOptions.length > VIRTUAL_THRESHOLD;
+  const LIST_HEIGHT = 220;
+  const windowRange = isVirtual
+    ? virtualWindow(listScrollTop, LIST_HEIGHT, VIRTUAL_ROW_HEIGHT, filteredOptions.length)
+    : { start: 0, end: filteredOptions.length };
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!isOpen || !isVirtual || !list || activeOptionIndex < 0) return;
+    const next = scrollTopForRow(activeOptionIndex, list.scrollTop, LIST_HEIGHT, VIRTUAL_ROW_HEIGHT);
+    if (next !== list.scrollTop) list.scrollTop = next;
+  }, [isOpen, isVirtual, activeOptionIndex]);
+
   const closeDropdown = useCallback((restoreFocus = false) => {
     setIsOpen(false);
     setSearchQuery('');
     setActiveIndex(null);
+    setListScrollTop(0);
     if (restoreFocus) triggerRef.current?.focus();
   }, []);
 
@@ -168,6 +192,7 @@ export function Select({
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isOpen) {
+        event.preventDefault();
         closeDropdown(true);
       }
     };
@@ -416,17 +441,20 @@ export function Select({
 
           {/* Options List */}
           <div
+            ref={listRef}
             id={listboxId}
             role="listbox"
             tabIndex={-1}
+            onScroll={isVirtual ? (e) => setListScrollTop(e.currentTarget.scrollTop) : undefined}
             style={{
               maxHeight: '220px',
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              gap: '2px',
+              gap: isVirtual ? 0 : '2px',
             }}
           >
+            {isVirtual && windowRange.start > 0 && <div aria-hidden style={{ flex: '0 0 auto', height: windowRange.start * VIRTUAL_ROW_HEIGHT }} />}
             {filteredOptions.length === 0 ? (
               <div
                 style={{
@@ -439,7 +467,8 @@ export function Select({
                 {effectiveNoOptionsText}
               </div>
             ) : (
-              filteredOptions.map((option, optionIndex) => {
+              filteredOptions.slice(windowRange.start, windowRange.end).map((option, offset) => {
+                const optionIndex = windowRange.start + offset;
                 const isSelected = option.value === value;
                 return (
                   <button
@@ -452,12 +481,15 @@ export function Select({
                       onChange(option.value);
                       closeDropdown(true);
                     }}
+                    aria-setsize={isVirtual ? filteredOptions.length : undefined}
+                    aria-posinset={isVirtual ? optionIndex + 1 : undefined}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       gap: '12px',
                       width: '100%',
+                      ...(isVirtual ? { flex: '0 0 auto', height: VIRTUAL_ROW_HEIGHT, overflow: 'hidden' } : {}),
                       padding: '8px 10px',
                       borderRadius: 'var(--radius-sm)',
                       fontSize: 'var(--text-sm)',
@@ -498,6 +530,9 @@ export function Select({
                   </button>
                 );
               })
+            )}
+            {isVirtual && windowRange.end < filteredOptions.length && (
+              <div aria-hidden style={{ flex: '0 0 auto', height: (filteredOptions.length - windowRange.end) * VIRTUAL_ROW_HEIGHT }} />
             )}
           </div>
 

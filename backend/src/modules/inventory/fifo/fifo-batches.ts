@@ -256,6 +256,8 @@ export interface CreateFifoBatchParams {
   createdAt?: Date;
   /** The opening-balance line this batch opens (unposting removes it). */
   openingBalanceLineId?: string;
+  /** The production document whose output this batch is (cancelling removes it). */
+  productionDocumentId?: string;
 }
 
 /** Adds a new cost layer (batch) to a warehouse. */
@@ -287,6 +289,9 @@ export async function createFifoBatch(
       ...(params.createdAt ? { createdAt: params.createdAt } : {}),
       ...(params.openingBalanceLineId
         ? { openingBalanceLineId: params.openingBalanceLineId }
+        : {}),
+      ...(params.productionDocumentId
+        ? { productionDocumentId: params.productionDocumentId }
         : {}),
     },
   });

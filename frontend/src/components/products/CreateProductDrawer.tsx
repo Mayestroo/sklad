@@ -2,7 +2,7 @@
 
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -11,18 +11,35 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { CURRENCY_OPTIONS, errorMessage } from '@/lib/utils';
+import { CURRENCY_OPTIONS, errorMessage, formatCurrency } from '@/lib/utils';
 import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { toast } from '@/context/ToastContext';
 import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import type { Category } from '@shared/types';
 import { editedProductName } from '@/lib/product-name';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { useConfirm } from '@/context/ConfirmContext';
+import { unitLabel } from '@/lib/units';
+import { productTypeLabel } from '@/lib/product-types';
+import { unitOptionsFor } from '@/lib/production-recipe';
+import { Trash2 } from 'lucide-react';
+
+type ItemType = 'PRODUCT' | 'RAW_MATERIAL' | 'FINISHED_PRODUCT' | 'SERVICE';
+
+/** An extra unit row: 1 `name` = `factor` base units (TZ 8.1). */
+interface UnitRow {
+  key: number;
+  name: string;
+  factor: string;
+}
+let unitRowKey = 0;
 
 /** The saved product handed back to the caller (the API returns more). */
 interface CreatedProduct {
   id: string;
   name: string | { uz?: string; ru?: string };
   sku: string;
+  type?: string;
 }
 
 /** The fields of a product this drawer edits (callers pass list rows of several shapes). */
@@ -40,6 +57,9 @@ interface EditableProduct {
   salePrice?: number | string | null;
   salePriceCurrency?: string | null;
   minStockAlert?: number | string | null;
+  isSemiFinished?: boolean | null;
+  costSource?: string | null;
+  units?: Array<{ name: string; factor: number | string }> | null;
 }
 
 export interface CreateProductDrawerProps {
@@ -47,7 +67,11 @@ export interface CreateProductDrawerProps {
   onClose: () => void;
   productToEdit?: EditableProduct | null;
   initialSkuOrBarcode?: string;
-  initialType?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE';
+  initialType?: ItemType;
+  /** The type cannot be changed (quick create from a recipe, TZ 3.2). */
+  lockType?: boolean;
+  /** Types offered by the switch; all four by default. */
+  allowedTypes?: ItemType[];
   onSuccess?(createdProduct: CreatedProduct, initialQuantity?: number): void;
 }
 
@@ -57,8 +81,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   productToEdit = null,
   initialSkuOrBarcode = '',
   initialType = 'PRODUCT',
+  lockType = false,
+  allowedTypes,
   onSuccess,
 }) => {
+  const confirm = useConfirm();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
@@ -66,7 +93,12 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const salesDefault = useSalesDefaultCurrency();
   const isEdit = Boolean(productToEdit);
 
-  const [itemType, setItemType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE'>(initialType);
+  const [itemType, setItemType] = useState<ItemType>(initialType);
+  const [isSemiFinished, setIsSemiFinished] = useState(false);
+  const [unitRows, setUnitRows] = useState<UnitRow[]>([]);
+  const [duplicates, setDuplicates] = useState<string[]>([]);
+  const dirty = useRef(false);
+  const isFinished = itemType === 'FINISHED_PRODUCT';
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
@@ -111,6 +143,20 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       .catch(console.error);
   }, [token, company, locale, isOpen]);
 
+  // TZ 3.2: warn about a product with the same name (saving is still allowed).
+  useEffect(() => {
+    const trimmed = name.trim();
+    if (!isOpen || !token || !company?.id || trimmed.length < 2) return;
+    const timer = window.setTimeout(() => {
+      const query = new URLSearchParams({ name: trimmed });
+      if (productToEdit?.id) query.set('excludeId', productToEdit.id);
+      apiFetch<Array<{ id: string; name: unknown; type: string }>>(`/inventory/products/name-check?${query.toString()}`, { token, tenantId: company.id, locale })
+        .then((rows) => setDuplicates((rows ?? []).map((row) => productTypeLabel(row.type, locale))))
+        .catch(() => setDuplicates([]));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [name, isOpen, token, company, locale, productToEdit?.id]);
+
   useEffect(() => {
     if (isOpen) {
       if (productToEdit) {
@@ -134,10 +180,16 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setSellingPrice(productToEdit.salePrice !== undefined ? String(productToEdit.salePrice) : '');
         setSalePriceCurrency(productToEdit.salePriceCurrency || '');
         setMinStockAlert(productToEdit.minStockAlert !== undefined ? String(productToEdit.minStockAlert) : '0');
+        setIsSemiFinished(Boolean(productToEdit.isSemiFinished));
+        setUnitRows((productToEdit.units ?? []).map((u) => ({ key: ++unitRowKey, name: u.name, factor: String(Number(u.factor)) })));
         setError(null);
+        dirty.current = false;
 
       } else {
         setItemType(initialType || 'PRODUCT');
+        setIsSemiFinished(false);
+        setUnitRows([]);
+        dirty.current = false;
         setCostPriceCurrency('');
         setCostPriceExchangeRate('');
         setSalePriceCurrency(salesDefault ?? '');
@@ -207,6 +259,18 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       return;
     }
 
+    const units: Array<{ name: string; factor: number }> = [];
+    for (const row of unitRows) {
+      const unitName = row.name.trim();
+      const factor = Number(String(row.factor).replace(',', '.'));
+      if (!unitName && !row.factor) continue;
+      if (!unitName || !(factor > 0)) {
+        setError(isRu ? 'Укажите название и коэффициент (больше 0) каждой доп. единицы' : 'Har bir qo‘shimcha birlik uchun nom va koeffitsiyent (0 dan katta) kiriting');
+        return;
+      }
+      units.push({ name: unitName, factor });
+    }
+
     const numQty = parseFloat(String(quantity)) || 1;
     setLoading(true);
     setError(null);
@@ -233,6 +297,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           salePrice: Number(sellingPrice) || 0,
           salePriceCurrency: salePriceCurrency || undefined,
           minStockAlert: Number(minStockAlert) || 0,
+          isSemiFinished: isFinished ? isSemiFinished : false,
+          units,
+          // TZ 3.3: a finished product's cost is never typed in.
+          ...(isFinished ? { costPrice: undefined, costPriceCurrency: undefined, costPriceExchangeRate: undefined } : {}),
         };
         res = await apiFetch(`/inventory/products/${productToEdit.id}`, {
           method: 'PUT',
@@ -258,6 +326,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           salePrice: Number(sellingPrice) || 0,
           salePriceCurrency: salePriceCurrency || undefined,
           minStockAlert: Number(minStockAlert) || 0,
+          isSemiFinished: isFinished ? isSemiFinished : false,
+          units,
+          // TZ 3.3: a finished product's cost is never typed in.
+          ...(isFinished ? { costPrice: undefined, costPriceCurrency: undefined, costPriceExchangeRate: undefined } : {}),
         };
 
         res = await apiFetch('/inventory/products', {
@@ -269,7 +341,9 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         });
       }
 
-      const savedQuantity = numQty;
+      // TZ 3.3: a finished product gets stock only from production.
+      const savedQuantity = isFinished ? 0 : numQty;
+      dirty.current = false;
       resetForm();
       if (onSuccess) onSuccess(res, savedQuantity);
       onClose();
@@ -293,7 +367,27 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setCostPriceExchangeRate('');
     setSellingPrice('');
     setSalePriceCurrency(salesDefault ?? '');
+    setIsSemiFinished(false);
+    setUnitRows([]);
+    setDuplicates([]);
     setError(null);
+    dirty.current = false;
+  };
+
+  /** TZ 11.5: unsaved input asks before the drawer closes. */
+  const requestClose = async () => {
+    if (dirty.current) {
+      const ok = await confirm({
+        title: isRu ? 'Закрыть без сохранения?' : 'Saqlamasdan yopilsinmi?',
+        description: isRu ? 'Введённые данные будут потеряны.' : 'Kiritilgan ma’lumotlar yo‘qoladi.',
+        variant: 'warning',
+        confirmText: isRu ? 'Закрыть' : 'Yopish',
+        cancelText: isRu ? 'Продолжить ввод' : 'Davom etish',
+      });
+      if (!ok) return;
+    }
+    resetForm();
+    onClose();
   };
 
   const handleAddCustomUnit = (e: React.FormEvent) => {
@@ -341,33 +435,19 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const effectiveBaseUnit = customMatch ? customMatch.baseUnit : unitOfMeasure;
   const isFractionalUnit = effectiveBaseUnit === 'kg' || effectiveBaseUnit === 'liter' || effectiveBaseUnit === 'meter';
 
-  const getQuantityLabel = () => {
-    switch (unitOfMeasure) {
-      case 'kg':
-        return isRu ? 'Количество (кг) *' : 'Soni (kg) *';
-      case 'liter':
-        return isRu ? 'Количество (литр) *' : 'Soni (litr) *';
-      case 'meter':
-        return isRu ? 'Количество (метр) *' : 'Soni (metr) *';
-      case 'box':
-        return isRu ? 'Количество (коробок) *' : 'Soni (quti) *';
-      case 'pack':
-        return isRu ? 'Количество (пачек) *' : 'Soni (pachka) *';
-      case 'piece':
-        return isRu ? 'Количество (шт) *' : 'Soni (dona) *';
-      default: {
-        const custom = customUnits.find((u) => u.value === unitOfMeasure);
-        return isRu
-          ? `Количество (${custom ? custom.label : unitOfMeasure}) *`
-          : `Soni (${custom ? custom.label : unitOfMeasure}) *`;
-      }
-    }
-  };
+  // TZ 11.5: the unit is the input's suffix, so the label does not repeat it.
+  const getQuantityLabel = () => (isRu ? 'Количество *' : 'Soni *');
+
+  const standardSubUnits = unitOptionsFor(unitOfMeasure)
+    .slice(1)
+    .map((u) => unitLabel(u.code, locale))
+    .join(', ');
 
   const getDrawerTitle = () => {
     if (isEdit) return isRu ? 'Редактировать позицию' : 'Pozitsiyani tahrirlash';
     if (itemType === 'RAW_MATERIAL') return isRu ? 'Новое сырьё / материал' : 'Yangi Xomashyo Qo‘shish';
     if (itemType === 'SERVICE') return isRu ? 'Новая услуга' : 'Yangi Xizmat Qo‘shish';
+    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Новый готовый продукт' : 'Yangi Tayyor mahsulot qo‘shish';
     return isRu ? 'Новый товар' : 'Yangi Tovar Qo‘shish';
   };
 
@@ -387,6 +467,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         ? 'Быстрое добавление транспортных или иных услуг в документ'
         : 'Yetkazib berish yoki boshqa xizmatlarni tezkor kiritish';
     }
+    if (itemType === 'FINISHED_PRODUCT') {
+      return isRu
+        ? 'Себестоимость рассчитается по рецептуре и производству; остаток появится после выпуска'
+        : 'Tannarx retseptura va ishlab chiqarishdan hisoblanadi; qoldiq ishlab chiqarish yakunlanganda paydo bo‘ladi';
+    }
     return isRu
       ? 'Быстрое добавление нового товара в каталог и документ'
       : 'Yangi tovar, miqdori va narxlarini tezkor kiritish';
@@ -396,16 +481,14 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     if (isEdit) return isRu ? 'Сохранить изменения (Ctrl+Enter)' : 'O‘zgarishlarni saqlash (Ctrl+Enter)';
     if (itemType === 'RAW_MATERIAL') return isRu ? 'Сохранить сырьё (Ctrl+Enter)' : 'Xomashyoni saqlash (Ctrl+Enter)';
     if (itemType === 'SERVICE') return isRu ? 'Сохранить услугу (Ctrl+Enter)' : 'Xizmatni saqlash (Ctrl+Enter)';
+    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Сохранить продукт (Ctrl+Enter)' : 'Mahsulotni saqlash (Ctrl+Enter)';
     return isRu ? 'Сохранить товар (Ctrl+Enter)' : 'Tovarni saqlash (Ctrl+Enter)';
   };
 
   return (
     <Drawer
       isOpen={isOpen}
-      onClose={() => {
-        resetForm();
-        onClose();
-      }}
+      onClose={() => void requestClose()}
       title={getDrawerTitle()}
       description={getDrawerDescription()}
       icon={<PackagePlus size={20} />}
@@ -416,10 +499,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           <Button
             type="button"
             variant="secondary"
-            onClick={() => {
-              resetForm();
-              onClose();
-            }}
+            onClick={() => void requestClose()}
             disabled={loading}
           >
             {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
@@ -462,84 +542,89 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <form
+        onSubmit={handleSubmit}
+        onInput={() => {
+          dirty.current = true;
+        }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}
+      >
         {/* Type Segmented Switch */}
         <div>
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
             {isRu ? 'Тип номенклатуры' : 'Nomenklatura turi'}
           </label>
-          <div style={{ display: 'flex', borderRadius: 'var(--radius-lg)', padding: '4px', gap: '4px', backgroundColor: 'var(--color-segmented-bg)', border: '1px solid var(--color-segmented-border)' }}>
-            <button
-              type="button"
-              onClick={() => setItemType('PRODUCT')}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                fontSize: 'var(--text-xs)',
-                fontWeight: itemType === 'PRODUCT' ? 700 : 500,
-                borderRadius: 'var(--radius-md)',
-                border: itemType === 'PRODUCT' ? '1px solid var(--color-primary-500)' : '1px solid transparent',
-                cursor: 'pointer',
-                backgroundColor: itemType === 'PRODUCT' ? 'var(--color-primary-100)' : 'transparent',
-                color: itemType === 'PRODUCT' ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
-                boxShadow: itemType === 'PRODUCT' ? 'var(--shadow-sm)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isRu ? 'Товар' : 'Tovar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setItemType('RAW_MATERIAL')}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                fontSize: 'var(--text-xs)',
-                fontWeight: itemType === 'RAW_MATERIAL' ? 700 : 500,
-                borderRadius: 'var(--radius-md)',
-                border: itemType === 'RAW_MATERIAL' ? '1px solid var(--color-success-500)' : '1px solid transparent',
-                cursor: 'pointer',
-                backgroundColor: itemType === 'RAW_MATERIAL' ? 'var(--color-success-100)' : 'transparent',
-                color: itemType === 'RAW_MATERIAL' ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
-                boxShadow: itemType === 'RAW_MATERIAL' ? 'var(--shadow-sm)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isRu ? 'Сырьё / Материал' : 'Xomashyo'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setItemType('SERVICE')}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                fontSize: 'var(--text-xs)',
-                fontWeight: itemType === 'SERVICE' ? 700 : 500,
-                borderRadius: 'var(--radius-md)',
-                border: itemType === 'SERVICE' ? '1px solid var(--color-warning-500)' : '1px solid transparent',
-                cursor: 'pointer',
-                backgroundColor: itemType === 'SERVICE' ? 'var(--color-warning-100)' : 'transparent',
-                color: itemType === 'SERVICE' ? 'var(--color-warning-600)' : 'var(--color-text-secondary)',
-                boxShadow: itemType === 'SERVICE' ? 'var(--shadow-sm)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isRu ? 'Услуга' : 'Xizmat'}
-            </button>
+          <div role="radiogroup" aria-label={isRu ? 'Тип номенклатуры' : 'Nomenklatura turi'} style={{ display: 'flex', flexWrap: 'wrap', borderRadius: 'var(--radius-lg)', padding: '4px', gap: '4px', backgroundColor: 'var(--color-segmented-bg)', border: '1px solid var(--color-segmented-border)' }}>
+            {(lockType ? [itemType] : allowedTypes ?? (['PRODUCT', 'RAW_MATERIAL', 'FINISHED_PRODUCT', 'SERVICE'] as ItemType[])).map((type) => {
+              const active = itemType === type;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={lockType}
+                  onClick={() => {
+                    dirty.current = true;
+                    setItemType(type);
+                  }}
+                  style={{
+                    flex: 1,
+                    minWidth: 96,
+                    minHeight: 40,
+                    padding: '8px 12px',
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: active ? 700 : 500,
+                    borderRadius: 'var(--radius-md)',
+                    border: active ? '1px solid var(--color-primary-500)' : '1px solid transparent',
+                    cursor: lockType ? 'default' : 'pointer',
+                    backgroundColor: active ? 'var(--color-primary-100)' : 'transparent',
+                    color: active ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
+                    boxShadow: active ? 'var(--shadow-sm)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {productTypeLabel(type, locale)}
+                  {lockType && <span style={{ fontWeight: 500 }}> · {isRu ? 'тип закреплён' : 'tur qulflangan'}</span>}
+                </button>
+              );
+            })}
           </div>
+          {isFinished && (
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <Checkbox
+                label={isRu ? 'Полуфабрикат' : 'Yarim tayyor mahsulot'}
+                description={isRu ? 'Используется как сырьё в других рецептурах' : 'Boshqa retseptalarda xomashyo sifatida ishlatiladi'}
+                checked={isSemiFinished}
+                onChange={(event) => {
+                  dirty.current = true;
+                  setIsSemiFinished(event.target.checked);
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Product Name */}
         <div>
           <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-            {isRu ? (itemType === 'SERVICE' ? 'Наименование услуги *' : itemType === 'RAW_MATERIAL' ? 'Наименование сырья *' : 'Наименование товара *') : (itemType === 'SERVICE' ? 'Xizmat nomi *' : itemType === 'RAW_MATERIAL' ? 'Xomashyo nomi *' : 'Tovar nomi *')}
+            {isRu ? (itemType === 'SERVICE' ? 'Наименование услуги *' : itemType === 'RAW_MATERIAL' ? 'Наименование сырья *' : itemType === 'FINISHED_PRODUCT' ? 'Наименование продукта *' : 'Наименование товара *') : (itemType === 'SERVICE' ? 'Xizmat nomi *' : itemType === 'RAW_MATERIAL' ? 'Xomashyo nomi *' : itemType === 'FINISHED_PRODUCT' ? 'Mahsulot nomi *' : 'Tovar nomi *')}
           </label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={isRu ? (itemType === 'SERVICE' ? 'Например: Доставка и логистика' : itemType === 'RAW_MATERIAL' ? 'Например: Алюминиевый профиль 60x40' : 'Например: Футболка Zara M') : (itemType === 'SERVICE' ? 'Masalan: Transport xizmati' : itemType === 'RAW_MATERIAL' ? 'Masalan: Alyumin profil 60x40' : 'Masalan: Futbolka Zara M')}
             autoFocus
+            aria-required="true"
           />
+          {duplicates.length > 0 && name.trim().length >= 2 && (
+            <div role="status" style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
+              <AlertCircle size={14} aria-hidden />
+              {isRu
+                ? `Позиция с таким названием уже есть (${duplicates.join(', ')}). Проверьте, не дубликат ли это.`
+                : `Bunday nomli pozitsiya allaqachon bor (${duplicates.join(', ')}). Takror emasligini tekshiring.`}
+            </div>
+          )}
         </div>
 
         {/* SKU & Barcode */}
@@ -600,10 +685,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         </div>
 
         {/* Unit of Measure & Quantity */}
-        <div style={{ display: 'grid', gridTemplateColumns: isEdit ? '1fr' : '1fr 1fr', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isEdit || isFinished ? '1fr' : '1fr 1fr', gap: 'var(--space-3)' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Единица измерения' : 'O‘lchov birligi'}
+              {isRu ? 'Единица измерения *' : 'O‘lchov birligi *'}
             </label>
             <Select
               options={allUnitOptions}
@@ -614,7 +699,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             />
           </div>
 
-          {!isEdit && (
+          {!isEdit && !isFinished && (
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
                 {getQuantityLabel()}
@@ -633,38 +718,61 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
         {/* Cost Price & Selling Price */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {isRu ? 'Цена закупки (Себестоимость)' : 'Xarid narxi (Tan narx)'}
-            </label>
-            <MoneyInput
-              aria-label={isRu ? 'Цена закупки' : 'Xarid narxi'}
-              value={costPrice}
-              onValueChange={setCostPrice}
-            />
-            <div style={{ marginTop: 'var(--space-2)' }}>
-              <Select
-                label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'}
-                options={CURRENCY_OPTIONS}
-                value={costPriceCurrency}
-                onChange={(value) => {
-                  setCostPriceCurrency(value);
-                  if (value === 'UZS') setCostPriceExchangeRate('1');
-                  else if (costPriceCurrency !== 'USD') setCostPriceExchangeRate('');
-                }}
-                placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+          {isFinished ? (
+            <div>
+              <label htmlFor="finished-cost" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Себестоимость' : 'Tannarx'}
+              </label>
+              {/* TZ 3.3: read-only, grey, with the reason (11.5). */}
+              <input
+                id="finished-cost"
+                readOnly
+                aria-readonly="true"
+                value={formatCurrency(Number(productToEdit?.costPrice ?? 0), locale, 'UZS')}
+                style={{ width: '100%', minHeight: 40, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--color-border)', background: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', cursor: 'not-allowed' }}
               />
+              <div style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                {productToEdit?.costSource === 'PRODUCTION_ACTUAL'
+                  ? isRu ? 'Фактическая (производство)' : 'Haqiqiy (ishlab chiqarish)'
+                  : productToEdit?.costSource === 'RECIPE_ESTIMATE'
+                    ? isRu ? 'Оценка (рецептура)' : 'Taxminiy (retseptura)'
+                    : isRu ? 'Рассчитывается автоматически по рецептуре и производству' : 'Retseptura va ishlab chiqarishdan avtomatik hisoblanadi'}
+              </div>
             </div>
-            {costPriceCurrency === 'USD' && (
+          ) : (
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                {isRu ? 'Цена закупки (Себестоимость)' : 'Xarid narxi (Tan narx)'}
+              </label>
               <MoneyInput
-                label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
-                value={costPriceExchangeRate}
-                onValueChange={setCostPriceExchangeRate}
-                decimals={4}
-                placeholder="12,800"
+                aria-label={isRu ? 'Цена закупки' : 'Xarid narxi'}
+                value={costPrice}
+                onValueChange={setCostPrice}
               />
-            )}
-          </div>
+              <div style={{ marginTop: 'var(--space-2)' }}>
+                <Select
+                  label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'}
+                  options={CURRENCY_OPTIONS}
+                  value={costPriceCurrency}
+                  onChange={(value) => {
+                    setCostPriceCurrency(value);
+                    if (value === 'UZS') setCostPriceExchangeRate('1');
+                    else if (costPriceCurrency !== 'USD') setCostPriceExchangeRate('');
+                  }}
+                  placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+                />
+              </div>
+              {costPriceCurrency === 'USD' && (
+                <MoneyInput
+                  label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
+                  value={costPriceExchangeRate}
+                  onValueChange={setCostPriceExchangeRate}
+                  decimals={4}
+                  placeholder="12,800"
+                />
+              )}
+            </div>
+          )}
 
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
@@ -687,6 +795,62 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
           </div>
         </div>
 
+        {itemType !== 'SERVICE' && (
+          <fieldset style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', margin: 0 }}>
+            <legend style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', padding: '0 4px' }}>
+              {isRu ? 'Дополнительные единицы' : 'Qo‘shimcha birliklar'}
+            </legend>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+              {isRu
+                ? `Например: 1 мешок = 50 ${unitLabel(unitOfMeasure, locale)}. Стандартные единицы (${standardSubUnits || '—'}) уже есть.`
+                : `Masalan: 1 qop = 50 ${unitLabel(unitOfMeasure, locale)}. Standart birliklar (${standardSubUnits || '—'}) avtomatik mavjud.`}
+            </div>
+            {unitRows.map((row, index) => (
+              <div key={row.key} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto minmax(0, 1fr) auto 40px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>1</span>
+                <Input
+                  aria-label={`${isRu ? 'Название единицы' : 'Birlik nomi'} ${index + 1}`}
+                  placeholder={isRu ? 'мешок' : 'qop'}
+                  value={row.name}
+                  onChange={(e) => setUnitRows((rows) => rows.map((r) => (r.key === row.key ? { ...r, name: e.target.value } : r)))}
+                />
+                <span aria-hidden style={{ color: 'var(--color-text-secondary)' }}>=</span>
+                <Input
+                  aria-label={`${isRu ? 'Коэффициент' : 'Koeffitsiyent'} ${index + 1}`}
+                  inputMode="decimal"
+                  placeholder="50"
+                  value={row.factor}
+                  onChange={(e) => setUnitRows((rows) => rows.map((r) => (r.key === row.key ? { ...r, factor: e.target.value.replace(/[^0-9.,]/g, '') } : r)))}
+                  style={{ textAlign: 'right' }}
+                />
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{unitLabel(unitOfMeasure, locale)}</span>
+                <button
+                  type="button"
+                  aria-label={isRu ? 'Удалить единицу' : 'Birlikni o‘chirish'}
+                  title={isRu ? 'Удалить единицу' : 'Birlikni o‘chirish'}
+                  onClick={() => {
+                    dirty.current = true;
+                    setUnitRows((rows) => rows.filter((r) => r.key !== row.key));
+                  }}
+                  style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-600)', cursor: 'pointer' }}
+                >
+                  <Trash2 size={16} aria-hidden />
+                </button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                dirty.current = true;
+                setUnitRows((rows) => [...rows, { key: ++unitRowKey, name: '', factor: '' }]);
+              }}
+            >
+              <Plus size={14} aria-hidden /> {isRu ? 'Добавить единицу' : 'Birlik qo‘shish'}
+            </Button>
+          </fieldset>
+        )}
         </form>
 
       <Modal

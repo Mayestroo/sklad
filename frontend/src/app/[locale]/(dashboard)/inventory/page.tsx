@@ -1,5 +1,6 @@
 'use client';
 
+import { productTypeLabel, productTypeOptions, semiFinishedLabel } from '@/lib/product-types';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
@@ -42,6 +43,8 @@ export default function InventoryPage() {
   // The typed search applies on Enter / the filter button, as before.
   const [appliedSearch, setAppliedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  // TZ "Ishlab chiqarish" 7: finished products are filtered apart from raw materials.
+  const [selectedType, setSelectedType] = useState<string>('');
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
   const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
 
@@ -94,9 +97,9 @@ export default function InventoryPage() {
   const safeWarehouses = Array.isArray(warehouses) ? warehouses : [];
   const safeCategories = Array.isArray(categories) ? categories : [];
 
-  const filteredProducts = filterLowStockOnly
-    ? safeProducts.filter((p) => p.isLowStock)
-    : safeProducts;
+  const filteredProducts = safeProducts.filter(
+    (p) => (!filterLowStockOnly || p.isLowStock) && (!selectedType || p.type === selectedType),
+  );
 
   const isRu = locale === 'ru';
 
@@ -231,6 +234,16 @@ export default function InventoryPage() {
             />
           </div>
 
+          {/* Type Select */}
+          <div style={{ width: '200px' }}>
+            <Select
+              aria-label={isRu ? 'Тип номенклатуры' : 'Nomenklatura turi'}
+              options={productTypeOptions(locale, isRu ? 'Все типы' : 'Barcha turlar').filter((o) => o.value !== 'SERVICE')}
+              value={selectedType}
+              onChange={(val) => setSelectedType(val)}
+            />
+          </div>
+
           {/* Category Select */}
           <div style={{ width: '220px' }}>
             <Select
@@ -291,6 +304,10 @@ export default function InventoryPage() {
                     <tr key={product.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                       <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)' }}>
                         {getLocalizedName(product.name)}
+                        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                          {productTypeLabel(product.type, locale)}
+                          {product.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}
+                        </div>
                       </td>
                       <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
                         {product.sku}

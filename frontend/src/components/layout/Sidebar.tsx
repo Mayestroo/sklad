@@ -87,6 +87,7 @@ export function Sidebar() {
   const settingsSubItems = [
     { href: '/settings/branches', label: isRu ? 'Филиалы и склады' : 'Filial va omborlar', icon: GitBranch },
     { href: '/settings/sales', label: isRu ? 'Настройки продаж' : 'Savdo sozlamalari', icon: ShoppingCart },
+    { href: '/settings/production', label: isRu ? 'Себестоимость' : 'Tannarx sozlamasi', icon: Factory },
     { href: '/settings/security', label: isRu ? 'Безопасность' : 'Xavfsizlik', icon: ShieldCheck },
     { href: '/settings/billing', label: isRu ? 'Тариф и оплата' : 'Tarif va to‘lov', icon: CreditCard },
   ];

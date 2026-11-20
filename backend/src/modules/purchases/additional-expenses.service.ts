@@ -1,4 +1,5 @@
 import { catalogCostFromUzs } from '../inventory/products/catalog-cost';
+import { refreshEstimatedCosts } from '../production/estimated-cost';
 import {
   Injectable,
   NotFoundException,
@@ -695,6 +696,9 @@ export class AdditionalExpensesService {
     await tx.product.update({
       where: { tenantId, id: productId },
       data: catalogCostFromUzs(landedCostUzs, card),
+    });
+    await refreshEstimatedCosts(tx, tenantId, [productId], {
+      applyAverage: true,
     });
   }
 

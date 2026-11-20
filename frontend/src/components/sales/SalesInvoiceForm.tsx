@@ -1,5 +1,6 @@
 'use client';
 
+import { isSellable, productTypeLabel, semiFinishedLabel } from '@/lib/product-types';
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo } from 'react';
@@ -76,6 +77,8 @@ interface ProductOption {
   unitOfMeasure?: string;
   stockQty?: number;
   currency?: string;
+  type?: string | null;
+  isSemiFinished?: boolean | null;
 }
 
 /** A product row as GET /inventory/products returns it. */
@@ -95,6 +98,8 @@ interface ProductApiRow {
   stockQuantity?: number | null;
   quantity?: number | null;
   stockLevels?: StockLevelRow[];
+  type?: string | null;
+  isSemiFinished?: boolean | null;
 }
 
 /** A stock level row (per product and warehouse). */
@@ -250,7 +255,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setWarehouseId(whList[0].id);
       }
 
-      const rawProducts = listOf(prdRes);
+      // TZ "Ishlab chiqarish" 4.6: a semi-finished product is sold only with a sale price.
+      const rawProducts = listOf(prdRes).filter(isSellable);
       const prdList: ProductOption[] = rawProducts.map((p) => ({
         id: p.id,
         name: p.name,
@@ -264,6 +270,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           vatRate: Number(p.vatRate ?? 0),
           unitOfMeasure: p.unitOfMeasure || 'dona',
         stockQty: Number(p.totalStock ?? p.stockQuantity ?? p.quantity ?? 0),
+        type: p.type ?? null,
+        isSemiFinished: p.isSemiFinished ?? null,
       }));
       setProducts(prdList);
 
@@ -896,6 +904,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     return {
       value: p.id,
       label: `${getLocalizedName(p.name)} ${p.sku ? `(${p.sku})` : ''} · ${stockLabel(freeStock, p.stockQty, locale)}`,
+      // TZ "Ishlab chiqarish" 3.1: the type is shown and searchable ("Tayyor mahsulot").
+      description: `${productTypeLabel(p.type, locale)}${p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}`,
     };
   });
 

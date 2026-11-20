@@ -1,4 +1,6 @@
 import {
+  IsArray,
+  IsBoolean,
   IsEnum,
   IsNumber,
   IsObject,
@@ -8,7 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TranslatableTextDto } from './create-product.dto';
+import { ProductUnitDto, TranslatableTextDto } from './create-product.dto';
 import { IsValidCurrency } from '../../../common/validators/currency.validator';
 
 export class UpdateProductDto {
@@ -28,9 +30,21 @@ export class UpdateProductDto {
   @IsOptional()
   categoryId?: string | null;
 
-  @IsEnum(['PRODUCT', 'RAW_MATERIAL', 'SERVICE', 'BUNDLE'])
+  @IsEnum(['PRODUCT', 'RAW_MATERIAL', 'FINISHED_PRODUCT', 'SERVICE', 'BUNDLE'])
   @IsOptional()
-  type?: 'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE' | 'BUNDLE';
+  type?: 'PRODUCT' | 'RAW_MATERIAL' | 'FINISHED_PRODUCT' | 'SERVICE' | 'BUNDLE';
+
+  /** Only for FINISHED_PRODUCT: other recipes may use it as a material (TZ 3.1). */
+  @IsBoolean()
+  @IsOptional()
+  isSemiFinished?: boolean;
+
+  /** Extra units (1 qop = 50 kg). On update the list replaces the stored one. */
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ProductUnitDto)
+  units?: ProductUnitDto[];
 
   @IsString()
   @IsOptional()

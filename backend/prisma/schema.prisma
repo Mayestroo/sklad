@@ -60,6 +60,8 @@ enum PermissionAction {
   DELETE
   CLOSE
   REOPEN
+  COMPLETE
+  CANCEL
 }
 
 enum AccountingPeriodStatus {
@@ -80,6 +82,22 @@ enum ProductType {
   RAW_MATERIAL
   SERVICE
   BUNDLE
+  FINISHED_PRODUCT
+}
+
+/// Where the catalog cost of a product comes from (TZ 3.4).
+enum ProductCostSource {
+  MANUAL
+  PURCHASE
+  RECIPE_ESTIMATE
+  PRODUCTION_ACTUAL
+}
+
+enum ProductionCostType {
+  SALARY
+  ENERGY
+  DEPRECIATION
+  OTHER
 }
 
 enum UnitOfMeasure {
@@ -349,6 +367,7 @@ model Company {
   productionDocuments  ProductionDocument[]
   productionMaterialMovements ProductionMaterialMovement[]
   stockReservations    StockReservation[]
+  productUnits         ProductUnit[]
   serviceActs          ServiceAct[]
   settlementEntries    CounterpartySettlementEntry[]
   settlementAllocations SettlementAllocation[]
@@ -612,6 +631,7 @@ model Warehouse {
   defectSalesReturns SalesReturn[]     @relation("SalesReturnDefectWarehouse")
   productBatches    ProductBatch[]
   productionDocuments ProductionDocument[]
+  productionOutputDocuments ProductionDocument[] @relation("ProductionOutputWarehouse")
   salesOrders       SalesOrder[]
   stockReservations StockReservation[]
   isDefect          Boolean            @default(false) @map("is_defect")
@@ -714,6 +734,9 @@ model Product {
   vatRate        Decimal       @default(12) @db.Decimal(5, 2) @map("vat_rate")
   minStockAlert  Decimal       @default(0) @db.Decimal(15, 2) @map("min_stock_alert")
   weight         Decimal       @default(0) @db.Decimal(15, 3)
+  /// A finished product that other recipes use as a material (TZ 4.6).
+  isSemiFinished Boolean       @default(false) @map("is_semi_finished")
+  costSource     ProductCostSource @default(MANUAL) @map("cost_source")
   isActive       Boolean       @default(true) @map("is_active")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
@@ -742,6 +765,7 @@ model Product {
   productionMaterialLines ProductionMaterialLine[]
   stockReservations      StockReservation[]
   serviceActItems        ServiceActItem[]
+  units                  ProductUnit[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
@@ -749,6 +773,23 @@ model Product {
     openingBalanceLines OpeningBalanceLine[]
 
   @@map("products")
+}
+
+/// An extra unit of a product: 1 `name` = `factor` base units (1 qop = 50 kg).
+model ProductUnit {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  productId String   @map("product_id")
+  name      String
+  factor    Decimal  @db.Decimal(24, 12)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company   Company  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, name])
+  @@index([tenantId])
+  @@map("product_units")
 }
 
 model ProductVariant {
@@ -1132,6 +1173,7 @@ model ProductionRecipe {
   outputQuantity   Decimal  @db.Decimal(15, 3) @map("output_quantity")
   note             String?
   isActive         Boolean  @default(true) @map("is_active")
+  isArchived       Boolean  @default(false) @map("is_archived")
   createdById      String?  @map("created_by_id")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -1150,7 +1192,12 @@ model ProductionRecipeItem {
   id                String   @id @default(uuid())
   recipeId          String   @map("recipe_id")
   productId         String   @map("product_id")
+  /// Quantity in `unit` (the entry unit); base quantity = quantity × unitFactor.
   quantity          Decimal  @db.Decimal(15, 3)
+  /// Entry unit code or product-unit name; null = the base unit.
+  unit              String?
+  unitFactor        Decimal  @default(1) @db.Decimal(24, 12) @map("unit_factor")
+  lossPercent       Decimal  @default(0) @db.Decimal(5, 2) @map("loss_percent")
 
   recipe            ProductionRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
   product           Product @relation("ProductionRecipeMaterial", fields: [productId], references: [id], onDelete: Restrict)
@@ -1167,6 +1214,8 @@ model ProductionDocument {
   productId           String             @map("product_id")
   recipeId            String             @map("recipe_id")
   warehouseId         String             @map("warehouse_id")
+  /// Finished goods warehouse; null = the raw-material warehouse.
+  outputWarehouseId   String?            @map("output_warehouse_id")
   responsibleId       String?            @map("responsible_id")
   plannedQuantity     Decimal            @db.Decimal(15, 3) @map("planned_quantity")
   producedQuantity    Decimal?           @db.Decimal(15, 3) @map("produced_quantity")
@@ -1175,6 +1224,14 @@ model ProductionDocument {
   plannedMaterialCost Decimal            @default(0) @db.Decimal(15, 2) @map("planned_material_cost")
   actualMaterialCost  Decimal            @default(0) @db.Decimal(15, 2) @map("actual_material_cost")
   unitCost            Decimal            @default(0) @db.Decimal(17, 4) @map("unit_cost")
+  extraCost           Decimal            @default(0) @db.Decimal(15, 2) @map("extra_cost")
+  totalCost           Decimal            @default(0) @db.Decimal(15, 2) @map("total_cost")
+  /// Unit of the product when the document was created.
+  productUnit         String?            @map("product_unit")
+  plannedStartDate    DateTime?          @map("planned_start_date")
+  plannedEndDate      DateTime?          @map("planned_end_date")
+  cancelReason        String?            @map("cancel_reason")
+  cancelledAt         DateTime?          @map("cancelled_at")
   createdById         String?            @map("created_by_id")
   startedAt           DateTime?          @map("started_at")
   completedAt         DateTime?          @map("completed_at")
@@ -1185,11 +1242,13 @@ model ProductionDocument {
   product             Product             @relation("ProductionDocumentProduct", fields: [productId], references: [id], onDelete: Restrict)
   recipe              ProductionRecipe    @relation(fields: [recipeId], references: [id], onDelete: Restrict)
   warehouse           Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  outputWarehouse     Warehouse?          @relation("ProductionOutputWarehouse", fields: [outputWarehouseId], references: [id], onDelete: Restrict)
   responsible         User?               @relation("ResponsibleProductionDocuments", fields: [responsibleId], references: [id], onDelete: SetNull)
   createdBy           User?               @relation("CreatedProductionDocuments", fields: [createdById], references: [id], onDelete: SetNull)
   materials           ProductionMaterialLine[]
   outputBatch         ProductBatch?       @relation("ProductionOutputBatch")
   materialMovements   ProductionMaterialMovement[]
+  extraCosts          ProductionDocumentCost[]
 
   @@unique([tenantId, docNumber])
   @@index([tenantId, status, docDate])
@@ -1205,6 +1264,9 @@ model ProductionMaterialLine {
   actualQuantity       Decimal? @db.Decimal(15, 3) @map("actual_quantity")
   unitCost             Decimal  @default(0) @db.Decimal(17, 4) @map("unit_cost")
   totalCost            Decimal  @default(0) @db.Decimal(15, 2) @map("total_cost")
+  /// Base unit of the material when the document was created.
+  unitOfMeasure        String?  @map("unit_of_measure")
+  lossPercent          Decimal  @default(0) @db.Decimal(5, 2) @map("loss_percent")
 
   productionDocument   ProductionDocument @relation(fields: [productionDocumentId], references: [id], onDelete: Cascade)
   product              Product @relation(fields: [productId], references: [id], onDelete: Restrict)
@@ -1213,6 +1275,20 @@ model ProductionMaterialLine {
 
   @@unique([productionDocumentId, productId])
   @@map("production_material_lines")
+}
+
+/// A manual extra cost of a production document (UZS), added to the output cost.
+model ProductionDocumentCost {
+  id                   String             @id @default(uuid())
+  productionDocumentId String             @map("production_document_id")
+  costType             ProductionCostType @map("cost_type")
+  amount               Decimal            @db.Decimal(15, 2)
+  comment              String?
+
+  productionDocument   ProductionDocument @relation(fields: [productionDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([productionDocumentId])
+  @@map("production_document_costs")
 }
 
 model ProductionMaterialBatch {

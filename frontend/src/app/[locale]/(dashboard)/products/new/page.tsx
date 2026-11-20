@@ -41,7 +41,9 @@ export default function NewProductPage() {
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [type, setType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'SERVICE' | 'BUNDLE'>('PRODUCT');
+  const [type, setType] = useState<'PRODUCT' | 'RAW_MATERIAL' | 'FINISHED_PRODUCT' | 'SERVICE' | 'BUNDLE'>('PRODUCT');
+  const [isSemiFinished, setIsSemiFinished] = useState(false);
+  const isFinished = type === 'FINISHED_PRODUCT';
   const [unitOfMeasure, setUnitOfMeasure] = useState<'piece' | 'kg' | 'liter' | 'meter' | 'box' | 'pack'>('piece');
   const [costPrice, setCostPrice] = useState<number>(0);
   // F8 / ADR 0022: the cost currency is chosen, never guessed.
@@ -93,12 +95,12 @@ export default function NewProductPage() {
     setError(null);
     setLoading(true);
 
-    if (costPrice > 0 && !costPriceCurrency) {
+    if (!isFinished && costPrice > 0 && !costPriceCurrency) {
       setError(isRu ? 'Укажите валюту себестоимости' : 'Xarid tannarxi valyutasini tanlang');
       setLoading(false);
       return;
     }
-    if (costPrice > 0 && costPriceCurrency === 'USD' && Number(costPriceExchangeRate) <= 0) {
+    if (!isFinished && costPrice > 0 && costPriceCurrency === 'USD' && Number(costPriceExchangeRate) <= 0) {
       setError(isRu ? 'Укажите положительный курс себестоимости' : 'Xarid tannarxi uchun 0 dan katta kursni kiriting');
       setLoading(false);
       return;
@@ -123,9 +125,14 @@ export default function NewProductPage() {
           categoryId: categoryId || undefined,
           type,
           unitOfMeasure,
-          costPrice: Number(costPrice),
-          costPriceCurrency: costPriceCurrency || undefined,
-          costPriceExchangeRate: costPriceCurrency === 'USD' ? Number(costPriceExchangeRate) : 1,
+          // TZ "Ishlab chiqarish" 3.3: a finished product's cost comes from its recipe and production.
+          ...(isFinished
+            ? { isSemiFinished }
+            : {
+                costPrice: Number(costPrice),
+                costPriceCurrency: costPriceCurrency || undefined,
+                costPriceExchangeRate: costPriceCurrency === 'USD' ? Number(costPriceExchangeRate) : 1,
+              }),
           salePrice: Number(salePrice),
           salePriceCurrency: salePriceCurrency || undefined,
           vatRate: Number(vatRate),
@@ -152,6 +159,7 @@ export default function NewProductPage() {
   const typeOptions = [
     { value: 'PRODUCT', label: isRu ? 'Товар (Продукт)' : 'Mahsulot (Tovar)' },
     { value: 'RAW_MATERIAL', label: isRu ? 'Сырьё' : 'Xomashyo' },
+    { value: 'FINISHED_PRODUCT', label: isRu ? 'Готовый продукт' : 'Tayyor mahsulot' },
     { value: 'SERVICE', label: isRu ? 'Услуга' : 'Xizmat' },
     { value: 'BUNDLE', label: isRu ? 'Комплект (Набор)' : 'To‘plam (Komplekt)' },
   ];
@@ -259,22 +267,36 @@ export default function NewProductPage() {
               options={unitOptions}
             />
 
-            <MoneyInput
-              id="prod-cost-price"
-              label={isRu ? 'Себестоимость' : 'Tannarxi'}
-              value={costPrice || ''}
-              onValueChange={(value) => setCostPrice(Number(value) || 0)}
-            />
+            {isFinished ? (
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, fontSize: 'var(--text-sm)' }}>
+                  <input type="checkbox" checked={isSemiFinished} onChange={(e) => setIsSemiFinished(e.target.checked)} style={{ width: 18, height: 18 }} />
+                  {isRu ? 'Полуфабрикат (используется в других рецептурах)' : 'Yarim tayyor mahsulot (boshqa retseptalarda xomashyo)'}
+                </label>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Себестоимость рассчитывается автоматически по рецептуре и производству.' : 'Tannarx retseptura va ishlab chiqarishdan avtomatik hisoblanadi.'}
+                </div>
+              </div>
+            ) : (
+              <>
+                <MoneyInput
+                  id="prod-cost-price"
+                  label={isRu ? 'Себестоимость' : 'Tannarxi'}
+                  value={costPrice || ''}
+                  onValueChange={(value) => setCostPrice(Number(value) || 0)}
+                />
 
-            <Select label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'} options={CURRENCY_OPTIONS} value={costPriceCurrency} onChange={(value) => { setCostPriceCurrency(value as 'USD' | 'UZS'); setCostPriceExchangeRate(value === 'UZS' ? '1' : ''); }} placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'} />
-            {costPriceCurrency === 'USD' && (
-              <MoneyInput
-                label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
-                value={costPriceExchangeRate}
-                onValueChange={setCostPriceExchangeRate}
-                decimals={4}
-                placeholder="12,800"
-              />
+                <Select label={isRu ? 'Валюта себестоимости' : 'Xarid tannarxi valyutasi'} options={CURRENCY_OPTIONS} value={costPriceCurrency} onChange={(value) => { setCostPriceCurrency(value as 'USD' | 'UZS'); setCostPriceExchangeRate(value === 'UZS' ? '1' : ''); }} placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'} />
+                {costPriceCurrency === 'USD' && (
+                  <MoneyInput
+                    label={isRu ? 'Курс к UZS' : 'UZS ga kurs'}
+                    value={costPriceExchangeRate}
+                    onValueChange={setCostPriceExchangeRate}
+                    decimals={4}
+                    placeholder="12,800"
+                  />
+                )}
+              </>
             )}
 
             <MoneyInput

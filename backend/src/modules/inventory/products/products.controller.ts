@@ -72,6 +72,17 @@ export class ProductsController {
     return this.productsService.findStockLevels(tenantId, warehouseId);
   }
 
+  /** Same-name products, for the duplicate warning when creating one. */
+  @Get('name-check')
+  @RequirePermissions('inventory:view')
+  findByName(
+    @CurrentTenant() tenantId: string,
+    @Query('name') name = '',
+    @Query('excludeId') excludeId?: string,
+  ) {
+    return this.productsService.findByName(tenantId, name, excludeId);
+  }
+
   @Get(':id')
   @RequirePermissions('inventory:view')
   findById(@CurrentTenant() tenantId: string, @Param('id') id: string) {
