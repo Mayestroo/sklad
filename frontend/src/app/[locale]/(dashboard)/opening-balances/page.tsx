@@ -162,7 +162,7 @@ function RemoveCell({ isReadOnly, isRu, onClick }: { isReadOnly: boolean; isRu: 
       <button
         type="button"
         onClick={onClick}
-        style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+        style={{ background: 'none', border: 'none', color: 'var(--color-error-700)', cursor: 'pointer', padding: '4px' }}
         title={isRu ? 'Удалить' : 'O‘chirish'}
       >
         <Trash2 size={16} />

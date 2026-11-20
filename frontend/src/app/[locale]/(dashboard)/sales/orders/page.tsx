@@ -333,7 +333,7 @@ export default function SalesOrdersPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: 'var(--color-warning-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Factory size={22} />
           </div>
           <div>
@@ -350,7 +350,7 @@ export default function SalesOrdersPage() {
         </Card>
 
         <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--color-success-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--color-success-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Truck size={22} />
           </div>
           <div>

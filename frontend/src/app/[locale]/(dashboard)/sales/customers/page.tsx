@@ -262,7 +262,7 @@ export default function CustomersPage() {
                             id={`delete-customer-${c.id}`}
                             onClick={() => setDeletingCustomer(c)}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-error-500)' }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-error-700)' }}
                           >
                             <Trash2 size={14} />
                           </button>

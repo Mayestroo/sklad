@@ -704,7 +704,7 @@ export default function SalesReturnsPage() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {formError && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--color-error-500)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--color-error-700)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={16} /> {formError}
             </div>
           )}

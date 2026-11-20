@@ -295,7 +295,7 @@ export default function CrmKanbanPage() {
                           <button
                             type="button"
                             onClick={() => setDeletingDeal(deal)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: 'var(--color-error-500)' }}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: 'var(--color-error-700)' }}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
                           >
                             <Trash2 size={13} />

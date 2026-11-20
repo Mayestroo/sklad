@@ -53,7 +53,7 @@ export default function ViewPurchaseReturnPage() {
   if (!returnDoc) {
     return (
       <Card style={{ padding: '32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-        <AlertCircle size={40} style={{ color: 'var(--color-danger-500)' }} />
+        <AlertCircle size={40} style={{ color: 'var(--color-danger-700)' }} />
         <div style={{ fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--color-danger-600)' }}>
           {isRu ? 'Документ возврата не найден' : 'Qaytarish hujjati topilmadi'}
         </div>

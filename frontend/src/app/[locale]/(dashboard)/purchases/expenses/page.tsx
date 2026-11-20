@@ -450,7 +450,7 @@ export default function ExpensesPage() {
                             variant="ghost"
                             size="sm"
                             onClick={(e) => handleDeleteDraft(item, e)}
-                            style={{ color: 'var(--color-danger-500)', padding: '6px' }}
+                            style={{ color: 'var(--color-danger-700)', padding: '6px' }}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
                           >
                             <Trash2 size={14} />

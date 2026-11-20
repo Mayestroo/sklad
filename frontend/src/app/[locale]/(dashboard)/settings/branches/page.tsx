@@ -378,7 +378,7 @@ export default function BranchesPage() {
                           <button
                             type="button"
                             onClick={() => setDeletingWarehouse(wh)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-error-500)' }}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-error-700)' }}
                             title={isRu ? 'Удалить склад' : 'Omborxonani o‘chirish'}
                           >
                             <Trash2 size={14} />

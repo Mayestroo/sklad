@@ -566,7 +566,7 @@ export default function CounterpartiesPage() {
                           setDeleteFolderId(f.id);
                         }}
                         title={isRu ? 'Удалить' : 'O\'chirish'}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 2 }}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-error-700)', padding: 2 }}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -1106,7 +1106,7 @@ export default function CounterpartiesPage() {
         >
           <form onSubmit={handleSaveFolder} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {folderError && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error-500)', fontSize: 'var(--text-sm)' }}>
+              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error-700)', fontSize: 'var(--text-sm)' }}>
                 {folderError}
               </div>
             )}

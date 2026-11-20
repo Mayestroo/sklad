@@ -146,7 +146,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
               <span
                 style={{
                   fontSize: 'var(--text-xs)',
-                  color: 'var(--color-error-500)',
+                  color: 'var(--color-error-700)',
                 }}
               >
                 {error}

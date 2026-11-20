@@ -506,7 +506,7 @@ export default function ReturnsPage() {
                                 disabled={actionLoadingId === ret.id}
                                 onClick={() => handleCancel(ret.id)}
                                 title={isRu ? 'Отменить' : 'Bekor qilish'}
-                                style={{ padding: '4px 8px', color: 'var(--color-danger-500)' }}
+                                style={{ padding: '4px 8px', color: 'var(--color-danger-700)' }}
                               >
                                 <XCircle size={15} />
                               </Button>

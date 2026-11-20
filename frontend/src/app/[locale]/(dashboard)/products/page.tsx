@@ -758,7 +758,7 @@ export default function ProductsPage() {
                         <button
                           type="button"
                           onClick={() => setDeletingCategory(c)}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-error-500)' }}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-error-700)' }}
                           title={isRu ? 'Удалить' : 'O‘chirish'}
                         >
                           <Trash2 size={14} />

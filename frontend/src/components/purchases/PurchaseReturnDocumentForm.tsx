@@ -597,7 +597,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
       {/* Error notification */}
       {error && (
-        <Card style={{ padding: 'var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Card style={{ padding: 'var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertCircle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
         </Card>
@@ -897,7 +897,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                           size="sm"
                           variant="ghost"
                           onClick={() => handleRemoveItem(idx)}
-                          style={{ color: 'var(--color-danger-500)', padding: '4px' }}
+                          style={{ color: 'var(--color-danger-700)', padding: '4px' }}
                         >
                           <Trash2 size={16} />
                         </Button>
