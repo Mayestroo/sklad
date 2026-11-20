@@ -3,6 +3,10 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderPage } from '@/test/render-page';
 
 const apiFetch = vi.fn();
+vi.mock('@/i18n/navigation', () => ({
+  usePathname: () => '/inventory/documents',
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
 vi.mock('@/lib/api', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
 const auth = { token: 'tok', company: { id: 'tenant-1' }, hasPermission: () => true };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
