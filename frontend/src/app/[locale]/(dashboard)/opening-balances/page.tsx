@@ -1508,7 +1508,7 @@ function DebtsTable({
                     decimals={2}
                     placeholder="0"
                     className="tabular-nums"
-                    style={field('180px', { fontWeight: 600, textAlign: 'right', color: isAsset ? 'var(--color-success-600)' : 'var(--color-error-600)' })}
+                    style={field('180px', { fontWeight: 600, textAlign: 'right', color: isAsset ? 'var(--color-success-700)' : 'var(--color-error-700)' })}
                   />
                 </td>
                 <td style={td}>
@@ -1597,7 +1597,7 @@ function FixedAssetsTable({
                 <td style={{ ...td, textAlign: 'right', color: 'var(--color-error-700)' }} className="tabular-nums">
                   {line.fixedAssetId ? formatCurrency(accDep, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : 'var(--color-success-600)' }} className="tabular-nums">
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-700)' : 'var(--color-success-700)' }} className="tabular-nums">
                   {overDepreciated ? (
                     <span data-testid="fixed-asset-over-depreciated">{isRu ? 'Амортизация больше стоимости' : 'Eskirish qiymatdan katta'}</span>
                   ) : line.fixedAssetId ? (

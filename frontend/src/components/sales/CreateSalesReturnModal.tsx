@@ -488,7 +488,7 @@ export function CreateSalesReturnModal({
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                         <div>{quantityWithUnit(item.soldQty, item.unit, locale)}</div>
-                        <div style={{ fontSize: '11px', color: item.returnableQty > 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontWeight: 600 }}>
+                        <div style={{ fontSize: '11px', color: item.returnableQty > 0 ? 'var(--color-success-700)' : 'var(--color-error-700)', fontWeight: 600 }}>
                           max: {quantityWithUnit(item.returnableQty, item.unit, locale)}
                         </div>
                       </td>

@@ -367,10 +367,10 @@ export function AktSverkaDrawer({
                           <td style={{ padding: '10px 12px', color: 'var(--color-text-secondary)' }}>
                             {tx.description}
                           </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.debit > 0 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.debit > 0 ? 'var(--color-success-700)' : 'var(--color-text-tertiary)' }}>
                             {tx.debit > 0 ? `+ ${formatCurrency(tx.debit, locale, tx.currency)}` : '—'}
                           </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.credit > 0 ? 'var(--color-error-600)' : 'var(--color-text-tertiary)' }}>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.credit > 0 ? 'var(--color-error-700)' : 'var(--color-text-tertiary)' }}>
                             {tx.credit > 0 ? `- ${formatCurrency(tx.credit, locale, tx.currency)}` : '—'}
                           </td>
                         </tr>

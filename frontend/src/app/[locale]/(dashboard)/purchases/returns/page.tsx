@@ -307,7 +307,7 @@ export default function ReturnsPage() {
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {isRu ? 'Черновики к утверждению' : 'Kutilayotgan Qoralamalar'}
           </div>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: draftCount > 0 ? 'var(--color-warning-600)' : 'var(--color-text-secondary)', marginTop: '6px' }}>
+          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: draftCount > 0 ? 'var(--color-warning-700)' : 'var(--color-text-secondary)', marginTop: '6px' }}>
             {draftCount} {isRu ? 'документов' : 'ta hujjat'}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>

@@ -638,7 +638,7 @@ export default function SalesOrdersPage() {
                                     textAlign: 'left',
                                     padding: '8px 14px',
                                     fontSize: 'var(--text-sm)',
-                                    color: s.status === 'CANCELLED' ? 'var(--color-error-600)' : 'var(--color-text-primary)',
+                                    color: s.status === 'CANCELLED' ? 'var(--color-error-700)' : 'var(--color-text-primary)',
                                     background: 'none',
                                     border: 'none',
                                     borderBottom: '1px solid var(--color-border-light)',

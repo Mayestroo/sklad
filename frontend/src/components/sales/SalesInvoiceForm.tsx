@@ -1027,7 +1027,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}
                 title="Ctrl+Enter"
                 aria-keyshortcuts="Control+Enter"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-700)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
               >
                 {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
               </Button>
@@ -1130,7 +1130,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-700)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-600)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -1201,7 +1201,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                   <span
                     style={{
                       fontWeight: 600,
-                      color: debt > 0 ? 'var(--color-error-600)' : debt < 0 ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
+                      color: debt > 0 ? 'var(--color-error-700)' : debt < 0 ? 'var(--color-success-700)' : 'var(--color-text-secondary)',
                     }}
                   >
                     {currency ? formatCurrency(debt, locale, currency) : '—'}
@@ -1410,7 +1410,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                               <span
                                 style={{
                                   fontWeight: 600,
-                                  color: warehouseStockMap[item.productId].free >= qty ? 'var(--color-success-600)' : 'var(--color-error-600)',
+                                  color: warehouseStockMap[item.productId].free >= qty ? 'var(--color-success-700)' : 'var(--color-error-700)',
                                 }}
                               >
                                 {isRu ? 'Свободный остаток' : 'Erkin qoldiq'}: {warehouseStockMap[item.productId].free}
@@ -1450,7 +1450,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         aria-label={`${isRu ? 'Цена продажи для строки' : 'Sotish narxi'} ${idx + 1}`}
                         style={{
                           borderColor: isBelowCost ? 'var(--color-error-500)' : undefined,
-                          color: isBelowCost ? 'var(--color-error-600)' : undefined,
+                          color: isBelowCost ? 'var(--color-error-700)' : undefined,
                           ...(!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : {}),
                         }}
                       />
@@ -1605,13 +1605,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Валовая прибыль:' : 'Yalpi foyda:'}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }} className="tabular-nums">
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }} className="tabular-nums">
                  {formatCurrency(calculations.estimatedProfit, locale, 'UZS')}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Маржа (%):' : 'Marja (%):'}</span>
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: calculations.marginPercent >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }} className="tabular-nums">
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: calculations.marginPercent >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }} className="tabular-nums">
                 {formatPercent(calculations.marginPercent)}
               </span>
             </div>

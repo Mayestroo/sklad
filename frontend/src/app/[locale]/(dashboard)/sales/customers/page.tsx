@@ -229,7 +229,7 @@ export default function CustomersPage() {
                       <td style={{ padding: '12px 14px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                         {balances.length > 0
                           ? balances.map((balance) => (
-                              <div key={balance.currency} style={{ color: balance.customerDebt > 0 ? 'var(--color-warning-600)' : 'var(--color-info-600)', fontWeight: 600 }}>
+                              <div key={balance.currency} style={{ color: balance.customerDebt > 0 ? 'var(--color-warning-700)' : 'var(--color-info-700)', fontWeight: 600 }}>
                                 {balance.currency}: {formatCurrency(balance.customerDebt, locale, balance.currency)}
                               </div>
                             ))
@@ -298,7 +298,7 @@ export default function CustomersPage() {
                       .map((balance) => `${balance.currency}: ${formatCurrency(balance.customerDebt, locale, balance.currency)}`)
                       .join(' · ') || '—', color: 'var(--color-warning-700)' },
                     { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency), color: 'var(--color-error-700)' },
-                    { label: isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)', value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'), color: profile.metrics.grossProfit >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' },
+                    { label: isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)', value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'), color: profile.metrics.grossProfit >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' },
                   ].map((m) => (
                     <div key={m.label} style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</div>

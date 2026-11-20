@@ -892,7 +892,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}
                 title="Ctrl+Enter"
                 aria-keyshortcuts="Control+Enter"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-700)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
               >
                 {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
               </Button>
@@ -1005,7 +1005,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-700)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-600)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -1052,7 +1052,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                   <span
                     style={{
                       fontWeight: 600,
-                      color: debt > 0 ? 'var(--color-error-600)' : debt < 0 ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
+                      color: debt > 0 ? 'var(--color-error-700)' : debt < 0 ? 'var(--color-success-700)' : 'var(--color-text-secondary)',
                     }}
                   >
                     {currency ? formatCurrency(debt, locale, currency) : '—'}
@@ -1542,7 +1542,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                             background: 'none',
                             border: 'none',
                             cursor: items.length <= 1 ? 'not-allowed' : 'pointer',
-                            color: items.length <= 1 ? 'var(--color-text-tertiary)' : 'var(--color-error-600)',
+                            color: items.length <= 1 ? 'var(--color-text-tertiary)' : 'var(--color-error-700)',
                             padding: '4px',
                           }}
                         >

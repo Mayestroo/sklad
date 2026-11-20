@@ -297,7 +297,7 @@ export function QuickPaymentModal({
               style={{
                 fontSize: 'var(--text-base)',
                 fontWeight: 700,
-                color: !settlementSide || !currency ? 'var(--color-text-primary)' : isIncome ? 'var(--color-success-600)' : 'var(--color-error-600)',
+                color: !settlementSide || !currency ? 'var(--color-text-primary)' : isIncome ? 'var(--color-success-700)' : 'var(--color-error-700)',
               }}
             >
               {settlementSide && currency ? formatCurrency(selectedBalance, locale, currency) : '—'}

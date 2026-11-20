@@ -86,7 +86,7 @@ export function OrderTotalsSummary({
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
           <span>{isRu ? 'ОСТАТОК К ОПЛАТЕ:' : 'QOLDIQ TO‘LOV:'}</span>
-          <span className="tabular-nums" style={{ color: calculations.remaining > 0 ? 'var(--color-error-600)' : 'var(--color-success-600)' }}>
+          <span className="tabular-nums" style={{ color: calculations.remaining > 0 ? 'var(--color-error-700)' : 'var(--color-success-700)' }}>
             {currency ? formatCurrency(calculations.remaining, locale, currency) : '—'}
           </span>
         </div>

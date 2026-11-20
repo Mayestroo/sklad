@@ -749,7 +749,7 @@ export default function CounterpartiesPage() {
                 label: isRu ? 'Все' : 'Barchasi',
                 activeBg: 'rgba(59, 130, 246, 0.20)',
                 activeBorder: 'rgba(59, 130, 246, 0.50)',
-                activeColor: 'var(--color-info-600)',
+                activeColor: 'var(--color-info-700)',
                 color: null,
               },
               {
@@ -758,7 +758,7 @@ export default function CounterpartiesPage() {
                 count: summary?.receivables.count,
                 activeBg: 'rgba(16, 185, 129, 0.22)',
                 activeBorder: 'rgba(16, 185, 129, 0.55)',
-                activeColor: 'var(--color-success-600)',
+                activeColor: 'var(--color-success-700)',
                 color: 'var(--color-success-700)',
                 dot: 'var(--color-success-500)',
               },
@@ -768,7 +768,7 @@ export default function CounterpartiesPage() {
                 count: summary?.payables.count,
                 activeBg: 'rgba(239, 68, 68, 0.22)',
                 activeBorder: 'rgba(239, 68, 68, 0.55)',
-                activeColor: 'var(--color-error-600)',
+                activeColor: 'var(--color-error-700)',
                 color: 'var(--color-error-700)',
                 dot: 'var(--color-error-500)',
               },
@@ -919,7 +919,7 @@ export default function CounterpartiesPage() {
                                 borderRadius: 12,
                                 fontSize: 'var(--text-xs)',
                                 background: `${item.folder.color || '#3b82f6'}15`,
-                                color: item.folder.color || 'var(--color-info-600)',
+                                color: item.folder.color || 'var(--color-info-700)',
                                 border: `1px solid ${item.folder.color || '#3b82f6'}40`,
                                 fontWeight: 600,
                               }}
@@ -986,7 +986,7 @@ export default function CounterpartiesPage() {
                                       : isRu ? 'Вернуть клиентский аванс' : 'Mijoz avansini qaytarish'}
                                     style={{
                                       backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                      color: isIncome ? 'var(--color-success-600)' : 'var(--color-error-600)',
+                                      color: isIncome ? 'var(--color-success-700)' : 'var(--color-error-700)',
                                       borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
                                       padding: '0 8px',
                                     }}
@@ -1008,7 +1008,7 @@ export default function CounterpartiesPage() {
                                       : isRu ? 'Оплатить поставщику' : 'Ta’minotchiga to‘lash'}
                                     style={{
                                       backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                      color: isIncome ? 'var(--color-success-600)' : 'var(--color-error-600)',
+                                      color: isIncome ? 'var(--color-success-700)' : 'var(--color-error-700)',
                                       borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
                                       padding: '0 8px',
                                     }}
@@ -1253,7 +1253,7 @@ export default function CounterpartiesPage() {
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Папка' : 'Papka'}</div>
                 <div style={{ marginTop: 4 }}>
                   {detailItem.folder ? (
-                    <span style={{ color: detailItem.folder.color || 'var(--color-info-600)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+                    <span style={{ color: detailItem.folder.color || 'var(--color-info-700)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                       {detailItem.folder.name}
                     </span>
                   ) : (
@@ -1281,7 +1281,7 @@ export default function CounterpartiesPage() {
               </div>
               <div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Постоянная скидка' : 'Doimiy chegirma'}</div>
-                <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginTop: 4, color: Number(detailItem.discountPercent || 0) > 0 ? 'var(--color-success-600)' : 'inherit' }}>
+                <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginTop: 4, color: Number(detailItem.discountPercent || 0) > 0 ? 'var(--color-success-700)' : 'inherit' }}>
                   {Number(detailItem.discountPercent || 0)}%
                 </div>
               </div>

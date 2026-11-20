@@ -354,7 +354,7 @@ export default function NewExpensePage() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: 'var(--color-success-700)',
+              backgroundColor: 'var(--color-success-600)',
             }}
           >
             {!submitting && <CheckCircle2 size={16} aria-hidden />}

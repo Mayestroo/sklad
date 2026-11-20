@@ -440,7 +440,7 @@ export default function ProductsPage() {
                               height: '32px',
                               borderRadius: 'var(--radius-sm)',
                               backgroundColor: p.type === 'SERVICE' ? 'var(--color-info-50)' : 'var(--color-primary-50)',
-                              color: p.type === 'SERVICE' ? 'var(--color-info-600)' : 'var(--color-primary-600)',
+                              color: p.type === 'SERVICE' ? 'var(--color-info-700)' : 'var(--color-primary-600)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',

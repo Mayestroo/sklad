@@ -147,7 +147,7 @@ export function SupplierProfileDrawer({
                       ? data.metrics.balancesByCurrency
                           .filter((balance) => balance.supplierDebt !== 0)
                           .map((balance) => (
-                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-info-600)' }} className="tabular-nums">
+                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-700)' : 'var(--color-info-700)' }} className="tabular-nums">
                               {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                             </div>
                           ))

@@ -500,7 +500,7 @@ export default function PurchasesPage() {
                     <td data-label={isRu ? 'ОБЩАЯ СУММА' : 'JAMI SUMMA'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
                       {formatCurrency(Number(r.totalAmount), locale, r.currency)}
                     </td>
-                    <td data-label={isRu ? 'ДОП. РАСХОДЫ' : 'XARAJATLAR'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? 'var(--color-warning-600)' : 'var(--color-text-tertiary)' }} className="tabular-nums">
+                    <td data-label={isRu ? 'ДОП. РАСХОДЫ' : 'XARAJATLAR'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 500, color: Number(r.additionalExpensesTotal) > 0 ? 'var(--color-warning-700)' : 'var(--color-text-tertiary)' }} className="tabular-nums">
                       {Number(r.additionalExpensesTotal) > 0 ? `+${formatCurrency(Number(r.additionalExpensesTotal), locale, r.currency)}` : '—'}
                     </td>
                     <td data-label={isRu ? 'СТАТУС' : 'HOLATI'} style={{ padding: '12px 16px', textAlign: 'center' }}>

@@ -482,7 +482,7 @@ export default function ServicesPage() {
             style={{
               fontSize: 'var(--text-2xl)',
               fontWeight: 'var(--font-bold)',
-              color: debtByCurrency.length > 0 ? 'var(--color-error-600)' : 'var(--color-text-primary)',
+              color: debtByCurrency.length > 0 ? 'var(--color-error-700)' : 'var(--color-text-primary)',
               marginTop: 'var(--space-2)',
             }}
           >

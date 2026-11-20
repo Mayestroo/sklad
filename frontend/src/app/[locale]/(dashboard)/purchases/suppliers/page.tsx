@@ -197,7 +197,7 @@ export default function SuppliersPage() {
                       >
                         {balances.length > 0
                           ? balances.map((balance) => (
-                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-info-600)' }}>
+                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-700)' : 'var(--color-info-700)' }}>
                                 {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                               </div>
                             ))

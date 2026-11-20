@@ -319,7 +319,7 @@ export function PartialDispatchModal({
                         <span
                           style={{
                             fontWeight: 600,
-                            color: physicalStock >= unShipped ? 'var(--color-success-600)' : 'var(--color-warning-600)',
+                            color: physicalStock >= unShipped ? 'var(--color-success-700)' : 'var(--color-warning-700)',
                           }}
                         >
                           {quantityWithUnit(physicalStock, item.product?.unitOfMeasure, locale)}

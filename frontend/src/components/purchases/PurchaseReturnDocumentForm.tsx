@@ -621,7 +621,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
               placeholder={isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang'}
             />
             {selectedSupplier && (
-              <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px', color: currentSupplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-success-600)' }}>
+              <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px', color: currentSupplierDebt > 0 ? 'var(--color-danger-700)' : 'var(--color-success-700)' }}>
                 {isRu ? 'Текущий долг: ' : 'Joriy qarzdorlik: '}
                 <strong>
                   {formatCurrencyIfAvailable(
@@ -929,7 +929,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
           <div style={{ height: '1px', backgroundColor: 'var(--color-border-light)', margin: '4px 0' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
             <span>{isRu ? 'Остаток долга после проведения:' : 'Tasdiqlangandan so‘ng qarz:'}</span>
-            <span style={{ color: projectedSupplierDebt >= 0 ? 'var(--color-text-primary)' : 'var(--color-success-600)' }}>
+            <span style={{ color: projectedSupplierDebt >= 0 ? 'var(--color-text-primary)' : 'var(--color-success-700)' }}>
               {formatCurrencyIfAvailable(projectedSupplierDebt, locale, currency) || '—'}
               {projectedSupplierDebt < 0 && (
                 <span style={{ fontSize: '11px', display: 'block', color: 'var(--color-success-700)', fontWeight: 500 }}>

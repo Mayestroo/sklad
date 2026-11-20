@@ -839,7 +839,7 @@ export default function SalesReturnsPage() {
                             />
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }}>
-                            <div style={{ color: item.returnableQuantity > 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontWeight: 600 }}>
+                            <div style={{ color: item.returnableQuantity > 0 ? 'var(--color-success-700)' : 'var(--color-error-700)', fontWeight: 600 }}>
                               {quantityWithUnit(item.returnableQuantity, item.unit, locale)}
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>

@@ -119,7 +119,7 @@ export default function AccountingPage() {
                     <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
                       {formatCurrency(item.creditTurnover, locale, osv.currency)}
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: item.closingBalance >= 0 ? 'var(--color-text-primary)' : 'var(--color-error-600)' }} className="tabular-nums">
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: item.closingBalance >= 0 ? 'var(--color-text-primary)' : 'var(--color-error-700)' }} className="tabular-nums">
                       {formatCurrency(item.closingBalance, locale, osv.currency)}
                     </td>
                   </tr>

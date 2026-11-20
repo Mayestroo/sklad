@@ -105,7 +105,7 @@ function AccountNetRows({
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
             {account.name[locale]} · {account.currency}
           </span>
-          <span style={{ color: account.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
+          <span style={{ color: account.netCashFlow >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
             {formatCurrency(account.netCashFlow, locale, account.currency)}
           </span>
         </div>
@@ -138,7 +138,7 @@ function AccountFlowRows({
       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
       {items.map((account) => (
         <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : 'var(--color-error-600)' }}>
+          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : 'var(--color-error-700)' }}>
             {account.name[locale]} · {account.currency}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
@@ -1004,7 +1004,7 @@ export default function FinancePage() {
                 borderRadius: 'var(--radius-md)',
                 backgroundColor:
                   debtsSubTab === 'receivables' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                color: debtsSubTab === 'receivables' ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
+                color: debtsSubTab === 'receivables' ? 'var(--color-success-700)' : 'var(--color-text-secondary)',
                 fontWeight: debtsSubTab === 'receivables' ? 600 : 500,
                 border: 'none',
                 cursor: 'pointer',
@@ -1019,7 +1019,7 @@ export default function FinancePage() {
                 borderRadius: 'var(--radius-md)',
                 backgroundColor:
                   debtsSubTab === 'payables' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                color: debtsSubTab === 'payables' ? 'var(--color-error-600)' : 'var(--color-text-secondary)',
+                color: debtsSubTab === 'payables' ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
                 fontWeight: debtsSubTab === 'payables' ? 600 : 500,
                 border: 'none',
                 cursor: 'pointer',
@@ -1065,7 +1065,7 @@ export default function FinancePage() {
                             {cp.inn && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>STIR: {cp.inn}</span>}
                           </td>
                           <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{cp.phone || '—'}</td>
-                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
+                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
                             {formatCurrency(amount, locale, balance.currency)}
                           </td>
                           <td style={{ padding: '12px', textAlign: 'center' }}>

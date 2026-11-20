@@ -694,7 +694,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистый поток (UZS)' : 'Sof oqim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: uzsSummary.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ fontWeight: 'var(--font-bold)', color: uzsSummary.netCashFlow >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)', fontVariantNumeric: 'tabular-nums' }}>
                 {uzsSummary.netCashFlow >= 0 ? '+' : ''}{formatAmount(uzsSummary.netCashFlow, 'UZS')}
               </div>
             </div>
@@ -767,7 +767,7 @@ export default function DashboardPage() {
                     fontSize: 'var(--text-sm)',
                     fontWeight: 'var(--font-semibold)',
                     fontVariantNumeric: 'tabular-nums',
-                    color: tx.direction === 'INCOME' ? 'var(--color-success-600)' : tx.direction === 'EXPENSE' ? 'var(--color-error-600)' : 'var(--color-info-600)',
+                    color: tx.direction === 'INCOME' ? 'var(--color-success-700)' : tx.direction === 'EXPENSE' ? 'var(--color-error-700)' : 'var(--color-info-700)',
                   }}>
                     {tx.direction === 'INCOME' ? '+' : tx.direction === 'EXPENSE' ? '−' : ''}{formatMoney(Number(tx.amount), tx.currency)}
                   </div>
