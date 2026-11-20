@@ -13,7 +13,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { quickPeriodRange } from '@/lib/date-range';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
@@ -21,6 +24,7 @@ import { formatDate, formatCurrency, formatAmount, formatMoney, formatCompactNum
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { FullDashboard, DashboardPeriod, CashFlowPoint } from '@shared/types';
 import {
   TrendingUp,
@@ -34,49 +38,13 @@ import {
   ArrowDownRight,
   RefreshCw,
   Calendar,
+  Plus,
+  PackagePlus,
+  Receipt,
+  CreditCard,
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────
-
-function getPeriodDates(period: DashboardPeriod): { date_from: string; date_to: string } {
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-
-  switch (period) {
-    case 'today':
-      return { date_from: todayStr, date_to: todayStr };
-    case 'yesterday': {
-      const y = new Date(now); y.setDate(y.getDate() - 1);
-      const s = y.toISOString().slice(0, 10);
-      return { date_from: s, date_to: s };
-    }
-    case 'this_week': {
-      const start = new Date(now); start.setDate(now.getDate() - now.getDay());
-      return { date_from: start.toISOString().slice(0, 10), date_to: todayStr };
-    }
-    case 'last_week': {
-      const end = new Date(now); end.setDate(now.getDate() - now.getDay() - 1);
-      const start = new Date(end); start.setDate(end.getDate() - 6);
-      return { date_from: start.toISOString().slice(0, 10), date_to: end.toISOString().slice(0, 10) };
-    }
-    case 'this_month':
-      return { date_from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, date_to: todayStr };
-    case 'last_month': {
-      const d = new Date(now.getFullYear(), now.getMonth(), 0);
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return { date_from: start.toISOString().slice(0, 10), date_to: d.toISOString().slice(0, 10) };
-    }
-    case 'this_quarter': {
-      const q = Math.floor(now.getMonth() / 3);
-      const start = new Date(now.getFullYear(), q * 3, 1);
-      return { date_from: start.toISOString().slice(0, 10), date_to: todayStr };
-    }
-    case 'this_year':
-      return { date_from: `${now.getFullYear()}-01-01`, date_to: todayStr };
-    default:
-      return { date_from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, date_to: todayStr };
-  }
-}
 
 // ─── Cash Flow Chart (Recharts) ──────────────────────────────────
 
@@ -309,11 +277,13 @@ function KpiCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, curren
 export default function DashboardPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const [period, setPeriod] = useState<DashboardPeriod>('this_month');
-  const [cashFlowGranularity, setCashFlowGranularity] = useState<'day' | 'week' | 'month'>('day');
+  const t = useTranslations('dashboard');
+  // The chosen period and chart step are remembered per browser.
+  const [period, setPeriod] = usePersistentState<DashboardPeriod>('dashboard.period', 'this_month');
+  const [cashFlowGranularity, setCashFlowGranularity] = usePersistentState<'day' | 'week' | 'month'>('dashboard.granularity', 'day');
 
   const dashboardEndpoint = useMemo(() => {
-    const { date_from, date_to } = getPeriodDates(period);
+    const { date_from, date_to } = quickPeriodRange(period);
     return `/dashboard?${new URLSearchParams({ date_from, date_to, granularity: cashFlowGranularity })}`;
   }, [period, cashFlowGranularity]);
   // keepPrevious: switching the period keeps the current numbers until the
@@ -348,15 +318,34 @@ export default function DashboardPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }} className="animate-fade-in">
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-          {isRu ? 'Главная' : 'Bosh sahifa'}
-        </h1>
-        <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading}>
-          <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : undefined }} />
-          {isRu ? 'Обновить' : 'Yangilash'}
-        </Button>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-3))' }}>
+        <PageHeader
+          title={isRu ? 'Главная' : 'Bosh sahifa'}
+          subtitle={t('subtitle')}
+          actions={
+            <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading} aria-label={isRu ? 'Обновить' : 'Yangilash'}>
+              <RefreshCw size={16} aria-hidden className={loading ? 'app-spinner' : undefined} />
+              <span className="app-header-hide-sm">{isRu ? 'Обновить' : 'Yangilash'}</span>
+            </Button>
+          }
+        />
       </div>
+
+      {/* Quick actions: the documents people start most often */}
+      <nav aria-label={t('quickActions')} className="dash-quick-actions">
+        {[
+          { href: '/sales/new', label: t('qaNewSale'), Icon: ShoppingCart, primary: true },
+          { href: '/purchases/new', label: t('qaNewReceipt'), Icon: PackagePlus },
+          { href: '/finance', label: t('qaPayment'), Icon: CreditCard },
+          { href: '/purchases/expenses/new', label: t('qaNewExpense'), Icon: Receipt },
+          { href: '/products/new', label: t('qaNewProduct'), Icon: Plus },
+        ].map(({ href, label, Icon, primary }) => (
+          <Link key={href} href={href} className={`dash-quick-action${primary ? ' is-primary' : ''}`}>
+            <Icon size={18} aria-hidden />
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
 
       {dashboardQuery.isError && (
         <Card>
@@ -365,7 +354,7 @@ export default function DashboardPage() {
       )}
 
       {/* Period Selector */}
-      <div style={{
+      <div role="group" aria-label={t('period')} style={{
         background: 'var(--color-bg-secondary)',
         border: '1px solid var(--color-border-light)',
         borderRadius: 'var(--radius-lg)',
@@ -375,10 +364,12 @@ export default function DashboardPage() {
         flexWrap: 'wrap',
         boxShadow: 'var(--shadow-sm)',
       }}>
-        <Calendar size={18} style={{ color: 'var(--color-text-tertiary)', alignSelf: 'center', marginLeft: '8px', marginRight: '4px' }} />
+        <Calendar size={18} aria-hidden style={{ color: 'var(--color-text-tertiary)', alignSelf: 'center', marginLeft: '8px', marginRight: '4px' }} />
         {periodsList.map((p) => (
           <button
             key={p.value}
+            type="button"
+            aria-pressed={period === p.value}
             onClick={() => setPeriod(p.value)}
             style={{
               padding: '6px 14px',
@@ -388,7 +379,8 @@ export default function DashboardPage() {
               fontSize: 'var(--text-sm)',
               fontWeight: period === p.value ? 'var(--font-semibold)' : 'var(--font-regular)',
               background: period === p.value ? 'var(--color-primary-600)' : 'transparent',
-              color: period === p.value ? '#fff' : 'var(--color-text-secondary)',
+              color: period === p.value ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
+              minHeight: 32,
               transition: 'all var(--transition-fast)',
             }}
           >
@@ -466,7 +458,7 @@ export default function DashboardPage() {
           value={
             data?.sales.byCurrency?.length
               ? data.sales.byCurrency.map((summary) => formatCurrency(summary.amount, locale, summary.currency)).join(' / ')
-              : `${formatMoney(data?.sales?.totalSales ?? 0, 'UZS')} (equiv.)`
+              : formatCurrency(data?.sales?.totalSales ?? 0, locale, 'UZS')
           }
           subtitle={`${data?.sales?.invoiceCount ?? 0} ${isRu ? 'документов' : 'ta hujjat'}`}
           icon={ShoppingCart}
@@ -495,6 +487,7 @@ export default function DashboardPage() {
         />
       </div>
 
+      {(data?.finance.summaryByAccount ?? []).length > 0 && (
       <Card title={isRu ? 'Движение по каждой кассе и банковскому счёту' : 'Har bir kassa va bank hisobi harakati'}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--space-3)' }}>
           {(data?.finance.summaryByAccount ?? []).map((account) => (
@@ -503,7 +496,7 @@ export default function DashboardPage() {
               style={{
                 padding: 'var(--space-3)',
                 borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-secondary)',
+                background: 'var(--color-bg-tertiary)',
                 borderLeft: `3px solid ${account.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)'}`,
               }}
             >
@@ -514,13 +507,13 @@ export default function DashboardPage() {
                 <span style={{ color: 'var(--color-success-700)' }}>
                   {isRu ? 'Приход' : 'Kirim'}: {formatCurrency(account.totalIncome, locale, account.currency)}
                 </span>
-                <span style={{ color: '#b91c1c' }}>
+                <span style={{ color: 'var(--color-error-700)' }}>
                   {isRu ? 'Расход' : 'Chiqim'}: {formatCurrency(account.totalExpense, locale, account.currency)}
                 </span>
-                <span style={{ color: '#1d4ed8' }}>
+                <span style={{ color: 'var(--color-text-primary)' }}>
                   {isRu ? 'Перевод входящий' : 'O‘tkazma kirim'}: {formatCurrency(account.transferIn, locale, account.currency)}
                 </span>
-                <span style={{ color: '#a16207' }}>
+                <span style={{ color: 'var(--color-warning-700)' }}>
                   {isRu ? 'Перевод исходящий' : 'O‘tkazma chiqim'}: {formatCurrency(account.transferOut, locale, account.currency)}
                 </span>
               </div>
@@ -528,16 +521,15 @@ export default function DashboardPage() {
           ))}
         </div>
       </Card>
+      )}
 
       {/* Orders Pipeline (Buyurtmalar voronkasi) */}
       {orderStats && (
         <Card
           title={isRu ? 'Воронка заказов и производство' : 'Buyurtmalar voronkasi va ishlab chiqarish'}
           action={
-            <Link href="/sales/orders" style={{ textDecoration: 'none' }}>
-              <Button variant="ghost" size="sm">
-                {isRu ? 'Все заказы' : 'Barcha buyurtmalar'} <ArrowRight size={14} />
-              </Button>
+            <Link href="/sales/orders" className="dash-card-link">
+              {isRu ? 'Все заказы' : 'Barcha buyurtmalar'} <ArrowRight size={14} aria-hidden />
             </Link>
           }
         >
@@ -549,45 +541,45 @@ export default function DashboardPage() {
               marginTop: 'var(--space-2)',
             }}
           >
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-primary-500)' }}>
+            <div style={{ padding: '12px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-primary-500)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'НОВЫЕ / СОГЛАСОВАНИЕ' : 'YANGI / TASDIQLASHDA'}
+                {isRu ? 'Новые / на согласовании' : 'Yangi / tasdiqlashda'}
               </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px' }}>
                 {(orderStats.pipeline?.NEW || 0) + (orderStats.pipeline?.PENDING_APPROVAL || 0)}
               </div>
             </div>
 
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-warning-500)' }}>
+            <div style={{ padding: '12px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-warning-500)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'В ПРОИЗВОДСТВЕ' : 'ISHLAB CHIQARISHDA'}
+                {isRu ? 'В производстве' : 'Ishlab chiqarishda'}
               </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-warning-600)' }}>
                 {(orderStats.pipeline?.SENT_TO_PRODUCTION || 0) + (orderStats.pipeline?.IN_PRODUCTION || 0) + (orderStats.pipeline?.PARTIALLY_READY || 0)}
               </div>
             </div>
 
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-error-500)' }}>
+            <div style={{ padding: '12px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-error-500)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'ОЖИДАЮТ ОПЛАТЫ' : 'TO‘LOV KUTILMOQDA'}
+                {isRu ? 'Ожидают оплаты' : 'To‘lov kutilmoqda'}
               </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-error-600)' }}>
                 {orderStats.pipeline?.AWAITING_PAYMENT || 0}
               </div>
             </div>
 
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-success-500)' }}>
+            <div style={{ padding: '12px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-success-500)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'ГОТОВЫ К ОТГРУЗКЕ' : 'JO‘NATISHGA TAYYOR'}
+                {isRu ? 'Готовы к отгрузке' : 'Jo‘natishga tayyor'}
               </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-success-600)' }}>
                 {orderStats.pipeline?.READY_TO_SHIP || 0}
               </div>
             </div>
 
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-info-500)' }}>
+            <div style={{ padding: '12px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-info-500)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'ОТГРУЖЕНЫ' : 'JO‘NATILGAN'}
+                {isRu ? 'Отгружены' : 'Jo‘natilgan'}
               </div>
               <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-info-600)' }}>
                 {orderStats.pipeline?.SHIPPED || 0}
@@ -598,11 +590,11 @@ export default function DashboardPage() {
       )}
 
       {/* Receivables & Payables */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 'var(--space-4)' }}>
         {/* Receivables */}
         <Card
           title={isRu ? 'Дебиторы (нам должны)' : 'Debitorlar (bizga qarzdorlar)'}
-          action={<Link href="/accounting" style={{ textDecoration: 'none' }}><Button variant="ghost" size="sm">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} /></Button></Link>}
+          action={<Link href="/counterparties" className="dash-card-link">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} aria-hidden /></Link>}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
@@ -630,7 +622,7 @@ export default function DashboardPage() {
         {/* Payables */}
         <Card
           title={isRu ? 'Кредиторы (мы должны)' : 'Kreditorlar (biz qarzdormiz)'}
-          action={<Link href="/accounting" style={{ textDecoration: 'none' }}><Button variant="ghost" size="sm">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} /></Button></Link>}
+          action={<Link href="/counterparties" className="dash-card-link">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} aria-hidden /></Link>}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
             <div>
@@ -658,7 +650,7 @@ export default function DashboardPage() {
 
       {/* Cash Flow Chart */}
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
           <div>
             <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>
               {isRu ? 'График движения денежных средств' : 'Pul oqimi grafigi'}
@@ -668,6 +660,8 @@ export default function DashboardPage() {
             {(['day', 'week', 'month'] as const).map((g) => (
               <button
                 key={g}
+                type="button"
+                aria-pressed={cashFlowGranularity === g}
                 onClick={() => setCashFlowGranularity(g)}
                 style={{
                   padding: '4px 10px',
@@ -677,7 +671,8 @@ export default function DashboardPage() {
                   fontSize: 'var(--text-xs)',
                   fontWeight: cashFlowGranularity === g ? 'var(--font-semibold)' : 'var(--font-regular)',
                   background: cashFlowGranularity === g ? 'var(--color-primary-600)' : 'var(--color-bg-secondary)',
-                  color: cashFlowGranularity === g ? '#fff' : 'var(--color-text-secondary)',
+                  color: cashFlowGranularity === g ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
+                  minHeight: 32,
                   transition: 'all var(--transition-fast)',
                 }}
               >
@@ -688,7 +683,7 @@ export default function DashboardPage() {
         </div>
         <CashFlowChart seriesByCurrency={data?.cashFlow?.seriesByCurrency ?? []} isRu={isRu} />
         {uzsSummary && (
-          <div style={{ display: 'flex', gap: 'var(--space-6)', marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap', marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего приход (UZS)' : 'Jami kirim (UZS)'}</div>
               <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalIncome, 'UZS')}</div>
@@ -708,7 +703,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* Bottom Row: Sales Chart + Recent Transactions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-4)' }}>
+      <div className="dash-bottom-grid">
         {/* Sales Dynamics */}
         <Card title={isRu ? 'Динамика продаж (эквивалент UZS)' : 'Sotuv dinamikasi (UZS ekv.)'}>
           <div style={{ marginTop: 'var(--space-2)' }}>
@@ -723,15 +718,13 @@ export default function DashboardPage() {
         <Card
           title={isRu ? 'Последние операции' : 'Oxirgi operatsiyalar'}
           action={
-            <Link href="/finance" style={{ textDecoration: 'none' }}>
-              <Button variant="ghost" size="sm">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} /></Button>
+            <Link href="/finance" className="dash-card-link">
+              {isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} aria-hidden />
             </Link>
           }
         >
           {!data?.recentTransactions || data.recentTransactions.length === 0 ? (
-            <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-              {isRu ? 'Операции не найдены' : 'Hech qanday operatsiya topilmadi'}
-            </div>
+            <EmptyState compact icon={Wallet} title={isRu ? 'Операций за период нет' : 'Bu davrda operatsiyalar yo‘q'} description={t('noTransactionsHint')} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: 'var(--space-2)' }}>
               {data.recentTransactions.slice(0, 7).map((tx) => (

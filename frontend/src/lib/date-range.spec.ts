@@ -26,3 +26,20 @@ test('one range field shows both ends and keeps them in order', () => {
   assert.equal(formatRange('', ''), '');
   assert.deepEqual(orderedRange('2026-11-30', '2026-11-01'), ['2026-11-01', '2026-11-30']);
 });
+
+test('quick periods use the local calendar date, weeks start on Monday', async () => {
+  const { quickPeriodRange, localIsoDate } = await import('./date-range.ts');
+  // Saturday 21 Nov 2026, 00:20 local time
+  const now = new Date(2026, 10, 21, 0, 20);
+  assert.equal(localIsoDate(now), '2026-11-21');
+  assert.deepEqual(quickPeriodRange('today', now), { date_from: '2026-11-21', date_to: '2026-11-21' });
+  assert.deepEqual(quickPeriodRange('yesterday', now), { date_from: '2026-11-20', date_to: '2026-11-20' });
+  assert.deepEqual(quickPeriodRange('this_week', now), { date_from: '2026-11-16', date_to: '2026-11-21' });
+  assert.deepEqual(quickPeriodRange('last_week', now), { date_from: '2026-11-09', date_to: '2026-11-15' });
+  assert.deepEqual(quickPeriodRange('this_month', now), { date_from: '2026-11-01', date_to: '2026-11-21' });
+  assert.deepEqual(quickPeriodRange('last_month', now), { date_from: '2026-10-01', date_to: '2026-10-31' });
+  assert.deepEqual(quickPeriodRange('this_quarter', now), { date_from: '2026-10-01', date_to: '2026-11-21' });
+  assert.deepEqual(quickPeriodRange('this_year', now), { date_from: '2026-01-01', date_to: '2026-11-21' });
+  // Sunday belongs to the week that started on Monday
+  assert.deepEqual(quickPeriodRange('this_week', new Date(2026, 10, 22, 12)), { date_from: '2026-11-16', date_to: '2026-11-22' });
+});

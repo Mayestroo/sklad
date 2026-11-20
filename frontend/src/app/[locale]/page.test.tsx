@@ -12,6 +12,7 @@ vi.mock('next-intl', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  usePathname: () => '/',
 }));
 
 import DashboardPage from './page';
@@ -44,6 +45,7 @@ function routes(handler: (url: string) => Promise<unknown>) {
 describe('Dashboard page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    window.localStorage.clear();
   });
 
   it('loads the dashboard and the order pipeline once', async () => {
