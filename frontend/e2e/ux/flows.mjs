@@ -220,6 +220,22 @@ try {
     const after = await page.getByTitle(isRu ? 'Удалить заказ' : "Buyurtmani o'chirish").count();
     log('rows with delete before/after:', before, after);
   }
+
+  if (flow === 'finance') {
+    await signIn();
+    await page.goto(BASE + '/finance', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: isRu ? 'Приход' : 'Kirim qo‘shish' }).first().click();
+    await page.getByRole('dialog').waitFor();
+    await page.waitForTimeout(400);
+    log('focused element:', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') || document.activeElement?.tagName));
+    await shot('1-income-drawer');
+    await page.keyboard.press('Control+Enter');
+    await page.waitForTimeout(800);
+    log('validation:', (await page.getByRole('dialog').locator('[role=alert], div').filter({ hasText: /tanlang|kiriting|Выберите|Укажите|Введите/ }).first().textContent().catch(() => 'none'))?.trim().slice(0, 120));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    log('closed by Esc:', !(await page.getByRole('dialog').isVisible().catch(() => false)));
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');

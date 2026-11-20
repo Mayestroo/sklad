@@ -435,30 +435,30 @@ export default function FinancePage() {
             variant="primary"
             onClick={() => handleOpenDrawer('income')}
             style={{
-              backgroundColor: 'var(--color-success-500)',
-              borderColor: 'var(--color-success-500)',
+              backgroundColor: 'var(--color-success-600)',
+              borderColor: 'var(--color-success-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
             }}
           >
-            <Plus size={16} />
-            <span>{isRu ? 'Приход (Кирим)' : 'Kirim qo‘shish'}</span>
+            <Plus size={16} aria-hidden />
+            <span>{isRu ? 'Приход' : 'Kirim qo‘shish'}</span>
           </Button>
 
           <Button
             variant="primary"
             onClick={() => handleOpenDrawer('expense')}
             style={{
-              backgroundColor: 'var(--color-error-500)',
-              borderColor: 'var(--color-error-500)',
+              backgroundColor: 'var(--color-error-600)',
+              borderColor: 'var(--color-error-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
             }}
           >
             <Minus size={16} />
-            <span>{isRu ? 'Расход (Чиким)' : 'Chiqim qo‘shish'}</span>
+            <span>{isRu ? 'Расход' : 'Chiqim qo‘shish'}</span>
           </Button>
 
           <Button
@@ -1844,10 +1844,11 @@ function FinanceTransactionDrawer({
   };
 
   const colorMap = {
-    income: 'var(--color-success-500)',
-    expense: 'var(--color-error-500)',
-    transfer: 'var(--color-info-500)',
-    exchange: '#7c3aed',
+    // -600 tones: white button text meets WCAG AA (the -500 tones were 2.3–3.8:1)
+    income: 'var(--color-success-600)',
+    expense: 'var(--color-error-600)',
+    transfer: 'var(--color-info-600)',
+    exchange: 'var(--color-primary-600)',
   };
 
   return (
@@ -1856,8 +1857,8 @@ function FinanceTransactionDrawer({
       title={titleMap[mode]}
       description={
         isRu
-          ? 'Оформление кассовой операции и взаиморасчетов по стандартам 1С'
-          : '1C mantiqida kassa amaliyoti va hisob-kitoblarni rasmiylashtirish'
+          ? 'После проведения сразу меняются остаток кассы и долг контрагента'
+          : 'Tasdiqlangach kassa qoldig‘i va kontragent qarzi darhol o‘zgaradi'
       }
       icon={<Wallet size={20} />}
       size="md"
@@ -1872,6 +1873,7 @@ function FinanceTransactionDrawer({
             variant="primary"
             onClick={() => handleSubmit()}
             disabled={loading}
+            title="Ctrl+Enter"
             style={{
               backgroundColor: colorMap[mode],
               borderColor: colorMap[mode],
@@ -1880,8 +1882,8 @@ function FinanceTransactionDrawer({
               gap: '6px',
             }}
           >
-            <CheckCircle2 size={16} />
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Провести' : 'Tasdiqlash'}
+            <CheckCircle2 size={16} aria-hidden />
+            {loading ? (isRu ? 'Сохранение…' : 'Saqlanmoqda…') : isRu ? 'Провести' : 'Tasdiqlash'}
           </Button>
         </>
       }

@@ -35,6 +35,8 @@
   --color-text-tertiary: #6f6762; /* WCAG AA (≥ 4.5:1) on every light surface */
   --color-text-inverse: #ffffff;
   --color-bg-input: #ffffff;
+  /* Placeholders stay visibly lighter than typed values (an example rate must not look entered). */
+  --color-text-placeholder: #a19b96;
 
   /* Segmented Controls / Tabs (Light Mode) */
   --color-segmented-bg: #f1f5f9;
@@ -165,6 +167,7 @@
   --color-text-primary: #f5f5f4;
   --color-text-secondary: #a8a29e;
   --color-text-tertiary: #8f8984; /* WCAG AA on dark surfaces */
+  --color-text-placeholder: #6b6560;
 
   /* Segmented Controls / Tabs (Dark Mode — Distinct, elevated active pills) */
   --color-segmented-bg: #141416;
@@ -261,8 +264,10 @@ input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type=
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
-input::placeholder {
-  color: var(--color-text-tertiary);
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
 }
 
 /* ─── Global Native Checkbox & Radio Modern Styling ─── */
