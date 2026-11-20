@@ -2,7 +2,9 @@
 
 import { activateOnKey } from '@/lib/a11y';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
+import { toast } from '@/context/ToastContext';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -95,6 +97,10 @@ export default function NewExpensePage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (errorMsg) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [errorMsg]);
 
   // Fetch reference data
   useEffect(() => {
@@ -128,9 +134,7 @@ export default function NewExpensePage() {
         setCounterparties(counterpartiesData || []);
         setCashAccounts(cashAccountsData || []);
 
-        if (cashAccountsData && cashAccountsData.length > 0) {
-          setCashAccountId(cashAccountsData[0].id);
-        }
+        // The cash account is picked when the currency is chosen (accounts are per currency).
       })
       .catch((err) => console.error(err))
       .finally(() => setLoadingRefs(false));
@@ -275,6 +279,9 @@ export default function NewExpensePage() {
         });
       }
 
+      toast.success(postImmediately
+        ? (isRu ? 'Расход проведён и распределён по товарам' : 'Xarajat tasdiqlandi va tovarlarga taqsimlandi')
+        : (isRu ? 'Черновик расхода сохранён' : 'Xarajat qoralamasi saqlandi'));
       router.push(`/${locale}/purchases/expenses/${draft.id}`);
     } catch (err) {
       setErrorMsg(errorMessage(err) || (isRu ? 'Произошла ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
@@ -282,6 +289,9 @@ export default function NewExpensePage() {
       setSubmitting(false);
     }
   };
+
+  // Ctrl+S saves the draft, Ctrl+Enter posts and allocates.
+  useDocumentShortcuts({ enabled: !submitting, onSave: () => void handleSubmit(false), onPost: () => void handleSubmit(true) });
 
   // Step Completion Checks
   const isStep1Done = Boolean(docDate && expenseType && counterpartyId && amount && Number(amount) > 0);
@@ -301,7 +311,7 @@ export default function NewExpensePage() {
           borderBottom: '1px solid var(--color-border-light)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap', minWidth: 0 }}>
           <Button
             variant="ghost"
             size="sm"
@@ -314,7 +324,7 @@ export default function NewExpensePage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                {isRu ? 'Новый дополнительный расход' : 'Yangi Qo‘shimcha Xarajat Kiritish'}
+                {isRu ? 'Новый дополнительный расход' : 'Yangi qo‘shimcha xarajat'}
               </h1>
               <Badge variant="warning">{isRu ? 'Черновик' : 'Qoralama'}</Badge>
             </div>
@@ -325,55 +335,44 @@ export default function NewExpensePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <Button
             variant="secondary"
-            disabled={submitting}
+            loading={submitting}
             onClick={() => handleSubmit(false)}
+            title="Ctrl+S"
+            aria-keyshortcuts="Control+S"
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Save size={16} /> {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+            {!submitting && <Save size={16} aria-hidden />} {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
           </Button>
+          {/* Not disabled while fields are missing: pressing it says what is missing. */}
           <Button
-            disabled={submitting || !counterpartyId || !receiptId || !amount || Number(amount) <= 0 || selectedItemIds.length === 0}
+            loading={submitting}
+            loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}
             onClick={() => handleSubmit(true)}
+            title="Ctrl+Enter"
+            aria-keyshortcuts="Control+Enter"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: 'var(--color-success-600)',
+              backgroundColor: 'var(--color-success-700)',
             }}
           >
-            {submitting ? (
-              <RefreshCw size={16} className="animate-spin" />
-            ) : (
-              <CheckCircle2 size={16} />
-            )}
-            {isRu ? 'Провести и распределить' : 'Tasdiqlash va Taqsimlash'}
+            {!submitting && <CheckCircle2 size={16} aria-hidden />}
+            {isRu ? 'Провести и распределить' : 'Tasdiqlash va taqsimlash'}
           </Button>
         </div>
       </div>
 
 
       {errorMsg && (
-        <div
-          style={{
-            padding: 'var(--space-3) var(--space-4)',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--color-danger-50)',
-            border: '1px solid var(--color-danger-100)',
-            color: 'var(--color-danger-600)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: 'var(--text-sm)',
-            boxShadow: 'var(--shadow-xs)',
-          }}
-        >
-          <AlertCircle size={20} />
-          <span style={{ fontWeight: 'var(--font-medium)' }}>{errorMsg}</span>
+        <div ref={errorRef} role="alert" tabIndex={-1} className="doc-banner is-error">
+          <AlertCircle size={20} aria-hidden />
+          <span>{errorMsg}</span>
         </div>
       )}
 
       {/* ─── Grid: Parameters & Selection ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 'var(--space-5)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))', gap: 'var(--space-5)' }}>
         {/* Card 1: Expense Details */}
         <Card
           style={{
@@ -705,7 +704,7 @@ export default function NewExpensePage() {
                       height: '32px',
                       borderRadius: 'var(--radius-md)',
                       backgroundColor: allocationMethod === 'BY_AMOUNT' ? 'var(--color-primary-600)' : 'var(--color-bg-hover)',
-                      color: allocationMethod === 'BY_AMOUNT' ? '#ffffff' : 'var(--color-text-secondary)',
+                      color: allocationMethod === 'BY_AMOUNT' ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -769,7 +768,7 @@ export default function NewExpensePage() {
                       height: '32px',
                       borderRadius: 'var(--radius-md)',
                       backgroundColor: allocationMethod === 'BY_QUANTITY' ? 'var(--color-primary-600)' : 'var(--color-bg-hover)',
-                      color: allocationMethod === 'BY_QUANTITY' ? '#ffffff' : 'var(--color-text-secondary)',
+                      color: allocationMethod === 'BY_QUANTITY' ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -819,7 +818,7 @@ export default function NewExpensePage() {
                       height: '32px',
                       borderRadius: 'var(--radius-md)',
                       backgroundColor: allocationMethod === 'BY_WEIGHT' ? 'var(--color-primary-600)' : 'var(--color-bg-hover)',
-                      color: allocationMethod === 'BY_WEIGHT' ? '#ffffff' : 'var(--color-text-secondary)',
+                      color: allocationMethod === 'BY_WEIGHT' ? 'var(--color-text-inverse)' : 'var(--color-text-secondary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1157,7 +1156,7 @@ export default function NewExpensePage() {
                   height: '28px',
                   borderRadius: 'var(--radius-full)',
                   backgroundColor: 'var(--color-primary-600)',
-                  color: '#ffffff',
+                  color: 'var(--color-text-inverse)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

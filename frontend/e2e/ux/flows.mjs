@@ -146,6 +146,26 @@ try {
     log('overflow:', await page.evaluate(() => document.documentElement.scrollWidth - innerWidth));
     await shot('2-navigated');
   }
+
+  if (flow === 'expense') {
+    await signIn();
+    await page.goto(BASE + '/purchases/expenses/new', { waitUntil: 'networkidle' });
+    await shot('1-new');
+    await page.keyboard.press('Control+Enter');
+    await page.waitForTimeout(500);
+    log('empty post error:', (await page.locator('main [role=alert]').first().textContent().catch(() => 'none'))?.trim());
+    await pick(isRu ? 'Выберите или найдите поставщика' : 'Kontragentni qidiring', 'Toshkent');
+    await page.getByLabel(isRu ? 'Сумма расхода' : 'Xarajat summasi').fill('500000');
+    await pick(isRu ? 'Валюта' : 'Valyuta', 'UZS');
+    await pick(isRu ? 'Выберите или найдите партию' : 'Xarid hujjatini qidiring', 'PUR-2026-0002');
+    await page.waitForTimeout(1500);
+    await shot('2-filled');
+    await page.keyboard.press('Control+Enter');
+    await page.waitForURL(/purchases\/expenses\/[0-9a-f-]{36}/, { timeout: 20000 });
+    await page.waitForTimeout(800);
+    log('posted, url:', new URL(page.url()).pathname);
+    await shot('3-posted');
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');
