@@ -925,7 +925,7 @@ export default function FinancePage() {
               />
             </div>
 
-            <Button variant="secondary" size="sm" onClick={() => fetchData()}>
+            <Button aria-label={isRu ? 'Обновить' : 'Yangilash'} title={isRu ? 'Обновить' : 'Yangilash'} variant="secondary" size="sm" onClick={() => fetchData()}>
               <RefreshCw size={14} />
             </Button>
           </div>

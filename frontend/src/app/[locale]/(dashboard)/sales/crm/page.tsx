@@ -303,7 +303,7 @@ export default function CrmKanbanPage() {
           <div style={{ width: '100%', maxWidth: '460px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
               <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Новая сделка CRM' : 'Yangi CRM Bitim Yaratish'}</h3>
-              <button type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'} type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
             <form onSubmit={handleCreateDeal} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>

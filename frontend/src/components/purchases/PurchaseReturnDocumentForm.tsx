@@ -901,7 +901,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                     </td>
                     {!isReadOnly && (
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                        <Button
+                        <Button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'}
                           size="sm"
                           variant="ghost"
                           onClick={() => handleRemoveItem(idx)}

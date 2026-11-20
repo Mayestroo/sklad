@@ -1502,7 +1502,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     {/* Remove button */}
                     {!isReadOnly && (
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                        <button
+                        <button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'}
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
                           disabled={items.length <= 1}

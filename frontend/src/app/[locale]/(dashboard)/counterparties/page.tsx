@@ -1,5 +1,6 @@
 'use client';
 
+import { activateOnKey } from '@/lib/a11y';
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
@@ -517,6 +518,10 @@ export default function CounterpartiesPage() {
                   <div
                     key={f.id}
                     onClick={() => setActiveFolderId(f.id)}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isActive}
+                    onKeyDown={activateOnKey(() => setActiveFolderId(f.id))}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -939,6 +944,9 @@ export default function CounterpartiesPage() {
                             return (
                               <div
                                 onClick={() => setStatementCounterpartyId(item.id)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={activateOnKey(() => setStatementCounterpartyId(item.id))}
                                 title={isRu ? 'Нажмите для просмотра акта сверки' : 'Akt sverkani ko‘rish uchun bosing'}
                                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, cursor: 'pointer' }}
                                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}

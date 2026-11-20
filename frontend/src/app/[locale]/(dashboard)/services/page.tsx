@@ -1,5 +1,6 @@
 'use client';
 
+import { activateOnKey } from '@/lib/a11y';
 import React, { useState, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -680,6 +681,8 @@ export default function ServicesPage() {
                     <tr
                       key={act.id}
                       onClick={() => handleOpenDetails(act)}
+                      tabIndex={0}
+                      onKeyDown={activateOnKey(() => handleOpenDetails(act))}
                       style={{
                         borderBottom: idx === acts.length - 1 ? 'none' : '1px solid var(--color-border-light)',
                         cursor: 'pointer',
@@ -865,7 +868,7 @@ export default function ServicesPage() {
             </span>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Button
+              <Button aria-label={isRu ? 'Предыдущая страница' : 'Oldingi sahifa'} title={isRu ? 'Предыдущая страница' : 'Oldingi sahifa'}
                 variant="secondary"
                 size="sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -876,7 +879,7 @@ export default function ServicesPage() {
               <span>
                 {page} / {totalPages}
               </span>
-              <Button
+              <Button aria-label={isRu ? 'Следующая страница' : 'Keyingi sahifa'} title={isRu ? 'Следующая страница' : 'Keyingi sahifa'}
                 variant="secondary"
                 size="sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}

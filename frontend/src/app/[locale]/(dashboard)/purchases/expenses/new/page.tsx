@@ -1,5 +1,6 @@
 'use client';
 
+import { activateOnKey } from '@/lib/a11y';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from 'next-intl';
@@ -668,6 +669,10 @@ export default function NewExpensePage() {
               {/* Option 1: BY_AMOUNT */}
               <div
                 onClick={() => setAllocationMethod('BY_AMOUNT')}
+                role="radio"
+                aria-checked={allocationMethod === 'BY_AMOUNT'}
+                tabIndex={0}
+                onKeyDown={activateOnKey(() => setAllocationMethod('BY_AMOUNT'))}
                 style={{
                   padding: '10px 14px',
                   borderRadius: 'var(--radius-md)',
@@ -728,6 +733,10 @@ export default function NewExpensePage() {
               {/* Option 2: BY_QUANTITY */}
               <div
                 onClick={() => setAllocationMethod('BY_QUANTITY')}
+                role="radio"
+                aria-checked={allocationMethod === 'BY_QUANTITY'}
+                tabIndex={0}
+                onKeyDown={activateOnKey(() => setAllocationMethod('BY_QUANTITY'))}
                 style={{
                   padding: '10px 14px',
                   borderRadius: 'var(--radius-md)',
@@ -774,6 +783,10 @@ export default function NewExpensePage() {
               {/* Option 3: BY_WEIGHT */}
               <div
                 onClick={() => setAllocationMethod('BY_WEIGHT')}
+                role="radio"
+                aria-checked={allocationMethod === 'BY_WEIGHT'}
+                tabIndex={0}
+                onKeyDown={activateOnKey(() => setAllocationMethod('BY_WEIGHT'))}
                 style={{
                   padding: '10px 14px',
                   borderRadius: 'var(--radius-md)',

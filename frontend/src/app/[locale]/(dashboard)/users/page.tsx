@@ -343,7 +343,7 @@ export default function UsersPage() {
               <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>
                 {isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'}
               </h3>
-              <button
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
                 type="button"
                 onClick={() => setShowModal(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
@@ -482,7 +482,7 @@ export default function UsersPage() {
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>
                 {isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'}
               </h2>
-              <button
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
                 type="button"
                 onClick={() => setEditingUser(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}

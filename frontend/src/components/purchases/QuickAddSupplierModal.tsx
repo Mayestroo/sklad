@@ -92,7 +92,7 @@ export function QuickAddSupplierModal({ isOpen, onClose, onSuccess }: QuickAddSu
               </p>
             </div>
           </div>
-          <button
+          <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
             onClick={onClose}
             type="button"
             className="text-text-muted hover:text-text-primary p-1.5 rounded-lg hover:bg-surface-hover transition-colors"

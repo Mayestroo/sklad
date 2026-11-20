@@ -177,7 +177,7 @@ export function AktSverkaDrawer({
               <Printer size={16} />
               <span style={{ marginLeft: 6 }}>{isRu ? 'Печать' : 'Chop etish'}</span>
             </Button>
-            <button
+            <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
               onClick={onClose}
               style={{
                 background: 'none',

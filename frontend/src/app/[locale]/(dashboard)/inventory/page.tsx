@@ -363,8 +363,8 @@ export default function InventoryPage() {
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
           <div style={{ width: '100%', maxWidth: '420px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>Shtrix-kod / QR Qidiruv</h3>
-              <button type="button" onClick={() => setShowScanner(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Поиск по штрих-коду / QR' : 'Shtrix-kod / QR bo‘yicha qidirish'}</h3>
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'} type="button" onClick={() => setShowScanner(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>

@@ -14,6 +14,9 @@ export function Card({ title, subtitle, action, children, style, className, onCl
   return (
     <div
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? activateOnKey(onClick) : undefined}
       className={className}
       style={{
         backgroundColor: 'var(--color-bg-secondary)',
@@ -52,3 +55,4 @@ export function Card({ title, subtitle, action, children, style, className, onCl
     </div>
   );
 }
+import { activateOnKey } from '@/lib/a11y';

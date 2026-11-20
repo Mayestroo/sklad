@@ -391,7 +391,7 @@ export function Select({
                 }}
               />
               {searchQuery && (
-                <button
+                <button aria-label={isRu ? 'Очистить' : 'Tozalash'} title={isRu ? 'Очистить' : 'Tozalash'}
                   type="button"
                   onClick={() => {
                     setSearchQuery('');

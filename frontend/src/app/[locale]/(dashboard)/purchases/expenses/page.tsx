@@ -1,5 +1,6 @@
 'use client';
 
+import { activateOnKey } from '@/lib/a11y';
 import { useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -376,6 +377,8 @@ export default function ExpensesPage() {
                     <tr
                       key={item.id}
                       onClick={() => router.push(`/${locale}/purchases/expenses/${item.id}`)}
+                      tabIndex={0}
+                      onKeyDown={activateOnKey(() => router.push(`/${locale}/purchases/expenses/${item.id}`))}
                       style={{
                         borderBottom: '1px solid var(--color-border-subtle)',
                         cursor: 'pointer',
@@ -522,6 +525,8 @@ export default function ExpensesPage() {
                       <tr
                         key={expense.id}
                         onClick={() => router.push(`/${locale}/purchases/expenses/${expense.id}`)}
+                        tabIndex={0}
+                        onKeyDown={activateOnKey(() => router.push(`/${locale}/purchases/expenses/${expense.id}`))}
                         style={{ borderBottom: '1px solid var(--color-border-subtle)', cursor: 'pointer' }}
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}

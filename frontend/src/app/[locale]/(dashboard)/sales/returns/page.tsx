@@ -572,9 +572,9 @@ export default function SalesReturnsPage() {
                 filteredReturns.map((ret) => (
                   <tr key={ret.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                     <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-                      <span style={{ cursor: 'pointer', color: 'var(--color-primary-600)' }} onClick={() => { setSelectedReturn(ret); setShowDetailsModal(true); }}>
+                      <button type="button" style={{ cursor: 'pointer', color: 'var(--color-primary-600)', background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 600 }} onClick={() => { setSelectedReturn(ret); setShowDetailsModal(true); }}>
                         {ret.returnNumber}
-                      </span>
+                      </button>
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
                       {formatDate(ret.returnDate, locale)}

@@ -787,7 +787,7 @@ export default function OpeningBalancesPage() {
                       <CheckCircle2 size={14} />
                       <span>{actionLoading ? (isRu ? 'Подождите...' : 'Kuting...') : isRu ? 'Провести' : 'Tasdiqlash'}</span>
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
+                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
                       <Trash2 size={14} />
                     </Button>
                   </>

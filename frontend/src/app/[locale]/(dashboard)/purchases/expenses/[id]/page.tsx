@@ -217,7 +217,7 @@ export default function ExpenseDetailPage() {
       {/* Header & Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/purchases/expenses`)}>
+          <Button aria-label={isRu ? 'Назад' : 'Orqaga'} title={isRu ? 'Назад' : 'Orqaga'} variant="ghost" size="sm" onClick={() => router.push(`/${locale}/purchases/expenses`)}>
             <ArrowLeft size={16} />
           </Button>
           <div>
