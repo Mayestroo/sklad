@@ -245,6 +245,11 @@ export default function CrmKanbanPage() {
 
                 {/* Cards List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', flex: 1 }}>
+                  {deals.length === 0 && (
+                    <div style={{ padding: 'var(--space-6) var(--space-2)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                      {isRu ? 'Нет сделок на этом этапе' : 'Bu bosqichda bitim yo‘q'}
+                    </div>
+                  )}
                   {deals.map((deal) => (
                     <Card key={deal.id} style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: 'var(--shadow-sm)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>

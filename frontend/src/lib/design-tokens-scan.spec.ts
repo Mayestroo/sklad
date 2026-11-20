@@ -32,3 +32,22 @@ test('every CSS token used without a fallback is defined in globals.css', () => 
   }
   assert.deepEqual([...missing.entries()], []);
 });
+
+/**
+ * Status colours come from the semantic tokens (--color-success|error|
+ * warning|info-*), not hard-coded hex, so the palette stays one system.
+ * Folder colours are user data saved in the database and stay hex.
+ */
+const STATUS_HEX = /['"]#(ef4444|dc2626|f59e0b|d97706|3b82f6|2563eb|10b981|059669|16a34a|22c55e)['"]/i;
+const STATUS_HEX_ALLOWED = [/folder/i, /\/\/ (Blue|Green|Amber|Red)$/];
+
+test('status colours in components use tokens', () => {
+  const found: string[] = [];
+  for (const file of walk(src)) {
+    if (!file.endsWith('.tsx')) continue;
+    readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      if (STATUS_HEX.test(line) && !STATUS_HEX_ALLOWED.some((re) => re.test(line))) found.push(file.slice(src.length) + ':' + (i + 1));
+    });
+  }
+  assert.deepEqual(found, []);
+});

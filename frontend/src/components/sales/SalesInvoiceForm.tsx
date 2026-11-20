@@ -1080,7 +1080,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       {docStatus === 'POSTED' && (
         <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <AlertTriangle size={20} color="#f59e0b" />
+            <AlertTriangle size={20} color="var(--color-warning-600)" />
             <div>
               <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                 {isRu ? 'Накладная проведена и заблокирована от изменений' : 'Sotuv hujjati tasdiqlangan va o‘zgarishlardan qulflangan'}
@@ -1560,7 +1560,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           {/* Profitability insight */}
           <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginTop: 'var(--space-2)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              <TrendingUp size={14} color="#10b981" />
+              <TrendingUp size={14} color="var(--color-success-600)" />
               <span>{isRu ? 'Ожидаемая маржинальность' : 'Kutilayotgan marja'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>

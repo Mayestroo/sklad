@@ -768,7 +768,7 @@ export default function FinancePage() {
                     fallbackAmount={dashboardMetrics?.debts.receivables || 0}
                     fallbackCurrency={defaultCurrency}
                     locale={locale}
-                    color="#059669"
+                    color="var(--color-success-600)"
                   />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Клиенты должны нам' : 'Mijozlar bizga to‘lashi kerak'}
@@ -776,7 +776,7 @@ export default function FinancePage() {
                   {(dashboardMetrics?.debts.customerAdvancesByCurrency.length ?? 0) > 0 && (
                     <div style={{ marginTop: 8, borderTop: '1px solid rgba(16, 185, 129, 0.18)', paddingTop: 6 }}>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы клиентов' : 'Mijozlar avansi'}</div>
-                      <MultiCurrencyValue items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} color="#2563eb" />
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} color="var(--color-info-600)" />
                     </div>
                   )}
                 </div>
@@ -798,7 +798,7 @@ export default function FinancePage() {
                     fallbackAmount={dashboardMetrics?.debts.payables || 0}
                     fallbackCurrency={defaultCurrency}
                     locale={locale}
-                    color="#dc2626"
+                    color="var(--color-error-600)"
                   />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Мы должны поставщикам' : 'Ta’minotchilarga to‘lashimiz kerak'}
@@ -806,7 +806,7 @@ export default function FinancePage() {
                   {(dashboardMetrics?.debts.supplierAdvancesByCurrency.length ?? 0) > 0 && (
                     <div style={{ marginTop: 8, borderTop: '1px solid rgba(239, 68, 68, 0.18)', paddingTop: 6 }}>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы поставщикам' : 'Ta’minotchilarga avanslar'}</div>
-                      <MultiCurrencyValue items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} color="#2563eb" />
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} color="var(--color-info-600)" />
                     </div>
                   )}
                 </div>
@@ -1098,6 +1098,19 @@ export default function FinancePage() {
                         </tr>
                       );
                     }),
+                )}
+                {!counterparties.some((cp) =>
+                  (cp.balancesByCurrency || []).some((balance: { customerDebt: number; supplierDebt: number }) =>
+                    debtsSubTab === 'receivables' ? balance.customerDebt > 0 : balance.supplierDebt > 0,
+                  ),
+                ) && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                      {debtsSubTab === 'receivables'
+                        ? isRu ? 'Никто нам не должен.' : 'Hozircha bizga hech kim qarzdor emas.'
+                        : isRu ? 'У нас нет долгов перед контрагентами.' : 'Hozircha kontragentlar oldida qarzimiz yo‘q.'}
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -1392,9 +1405,9 @@ function TransactionsTable({
 
                 <td style={{ padding: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {isIncome && <ArrowUpRight size={16} color="#10b981" />}
-                    {isExpense && <ArrowDownLeft size={16} color="#ef4444" />}
-                    {!isIncome && !isExpense && <ArrowLeftRight size={16} color="#3b82f6" />}
+                    {isIncome && <ArrowUpRight size={16} color="var(--color-success-600)" />}
+                    {isExpense && <ArrowDownLeft size={16} color="var(--color-error-600)" />}
+                    {!isIncome && !isExpense && <ArrowLeftRight size={16} color="var(--color-info-600)" />}
                     <span style={{ fontWeight: 500 }}>
                       {isIncome
                         ? isRu
@@ -1440,9 +1453,9 @@ function TransactionsTable({
                     color: isCancelled
                       ? 'var(--color-text-tertiary)'
                       : isIncome
-                      ? '#10b981'
+                      ? 'var(--color-success-600)'
                       : isExpense
-                      ? '#ef4444'
+                      ? 'var(--color-error-600)'
                       : 'var(--color-text-primary)',
                     textDecoration: isCancelled ? 'line-through' : 'none',
                   }}
@@ -1843,9 +1856,9 @@ function FinanceTransactionDrawer({
   };
 
   const colorMap = {
-    income: '#10b981',
-    expense: '#ef4444',
-    transfer: '#3b82f6',
+    income: 'var(--color-success-500)',
+    expense: 'var(--color-error-500)',
+    transfer: 'var(--color-info-500)',
     exchange: '#7c3aed',
   };
 

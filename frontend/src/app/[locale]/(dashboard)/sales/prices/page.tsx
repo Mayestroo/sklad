@@ -376,6 +376,17 @@ export default function PricesPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {products.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                        {productsQuery.isPending
+                          ? isRu ? 'Загрузка...' : 'Yuklanmoqda...'
+                          : isRu
+                          ? 'Товаров пока нет. Добавьте товары в разделе «Товары», затем задайте им цены здесь.'
+                          : 'Hozircha tovarlar yo‘q. Avval «Tovarlar» bo‘limida tovar qo‘shing, so‘ng bu yerda narx belgilang.'}
+                      </td>
+                    </tr>
+                  )}
                   {products.map((prod) => {
                     const listPrice = getPriceForProduct(prod.id);
                     const basePrice = Number(prod.salePrice || 0);

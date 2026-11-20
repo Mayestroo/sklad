@@ -252,7 +252,7 @@ export default function PurchasesPage() {
               fallbackAmount={stats?.totalSupplierDebt || 0}
               fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
-              color="#ef4444"
+              color="var(--color-error-600)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.suppliersWithDebtCount || 0} {isRu ? 'контрагентам' : 'ta kontragent oldida'}
@@ -273,7 +273,7 @@ export default function PurchasesPage() {
               fallbackAmount={stats?.monthlyReturnsTotal || 0}
               fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
-              color="#f59e0b"
+              color="var(--color-warning-600)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.monthlyReturnsCount || 0} {isRu ? 'возвратов' : 'ta qaytaruv'}

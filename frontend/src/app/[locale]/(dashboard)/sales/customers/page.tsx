@@ -164,7 +164,7 @@ export default function CustomersPage() {
         <Card style={{ padding: 'var(--space-4)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <DollarSign size={18} color="#f59e0b" />
+              <DollarSign size={18} color="var(--color-warning-600)" />
             </div>
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Общий долг' : 'Umumiy qarz'}</span>
           </div>
@@ -172,7 +172,7 @@ export default function CustomersPage() {
             items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
             fallbackCurrency={defaultCurrency}
             locale={locale}
-            color="#f59e0b"
+            color="var(--color-warning-600)"
           />
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{customersWithDebt} {isRu ? 'клиентов' : 'ta mijozda'}</div>
         </Card>

@@ -241,6 +241,13 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                      {isRu ? 'Сотрудников пока нет. Добавьте первого сотрудника кнопкой выше.' : 'Hozircha xodimlar yo‘q. Birinchi xodimni yuqoridagi tugma orqali qo‘shing.'}
+                    </td>
+                  </tr>
+                )}
                 {users.map((user) => (
                   <tr key={user.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                     <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>

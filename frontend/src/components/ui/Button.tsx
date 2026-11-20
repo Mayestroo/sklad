@@ -54,11 +54,11 @@ export function Button({
   const getSizeStyles = () => {
     switch (size) {
       case 'sm':
-        return { padding: '6px 12px', fontSize: 'var(--text-xs)' };
+        return { padding: '6px 12px', fontSize: 'var(--text-xs)', minHeight: 32 };
       case 'md':
-        return { padding: '8px 16px', fontSize: 'var(--text-sm)' };
+        return { padding: '8px 16px', fontSize: 'var(--text-sm)', minHeight: 38 };
       case 'lg':
-        return { padding: '12px 24px', fontSize: 'var(--text-base)' };
+        return { padding: '12px 24px', fontSize: 'var(--text-base)', minHeight: 44 };
     }
   };
 

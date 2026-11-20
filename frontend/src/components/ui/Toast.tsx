@@ -49,8 +49,8 @@ export const ToastCard: React.FC<ToastCardProps> = ({ toast, onClose }) => {
           bg: '#f0fdf4',
           border: '#bbf7d0',
           text: '#166534',
-          iconColor: '#16a34a',
-          barColor: '#22c55e',
+          iconColor: 'var(--color-success-600)',
+          barColor: 'var(--color-success-500)',
           icon: <CheckCircle2 size={20} />,
         };
       case 'error':
@@ -58,8 +58,8 @@ export const ToastCard: React.FC<ToastCardProps> = ({ toast, onClose }) => {
           bg: '#fef2f2',
           border: '#fecaca',
           text: '#991b1b',
-          iconColor: '#dc2626',
-          barColor: '#ef4444',
+          iconColor: 'var(--color-error-600)',
+          barColor: 'var(--color-error-500)',
           icon: <AlertCircle size={20} />,
         };
       case 'warning':
@@ -67,8 +67,8 @@ export const ToastCard: React.FC<ToastCardProps> = ({ toast, onClose }) => {
           bg: '#fffbeb',
           border: '#fde68a',
           text: '#92400e',
-          iconColor: '#d97706',
-          barColor: '#f59e0b',
+          iconColor: 'var(--color-warning-600)',
+          barColor: 'var(--color-warning-500)',
           icon: <AlertTriangle size={20} />,
         };
       case 'info':
@@ -77,8 +77,8 @@ export const ToastCard: React.FC<ToastCardProps> = ({ toast, onClose }) => {
           bg: '#eff6ff',
           border: '#bfdbfe',
           text: '#1e40af',
-          iconColor: '#2563eb',
-          barColor: '#3b82f6',
+          iconColor: 'var(--color-info-600)',
+          barColor: 'var(--color-info-500)',
           icon: <Info size={20} />,
         };
     }

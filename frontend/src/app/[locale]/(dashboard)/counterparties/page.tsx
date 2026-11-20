@@ -688,7 +688,7 @@ export default function CounterpartiesPage() {
                   fallbackAmount={summary?.receivables.total_amount ?? 0}
                   fallbackCurrency={defaultCurrency}
                   locale={locale}
-                  color="#059669"
+                  color="var(--color-success-600)"
                 />
               </div>
             </div>
@@ -731,7 +731,7 @@ export default function CounterpartiesPage() {
                   fallbackAmount={summary?.payables.total_amount ?? 0}
                   fallbackCurrency={defaultCurrency}
                   locale={locale}
-                  color="#dc2626"
+                  color="var(--color-error-600)"
                 />
               </div>
             </div>
@@ -753,7 +753,7 @@ export default function CounterpartiesPage() {
                 label: isRu ? 'Все' : 'Barchasi',
                 activeBg: 'rgba(59, 130, 246, 0.20)',
                 activeBorder: 'rgba(59, 130, 246, 0.50)',
-                activeColor: '#3b82f6',
+                activeColor: 'var(--color-info-600)',
                 color: null,
               },
               {
@@ -762,9 +762,9 @@ export default function CounterpartiesPage() {
                 count: summary?.receivables.count,
                 activeBg: 'rgba(16, 185, 129, 0.22)',
                 activeBorder: 'rgba(16, 185, 129, 0.55)',
-                activeColor: '#10b981',
+                activeColor: 'var(--color-success-600)',
                 color: 'var(--color-success-600)',
-                dot: '#10b981',
+                dot: 'var(--color-success-500)',
               },
               {
                 id: 'payables',
@@ -772,9 +772,9 @@ export default function CounterpartiesPage() {
                 count: summary?.payables.count,
                 activeBg: 'rgba(239, 68, 68, 0.22)',
                 activeBorder: 'rgba(239, 68, 68, 0.55)',
-                activeColor: '#ef4444',
+                activeColor: 'var(--color-error-600)',
                 color: 'var(--color-error-600)',
-                dot: '#ef4444',
+                dot: 'var(--color-error-500)',
               },
               {
                 id: 'settled',
@@ -818,10 +818,10 @@ export default function CounterpartiesPage() {
                         fontSize: '11px',
                         padding: '1px 7px',
                         borderRadius: '20px',
-                        background: active ? `${tab.dot}33` : 'var(--color-bg-subtle)',
+                        background: active ? `color-mix(in srgb, ${tab.dot} 20%, transparent)` : 'var(--color-bg-subtle)',
                         color: active ? tab.activeColor : 'var(--color-text-secondary)',
                         fontWeight: 700,
-                        border: active ? `1px solid ${tab.dot}66` : '1px solid var(--color-border)',
+                        border: active ? `1px solid color-mix(in srgb, ${tab.dot} 40%, transparent)` : '1px solid var(--color-border)',
                       }}
                     >
                       {tab.count}

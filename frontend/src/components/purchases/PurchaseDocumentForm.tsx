@@ -963,7 +963,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
       {docStatus === 'POSTED' && (
         <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <AlertTriangle size={20} color="#f59e0b" />
+            <AlertTriangle size={20} color="var(--color-warning-600)" />
             <div>
               <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                 {isRu ? 'Документ проведён и заблокирован от изменений' : 'Hujjat tasdiqlangan va o‘zgarishlardan qulflangan'}

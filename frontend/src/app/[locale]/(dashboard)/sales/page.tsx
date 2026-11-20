@@ -254,7 +254,7 @@ export default function SalesPage() {
               fallbackAmount={stats?.totalCustomerDebt || 0}
               fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
-              color="#ef4444"
+              color="var(--color-error-600)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {stats?.customersWithDebtCount || 0} {isRu ? 'клиентов' : 'ta mijoz qarzdor'}
@@ -275,7 +275,7 @@ export default function SalesPage() {
               fallbackAmount={stats?.monthlyReturnsTotal || 0}
               fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
-              color="#f59e0b"
+              color="var(--color-warning-600)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {isRu ? 'Сумма возвратов' : 'Qaytarilgan tovarlar'}
@@ -296,7 +296,7 @@ export default function SalesPage() {
               fallbackAmount={stats?.monthlyGrossProfit || 0}
               fallbackCurrency={stats?.currency || 'UZS'}
               locale={locale}
-              color="#10b981"
+              color="var(--color-success-600)"
             />
             <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
               {isRu ? 'Маржинальность:' : 'Marja:'} {formatPercent(Number(stats?.monthlyGrossProfitMargin || 0))}

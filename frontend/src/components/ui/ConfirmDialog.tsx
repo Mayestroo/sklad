@@ -244,7 +244,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               fontWeight: 600,
               backgroundColor:
                 variant === 'warning'
-                  ? '#d97706'
+                  ? 'var(--color-warning-600)'
                   : variant === 'danger'
                   ? 'var(--color-error-600, #dc2626)'
                   : undefined,

@@ -812,14 +812,14 @@ export default function OpeningBalancesPage() {
           {/* Summary: assets, liabilities, capital (balances itself) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
             <SummaryCard
-              color="#10b981"
+              color="var(--color-success-600)"
               icon={<TrendingUp size={20} />}
               title={isRu ? 'Активы' : 'Aktivlar'}
               value={formatCurrency(totals.totalAssets, locale, docCurrency)}
               hint={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
             />
             <SummaryCard
-              color="#ef4444"
+              color="var(--color-error-600)"
               icon={<TrendingDown size={20} />}
               title={isRu ? 'Обязательства' : 'Majburiyatlar'}
               value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
@@ -1172,7 +1172,7 @@ export default function OpeningBalancesPage() {
 function SummaryCard({ color, icon, title, value, hint }: { color: string; icon: React.ReactNode; title: string; value: string; hint: string }) {
   return (
     <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', borderLeft: `4px solid ${color}` }}>
-      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: `${color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
+      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
         {icon}
       </div>
       <div style={{ overflow: 'hidden' }}>

@@ -151,12 +151,12 @@ function CashFlowChart({
           <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={`colorIncome-${activeCurrency}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#16a34a" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                <stop offset="5%" stopColor="var(--color-success-600)" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="var(--color-success-600)" stopOpacity={0} />
               </linearGradient>
               <linearGradient id={`colorExpense-${activeCurrency}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#dc2626" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                <stop offset="5%" stopColor="var(--color-error-600)" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="var(--color-error-600)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false} />
@@ -192,19 +192,19 @@ function CashFlowChart({
             <Area
               type="monotone"
               dataKey={incomeKey}
-              stroke="#16a34a"
+              stroke="var(--color-success-600)"
               strokeWidth={2}
               fill={`url(#colorIncome-${activeCurrency})`}
-              dot={series.length <= 14 ? { r: 3, fill: '#16a34a', strokeWidth: 0 } : false}
+              dot={series.length <= 14 ? { r: 3, fill: 'var(--color-success-600)', strokeWidth: 0 } : false}
               activeDot={{ r: 5 }}
             />
             <Area
               type="monotone"
               dataKey={expenseKey}
-              stroke="#dc2626"
+              stroke="var(--color-error-600)"
               strokeWidth={2}
               fill={`url(#colorExpense-${activeCurrency})`}
-              dot={series.length <= 14 ? { r: 3, fill: '#dc2626', strokeWidth: 0 } : false}
+              dot={series.length <= 14 ? { r: 3, fill: 'var(--color-error-600)', strokeWidth: 0 } : false}
               activeDot={{ r: 5 }}
             />
           </AreaChart>

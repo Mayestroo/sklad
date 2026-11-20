@@ -559,3 +559,19 @@ textarea:focus-visible,
   [data-theme='dark'] .text-green-600,
   [data-theme='dark'] .text-emerald-600 { color: var(--color-success-700); }
 }
+
+/* ─── Hit targets (Apple HIG) ───
+   Icon-only buttons carry an aria-label or title; give them at least a 32px target
+   so a lone close / delete / arrow icon is easy to hit. :where() keeps the
+   specificity at zero, so an explicit min-width/min-height still wins. */
+:where(button[aria-label], button[title]) {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+@media (pointer: coarse) {
+  :where(button[aria-label], button[title]) {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
