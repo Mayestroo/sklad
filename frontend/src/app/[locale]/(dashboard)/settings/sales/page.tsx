@@ -207,7 +207,7 @@ function SalesSettingsForm({ initial }: { initial: CompanySettings | null | unde
                   <span style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-base)' }}>
                     {isRu
                       ? 'Использовать многоуровневые прайс-листы и категории цен'
-                      : 'Ko\'p darajali narxlar va chegirma jadvallaridan foydalanish (Enable Multi-tier Price Lists)'}
+                      : 'Ko\'p darajali narxlar va chegirma jadvallaridan foydalanish'}
                   </span>
                 }
                 description={
@@ -269,7 +269,7 @@ function SalesSettingsForm({ initial }: { initial: CompanySettings | null | unde
               <span style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)' }}>
                 {isRu
                   ? 'Разрешить продавцам изменять цены вручную в заказах'
-                  : 'Sotuvchilarga buyurtma va schyotlarda narxni qo\'lda o\'zgartirishga ruxsat berish (Allow Price Override)'}
+                  : 'Sotuvchilarga buyurtma va sotuv hujjatlarida narxni qo\'lda o\'zgartirishga ruxsat berish'}
               </span>
             }
             description={
