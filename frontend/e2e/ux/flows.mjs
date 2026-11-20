@@ -1,0 +1,156 @@
+// Real-flow checks in the browser against the local app (local DB only).
+// Usage: node e2e/ux/flows.mjs <flow> [locale] [width]
+// Flows: login, sale, receipt, palette, drawer, expense
+import { chromium } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const [flow = 'sale', locale = 'uz', width = '1440'] = process.argv.slice(2);
+const BASE = 'http://localhost:3000';
+const OUT = path.resolve('../docs/ux-audit/flows');
+fs.mkdirSync(OUT, { recursive: true });
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: Number(width), height: Number(width) < 600 ? 844 : 900 }, reducedMotion: 'reduce' });
+await ctx.addCookies([{ name: 'NEXT_LOCALE', value: locale, url: BASE }]);
+const page = await ctx.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(String(e)));
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 200)); });
+const shot = (name) => page.screenshot({ path: path.join(OUT, `${flow}-${name}-${locale}-${width}.jpg`), type: 'jpeg', quality: 60, fullPage: false });
+const log = (...a) => console.log(`[${flow} ${locale} ${width}]`, ...a);
+const isRu = locale === 'ru';
+
+async function signIn() {
+  const r = await page.request.post('http://localhost:3001/api/auth/login', { data: { email: 'admin@orient.uz', password: 'Admin123!' } });
+  const b = await r.json();
+  await page.goto(BASE + '/login');
+  await page.evaluate((b) => {
+    localStorage.setItem('crm_access_token', b.tokens.accessToken);
+    localStorage.setItem('crm_refresh_token', b.tokens.refreshToken);
+    localStorage.setItem('crm_user', JSON.stringify(b.user));
+    if (b.company) localStorage.setItem('crm_company', JSON.stringify(b.company));
+  }, b);
+}
+
+/** Opens a custom Select by its accessible name and picks the option containing `text`. */
+async function pick(comboName, text) {
+  const combo = page.getByRole('combobox', { name: comboName }).first();
+  await combo.click();
+  const search = page.locator('input[placeholder]').filter({ hasNot: page.locator('[disabled]') });
+  const opt = page.getByRole('option', { name: new RegExp(text, 'i') }).first();
+  if (!(await opt.isVisible().catch(() => false))) {
+    await page.keyboard.type(text.slice(0, 5));
+  }
+  await opt.click();
+  void search;
+}
+
+try {
+  if (flow === 'login') {
+    await page.goto(BASE + '/login', { waitUntil: 'networkidle' });
+    await shot('1-empty');
+    const email = page.locator('input[name=email]');
+    log('email focused:', await email.evaluate((el) => el === document.activeElement));
+    await page.keyboard.type('admin@orient.uz');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('wrong-password');
+    await page.keyboard.press('Enter');
+    const alert = page.locator('main [role=alert]');
+    await alert.waitFor({ timeout: 10000 });
+    log('error shown:', (await alert.textContent())?.trim());
+    log('password selected+focused:', await page.locator('input[name=password]').evaluate((el) => el === document.activeElement && el.selectionEnd - el.selectionStart === el.value.length));
+    await shot('2-error');
+    await page.keyboard.type('Admin123!');
+    await page.getByRole('button', { name: isRu ? 'Показать пароль' : 'Parolni ko‘rsatish' }).click();
+    log('password visible type:', await page.locator('input[name=password]').getAttribute('type'));
+    await page.locator('input[name=password]').press('Enter');
+    await page.waitForURL((u) => !u.pathname.includes('login'), { timeout: 15000 }).catch(() => {});
+    await page.getByRole('heading', { level: 1 }).waitFor({ timeout: 15000 });
+    log('after login h1:', await page.getByRole('heading', { level: 1 }).first().textContent());
+    await shot('3-dashboard');
+  }
+
+  if (flow === 'sale') {
+    await signIn();
+    await page.goto(BASE + '/sales/new', { waitUntil: 'networkidle' });
+    await shot('1-new');
+    // try to post empty → inline errors
+    await page.keyboard.press('Control+Enter');
+    await page.getByRole('alert').first().waitFor({ timeout: 8000 });
+    log('empty post error:', (await page.getByRole('alert').first().textContent())?.trim());
+    await shot('2-validation');
+    await pick(isRu ? 'Клиент' : 'Mijoz', 'Baraka');
+    await pick(isRu ? 'Выберите товар' : 'Tovarni tanlang', isRu ? 'Сахар' : 'Shakar');
+    const qty = page.getByLabel(isRu ? 'Количество для строки 1' : 'Miqdor 1');
+    await qty.fill('3');
+    await page.waitForTimeout(300);
+    log('live total:', (await page.locator('.doc-live-total').textContent().catch(() => 'none'))?.trim());
+    await shot('3-filled');
+    await page.getByRole('button', { name: isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish' }).click();
+    await page.waitForURL((u) => u.pathname === '/sales', { timeout: 20000 });
+    await page.waitForTimeout(500);
+    log('toast:', (await page.getByRole('status').filter({ hasText: /tasdiqlandi|проведена/ }).first().textContent().catch(() => 'none'))?.trim());
+    await shot('4-posted');
+  }
+
+  if (flow === 'receipt') {
+    await signIn();
+    await page.goto(BASE + '/purchases/new', { waitUntil: 'networkidle' });
+    await shot('1-new');
+    await pick(isRu ? 'Контрагент' : 'Kontragent', 'Ulgurji');
+    const prodCombo = page.getByRole('combobox').filter({ hasText: isRu ? 'Выберите' : 'tanlang' }).last();
+    await prodCombo.click();
+    await page.getByRole('option', { name: isRu ? /Рис/ : /Guruch/ }).first().click();
+    await page.keyboard.press('Control+s');
+    await page.waitForTimeout(600);
+    log('missing currency marked:', await page.getByText(isRu ? 'Выберите валюту' : 'Valyutani tanlang').count());
+    await pick(isRu ? 'Валюта' : 'Valyuta', 'UZS');
+    await page.getByLabel(isRu ? 'Количество для строки 1' : 'Miqdor 1').fill('10');
+    await page.getByLabel(isRu ? 'Цена за ед. для строки 1' : 'Birlik narxi 1').fill('15000');
+    await page.waitForTimeout(300);
+    log('live total:', (await page.locator('.doc-live-total').textContent().catch(() => 'none'))?.trim());
+    await shot('2-filled');
+    await page.keyboard.press('Control+s');
+    await page.waitForURL(/\/purchases\/[0-9a-f-]{36}/, { timeout: 20000 });
+    log('saved draft url:', new URL(page.url()).pathname);
+    await shot('3-saved');
+  }
+
+  if (flow === 'palette') {
+    await signIn();
+    await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+    await page.keyboard.press('Control+k');
+    await page.getByRole('combobox', { name: isRu ? 'Поиск раздела или действия' : 'Sahifa yoki amal qidirish' }).waitFor();
+    await page.keyboard.type(isRu ? 'возврат' : 'qaytar');
+    await shot('1-search');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(1500);
+    log('navigated to:', new URL(page.url()).pathname);
+    await page.keyboard.press('?');
+    await page.waitForTimeout(300);
+    log('help open:', await page.getByRole('dialog').isVisible().catch(() => false));
+    await shot('2-help');
+  }
+
+  if (flow === 'drawer') {
+    await signIn();
+    await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: isRu ? 'Открыть меню' : 'Menyuni ochish' }).click();
+    await page.waitForTimeout(300);
+    await shot('1-open');
+    await page.getByRole('button', { name: isRu ? /^Закупки$/ : /^Xaridlar$/ }).click();
+    await page.getByRole('link', { name: isRu ? 'Доп. расходы' : 'Qo‘shimcha xarajatlar' }).click();
+    await page.waitForURL(/purchases\/expenses/, { timeout: 15000 });
+    await page.waitForTimeout(400);
+    log('drawer closed after nav:', !(await page.locator('.app-sidebar.is-open').count()));
+    log('overflow:', await page.evaluate(() => document.documentElement.scrollWidth - innerWidth));
+    await shot('2-navigated');
+  }
+} catch (e) {
+  log('FAILED:', String(e).split('\n')[0]);
+  await shot('zz-failure');
+  process.exitCode = 1;
+}
+const real = errors.filter((e) => !/React DevTools|Download the/.test(e));
+log('console errors:', real.length ? real : 'none');
+await browser.close();
