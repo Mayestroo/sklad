@@ -137,6 +137,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       amount: 2000000,
       currency: 'UZS',
       receiptId,
+      receipt: { currency: 'UZS', exchangeRate: 1 },
       isPaid: false,
       counterpartyId: 'carrier-1',
       counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
@@ -213,6 +214,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       amount: 2000000,
       currency: 'UZS',
       receiptId,
+      receipt: { currency: 'UZS', exchangeRate: 1 },
       isPaid: false,
       counterpartyId: 'carrier-1',
       counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
@@ -386,6 +388,7 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
       currency: 'UZS',
       amount: 2000000,
       receiptId,
+      receipt: { currency: 'UZS', exchangeRate: 1 },
       isPaid: false,
       counterpartyId: 'carrier-1',
       items: [

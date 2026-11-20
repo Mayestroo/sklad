@@ -567,7 +567,7 @@ export function DatePicker({
         >
           {/* Header Navigation Bar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <button
+            <button aria-label={isRu ? 'Назад' : 'Oldingi'} title={isRu ? 'Назад' : 'Oldingi'}
               type="button"
               onClick={handlePrevMonth}
               disabled={viewMode === 'months'}
@@ -654,7 +654,7 @@ export function DatePicker({
               </button>
             </div>
 
-            <button
+            <button aria-label={isRu ? 'Вперёд' : 'Keyingi'} title={isRu ? 'Вперёд' : 'Keyingi'}
               type="button"
               onClick={handleNextMonth}
               disabled={viewMode === 'months'}

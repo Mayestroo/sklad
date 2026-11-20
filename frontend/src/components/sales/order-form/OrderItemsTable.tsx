@@ -130,7 +130,7 @@ export function OrderItemsTable({
                   {/* Ready Qty (read-only display) */}
                   {orderStatus !== 'NEW' && (
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? '#10b981' : '#f59e0b' }}>
+                      <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? 'var(--color-success-600)' : 'var(--color-warning-600)' }}>
                         {item.readyQty || 0} / {quantityWithUnit(item.quantity, products.find((product) => product.id === item.productId)?.unitOfMeasure, locale)}
                       </span>
                     </td>

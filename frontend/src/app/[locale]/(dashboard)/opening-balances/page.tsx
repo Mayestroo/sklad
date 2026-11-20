@@ -787,7 +787,7 @@ export default function OpeningBalancesPage() {
                       <CheckCircle2 size={14} />
                       <span>{actionLoading ? (isRu ? 'Подождите...' : 'Kuting...') : isRu ? 'Провести' : 'Tasdiqlash'}</span>
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
+                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
                       <Trash2 size={14} />
                     </Button>
                   </>
@@ -812,14 +812,14 @@ export default function OpeningBalancesPage() {
           {/* Summary: assets, liabilities, capital (balances itself) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
             <SummaryCard
-              color="#10b981"
+              color="var(--color-success-600)"
               icon={<TrendingUp size={20} />}
               title={isRu ? 'Активы' : 'Aktivlar'}
               value={formatCurrency(totals.totalAssets, locale, docCurrency)}
               hint={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
             />
             <SummaryCard
-              color="#ef4444"
+              color="var(--color-error-600)"
               icon={<TrendingDown size={20} />}
               title={isRu ? 'Обязательства' : 'Majburiyatlar'}
               value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
@@ -1172,7 +1172,7 @@ export default function OpeningBalancesPage() {
 function SummaryCard({ color, icon, title, value, hint }: { color: string; icon: React.ReactNode; title: string; value: string; hint: string }) {
   return (
     <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', borderLeft: `4px solid ${color}` }}>
-      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: `${color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
+      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
         {icon}
       </div>
       <div style={{ overflow: 'hidden' }}>
@@ -1508,7 +1508,7 @@ function DebtsTable({
                     decimals={2}
                     placeholder="0"
                     className="tabular-nums"
-                    style={field('180px', { fontWeight: 600, textAlign: 'right', color: isAsset ? '#10b981' : '#ef4444' })}
+                    style={field('180px', { fontWeight: 600, textAlign: 'right', color: isAsset ? 'var(--color-success-600)' : 'var(--color-error-600)' })}
                   />
                 </td>
                 <td style={td}>
@@ -1594,10 +1594,10 @@ function FixedAssetsTable({
                 <td style={{ ...td, textAlign: 'right' }} className="tabular-nums">
                   {line.fixedAssetId ? formatCurrency(initCost, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ ...td, textAlign: 'right', color: '#ef4444' }} className="tabular-nums">
+                <td style={{ ...td, textAlign: 'right', color: 'var(--color-error-600)' }} className="tabular-nums">
                   {line.fixedAssetId ? formatCurrency(accDep, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : '#10b981' }} className="tabular-nums">
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : 'var(--color-success-600)' }} className="tabular-nums">
                   {overDepreciated ? (
                     <span data-testid="fixed-asset-over-depreciated">{isRu ? 'Амортизация больше стоимости' : 'Eskirish qiymatdan katta'}</span>
                   ) : line.fixedAssetId ? (

@@ -52,6 +52,15 @@ import {
   PURCHASE_RETURN_GAIN_ACCOUNT_SETTING,
 } from '../../common/settings/accounting-settings';
 import { startOfBusinessMonth } from '../../common/utils/business-day';
+import {
+  allocateReceiptExpenses,
+  assertExpenseCurrencyMatchesReceipt,
+  assertReceiptOpenForExpense,
+  allocateReceiptLines,
+  lineAllocationsMatchExpenses,
+  receiptSupplierTotal,
+  splitReceiptExpensesByPayee,
+} from './expense-allocation.engine';
 
 type Numeric = number | string | Prisma.Decimal;
 
@@ -364,6 +373,7 @@ export class PurchasesService {
   ) {
     const existing = await this.prisma.purchaseReceipt.findFirst({
       where: { id, tenantId },
+      include: { expenses: true },
     });
 
     if (!existing) {
@@ -464,11 +474,59 @@ export class PurchasesService {
       };
     });
 
-    const totalAmount =
-      subtotalAmount -
-      discountAmount +
-      vatAmount +
-      Number(existing.additionalExpensesTotal);
+    // The lines are replaced, so the receipt expenses are spread again over
+    // the new lines (ADR 0002); otherwise the batch cost would lose them while
+    // the journal (additionalExpensesTotal) still carries them.
+    const existingExpenses = existing.expenses ?? [];
+    for (const e of existingExpenses) {
+      assertExpenseCurrencyMatchesReceipt(e.currency, targetCurrency);
+    }
+    const productWeights =
+      existingExpenses.length > 0
+        ? new Map(
+            (
+              await this.prisma.product.findMany({
+                where: {
+                  tenantId,
+                  id: { in: preparedItems.map((i) => i.productId) },
+                },
+                select: { id: true, sku: true, weight: true },
+              })
+            ).map((p) => [p.id, p]),
+          )
+        : new Map<string, { id: string; sku: string; weight: unknown }>();
+    const lineAllocations = allocateReceiptLines(
+      preparedItems.map((item, index) => ({
+        id: String(index),
+        productId: item.productId,
+        product: (productWeights.get(item.productId) ?? null) as {
+          sku?: string;
+          weight?: Prisma.Decimal | null;
+        } | null,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        weight: item.weight,
+      })),
+      existingExpenses,
+    );
+    preparedItems.forEach((item, index) => {
+      const allocation = lineAllocations.get(String(index))!;
+      item.allocatedExpenses = allocation.allocatedExpenses;
+      item.landedCost = allocation.landedCost;
+    });
+    const additionalExpensesTotal =
+      Math.round(
+        existingExpenses.reduce((sum, e) => sum + Number(e.amount), 0) * 100,
+      ) / 100;
+
+    // The supplier may change: an expense owed to the new supplier joins its
+    // payable, one owed to the old supplier stays with that supplier.
+    const totalAmount = receiptSupplierTotal(
+      { subtotalAmount, discountAmount, vatAmount },
+      existing.expenses ?? [],
+      dto.counterpartyId,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       // F9: lock the row and re-check the status inside the transaction; a
@@ -510,6 +568,7 @@ export class PurchasesService {
           subtotalAmount,
           discountAmount,
           vatAmount,
+          additionalExpensesTotal,
           totalAmount,
           items: {
             create: preparedItems,
@@ -547,7 +606,65 @@ export class PurchasesService {
       );
     }
 
+    // Each receipt expense is owed to its own supplier. The receipt total is
+    // recomputed here so a draft saved before this rule does not book another
+    // supplier's expense to the receipt supplier.
+    const receiptExpenses = receipt.expenses ?? [];
+    for (const e of receiptExpenses) {
+      assertExpenseCurrencyMatchesReceipt(e.currency, receipt.currency);
+    }
+    // A draft whose lines were replaced before edits re-spread its expenses
+    // has lines without their shares: spread them again so the batch cost and
+    // the journal both carry every expense.
+    const expensesTotal =
+      Math.round(
+        receiptExpenses.reduce((sum, e) => sum + Number(e.amount), 0) * 100,
+      ) / 100;
+    const reallocatedLines = !lineAllocationsMatchExpenses(
+      receipt.items,
+      receiptExpenses,
+    )
+      ? allocateReceiptLines(receipt.items, receiptExpenses)
+      : null;
+    if (reallocatedLines) {
+      for (const item of receipt.items) {
+        const allocation = reallocatedLines.get(item.id)!;
+        item.allocatedExpenses = new Prisma.Decimal(
+          allocation.allocatedExpenses,
+        );
+        item.landedCost = new Prisma.Decimal(allocation.landedCost);
+      }
+    }
+    // A draft carries only its own receipt expenses: Additional Expense
+    // documents apply to posted receipts and must be cancelled before unposting.
+    if (
+      Math.abs(Number(receipt.additionalExpensesTotal) - expensesTotal) >= 0.005
+    ) {
+      receipt.additionalExpensesTotal = new Prisma.Decimal(expensesTotal);
+    }
+    const supplierPayable = receiptSupplierTotal(
+      receipt,
+      receiptExpenses,
+      receipt.counterpartyId,
+    );
+    const { thirdParty: thirdPartyExpenses } = splitReceiptExpensesByPayee(
+      receiptExpenses,
+      receipt.counterpartyId,
+    );
+
     return this.prisma.$transaction(async (tx) => {
+      if (reallocatedLines) {
+        for (const item of receipt.items) {
+          await tx.purchaseReceiptItem.update({
+            where: { receipt: { tenantId }, id: item.id },
+            data: {
+              allocatedExpenses: item.allocatedExpenses,
+              landedCost: item.landedCost,
+            },
+          });
+        }
+      }
+
       // 1. Update stock levels & create batches (physical items only)
       for (const item of receipt.items) {
         const itemType = item.product?.type || 'PRODUCT';
@@ -634,19 +751,36 @@ export class PurchasesService {
         }
       }
 
-      // 2. Accrue supplier payable in the receipt's native currency.
+      // 2. Accrue supplier payables in the receipt's native currency: the
+      // receipt supplier for its lines and its own expenses, and each other
+      // expense supplier for its expense.
       await this.settlementService.recordMovement(tx, {
         tenantId,
         counterpartyId: receipt.counterpartyId,
         currency: receipt.currency,
         side: CounterpartySettlementSide.SUPPLIER,
-        amount: Number(receipt.totalAmount),
+        amount: supplierPayable,
         entryType: 'PURCHASE_RECEIPT_POSTED',
         effectiveAt: receipt.docDate,
         sourceDocType: 'PurchaseReceipt',
         sourceDocId: receipt.id,
         idempotencyKey: `PurchaseReceipt:${receipt.id}:POSTED:${receipt.updatedAt.toISOString()}`,
       });
+      for (const expense of thirdPartyExpenses) {
+        if (expense.amount === 0) continue;
+        await this.settlementService.recordMovement(tx, {
+          tenantId,
+          counterpartyId: expense.supplierId,
+          currency: receipt.currency,
+          side: CounterpartySettlementSide.SUPPLIER,
+          amount: expense.amount,
+          entryType: 'PURCHASE_EXPENSE_POSTED',
+          effectiveAt: receipt.docDate,
+          sourceDocType: 'PurchaseExpense',
+          sourceDocId: expense.expenseId,
+          idempotencyKey: `PurchaseExpense:${expense.expenseId}:POSTED:${receipt.updatedAt.toISOString()}`,
+        });
+      }
 
       // 3. Accounting journal entries according to BHMS / NAS Standard
       // Debit 2910 (Finished Goods / Tovarlar): Net product cost + allocated expenses
@@ -799,6 +933,8 @@ export class PurchasesService {
           status: PurchaseDocStatus.POSTED,
           postedById: userId,
           postedAt: new Date(),
+          totalAmount: supplierPayable,
+          additionalExpensesTotal: receipt.additionalExpensesTotal,
         },
         include: {
           counterparty: true,
@@ -821,6 +957,7 @@ export class PurchasesService {
           },
         },
         counterparty: true,
+        expenses: { select: { id: true } },
       },
     });
 
@@ -915,6 +1052,7 @@ export class PurchasesService {
         sourceDocId: receipt.id,
         idempotencyKey: `PurchaseReceipt:${receipt.id}:UNPOSTED:${receipt.updatedAt.toISOString()}`,
       });
+      await this.reverseThirdPartyExpensePayables(tx, tenantId, receipt);
 
       // 3. Remove journal entries
       await this.journalService.deleteEntriesForSource(
@@ -1218,6 +1356,73 @@ export class PurchasesService {
     });
   }
 
+  /**
+   * Reverses what posting actually booked to other expense suppliers. A
+   * receipt posted before expenses were split has no such entries, so the
+   * reversal reads the ledger instead of recomputing from the expenses.
+   */
+  private async reverseThirdPartyExpensePayables(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    receipt: {
+      docDate: Date;
+      updatedAt: Date;
+      expenses?: { id: string }[];
+    },
+  ) {
+    const expenseIds = (receipt.expenses ?? []).map((e) => e.id);
+    if (expenseIds.length === 0) return;
+    const entries = await tx.counterpartySettlementEntry.findMany({
+      where: {
+        tenantId,
+        sourceDocType: 'PurchaseExpense',
+        sourceDocId: { in: expenseIds },
+        side: CounterpartySettlementSide.SUPPLIER,
+      },
+      select: {
+        sourceDocId: true,
+        counterpartyId: true,
+        currency: true,
+        amount: true,
+      },
+    });
+    const open = new Map<
+      string,
+      {
+        expenseId: string;
+        counterpartyId: string;
+        currency: string;
+        amount: number;
+      }
+    >();
+    for (const entry of entries) {
+      const key = `${entry.sourceDocId}|${entry.counterpartyId}|${entry.currency}`;
+      const row = open.get(key) ?? {
+        expenseId: entry.sourceDocId,
+        counterpartyId: entry.counterpartyId,
+        currency: entry.currency,
+        amount: 0,
+      };
+      row.amount = Math.round((row.amount + Number(entry.amount)) * 100) / 100;
+      open.set(key, row);
+    }
+    for (const row of open.values()) {
+      if (row.amount === 0) continue;
+      await this.settlementService.recordMovement(tx, {
+        tenantId,
+        counterpartyId: row.counterpartyId,
+        currency: row.currency,
+        side: CounterpartySettlementSide.SUPPLIER,
+        amount: -row.amount,
+        entryType: 'PURCHASE_EXPENSE_UNPOSTED',
+        effectiveAt: receipt.docDate,
+        sourceDocType: 'PurchaseExpense',
+        sourceDocId: row.expenseId,
+        idempotencyKey: `PurchaseExpense:${row.expenseId}:${row.counterpartyId}:UNPOSTED:${receipt.updatedAt.toISOString()}`,
+      });
+    }
+  }
+
   async deleteReceipt(tenantId: string, id: string) {
     const receipt = await this.prisma.purchaseReceipt.findFirst({
       where: { id, tenantId },
@@ -1263,6 +1468,17 @@ export class PurchasesService {
       throw new NotFoundException('Xarid hujjati topilmadi');
     }
 
+    // ADR 0002: a receipt expense is allocated before posting; posting
+    // converts the lines (allocations included) to UZS at the receipt rate
+    // and locks the batch cost. A posted receipt's batches and journal are
+    // revalued only by an Additional Expense document (ADR 0008), which
+    // carries its own currency and rate.
+    assertReceiptOpenForExpense(receipt.status);
+    // The allocation is added to line totals in the receipt's currency and
+    // converted at the receipt rate; an amount in another currency would be
+    // summed as if it were the same money (ADR 0023).
+    assertExpenseCurrencyMatchesReceipt(dto.currency, receipt.currency);
+
     const allocationMethod =
       dto.allocationMethod || ExpenseAllocationMethod.BY_AMOUNT;
     await assertTenantOwned(this.prisma, tenantId, {
@@ -1270,7 +1486,19 @@ export class PurchasesService {
     });
 
     return this.prisma.$transaction(async (tx) => {
-      // Create expense
+      // F9: a post committed after the check above must not get expenses it
+      // never converted.
+      const lockedStatus = await lockDocumentStatus(
+        tx,
+        'purchaseReceipt',
+        receipt.id,
+        tenantId,
+      );
+      if (lockedStatus === null) {
+        throw new NotFoundException('Xarid hujjati topilmadi');
+      }
+      assertReceiptOpenForExpense(lockedStatus);
+
       const expense = await tx.purchaseExpense.create({
         data: {
           tenantId,
@@ -1284,61 +1512,32 @@ export class PurchasesService {
         },
       });
 
-      // Recalculate total additional expenses for this receipt
       const allExpenses = await tx.purchaseExpense.findMany({
         where: { tenantId, receiptId: dto.receiptId },
       });
+      // Rows saved before this guard may be in another currency; refuse
+      // rather than add them up.
+      for (const e of allExpenses) {
+        assertExpenseCurrencyMatchesReceipt(e.currency, receipt.currency);
+      }
 
+      // Each expense is spread by its own method, then the shares are summed.
+      const allocated = allocateReceiptExpenses(
+        receipt.items,
+        allExpenses.map((e) => ({
+          amount: Number(e.amount),
+          allocationMethod: e.allocationMethod,
+        })),
+      );
       const totalExpensesAmount = allExpenses.reduce(
         (sum, e) => sum + Number(e.amount),
         0,
       );
-      const subtotalAmount = Number(receipt.subtotalAmount);
-      const totalQuantity = receipt.items.reduce(
-        (sum, i) => sum + Number(i.quantity),
-        0,
-      );
 
-      // Total weight for BY_WEIGHT allocation
-      const totalWeight = receipt.items.reduce((sum, i) => {
-        const unitWeight =
-          Number(i.weight) > 0
-            ? Number(i.weight)
-            : Number(i.product?.weight) || 1;
-        return sum + Number(i.quantity) * unitWeight;
-      }, 0);
-
-      // Allocate expenses among items
       for (const item of receipt.items) {
-        let allocatedForItem = 0;
         const itemQty = Number(item.quantity);
         const itemTotal = Number(item.totalPrice);
-        const unitWeight =
-          Number(item.weight) > 0
-            ? Number(item.weight)
-            : Number(item.product?.weight) || 1;
-        const itemWeightTotal = itemQty * unitWeight;
-
-        if (
-          allocationMethod === ExpenseAllocationMethod.BY_AMOUNT &&
-          subtotalAmount > 0
-        ) {
-          allocatedForItem = (itemTotal / subtotalAmount) * totalExpensesAmount;
-        } else if (
-          allocationMethod === ExpenseAllocationMethod.BY_QUANTITY &&
-          totalQuantity > 0
-        ) {
-          allocatedForItem = (itemQty / totalQuantity) * totalExpensesAmount;
-        } else if (
-          allocationMethod === ExpenseAllocationMethod.BY_WEIGHT &&
-          totalWeight > 0
-        ) {
-          allocatedForItem =
-            (itemWeightTotal / totalWeight) * totalExpensesAmount;
-        } else {
-          allocatedForItem = totalExpensesAmount / receipt.items.length;
-        }
-
+        const allocatedForItem = allocated.get(item.id) ?? 0;
         const newLandedCost =
           itemQty > 0 ? (itemTotal + allocatedForItem) / itemQty : 0;
 
@@ -1349,26 +1548,15 @@ export class PurchasesService {
             landedCost: newLandedCost,
           },
         });
-
-        // Update product batch landed cost if created
-        if (receipt.status === PurchaseDocStatus.POSTED) {
-          await tx.productBatch.updateMany({
-            where: {
-              tenantId,
-              receiptId: receipt.id,
-              productId: item.productId,
-            },
-            data: { landedCost: newLandedCost },
-          });
-        }
       }
 
-      // Update total amount on receipt
-      const newTotalAmount =
-        Number(receipt.subtotalAmount) -
-        Number(receipt.discountAmount) +
-        Number(receipt.vatAmount) +
-        totalExpensesAmount;
+      // Landed cost takes every expense; the receipt total (the receipt
+      // supplier's payable) takes only the expenses owed to that supplier.
+      const newTotalAmount = receiptSupplierTotal(
+        receipt,
+        allExpenses,
+        receipt.counterpartyId,
+      );
 
       const updatedReceipt = await tx.purchaseReceipt.update({
         where: { tenantId, id: receipt.id },
@@ -2360,15 +2548,43 @@ export class PurchasesService {
       orderBy: { transactionDate: 'desc' },
     });
 
-    const totalPurchased = receipts.reduce(
-      (sum, r) => sum + Number(r.totalAmount),
-      0,
+    // ADR 0023: totals per currency over posted documents; never one sum
+    // across USD and UZS.
+    const byCurrency = (
+      rows: Array<{ currency: string; amount: unknown }>,
+    ): Array<{ currency: string; amount: number }> => {
+      const map = new Map<string, number>();
+      for (const row of rows) {
+        map.set(
+          row.currency,
+          (map.get(row.currency) ?? 0) + Number(row.amount),
+        );
+      }
+      return [...map.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([currency, amount]) => ({
+          currency,
+          amount: Math.round(amount * 100) / 100,
+        }));
+    };
+    const totalPurchasedByCurrency = byCurrency(
+      receipts
+        .filter((r) => r.status === 'POSTED')
+        .map((r) => ({ currency: r.currency, amount: r.totalAmount })),
     );
-    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalReturned = returns.reduce(
-      (sum, ret) => sum + Number(ret.totalAmount),
-      0,
+    const totalPaidByCurrency = byCurrency(
+      payments.map((p) => ({ currency: p.currency, amount: p.amount })),
     );
+    const totalReturnedByCurrency = byCurrency(
+      returns
+        .filter((ret) => ret.status === 'POSTED')
+        .map((ret) => ({ currency: ret.currency, amount: ret.totalAmount })),
+    );
+    const singleTotal = (totals: Array<{ amount: number }>) =>
+      totals.length === 1 ? totals[0].amount : 0;
+    const totalPurchased = singleTotal(totalPurchasedByCurrency);
+    const totalPaid = singleTotal(totalPaidByCurrency);
+    const totalReturned = singleTotal(totalReturnedByCurrency);
     const balances = await this.prisma.counterpartyBalance.findMany({
       where: { tenantId, counterpartyId: supplierId },
       select: { currency: true, customerDebt: true, supplierDebt: true },
@@ -2399,6 +2615,9 @@ export class PurchasesService {
         totalPurchased,
         totalPaid,
         totalReturned,
+        totalPurchasedByCurrency,
+        totalPaidByCurrency,
+        totalReturnedByCurrency,
         balancesByCurrency,
         supplierAdvancesByCurrency,
       },

@@ -352,8 +352,8 @@ export default function ProductionPage() {
       {notice && <div role="status" style={alertStyle('success')}>{notice}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 'var(--space-4)' }}>
-        <Kpi icon={<Clock3 size={20} />} title={isRu ? 'В производстве' : 'Jarayonda'} value={`${activeCount}`} color="#d97706" />
-        <Kpi icon={<CheckCircle2 size={20} />} title={isRu ? 'Завершено' : 'Yakunlangan'} value={`${completedCount}`} color="#059669" />
+        <Kpi icon={<Clock3 size={20} />} title={isRu ? 'В производстве' : 'Jarayonda'} value={`${activeCount}`} color="var(--color-warning-600)" />
+        <Kpi icon={<CheckCircle2 size={20} />} title={isRu ? 'Завершено' : 'Yakunlangan'} value={`${completedCount}`} color="var(--color-success-600)" />
         <Kpi icon={<Factory size={20} />} title={isRu ? 'Себестоимость выпуска' : 'Ishlab chiqarish tannarxi'} value={formatCurrency(totalCompletedCost, locale, 'UZS')} color="var(--color-primary-600)" />
       </div>
 

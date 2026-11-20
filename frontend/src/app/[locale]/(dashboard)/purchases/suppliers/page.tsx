@@ -7,7 +7,6 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -34,7 +33,6 @@ export default function SuppliersPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
 
   const suppliersQuery = useApiQuery<Counterparty[]>('/sales/counterparties');
   const suppliers = useMemo(
@@ -126,7 +124,6 @@ export default function SuppliersPage() {
             <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-600)' }} className="tabular-nums">
               <MultiCurrencyValue
                 items={Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
-                fallbackCurrency={defaultCurrency}
                 locale={locale}
                 color="var(--color-danger-600)"
               />
@@ -200,7 +197,7 @@ export default function SuppliersPage() {
                       >
                         {balances.length > 0
                           ? balances.map((balance) => (
-                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : '#2563eb' }}>
+                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-info-600)' }}>
                                 {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                               </div>
                             ))
@@ -214,7 +211,7 @@ export default function SuppliersPage() {
                           <Button size="sm" variant="secondary" onClick={() => setEditingSupplier(s)} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
                             <Pencil size={14} />
                           </Button>
-                          <Button size="sm" variant="secondary" style={{ color: '#ef4444' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
+                          <Button size="sm" variant="secondary" style={{ color: 'var(--color-error-600)' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
                             <Trash2 size={14} />
                           </Button>
                         </div>

@@ -1448,6 +1448,10 @@ model Deal {
   title          String
   stage          DealStageSlug @default(LEAD)
   amount         Decimal       @default(0) @db.Decimal(15, 2)
+  /// ADR 0022/0023: the amount's currency. NULL only on legacy deals saved
+  /// before the column existed (shown as "currency not set"); a nonzero
+  /// amount saved now always carries one.
+  currency       String?
   assignedUserId String?       @map("assigned_user_id")
   expectedClose  DateTime?     @map("expected_close")
   createdAt      DateTime      @default(now()) @map("created_at")

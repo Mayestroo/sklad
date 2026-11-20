@@ -10,9 +10,11 @@ import { fileURLToPath } from 'node:url';
  * `useDefaultCurrency()`); it starts blank and refuses to submit until one is
  * chosen. This scan fails when a new guess appears.
  *
- * The cases below are display-only and were left on purpose (docs/progress.md,
- * round 5, F8 table). Each entry is the number of matches allowed in that file
- * for that pattern; adding one more fails the scan.
+ * The display-only exceptions once listed here (F8 table, F10 cross-currency
+ * totals) are fixed: totals are kept per currency, a zero shows no currency
+ * and the display-only `useDefaultCurrency` hook is gone. ALLOWED keeps only
+ * defined (not guessed) currencies; each entry is the number of matches
+ * allowed in that file for that pattern, and one more fails the scan.
  */
 const SRC = fileURLToPath(new URL('..', import.meta.url));
 const SCANNED_DIRS = ['app', 'components', 'hooks', 'lib', 'context'];
@@ -24,38 +26,8 @@ const PATTERNS: Record<string, RegExp> = {
   objectDefault: /\b[cC]urrency\s*[:=]\s*['"](USD|UZS|EUR|RUB)['"]/,
 };
 
-const D = 'app/[locale]/(dashboard)/';
-const NEVER_EMPTY = 'display only; the field is a NOT NULL column (or always set by the API), so the fallback never shows';
-const ZERO = 'display only; fallback label of a zero amount when there is no row in any currency (MultiCurrencyValue)';
-const F10 = 'display only; finding F10 (cross-currency total labelled with one currency, ADR 0023), not a stored value';
 
 const ALLOWED: Array<{ file: string; pattern: keyof typeof PATTERNS; count: number; reason: string }> = [
-  { file: 'hooks/useDefaultCurrency.ts', pattern: 'hook', count: 1, reason: 'the display-only hook itself (its definition)' },
-  { file: `${D}accounting/page.tsx`, pattern: 'literal', count: 5, reason: `${NEVER_EMPTY}: OSV currency is always UZS (ADR 0006)` },
-  { file: `${D}accounting/reports/page.tsx`, pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: statements are in the UZS ledger currency` },
-  { file: `${D}analytics/page.tsx`, pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: the KPI response always carries currency` },
-  { file: `${D}analytics/page.tsx`, pattern: 'hook', count: 1, reason: `${NEVER_EMPTY}: the KPI response always carries currency` },
-  { file: `${D}counterparties/page.tsx`, pattern: 'hook', count: 1, reason: ZERO },
-  { file: `${D}finance/page.tsx`, pattern: 'hook', count: 1, reason: ZERO },
-  { file: `${D}finance/page.tsx`, pattern: 'literal', count: 9, reason: `${NEVER_EMPTY}: dashboard accountCurrencies are always set by the API` },
-  { file: `${D}inventory/page.tsx`, pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: products.cost_price_currency` },
-  { file: `${D}products/page.tsx`, pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: products.cost_price_currency` },
-  { file: `${D}purchases/expenses/new/page.tsx`, pattern: 'literal', count: 8, reason: `${NEVER_EMPTY}: purchase_receipts.currency` },
-  { file: `${D}purchases/expenses/page.tsx`, pattern: 'literal', count: 2, reason: `${NEVER_EMPTY}: additional_expenses.currency` },
-  { file: `${D}purchases/expenses/[id]/page.tsx`, pattern: 'literal', count: 5, reason: `${NEVER_EMPTY}: additional_expenses.currency` },
-  { file: `${D}purchases/page.tsx`, pattern: 'literal', count: 3, reason: ZERO },
-  { file: `${D}purchases/returns/page.tsx`, pattern: 'hook', count: 1, reason: F10 },
-  { file: `${D}purchases/suppliers/page.tsx`, pattern: 'hook', count: 1, reason: ZERO },
-  { file: `${D}sales/crm/page.tsx`, pattern: 'hook', count: 1, reason: F10 },
-  { file: `${D}sales/customers/page.tsx`, pattern: 'hook', count: 1, reason: `${ZERO}; customer profile totals: F10` },
-  { file: `${D}sales/page.tsx`, pattern: 'literal', count: 4, reason: ZERO },
-  { file: `${D}sales/prices/page.tsx`, pattern: 'hook', count: 1, reason: `${NEVER_EMPTY}: price_lists.currency of the selected list` },
-  { file: `${D}sales/returns/page.tsx`, pattern: 'hook', count: 1, reason: `${NEVER_EMPTY}: rendered only with a selected invoice (sales_invoices.currency)` },
-  { file: `${D}services/page.tsx`, pattern: 'hook', count: 1, reason: F10 },
-  { file: 'app/[locale]/page.tsx', pattern: 'state', count: 1, reason: 'display only; which currency the dashboard chart shows, not a stored value' },
-  { file: 'app/[locale]/page.tsx', pattern: 'literal', count: 5, reason: `${ZERO}; chart series pick` },
-  { file: 'components/purchases/SupplierProfileDrawer.tsx', pattern: 'literal', count: 1, reason: F10 },
-  { file: 'components/sales/OrderDeliveryNoteModal.tsx', pattern: 'literal', count: 1, reason: `${NEVER_EMPTY}: sales_orders.currency (print view)` },
   { file: 'lib/opening-balance-lines.ts', pattern: 'objectDefault', count: 1, reason: 'defined, not guessed: the fixed-asset register is kept in UZS (D6)' },
 ];
 

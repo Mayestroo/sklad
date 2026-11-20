@@ -7,8 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, errorMessage } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { formatCurrency, formatPriceOrUnset, errorMessage, CURRENCY_OPTIONS } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -28,7 +27,8 @@ interface Deal {
   title: string;
   stage: string;
   amount: number | string;
-  currency?: string;
+  /** null on legacy deals saved before the currency column (shown as "not chosen"). */
+  currency: string | null;
   counterpartyId: string;
   counterparty?: { name: string } | null;
 }
@@ -37,7 +37,7 @@ const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] 
   { slug: 'LEAD', nameUz: 'Lidlar (Yangi)', nameRu: 'Лиды (Новые)', color: 'var(--color-primary-600)' },
   { slug: 'QUALIFICATION', nameUz: 'Saralash', nameRu: 'Квалификация', color: '#8b5cf6' },
   { slug: 'PROPOSAL', nameUz: 'Tijorat Taklifi', nameRu: 'Коммерческое предл.', color: '#ec4899' },
-  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', color: '#f59e0b' },
+  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', color: 'var(--color-warning-600)' },
   { slug: 'WON', nameUz: 'G\'alaba (Shartnoma)', nameRu: 'Успешно (Выиграно)', color: 'var(--color-success-600)' },
   { slug: 'LOST', nameUz: 'Mag\'lubiyat', nameRu: 'Проиграно', color: 'var(--color-error-600)' },
 ];
@@ -47,7 +47,6 @@ export default function CrmKanbanPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
-  const defaultCurrency = useDefaultCurrency();
 
   const kanbanQuery = useApiQuery<Record<string, Deal[]>>('/sales/deals/kanban');
   const counterpartiesQuery = useApiQuery<Counterparty[]>('/sales/counterparties');
@@ -64,6 +63,8 @@ export default function CrmKanbanPage() {
   const counterpartyId = pickedCounterpartyId || counterparties[0]?.id || '';
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState<number>(0);
+  // Blank until chosen (ADR 0022): required when the amount is not zero.
+  const [currency, setCurrency] = useState('');
   const [stage, setStage] = useState<string>('LEAD');
   const [createLoading, setCreateLoading] = useState(false);
 
@@ -71,6 +72,7 @@ export default function CrmKanbanPage() {
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editAmount, setEditAmount] = useState<number>(0);
+  const [editCurrency, setEditCurrency] = useState('');
   const [editCounterpartyId, setEditCounterpartyId] = useState('');
   const [editStage, setEditStage] = useState('LEAD');
   const [editLoading, setEditLoading] = useState(false);
@@ -87,6 +89,10 @@ export default function CrmKanbanPage() {
   const handleCreateDeal = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !company) return;
+    if (amount > 0 && !currency) {
+      toast.error(isRu ? 'Выберите валюту суммы сделки' : 'Bitim summasining valyutasini tanlang');
+      return;
+    }
     setCreateLoading(true);
 
     try {
@@ -99,6 +105,7 @@ export default function CrmKanbanPage() {
           counterpartyId,
           title,
           amount: Number(amount),
+          ...(currency ? { currency } : {}),
           stage,
         }),
       });
@@ -106,9 +113,11 @@ export default function CrmKanbanPage() {
       setShowModal(false);
       setTitle('');
       setAmount(0);
+      setCurrency('');
+      toast.success(isRu ? 'Сделка создана' : 'Bitim yaratildi');
       fetchData();
     } catch (err) {
-      console.error(err);
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось создать сделку' : 'Bitimni yaratib bo‘lmadi'));
     } finally {
       setCreateLoading(false);
     }
@@ -118,6 +127,7 @@ export default function CrmKanbanPage() {
     setEditingDeal(deal);
     setEditTitle(deal.title || '');
     setEditAmount(Number(deal.amount) || 0);
+    setEditCurrency(deal.currency ?? '');
     setEditCounterpartyId(deal.counterpartyId || '');
     setEditStage(deal.stage || 'LEAD');
   };
@@ -125,6 +135,10 @@ export default function CrmKanbanPage() {
   const handleSaveEditDeal = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !company || !editingDeal) return;
+    if (editAmount > 0 && !editCurrency) {
+      toast.error(isRu ? 'Выберите валюту суммы сделки' : 'Bitim summasining valyutasini tanlang');
+      return;
+    }
     setEditLoading(true);
     try {
       await apiFetch<Deal>(`/sales/deals/${editingDeal.id}`, {
@@ -135,6 +149,7 @@ export default function CrmKanbanPage() {
         body: JSON.stringify({
           title: editTitle,
           amount: Number(editAmount),
+          ...(editCurrency ? { currency: editCurrency } : {}),
           counterpartyId: editCounterpartyId,
           stage: editStage,
         }),
@@ -226,7 +241,13 @@ export default function CrmKanbanPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(240px, 1fr))', gap: 'var(--space-4)', overflowX: 'auto', paddingBottom: 'var(--space-4)' }}>
           {STAGES.map((stg) => {
             const deals = kanbanData[stg.slug] || [];
-            const columnTotal = deals.reduce((sum, d) => sum + Number(d.amount), 0);
+            // Per currency (ADR 0023); legacy deals without a currency stay apart.
+            const totals = new Map<string, number>();
+            for (const d of deals) {
+              const key = d.currency ?? '';
+              totals.set(key, (totals.get(key) ?? 0) + Number(d.amount));
+            }
+            const columnTotals = [...totals.entries()].filter(([, sum]) => sum !== 0);
 
             return (
               <div key={stg.slug} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', backgroundColor: 'var(--color-bg-tertiary)', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', minHeight: '500px' }}>
@@ -239,12 +260,23 @@ export default function CrmKanbanPage() {
                     <Badge variant="neutral">{deals.length}</Badge>
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
-                    {formatCurrency(columnTotal, locale, defaultCurrency)}
+                    {columnTotals.length === 0
+                      ? '0'
+                      : columnTotals.map(([cur, sum]) => (
+                          <span key={cur || 'none'} style={{ display: 'block' }}>
+                            {cur ? formatCurrency(sum, locale, cur) : formatPriceOrUnset(sum, locale, null)}
+                          </span>
+                        ))}
                   </div>
                 </div>
 
                 {/* Cards List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', flex: 1 }}>
+                  {deals.length === 0 && (
+                    <div style={{ padding: 'var(--space-6) var(--space-2)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                      {isRu ? 'Нет сделок на этом этапе' : 'Bu bosqichda bitim yo‘q'}
+                    </div>
+                  )}
                   {deals.map((deal) => (
                     <Card key={deal.id} style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: 'var(--shadow-sm)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
@@ -263,7 +295,7 @@ export default function CrmKanbanPage() {
                           <button
                             type="button"
                             onClick={() => setDeletingDeal(deal)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: '#ef4444' }}
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: 'var(--color-error-500)' }}
                             title={isRu ? 'Удалить' : 'O‘chirish'}
                           >
                             <Trash2 size={13} />
@@ -277,7 +309,7 @@ export default function CrmKanbanPage() {
                       </div>
 
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: stg.color, marginTop: '2px' }} className="tabular-nums">
-                        {formatCurrency(Number(deal.amount), locale, deal.currency || defaultCurrency)}
+                        {formatPriceOrUnset(Number(deal.amount), locale, deal.currency)}
                       </div>
 
                       {/* Stage Selector Action */}
@@ -303,7 +335,7 @@ export default function CrmKanbanPage() {
           <div style={{ width: '100%', maxWidth: '460px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
               <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Новая сделка CRM' : 'Yangi CRM Bitim Yaratish'}</h3>
-              <button type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'} type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
             <form onSubmit={handleCreateDeal} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -320,12 +352,21 @@ export default function CrmKanbanPage() {
                 placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
               />
 
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>{isRu ? 'Ориентировочная сумма (сум)' : 'Taxminiy Summasi (So‘m)'}</label>
-                <MoneyInput
-                  aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
-                  value={amount || ''}
-                  onValueChange={(value) => setAmount(Number(value) || 0)}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 'var(--space-2)', alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>{isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}</label>
+                  <MoneyInput
+                    aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
+                    value={amount || ''}
+                    onValueChange={(value) => setAmount(Number(value) || 0)}
+                  />
+                </div>
+                <Select
+                  label={isRu ? 'Валюта' : 'Valyuta'}
+                  options={CURRENCY_OPTIONS}
+                  value={currency}
+                  onChange={(val) => setCurrency(val)}
+                  placeholder={isRu ? 'Выбрать' : 'Tanlang'}
                 />
               </div>
 
@@ -373,14 +414,23 @@ export default function CrmKanbanPage() {
               onChange={(val) => setEditCounterpartyId(val)}
             />
 
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                {isRu ? 'Ориентировочная сумма (сум)' : 'Taxminiy Summasi (So‘m)'}
-              </label>
-              <MoneyInput
-                aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
-                value={editAmount || ''}
-                onValueChange={(value) => setEditAmount(Number(value) || 0)}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 'var(--space-2)', alignItems: 'end' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                  {isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
+                </label>
+                <MoneyInput
+                  aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
+                  value={editAmount || ''}
+                  onValueChange={(value) => setEditAmount(Number(value) || 0)}
+                />
+              </div>
+              <Select
+                label={isRu ? 'Валюта' : 'Valyuta'}
+                options={CURRENCY_OPTIONS}
+                value={editCurrency}
+                onChange={(val) => setEditCurrency(val)}
+                placeholder={isRu ? 'Выбрать' : 'Tanlang'}
               />
             </div>
 
@@ -422,7 +472,7 @@ export default function CrmKanbanPage() {
               </Button>
               <Button
                 variant="primary"
-                style={{ backgroundColor: '#ef4444' }}
+                style={{ backgroundColor: 'var(--color-error-500)' }}
                 onClick={handleDeleteDeal}
                 disabled={deleteLoading}
               >

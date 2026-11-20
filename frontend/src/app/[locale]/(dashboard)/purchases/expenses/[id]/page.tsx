@@ -217,7 +217,7 @@ export default function ExpenseDetailPage() {
       {/* Header & Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/purchases/expenses`)}>
+          <Button aria-label={isRu ? 'Назад' : 'Orqaga'} title={isRu ? 'Назад' : 'Orqaga'} variant="ghost" size="sm" onClick={() => router.push(`/${locale}/purchases/expenses`)}>
             <ArrowLeft size={16} />
           </Button>
           <div>
@@ -302,7 +302,7 @@ export default function ExpenseDetailPage() {
             <div>
               <strong>{isRu ? 'Сумма расхода:' : 'Xarajat summasi:'}</strong>{' '}
               <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
-                {formatCurrency(Number(expense.amount) || 0, locale, expense.currency || 'UZS')}
+                {formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}
               </span>
             </div>
             <div style={{ marginTop: '4px' }}>
@@ -367,13 +367,13 @@ export default function ExpenseDetailPage() {
                       <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(oldCost, locale, expense.currency || 'UZS')}
+                      {formatCurrency(oldCost, locale, expense.currency)}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
-                      {formatCurrency(Number(item.allocatedAmount) || 0, locale, expense.currency || 'UZS')} (+{formatCurrency(perUnit, locale, expense.currency || 'UZS')}/dona)
+                      {formatCurrency(Number(item.allocatedAmount) || 0, locale, expense.currency)} (+{formatCurrency(perUnit, locale, expense.currency)}/dona)
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                      {formatCurrency(newCost, locale, expense.currency || 'UZS')}
+                      {formatCurrency(newCost, locale, expense.currency)}
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
                       +{formatPercent(percent)}
@@ -430,7 +430,7 @@ export default function ExpenseDetailPage() {
                     </td>
                     <td style={{ padding: '6px 10px' }}>{impact.customerName || '—'}</td>
                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-700)' }} className="tabular-nums">
-                      +{formatCurrency(Number(impact.totalDeltaCogs) || 0, locale, expense.currency || 'UZS')}
+                      +{formatCurrency(Number(impact.totalDeltaCogs) || 0, locale, expense.currency)}
                     </td>
                   </tr>
                 ))}

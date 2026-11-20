@@ -1,5 +1,7 @@
 'use client';
 
+import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
+import { totalsByCurrency } from '@/lib/currency-totals';
 import { useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -7,7 +9,6 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -36,7 +37,6 @@ export default function ReturnsPage() {
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
   const confirm = useConfirm();
-  const defaultCurrency = useDefaultCurrency();
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,7 +56,6 @@ export default function ReturnsPage() {
   }, [appliedSearch, statusFilter, startDate, endDate]);
   const returnsQuery = useApiQuery<PurchaseReturn[]>(returnsEndpoint);
   const returns = useMemo(() => returnsQuery.data ?? [], [returnsQuery.data]);
-  const returnsCurrency = returns[0]?.currency || defaultCurrency;
   const loading = returnsQuery.isPending;
 
   // Modals state
@@ -154,9 +153,12 @@ export default function ReturnsPage() {
   };
 
   // Metrics
-  const totalReturnedSum = returns
-    .filter((r) => r.status === 'POSTED')
-    .reduce((sum, r) => sum + Number(r.totalAmount), 0);
+  // Per currency (ADR 0023): a USD and a UZS return are never added together.
+  const totalReturnedByCurrency = totalsByCurrency(
+    returns.filter((r) => r.status === 'POSTED'),
+    (r) => r.currency,
+    (r) => r.totalAmount,
+  );
 
   const postedCount = returns.filter((r) => r.status === 'POSTED').length;
   const draftCount = returns.filter((r) => r.status === 'DRAFT').length;
@@ -203,14 +205,15 @@ export default function ReturnsPage() {
   };
 
   // Reason Analytics Breakdown
-  const reasonBreakdown: Record<string, { count: number; total: number }> = {};
+  // Share by number of returns; amounts stay per currency (ADR 0023).
+  const reasonBreakdown: Record<string, { count: number; rows: typeof returns }> = {};
   returns.forEach((r) => {
     const key = r.reason || (isRu ? 'Другое / Не указано' : 'Boshqa / Ko‘rsatilmadi');
     if (!reasonBreakdown[key]) {
-      reasonBreakdown[key] = { count: 0, total: 0 };
+      reasonBreakdown[key] = { count: 0, rows: [] };
     }
     reasonBreakdown[key].count += 1;
-    reasonBreakdown[key].total += Number(r.totalAmount);
+    reasonBreakdown[key].rows.push(r);
   });
 
   const renderStatusBadge = (status: string) => {
@@ -291,7 +294,7 @@ export default function ReturnsPage() {
             {isRu ? 'Всего возвращено (Проведено)' : 'Jami Qaytarilgan (Tasdiqlangan)'}
           </div>
           <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-primary-600)', marginTop: '6px' }}>
-            {formatCurrency(totalReturnedSum, locale, returnsCurrency)}
+            <MultiCurrencyValue items={totalReturnedByCurrency} locale={locale} color="var(--color-primary-600)" />
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
             {postedCount} {isRu ? 'проведенных операций' : 'ta tasdiqlangan hujjat'}
@@ -517,7 +520,7 @@ export default function ReturnsPage() {
                                   setDeleteError(null);
                                 }}
                                 title={isRu ? 'Удалить' : "O'chirish"}
-                                style={{ padding: '4px 8px', color: '#ef4444' }}
+                                style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
                               >
                                 <Trash2 size={15} />
                               </Button>
@@ -542,13 +545,18 @@ export default function ReturnsPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {Object.entries(reasonBreakdown).map(([reasonName, data]) => {
-                const percent = totalReturnedSum > 0 ? (data.total / totalReturnedSum) * 100 : 0;
+                const percent = returns.length > 0 ? (data.count / returns.length) * 100 : 0;
                 return (
                   <div key={reasonName} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
                       <span style={{ fontWeight: 600 }}>{reasonName}</span>
                       <span>
-                        <strong>{formatCurrency(data.total, locale, returnsCurrency)}</strong> ({data.count} {isRu ? 'операций' : 'ta'})
+                        <strong>
+                          {totalsByCurrency(data.rows, (r) => r.currency, (r) => r.totalAmount)
+                            .map((t) => formatCurrency(t.amount, locale, t.currency))
+                            .join(' · ')}
+                        </strong>{' '}
+                        ({data.count} {isRu ? 'операций' : 'ta'})
                       </span>
                     </div>
                     <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: '4px', overflow: 'hidden' }}>
@@ -602,7 +610,7 @@ export default function ReturnsPage() {
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: '#ef4444' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
               <Trash2 size={24} />
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
@@ -629,7 +637,7 @@ export default function ReturnsPage() {
                 type="button"
                 onClick={handleDeleteReturn}
                 disabled={deleteLoading}
-                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

@@ -14,7 +14,6 @@ vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('@/components/purchases/AllocateExpenseModal', () => ({ AllocateExpenseModal: () => null }));
 vi.mock('@/components/purchases/CreateReturnModal', () => ({ CreateReturnModal: () => null }));
 vi.mock('@/components/purchases/PayPurchaseModal', () => ({ PayPurchaseModal: () => null }));
 

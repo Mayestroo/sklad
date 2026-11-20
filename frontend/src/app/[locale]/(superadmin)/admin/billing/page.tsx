@@ -172,6 +172,20 @@ export default function SuperAdminBillingPage() {
               </tr>
             </thead>
             <tbody>
+              {tenantsQuery.isPending && (
+                <tr>
+                  <td colSpan={5} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                    {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
+                  </td>
+                </tr>
+              )}
+              {!tenantsQuery.isPending && !tenantsQuery.isError && tenants.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                    {isRu ? 'Предприятий пока нет.' : 'Hozircha korxonalar yo‘q.'}
+                  </td>
+                </tr>
+              )}
               {tenants.map((t) => {
                 const name = typeof t.name === 'string' ? t.name : t.name?.[locale] || t.name?.uz || t.slug;
                 return (

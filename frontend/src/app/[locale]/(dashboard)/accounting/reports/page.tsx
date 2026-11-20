@@ -17,7 +17,6 @@ export default function FinancialReportsPage() {
   const statementsQuery = useApiQuery<FinancialStatements>('/accounting/reports/statements');
   const statements = statementsQuery.data ?? null;
 
-  const reportCurrency = (statements as { currency?: string } | null | undefined)?.currency || 'UZS';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -30,7 +29,7 @@ export default function FinancialReportsPage() {
         </div>
 
         <Button variant="primary" onClick={() => window.print()}>
-          <Printer size={16} /> Chop etish (Print Report)
+          <Printer size={16} /> {isRu ? 'Печать' : 'Chop etish'}
         </Button>
       </div>
 
@@ -46,48 +45,48 @@ export default function FinancialReportsPage() {
         </div>
       ) : !statements ? (
         <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-          Hisobotlar topilmadi
+          {isRu ? 'Отчётов пока нет: они появятся после первых проведённых документов.' : 'Hozircha hisobot yo‘q: birinchi o‘tkazilgan hujjatlardan keyin paydo bo‘ladi.'}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 'var(--space-6)' }}>
           {/* Form 1: Balance Sheet */}
           <Card>
             <div style={{ borderBottom: '2px solid var(--color-primary-600)', paddingBottom: 'var(--space-3)', marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>
-                {locale === 'uz' ? 'SHAKL 1: BALANS HISOBOTI' : 'ФОРМА 1: БАЛАНСОВЫЙ ОТЧЁТ'}
+                {isRu ? 'Форма 1: Бухгалтерский баланс' : '1-shakl: Buxgalteriya balansi'}
               </h3>
               {statements.balanceSheet.isBalanced ? (
-                <Badge variant="success">Aktiv = Passiv (Teng)</Badge>
+                <Badge variant="success">{isRu ? 'Актив = Пассив' : 'Aktiv = Passiv'}</Badge>
               ) : (
-                <Badge variant="error">Muvozanatda emas</Badge>
+                <Badge variant="error">{isRu ? 'Баланс не сходится' : 'Balans teng emas'}</Badge>
               )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
               <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>I. JAMI AKTIVLAR (ASSETS)</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'I. Итого активы' : 'I. Jami aktivlar'}</div>
                 <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', marginTop: '4px' }} className="tabular-nums">
-                  {formatCurrency(Number(statements.balanceSheet.totalAssets), locale, reportCurrency)}
+                  {formatCurrency(Number(statements.balanceSheet.totalAssets), locale, statements.currency)}
                 </div>
               </div>
 
               <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>II. MAJBURIYATLAR (LIABILITIES)</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'II. Обязательства' : 'II. Majburiyatlar'}</div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-600)', marginTop: '4px' }} className="tabular-nums">
-                  {formatCurrency(Number(statements.balanceSheet.totalLiabilities), locale, reportCurrency)}
+                  {formatCurrency(Number(statements.balanceSheet.totalLiabilities), locale, statements.currency)}
                 </div>
               </div>
 
               <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>III. XUSUSIY KAPITAL / SOF FOYDA (EQUITY)</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'III. Собственный капитал / чистая прибыль' : 'III. Xususiy kapital / sof foyda'}</div>
                 <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', marginTop: '4px' }} className="tabular-nums">
-                  {formatCurrency(Number(statements.balanceSheet.totalEquity), locale, reportCurrency)}
+                  {formatCurrency(Number(statements.balanceSheet.totalEquity), locale, statements.currency)}
                 </div>
               </div>
 
               <div style={{ borderTop: '2px solid var(--color-border)', paddingTop: 'var(--space-3)', display: 'flex', justifyContent: 'space-between', fontWeight: 'var(--font-bold)' }}>
-                <span>JAMI PASSIVLAR:</span>
-                <span className="tabular-nums">{formatCurrency(Number(statements.balanceSheet.totalLiabilities) + Number(statements.balanceSheet.totalEquity), locale, reportCurrency)}</span>
+                <span>{isRu ? 'Итого пассивы:' : 'Jami passivlar:'}</span>
+                <span className="tabular-nums">{formatCurrency(Number(statements.balanceSheet.totalLiabilities) + Number(statements.balanceSheet.totalEquity), locale, statements.currency)}</span>
               </div>
             </div>
           </Card>
@@ -96,33 +95,33 @@ export default function FinancialReportsPage() {
           <Card>
             <div style={{ borderBottom: '2px solid var(--color-success-600)', paddingBottom: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
               <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>
-                {locale === 'uz' ? 'SHAKL 2: MOLIYAVIY NATIJALAR (P&L)' : 'ФОРМА 2: ОТЧЁТ О ФИНАНСОВЫХ РЕЗУЛЬТАТАХ'}
+                {isRu ? 'Форма 2: Отчёт о финансовых результатах' : '2-shakl: Moliyaviy natijalar'}
               </h3>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--color-border-light)' }}>
-                <span>1. Sotuvdan daromad (Net Revenue - Schyot 9010):</span>
+                <span>{isRu ? '1. Выручка от реализации (счёт 9010):' : '1. Sotuvdan tushum (9010-schyot):'}</span>
                 <strong className="tabular-nums" style={{ color: 'var(--color-success-600)' }}>
-                  {formatCurrency(Number(statements.profitLoss.totalRevenue), locale, reportCurrency)}
+                  {formatCurrency(Number(statements.profitLoss.totalRevenue), locale, statements.currency)}
                 </strong>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--color-border-light)' }}>
-                <span>2. Sotilgan tovarlar tannarxi (COGS - Schyot 9110):</span>
+                <span>{isRu ? '2. Себестоимость реализованных товаров (счёт 9110):' : '2. Sotilgan tovarlar tannarxi (9110-schyot):'}</span>
                 <strong className="tabular-nums" style={{ color: 'var(--color-error-600)' }}>
-                  - {formatCurrency(Number(statements.profitLoss.totalCogs), locale, reportCurrency)}
+                  - {formatCurrency(Number(statements.profitLoss.totalCogs), locale, statements.currency)}
                 </strong>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: 'var(--color-primary-50)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
-                <span>YALPI FOYDA (GROSS PROFIT):</span>
-                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.grossProfit), locale, reportCurrency)}</span>
+                <span>{isRu ? 'Валовая прибыль:' : 'Yalpi foyda:'}</span>
+                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.grossProfit), locale, statements.currency)}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: 'var(--color-success-50)', borderRadius: 'var(--radius-md)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-base)', color: 'var(--color-success-600)', marginTop: 'var(--space-4)' }}>
-                <span>SOF FOYDA (NET PROFIT):</span>
-                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.netProfit), locale, reportCurrency)}</span>
+                <span>{isRu ? 'Чистая прибыль:' : 'Sof foyda:'}</span>
+                <span className="tabular-nums">{formatCurrency(Number(statements.profitLoss.netProfit), locale, statements.currency)}</span>
               </div>
             </div>
           </Card>

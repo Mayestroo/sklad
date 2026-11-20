@@ -244,7 +244,7 @@ export default function InventoryDocumentsPage() {
           <div style={{ width: '100%', maxWidth: '640px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
               <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Новый складской документ' : 'Yangi Ombor Hujjati'}</h3>
-              <button type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'} type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
@@ -338,7 +338,7 @@ export default function InventoryDocumentsPage() {
                             {formatCurrency(item.quantity * item.unitPrice, locale, INVENTORY_COST_CURRENCY)}
                           </td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
-                            <button type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-600)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+                            <button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'} type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-600)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
                           </td>
                         </tr>
                       ))}

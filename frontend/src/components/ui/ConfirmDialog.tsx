@@ -78,7 +78,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               height: 48,
               borderRadius: '50%',
               backgroundColor: '#fee2e2',
-              color: '#dc2626',
+              color: 'var(--color-error-600)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -97,7 +97,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               height: 48,
               borderRadius: '50%',
               backgroundColor: '#fef3c7',
-              color: '#d97706',
+              color: 'var(--color-warning-600)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -244,11 +244,11 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               fontWeight: 600,
               backgroundColor:
                 variant === 'warning'
-                  ? '#d97706'
+                  ? 'var(--color-warning-600)'
                   : variant === 'danger'
                   ? 'var(--color-error-600, #dc2626)'
                   : undefined,
-              borderColor: variant === 'warning' ? '#d97706' : undefined,
+              borderColor: variant === 'warning' ? 'var(--color-warning-600)' : undefined,
             }}
           >
             {confirmText || defaultConfirmText()}

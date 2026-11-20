@@ -504,8 +504,16 @@ export class SalesOrdersService {
       const vatRate = lineInputs[index].vatRate;
       const amounts = calculateSalesLineAmounts(lineInputs[index]);
       const prd = productMap.get(item.productId);
+      // Catalog cost in UZS; a USD cost without a usable rate is unknown
+      // (never converted at 1, ADR 0022) and gives no below-cost warning.
+      const costRate =
+        prd?.costPriceCurrency === 'USD'
+          ? Number(prd.costPriceExchangeRate)
+          : 1;
       const costInUzs =
-        Number(prd?.costPrice || 0) * Number(prd?.costPriceExchangeRate || 1);
+        Number.isFinite(costRate) && costRate > 0
+          ? Number(prd?.costPrice || 0) * costRate
+          : 0;
       const orderToUzsRate = dto.currency === 'USD' ? exchangeRate : 1;
       const effectivePriceInUzs = (amounts.netAmount * orderToUzsRate) / qty;
       if (costInUzs > 0 && effectivePriceInUzs < costInUzs) {

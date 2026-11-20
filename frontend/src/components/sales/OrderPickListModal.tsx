@@ -72,7 +72,7 @@ export function OrderPickListModal({ isOpen, onClose, order }: OrderPickListModa
               <Printer className="h-4 w-4" />
               {isRu ? 'Печать (A4)' : 'Chop etish (A4)'}
             </Button>
-            <Button variant="ghost" onClick={onClose} className="p-1 text-gray-500 hover:text-gray-700">
+            <Button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'} variant="ghost" onClick={onClose} className="p-1 text-gray-500 hover:text-gray-700">
               <X className="h-5 w-5" />
             </Button>
           </div>

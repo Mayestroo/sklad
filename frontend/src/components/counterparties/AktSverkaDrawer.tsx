@@ -177,7 +177,7 @@ export function AktSverkaDrawer({
               <Printer size={16} />
               <span style={{ marginLeft: 6 }}>{isRu ? 'Печать' : 'Chop etish'}</span>
             </Button>
-            <button
+            <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
               onClick={onClose}
               style={{
                 background: 'none',
@@ -231,10 +231,10 @@ export function AktSverkaDrawer({
                           {cp?.balancesByCurrency.map((balance) => (
                             <div key={balance.currency} style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 8 }}>
                               <strong>{balance.currency}</strong>
-                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 4, color: '#059669' }}>
+                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 4, color: 'var(--color-success-600)' }}>
                                 {isRu ? 'Баланс клиента' : 'Mijoz balansi'}: {formatCurrency(balance.customerDebt, locale, balance.currency)}
                               </div>
-                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, color: '#dc2626' }}>
+                              <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, color: 'var(--color-error-600)' }}>
                                 {isRu ? 'Баланс поставщика' : 'Ta’minotchi balansi'}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                               </div>
                               <div style={{ fontSize: 'var(--text-xs)', marginTop: 2, fontWeight: 700 }}>
@@ -367,10 +367,10 @@ export function AktSverkaDrawer({
                           <td style={{ padding: '10px 12px', color: 'var(--color-text-secondary)' }}>
                             {tx.description}
                           </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.debit > 0 ? '#059669' : 'var(--color-text-tertiary)' }}>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.debit > 0 ? 'var(--color-success-600)' : 'var(--color-text-tertiary)' }}>
                             {tx.debit > 0 ? `+ ${formatCurrency(tx.debit, locale, tx.currency)}` : '—'}
                           </td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.credit > 0 ? '#dc2626' : 'var(--color-text-tertiary)' }}>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: tx.credit > 0 ? 'var(--color-error-600)' : 'var(--color-text-tertiary)' }}>
                             {tx.credit > 0 ? `- ${formatCurrency(tx.credit, locale, tx.currency)}` : '—'}
                           </td>
                         </tr>

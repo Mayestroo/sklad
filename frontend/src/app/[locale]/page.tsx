@@ -87,15 +87,9 @@ function CashFlowChart({
   seriesByCurrency: { currency: string; series: CashFlowPoint[] }[];
   isRu: boolean;
 }) {
-  // The user's tab; when the data has no series in it, UZS, else the first.
-  const [chosenCurrency, setActiveCurrency] = useState<string>('UZS');
-  const activeCurrency = seriesByCurrency.some((e) => e.currency === chosenCurrency)
-    ? chosenCurrency
-    : (seriesByCurrency.find((e) => e.currency === 'UZS') ?? seriesByCurrency[0])?.currency ?? 'UZS';
-
-  const currencies = seriesByCurrency.map((e) => e.currency);
-  const currentEntry = seriesByCurrency.find((e) => e.currency === activeCurrency);
-  const series = currentEntry?.series ?? [];
+  // The user's tab; until one is picked (or when it has no series), the UZS
+  // series if there is one, else the first. Which tab is open, not a data value.
+  const [chosenCurrency, setActiveCurrency] = useState<string | null>(null);
 
   if (seriesByCurrency.length === 0) {
     return (
@@ -104,6 +98,14 @@ function CashFlowChart({
       </div>
     );
   }
+
+  const currencies = seriesByCurrency.map((e) => e.currency);
+  const currentEntry =
+    seriesByCurrency.find((e) => e.currency === chosenCurrency) ??
+    seriesByCurrency.find((e) => e.currency === 'UZS') ??
+    seriesByCurrency[0];
+  const activeCurrency = currentEntry.currency;
+  const series = currentEntry.series;
 
 
   const incomeKey = isRu ? 'Приход' : 'Kirim';
@@ -151,12 +153,12 @@ function CashFlowChart({
           <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={`colorIncome-${activeCurrency}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#16a34a" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                <stop offset="5%" stopColor="var(--color-success-600)" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="var(--color-success-600)" stopOpacity={0} />
               </linearGradient>
               <linearGradient id={`colorExpense-${activeCurrency}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#dc2626" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                <stop offset="5%" stopColor="var(--color-error-600)" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="var(--color-error-600)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false} />
@@ -192,19 +194,19 @@ function CashFlowChart({
             <Area
               type="monotone"
               dataKey={incomeKey}
-              stroke="#16a34a"
+              stroke="var(--color-success-600)"
               strokeWidth={2}
               fill={`url(#colorIncome-${activeCurrency})`}
-              dot={series.length <= 14 ? { r: 3, fill: '#16a34a', strokeWidth: 0 } : false}
+              dot={series.length <= 14 ? { r: 3, fill: 'var(--color-success-600)', strokeWidth: 0 } : false}
               activeDot={{ r: 5 }}
             />
             <Area
               type="monotone"
               dataKey={expenseKey}
-              stroke="#dc2626"
+              stroke="var(--color-error-600)"
               strokeWidth={2}
               fill={`url(#colorExpense-${activeCurrency})`}
-              dot={series.length <= 14 ? { r: 3, fill: '#dc2626', strokeWidth: 0 } : false}
+              dot={series.length <= 14 ? { r: 3, fill: 'var(--color-error-600)', strokeWidth: 0 } : false}
               activeDot={{ r: 5 }}
             />
           </AreaChart>
@@ -509,7 +511,7 @@ export default function DashboardPage() {
                 {account.name[locale]} · {account.currency}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 'var(--text-xs)' }}>
-                <span style={{ color: '#047857' }}>
+                <span style={{ color: 'var(--color-success-700)' }}>
                   {isRu ? 'Приход' : 'Kirim'}: {formatCurrency(account.totalIncome, locale, account.currency)}
                 </span>
                 <span style={{ color: '#b91c1c' }}>
@@ -606,8 +608,6 @@ export default function DashboardPage() {
             <div>
               <MultiCurrencyValue
                 items={data?.debts?.receivable?.byCurrency}
-                fallbackAmount={data?.debts?.receivable?.total ?? 0}
-                fallbackCurrency={data?.debts?.receivable?.byCurrency?.[0]?.currency || 'UZS'}
                 locale={locale}
                 color="var(--color-success-600)"
               />
@@ -622,7 +622,7 @@ export default function DashboardPage() {
           {data?.debts?.receivable?.topDebtors?.slice(0, 3).map((d) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{d.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, (d as { currency?: string } | null | undefined)?.currency || 'UZS')}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, d.currency)}</span>
             </div>
           ))}
         </Card>
@@ -636,8 +636,6 @@ export default function DashboardPage() {
             <div>
               <MultiCurrencyValue
                 items={data?.debts?.payable?.byCurrency}
-                fallbackAmount={data?.debts?.payable?.total ?? 0}
-                fallbackCurrency={data?.debts?.payable?.byCurrency?.[0]?.currency || 'UZS'}
                 locale={locale}
                 color="var(--color-error-600)"
               />
@@ -652,7 +650,7 @@ export default function DashboardPage() {
           {data?.debts?.payable?.topCreditors?.slice(0, 3).map((c) => (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{c.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, (c as { currency?: string } | null | undefined)?.currency || 'UZS')}</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, c.currency)}</span>
             </div>
           ))}
         </Card>

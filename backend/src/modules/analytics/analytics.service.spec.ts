@@ -24,7 +24,7 @@ describe('AnalyticsService', () => {
           },
         ]),
       },
-      stockLevel: { findMany: jest.fn().mockResolvedValue([]) },
+      productBatch: { findMany: jest.fn().mockResolvedValue([]) },
       purchaseReceipt: { findFirst: jest.fn().mockResolvedValue(null) },
       company: { findUnique: jest.fn().mockResolvedValue(null) },
     };

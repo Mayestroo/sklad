@@ -114,13 +114,13 @@ export default function AccountingPage() {
                     </td>
                     <td style={{ padding: '12px' }}>{getAccountTypeBadge(item.accountType)}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(item.debitTurnover, locale, osv.currency || 'UZS')}
+                      {formatCurrency(item.debitTurnover, locale, osv.currency)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(item.creditTurnover, locale, osv.currency || 'UZS')}
+                      {formatCurrency(item.creditTurnover, locale, osv.currency)}
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: item.closingBalance >= 0 ? 'var(--color-text-primary)' : 'var(--color-error-600)' }} className="tabular-nums">
-                      {formatCurrency(item.closingBalance, locale, osv.currency || 'UZS')}
+                      {formatCurrency(item.closingBalance, locale, osv.currency)}
                     </td>
                   </tr>
                 ))}
@@ -129,10 +129,10 @@ export default function AccountingPage() {
                 <tr style={{ backgroundColor: 'var(--color-bg-tertiary)', fontWeight: 'var(--font-bold)', fontSize: 'var(--text-sm)' }}>
                   <td colSpan={3} style={{ padding: '12px' }}>{isRu ? 'ИТОГО БАЛАНС ОБОРОТОВ:' : 'JAMI OBOROTLAR BALANSI:'}</td>
                   <td style={{ padding: '12px', textAlign: 'right', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                    {formatCurrency(osv.totalDebitTurnover, locale, osv.currency || 'UZS')}
+                    {formatCurrency(osv.totalDebitTurnover, locale, osv.currency)}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'right', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                    {formatCurrency(osv.totalCreditTurnover, locale, osv.currency || 'UZS')}
+                    {formatCurrency(osv.totalCreditTurnover, locale, osv.currency)}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'right' }}>
                     {osv.totalDebitTurnover === osv.totalCreditTurnover ? (

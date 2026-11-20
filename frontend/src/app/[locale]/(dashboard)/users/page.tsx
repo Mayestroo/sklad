@@ -241,6 +241,13 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                      {isRu ? 'Сотрудников пока нет. Добавьте первого сотрудника кнопкой выше.' : 'Hozircha xodimlar yo‘q. Birinchi xodimni yuqoridagi tugma orqali qo‘shing.'}
+                    </td>
+                  </tr>
+                )}
                 {users.map((user) => (
                   <tr key={user.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                     <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
@@ -298,7 +305,7 @@ export default function UsersPage() {
                               setDeletingUser(user);
                               setDeleteError(null);
                             }}
-                            style={{ color: '#ef4444', padding: '4px 8px' }}
+                            style={{ color: 'var(--color-error-600)', padding: '4px 8px' }}
                             title={isRu ? 'Удалить' : "O'chirish"}
                           >
                             <Trash2 size={15} />
@@ -343,7 +350,7 @@ export default function UsersPage() {
               <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>
                 {isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'}
               </h3>
-              <button
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
                 type="button"
                 onClick={() => setShowModal(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
@@ -482,7 +489,7 @@ export default function UsersPage() {
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>
                 {isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'}
               </h2>
-              <button
+              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
                 type="button"
                 onClick={() => setEditingUser(null)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
@@ -598,7 +605,7 @@ export default function UsersPage() {
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: '#ef4444' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
               <Trash2 size={24} />
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Удалить сотрудника?' : 'Foydalanuvchini o‘chirish?'}
@@ -626,7 +633,7 @@ export default function UsersPage() {
                 type="button"
                 onClick={handleDeleteUser}
                 disabled={deleteLoading}
-                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? tCommon('loading') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

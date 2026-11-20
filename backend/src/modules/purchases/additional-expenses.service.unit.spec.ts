@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AdditionalExpensesService } from './additional-expenses.service';
+import {
+  AdditionalExpensesService,
+  expenseInReceiptCurrency,
+} from './additional-expenses.service';
 import { PrismaService } from '../../common/prisma';
 import { BadRequestException } from '@nestjs/common';
 import {
@@ -371,6 +374,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         amount: 100,
         currency: 'UZS',
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         counterparty: { id: 'carrier-1', name: 'Carrier' },
         items: [],
       });
@@ -393,6 +397,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         currency: 'USD',
         exchangeRate: 12800,
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: true,
         cashAccountId: 'bank-usd',
         cashAccount: {
@@ -419,6 +424,11 @@ describe('AdditionalExpensesService Unit Tests', () => {
 
       await service.postExpense(tenantId, userId, expense.id);
 
+      // 100 USD on a UZS receipt: the receipt total grows in UZS.
+      expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
+        where: { tenantId, id: receiptId },
+        data: { additionalExpensesTotal: { increment: 1280000 } },
+      });
       expect(prisma.financeTransaction.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -454,6 +464,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         amount: 1000000,
         currency: 'UZS',
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
@@ -528,6 +539,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         amount: 1000000,
         currency: 'UZS',
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
@@ -624,6 +636,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         amount: 1000000,
         currency: 'UZS',
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         counterparty: { id: 'carrier-1', name: 'Silk Road Logistics' },
@@ -743,6 +756,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         currency: 'UZS',
         amount: 500000,
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: true,
         counterpartyId: 'carrier-1',
         items: [],
@@ -781,6 +795,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         currency: 'UZS',
         amount: 1000000,
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         items: [
@@ -857,6 +872,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         exchangeRate: 12500,
         amount: 80,
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         items: [
@@ -909,6 +925,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         currency: 'UZS',
         amount: 1000,
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         items: [
@@ -929,6 +946,36 @@ describe('AdditionalExpensesService Unit Tests', () => {
       expect(prisma.productBatch.update).not.toHaveBeenCalled();
     });
 
+    it('a USD expense on a USD receipt adds and removes the same USD amount on the receipt total (ADR 0023)', async () => {
+      // PUR-2026-0001 / EXP-2026-0001: posting added 6 × 12,000 = 72,000 to a
+      // USD receipt and cancelling removed 6, leaving 71,994 behind.
+      const expense = {
+        id: 'exp-usd-on-usd',
+        status: PurchaseDocStatus.POSTED,
+        currency: 'USD',
+        exchangeRate: 12000,
+        amount: 6,
+        receiptId,
+        receipt: { currency: 'USD', exchangeRate: 12000 },
+        isPaid: false,
+        counterpartyId: 'carrier-1',
+        items: [],
+      };
+      prisma.additionalExpense.findFirst.mockResolvedValue(expense);
+      prisma.financeTransaction.findFirst.mockResolvedValue(null);
+      prisma.additionalExpense.update.mockResolvedValue({
+        id: expense.id,
+        status: PurchaseDocStatus.CANCELLED,
+      });
+
+      await service.cancelExpense(tenantId, userId, expense.id);
+
+      expect(prisma.purchaseReceipt.update).toHaveBeenCalledWith({
+        where: { tenantId, id: receiptId },
+        data: { additionalExpensesTotal: { decrement: 6 } },
+      });
+    });
+
     it('restores the profit of a USD sale with VAT as net revenue in UZS minus COGS on cancel', async () => {
       prisma.additionalExpense.findFirst.mockResolvedValue({
         id: 'exp-2',
@@ -936,6 +983,7 @@ describe('AdditionalExpensesService Unit Tests', () => {
         currency: 'UZS',
         amount: 1000000,
         receiptId,
+        receipt: { currency: 'UZS', exchangeRate: 1 },
         isPaid: false,
         counterpartyId: 'carrier-1',
         items: [
@@ -1000,5 +1048,41 @@ describe('AdditionalExpensesService Unit Tests', () => {
         data: { totalCogs: 6000000, grossProfit: 1500000 },
       });
     });
+  });
+});
+
+describe('expenseInReceiptCurrency', () => {
+  it('keeps the amount when the expense and the receipt share a currency', () => {
+    expect(
+      expenseInReceiptCurrency(
+        { amount: 6, currency: 'USD', exchangeRate: 12000 },
+        { currency: 'USD', exchangeRate: 12500 },
+      ),
+    ).toBe(6);
+  });
+
+  it('converts through UZS at each document rate when currencies differ', () => {
+    expect(
+      expenseInReceiptCurrency(
+        { amount: 6, currency: 'USD', exchangeRate: 12000 },
+        { currency: 'UZS', exchangeRate: 1 },
+      ),
+    ).toBe(72000);
+    expect(
+      expenseInReceiptCurrency(
+        { amount: 72000, currency: 'UZS', exchangeRate: 1 },
+        { currency: 'USD', exchangeRate: 12000 },
+      ),
+    ).toBe(6);
+  });
+
+  it('refuses a missing receipt or a foreign receipt without a rate', () => {
+    const usd = { amount: 1, currency: 'UZS', exchangeRate: 1 };
+    expect(() => expenseInReceiptCurrency(usd, null)).toThrow(
+      BadRequestException,
+    );
+    expect(() =>
+      expenseInReceiptCurrency(usd, { currency: 'USD', exchangeRate: null }),
+    ).toThrow(BadRequestException);
   });
 });

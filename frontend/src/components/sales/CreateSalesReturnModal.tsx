@@ -317,7 +317,7 @@ export function CreateSalesReturnModal({
               backgroundColor: 'rgba(239, 68, 68, 0.1)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: 'var(--radius-md)',
-              color: '#ef4444',
+              color: 'var(--color-error-600)',
               fontSize: 'var(--text-sm)',
               display: 'flex',
               alignItems: 'center',
@@ -408,7 +408,7 @@ export function CreateSalesReturnModal({
         </form>
 
         {barcodeFeedback && (
-          <div style={{ fontSize: 'var(--text-xs)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', background: barcodeFeedback.includes('+1') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: barcodeFeedback.includes('+1') ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontSize: 'var(--text-xs)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', background: barcodeFeedback.includes('+1') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: barcodeFeedback.includes('+1') ? 'var(--color-success-500)' : 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: 6 }}>
             {barcodeFeedback.includes('+1') ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
             <span>{barcodeFeedback}</span>
           </div>
@@ -487,7 +487,7 @@ export function CreateSalesReturnModal({
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                         <div>{quantityWithUnit(item.soldQty, item.unit, locale)}</div>
-                        <div style={{ fontSize: '11px', color: item.returnableQty > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                        <div style={{ fontSize: '11px', color: item.returnableQty > 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontWeight: 600 }}>
                           max: {quantityWithUnit(item.returnableQty, item.unit, locale)}
                         </div>
                       </td>
@@ -545,13 +545,13 @@ export function CreateSalesReturnModal({
               </div>
             )}
             {hasDefectiveItems && (
-              <div style={{ fontSize: '12px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <AlertCircle size={13} />
                 <span>{isRu ? 'Бракованные товары будут направлены на склад брака' : 'Brak tovarlar alohida brak omboriga kirim qilinadi'}</span>
               </div>
             )}
           </div>
-          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: '#f59e0b' }} className="tabular-nums">
+          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-warning-600)' }} className="tabular-nums">
             {formatCurrency(returnTotal, locale, invoice.currency)}
           </span>
         </div>

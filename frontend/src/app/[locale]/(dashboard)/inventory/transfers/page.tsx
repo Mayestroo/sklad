@@ -275,7 +275,7 @@ export default function StockTransfersPage() {
                               setDeleteConfirmTransfer(tr);
                               setDeleteError(null);
                             }}
-                            style={{ color: '#ef4444', padding: '4px 8px' }}
+                            style={{ color: 'var(--color-error-600)', padding: '4px 8px' }}
                             title={isRu ? 'Удалить перемещение' : "O'chirish"}
                           >
                             <Trash2 size={15} />
@@ -390,7 +390,7 @@ export default function StockTransfersPage() {
               <Button
                 onClick={handleDeleteTransfer}
                 disabled={deleteLoading}
-                style={{ backgroundColor: '#ef4444', color: '#fff' }}
+                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

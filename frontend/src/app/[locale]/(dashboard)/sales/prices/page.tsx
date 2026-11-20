@@ -7,8 +7,7 @@ import { useLocale } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatPercent, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
+import { formatCurrency, formatPriceOrUnset, formatPercent, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -34,6 +33,8 @@ interface Product {
   name: LocalizedName;
   sku: string;
   salePrice: number;
+  /** null on legacy prices whose currency was never set (F8). */
+  salePriceCurrency: 'USD' | 'UZS' | null;
   costPrice: number;
 }
 
@@ -41,7 +42,6 @@ export default function PricesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const defaultCurrency = useDefaultCurrency();
 
   const invalidateApi = useInvalidateApi();
   const priceListsQuery = useApiQuery<PriceList[]>('/sales/price-lists');
@@ -350,7 +350,7 @@ export default function PricesPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}
+                      style={{ color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 6 }}
                       onClick={() => setDeletingPL(selectedPL)}
                     >
                       <Trash2 size={14} /> {isRu ? 'Удалить' : 'O‘chirish'}
@@ -376,14 +376,27 @@ export default function PricesPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {products.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
+                        {productsQuery.isPending
+                          ? isRu ? 'Загрузка...' : 'Yuklanmoqda...'
+                          : isRu
+                          ? 'Товаров пока нет. Добавьте товары в разделе «Товары», затем задайте им цены здесь.'
+                          : 'Hozircha tovarlar yo‘q. Avval «Tovarlar» bo‘limida tovar qo‘shing, so‘ng bu yerda narx belgilang.'}
+                      </td>
+                    </tr>
+                  )}
                   {products.map((prod) => {
                     const listPrice = getPriceForProduct(prod.id);
                     const basePrice = Number(prod.salePrice || 0);
                     const isEditing = prod.id in editingPrices;
                     const isSaving = savingPrice === prod.id;
 
+                    // A discount compares two prices in the same currency only (ADR 0023).
+                    const sameCurrency = prod.salePriceCurrency === selectedPL?.currency;
                     let discountBadge = null;
-                    if (listPrice > 0 && basePrice > 0) {
+                    if (listPrice > 0 && basePrice > 0 && sameCurrency) {
                       if (listPrice < basePrice) {
                         const disc = formatPercent(((basePrice - listPrice) / basePrice) * 100);
                         discountBadge = <Badge variant="success">-{disc} {isRu ? 'скидка' : 'chegirma'}</Badge>;
@@ -400,7 +413,7 @@ export default function PricesPage() {
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', fontWeight: 500 }}>{getProductName(prod)}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{prod.sku || '—'}</td>
                         <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)' }}>
-                          {formatCurrency(basePrice, locale, (prod as { currency?: string } | null | undefined)?.currency || selectedPL?.currency || defaultCurrency)}
+                          {formatPriceOrUnset(basePrice, locale, prod.salePriceCurrency)}
                         </td>
                         <td style={{ padding: '10px 14px' }}>
                           {isEditing ? (
@@ -422,7 +435,7 @@ export default function PricesPage() {
                             </form>
                           ) : (
                             <span style={{ fontWeight: listPrice > 0 ? 600 : 400, color: listPrice > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                              {listPrice > 0 ? formatCurrency(listPrice, locale, selectedPL?.currency || defaultCurrency) : '—'}
+                              {listPrice > 0 && selectedPL ? formatCurrency(listPrice, locale, selectedPL.currency) : '—'}
                             </span>
                           )}
                         </td>

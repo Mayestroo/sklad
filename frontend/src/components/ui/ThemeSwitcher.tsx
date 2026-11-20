@@ -72,7 +72,7 @@ export function ThemeSwitcher() {
         transition: 'all var(--transition-fast)',
       }}
     >
-      {theme === 'light' ? <Moon size={18} /> : <Sun size={18} style={{ color: '#f59e0b' }} />}
+      {theme === 'light' ? <Moon size={18} /> : <Sun size={18} style={{ color: 'var(--color-warning-600)' }} />}
     </button>
   );
 }

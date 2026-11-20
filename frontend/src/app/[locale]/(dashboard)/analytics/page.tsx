@@ -5,7 +5,6 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency } from '@/lib/utils';
-import { useDefaultCurrency } from '@/hooks/useDefaultCurrency';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -21,23 +20,15 @@ import {
   CategoryBreakdownItem,
   TopProductItem,
   FinancialRatios,
+  TopClientItem,
 } from '@shared/types';
 import { unitLabel } from '@/lib/units';
 
-/** GET /analytics/top-clients */
-interface TopClient {
-  counterpartyId: string;
-  name: string;
-  inn?: string | null;
-  invoiceCount: number;
-  totalSpent: number;
-}
 
 export default function AnalyticsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const defaultCurrency = useDefaultCurrency();
 
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | 'quarter' | 'year'>('month');
   // One query per report; the range is part of each endpoint (= cache key).
@@ -46,7 +37,7 @@ export default function AnalyticsPage() {
   const categoriesQuery = useApiQuery<CategoryBreakdownItem[]>(`/analytics/category-breakdown?range=${timeRange}`);
   const topProductsQuery = useApiQuery<TopProductItem[]>(`/analytics/top-products?range=${timeRange}&limit=10`);
   // Optional block: a failure leaves it empty (as before) instead of failing the page.
-  const topClientsQuery = useApiQuery<TopClient[]>(`/analytics/top-clients?range=${timeRange}&limit=5`);
+  const topClientsQuery = useApiQuery<TopClientItem[]>(`/analytics/top-clients?range=${timeRange}&limit=5`);
   const ratiosQuery = useApiQuery<FinancialRatios>('/analytics/financial-ratios');
   const requiredQueries = [kpiQuery, trendQuery, categoriesQuery, topProductsQuery, ratiosQuery];
 
@@ -62,9 +53,11 @@ export default function AnalyticsPage() {
     requiredQueries.filter((q) => q.isError).forEach((q) => void q.refetch());
   };
 
-  const reportCurrency = (kpi as { currency?: string } | null | undefined)?.currency || defaultCurrency || 'USD';
-
   const maxTrendRevenue = Math.max(...trend.map((t) => t.revenue), 1);
+  // A ratio the backend cannot compute honestly (e.g. debts in USD) is null.
+  const notComputable = (
+    <span title={isRu ? 'Нельзя посчитать: долги в разных валютах или нет данных за год' : 'Hisoblab bo‘lmaydi: qarzlar turli valyutada yoki yil bo‘yicha ma’lumot yo‘q'}>—</span>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -150,8 +143,6 @@ export default function AnalyticsPage() {
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: '8px' }} className="tabular-nums">
                 <MultiCurrencyValue
                   items={kpi?.totalRevenueByCurrency}
-                  fallbackAmount={kpi?.totalRevenue || 0}
-                  fallbackCurrency={reportCurrency}
                   locale={locale}
                 />
               </div>
@@ -170,8 +161,6 @@ export default function AnalyticsPage() {
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', marginTop: '8px' }} className="tabular-nums">
                 <MultiCurrencyValue
                   items={kpi?.grossProfitByCurrency}
-                  fallbackAmount={kpi?.grossProfit || 0}
-                  fallbackCurrency="UZS"
                   locale={locale}
                   color="var(--color-success-600)"
                 />
@@ -187,8 +176,6 @@ export default function AnalyticsPage() {
               </div>
               <MultiCurrencyValue
                 items={kpi?.receivablesByCurrency}
-                fallbackAmount={kpi?.totalAccountsReceivable || 0}
-                fallbackCurrency={reportCurrency}
                 locale={locale}
                 color="var(--color-warning-600)"
               />
@@ -203,8 +190,6 @@ export default function AnalyticsPage() {
               </div>
               <MultiCurrencyValue
                 items={kpi?.payablesByCurrency}
-                fallbackAmount={kpi?.totalAccountsPayable || 0}
-                fallbackCurrency={reportCurrency}
                 locale={locale}
                 color="var(--color-error-600)"
               />
@@ -224,7 +209,7 @@ export default function AnalyticsPage() {
                     {isRu ? 'Динамика продаж и прибыли' : 'Sotuvlar va Foyda Oylik Dinamikasi'}
                   </h3>
                   <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'График роста выручки и валовой прибыли' : 'Tushum va yalpi foyda o\'sish grafigi'}
+                    {isRu ? 'Выручка в UZS по курсу каждого документа' : 'Tushum, har bir hujjat kursi bo‘yicha UZS ekvivalentida'}
                   </p>
                 </div>
               </div>
@@ -240,7 +225,7 @@ export default function AnalyticsPage() {
                     return (
                       <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%', justifyContent: 'flex-end' }}>
                         <div style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                          {formatCurrency(point.revenue, locale, reportCurrency)}
+                          {formatCurrency(point.revenue, locale, point.currency)}
                         </div>
                         <div
                           style={{
@@ -269,7 +254,7 @@ export default function AnalyticsPage() {
                   {isRu ? 'Распределение по категориям' : 'Kategoriyalar Taqsimoti'}
                 </h3>
                 <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Доля выручки по категориям товаров' : 'Sotuv tushumining tovar turlari bo\'yicha ulushi'}
+                  {isRu ? 'Доля выручки по категориям, в UZS' : 'Tushumning kategoriyalar bo‘yicha ulushi, UZS ekvivalentida'}
                 </p>
               </div>
 
@@ -285,7 +270,7 @@ export default function AnalyticsPage() {
                         <span style={{ fontWeight: 'var(--font-medium)' }}>
                           {cat.categoryName[locale] || cat.categoryName.ru || cat.categoryName.uz}
                         </span>
-                        <span style={{ fontWeight: 'var(--font-bold)' }}>{cat.percentage}% ({formatCurrency(cat.revenue, locale, reportCurrency)})</span>
+                        <span style={{ fontWeight: 'var(--font-bold)' }}>{cat.percentage}% ({formatCurrency(cat.revenue, locale, cat.currency)})</span>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
                         <div style={{ width: `${cat.percentage}%`, height: '100%', backgroundColor: 'var(--color-primary-600)', borderRadius: 'var(--radius-full)' }} />
@@ -336,7 +321,7 @@ export default function AnalyticsPage() {
                           <td style={{ padding: '8px', fontFamily: 'var(--font-mono)' }}>{p.sku}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>{p.totalQuantity} {unitLabel(p.unitOfMeasure, locale)}</td>
                           <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                            {formatCurrency(p.totalRevenue, locale, reportCurrency)}
+                            {formatCurrency(p.totalRevenue, locale, p.currency)}
                           </td>
                         </tr>
                       ))}
@@ -374,7 +359,7 @@ export default function AnalyticsPage() {
                           </div>
                         </div>
                         <div style={{ fontWeight: 'bold', color: 'var(--color-success-600)' }} className="tabular-nums">
-                          {formatCurrency(client.totalSpent, locale, reportCurrency)}
+                          {formatCurrency(client.totalSpent, locale, client.currency)}
                         </div>
                       </div>
                     ))}
@@ -396,7 +381,7 @@ export default function AnalyticsPage() {
                       {isRu ? 'ЧИСТЫЙ ОБОРОТНЫЙ КАПИТАЛ' : 'SOF AYLANMA MABLAG\' (WORKING CAPITAL)'}
                     </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
-                      {formatCurrency(ratios?.workingCapital || 0, locale, reportCurrency)}
+                      {ratios && ratios.workingCapital !== null ? formatCurrency(ratios.workingCapital, locale, ratios.currency) : notComputable}
                     </div>
                   </div>
 
@@ -405,7 +390,7 @@ export default function AnalyticsPage() {
                       {isRu ? 'ОБОРАЧИВАЕМОСТЬ ЗАПАСОВ (ДНЕЙ)' : 'TOVARLAR AYLANISH DAVRI (INVENTORY DAYS)'}
                     </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {ratios?.inventoryTurnoverDays || 0} {isRu ? 'дн' : 'Kun'}
+                      {ratios && ratios.inventoryTurnoverDays !== null ? `${ratios.inventoryTurnoverDays} ${isRu ? 'дн.' : 'kun'}` : notComputable}
                     </div>
                   </div>
 
@@ -414,7 +399,7 @@ export default function AnalyticsPage() {
                       {isRu ? 'ПЕРИОД СБОРА ДЕБИТОРКИ (ДНЕЙ)' : 'QARZDORLIK YIG\'ISH MUDDATI (AR DAYS)'}
                     </div>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-600)' }} className="tabular-nums">
-                      {ratios?.arCollectionDays || 0} {isRu ? 'дн' : 'Kun'}
+                      {ratios && ratios.arCollectionDays !== null ? `${ratios.arCollectionDays} ${isRu ? 'дн.' : 'kun'}` : notComputable}
                     </div>
                   </div>
                 </div>

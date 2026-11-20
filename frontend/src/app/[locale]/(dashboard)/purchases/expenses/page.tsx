@@ -1,5 +1,6 @@
 'use client';
 
+import { activateOnKey } from '@/lib/a11y';
 import { useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -376,6 +377,8 @@ export default function ExpensesPage() {
                     <tr
                       key={item.id}
                       onClick={() => router.push(`/${locale}/purchases/expenses/${item.id}`)}
+                      tabIndex={0}
+                      onKeyDown={activateOnKey(() => router.push(`/${locale}/purchases/expenses/${item.id}`))}
                       style={{
                         borderBottom: '1px solid var(--color-border-subtle)',
                         cursor: 'pointer',
@@ -405,7 +408,7 @@ export default function ExpensesPage() {
                         </div>
                       </td>
                       <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {formatCurrency(Number(item.amount) || 0, locale, item.currency || 'UZS')}
+                        {formatCurrency(Number(item.amount) || 0, locale, item.currency)}
                       </td>
                       <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center' }}>
                         {item.isPaid ? (
@@ -522,6 +525,8 @@ export default function ExpensesPage() {
                       <tr
                         key={expense.id}
                         onClick={() => router.push(`/${locale}/purchases/expenses/${expense.id}`)}
+                        tabIndex={0}
+                        onKeyDown={activateOnKey(() => router.push(`/${locale}/purchases/expenses/${expense.id}`))}
                         style={{ borderBottom: '1px solid var(--color-border-subtle)', cursor: 'pointer' }}
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -539,7 +544,7 @@ export default function ExpensesPage() {
                           {getExpenseTypeBadge(expense.expenseType)}
                         </td>
                         <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                          {formatCurrency(Number(expense.amount) || 0, locale, expense.currency || 'UZS')}
+                          {formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}
                         </td>
                         <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                           {expense.allocationMethod === 'BY_AMOUNT' ? (isRu ? 'По стоимости' : 'Qiymatiga mutanosib') : expense.allocationMethod === 'BY_QUANTITY' ? (isRu ? 'По количеству' : 'Miqdoriga mutanosib') : (isRu ? 'По весу' : 'Vazniga mutanosib')}

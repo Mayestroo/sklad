@@ -604,7 +604,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
       {/* Error notification */}
       {error && (
-        <Card style={{ padding: 'var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <Card style={{ padding: 'var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <AlertCircle size={20} />
           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
         </Card>
@@ -901,7 +901,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                     </td>
                     {!isReadOnly && (
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                        <Button
+                        <Button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'}
                           size="sm"
                           variant="ghost"
                           onClick={() => handleRemoveItem(idx)}

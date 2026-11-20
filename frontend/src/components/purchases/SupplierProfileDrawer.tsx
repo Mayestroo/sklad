@@ -27,6 +27,9 @@ interface SupplierProfileData {
     totalPurchased: number;
     totalPaid: number;
     totalReturned: number;
+    totalPurchasedByCurrency: Array<{ currency: string; amount: number }>;
+    totalPaidByCurrency: Array<{ currency: string; amount: number }>;
+    totalReturnedByCurrency: Array<{ currency: string; amount: number }>;
     balancesByCurrency: NonNullable<SupplierProfileData['supplier']['balancesByCurrency']>;
     supplierAdvancesByCurrency: Array<{ currency: string; amount: number }>;
   };
@@ -86,7 +89,9 @@ export function SupplierProfileDrawer({
           <>
             {/* Header Debt KPI Banner */}
             {(() => {
-              const supplierCurrency = data.receipts?.[0]?.currency || data.payments?.[0]?.currency || 'UZS';
+              // Per currency (ADR 0023): USD and UZS purchases are never added together.
+              const perCurrency = (items: Array<{ currency: string; amount: number }>) =>
+                items.length === 0 ? '0' : items.map((t) => formatCurrency(t.amount, locale, t.currency)).join(' · ');
               return (
                 <div
                   style={{
@@ -107,7 +112,7 @@ export function SupplierProfileDrawer({
                       {isRu ? 'Общая сумма закупок' : 'Jami Xaridlar Summasi'}
                     </div>
                     <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }} className="tabular-nums">
-                      {formatCurrency(data.metrics.totalPurchased, locale, supplierCurrency)}
+                      {perCurrency(data.metrics.totalPurchasedByCurrency)}
                     </div>
                   </div>
 
@@ -123,7 +128,7 @@ export function SupplierProfileDrawer({
                       {isRu ? 'Оплаченная сумма' : 'To\'langan Summa'}
                     </div>
                     <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
-                      {formatCurrency(data.metrics.totalPaid, locale, supplierCurrency)}
+                      {perCurrency(data.metrics.totalPaidByCurrency)}
                     </div>
                   </div>
 
@@ -142,7 +147,7 @@ export function SupplierProfileDrawer({
                       ? data.metrics.balancesByCurrency
                           .filter((balance) => balance.supplierDebt !== 0)
                           .map((balance) => (
-                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : '#2563eb' }} className="tabular-nums">
+                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-info-600)' }} className="tabular-nums">
                               {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                             </div>
                           ))

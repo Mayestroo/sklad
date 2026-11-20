@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ExpenseAllocationMethod, Prisma } from '@prisma/client';
 
 /** Inputs are read through Number(), so Prisma Decimals are accepted as-is. */
@@ -53,6 +54,35 @@ export interface AllocationPreviewResult {
   items: AllocationPreviewItem[];
 }
 
+/** A line's unit weight: its own, else the product card's; null when neither is set. */
+export function knownUnitWeight(item: {
+  weight?: Numeric | null;
+  product?: { weight?: Numeric | null } | null;
+}): number | null {
+  const own = Number(item.weight);
+  if (Number.isFinite(own) && own > 0) return own;
+  const card = Number(item.product?.weight);
+  return Number.isFinite(card) && card > 0 ? card : null;
+}
+
+/**
+ * BY_WEIGHT needs every line's weight (ADR 0022): a missing weight is
+ * refused, never taken as 1 kg.
+ */
+export function requireUnitWeight(item: {
+  weight?: Numeric | null;
+  product?: { weight?: Numeric | null; sku?: string } | null;
+}): number {
+  const weight = knownUnitWeight(item);
+  if (weight === null) {
+    const sku = item.product?.sku ? ` ${item.product.sku}` : '';
+    throw new BadRequestException(
+      `Weight is not set for product${sku}: set it or allocate by amount or quantity`,
+    );
+  }
+  return weight;
+}
+
 /**
  * Pure Mathematical Engine for Expense Allocation across Inventory Items
  * Handles BY_AMOUNT, BY_QUANTITY, BY_WEIGHT methods and enforces the Allocation Remainder Rule.
@@ -71,13 +101,10 @@ export class ExpenseAllocationEngine {
     } else if (method === ExpenseAllocationMethod.BY_QUANTITY) {
       basisSum = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
     } else if (method === ExpenseAllocationMethod.BY_WEIGHT) {
-      basisSum = items.reduce((sum, i) => {
-        const unitWeight =
-          Number(i.weight) > 0
-            ? Number(i.weight)
-            : Number(i.product?.weight) || 1;
-        return sum + (Number(i.quantity) || 0) * unitWeight;
-      }, 0);
+      basisSum = items.reduce(
+        (sum, i) => sum + (Number(i.quantity) || 0) * requireUnitWeight(i),
+        0,
+      );
     }
 
     return basisSum <= 0 ? items.length : basisSum;
@@ -100,12 +127,19 @@ export class ExpenseAllocationEngine {
 
     const previewItems: AllocationPreviewItem[] = targetItems.map(
       (item, index) => {
-        const qty = Number(item.quantity) || 1;
+        const qty = Number(item.quantity);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          // A receipt line always has a positive quantity; never assume 1 (ADR 0022).
+          throw new BadRequestException(
+            'A receipt line has no positive quantity to allocate on',
+          );
+        }
         const lineTotal = Number(item.totalPrice) || 0;
+        // Shown on every line; required (never 1 kg) only for BY_WEIGHT.
         const unitWeight =
-          Number(item.weight) > 0
-            ? Number(item.weight)
-            : Number(item.product?.weight) || 1;
+          allocationMethod === ExpenseAllocationMethod.BY_WEIGHT
+            ? requireUnitWeight(item)
+            : (knownUnitWeight(item) ?? 0);
 
         if (lineTotal > maxLineItemValue) {
           maxLineItemValue = lineTotal;
@@ -194,4 +228,187 @@ export class ExpenseAllocationEngine {
       items: previewItems,
     };
   }
+}
+
+/**
+ * Spreads every receipt expense over the lines by its own method and sums the
+ * shares per line (receipt currency). Each expense keeps the remainder rule,
+ * so the line shares add up to the expense total exactly.
+ */
+export function allocateReceiptExpenses(
+  items: AllocationTargetItem[],
+  expenses: { amount: number; allocationMethod: ExpenseAllocationMethod }[],
+): Map<string, number> {
+  const byLine = new Map<string, number>(items.map((i) => [i.id, 0]));
+  for (const expense of expenses) {
+    const { items: shares } = ExpenseAllocationEngine.allocateExpense(
+      items,
+      expense.amount,
+      expense.allocationMethod,
+    );
+    for (const share of shares) {
+      byLine.set(
+        share.receiptItemId,
+        Math.round(
+          ((byLine.get(share.receiptItemId) ?? 0) + share.allocatedAmount) *
+            100,
+        ) / 100,
+      );
+    }
+  }
+  return byLine;
+}
+
+/**
+ * A receipt expense is allocated before posting (ADR 0002); a posted
+ * receipt's cost changes only through an Additional Expense document
+ * (ADR 0008), which converts at its own rate and revalues batches, sales
+ * COGS and the journal.
+ */
+export function assertReceiptOpenForExpense(status: string): void {
+  if (status !== 'DRAFT') {
+    throw new BadRequestException(
+      "Tasdiqlangan xaridga xarajat faqat 'Qo'shimcha xarajat' hujjati orqali qo'shiladi",
+    );
+  }
+}
+
+/**
+ * The allocation is added to line totals in the receipt's currency and
+ * converted to UZS at the receipt rate when posting, so the expense must be
+ * in that currency: amounts in different currencies are never summed
+ * (ADR 0023). An expense in another currency goes through an Additional
+ * Expense document, which carries its own rate (ADR 0008).
+ */
+export function assertExpenseCurrencyMatchesReceipt(
+  expenseCurrency: string,
+  receiptCurrency: string,
+): void {
+  if (expenseCurrency !== receiptCurrency) {
+    throw new BadRequestException(
+      `Xarajat valyutasi (${expenseCurrency}) xarid valyutasiga (${receiptCurrency}) teng bo'lishi shart; boshqa valyutadagi xarajatni 'Qo'shimcha xarajat' hujjati orqali kiriting`,
+    );
+  }
+}
+
+export interface ReceiptExpensePayeeInput {
+  id: string;
+  supplierId: string | null;
+  amount: Numeric;
+}
+
+export interface ThirdPartyReceiptExpense {
+  expenseId: string;
+  supplierId: string;
+  amount: number;
+}
+
+/**
+ * Who is owed each receipt expense. An expense with no supplier, or with the
+ * receipt's own supplier, is on that supplier's invoice and adds to its
+ * payable; an expense with another supplier (a carrier, a customs broker) is
+ * owed to that supplier. Every expense still goes into landed cost.
+ */
+export function splitReceiptExpensesByPayee(
+  expenses: ReceiptExpensePayeeInput[],
+  receiptSupplierId: string,
+): { receiptSupplierAmount: number; thirdParty: ThirdPartyReceiptExpense[] } {
+  let receiptSupplierAmount = 0;
+  const thirdParty: ThirdPartyReceiptExpense[] = [];
+  for (const expense of expenses) {
+    const amount = Number(expense.amount);
+    if (!expense.supplierId || expense.supplierId === receiptSupplierId) {
+      receiptSupplierAmount += amount;
+    } else {
+      thirdParty.push({
+        expenseId: expense.id,
+        supplierId: expense.supplierId,
+        amount,
+      });
+    }
+  }
+  return {
+    receiptSupplierAmount: Math.round(receiptSupplierAmount * 100) / 100,
+    thirdParty,
+  };
+}
+
+/**
+ * The receipt total: what the receipt's own supplier is owed (lines after
+ * discount, VAT, and the expenses on its invoice). Expenses owed to other
+ * suppliers are in `additionalExpensesTotal` (landed cost) but not here.
+ */
+export function receiptSupplierTotal(
+  amounts: {
+    subtotalAmount: Numeric;
+    discountAmount: Numeric;
+    vatAmount: Numeric;
+  },
+  expenses: ReceiptExpensePayeeInput[],
+  receiptSupplierId: string,
+): number {
+  const { receiptSupplierAmount } = splitReceiptExpensesByPayee(
+    expenses,
+    receiptSupplierId,
+  );
+  return (
+    Math.round(
+      (Number(amounts.subtotalAmount) -
+        Number(amounts.discountAmount) +
+        Number(amounts.vatAmount) +
+        receiptSupplierAmount) *
+        100,
+    ) / 100
+  );
+}
+
+export interface ReceiptLineAllocation {
+  allocatedExpenses: number;
+  landedCost: number;
+}
+
+/**
+ * Each line's share of the receipt expenses and its landed unit cost (line
+ * total after discount and VAT plus the share, per unit; receipt currency).
+ * Lines whose `allocatedExpenses` no longer add up to the expenses (a draft
+ * whose lines were replaced) are brought back in line with this.
+ */
+export function allocateReceiptLines(
+  items: (AllocationTargetItem & { totalPrice: Numeric })[],
+  expenses: { amount: Numeric; allocationMethod: ExpenseAllocationMethod }[],
+): Map<string, ReceiptLineAllocation> {
+  const shares =
+    expenses.length > 0
+      ? allocateReceiptExpenses(
+          items,
+          expenses.map((e) => ({
+            amount: Number(e.amount),
+            allocationMethod: e.allocationMethod,
+          })),
+        )
+      : new Map<string, number>();
+  const result = new Map<string, ReceiptLineAllocation>();
+  for (const item of items) {
+    const qty = Number(item.quantity);
+    const allocatedExpenses = shares.get(item.id) ?? 0;
+    result.set(item.id, {
+      allocatedExpenses,
+      landedCost:
+        qty > 0 ? (Number(item.totalPrice) + allocatedExpenses) / qty : 0,
+    });
+  }
+  return result;
+}
+
+/** True when the lines' shares add up to the receipt expenses (to the tiyin). */
+export function lineAllocationsMatchExpenses(
+  items: { allocatedExpenses?: Numeric | null }[],
+  expenses: { amount: Numeric }[],
+): boolean {
+  const allocated = items.reduce(
+    (sum, i) => sum + Number(i.allocatedExpenses ?? 0),
+    0,
+  );
+  const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  return Math.abs(allocated - total) < 0.005;
 }

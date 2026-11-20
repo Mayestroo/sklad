@@ -136,7 +136,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
             <span style={{ fontWeight: 600, color: '#1e40af' }}>{isRu ? 'Причина возврата: ' : 'Qaytarish sababi: '}</span>
             <span style={{ color: '#1e3a8a' }}>{purchaseReturn.reason || (isRu ? 'Не указана' : 'Ko‘rsatilmadi')}</span>
             {purchaseReturn.comment && (
-              <div style={{ marginTop: '4px', fontSize: '12px', color: '#3b82f6' }}>
+              <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--color-info-600)' }}>
                 {isRu ? 'Примечание: ' : 'Izoh: '}{purchaseReturn.comment}
               </div>
             )}
@@ -178,7 +178,7 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
                           padding: '2px 6px',
                           borderRadius: '4px',
                           backgroundColor: itemType === 'RAW_MATERIAL' ? '#ecfdf5' : '#eff6ff',
-                          color: itemType === 'RAW_MATERIAL' ? '#047857' : '#1d4ed8',
+                          color: itemType === 'RAW_MATERIAL' ? 'var(--color-success-700)' : '#1d4ed8',
                         }}
                       >
                         {itemType === 'RAW_MATERIAL' ? (isRu ? 'Сырье' : 'Xomashyo') : (isRu ? 'Товар' : 'Tovar')}

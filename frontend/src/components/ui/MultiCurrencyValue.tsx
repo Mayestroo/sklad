@@ -9,17 +9,18 @@ export interface CurrencyAmountItem {
 
 interface MultiCurrencyValueProps {
   items?: CurrencyAmountItem[];
-  fallbackAmount?: number;
-  fallbackCurrency?: string;
   locale: string;
   color?: string;
   className?: string;
 }
 
+/**
+ * One line per currency, never summed across currencies (ADR 0023). With no
+ * non-zero amount it shows a plain 0: a zero has no currency to guess
+ * (ADR 0022).
+ */
 export function MultiCurrencyValue({
   items,
-  fallbackAmount = 0,
-  fallbackCurrency = 'UZS',
   locale,
   color,
   className = 'tabular-nums',
@@ -37,7 +38,7 @@ export function MultiCurrencyValue({
         }}
         className={className}
       >
-        {formatCurrency(fallbackAmount, locale, fallbackCurrency)}
+        0
       </div>
     );
   }
