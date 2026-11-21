@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { Signal, SignalStrip, ChipGroup } from '@/components/ui/list/ListKit';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
@@ -20,8 +21,6 @@ import { SearchField } from '@/components/ui/SearchField';
 import { toast } from '@/context/ToastContext';
 import {
   Building2,
-  Users,
-  DollarSign,
   Plus,
   LogIn,
   Edit2,
@@ -240,6 +239,12 @@ export default function SuperAdminTenantsPage() {
     }
   };
 
+  const ta = useTranslations('rd.admin');
+  const countBy = (st: string) => tenants.filter((t) => t.status === st).length;
+  // Trials that end within a week (or already ended) need a call or a plan.
+  const [weekAhead] = useState(() => Date.now() + 7 * 86400000);
+  const trialEnding = tenants.filter((t) => t.status === 'TRIAL' && t.trialEndsAt && new Date(t.trialEndsAt).getTime() <= weekAhead);
+
   // Filtered tenants
   const filteredTenants = tenants.filter((t) => {
     const nameStr =
@@ -341,19 +346,22 @@ export default function SuperAdminTenantsPage() {
         />
       </div>
 
-      <div className="ux-kpi-grid">
-        <div data-mrr-card style={{ display: 'contents' }}>
-          {kpi(isRu ? 'Доход в месяц (MRR)' : 'Oylik daromad (MRR)', <MrrValue metrics={metrics} locale={locale} />, DollarSign)}
-        </div>
-        {kpi(isRu ? 'Активные компании' : 'Faol korxonalar', metrics?.activeTenantsCount ?? 0, Building2)}
-        {kpi(isRu ? 'На пробном периоде' : 'Sinov davrida', metrics?.trialTenantsCount ?? 0, Clock)}
-        {kpi(isRu ? 'Всего пользователей' : 'Jami foydalanuvchilar', metrics?.totalUsersCount ?? 0, Users)}
-      </div>
+      {/* What needs the owner's attention, then the money in one line */}
+      <SignalStrip label={ta('attention')}>
+        <Signal label={ta('trialEnding')} value={trialEnding.length} hint={ta('trialEndingHint')} tone={trialEnding.length ? 'warning' : 'neutral'} onClick={() => { setStatusFilter('TRIAL'); setSearchQuery(''); }} active={statusFilter === 'TRIAL'} />
+        <Signal label={isRu ? 'Приостановлена' : 'To‘xtatilgan'} value={countBy('SUSPENDED')} tone={countBy('SUSPENDED') ? 'warning' : 'neutral'} onClick={() => setStatusFilter('SUSPENDED')} active={statusFilter === 'SUSPENDED'} />
+        <Signal label={isRu ? 'Заблокирована' : 'Bloklangan'} value={countBy('BLOCKED')} tone={countBy('BLOCKED') ? 'error' : 'neutral'} onClick={() => setStatusFilter('BLOCKED')} active={statusFilter === 'BLOCKED'} />
+        <Signal label={isRu ? 'Активные компании' : 'Faol korxonalar'} value={metrics?.activeTenantsCount ?? countBy('ACTIVE')} hint={ta('users', { count: metrics?.totalUsersCount ?? 0 })} tone="success" onClick={() => setStatusFilter('ACTIVE')} active={statusFilter === 'ACTIVE'} />
+      </SignalStrip>
+      <p data-mrr-card style={{ margin: 0, display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+        <span>{isRu ? 'Доход в месяц (MRR)' : 'Oylik daromad (MRR)'}</span>
+        <strong style={{ color: 'var(--color-text-primary)' }}><MrrValue metrics={metrics} locale={locale} /></strong>
+      </p>
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap', padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)' }}>
           <SearchField value={searchQuery} onChange={setSearchQuery} placeholder={isRu ? 'Название или slug компании' : 'Korxona nomi yoki slug'} style={{ maxWidth: 380 }} />
-          <Select label={isRu ? 'Статус' : 'Holat'} value={statusFilter} onChange={setStatusFilter} style={{ width: 200 }} options={[{ value: 'ALL', label: isRu ? 'Все' : 'Hammasi' }, ...statusOptions]} />
+          <ChipGroup label={isRu ? 'Статус' : 'Holat'} value={statusFilter === 'ALL' ? '' : statusFilter} onChange={(v) => setStatusFilter(v || 'ALL')} options={[{ value: '', label: isRu ? 'Все' : 'Hammasi', count: tenants.length }, ...statusOptions.map((o) => ({ ...o, count: countBy(o.value) }))]} />
           <Select label={isRu ? 'Тариф' : 'Tarif'} value={planFilter} onChange={setPlanFilter} style={{ width: 200 }} options={[{ value: 'ALL', label: isRu ? 'Все' : 'Hammasi' }, ...planOptions]} />
         </div>
 

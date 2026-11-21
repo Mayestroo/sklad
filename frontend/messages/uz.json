@@ -1024,6 +1024,12 @@
       "exampleLast": "Misolda kartada: 120 000",
       "exampleAverage": "Misolda kartada: 110 000",
       "change": "{from} → {to}. Eski hujjatlar o‘zgarmaydi."
+    },
+    "admin": {
+      "attention": "E’tibor talab qiladi",
+      "trialEnding": "Sinov 7 kun ichida tugaydi",
+      "trialEndingHint": "Qo‘ng‘iroq qiling yoki tarif taklif qiling",
+      "users": "{count, plural, other {jami # foydalanuvchi}}"
     }
   }
 }
