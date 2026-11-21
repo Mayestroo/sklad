@@ -1050,6 +1050,16 @@
       "urgent": "muhim",
       "we": "Biz (Sklad)",
       "replyNote": "Javob yuborilgach murojaat «Hal qilindi» bo‘ladi. Ctrl+Enter — yuborish."
+    },
+    "announcements": {
+      "preview": "Foydalanuvchilar shunday ko‘radi",
+      "seenUz": "O‘zbekcha interfeysda",
+      "seenRu": "Ruscha interfeysda",
+      "ruFallback": "Ruscha matn bo‘sh — rus tilidagi foydalanuvchilar o‘zbekcha matnni ko‘radi.",
+      "showRu": "Ruscha variantini ko‘rish",
+      "showUz": "O‘zbekcha variantini ko‘rish",
+      "active": "Ko‘rsatilmoqda",
+      "hidden": "Yashirilgan"
     }
   }
 }

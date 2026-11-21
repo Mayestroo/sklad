@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatDate, errorMessage } from '@/lib/utils';
@@ -41,6 +42,7 @@ export default function SuperAdminAnnouncementsPage() {
   const [msgUz, setMsgUz] = useState('');
   const [msgRu, setMsgRu] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
+  const ta = useTranslations('rd.announcements');
 
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
@@ -126,11 +128,21 @@ export default function SuperAdminAnnouncementsPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                       <h2 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{title}</h2>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                        <Badge variant={item.isActive ? 'success' : 'neutral'}>{item.isActive ? ta('active') : ta('hidden')}</Badge>
                         <Calendar size={13} aria-hidden /> {formatDate(item.createdAt, locale)}
                       </span>
                     </div>
                     <p style={{ margin: '8px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{message}</p>
+                    {typeof item.title !== 'string' && (
+                      <details style={{ marginTop: 8 }}>
+                        <summary className="rd-linkbtn" style={{ paddingLeft: 0, display: 'inline' }}>{locale === 'ru' ? ta('showUz') : ta('showRu')}</summary>
+                        <div className="ann-preview" style={{ marginTop: 6 }}>
+                          <strong>{item.title?.[locale === 'ru' ? 'uz' : 'ru'] || '—'}</strong>
+                          <span style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text-secondary)' }}>{item.message?.[locale === 'ru' ? 'uz' : 'ru'] || '—'}</span>
+                        </div>
+                      </details>
+                    )}
                   </div>
                 </article>
               </Card>
@@ -143,7 +155,7 @@ export default function SuperAdminAnnouncementsPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={isRu ? 'Новое объявление' : 'Yangi e’lon'}
-        size="md"
+        size="lg"
         footer={
           <>
             <Button variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
@@ -154,9 +166,6 @@ export default function SuperAdminAnnouncementsPage() {
         }
       >
         <form id="sa-announcement" onSubmit={handleCreateAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {isRu ? 'Если русский текст пуст, покажем узбекский.' : 'Ruscha matn bo‘sh bo‘lsa, o‘zbekchasi ko‘rsatiladi.'}
-          </p>
           <Input autoFocus required label={isRu ? 'Заголовок (по-узбекски) *' : 'Sarlavha (o‘zbekcha) *'} value={titleUz} onChange={(e) => setTitleUz(e.target.value)} />
           <Input label={isRu ? 'Заголовок (по-русски)' : 'Sarlavha (ruscha)'} value={titleRu} onChange={(e) => setTitleRu(e.target.value)} />
           <div>
@@ -167,6 +176,22 @@ export default function SuperAdminAnnouncementsPage() {
             <label htmlFor="sa-ann-msg-ru" style={labelStyle}>{isRu ? 'Текст (по-русски)' : 'Matn (ruscha)'}</label>
             <textarea id="sa-ann-msg-ru" rows={3} value={msgRu} onChange={(e) => setMsgRu(e.target.value)} style={fieldStyle} />
           </div>
+          <section aria-label={ta('preview')} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <h3 style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{ta('preview')}</h3>
+            {(['uz', 'ru'] as const).map((lang) => {
+              const t = lang === 'uz' ? titleUz : titleRu || titleUz;
+              const m = lang === 'uz' ? msgUz : msgRu || msgUz;
+              const fallback = lang === 'ru' && (!titleRu.trim() || !msgRu.trim()) && (titleUz.trim() || msgUz.trim());
+              return (
+                <div key={lang} className="ann-preview">
+                  <span className="rd-sub">{lang === 'uz' ? ta('seenUz') : ta('seenRu')}</span>
+                  <strong>{t || '—'}</strong>
+                  <span style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text-secondary)' }}>{m || '—'}</span>
+                  {fallback && <span role="status" style={{ color: 'var(--color-warning-700)', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)' }}>{ta('ruFallback')}</span>}
+                </div>
+              );
+            })}
+          </section>
         </form>
       </Modal>
     </div>
