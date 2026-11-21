@@ -1,0 +1,210 @@
+[
+  {
+    "route": "/admin",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 2244,
+    "overflowX": 0,
+    "url": "/admin",
+    "h1": [
+      "Korxonalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin-uz-1440.jpg"
+  },
+  {
+    "route": "/admin/security",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1382,
+    "overflowX": 0,
+    "url": "/admin/security",
+    "h1": [
+      "Jurnal va zaxira nusxalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_security-uz-1440.jpg"
+  },
+  {
+    "route": "/admin/tickets",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1315,
+    "overflowX": 0,
+    "url": "/admin/tickets",
+    "h1": [
+      "Murojaatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_tickets-uz-1440.jpg"
+  },
+  {
+    "route": "/admin/billing",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1315,
+    "overflowX": 0,
+    "url": "/admin/billing",
+    "h1": [
+      "Tariflar va obunalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_billing-uz-1440.jpg"
+  },
+  {
+    "route": "/admin",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 2384,
+    "overflowX": 0,
+    "url": "/admin",
+    "h1": [
+      "Korxonalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin-uz-390.jpg"
+  },
+  {
+    "route": "/admin/security",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1375,
+    "overflowX": 0,
+    "url": "/admin/security",
+    "h1": [
+      "Jurnal va zaxira nusxalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_security-uz-390.jpg"
+  },
+  {
+    "route": "/admin/tickets",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1440,
+    "overflowX": 0,
+    "url": "/admin/tickets",
+    "h1": [
+      "Murojaatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_tickets-uz-390.jpg"
+  },
+  {
+    "route": "/admin/billing",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1374,
+    "overflowX": 0,
+    "url": "/admin/billing",
+    "h1": [
+      "Tariflar va obunalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_billing-uz-390.jpg"
+  },
+  {
+    "route": "/admin",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 2435,
+    "overflowX": 0,
+    "url": "/admin",
+    "h1": [
+      "Компании"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin-ru-1440.jpg"
+  },
+  {
+    "route": "/admin/security",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1339,
+    "overflowX": 0,
+    "url": "/admin/security",
+    "h1": [
+      "Журнал и резервные копии"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_security-ru-1440.jpg"
+  },
+  {
+    "route": "/admin/tickets",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 2737,
+    "overflowX": 0,
+    "url": "/admin/tickets",
+    "h1": [
+      "Обращения"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_tickets-ru-1440.jpg"
+  },
+  {
+    "route": "/admin/billing",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1312,
+    "overflowX": 0,
+    "url": "/admin/billing",
+    "h1": [
+      "Тарифы и подписки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_billing-ru-1440.jpg"
+  },
+  {
+    "route": "/admin",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 2203,
+    "overflowX": 0,
+    "url": "/admin",
+    "h1": [
+      "Компании"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin-ru-390.jpg"
+  },
+  {
+    "route": "/admin/security",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1446,
+    "overflowX": 0,
+    "url": "/admin/security",
+    "h1": [
+      "Журнал и резервные копии"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_security-ru-390.jpg"
+  },
+  {
+    "route": "/admin/tickets",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1326,
+    "overflowX": 0,
+    "url": "/admin/tickets",
+    "h1": [
+      "Обращения"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_tickets-ru-390.jpg"
+  },
+  {
+    "route": "/admin/billing",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1361,
+    "overflowX": 0,
+    "url": "/admin/billing",
+    "h1": [
+      "Тарифы и подписки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before-admin\\admin_billing-ru-390.jpg"
+  }
+]

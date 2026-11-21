@@ -12,6 +12,8 @@ interface MultiCurrencyValueProps {
   locale: string;
   color?: string;
   className?: string;
+  /** Take size, weight and colour from the parent (StatCard value); extra currencies one step smaller. */
+  inherit?: boolean;
 }
 
 /**
@@ -24,8 +26,23 @@ export function MultiCurrencyValue({
   locale,
   color,
   className = 'tabular-nums',
+  inherit,
 }: MultiCurrencyValueProps) {
   const activeItems = (items || []).filter((i) => i.amount !== 0);
+  if (inherit)
+    return (
+      <span className="mcv tabular-nums">
+        {activeItems.length === 0 ? (
+          <span className="mcv-line">0</span>
+        ) : (
+          activeItems.map((item) => (
+            <span key={item.currency} className="mcv-line">
+              {formatCurrency(item.amount, locale, item.currency)}
+            </span>
+          ))
+        )}
+      </span>
+    );
 
   if (activeItems.length === 0) {
     return (

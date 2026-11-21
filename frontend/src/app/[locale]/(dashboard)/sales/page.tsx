@@ -10,33 +10,18 @@ import { apiFetch, listOf, type ListResponse } from '@/lib/api';
 import { formatCurrency, formatPercent, formatDate, formatDateTime, errorMessage, type LocalizedName } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Button, buttonStyle } from '@/components/ui/Button';
-import { Select, SelectOption } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { toast } from '@/context/ToastContext';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { totalsByCurrency } from '@/lib/currency-totals';
 import { usePersistentState } from '@/lib/usePersistentState';
-import {
-  ActiveFilters,
-  ALL_TIME,
-  ChipGroup,
-  ColumnChooser,
-  CurrencyTotals,
-  MoreFiltersButton,
-  PeriodFilter,
-  resolvePeriod,
-  Signal,
-  SignalStrip,
-  useListFilters,
-  type ActiveFilter,
-  type PeriodValue,
-} from '@/components/ui/list/ListKit';
+import { CurrencyTotals } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, periodRange, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Facts, PaidProgress, PreviewHead, SectionTitle } from '@/components/ui/list/Preview';
 import { CreditCard, Plus, RotateCcw, ShoppingCart, ExternalLink } from 'lucide-react';
@@ -66,7 +51,7 @@ const FILTER_DEFAULTS = {
   paymentStatus: '',
   counterpartyId: '',
   warehouseId: '',
-  period: ALL_TIME as PeriodValue,
+  period: '',
 };
 
 /** GET /sales/invoices with the non-empty filters. */
@@ -91,14 +76,13 @@ export default function SalesPage() {
   const td = useTranslations('rd.doc');
   const ts = useTranslations('rd.sales');
 
-  // Filters apply at once and are remembered; a link may open the list pre-filtered (?status=DRAFT).
-  const [filters, setFilters, resetFilters] = useListFilters('sales.list', FILTER_DEFAULTS, ['status', 'paymentStatus']);
-  const [search, setSearch] = useState('');
-  const debouncedSearch = useDebouncedValue(search.trim(), 350);
-  const [moreOpen, setMoreOpen] = useState(false);
+  // Filters live in the URL and are remembered per user; a link may open the list pre-filtered (?status=DRAFT).
+  const lf = useFilterState('sales.list', FILTER_DEFAULTS);
+  const filters = lf.values;
+  const debouncedSearch = lf.debouncedSearch;
   const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('sales.list.hidden', ['warehouse']);
   const [sort, setSort] = usePersistentState<SortState | null>('sales.list.sort', null);
-  const range = resolvePeriod(filters.period);
+  const range = periodRange(filters.period);
 
   const invoicesEndpoint = useMemo(
     () =>
@@ -251,34 +235,15 @@ export default function SalesPage() {
     },
   ];
 
-  const customerOptions: SelectOption[] = [{ value: '', label: ts('anyCustomer') }, ...counterparties.map((c) => ({ value: c.id, label: c.name }))];
-  const warehouseOptions: SelectOption[] = [{ value: '', label: tl('anyWarehouse') }, ...warehouses.map((w) => ({ value: w.id, label: nameOf(w.name) }))];
-
-  const statusOptions = [
-    { value: '', label: tl('all') },
-    { value: 'DRAFT', label: td('draft') },
-    { value: 'POSTED', label: td('posted') },
-    { value: 'CANCELLED', label: td('cancelled') },
+  const filterDefs: FilterDef[] = [
+    { key: 'status', kind: 'segmented', label: tl('status'), options: [{ value: 'DRAFT', label: td('draft') }, { value: 'POSTED', label: td('posted') }, { value: 'CANCELLED', label: td('cancelled') }] },
+    { key: 'paymentStatus', kind: 'select', label: tl('payment'), options: [{ value: 'UNPAID', label: td('unpaid') }, { value: 'PARTIALLY_PAID', label: td('partial') }, { value: 'PAID', label: td('paid') }] },
+    { key: 'counterpartyId', kind: 'select', label: ts('customer'), searchable: true, options: counterparties.map((c) => ({ value: c.id, label: c.name })) },
+    { key: 'warehouseId', kind: 'select', label: tl('warehouse'), options: warehouses.map((w) => ({ value: w.id, label: nameOf(w.name) })) },
+    { key: 'period', kind: 'period', label: tl('period') },
   ];
-  const paymentOptions = [
-    { value: 'UNPAID', label: td('unpaid') },
-    { value: 'PARTIALLY_PAID', label: td('partial') },
-    { value: 'PAID', label: td('paid') },
-  ];
-
-  const active: ActiveFilter[] = [];
-  if (debouncedSearch) active.push({ key: 'q', label: `«${debouncedSearch}»`, onClear: () => setSearch('') });
-  if (filters.counterpartyId) active.push({ key: 'c', label: counterparties.find((c) => c.id === filters.counterpartyId)?.name ?? ts('customer'), onClear: () => setFilters({ counterpartyId: '' }) });
-  if (filters.warehouseId) active.push({ key: 'w', label: nameOf(warehouses.find((w) => w.id === filters.warehouseId)?.name), onClear: () => setFilters({ warehouseId: '' }) });
-  const moreCount = (filters.counterpartyId ? 1 : 0) + (filters.warehouseId ? 1 : 0);
-  const anyFilter = Boolean(debouncedSearch || filters.status || filters.paymentStatus || filters.counterpartyId || filters.warehouseId || filters.period.key !== 'all');
-  const clearAll = () => {
-    setSearch('');
-    resetFilters();
-  };
-
-  const unpaidOnly = filters.status === 'POSTED' && filters.paymentStatus === 'UNPAID';
-
+  const anyFilter = Boolean(debouncedSearch || lf.activeCount > 0);
+  const clearAll = lf.reset;
   return (
     <div className="rd-page">
       <PageHeader
@@ -291,57 +256,25 @@ export default function SalesPage() {
         }
       />
 
-      {/* Numbers that are also filters */}
-      <SignalStrip label={tl('summary')}>
-        <Signal
-          tone="error"
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard
           label={ts('sigDebt')}
-          value={stats?.totalCustomerDebtByCurrency?.some((i) => i.amount !== 0) ? <MultiCurrencyValue items={stats.totalCustomerDebtByCurrency} locale={locale} /> : formatCurrency(0, locale, 'UZS')}
-          hint={ts('sigDebtHint', { count: stats?.customersWithDebtCount ?? 0 })}
-          active={unpaidOnly}
-          onClick={() => setFilters(unpaidOnly ? { status: '', paymentStatus: '' } : { status: 'POSTED', paymentStatus: 'UNPAID' })}
+          loading={statsQuery.isPending}
+          value={stats?.totalCustomerDebtByCurrency?.some((i) => i.amount !== 0) ? <MultiCurrencyValue inherit items={stats.totalCustomerDebtByCurrency} locale={locale} /> : formatCurrency(0, locale, 'UZS')}
+          secondary={ts('sigDebtHint', { count: stats?.customersWithDebtCount ?? 0 })}
         />
-        <Signal
-          tone="warning"
-          label={ts('sigDrafts')}
-          value={draftCount}
-          hint={ts('sigDraftsHint')}
-          active={filters.status === 'DRAFT'}
-          onClick={() => setFilters({ status: filters.status === 'DRAFT' ? '' : 'DRAFT', paymentStatus: '' })}
-        />
-        <Signal tone="info" label={ts('sigMonth')} value={<MultiCurrencyValue items={stats?.monthlySalesByCurrency} locale={locale} />} hint={ts('sigMonthHint', { count: stats?.monthlySalesCount ?? 0 })} />
-        <Signal tone="success" label={ts('sigProfit')} value={<MultiCurrencyValue items={stats?.monthlyGrossProfitByCurrency} locale={locale} />} hint={ts('sigProfitHint', { pct: formatPercent(Number(stats?.monthlyGrossProfitMargin || 0)) })} />
-      </SignalStrip>
+        <StatCard label={ts('sigDrafts')} loading={draftsQuery.isPending} value={draftCount} secondary={ts('sigDraftsHint')} />
+        <StatCard label={ts('sigMonth')} loading={statsQuery.isPending} value={<MultiCurrencyValue inherit items={stats?.monthlySalesByCurrency} locale={locale} />} secondary={ts('sigMonthHint', { count: stats?.monthlySalesCount ?? 0 })} />
+        <StatCard label={ts('sigProfit')} loading={statsQuery.isPending} value={<MultiCurrencyValue inherit items={stats?.monthlyGrossProfitByCurrency} locale={locale} />} secondary={ts('sigProfitHint', { pct: formatPercent(Number(stats?.monthlyGrossProfitMargin || 0)) })} />
+      </StatCardGrid>
 
-      {/* Search · status · payment · period · more */}
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={ts('searchPh')} label={tl('search')} />
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={tl('status')} showLabel options={statusOptions} value={filters.status} onChange={(v) => setFilters({ status: v })} />
-          <ChipGroup label={tl('payment')} showLabel options={paymentOptions} value={filters.paymentStatus} onChange={(v) => setFilters({ paymentStatus: v })} />
-        </div>
-        <div className="rd-toolbar-row">
-          <PeriodFilter value={filters.period} onChange={(p) => setFilters({ period: p })} locale={locale} />
-          <span className="rd-toolbar-spacer" />
-          <MoreFiltersButton open={moreOpen} onToggle={() => setMoreOpen((o) => !o)} activeCount={moreCount} controls="sales-more" />
-        </div>
-        {moreOpen && (
-          <div id="sales-more" className="rd-more-panel">
-            <div>
-              <span className="rd-field-label">{ts('customer')}</span>
-              <Select options={customerOptions} value={filters.counterpartyId} onChange={(v) => setFilters({ counterpartyId: v })} searchable />
-            </div>
-            <div>
-              <span className="rd-field-label">{tl('warehouse')}</span>
-              <Select options={warehouseOptions} value={filters.warehouseId} onChange={(v) => setFilters({ warehouseId: v })} />
-            </div>
-          </div>
-        )}
-        <ActiveFilters items={active} onClearAll={clearAll} />
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={ts('searchPh')}
+        resultCount={invoicesQuery.isPending ? null : invoices.length}
+        columns={<ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {invoicesQuery.isError ? (

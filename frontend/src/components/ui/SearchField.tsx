@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type Ref } from 'react';
 import { Search, X } from 'lucide-react';
 import { useLocale } from 'next-intl';
 
@@ -13,14 +13,18 @@ export interface SearchFieldProps {
   label?: string;
   style?: React.CSSProperties;
   autoFocus?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
+  /** Key that focuses the field (shown as a hint while empty; the page binds it). */
+  shortcut?: string;
+  className?: string;
 }
 
 /** List search box: magnifier, clear button, Esc clears. */
-export function SearchField({ value, onChange, placeholder, label, style, autoFocus }: SearchFieldProps) {
+export function SearchField({ value, onChange, placeholder, label, style, autoFocus, inputRef, shortcut, className }: SearchFieldProps) {
   const id = useId();
   const isRu = useLocale() === 'ru';
   return (
-    <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 0, ...style }}>
+    <div className={className} style={{ position: 'relative', flex: '1 1 240px', minWidth: 0, ...style }}>
       <Search
         size={16}
         aria-hidden
@@ -28,7 +32,9 @@ export function SearchField({ value, onChange, placeholder, label, style, autoFo
       />
       <input
         id={id}
+        ref={inputRef}
         type="search"
+        aria-keyshortcuts={shortcut}
         className="ux-search-input"
         value={value}
         autoFocus={autoFocus}
@@ -54,6 +60,11 @@ export function SearchField({ value, onChange, placeholder, label, style, autoFo
           outline: 'none',
         }}
       />
+      {shortcut && !value && (
+        <kbd aria-hidden className="ux-search-kbd">
+          {shortcut}
+        </kbd>
+      )}
       {value && (
         <button
           type="button"
