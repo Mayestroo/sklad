@@ -4,8 +4,11 @@ import { isSellable, productTypeLabel, semiFinishedLabel } from '@/lib/product-t
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { readRemembered, remember } from '@/lib/usePersistentState';
+import { readRemembered, remember, usePersistentState } from '@/lib/usePersistentState';
 import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
+import { DocChecklist, linesKeyDown } from '@/components/ui/DocChecklist';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { useTranslations } from 'next-intl';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch, listOf, type ListResponse } from '@/lib/api';
@@ -136,6 +139,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const confirm = useConfirm();
   const searchParams = useSearchParams();
   const isEditRequested = searchParams?.get('edit') === 'true';
+  const tf = useTranslations('rd.docForm');
+  const [showDiscVatPref, setShowDiscVatPref] = usePersistentState<boolean>('docForm.showDiscVat', false);
 
   const isPriceOverrideAllowed =
     hasPermission('sales:override_price') ||
@@ -946,6 +951,16 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
   };
 
+  const showDiscVat = showDiscVatPref || items.some((i) => Number(i.discount) > 0);
+  const checklist = [
+    { label: tf('ckCustomer'), done: Boolean(counterpartyId) },
+    { label: tf('ckWarehouse'), done: Boolean(warehouseId) },
+    { label: currency && currency !== 'UZS' ? tf('ckCurrencyRate') : tf('ckCurrency'), done: Boolean(currency) && (currency === 'UZS' || Number(exchangeRate) > 0) },
+    { label: tf('ckLines'), done: items.some((i) => i.productId) },
+    { label: tf('ckQty'), done: items.filter((i) => i.productId).length > 0 && items.filter((i) => i.productId).every((i) => Number(i.quantity) > 0) },
+    { label: tf('ckPrice'), done: items.filter((i) => i.productId).length > 0 && items.filter((i) => i.productId).every((i) => Number(i.unitPrice) > 0) },
+  ];
+
   // Ctrl+S saves the draft, Ctrl+Enter posts (only while the document is editable).
   useDocumentShortcuts({ enabled: !isReadOnly && !loading, onSave: handleSaveDraft, onPost: handlePost });
 
@@ -1047,46 +1062,20 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
           {docStatus === 'POSTED' && (
             <>
-              <Button
-                variant="ghost"
-                onClick={handleDeleteInvoice}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
-              >
-                <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleUnpostToEdit}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-warning-700)', borderColor: 'var(--color-warning-600)', fontWeight: 600 }}
-              >
-                <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={handleUnpost}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <RotateCcw size={16} /> {isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish'}
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={() => setIsPayOpen(true)}
-                style={{
-                  backgroundColor: 'var(--color-success-50)',
-                  color: 'var(--color-success-700)',
-                  border: '1px solid var(--color-success-200)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <CreditCard size={16} aria-hidden /> {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
-              </Button>
+              {/* Rare and risky actions behind one menu; the everyday ones stay visible. */}
+              <ActionsMenu
+                label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                actions={[
+                  { label: isRu ? 'Редактировать' : 'Tahrirlash', onSelect: handleUnpostToEdit },
+                  { label: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish', onSelect: handleUnpost },
+                  { label: isRu ? 'Удалить' : 'O‘chirish', onSelect: handleDeleteInvoice, danger: true },
+                ]}
+              />
+              {paymentStatus !== 'PAID' && (
+                <Button onClick={() => setIsPayOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CreditCard size={16} aria-hidden /> {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
+                </Button>
+              )}
 
               <Button
                 variant="secondary"
@@ -1169,6 +1158,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         </div>
       )}
 
+      <div className="doc-layout">
+      <div className="doc-main">
       {/* Document Primary Metadata Form Card */}
       <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
@@ -1236,27 +1227,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             />
           </div>
 
-          {/* Contract Number */}
-          <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
-            <Input
-              label={isRu ? '№ Договора' : 'Shartnoma №'}
-              value={contractNumber}
-              onChange={(e) => { markDirty(); setContractNumber(e.target.value); }}
-              placeholder="№ 12-A"
-              disabled={isReadOnly}
-            />
-          </div>
-
-          {/* Contract Date */}
-          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
-            <DatePicker
-              label={isRu ? 'Дата договора' : 'Shartnoma sanasi'}
-              value={contractDate}
-              onChange={(val) => { markDirty(); setContractDate(val); }}
-              disabled={isReadOnly}
-            />
-          </div>
-
           {/* Currency */}
           <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
             <Select
@@ -1284,6 +1254,31 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             </div>
           )}
 
+          {/* Rare fields: folded unless one is filled */}
+          <details className="doc-more" open={Boolean(contractNumber || contractDate || paymentTerms || comment || Number(additionalChargeAmount) > 0) || undefined}>
+            <summary>{tf('moreOptions')}</summary>
+            <div className="doc-more-body">
+          {/* Contract Number */}
+          <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
+            <Input
+              label={isRu ? '№ Договора' : 'Shartnoma №'}
+              value={contractNumber}
+              onChange={(e) => { markDirty(); setContractNumber(e.target.value); }}
+              placeholder="№ 12-A"
+              disabled={isReadOnly}
+            />
+          </div>
+
+          {/* Contract Date */}
+          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
+            <DatePicker
+              label={isRu ? 'Дата договора' : 'Shartnoma sanasi'}
+              value={contractDate}
+              onChange={(val) => { markDirty(); setContractDate(val); }}
+              disabled={isReadOnly}
+            />
+          </div>
+
           {/* Payment Terms */}
           <div style={{ minWidth: '180px', flex: '1.5 1 200px' }}>
             <Input
@@ -1305,6 +1300,32 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               disabled={isReadOnly}
             />
           </div>
+              {!isReadOnly && (
+                <div style={{ flexBasis: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)', alignItems: 'end' }}>
+            <MoneyInput
+              label={isRu ? `Дополнительная сумма покупателю${currency ? ` (${currency})` : ''}` : `Mijozga qo‘shimcha summa${currency ? ` (${currency})` : ''}`}
+              value={additionalChargeAmount}
+              onValueChange={(value) => {
+                markDirty();
+                setAdditionalChargeAmount(Number(value));
+              }}
+            />
+            <Input
+              label={isRu ? 'НДС на доплату, %' : 'Qo‘shimcha QQS, %'}
+              type="text"
+              inputMode="decimal"
+              value={additionalChargeVatRate}
+              onChange={(event) => {
+                markDirty();
+                setAdditionalChargeVatRate(event.target.value);
+              }}
+            />
+          </div>
+                </div>
+              )}
+            </div>
+          </details>
         </div>
       </Card>
 
@@ -1339,33 +1360,37 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         </div>
 
         {/* Table container */}
-        <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
-          <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+        <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto', minHeight: '220px', paddingBottom: '40px' }}>
+          <table className="doc-lines" style={{ width: '100%', minWidth: showDiscVat ? '900px' : '680px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                   {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '130px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Цена продажи${currency ? ` (${currency})` : ''}` : `Sotish narxi${currency ? ` (${currency})` : ''}`}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
-                  {isRu ? 'Скидка %' : 'Chegirma %'}
-                </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
-                  {isRu ? 'НДС %' : 'QQS %'}
-                </th>
+                {showDiscVat && (
+                  <>
+                    <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
+                      {isRu ? 'Скидка %' : 'Chegirma %'}
+                    </th>
+                    <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
+                      {isRu ? 'НДС %' : 'QQS %'}
+                    </th>
+                  </>
+                )}
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '180px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Итого${currency ? ` (${currency})` : ''}` : `Jami summa${currency ? ` (${currency})` : ''}`}
                 </th>
                 {!isReadOnly && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}
               </tr>
             </thead>
-            <tbody>
+            <tbody onKeyDown={linesKeyDown({ rowCount: items.length, addRow: () => addItemRow(), disabled: isReadOnly })}>
               {items.map((item, idx) => {
                 const prd = products.find((p) => p.id === item.productId);
                 const qty = Number(item.quantity) || 0;
@@ -1404,6 +1429,18 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                           })()}</span>
                           <span>•</span>
                           <span>{isRu ? 'Ед.' : 'Birlik'}: {unitLabel(prd.unitOfMeasure, locale)}</span>
+                          {!showDiscVat && (
+                            <>
+                              <span>•</span>
+                              <span>{isRu ? 'НДС' : 'QQS'}: {Number(item.vatRate) || 0}%</span>
+                              {Number(item.discount) > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span>{isRu ? 'Скидка' : 'Chegirma'}: {Number(item.discount)}%</span>
+                                </>
+                              )}
+                            </>
+                          )}
                           {warehouseStockMap[item.productId] !== undefined && (
                             <>
                               <span>•</span>
@@ -1456,6 +1493,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       />
                     </td>
 
+                    {showDiscVat && (<>
                     {/* Discount */}
                     <td style={{ padding: '10px 12px' }}>
                       <Input
@@ -1484,6 +1522,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       />
                     </td>
 
+                    </>)}
                     {/* Line Total */}
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
                       {currency ? formatCurrency(lineTotal, locale, currency) : '—'}
@@ -1513,7 +1552,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
         {/* Add Row Button */}
         {!isReadOnly && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
             <Button
               type="button"
               variant="secondary"
@@ -1524,42 +1563,22 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             >
               <Plus size={16} /> {isRu ? 'Добавить позицию' : 'Qator qo‘shish'}
             </Button>
+            <label className="auth-check" style={{ marginLeft: 'auto' }}>
+              <input type="checkbox" checked={showDiscVat} onChange={(e) => setShowDiscVatPref(e.target.checked)} />
+              {tf('showDiscVat')}
+            </label>
           </div>
         )}
       </Card>
 
-      {!isReadOnly && (
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)', alignItems: 'end' }}>
-            <MoneyInput
-              label={isRu ? `Дополнительная сумма покупателю${currency ? ` (${currency})` : ''}` : `Mijozga qo‘shimcha summa${currency ? ` (${currency})` : ''}`}
-              value={additionalChargeAmount}
-              onValueChange={(value) => {
-                markDirty();
-                setAdditionalChargeAmount(Number(value));
-              }}
-            />
-            <Input
-              label={isRu ? 'НДС на доплату, %' : 'Qo‘shimcha QQS, %'}
-              type="text"
-              inputMode="decimal"
-              value={additionalChargeVatRate}
-              onChange={(event) => {
-                markDirty();
-                setAdditionalChargeVatRate(event.target.value);
-              }}
-            />
-          </div>
-        </Card>
-      )}
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+        * {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}
+      </div>
+      </div>
 
-      {/* Summary Footer Panel with Required notice */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', padding: 'var(--space-2) 0' }}>
-          <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
-        </div>
-
-        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
+      {/* Side panel: live totals, what is still missing, the next step */}
+      <aside className="doc-aside" aria-label={tf('sidePanel')}>
+        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
             {isRu ? 'Финансовый итог' : 'Hisob-kitob'}
           </h3>
@@ -1617,6 +1636,38 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             </div>
           </div>
         </Card>
+        {!isReadOnly ? (
+          <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <DocChecklist items={checklist} />
+            <Button onClick={handlePost} loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} style={{ width: '100%', backgroundColor: 'var(--color-success-600)' }}>
+              {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
+            </Button>
+            <Button variant="secondary" onClick={handleSaveDraft} loading={loading} style={{ width: '100%' }}>
+              {!loading && <Save size={16} aria-hidden />} {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+            </Button>
+            <p className="doc-aside-hint">{tf('shortcutsHint')}</p>
+          </Card>
+        ) : docStatus === 'POSTED' ? (
+          <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>{tf('paymentTitle')}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+              <span>{isRu ? 'Оплачено' : 'To‘langan'}</span>
+              <span className="tabular-nums">{currency ? formatCurrency(Number(currentInvoiceData?.paidAmount || 0), locale, currency) : '—'}</span>
+            </div>
+            {currency && calculations.grandTotal - Number(currentInvoiceData?.paidAmount || 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-700)' }}>
+                <span>{tf('debtLeft')}</span>
+                <span className="tabular-nums">{formatCurrency(calculations.grandTotal - Number(currentInvoiceData?.paidAmount || 0), locale, currency)}</span>
+              </div>
+            )}
+            {paymentStatus !== 'PAID' && (
+              <Button onClick={() => setIsPayOpen(true)} style={{ width: '100%' }}>
+                <CreditCard size={16} aria-hidden /> {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
+              </Button>
+            )}
+          </Card>
+        ) : null}
+      </aside>
       </div>
 
       {/* Drawers & Modals (Standardized with Purchases) */}

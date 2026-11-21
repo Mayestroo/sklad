@@ -656,6 +656,28 @@
       "noSalesHint": "Birinchi sotuvni yarating — qoldiq, tannarx va mijoz qarzi o‘zi hisoblanadi.",
       "deleteTitleDraft": "Qoralamani o‘chirish",
       "previewTitle": "Sotuv {number}"
+    },
+    "docForm": {
+      "readyToPost": "Tasdiqlashga tayyor",
+      "stillMissing": "{count, plural, other {Yana # narsa kerak}}",
+      "done": "bajarildi",
+      "notDone": "hali yo‘q",
+      "moreOptions": "Qo‘shimcha: shartnoma, to‘lov shartlari, izoh",
+      "sidePanel": "Hujjat yakuni",
+      "shortcutsHint": "Ctrl+S — qoralama, Ctrl+Enter — tasdiqlash. Qatorda Enter — keyingi qator.",
+      "paymentTitle": "To‘lov",
+      "debtLeft": "Qoldiq qarz",
+      "ckCustomer": "Mijoz tanlangan",
+      "ckSupplier": "Yetkazib beruvchi tanlangan",
+      "ckWarehouse": "Ombor tanlangan",
+      "ckCurrency": "Valyuta tanlangan",
+      "ckCurrencyRate": "Valyuta va kurs kiritilgan",
+      "ckLines": "Kamida bitta tovar qo‘shilgan",
+      "ckQty": "Har bir qatorda miqdor bor",
+      "ckPrice": "Har bir qatorda narx bor",
+      "ckDate": "Sana kiritilgan",
+      "ckAmount": "Summa kiritilgan",
+      "showDiscVat": "Chegirma va QQS ustunlari"
     }
   }
 }

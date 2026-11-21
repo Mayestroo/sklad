@@ -1303,3 +1303,25 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
   .dash-todo-text { flex: 1 1 calc(100% - 52px); }
   .dash-quick-actions { gap: var(--space-2); }
 }
+
+/* ─── Document forms (ux/redesign): main column + sticky side panel ─── */
+.doc-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--space-5); align-items: start; }
+.doc-main { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.doc-aside { position: sticky; top: calc(var(--header-height) + 96px); display: flex; flex-direction: column; gap: var(--space-4); }
+.doc-aside-hint { font-size: var(--text-xs); color: var(--color-text-tertiary); line-height: var(--leading-normal); }
+.doc-more { flex-basis: 100%; border-top: 1px dashed var(--color-border); padding-top: var(--space-2); }
+.doc-more > summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--color-primary-700); }
+.doc-more-body { display: flex; flex-wrap: wrap; gap: var(--space-3); padding-top: var(--space-3); align-items: flex-start; }
+.doc-checklist h3 { font-size: var(--text-sm); font-weight: var(--font-semibold); margin-bottom: var(--space-2); }
+.doc-checklist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.doc-checklist li { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text-secondary); }
+.doc-checklist li svg { flex-shrink: 0; margin-top: 2px; color: var(--color-text-tertiary); }
+.doc-checklist li[data-done="true"] { color: var(--color-text-primary); }
+.doc-checklist li[data-done="true"] svg { color: var(--color-success-600); }
+@media (max-width: 1199px) {
+  .doc-layout { grid-template-columns: 1fr; }
+  .doc-aside { position: static; }
+}
+.doc-lines th, .doc-lines td { padding: 8px 6px !important; }
+.doc-lines th:first-child, .doc-lines td:first-child { width: 28px !important; }
+.doc-lines td:has([data-testid="quantity-unit"]) { min-width: 124px; }
