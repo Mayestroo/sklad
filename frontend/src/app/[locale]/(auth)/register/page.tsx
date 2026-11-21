@@ -29,6 +29,7 @@ const sectionTitle: React.CSSProperties = {
 
 export default function RegisterPage() {
   const t = useTranslations('auth');
+  const tr = useTranslations('rd.auth');
   const locale = useLocale();
 
   const [companyUzName, setCompanyUzName] = useState('');
@@ -79,20 +80,93 @@ export default function RegisterPage() {
     }
   };
 
+  const companyName = companyUzName.trim() || companyRuName.trim();
+  const adminName = [adminFirstName.trim(), adminLastName.trim()].filter(Boolean).join(' ');
+  const aside = (
+    <>
+      <dl className="auth-summary" aria-live="polite">
+        <div>
+          <dt>{tr('summaryCompany')}</dt>
+          <dd>{companyName || <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{tr('notFilled')}</span>}</dd>
+          {companySlug && (
+            <dd
+              style={{
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-secondary)',
+                fontWeight: 400,
+              }}
+            >
+              {tr('codePreview', { code: companySlug })}
+            </dd>
+          )}
+        </div>
+        <div>
+          <dt>{tr('summaryAdmin')}</dt>
+          <dd>
+            {adminName || adminEmail.trim() ? (
+              [adminName, adminEmail.trim()].filter(Boolean).join(' · ')
+            ) : (
+              <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{tr('notFilled')}</span>
+            )}
+          </dd>
+        </div>
+      </dl>
+      <h2>{tr('nextStepsTitle')}</h2>
+      <ol>
+        <li>
+          <span className="auth-aside-icon" aria-hidden>
+            1
+          </span>
+          {tr('nextStep1')}
+        </li>
+        <li>
+          <span className="auth-aside-icon" aria-hidden>
+            2
+          </span>
+          {tr('nextStep2')}
+        </li>
+        <li>
+          <span className="auth-aside-icon" aria-hidden>
+            3
+          </span>
+          {tr('nextStep3')}
+        </li>
+      </ol>
+    </>
+  );
+
   return (
     <AuthCard
-      maxWidth={560}
+      aside={aside}
+      maxWidth={600}
       title={t('startTrial')}
       subtitle={t('registerSubtitle')}
       badge={
-        <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-700)', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)' }}>
+        <span
+          style={{
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-full)',
+            backgroundColor: 'var(--color-success-50)',
+            color: 'var(--color-success-700)',
+            fontSize: 'var(--text-xs)',
+            fontWeight: 'var(--font-semibold)',
+          }}
+        >
           {t('trialDays')}
         </span>
       }
       footer={
         <>
           {t('alreadyHaveAccount')}{' '}
-          <Link href="/login" style={{ color: 'var(--color-primary-700)', fontWeight: 'var(--font-semibold)', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+          <Link
+            href="/login"
+            style={{
+              color: 'var(--color-primary-700)',
+              fontWeight: 'var(--font-semibold)',
+              textDecoration: 'underline',
+              textUnderlineOffset: 3,
+            }}
+          >
             {t('login')}
           </Link>
         </>
@@ -115,55 +189,118 @@ export default function RegisterPage() {
         >
           <MailCheck size={22} aria-hidden style={{ color: 'var(--color-success-700)', flexShrink: 0 }} />
           <div>
-            <div style={{ fontWeight: 'var(--font-semibold)', marginBottom: '4px' }}>{t('checkInboxTitle')}</div>
+            <div
+              style={{
+                fontWeight: 'var(--font-semibold)',
+                marginBottom: '4px',
+              }}
+            >
+              {t('checkInboxTitle')}
+            </div>
             <div>{t('checkInboxText', { email: sentTo })}</div>
+            <div
+              style={{
+                marginTop: 'var(--space-2)',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              {tr('openMail')}
+            </div>
+            <button type="button" className="rd-linkbtn" style={{ paddingLeft: 0, fontSize: 'var(--text-sm)' }} onClick={() => setSentTo(null)}>
+              {tr('changeData')}
+            </button>
           </div>
         </div>
       ) : (
         <>
           <AuthError message={error} />
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-            <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <form
+            onSubmit={handleSubmit}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-5)',
+            }}
+          >
+            <fieldset
+              style={{
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-3)',
+              }}
+            >
               <legend style={sectionTitle}>{t('companySection')}</legend>
-              <div className="auth-grid-2">
-                <AuthField
-                  label={t('companyNameUz')}
-                  icon={Building2}
-                  required
-                  autoFocus
-                  autoComplete="organization"
-                  value={companyUzName}
-                  onChange={(e) => {
-                    setCompanyUzName(e.target.value);
-                    if (!slugTouched) setCompanySlug(slugFromName(e.target.value));
-                  }}
-                  placeholder="Navro'z Trade LLC"
-                />
-                <AuthField
-                  label={t('companyNameRu')}
-                  hint={t('optional')}
-                  value={companyRuName}
-                  onChange={(e) => setCompanyRuName(e.target.value)}
-                  placeholder="ООО Навруз Трейд"
-                />
-              </div>
               <AuthField
-                label={t('companySlug')}
-                hint={t('companySlugHint')}
+                label={t('companyNameUz')}
+                icon={Building2}
                 required
-                autoCapitalize="none"
-                spellCheck={false}
-                pattern="[a-z0-9-]+"
-                value={companySlug}
+                autoFocus
+                autoComplete="organization"
+                value={companyUzName}
                 onChange={(e) => {
-                  setSlugTouched(true);
-                  setCompanySlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'));
+                  setCompanyUzName(e.target.value);
+                  if (!slugTouched) setCompanySlug(slugFromName(e.target.value));
                 }}
-                placeholder="navroz-trade"
+                placeholder="Navro'z Trade LLC"
               />
+              <details className="auth-more">
+                <summary>{tr('moreOptions')}</summary>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--space-3)',
+                    paddingTop: 'var(--space-3)',
+                  }}
+                >
+                  <AuthField
+                    label={t('companyNameRu')}
+                    hint={t('optional')}
+                    value={companyRuName}
+                    onChange={(e) => setCompanyRuName(e.target.value)}
+                    placeholder="ООО Навруз Трейд"
+                  />
+                  <AuthField
+                    label={t('companySlug')}
+                    hint={t('companySlugHint')}
+                    required
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    pattern="[a-z0-9-]+"
+                    onInvalid={(e) => {
+                      // Inside "More options": open it so the browser can show the message.
+                      const details = e.currentTarget.closest('details');
+                      if (details) details.open = true;
+                    }}
+                    value={companySlug}
+                    onChange={(e) => {
+                      setSlugTouched(true);
+                      setCompanySlug(
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9-]/g, '-')
+                          .replace(/-+/g, '-'),
+                      );
+                    }}
+                    placeholder="navroz-trade"
+                  />
+                </div>
+              </details>
             </fieldset>
 
-            <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <fieldset
+              style={{
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-3)',
+              }}
+            >
               <legend style={sectionTitle}>{t('adminSection')}</legend>
               <div className="auth-grid-2">
                 <AuthField

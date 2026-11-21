@@ -7,17 +7,19 @@ import type { LucideIcon } from 'lucide-react';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 
 /** Centered card used by the sign-in and sign-up screens: brand, language switch, title. */
-export function AuthCard({ title, subtitle, badge, children, footer, maxWidth = 440 }: {
+export function AuthCard({ title, subtitle, badge, children, footer, maxWidth = 440, aside, asideOnPhone = 'show' }: {
   title: string;
   subtitle?: string;
   badge?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   maxWidth?: number;
+  /** Side panel (desktop: right of the form; phones: below it, or hidden). */
+  aside?: ReactNode;
+  asideOnPhone?: 'show' | 'hide';
 }) {
   const t = useTranslations('auth');
-  return (
-    <div className="auth-page">
+  const card = (
       <main className="auth-card" style={{ maxWidth }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
@@ -48,6 +50,19 @@ export function AuthCard({ title, subtitle, badge, children, footer, maxWidth = 
           <div style={{ marginTop: 'var(--space-6)', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{footer}</div>
         )}
       </main>
+  );
+  return (
+    <div className="auth-page">
+      {aside ? (
+        <div className="auth-split">
+          {card}
+          <aside className="auth-aside" data-phone={asideOnPhone}>
+            {aside}
+          </aside>
+        </div>
+      ) : (
+        card
+      )}
     </div>
   );
 }

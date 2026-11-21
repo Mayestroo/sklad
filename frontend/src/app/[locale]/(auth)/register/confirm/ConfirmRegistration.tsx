@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Check } from 'lucide-react';
+import { AuthCard } from '@/components/auth/AuthCard';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -17,6 +18,7 @@ import type { AuthResponse } from '@shared/types';
  */
 export function ConfirmRegistration({ token }: { token: string | null }) {
   const t = useTranslations('auth');
+  const tr = useTranslations('rd.auth');
   const locale = useLocale();
   const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
@@ -60,52 +62,37 @@ export function ConfirmRegistration({ token }: { token: string | null }) {
     </div>
   );
 
+  const aside = (
+    <>
+      <h2>{tr('nextStepsTitle')}</h2>
+      <ol>
+        <li><span className="auth-aside-icon" aria-hidden><Check size={14} /></span>{tr('nextStep1')}</li>
+        <li><span className="auth-aside-icon" aria-hidden>2</span><strong style={{ color: 'var(--color-text-primary)' }}>{tr('nextStep2')}</strong></li>
+        <li><span className="auth-aside-icon" aria-hidden>3</span>{tr('nextStep3')}</li>
+      </ol>
+    </>
+  );
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: 'var(--color-bg-primary)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 'var(--space-8) var(--space-4)',
-      }}
+    <AuthCard title={t('confirmTitle')} aside={aside} maxWidth={600}
+      footer={
+        <Link href="/register" style={{ color: 'var(--color-primary-700)', fontWeight: 'var(--font-semibold)', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+          {t('registerAgain')}
+        </Link>
+      }
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          backgroundColor: 'var(--color-bg-secondary)',
-          borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--color-border-light)',
-          boxShadow: 'var(--shadow-lg)',
-          padding: 'var(--space-8)',
-        }}
-      >
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginBottom: 'var(--space-3)' }}>
-          {t('confirmTitle')}
-        </h1>
-
-        {!token ? (
-          alert(t('confirmMissingToken'))
-        ) : (
-          <>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-              {t('confirmText')}
-            </p>
-            {error && alert(error)}
-            <Button type="button" variant="primary" disabled={loading} onClick={confirm} style={{ width: '100%' }}>
-              {t('confirmButton')}
-            </Button>
-          </>
-        )}
-
-        <div style={{ marginTop: 'var(--space-6)', textAlign: 'center', fontSize: 'var(--text-sm)' }}>
-          <Link href="/register" style={{ color: 'var(--color-primary-600)', fontWeight: 'var(--font-semibold)', textDecoration: 'none' }}>
-            {t('registerAgain')}
-          </Link>
-        </div>
-      </div>
-    </div>
+      {!token ? (
+        alert(t('confirmMissingToken'))
+      ) : (
+        <>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-2)' }}>{t('confirmText')}</p>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>{tr('confirmSteps')}</p>
+          {error && alert(error)}
+          <Button type="button" variant="primary" size="lg" loading={loading} onClick={confirm} style={{ width: '100%' }}>
+            {t('confirmButton')}
+          </Button>
+        </>
+      )}
+    </AuthCard>
   );
 }
