@@ -944,6 +944,22 @@
       "openOb": "Начальные остатки",
       "whereTitle": "Куда ушла выручка",
       "whereAria": "Выручка {revenue}: расходы {costs}, валовая прибыль {profit}"
+    },
+    "analytics": {
+      "qTrend": "Растут ли продажи?",
+      "qCategories": "Какая категория приносит деньги?",
+      "qTopProducts": "Что продаётся лучше всего?",
+      "qTopClients": "Кто покупает больше всех?",
+      "qRatios": "Как быстро оборачиваются деньги?",
+      "toProducts": "Товары",
+      "toCustomers": "Клиенты",
+      "answerTitle": "Коротко: {range}",
+      "aSales": "Продажи:",
+      "aMargin": "маржа {pct}%",
+      "aTopProduct": "Больше всего выручки принёс товар:",
+      "aTopClient": "Самый крупный клиент:",
+      "aReceivable": "Клиенты должны нам:",
+      "collect": "Взыскать"
     }
   }
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { LoadError } from '@/components/ui/LoadError';
@@ -12,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { BarChart3, Printer } from 'lucide-react';
+import { ArrowRight, BarChart3, Printer } from 'lucide-react';
 import {
   KpiSummary,
   SalesTrendDataPoint,
@@ -53,11 +54,18 @@ function Kpi({ label, hint, children }: { label: string; hint: string; children:
   );
 }
 
-function SectionTitle({ title, hint }: { title: string; hint?: string }) {
+function SectionTitle({ title, hint, action }: { title: string; hint?: string; action?: { href: string; label: string } }) {
   return (
-    <div>
-      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{title}</h2>
-      {hint && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{hint}</p>}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+      <div>
+        <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{title}</h2>
+        {hint && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{hint}</p>}
+      </div>
+      {action && (
+        <Link href={action.href} className="dash-card-link no-print">
+          {action.label} <ArrowRight size={14} aria-hidden />
+        </Link>
+      )}
     </div>
   );
 }
@@ -120,6 +128,7 @@ export default function AnalyticsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
+  const tan = useTranslations('rd.analytics');
   const [timeRange, setTimeRange] = usePersistentState<Range>('analytics.range', 'month');
   // One query per report; the range is part of each endpoint (= cache key).
   const kpiQuery = useApiQuery<KpiSummary>(`/analytics/kpi-summary?range=${timeRange}`);
@@ -202,6 +211,34 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
+          {kpi && (
+            <section className="rd-table-card dash-panel" aria-labelledby="an-answer">
+              <h2 id="an-answer" className="dash-panel-title">{tan('answerTitle', { range: rangeName })}</h2>
+              <ul className="an-answer">
+                <li>
+                  {tan('aSales')} <strong className="tabular-nums">{(kpi.totalRevenueByCurrency ?? []).filter((x) => x.amount).map((x) => formatCurrency(x.amount, locale, x.currency)).join(' · ') || '—'}</strong>
+                  {kpi.netProfitMargin ? <> · {tan('aMargin', { pct: kpi.netProfitMargin })}</> : null}
+                </li>
+                {topProducts[0] && (
+                  <li>
+                    {tan('aTopProduct')} <strong>{topProducts[0].productName[locale] || topProducts[0].productName.uz}</strong>
+                  </li>
+                )}
+                {topClients[0] && (
+                  <li>
+                    {tan('aTopClient')} <strong>{topClients[0].name}</strong>
+                  </li>
+                )}
+                {(kpi.receivablesByCurrency ?? []).some((x) => x.amount > 0) && (
+                  <li>
+                    {tan('aReceivable')} <strong className="tabular-nums">{(kpi.receivablesByCurrency ?? []).filter((x) => x.amount).map((x) => formatCurrency(x.amount, locale, x.currency)).join(' · ')}</strong>{' '}
+                    <Link href="/counterparties" className="rd-linkbtn">{tan('collect')}</Link>
+                  </li>
+                )}
+              </ul>
+            </section>
+          )}
+
           <div className="ux-kpi-grid">
             <Kpi label={isRu ? 'Выручка' : 'Sotuv tushumi'} hint={isRu ? `Проведённые продажи, ${rangeName}` : `Tasdiqlangan sotuvlar, ${rangeName}`}>
               <MultiCurrencyValue items={kpi?.totalRevenueByCurrency} locale={locale} />
@@ -226,7 +263,7 @@ export default function AnalyticsPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--ux-split-2-1)', gap: 'var(--space-6)', alignItems: 'start' }}>
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <SectionTitle title={isRu ? 'Выручка по месяцам' : 'Oylar bo‘yicha tushum'} hint={
+              <SectionTitle title={tan('qTrend')} hint={
                   trend.length > 1
                     ? isRu ? 'В UZS по курсу каждого документа. Наведите на столбец, чтобы увидеть сумму.' : 'Har bir hujjat kursi bo‘yicha UZS da. Summani ko‘rish uchun ustun ustiga olib boring.'
                     : isRu ? 'В UZS по курсу каждого документа' : 'Har bir hujjat kursi bo‘yicha UZS da'
@@ -252,7 +289,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <SectionTitle title={isRu ? 'По категориям' : 'Kategoriyalar bo‘yicha'} hint={isRu ? 'Доля выручки, в UZS' : 'Tushumdagi ulush, UZS da'} />
+              <SectionTitle title={tan('qCategories')} action={{ href: '/products', label: tan('toProducts') }} hint={isRu ? 'Доля выручки, в UZS' : 'Tushumdagi ulush, UZS da'} />
               {categories.length === 0 ? (
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Нет продаж за период.' : 'Davr uchun sotuvlar yo‘q.'}</p>
               ) : (
@@ -277,7 +314,7 @@ export default function AnalyticsPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--ux-split-2-1)', gap: 'var(--space-6)', alignItems: 'start' }}>
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <SectionTitle title={isRu ? 'Самые продаваемые товары' : 'Eng ko‘p sotilgan tovarlar'} hint={isRu ? 'Топ-10 по выручке за период' : 'Davr uchun tushum bo‘yicha top-10'} />
+              <SectionTitle action={{ href: '/products', label: tan('toProducts') }} title={tan('qTopProducts')} hint={isRu ? 'Топ-10 по выручке за период' : 'Davr uchun tushum bo‘yicha top-10'} />
               {topProducts.length === 0 ? (
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Нет продаж за период.' : 'Davr uchun sotuvlar yo‘q.'}</p>
               ) : (
@@ -311,7 +348,7 @@ export default function AnalyticsPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
               <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                <SectionTitle title={isRu ? 'Основные клиенты' : 'Asosiy mijozlar'} hint={isRu ? 'Больше всего купили за период' : 'Davr ichida eng ko‘p xarid qilganlar'} />
+                <SectionTitle action={{ href: '/sales/customers', label: tan('toCustomers') }} title={tan('qTopClients')} hint={isRu ? 'Больше всего купили за период' : 'Davr ichida eng ko‘p xarid qilganlar'} />
                 {topClients.length === 0 ? (
                   <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Нет продаж за период.' : 'Davr uchun sotuvlar yo‘q.'}</p>
                 ) : (
@@ -333,7 +370,7 @@ export default function AnalyticsPage() {
               </Card>
 
               <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                <SectionTitle title={isRu ? 'Финансовые показатели' : 'Moliyaviy ko‘rsatkichlar'} hint={isRu ? 'На сегодня, не зависят от периода' : 'Bugungi holat, davrga bog‘liq emas'} />
+                <SectionTitle title={tan('qRatios')} hint={isRu ? 'На сегодня, не зависят от периода' : 'Bugungi holat, davrga bog‘liq emas'} />
                 <dl style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {[
                     {

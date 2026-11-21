@@ -944,6 +944,22 @@
       "openOb": "Boshlang‘ich qoldiqlar",
       "whereTitle": "Tushum qayerga ketdi",
       "whereAria": "Tushum {revenue}: xarajatlar {costs}, yalpi foyda {profit}"
+    },
+    "analytics": {
+      "qTrend": "Sotuv o‘syaptimi?",
+      "qCategories": "Qaysi kategoriya pul keltiryapti?",
+      "qTopProducts": "Nima eng ko‘p sotilyapti?",
+      "qTopClients": "Kim eng ko‘p sotib olyapti?",
+      "qRatios": "Pul qanchalik tez aylanyapti?",
+      "toProducts": "Tovarlar",
+      "toCustomers": "Mijozlar",
+      "answerTitle": "Qisqacha: {range}",
+      "aSales": "Sotuv:",
+      "aMargin": "marja {pct}%",
+      "aTopProduct": "Eng ko‘p tushum keltirgan tovar:",
+      "aTopClient": "Eng katta mijoz:",
+      "aReceivable": "Mijozlar bizga qarz:",
+      "collect": "Undirish"
     }
   }
 }
