@@ -844,6 +844,17 @@
       "searchPh": "Nomi, SKU yoki shtrix-kod",
       "shownOf": "{total} tadan {shown} tasi ko‘rsatilmoqda",
       "showMore": "Yana ko‘rsatish"
+    },
+    "invdocs": {
+      "startTitle": "Nima qilmoqchisiz?",
+      "inTitle": "Ortiqchani kirim qilish",
+      "inHint": "Sanashda ortiqcha chiqdi yoki hujjatsiz keldi",
+      "outTitle": "Hisobdan chiqarish",
+      "outHint": "Buzilgan, muddati o‘tgan yoki yo‘qolgan tovar",
+      "countTitle": "Inventarizatsiya",
+      "countHint": "Haqiqiy sanalgan miqdorni kiritish",
+      "docsSoFar": "{count, plural, other {# ta hujjat}}",
+      "enterAdds": "miqdor yoki narxda Enter — qatorni qo‘shadi"
     }
   }
 }
