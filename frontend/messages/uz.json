@@ -814,7 +814,14 @@
       "none": "Katalog hali bo‘sh",
       "noneHint": "Birinchi tovarni qo‘shing yoki boshlang‘ich qoldiqlardan import qiling.",
       "shownOf": "{total} tadan {shown} tasi ko‘rsatilmoqda",
-      "showMore": "Yana ko‘rsatish"
+      "showMore": "Yana ko‘rsatish",
+      "essentials": "Sotishni boshlash uchun yetarli",
+      "essentialsHint": "Nomi, shtrix-kod, o‘lchov birligi va narx. Qolgani — ixtiyoriy.",
+      "moreOptions": "Qo‘shimcha: ikkinchi tildagi nom, kategoriya, turi, SKU, tannarx, QQS, minimal qoldiq",
+      "preview": "Sotuvda shunday ko‘rinadi",
+      "noName": "Nomi hali yo‘q",
+      "noPrice": "Narx belgilanmagan",
+      "barcode": "Shtrix-kod"
     }
   }
 }
