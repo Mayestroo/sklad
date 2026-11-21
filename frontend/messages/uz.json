@@ -1010,6 +1010,14 @@
     "security": {
       "changesOnly": "Faqat o‘zgarishlar (kirish-chiqishlarsiz)",
       "dayLine": "{count, plural, other {# ta harakat}}{deleted, plural, =0 {} other {, shundan # ta o‘chirish}}"
+    },
+    "billing": {
+      "daysLeft": "Tugashiga {count} kun qoldi",
+      "ended": "Muddat tugagan — obunani uzaytiring",
+      "daysUnknown": "Muddat ma’lum emas",
+      "nextPayment": "keyingi to‘lov {date}",
+      "changePlan": "Tarifni o‘zgartirish",
+      "changePlanHint": "{count} ta tarifni solishtiring"
     }
   }
 }

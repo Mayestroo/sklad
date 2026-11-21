@@ -1010,6 +1010,14 @@
     "security": {
       "changesOnly": "Только изменения (без входов и выходов)",
       "dayLine": "{count, plural, one {# действие} few {# действия} other {# действий}}{deleted, plural, =0 {} one {, из них # удаление} few {, из них # удаления} other {, из них # удалений}}"
+    },
+    "billing": {
+      "daysLeft": "{count, plural, one {Остался # день} few {Осталось # дня} other {Осталось # дней}}",
+      "ended": "Срок истёк — продлите подписку",
+      "daysUnknown": "Срок неизвестен",
+      "nextPayment": "следующая оплата {date}",
+      "changePlan": "Сменить тариф",
+      "changePlanHint": "{count, plural, one {сравните # тариф} few {сравните # тарифа} other {сравните # тарифов}}"
     }
   }
 }

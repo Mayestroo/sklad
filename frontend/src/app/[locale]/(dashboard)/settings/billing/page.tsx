@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
@@ -66,6 +66,11 @@ export default function BillingSettingsPage() {
     return p ? p.name[locale] || p.name.uz : id ?? '—';
   };
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
+  const tb = useTranslations('rd.billing');
+  const daysLeft = subStatus?.daysRemaining ?? null;
+  // Plans stay folded while the subscription has time left; open when a week or less remains.
+  const [plansToggled, setPlansOpen] = useState<boolean | null>(null);
+  const plansOpen = plansToggled ?? (daysLeft == null || daysLeft <= 7);
   const status = subStatus ? STATUS[subStatus.status] : undefined;
 
   const handleStartCheckout = (planId: PlanId) => {
@@ -131,14 +136,9 @@ export default function BillingSettingsPage() {
                       <Badge variant={status?.variant ?? 'neutral'}>{status ? (isRu ? status.ru : status.uz) : subStatus.status}</Badge>
                     )}
                   </div>
-                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                    {isRu ? 'Осталось дней: ' : 'Qolgan kunlar: '}
-                    <strong className="tabular-nums" style={{ color: (subStatus?.daysRemaining ?? 0) <= 3 ? 'var(--color-error-700)' : 'var(--color-text-primary)' }}>
-                      {subStatus?.daysRemaining ?? 0}
-                    </strong>
-                    {' · '}
-                    {isRu ? 'Следующая оплата: ' : 'Keyingi to‘lov: '}
-                    {subStatus?.nextBillingAt ? formatDate(subStatus.nextBillingAt, locale) : '—'}
+                  <p style={{ fontSize: 'var(--text-sm)', color: daysLeft != null && daysLeft <= 3 ? 'var(--color-error-700)' : 'var(--color-text-secondary)', marginTop: 4, fontWeight: daysLeft != null && daysLeft <= 3 ? 'var(--font-semibold)' : undefined }}>
+                    {daysLeft == null ? tb('daysUnknown') : daysLeft <= 0 ? tb('ended') : tb('daysLeft', { count: daysLeft })}
+                    {subStatus?.nextBillingAt ? ` · ${tb('nextPayment', { date: formatDate(subStatus.nextBillingAt, locale) })}` : ''}
                   </p>
                 </div>
               </div>
@@ -148,10 +148,12 @@ export default function BillingSettingsPage() {
             </div>
           </Card>
 
-          <section aria-labelledby="plans-heading">
-            <h2 id="plans-heading" style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-4)' }}>
-              {isRu ? 'Тарифы' : 'Tariflar'}
-            </h2>
+          <details className="doc-more" open={plansOpen} onToggle={(e) => setPlansOpen((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary>
+              <span id="plans-heading" style={{ fontWeight: 'var(--font-semibold)' }}>{tb('changePlan')}</span>
+              <span className="rd-sub" style={{ display: 'inline', marginLeft: 8 }}>{tb('changePlanHint', { count: plans.length })}</span>
+            </summary>
+            <div style={{ paddingTop: 'var(--space-4)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 'var(--space-6)' }}>
               {plans.map((plan) => {
                 const current = plan.id === subStatus?.plan;
@@ -197,7 +199,8 @@ export default function BillingSettingsPage() {
                 );
               })}
             </div>
-          </section>
+            </div>
+          </details>
 
           <Card>
             <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-4)' }}>{isRu ? 'История оплат' : 'To‘lovlar tarixi'}</h2>
