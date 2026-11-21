@@ -2,8 +2,9 @@
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { QuantityInput } from '@/components/ui/QuantityInput';
+import { DocChecklist } from '@/components/ui/DocChecklist';
 import { useState, useEffect, useMemo } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useRouter } from '@/i18n/navigation';
@@ -75,6 +76,7 @@ interface PurchaseReturnDocumentFormProps {
 export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturnDocumentFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tf = useTranslations('rd.docForm');
   const router = useRouter();
   const { token, company } = useAuth();
   const confirm = useConfirm();
@@ -603,6 +605,8 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         </Card>
       )}
 
+      <div className="doc-layout">
+      <div className="doc-main">
       {/* Primary Metadata Form */}
       <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
@@ -778,7 +782,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
 
         {/* Table */}
         <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <table className="doc-lines" style={{ width: '100%', minWidth: '760px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'center', width: '40px' }}>№</th>
@@ -911,10 +915,25 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         </div>
       </Card>
 
-      {/* Summary Totals and Actions Footer */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 'var(--space-6)' }}>
+      </div>
+
+      {/* Side panel: what is missing, totals, the effect on the supplier debt, Save / Post */}
+      <aside className="doc-aside" aria-label={tf('sidePanel')}>
+        {!isReadOnly && (
+          <Card style={{ padding: 'var(--space-5)' }}>
+            <DocChecklist
+              items={[
+                { label: tf('ckSupplier'), done: Boolean(counterpartyId) },
+                { label: tf('ckWarehouse'), done: Boolean(warehouseId) },
+                { label: tf('ckCurrency'), done: Boolean(currency) },
+                { label: tf('ckLines'), done: items.length > 0 },
+                { label: tf('ckQty'), done: items.length > 0 && items.every((i) => Number(i.quantity) > 0) },
+              ]}
+            />
+          </Card>
+        )}
         {/* Counterparty Settlement Impact Card */}
-        <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', order: 3 }}>
           <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
             {isRu ? 'Взаиморасчеты с контрагентом' : 'Kontragent hisob-kitobi'}
           </h4>
@@ -957,7 +976,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
           </div>
 
           {!isReadOnly && (
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
               <Button
                 variant="secondary"
                 onClick={() => handleSave('DRAFT')}
@@ -977,6 +996,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
             </div>
           )}
         </Card>
+      </aside>
       </div>
 
       {/* Printable Act Modal */}
