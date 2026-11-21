@@ -3,11 +3,12 @@
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { ChipGroup } from '@/components/ui/list/ListKit';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatPriceOrUnset, formatPercent, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatPriceOrUnset, formatPercent, CURRENCY_OPTIONS, errorMessage, type LocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -16,7 +17,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Drawer } from '@/components/ui/Drawer';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
-import { Plus, Tag, Edit2, Edit3, Check, Trash2, X } from 'lucide-react';
+import { Plus, Tag, Edit2, Check, Trash2, X } from 'lucide-react';
 import { useConfirm } from '@/context/ConfirmContext';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -83,7 +84,9 @@ export default function PricesPage() {
 
   const confirm = useConfirm();
   const [productSearch, setProductSearch] = useState('');
-  const [pricedOnly, setPricedOnly] = useState(false);
+  const [pricedMode, setPricedMode] = useState<'all' | 'priced' | 'unpriced'>('all');
+  const [rowLimit, setRowLimit] = useState(100);
+  const tpr = useTranslations('rd.prices');
 
   // Inline price editing
   const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
@@ -262,7 +265,7 @@ export default function PricesPage() {
   };
 
   const visibleProducts = products.filter(
-    (p) => (!pricedOnly || getPriceForProduct(p.id) > 0) && matchesSearch(productSearch, ...(typeof p.name === 'object' ? [p.name.uz, p.name.ru] : [p.name]), p.sku),
+    (p) => (pricedMode === 'all' || (pricedMode === 'priced') === getPriceForProduct(p.id) > 0) && matchesSearch(productSearch, ...(typeof p.name === 'object' ? [p.name.uz, p.name.ru] : [p.name]), p.sku),
   );
 
   return (
@@ -398,7 +401,20 @@ export default function PricesPage() {
               {products.length > 0 && (
                 <div style={{ padding: 'var(--space-3) var(--space-4)', display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--color-border-light)' }}>
                   <SearchField value={productSearch} onChange={setProductSearch} placeholder={isRu ? 'Товар или артикул' : 'Tovar yoki artikul'} style={{ maxWidth: 340 }} />
-                  <Checkbox checked={pricedOnly} onChange={(e) => setPricedOnly(e.target.checked)} label={isRu ? 'Только с ценой в прайсе' : 'Faqat jadvalda narxi borlar'} />
+                  <ChipGroup
+                    label={tpr('show')}
+                    options={[
+                      { value: 'all', label: isRu ? 'Все' : 'Hammasi', count: products.length },
+                      { value: 'priced', label: tpr('priced'), count: selectedPL.prices?.length ?? 0 },
+                      { value: 'unpriced', label: tpr('unpriced'), count: Math.max(0, products.length - (selectedPL.prices?.length ?? 0)) },
+                    ]}
+                    value={pricedMode}
+                    onChange={(v) => setPricedMode((v || 'all') as 'all' | 'priced' | 'unpriced')}
+                  />
+                  {Object.keys(editingPrices).length > 0 && (
+                    <span className="rd-active-filter" style={{ paddingRight: 10 }}>{tpr('unsaved', { count: Object.keys(editingPrices).length })}</span>
+                  )}
+                  <span className="rd-sub" style={{ marginLeft: 'auto', marginTop: 0 }}>{tpr('keysHint')}</span>
                 </div>
               )}
               <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
@@ -437,10 +453,11 @@ export default function PricesPage() {
                       </td>
                     </tr>
                   )}
-                  {visibleProducts.map((prod) => {
+                  {visibleProducts.slice(0, rowLimit).map((prod, rowIndex) => {
                     const listPrice = getPriceForProduct(prod.id);
                     const basePrice = Number(prod.salePrice || 0);
                     const isEditing = prod.id in editingPrices;
+                    void startEdit;
                     const isSaving = savingPrice === prod.id;
 
                     // A discount compares two prices in the same currency only (ADR 0023).
@@ -465,45 +482,39 @@ export default function PricesPage() {
                         <td data-label={isRu ? 'Базовая цена' : 'Asosiy narx'} style={{ padding: '10px 14px' }} className="tabular-nums">
                           {formatPriceOrUnset(basePrice, locale, prod.salePriceCurrency)}
                         </td>
-                        <td data-label={isRu ? 'Цена в прайсе' : 'Jadvaldagi narx'} style={{ padding: '10px 14px' }} className="tabular-nums">
-                          {isEditing ? (
-                            <form
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') {
-                                  e.stopPropagation();
-                                  cancelEdit(prod.id);
-                                }
-                                // CurrencyInput blurs on Enter, which cancels the implicit submit: save here.
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  void handleSavePrice(prod.id);
-                                }
-                              }}
-                              onSubmit={(e) => {
+                        <td data-label={isRu ? 'Цена в прайсе' : 'Jadvaldagi narx'} style={{ padding: '6px 14px' }} className="tabular-nums">
+                          {/* Spreadsheet-style: the price is always editable; Enter saves and moves down, Esc undoes */}
+                          <div
+                            data-price-row={rowIndex}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.stopPropagation();
+                                cancelEdit(prod.id);
+                              }
+                              if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleSavePrice(prod.id);
-                              }}
-                            >
-                              <CurrencyInput
-                                id={`price-input-${prod.id}`}
-                                aria-label={isRu ? `Цена: ${getProductName(prod)}` : `Narx: ${getProductName(prod)}`}
-                                value={editingPrices[prod.id] ?? ''}
-                                decimals={2}
-                                autoFocus
-                                onChange={(value) => setEditingPrices((prev) => ({ ...prev, [prod.id]: value }))}
-                                style={{ width: 140, borderColor: 'var(--color-primary-400)' }}
-                              />
-                            </form>
-                          ) : (
-                            <span style={{ fontWeight: listPrice > 0 ? 600 : 400, color: listPrice > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                              {listPrice > 0 && selectedPL ? formatCurrency(listPrice, locale, selectedPL.currency) : '—'}
-                            </span>
-                          )}
+                                if (isEditing) void handleSavePrice(prod.id);
+                                const next = document.querySelector<HTMLInputElement>(`[data-price-row="${rowIndex + 1}"] input`);
+                                next?.focus();
+                                next?.select();
+                              }
+                            }}
+                          >
+                          <CurrencyInput
+                            id={`price-input-${prod.id}`}
+                            aria-label={isRu ? `Цена: ${getProductName(prod)}` : `Narx: ${getProductName(prod)}`}
+                            value={isEditing ? editingPrices[prod.id] ?? '' : listPrice > 0 ? listPrice : ''}
+                            decimals={2}
+                            placeholder="—"
+                            onChange={(value) => setEditingPrices((prev) => ({ ...prev, [prod.id]: value }))}
+                            style={{ width: 150, borderColor: isEditing ? 'var(--color-warning-600)' : undefined }}
+                          />
+                          </div>
                         </td>
                         <td data-label={isRu ? 'Разница' : 'Farq'} style={{ padding: '10px 14px' }}>
                           {discountBadge || <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>—</span>}
                         </td>
-                        <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                        <td style={{ padding: '6px 14px', textAlign: 'right' }}>
                           {isEditing ? (
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               <Button id={`save-price-${prod.id}`} size="sm" onClick={() => void handleSavePrice(prod.id)} loading={isSaving} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
@@ -513,17 +524,24 @@ export default function PricesPage() {
                                 <X size={14} aria-hidden />
                               </Button>
                             </div>
-                          ) : (
-                            <Button id={`edit-price-${prod.id}`} size="sm" variant="outline" onClick={() => startEdit(prod.id)} style={{ whiteSpace: 'nowrap' }} aria-label={isRu ? `Указать цену: ${getProductName(prod)}` : `Narx kiritish: ${getProductName(prod)}`}>
-                              <Edit3 size={12} aria-hidden /> {listPrice > 0 ? (isRu ? 'Изменить' : 'O‘zgartirish') : isRu ? 'Указать цену' : 'Narx kiritish'}
-                            </Button>
-                          )}
+                          ) : listPrice <= 0 && basePrice > 0 && sameCurrency ? (
+                            <button type="button" className="rd-linkbtn" onClick={() => setEditingPrices((prev) => ({ ...prev, [prod.id]: basePrice }))}>
+                              {tpr('useBase')}
+                            </button>
+                          ) : null}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              {visibleProducts.length > rowLimit && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
+                  <Button variant="secondary" size="sm" onClick={() => setRowLimit((n) => n + 200)}>
+                    {tpr('showMore', { shown: rowLimit, total: visibleProducts.length })}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </Card>

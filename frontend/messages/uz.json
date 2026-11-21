@@ -873,6 +873,15 @@
       "swap": "Omborlarni almashtirish",
       "inSource": "Chiquvchi omborda hozir: {qty}",
       "removeLine": "«{name}» qatorini olib tashlash"
+    },
+    "prices": {
+      "useBase": "Asosiy narxni qo‘yish",
+      "show": "Ko‘rsatish",
+      "priced": "Narxi bor",
+      "unpriced": "Narxi yo‘q",
+      "unsaved": "{count, plural, other {# ta saqlanmagan narx}}",
+      "keysHint": "Narxni yozing — Enter saqlaydi va keyingi qatorga o‘tadi, Esc bekor qiladi",
+      "showMore": "Yana ko‘rsatish ({total} tadan {shown})"
     }
   }
 }
