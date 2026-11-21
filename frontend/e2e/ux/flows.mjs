@@ -362,6 +362,27 @@ try {
     await page.waitForTimeout(1500);
     log('act removed:', !(await page.getByText(actNo || '???', { exact: true }).isVisible().catch(() => false)));
   }
+
+  if (flow === 'sreturn') {
+    // Read-only check: nothing is saved.
+    await signIn();
+    const id = process.env.UX_INVOICE_ID;
+    await page.goto(BASE + '/sales/' + id, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: isRu ? 'Возврат' : 'Qaytarish' }).first().click();
+    const drawer = page.getByRole('dialog');
+    await drawer.waitFor();
+    await page.waitForTimeout(800);
+    await drawer.getByRole('button', { name: isRu ? 'Провести возврат' : 'Qaytarishni tasdiqlash' }).click();
+    log('empty post message:', (await drawer.locator('[role=alert]').first().textContent())?.trim());
+    const qty = drawer.locator('input[inputmode="decimal"]').first();
+    await qty.fill('1');
+    await drawer.getByRole('checkbox').first().check();
+    log('defect warehouse preselected:', await drawer.getByText(isRu ? 'Выберите склад брака' : 'Brak omborini tanlang').first().isVisible().catch(() => false) ? 'no (must choose)' : 'yes');
+    await drawer.getByRole('button', { name: isRu ? 'Провести возврат' : 'Qaytarishni tasdiqlash' }).click();
+    log('defect warehouse message:', (await drawer.locator('[role=alert]').first().textContent())?.trim());
+    await shot('1-defect-needs-warehouse');
+    await page.keyboard.press('Escape');
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');
