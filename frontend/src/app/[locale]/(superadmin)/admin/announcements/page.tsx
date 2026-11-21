@@ -10,6 +10,10 @@ import { formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Plus, Bell, Calendar } from 'lucide-react';
 import { toast } from '@/context/ToastContext';
 
@@ -54,7 +58,7 @@ export default function SuperAdminAnnouncementsPage() {
         }),
       });
 
-      toast.success(isRu ? 'Оповещение успешно опубликовано' : 'Bildirishnoma muvaffaqiyatli eʼlon qilindi');
+      toast.success(isRu ? 'Объявление опубликовано' : 'E’lon chop etildi');
       setModalOpen(false);
       setTitleUz('');
       setTitleRu('');
@@ -62,166 +66,106 @@ export default function SuperAdminAnnouncementsPage() {
       setMsgRu('');
       void invalidateApi('/super-admin/announcements');
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка при публикации' : 'Xatolik yuz berdi'));
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось опубликовать' : 'E’lonni chop etib bo‘lmadi'));
     } finally {
       setSubmitLoading(false);
     }
   };
 
-  const inputStyle: React.CSSProperties = {
+  const fieldStyle: React.CSSProperties = {
     width: '100%',
     padding: '8px 12px',
-    backgroundColor: 'var(--color-bg-tertiary)',
+    backgroundColor: 'var(--color-bg-input)',
     border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-md)',
     color: 'var(--color-text-primary)',
     fontSize: 'var(--text-sm)',
-    outline: 'none',
     boxSizing: 'border-box',
     fontFamily: 'inherit',
+    resize: 'vertical',
   };
+  const labelStyle: React.CSSProperties = { display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', marginBottom: 4 };
+  const newButton = (
+    <Button onClick={() => setModalOpen(true)} variant="primary">
+      <Plus size={16} aria-hidden /> {isRu ? 'Новое объявление' : 'Yangi e’lon'}
+    </Button>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
-            {isRu ? 'Оповещения системы' : 'Tizim bildirishnomalari'}
-          </h1>
-        </div>
-
-        <Button onClick={() => setModalOpen(true)} variant="primary">
-          <Plus size={16} />
-          <span>{isRu ? 'Создать оповещение' : 'Yangi eʼlon berish'}</span>
-        </Button>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          showBreadcrumbs={false}
+          title={isRu ? 'Объявления' : 'E’lonlar'}
+          subtitle={isRu ? 'Сообщения, которые видят пользователи всех компаний (обновления, плановые работы).' : 'Barcha korxonalar foydalanuvchilari ko‘radigan xabarlar (yangilanishlar, rejali ishlar).'}
+          actions={newButton}
+        />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {announcementsQuery.isError ? (
           <Card>
-            <LoadError
-              error={announcementsQuery.error}
-              onRetry={() => void announcementsQuery.refetch()}
-              retrying={announcementsQuery.isFetching}
-            />
+            <LoadError error={announcementsQuery.error} onRetry={() => void announcementsQuery.refetch()} retrying={announcementsQuery.isFetching} />
           </Card>
         ) : announcementsQuery.isPending ? (
-          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            Yuklanmoqda...
-          </div>
+          <Card><SkeletonRows rows={3} columns={2} /></Card>
         ) : announcements.length === 0 ? (
-          <Card style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-            {isRu ? 'Нет активных оповещений' : 'Hozircha faol bildirishnomalar yo‘q'}
+          <Card>
+            <EmptyState icon={Bell} title={isRu ? 'Объявлений пока нет' : 'Hozircha e’lonlar yo‘q'} description={isRu ? 'Напишите объявление — оно появится у пользователей всех компаний.' : 'E’lon yozing — u barcha korxonalar foydalanuvchilarida paydo bo‘ladi.'} action={newButton} />
           </Card>
         ) : (
           announcements.map((item) => {
             const title = typeof item.title === 'string' ? item.title : item.title?.[locale] || item.title?.uz;
             const message = typeof item.message === 'string' ? item.message : item.message?.[locale] || item.message?.uz;
-
             return (
               <Card key={item.id} style={{ padding: 'var(--space-5)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-4)' }}>
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'var(--color-primary-50)',
-                      color: 'var(--color-primary-600)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
+                <article style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-4)' }}>
+                  <div aria-hidden style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <Bell size={20} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-                      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                        {title}
-                      </h3>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                        <Calendar size={13} />
-                        <span>{formatDate(item.createdAt, locale)}</span>
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                      <h2 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{title}</h2>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                        <Calendar size={13} aria-hidden /> {formatDate(item.createdAt, locale)}
+                      </span>
                     </div>
-                    <p style={{ margin: '8px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>
-                      {message}
-                    </p>
+                    <p style={{ margin: '8px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{message}</p>
                   </div>
-                </div>
+                </article>
               </Card>
             );
           })
         )}
       </div>
 
-      {/* Modal */}
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={isRu ? 'Новое оповещение' : 'Yangi tizim bildirishnomasi'}
+        title={isRu ? 'Новое объявление' : 'Yangi e’lon'}
         size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button variant="primary" type="submit" form="sa-announcement" loading={submitLoading} loadingText={isRu ? 'Публикация…' : 'E’lon qilinmoqda…'}>
+              {isRu ? 'Опубликовать для всех' : 'Hammaga e’lon qilish'}
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleCreateAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <form id="sa-announcement" onSubmit={handleCreateAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            {isRu ? 'Если русский текст пуст, покажем узбекский.' : 'Ruscha matn bo‘sh bo‘lsa, o‘zbekchasi ko‘rsatiladi.'}
+          </p>
+          <Input autoFocus required label={isRu ? 'Заголовок (по-узбекски) *' : 'Sarlavha (o‘zbekcha) *'} value={titleUz} onChange={(e) => setTitleUz(e.target.value)} />
+          <Input label={isRu ? 'Заголовок (по-русски)' : 'Sarlavha (ruscha)'} value={titleRu} onChange={(e) => setTitleRu(e.target.value)} />
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-              {isRu ? 'Заголовок (UZ)' : 'Sarlavha (UZ)'} *
-            </label>
-            <input
-              type="text"
-              required
-              value={titleUz}
-              onChange={(e) => setTitleUz(e.target.value)}
-              style={inputStyle}
-            />
+            <label htmlFor="sa-ann-msg-uz" style={labelStyle}>{isRu ? 'Текст (по-узбекски) *' : 'Matn (o‘zbekcha) *'}</label>
+            <textarea id="sa-ann-msg-uz" required rows={3} value={msgUz} onChange={(e) => setMsgUz(e.target.value)} style={fieldStyle} />
           </div>
-
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-              {isRu ? 'Заголовок (RU)' : 'Sarlavha (RU)'}
-            </label>
-            <input
-              type="text"
-              value={titleRu}
-              onChange={(e) => setTitleRu(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-              {isRu ? 'Текст сообщения (UZ)' : 'Xabar matni (UZ)'} *
-            </label>
-            <textarea
-              required
-              rows={3}
-              value={msgUz}
-              onChange={(e) => setMsgUz(e.target.value)}
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-              {isRu ? 'Текст сообщения (RU)' : 'Xabar matni (RU)'}
-            </label>
-            <textarea
-              rows={3}
-              value={msgRu}
-              onChange={(e) => setMsgRu(e.target.value)}
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button variant="primary" type="submit" disabled={submitLoading}>
-              {submitLoading ? (isRu ? 'Публикация...' : 'Yuborilmoqda...') : isRu ? 'Опубликовать' : 'Eʼlon qilish'}
-            </Button>
+            <label htmlFor="sa-ann-msg-ru" style={labelStyle}>{isRu ? 'Текст (по-русски)' : 'Matn (ruscha)'}</label>
+            <textarea id="sa-ann-msg-ru" rows={3} value={msgRu} onChange={(e) => setMsgRu(e.target.value)} style={fieldStyle} />
           </div>
         </form>
       </Modal>

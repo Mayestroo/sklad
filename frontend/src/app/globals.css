@@ -1136,3 +1136,6 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
 
 /* Table rows that open something: quiet hover in both themes */
 .ux-row-hover:hover { background: var(--color-bg-tertiary); }
+
+/* Super-admin header: the portal link keeps only its icon on phones */
+@media (max-width: 639px) { .sa-portal-text, .sa-owner-badge { display: none; } }

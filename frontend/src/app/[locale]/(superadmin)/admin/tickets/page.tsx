@@ -9,8 +9,11 @@ import { apiFetch } from '@/lib/api';
 import { formatDate, errorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { CheckCircle2, Clock, LifeBuoy } from 'lucide-react';
 import { SupportTicket } from '@shared/types';
 import { toast } from '@/context/ToastContext';
 
@@ -41,12 +44,12 @@ export default function SuperAdminTicketsPage() {
         body: JSON.stringify({ message: replyMessage }),
       });
 
-      toast.success(isRu ? 'Ответ успешно отправлен' : 'Javob muvaffaqiyatli yuborildi');
+      toast.success(isRu ? 'Ответ отправлен компании' : 'Javob korxonaga yuborildi');
       setSelectedTicket(null);
       setReplyMessage('');
       void invalidateApi('/super-admin/tickets');
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки ответа' : 'Xatolik yuz berdi'));
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось отправить ответ' : 'Javobni yuborib bo‘lmadi'));
     } finally {
       setReplyLoading(false);
     }
@@ -54,10 +57,12 @@ export default function SuperAdminTicketsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <div>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
-          {isRu ? 'Техподдержка' : 'Mijozlar murojaatlari'}
-        </h1>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          showBreadcrumbs={false}
+          title={isRu ? 'Обращения' : 'Murojaatlar'}
+          subtitle={isRu ? 'Вопросы компаний в поддержку. Ответ приходит компании в её кабинет.' : 'Korxonalarning qo‘llab-quvvatlashga savollari. Javob korxona kabinetiga boradi.'}
+        />
       </div>
 
       <div
@@ -72,16 +77,12 @@ export default function SuperAdminTicketsPage() {
         {ticketsQuery.isError ? (
           <LoadError error={ticketsQuery.error} onRetry={() => void ticketsQuery.refetch()} retrying={ticketsQuery.isFetching} />
         ) : ticketsQuery.isPending ? (
-          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            Yuklanmoqda...
-          </div>
+          <SkeletonRows rows={4} columns={4} />
         ) : tickets.length === 0 ? (
-          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            {isRu ? 'Нет активных тикетов' : 'Hozircha hech qanday murojaat yo‘q'}
-          </div>
+          <EmptyState icon={LifeBuoy} title={isRu ? 'Обращений пока нет' : 'Hozircha murojaatlar yo‘q'} description={isRu ? 'Когда компания напишет в поддержку, обращение появится здесь.' : 'Korxona qo‘llab-quvvatlashga yozganda murojaat shu yerda paydo bo‘ladi.'} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
                 <tr
                   style={{
@@ -89,16 +90,14 @@ export default function SuperAdminTicketsPage() {
                     backgroundColor: 'var(--color-bg-tertiary)',
                     color: 'var(--color-text-secondary)',
                     fontSize: 'var(--text-xs)',
-                    fontWeight: 'var(--font-semibold)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
+                    fontWeight: 'var(--font-medium)',
                   }}
                 >
                   <th style={{ padding: '12px 20px' }}>{isRu ? 'Тема' : 'Mavzu'}</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Предприятие' : 'Korxona'}</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holat'}</th>
                   <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата' : 'Sana'}</th>
-                  <th style={{ padding: '12px 20px', textAlign: 'right' }}>{isRu ? 'Действие' : 'Amal'}</th>
+                  <th style={{ padding: '12px 20px' }}><span className="sr-only">{isRu ? 'Действие' : 'Amal'}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -109,10 +108,9 @@ export default function SuperAdminTicketsPage() {
                       borderBottom: '1px solid var(--color-border-light)',
                       transition: 'background-color var(--transition-fast)',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    className="ux-row-hover"
                   >
-                    <td style={{ padding: '14px 20px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
+                    <td data-primary style={{ padding: '14px 20px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                       <div>{ticket.subject}</div>
                       {ticket.messages?.[0]?.message && (
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)', marginTop: '2px' }}>
@@ -120,10 +118,10 @@ export default function SuperAdminTicketsPage() {
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>
-                      {(ticket as { company?: { name?: { uz?: string }; slug?: string } }).company?.name?.uz || (ticket as { company?: { slug?: string } }).company?.slug || 'Korxona'}
+                    <td data-label={isRu ? 'Компания' : 'Korxona'} style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>
+                      {(ticket as { company?: { name?: { uz?: string; ru?: string }; slug?: string } }).company?.name?.[locale] || (ticket as { company?: { name?: { uz?: string } } }).company?.name?.uz || (ticket as { company?: { slug?: string } }).company?.slug || 'Korxona'}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
+                    <td data-label={isRu ? 'Статус' : 'Holat'} style={{ padding: '14px 16px' }}>
                       {ticket.status === 'RESOLVED' ? (
                         <Badge variant="success">
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -138,14 +136,15 @@ export default function SuperAdminTicketsPage() {
                         </Badge>
                       )}
                     </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
+                    <td data-label={isRu ? 'Дата' : 'Sana'} style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>
                       {formatDate(ticket.createdAt, locale)}
                     </td>
                     <td style={{ padding: '14px 20px', textAlign: 'right' }}>
                       <Button
                         size="sm"
-                        variant="secondary"
+                        variant="outline"
                         onClick={() => setSelectedTicket(ticket)}
+                        aria-label={isRu ? `Ответить: ${ticket.subject}` : `Javob berish: ${ticket.subject}`}
                       >
                         {isRu ? 'Ответить' : 'Javob berish'}
                       </Button>
@@ -162,11 +161,20 @@ export default function SuperAdminTicketsPage() {
       <Modal
         isOpen={!!selectedTicket}
         onClose={() => setSelectedTicket(null)}
-        title={isRu ? 'Ответ на обращение' : 'Murojaatga javob berish'}
+        title={isRu ? 'Ответ на обращение' : 'Murojaatga javob'}
         size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSelectedTicket(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button variant="primary" type="submit" form="sa-ticket-reply" loading={replyLoading} loadingText={isRu ? 'Отправка…' : 'Yuborilmoqda…'}>
+              {isRu ? 'Отправить ответ' : 'Javobni yuborish'}
+            </Button>
+          </>
+        }
+        onSubmitShortcut={() => (document.getElementById('sa-ticket-reply') as HTMLFormElement | null)?.requestSubmit()}
       >
         {selectedTicket && (
-          <form onSubmit={handleReply} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <form id="sa-ticket-reply" onSubmit={handleReply} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>
                 {isRu ? 'Тема обращения:' : 'Murojaat mavzusi:'}
@@ -174,13 +182,20 @@ export default function SuperAdminTicketsPage() {
               <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
                 {selectedTicket.subject}
               </div>
+              {selectedTicket.messages?.[0]?.message && (
+                <blockquote style={{ margin: 'var(--space-2) 0 0', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap' }}>
+                  {selectedTicket.messages[0].message}
+                </blockquote>
+              )}
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+              <label htmlFor="sa-ticket-reply-text" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 {isRu ? 'Текст ответа' : 'Javob matni'} *
               </label>
               <textarea
+                id="sa-ticket-reply-text"
+                autoFocus
                 required
                 rows={4}
                 value={replyMessage}
@@ -189,7 +204,7 @@ export default function SuperAdminTicketsPage() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  backgroundColor: 'var(--color-bg-tertiary)',
+                  backgroundColor: 'var(--color-bg-input)',
                   border: '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-md)',
                   color: 'var(--color-text-primary)',
@@ -202,14 +217,6 @@ export default function SuperAdminTicketsPage() {
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="primary" type="submit" disabled={replyLoading}>
-                {replyLoading ? (isRu ? 'Отправка...' : 'Yuborilmoqda...') : isRu ? 'Отправить ответ' : 'Yuborish'}
-              </Button>
-            </div>
           </form>
         )}
       </Modal>

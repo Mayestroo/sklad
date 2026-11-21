@@ -18,6 +18,7 @@ import { Skeleton, SkeletonRows } from '@/components/ui/Skeleton';
 import { toast } from '@/context/ToastContext';
 import { CheckCircle, ExternalLink, Receipt, Sparkles } from 'lucide-react';
 import { PricingPlan, SubscriptionPayment } from '@shared/types';
+import { COMPANY_STATUS_LABELS } from '@/lib/platform-labels';
 
 /** GET /billing/status */
 interface SubscriptionStatusView {
@@ -36,15 +37,8 @@ interface CheckoutResult {
 type PlanId = 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE';
 type CheckoutMethod = 'CLICK' | 'PAYME';
 
-/** Subscription or company status in words. */
-const STATUS: Record<string, { uz: string; ru: string; variant: 'success' | 'warning' | 'error' | 'neutral' }> = {
-  TRIAL: { uz: 'Sinov davri', ru: 'Пробный период', variant: 'warning' },
-  ACTIVE: { uz: 'Faol', ru: 'Активна', variant: 'success' },
-  OVERDUE: { uz: 'To‘lov muddati o‘tgan', ru: 'Просрочена оплата', variant: 'error' },
-  CANCELLED: { uz: 'Bekor qilingan', ru: 'Отменена', variant: 'neutral' },
-  SUSPENDED: { uz: 'To‘xtatilgan', ru: 'Приостановлена', variant: 'error' },
-  BLOCKED: { uz: 'Bloklangan', ru: 'Заблокирована', variant: 'error' },
-};
+/** Subscription or company status in words (shared list). */
+const STATUS = COMPANY_STATUS_LABELS;
 
 export default function BillingSettingsPage() {
   const locale = useLocale() as 'uz' | 'ru';

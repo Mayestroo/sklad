@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CACHE = path.join(os.tmpdir(), 'sklad-ux-auth.json');
+// One cache per account (the API allows 5 logins a minute).
+const EMAIL = process.env.UX_EMAIL || 'admin@orient.uz';
+const CACHE = path.join(os.tmpdir(), EMAIL === 'admin@orient.uz' ? 'sklad-ux-auth.json' : `sklad-ux-auth-${EMAIL.replace(/[^a-z0-9]/gi, '_')}.json`);
 const API = process.env.UX_API || 'http://localhost:3001/api';
 
 export async function getAuth(request) {

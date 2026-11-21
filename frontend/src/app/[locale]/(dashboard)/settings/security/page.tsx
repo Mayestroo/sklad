@@ -15,6 +15,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { SearchField, matchesSearch } from '@/components/ui/SearchField';
 import { Database, History } from 'lucide-react';
 import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '@shared/types';
+import { AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS } from '@/lib/platform-labels';
 
 /** GET /audit-logs */
 interface AuditLogRow {
@@ -27,32 +28,9 @@ interface AuditLogRow {
   user?: { firstName: string; lastName: string } | null;
 }
 
-const ACTIONS: Record<string, { uz: string; ru: string; variant: 'success' | 'info' | 'error' | 'neutral' | 'warning' }> = {
-  CREATE: { uz: 'Yaratdi', ru: 'Создал', variant: 'success' },
-  UPDATE: { uz: 'O‘zgartirdi', ru: 'Изменил', variant: 'info' },
-  DELETE: { uz: 'O‘chirdi', ru: 'Удалил', variant: 'error' },
-  LOGIN: { uz: 'Tizimga kirdi', ru: 'Вошёл в систему', variant: 'neutral' },
-  LOGOUT: { uz: 'Tizimdan chiqdi', ru: 'Вышел из системы', variant: 'neutral' },
-};
-
-const ENTITIES: Record<string, { uz: string; ru: string }> = {
-  AccountingPeriod: { uz: 'Hisob davri', ru: 'Учётный период' },
-  AdditionalExpense: { uz: 'Qo‘shimcha xarajat', ru: 'Доп. расход' },
-  Company: { uz: 'Kompaniya', ru: 'Компания' },
-  CompanySettings: { uz: 'Kompaniya sozlamalari', ru: 'Настройки компании' },
-  InventoryDocument: { uz: 'Ombor hujjati', ru: 'Складской документ' },
-  Payment: { uz: 'To‘lov', ru: 'Оплата' },
-  ProductionDocument: { uz: 'Ishlab chiqarish hujjati', ru: 'Документ производства' },
-  ProductionMaterialLine: { uz: 'Xomashyo qatori', ru: 'Строка сырья' },
-  ProductionRecipe: { uz: 'Retsept', ru: 'Рецепт' },
-  PurchaseReceipt: { uz: 'Kirim hujjati', ru: 'Приходный документ' },
-  PurchaseReturn: { uz: 'Yetkazib beruvchiga qaytarish', ru: 'Возврат поставщику' },
-  SalesInvoice: { uz: 'Sotuv hujjati', ru: 'Продажа' },
-  SalesOrder: { uz: 'Buyurtma', ru: 'Заказ' },
-  SalesReturn: { uz: 'Mijozdan qaytarish', ru: 'Возврат покупателя' },
-  StockTransfer: { uz: 'Omborlararo ko‘chirish', ru: 'Перемещение' },
-  User: { uz: 'Foydalanuvchi', ru: 'Пользователь' },
-};
+// Shared words for audit codes (also used by the platform owner pages).
+const ACTIONS = AUDIT_ACTION_LABELS;
+const ENTITIES = AUDIT_ENTITY_LABELS;
 
 const PAGE = 50;
 
