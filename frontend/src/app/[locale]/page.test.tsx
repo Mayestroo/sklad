@@ -69,7 +69,9 @@ describe('Dashboard page', () => {
     renderPage(<DashboardPage />);
     await screen.findByText('Mijoz MChJ');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bugun' }));
+    // The period picker (shared Select, named by its placeholder key in this mock).
+    fireEvent.click(screen.getByRole('combobox', { name: 'period' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Bugun/ }));
     await waitFor(() => expect(dashboardCalls()).toHaveLength(2));
     expect(screen.getByText('Mijoz MChJ')).toBeTruthy();
 
