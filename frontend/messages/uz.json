@@ -882,6 +882,16 @@
       "unsaved": "{count, plural, other {# ta saqlanmagan narx}}",
       "keysHint": "Narxni yozing — Enter saqlaydi va keyingi qatorga o‘tadi, Esc bekor qiladi",
       "showMore": "Yana ko‘rsatish ({total} tadan {shown})"
+    },
+    "finance": {
+      "subtitle": "Kassa va hisob raqamlari: qoldiq, kirim, chiqim, o‘tkazma va qarzlar",
+      "overview": "Umumiy ko‘rinish",
+      "account": "Kassa / hisob",
+      "today": "Bugun",
+      "month": "Shu oy",
+      "monthNet": "Oy bo‘yicha sof",
+      "noAccounts": "Kassalar hali sozlanmagan",
+      "openDebts": "Qarzdorlik nazoratida ochish"
     }
   }
 }

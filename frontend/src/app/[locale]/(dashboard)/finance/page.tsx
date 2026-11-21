@@ -2,7 +2,7 @@
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useCallback } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { financeQuickAction } from '@/lib/finance-quick-action';
 import { useAuth } from '@/context/AuthContext';
@@ -48,7 +48,6 @@ import {
   CheckCircle2,
   Edit2,
   XCircle,
-  TrendingUp,
   Building,
   DollarSign,
   Users,
@@ -90,78 +89,53 @@ function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
   }
 }
 
-function AccountNetRows({
-  items,
-  locale,
-}: {
-  items: FinanceAccountFlow[];
-  locale: 'uz' | 'ru';
-  isRu: boolean;
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 'var(--text-sm)', fontWeight: 700 }}>
-      {items.map((account) => (
-        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
-            {account.name[locale]} · {account.currency}
-          </span>
-          <span style={{ color: account.netCashFlow >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
-            {formatCurrency(account.netCashFlow, locale, account.currency)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
-function AccountFlowRows({
-  title,
-  items,
-  locale,
-  isRu,
-}: {
-  title: string;
-  items: FinanceAccountFlow[];
-  locale: 'uz' | 'ru';
-  isRu: boolean;
-}) {
-  if (items.length === 0) {
+
+/** One row per cash desk / account: today's and this month's in / out / net (per currency, never summed). */
+function AccountFlowTable({ today, month, locale }: { today: FinanceAccountFlow[]; month: FinanceAccountFlow[]; locale: 'uz' | 'ru' }) {
+  const tf = useTranslations('rd.finance');
+  const key = (a: FinanceAccountFlow) => a.accountId ?? `unassigned-${a.currency}`;
+  const rows = [...month, ...today.filter((t) => !month.some((m) => key(m) === key(t)))];
+  if (rows.length === 0) return <p className="dash-panel-hint">{tf('noAccounts')}</p>;
+  const cell = (a: FinanceAccountFlow | undefined, currency: string) => {
+    if (!a || (a.income === 0 && a.expense === 0 && a.transferIn === 0 && a.transferOut === 0)) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
+    const inn = a.income + a.transferIn;
+    const out = a.expense + a.transferOut;
     return (
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-        {isRu ? 'Счета пока не настроены' : 'Kassalar hali sozlanmagan'}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+        {inn !== 0 && <span style={{ color: 'var(--color-success-700)' }}>+{formatCurrency(inn, locale, currency)}</span>}
+        {out !== 0 && <span style={{ color: 'var(--color-error-700)' }}>−{formatCurrency(out, locale, currency)}</span>}
       </div>
     );
-  }
-
+  };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
-      {items.map((account) => (
-        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : 'var(--color-error-700)' }}>
-            {account.name[locale]} · {account.currency}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-            {[
-              { label: isRu ? 'Поступления' : 'Kirim', amount: account.income, color: 'var(--color-success-700)' },
-              { label: isRu ? 'Расходы' : 'Chiqim', amount: account.expense, color: 'var(--color-error-700)' },
-              { label: isRu ? 'Перевод входящий' : 'O‘tkazma kirim', amount: account.transferIn, color: 'var(--color-info-700)' },
-              { label: isRu ? 'Перевод исходящий' : 'O‘tkazma chiqim', amount: account.transferOut, color: 'var(--color-primary-700)' },
-            ].map((movement) => (
-              <div key={movement.label} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 'var(--text-xs)' }}>
-                <span style={{ color: 'var(--color-text-tertiary)' }}>{movement.label}</span>
-                <span style={{ color: movement.color }}>{formatCurrency(movement.amount, locale, account.currency)}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-xs)' }}>
-            <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистое движение' : 'Sof harakat'}</span>
-            <Badge variant={account.netCashFlow >= 0 ? 'success' : 'error'}>
-              {formatCurrency(account.netCashFlow, locale, account.currency)}
-            </Badge>
-          </div>
-        </div>
-      ))}
+    <div style={{ overflowX: 'auto' }} role="region" tabIndex={0} aria-label={tf('account')}>
+    <table className="rd-mini-table">
+      <thead>
+        <tr>
+          <th scope="col">{tf('account')}</th>
+          <th scope="col" style={{ textAlign: 'right' }}>{tf('today')}</th>
+          <th scope="col" style={{ textAlign: 'right' }}>{tf('month')}</th>
+          <th scope="col" style={{ textAlign: 'right' }}>{tf('monthNet')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const t = today.find((x) => key(x) === key(r));
+          const m = month.find((x) => key(x) === key(r));
+          return (
+            <tr key={key(r)}>
+              <td style={{ color: r.accountId ? undefined : 'var(--color-error-700)' }}>{r.name[locale]} <span className="rd-sub">· {r.currency}</span></td>
+              <td className="tabular-nums" style={{ textAlign: 'right' }}>{cell(t, r.currency)}</td>
+              <td className="tabular-nums" style={{ textAlign: 'right' }}>{cell(m, r.currency)}</td>
+              <td className="tabular-nums" style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)', color: (m?.netCashFlow ?? 0) >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
+                {m ? formatCurrency(m.netCashFlow, locale, r.currency) : '—'}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
     </div>
   );
 }
@@ -170,6 +144,7 @@ function AccountFlowRows({
 export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tfin = useTranslations('rd.finance');
   const { token, company } = useAuth();
 
   // Active Tab: dashboard | journal | income | expense | transfers | debts | deleted
@@ -417,16 +392,10 @@ export default function FinancePage() {
         }}
       >
         <div>
-          <h1
-            style={{
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--font-bold)',
-              color: 'var(--color-text-primary)',
-              margin: 0,
-            }}
-          >
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
             {isRu ? 'Финансы' : 'Moliya'}
           </h1>
+          <p style={{ marginTop: 'var(--space-1)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{tfin('subtitle')}</p>
         </div>
 
         {/* Action Buttons */}
@@ -597,38 +566,6 @@ export default function FinancePage() {
           </div>
         </Card>
 
-        {/* Jami Sof Pul Oqimi (Bu oy) */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid var(--color-primary-500)',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(99, 102, 241, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-primary-600)',
-              flexShrink: 0,
-            }}
-          >
-            <TrendingUp size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Чистый денежный поток (Месяц)' : 'Sof pul oqimi (Shu oy)'}
-            </div>
-            <AccountNetRows items={dashboardMetrics?.month.byAccount ?? []} locale={locale} isRu={isRu} />
-          </div>
-        </Card>
       </div>
 
       {/* ─── Navigation Tabs ────────────────────────────────────────── */}
@@ -642,7 +579,7 @@ export default function FinancePage() {
         }}
       >
         {[
-          { id: 'dashboard', label: isRu ? 'Дашборд' : 'Dashboard' },
+          { id: 'dashboard', label: tfin('overview') },
           { id: 'journal', label: isRu ? 'Журнал операций' : 'Operatsiyalar jurnali' },
           { id: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
           { id: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
@@ -707,20 +644,7 @@ export default function FinancePage() {
                 <span>{isRu ? 'Динамика поступлений и списаний' : 'Kirim va Chiqim dinamikasi'}</span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                <AccountFlowRows
-                  title={isRu ? 'Сегодня' : 'Bugun'}
-                  items={dashboardMetrics?.today.byAccount ?? []}
-                  locale={locale}
-                  isRu={isRu}
-                />
-                <AccountFlowRows
-                  title={isRu ? 'В этом месяце' : 'Shu oyda'}
-                  items={dashboardMetrics?.month.byAccount ?? []}
-                  locale={locale}
-                  isRu={isRu}
-                />
-              </div>
+              <AccountFlowTable today={dashboardMetrics?.today.byAccount ?? []} month={dashboardMetrics?.month.byAccount ?? []} locale={locale} />
             </Card>
 
             {/* Qarzdorlik Balansi (Segregated Debts) */}
