@@ -4,8 +4,9 @@ import { activateOnKey } from '@/lib/a11y';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
+import { DocChecklist } from '@/components/ui/DocChecklist';
 import { toast } from '@/context/ToastContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -65,6 +66,8 @@ interface CashAccount {
 export default function NewExpensePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tf = useTranslations('rd.docForm');
+  const te = useTranslations('rd.expenses');
   const router = useRouter();
   const { token, company } = useAuth();
 
@@ -371,187 +374,10 @@ export default function NewExpensePage() {
         </div>
       )}
 
+      <div className="doc-layout">
+      <div className="doc-main">
       {/* ─── Grid: Parameters & Selection ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))', gap: 'var(--space-5)' }}>
-        {/* Card 1: Expense Details */}
-        <Card
-          style={{
-            padding: 'var(--space-5)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-4)',
-            backgroundColor: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-        >
-          {/* Card Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'var(--color-primary-50)',
-                  border: '1px solid var(--color-primary-100)',
-                  color: 'var(--color-primary-600)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Receipt size={18} />
-              </div>
-              <div>
-                <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                  {isRu ? '1. Параметры расхода' : '1. Xarajat parametrlari'}
-                </h2>
-                <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                  {isRu ? 'Дата, тип, сумма и поставщик услуги' : 'Sana, xarajat turi, summa va kontragent'}
-                </p>
-              </div>
-            </div>
-            {isStep1Done && <Badge variant="success">{isRu ? 'Готово' : 'Tayyor'}</Badge>}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)' }}>
-            <div>
-              <DatePicker
-                label={isRu ? 'Дата расхода' : 'Xarajat sanasi'}
-                value={docDate}
-                onChange={(val) => setDocDate(val)}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                {isRu ? 'Тип расхода' : 'Xarajat turi'}
-              </label>
-              <Select
-                value={expenseType}
-                onChange={(val) => setExpenseType(val as ExpenseType)}
-                options={[
-                  { value: 'TRANSPORT', label: isRu ? 'Транспорт / Доставка' : 'Transport / Yetkazish' },
-                  { value: 'CUSTOMS', label: isRu ? 'Таможня / Пошлина' : 'Bojxona / Boj' },
-                  { value: 'BROKER', label: isRu ? 'Брокерские услуги' : 'Brokerlik xizmati' },
-                  { value: 'INSURANCE', label: isRu ? 'Страхование груза' : 'Yuk sug‘urtasi' },
-                  { value: 'OTHER', label: isRu ? 'Прочие расходы' : 'Boshqa xarajatlar' },
-                ]}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-              {isRu ? 'Поставщик услуг / Перевозчик *' : 'Xizmat ko‘rsatuvchi kontragent *'}
-            </label>
-            <Select
-              searchable
-              value={counterpartyId}
-              onChange={(val) => setCounterpartyId(val)}
-              placeholder={isRu ? 'Выберите или найдите поставщика...' : 'Kontragentni qidiring yoki tanlang...'}
-              options={counterparties.map((c) => ({
-                value: c.id,
-                label: `${getCounterpartyName(c.name) || '—'}${c.phone ? ` (${c.phone})` : ''}`,
-              }))}
-              onCreateNew={() => setQuickSupplierOpen(true)}
-              createNewLabel={isRu ? 'Добавить поставщика' : 'Kontragent qo‘shish'}
-            />
-          </div>
-
-          {/* Amount & Currency */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(96px, 1fr)', gap: 'var(--space-3)' }}>
-            <div>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                {isRu ? 'Сумма расхода *' : 'Xarajat summasi *'}
-              </label>
-              <div style={{ position: 'relative' }}>
-                <MoneyInput
-                  aria-label={isRu ? 'Сумма расхода' : 'Xarajat summasi'}
-                  value={amount}
-                  onValueChange={(value) => setAmount(Number(value))}
-                  style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-                {isRu ? 'Валюта *' : 'Valyuta *'}
-              </label>
-              <Select
-                value={currency}
-                placeholder={isRu ? 'Валюта' : 'Valyuta'}
-                  onChange={(val) => {
-                    setCurrency(val);
-                    setExchangeRate('');
-                    const compatible = cashAccounts.find(
-                      (account) => account.currency === val && account.isActive && isCashAccountCurrencyValid(account),
-                    );
-                    setCashAccountId(compatible?.id || '');
-                  }}
-                options={CURRENCY_OPTIONS}
-              />
-            </div>
-          </div>
-
-          {currency === 'USD' && (
-            <div style={{ marginTop: 'var(--space-3)' }}>
-              <MoneyInput
-                label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
-                value={exchangeRate}
-                onValueChange={setExchangeRate}
-                decimals={4}
-                placeholder="12,800"
-              />
-            </div>
-          )}
-
-          {/* Payment Mode */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-subtle)' }}>
-            <Checkbox
-              checked={isPaid}
-              onChange={(e) => setIsPaid(e.target.checked)}
-              label={isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}
-            />
-
-            {isPaid && (
-              <div style={{ marginTop: '4px' }}>
-                <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                  {isRu ? 'Касса для списания средств *' : 'Chiqim qilinadigan kassa hisobi *'}
-                </label>
-                <Select
-                  value={cashAccountId}
-                  onChange={(val) => setCashAccountId(val)}
-                   options={compatibleCashAccounts.map((a) => {
-                    const accName =
-                      typeof a.name === 'object' && a.name
-                        ? a.name[locale] || a.name.uz || a.name.ru || 'Kassa'
-                        : a.name || 'Kassa';
-                    return {
-                      value: a.id,
-                       label: `${accName} (${CASH_ACCOUNT_TYPE_LABELS[a.accountType]?.[locale === 'ru' ? 'ru' : 'uz'] ?? a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
-                    };
-                  })}
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
-              {isRu ? 'Комментарий / Номер накладной' : 'Izoh / Yuk xati raqami'}
-            </label>
-            <Input
-              placeholder={isRu ? 'Например: ТТН №48291, рейс Ташкент-Самарканд...' : 'Masalan: TTN №48291, Toshkent-Samarqand reysi...'}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-          </div>
-        </Card>
-
         {/* Card 2: Target Receipt & Method */}
         <Card
           style={{
@@ -585,7 +411,7 @@ export default function NewExpensePage() {
               </div>
               <div>
                 <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                  {isRu ? '2. Выбор закупки и метода' : '2. Xarid va taqsimot usulini tanlash'}
+                  {isRu ? '1. Выбор закупки и метода' : '1. Xarid va taqsimot usulini tanlash'}
                 </h2>
                 <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
                   {isRu ? 'Целевая партия и формула распределения' : 'Qaysi xaridga va qanday formula bilan taqsimlash'}
@@ -844,6 +670,185 @@ export default function NewExpensePage() {
             </div>
           </div>
         </Card>
+        {/* Card 1: Expense Details */}
+        <Card
+          style={{
+            padding: 'var(--space-5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-4)',
+            backgroundColor: 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          {/* Card Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--color-primary-50)',
+                  border: '1px solid var(--color-primary-100)',
+                  color: 'var(--color-primary-600)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Receipt size={18} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
+                  {isRu ? '2. Параметры расхода' : '2. Xarajat parametrlari'}
+                </h2>
+                <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                  {isRu ? 'Дата, тип, сумма и поставщик услуги' : 'Sana, xarajat turi, summa va kontragent'}
+                </p>
+              </div>
+            </div>
+            {isStep1Done && <Badge variant="success">{isRu ? 'Готово' : 'Tayyor'}</Badge>}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)' }}>
+            <div>
+              <DatePicker
+                label={isRu ? 'Дата расхода' : 'Xarajat sanasi'}
+                value={docDate}
+                onChange={(val) => setDocDate(val)}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                {isRu ? 'Тип расхода' : 'Xarajat turi'}
+              </label>
+              <Select
+                value={expenseType}
+                onChange={(val) => setExpenseType(val as ExpenseType)}
+                options={[
+                  { value: 'TRANSPORT', label: isRu ? 'Транспорт / Доставка' : 'Transport / Yetkazish' },
+                  { value: 'CUSTOMS', label: isRu ? 'Таможня / Пошлина' : 'Bojxona / Boj' },
+                  { value: 'BROKER', label: isRu ? 'Брокерские услуги' : 'Brokerlik xizmati' },
+                  { value: 'INSURANCE', label: isRu ? 'Страхование груза' : 'Yuk sug‘urtasi' },
+                  { value: 'OTHER', label: isRu ? 'Прочие расходы' : 'Boshqa xarajatlar' },
+                ]}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+              {isRu ? 'Поставщик услуг / Перевозчик *' : 'Xizmat ko‘rsatuvchi kontragent *'}
+            </label>
+            <Select
+              searchable
+              value={counterpartyId}
+              onChange={(val) => setCounterpartyId(val)}
+              placeholder={isRu ? 'Выберите или найдите поставщика...' : 'Kontragentni qidiring yoki tanlang...'}
+              options={counterparties.map((c) => ({
+                value: c.id,
+                label: `${getCounterpartyName(c.name) || '—'}${c.phone ? ` (${c.phone})` : ''}`,
+              }))}
+              onCreateNew={() => setQuickSupplierOpen(true)}
+              createNewLabel={isRu ? 'Добавить поставщика' : 'Kontragent qo‘shish'}
+            />
+          </div>
+
+          {/* Amount & Currency */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(96px, 1fr)', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                {isRu ? 'Сумма расхода *' : 'Xarajat summasi *'}
+              </label>
+              <div style={{ position: 'relative' }}>
+                <MoneyInput
+                  aria-label={isRu ? 'Сумма расхода' : 'Xarajat summasi'}
+                  value={amount}
+                  onValueChange={(value) => setAmount(Number(value))}
+                  style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                {isRu ? 'Валюта *' : 'Valyuta *'}
+              </label>
+              <Select
+                value={currency}
+                placeholder={isRu ? 'Валюта' : 'Valyuta'}
+                  onChange={(val) => {
+                    setCurrency(val);
+                    setExchangeRate('');
+                    const compatible = cashAccounts.find(
+                      (account) => account.currency === val && account.isActive && isCashAccountCurrencyValid(account),
+                    );
+                    setCashAccountId(compatible?.id || '');
+                  }}
+                options={CURRENCY_OPTIONS}
+              />
+            </div>
+          </div>
+
+          {currency === 'USD' && (
+            <div style={{ marginTop: 'var(--space-3)' }}>
+              <MoneyInput
+                label={isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
+                value={exchangeRate}
+                onValueChange={setExchangeRate}
+                decimals={4}
+                placeholder="12,800"
+              />
+            </div>
+          )}
+
+          {/* Payment Mode */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-subtle)' }}>
+            <Checkbox
+              checked={isPaid}
+              onChange={(e) => setIsPaid(e.target.checked)}
+              label={isRu ? 'Оплатить сразу из кассы / банка' : 'Kassadan darhol to‘lov qilindi'}
+            />
+
+            {isPaid && (
+              <div style={{ marginTop: '4px' }}>
+                <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  {isRu ? 'Касса для списания средств *' : 'Chiqim qilinadigan kassa hisobi *'}
+                </label>
+                <Select
+                  value={cashAccountId}
+                  onChange={(val) => setCashAccountId(val)}
+                   options={compatibleCashAccounts.map((a) => {
+                    const accName =
+                      typeof a.name === 'object' && a.name
+                        ? a.name[locale] || a.name.uz || a.name.ru || 'Kassa'
+                        : a.name || 'Kassa';
+                    return {
+                      value: a.id,
+                       label: `${accName} (${CASH_ACCOUNT_TYPE_LABELS[a.accountType]?.[locale === 'ru' ? 'ru' : 'uz'] ?? a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
+                    };
+                  })}
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }}>
+              {isRu ? 'Комментарий / Номер накладной' : 'Izoh / Yuk xati raqami'}
+            </label>
+            <Input
+              placeholder={isRu ? 'Например: ТТН №48291, рейс Ташкент-Самарканд...' : 'Masalan: TTN №48291, Toshkent-Samarqand reysi...'}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+          </div>
+        </Card>
+
       </div>
 
       {/* ─── Card 3: Interactive Items Table & Preview ─── */}
@@ -1204,6 +1209,36 @@ export default function NewExpensePage() {
           </div>
         )}
       </Card>
+      </div>
+
+      {/* Side panel: what is still missing and the next step, always in view */}
+      <aside className="doc-aside" aria-label={tf('sidePanel')}>
+        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {amount !== '' && Number(amount) > 0 && currency && (
+            <div aria-live="polite">
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Сумма расхода' : 'Xarajat summasi'}</div>
+              <div className="rd-preview-amount">{formatCurrency(Number(amount), locale, currency)}</div>
+            </div>
+          )}
+          <DocChecklist
+            items={[
+              { label: te('ckReceipt'), done: Boolean(receiptId) },
+              { label: te('ckProvider'), done: Boolean(counterpartyId) },
+              { label: tf('ckAmount'), done: amount !== '' && Number(amount) > 0 },
+              { label: tf('ckCurrency'), done: Boolean(currency) },
+              { label: te('ckItems'), done: selectedItemIds.length > 0 },
+            ]}
+          />
+          <Button loading={submitting} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} onClick={() => handleSubmit(true)} style={{ width: '100%', backgroundColor: 'var(--color-success-600)' }}>
+            {!submitting && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и распределить' : 'Tasdiqlash va taqsimlash'}
+          </Button>
+          <Button variant="secondary" loading={submitting} onClick={() => handleSubmit(false)} style={{ width: '100%' }}>
+            {!submitting && <Save size={16} aria-hidden />} {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+          </Button>
+          <p className="doc-aside-hint">{te('asideHint')}</p>
+        </Card>
+      </aside>
+      </div>
       <CreateCounterpartyDrawer
         isOpen={quickSupplierOpen}
         onClose={() => setQuickSupplierOpen(false)}

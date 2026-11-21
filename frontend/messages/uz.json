@@ -767,7 +767,11 @@
       "onCredit": "Qarzga",
       "view": "Ko‘rinish",
       "none": "Hali qo‘shimcha xarajat yo‘q",
-      "noneHint": "Kirim uchun transport yoki bojxona xarajatini kiriting — u tovar tannarxiga qo‘shiladi."
+      "noneHint": "Kirim uchun transport yoki bojxona xarajatini kiriting — u tovar tannarxiga qo‘shiladi.",
+      "ckReceipt": "Kirim hujjati tanlangan",
+      "ckProvider": "Xizmat ko‘rsatuvchi tanlangan",
+      "ckItems": "Taqsimlanadigan tovarlar belgilangan",
+      "asideHint": "Avval kirimni tanlang — tovarlari va yangi tannarx pastda ko‘rinadi. Ctrl+S — qoralama, Ctrl+Enter — tasdiqlash."
     }
   }
 }
