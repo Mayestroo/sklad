@@ -1326,3 +1326,4 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .doc-lines th:first-child, .doc-lines td:first-child { width: 28px !important; }
 .doc-lines td:has([data-testid="quantity-unit"]) { min-width: 124px; }
 .doc-lines input { min-width: 56px; }
+.doc-lines th:nth-child(2) { min-width: 200px !important; }

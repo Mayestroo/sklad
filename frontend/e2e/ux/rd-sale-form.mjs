@@ -58,6 +58,26 @@ const focusedRow = await page.evaluate(() => {
 console.log(`Enter in qty of last row → rows=${rows}, focus=${focusedRole} in row ${focusedRow}`);
 console.log('checklist now: ' + (await checklist()) + ' — ' + (await page.locator('.doc-checklist h3').innerText()));
 await page.screenshot({ path: path.join(outDir, `filled-${locale}-${width}.jpg`), type: 'jpeg', quality: 60, fullPage: true });
+if (process.env.POST === '1') {
+  // complete the document: currency if empty, a price on filled rows, drop the empty last row, then Ctrl+Enter posts
+  const cur = page.getByRole('combobox', { name: /Valyuta|Валюта/ });
+  console.log('currency combos: ' + (await cur.count()) + ' labels=' + JSON.stringify(await page.locator('.doc-main [role="combobox"]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))));
+  if (await cur.count()) { await cur.first().click(); await page.waitForTimeout(200); console.log('options: ' + JSON.stringify((await page.locator('[role="listbox"] [role="option"]').allInnerTexts()).slice(0, 5))); await page.locator('[role="listbox"] [role="option"]', { hasText: 'UZS' }).first().click(); }
+  const lastRow = page.locator('.doc-main tbody tr').last();
+  const del = lastRow.locator('button[aria-label], button[title]').last();
+  await del.click();
+  await page.waitForTimeout(300);
+  const priceInputs = page.locator('.doc-main tbody tr').first().locator('input');
+  const n = await priceInputs.count();
+  await priceInputs.nth(1).fill('15000');
+  console.log('inputs in row: ' + n + '; checklist before post: ' + (await checklist()) + ' missing=' + JSON.stringify(await page.locator('.doc-checklist li[data-done="false"]').allInnerTexts()));
+  await page.keyboard.press('Control+Enter');
+  await page.waitForTimeout(3000);
+  console.log('after Ctrl+Enter url: ' + new URL(page.url()).pathname + ' toast: ' + JSON.stringify(await page.locator('.app-toast-region').innerText().catch(() => '')));
+  await page.screenshot({ path: path.join(outDir, `posted-${locale}-${width}.jpg`), type: 'jpeg', quality: 60, fullPage: true });
+  await browser.close();
+  process.exit(0);
+}
 // Ctrl+S saves a draft
 await page.keyboard.press('Control+s');
 await page.waitForTimeout(2500);

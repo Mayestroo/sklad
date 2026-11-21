@@ -2,8 +2,11 @@
 
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { readRemembered, remember } from '@/lib/usePersistentState';
+import { readRemembered, remember, usePersistentState } from '@/lib/usePersistentState';
 import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
+import { DocChecklist, linesKeyDown } from '@/components/ui/DocChecklist';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { useTranslations } from 'next-intl';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -89,6 +92,8 @@ interface PurchaseDocumentFormProps {
 export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tf = useTranslations('rd.docForm');
+  const [showDiscVatPref, setShowDiscVatPref] = usePersistentState<boolean>('docForm.showDiscVat', false);
   const { token, company } = useAuth();
   const router = useRouter();
   const confirm = useConfirm();
@@ -803,6 +808,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
     }
   };
 
+  const showDiscVat = showDiscVatPref || items.some((i) => Number(i.discount) > 0);
   // Ctrl+S saves the draft, Ctrl+Enter posts and closes (only while the document is editable).
   useDocumentShortcuts({ enabled: !isReadOnly && !loading, onSave: handleSaveDraft, onPost: () => handlePost(true) });
 
@@ -912,46 +918,20 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
           {docStatus === 'POSTED' && (
             <>
-              <Button
-                variant="ghost"
-                onClick={handleDeleteReceipt}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
-              >
-                <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleUnpostToEdit}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-warning-700)', borderColor: 'var(--color-warning-600)', fontWeight: 600 }}
-              >
-                <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={handleUnpost}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <RotateCcw size={16} /> {isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish'}
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={() => setIsPayOpen(true)}
-                style={{
-                  backgroundColor: 'var(--color-success-50)',
-                  color: 'var(--color-success-700)',
-                  border: '1px solid var(--color-success-200)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <CreditCard size={16} aria-hidden /> {isRu ? 'Оплатить поставщику' : 'Yetkazib beruvchiga to‘lash'}
-              </Button>
+              {/* Rare and risky actions behind one menu; the everyday ones stay visible. */}
+              <ActionsMenu
+                label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                actions={[
+                  { label: isRu ? 'Редактировать' : 'Tahrirlash', onSelect: handleUnpostToEdit },
+                  { label: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish', onSelect: handleUnpost },
+                  { label: isRu ? 'Удалить' : 'O‘chirish', onSelect: handleDeleteReceipt, danger: true },
+                ]}
+              />
+              {paymentStatus !== 'PAID' && (
+                <Button onClick={() => setIsPayOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CreditCard size={16} aria-hidden /> {isRu ? 'Оплатить поставщику' : 'Yetkazib beruvchiga to‘lash'}
+                </Button>
+              )}
 
               <Button
                 variant="secondary"
@@ -1020,6 +1000,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
         </div>
       )}
 
+      <div className="doc-layout">
+      <div className="doc-main">
       {/* Document Primary Metadata Form Card */}
       <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
@@ -1087,27 +1069,6 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             />
           </div>
 
-          {/* Contract Number */}
-          <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
-            <Input
-              label={isRu ? '№ Договора' : 'Shartnoma №'}
-              value={contractNumber}
-              onChange={(e) => { markDirty(); setContractNumber(e.target.value); }}
-              placeholder="№ 12-A"
-              disabled={isReadOnly}
-            />
-          </div>
-
-          {/* Contract Date */}
-          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
-            <DatePicker
-              label={isRu ? 'Дата договора' : 'Shartnoma sanasi'}
-              value={contractDate}
-              onChange={(val) => { markDirty(); setContractDate(val); }}
-              disabled={isReadOnly}
-            />
-          </div>
-
           {/* Currency */}
           <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
             <Select
@@ -1139,8 +1100,33 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             </div>
           )}
 
+          {/* Rare fields: folded unless one is filled */}
+          <details className="doc-more" open={Boolean(contractNumber || contractDate || comment) || undefined}>
+            <summary>{isRu ? 'Дополнительно: договор, комментарий' : 'Qo‘shimcha: shartnoma, izoh'}</summary>
+            <div className="doc-more-body">
+          {/* Contract Number */}
+          <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
+            <Input
+              label={isRu ? '№ Договора' : 'Shartnoma №'}
+              value={contractNumber}
+              onChange={(e) => { markDirty(); setContractNumber(e.target.value); }}
+              placeholder="№ 12-A"
+              disabled={isReadOnly}
+            />
+          </div>
+
+          {/* Contract Date */}
+          <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
+            <DatePicker
+              label={isRu ? 'Дата договора' : 'Shartnoma sanasi'}
+              value={contractDate}
+              onChange={(val) => { markDirty(); setContractDate(val); }}
+              disabled={isReadOnly}
+            />
+          </div>
+
           {/* Comment */}
-          <div>
+          <div style={{ flex: '2 1 260px' }}>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Комментарий / Примечание' : 'Izoh / Qayd'}
             </label>
@@ -1151,6 +1137,8 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
               disabled={isReadOnly}
             />
           </div>
+            </div>
+          </details>
         </div>
 
         {/* Collapsible GTD (Customs) Section */}
@@ -1406,7 +1394,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
         {/* Table container */}
         <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
-          <table style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <table className="doc-lines" style={{ width: '100%', minWidth: showDiscVat ? '900px' : '700px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
@@ -1419,22 +1407,26 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Цена за ед.${currency ? ` (${currency})` : ''}` : `Birlik narxi${currency ? ` (${currency})` : ''}`}
                 </th>
+                {showDiscVat && (
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '130px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Скидка${currency ? ` (${currency})` : ''}` : `Chegirma${currency ? ` (${currency})` : ''}`}
                 </th>
+                )}
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'НДС %' : 'QQS %'}
                 </th>
+                {showDiscVat && (
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '140px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Сумма НДС${currency ? ` (${currency})` : ''}` : `QQS summasi${currency ? ` (${currency})` : ''}`}
                 </th>
+                )}
                 <th style={{ padding: '10px 12px', textAlign: 'right', width: '180px', whiteSpace: 'nowrap' }}>
                   {isRu ? `Итого${currency ? ` (${currency})` : ''}` : `Jami Summa${currency ? ` (${currency})` : ''}`}
                 </th>
                 {!isReadOnly && <th style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}></th>}
               </tr>
             </thead>
-            <tbody>
+            <tbody onKeyDown={linesKeyDown({ rowCount: items.length, addRow: handleAddItem, disabled: isReadOnly })}>
               {items.map((item, idx) => {
                 const qty = Number(item.quantity) || 0;
                 const price = Number(item.unitPrice) || 0;
@@ -1494,6 +1486,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     </td>
 
                     {/* Discount */}
+                    {showDiscVat && (
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <CurrencyInput
                         value={item.discount}
@@ -1502,6 +1495,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         aria-label={isRu ? `Скидка для строки ${idx + 1}` : `Chegirma ${idx + 1}`}
                       />
                     </td>
+                    )}
 
                     {/* VAT Rate */}
                     <td style={{ padding: '10px 12px' }}>
@@ -1518,9 +1512,11 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                     </td>
 
                     {/* VAT Amount */}
+                    {showDiscVat && (
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, whiteSpace: 'nowrap' }} className="tabular-nums">
                       {currency ? formatCurrency(lineVat, locale, currency) : '—'}
                     </td>
+                    )}
 
                     {/* Line Total */}
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
@@ -1567,11 +1563,17 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             <Plus size={16} /> {isRu ? 'Добавить строку' : 'Qator qo‘shish'}
           </Button>
         )}
+        <label className="auth-check" style={{ alignSelf: 'flex-end' }}>
+          <input type="checkbox" checked={showDiscVat} onChange={(e) => setShowDiscVatPref(e.target.checked)} />
+          {tf('showDiscVat')}
+        </label>
       </Card>
 
-      {/* Totals Summary Footer Card */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      </div>
+
+      {/* Side panel: live totals, what is still missing, the next step */}
+      <aside className="doc-aside" aria-label={tf('sidePanel')}>
+        <Card style={{ padding: 'var(--space-5)', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             <span>{isRu ? 'Сумма позиций:' : 'Pozitsiyalar summasi:'}</span>
             <span className="tabular-nums" style={{ fontWeight: 500 }}>{currency ? formatCurrency(totals.subtotal, locale, currency) : '—'}</span>
@@ -1603,6 +1605,47 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             </div>
           </div>
         </Card>
+        {!isReadOnly ? (
+          <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <DocChecklist
+              items={[
+                { label: tf('ckSupplier'), done: Boolean(counterpartyId) },
+                { label: tf('ckWarehouse'), done: Boolean(warehouseId) },
+                { label: currency && currency !== 'UZS' ? tf('ckCurrencyRate') : tf('ckCurrency'), done: Boolean(currency) && (currency === 'UZS' || Number(exchangeRate) > 0) },
+                { label: tf('ckLines'), done: items.some((i) => i.productId) },
+                { label: tf('ckQty'), done: items.some((i) => i.productId) && items.filter((i) => i.productId).every((i) => Number(i.quantity) > 0) },
+                { label: tf('ckPrice'), done: items.some((i) => i.productId) && items.filter((i) => i.productId).every((i) => Number(i.unitPrice) > 0) },
+              ]}
+            />
+            <Button onClick={() => handlePost(true)} loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} style={{ width: '100%', backgroundColor: 'var(--color-success-600)' }}>
+              {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
+            </Button>
+            <Button variant="secondary" onClick={handleSaveDraft} loading={loading} style={{ width: '100%' }}>
+              {!loading && <Save size={16} aria-hidden />} {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+            </Button>
+            <p className="doc-aside-hint">{tf('shortcutsHint')}</p>
+          </Card>
+        ) : docStatus === 'POSTED' ? (
+          <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>{tf('paymentTitle')}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+              <span>{isRu ? 'Оплачено' : 'To‘langan'}</span>
+              <span className="tabular-nums">{currency ? formatCurrency(Number(currentReceiptData?.paidAmount || 0), locale, currency) : '—'}</span>
+            </div>
+            {currency && Number(currentReceiptData?.totalAmount || totals.grandTotal) - Number(currentReceiptData?.paidAmount || 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-700)' }}>
+                <span>{tf('debtLeft')}</span>
+                <span className="tabular-nums">{formatCurrency(Number(currentReceiptData?.totalAmount || totals.grandTotal) - Number(currentReceiptData?.paidAmount || 0), locale, currency)}</span>
+              </div>
+            )}
+            {paymentStatus !== 'PAID' && (
+              <Button onClick={() => setIsPayOpen(true)} style={{ width: '100%' }}>
+                <CreditCard size={16} aria-hidden /> {isRu ? 'Оплатить поставщику' : 'Yetkazib beruvchiga to‘lash'}
+              </Button>
+            )}
+          </Card>
+        ) : null}
+      </aside>
       </div>
 
       {/* Modals for Quick Actions on POSTED receipt */}
