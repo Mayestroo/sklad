@@ -82,3 +82,100 @@ node e2e/ux/flows.mjs sale ru 1280         # login|sale|receipt|expense|order|pr
 ```
 The harness caches the sign-in token (`%TEMP%/sklad-ux-auth.json`) because the API
 allows 5 logins per minute.
+
+## Page patterns (2026-11 redesign, branch ux/redesign)
+
+Every page answers "what does the person come here to do?" first. The shared kit
+lives in `src/components/ui/list/`, `src/components/ui/DocChecklist.tsx` and the
+`rd-*` / `doc-*` classes at the end of `globals.css`. New strings: `rd.*` messages.
+
+### Lists (sales, purchases, orders, returns, expenses, stock, products, counterparties…)
+
+| Piece | Rule |
+|---|---|
+| `SignalStrip` + `Signal` | 2–4 tiles that each **filter the list** ("Overdue 3", "Draft 2"). A tile that cannot be clicked into a list does not belong here. Tone only when there is something to do |
+| `ChipGroup` | Status / type filters with counts, instead of a select. "All" first |
+| `PeriodFilter` + `resolvePeriod` | Today / week / month / custom; `ALL_TIME` for history |
+| `MoreFiltersButton` + `ActiveFilters` | Rare filters fold away; what is active is always visible as removable chips |
+| `useListFilters(key, defaults, urlKeys)` | Filters remembered per browser; URL params (`?status=`, `?q=`) override, so dashboards and other pages can link into a filtered list |
+| `DataTable` | Sticky sortable header, `onRowClick` + Enter, `footer` totals row, phone card rows. Columns: `primary` (first, bold), `numeric`, `locked` (cannot be hidden via `ColumnChooser`) |
+| `CurrencyTotals` / `totalsByCurrency` | Footer and tile sums per currency (ADR 0023) |
+| Row actions | One `ActionsMenu` (⋯) per row; destructive items `danger: true`, hidden (not disabled) without permission |
+
+### Documents (sale, receipt, order, returns, expenses)
+
+- `doc-layout` = `doc-main` (header fields, lines) + sticky `doc-aside` (300 px): totals,
+  `DocChecklist` ("ready to post": what is still missing, each item jumps to the field),
+  primary actions. Below 1024 px the aside follows the main column.
+- Rarely used fields (contract, comment, delivery address, discount/VAT) sit in a
+  `details.doc-more` fold whose summary says what is inside.
+- Lines table `doc-lines`: Enter in a cell moves to the same cell in the next row, or adds a
+  row from the last one (`linesKeyDown`). Quantity cells keep ≥ 124 px.
+- Posted documents: actions move into ⋯ (`ActionsMenu`), the page reads as a result.
+  If a banner asks the person to press something, that button is **in the banner**.
+
+### Detail and settings
+
+- Detail pages: `PreviewHead` (number, status, counterparty) → `Facts` → `PaidProgress`
+  → sections titled with `SectionTitle`.
+- Settings: `SettingsShell` (route layout) gives every section a searchable list with a
+  one-line description; keywords in both languages. Forms that save settings use
+  `.set-savebar`: it appears only when something changed, says **what** will change in
+  words, and offers Discard / Save. It compares with what was last saved, not with the
+  first loaded value.
+
+### Reports and dashboards
+
+- An answer first (`an-answer`, dashboard attention row): a written sentence with the
+  number and a link to act ("Customers owe 12 000 000 UZS — Collect").
+- Section titles are questions ("What sells best?"), each with a link to the page where
+  you act.
+- Logs (audit, journal): grouped by **local** day with a one-line summary; noisy rows
+  (sign-ins) hidden by default behind a remembered toggle.
+
+### Inboxes and composers (platform admin)
+
+- Tickets: list + conversation side by side; "waiting for our answer" first; inline reply
+  with Ctrl+Enter; say what the action does ("the ticket becomes Resolved").
+- Announcements and other publish-to-everyone actions: a live preview per interface
+  language, and an explicit warning when one language is missing.
+
+### Number input
+
+- `CurrencyInput` / `MoneyInput` / `QuantityInput` show the same text as the rest of the
+  app: `15 000,5` (NBSP groups, comma decimal, no trailing zeros).
+- Typing accepts `15,000.5` and `15.000,5` (the last separator is the decimal). A single
+  separator followed by exactly three digits is ambiguous: in fields with < 3 decimals it
+  is a group; typed key by key it is a decimal; pasted it is read as thousands **and** a
+  note under the field says so with a one-click "It was a decimal". Rules and tests:
+  `src/lib/money-input.ts`, `money-input.spec.ts`.
+- `onChange` always reports a plain number — inputs never change what is sent to the API.
+
+### Words (glossary for the redesigned pages)
+
+Domain terms and their English names come from `CONTEXT.md` (use its terms, not its _Avoid_ list, in code and issues). This table only fixes the **interface** words in uz/ru.
+
+| Use | Not | Meaning |
+|---|---|---|
+| Tasdiqlash / Проведение (post) | "Provodka qilish" in UI text | Make a document affect stock, money and the journal |
+| Qoralama / Черновик | Draft (English) | Saved, not posted |
+| Kirim hujjati / Приходный документ | Nakladnoy | Goods receipt from a supplier |
+| Qo‘shimcha xarajat / Доп. расход | Landed cost (English) | Transport, customs… spread over a receipt's cost |
+| Qarz / Долг (customer owes / we owe) | Debitorka, kreditorka in headings | Settlement balance per currency |
+| Ombor / Склад | Sklad in Uzbek text | Warehouse |
+| Kassa / Касса, Hisob / Счёт | Cash account (English) | Where money is kept, one currency each |
+
+### Checks before a page commit
+
+```bash
+cd frontend
+npx tsc --noEmit -p .                 # after adding a route: npx next typegen first
+npx vitest run <page folder>          # DOM tests
+npm test                              # node runner: source scans (money, i18n, wiring) — run it too
+bash ../.local/uxrun/lintbase.sh <file>   # no new ESLint errors vs HEAD
+MSYS_NO_PATHCONV=1 node e2e/ux/shot-one.mjs <outDir> <name> <route> 1 1440,390 uz,ru   # overflow 0
+node e2e/ux/axe-sweep.mjs out.json both    # WCAG 2.1 A/AA, light + dark
+```
+Task flows used for verification: `e2e/ux/rd-*.mjs` (sale form, transfer, prices,
+inventory document, product, returns, ticket reply, announcement, branch attach,
+finance operations, money input). They write only to the local database.
