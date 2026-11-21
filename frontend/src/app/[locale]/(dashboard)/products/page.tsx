@@ -44,6 +44,7 @@ function productName(p: Product, locale: 'uz' | 'ru'): string {
 export default function ProductsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company } = useAuth();
 
   const productsQuery = useApiQuery<Product[]>('/inventory/products');
@@ -275,7 +276,7 @@ export default function ProductsPage() {
               {productTypeLabel(p.type, locale)}
               {p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}
               {p.sku ? ` · ${p.sku}` : ''}
-              {!p.isActive ? ` · ${isRu ? 'неактивный' : 'nofaol'}` : ''}
+              {!p.isActive ? ` · ${tIn('nofaol')}` : ''}
             </div>
           </div>
         </div>
@@ -382,7 +383,7 @@ export default function ProductsPage() {
       <SignalStrip label={tl('summary')}>
         <Signal tone="error" label={tp('sigLow')} value={lowCount} hint={tp('sigLowHint')} active={focus === 'low'} onClick={() => setFocus(focus === 'low' ? '' : 'low')} />
         <Signal tone="warning" label={tp('sigNoPrice')} value={noPriceCount} hint={tp('sigNoPriceHint')} active={focus === 'noprice'} onClick={() => setFocus(focus === 'noprice' ? '' : 'noprice')} />
-        <Signal tone="info" label={isRu ? 'Активные позиции' : 'Faol pozitsiyalar'} value={`${activeProducts} / ${totalProducts}`} hint={isRu ? `Услуг: ${servicesCount}` : `Xizmatlar: ${servicesCount}`} />
+        <Signal tone="info" label={tIn('faol_pozitsiyalar')} value={`${activeProducts} / ${totalProducts}`} hint={tIn('xizmatlar_p0', { p0: servicesCount })} />
         <Signal tone="neutral" label={isRu ? 'Категории' : 'Kategoriyalar'} value={totalCategories} />
       </SignalStrip>
 
@@ -395,7 +396,7 @@ export default function ProductsPage() {
           <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
         </div>
         <div className="rd-toolbar-row">
-          <ChipGroup label={isRu ? 'Тип' : 'Turi'} showLabel options={typeOptions} value={selectedType} onChange={setSelectedType} />
+          <ChipGroup label={tIn('turi')} showLabel options={typeOptions} value={selectedType} onChange={setSelectedType} />
           <ChipGroup label={isRu ? 'Статус' : 'Holat'} showLabel options={statusOptions} value={selectedStatus} onChange={setSelectedStatus} />
         </div>
       </div>

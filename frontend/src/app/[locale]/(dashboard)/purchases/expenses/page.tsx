@@ -50,6 +50,7 @@ interface ExpensesResponse {
 export default function ExpensesPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const router = useRouter();
   const { token, company } = useAuth();
   const confirm = useConfirm();
@@ -185,7 +186,7 @@ export default function ExpensesPage() {
   const columns: Column<AdditionalExpense>[] = [
     {
       key: 'number',
-      label: isRu ? '№ / Дата' : '№ / Sana',
+      label: tIn('sana'),
       primary: true,
       locked: true,
       sortValue: (r) => r.docDate,
@@ -230,7 +231,7 @@ export default function ExpensesPage() {
     },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (r) => (
         <div className="rd-row-actions">
@@ -273,10 +274,10 @@ export default function ExpensesPage() {
 
       {/* Totals by type — each tile filters the list to that type */}
       <SignalStrip label={tl('summary')}>
-        <Signal tone="warning" label={isRu ? 'Транспортные расходы' : 'Transport xarajatlari'} value={kpi(data?.stats.transport)} hint={te('clickToFilter')} active={typeFilter === 'TRANSPORT'} onClick={() => toggleType('TRANSPORT')} />
-        <Signal tone="info" label={isRu ? 'Таможенные пошлины' : 'Bojxona to‘lovlari'} value={kpi(data?.stats.customs)} hint={te('clickToFilter')} active={typeFilter === 'CUSTOMS'} onClick={() => toggleType('CUSTOMS')} />
-        <Signal tone="neutral" label={isRu ? 'Брокерские услуги' : 'Brokerlik xizmatlari'} value={kpi(data?.stats.broker)} hint={te('clickToFilter')} active={typeFilter === 'BROKER'} onClick={() => toggleType('BROKER')} />
-        <Signal tone="success" label={isRu ? 'Всего распределено' : 'Jami taqsimlangan'} value={kpi(data?.stats.all)} hint={te('allHint')} />
+        <Signal tone="warning" label={tIn('transport_xarajatlari')} value={kpi(data?.stats.transport)} hint={te('clickToFilter')} active={typeFilter === 'TRANSPORT'} onClick={() => toggleType('TRANSPORT')} />
+        <Signal tone="info" label={tIn('bojxona_tolovlari')} value={kpi(data?.stats.customs)} hint={te('clickToFilter')} active={typeFilter === 'CUSTOMS'} onClick={() => toggleType('CUSTOMS')} />
+        <Signal tone="neutral" label={tIn('brokerlik_xizmatlari')} value={kpi(data?.stats.broker)} hint={te('clickToFilter')} active={typeFilter === 'BROKER'} onClick={() => toggleType('BROKER')} />
+        <Signal tone="success" label={tIn('jami_taqsimlangan')} value={kpi(data?.stats.all)} hint={te('allHint')} />
       </SignalStrip>
 
       <div className="rd-toolbar">
@@ -293,8 +294,8 @@ export default function ExpensesPage() {
           <ChipGroup
             label={te('view')}
             options={[
-              { value: 'list', label: isRu ? 'Все расходы' : 'Barcha xarajatlar' },
-              { value: 'analytics', label: isRu ? 'Влияние на себестоимость' : 'Tannarxga ta’siri' },
+              { value: 'list', label: tIn('barcha_xarajatlar') },
+              { value: 'analytics', label: tIn('tannarxga_tasiri') },
             ]}
             value={activeTab}
             onChange={(v) => setActiveTab((v || 'list') as 'list' | 'analytics')}

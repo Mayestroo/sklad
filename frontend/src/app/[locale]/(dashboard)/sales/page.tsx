@@ -85,6 +85,7 @@ export default function SalesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const router = useRouter();
   const tl = useTranslations('rd.list');
   const td = useTranslations('rd.doc');
@@ -204,7 +205,7 @@ export default function SalesPage() {
   const columns: Column<InvoiceRow>[] = [
     {
       key: 'number',
-      label: isRu ? '№ / Дата' : '№ / Sana',
+      label: tIn('sana'),
       primary: true,
       locked: true,
       sortValue: (r) => r.invoiceDate || r.createdAt || '',
@@ -239,7 +240,7 @@ export default function SalesPage() {
     },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (r) => (
         <div className="rd-row-actions">
@@ -519,12 +520,8 @@ export default function SalesPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {deletingInvoice.status === 'POSTED'
-                ? isRu
-                  ? `Накладная продажи ${numberOf(deletingInvoice)} уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?`
-                  : `${numberOf(deletingInvoice)} raqamli sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?`
-                : isRu
-                  ? `Вы действительно хотите удалить накладную ${numberOf(deletingInvoice)}? Это действие необратимо.`
-                  : `Haqiqatan ham ${numberOf(deletingInvoice)} raqamli sotuv hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+                ? tIn('p0_raqamli_sotuv_hujjati_tasdiql', { p0: numberOf(deletingInvoice) })
+                : tIn('haqiqatan_ham_p0_raqamli_sotuv_h', { p0: numberOf(deletingInvoice) })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
               <Button variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>

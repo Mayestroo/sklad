@@ -48,6 +48,7 @@ function Row({ label, value, strong, tone }: { label: ReactNode; value: ReactNod
 export default function FinancialReportsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const tUx = useTranslations('ux');
   const trp = useTranslations('rd.reports');
   const statementsQuery = useApiQuery<FinancialStatements>('/accounting/reports/statements');
@@ -139,7 +140,7 @@ export default function FinancialReportsPage() {
               <span className="rp-bar-profit" />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginTop: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
-              <span><span className="rp-dot rp-dot-costs" aria-hidden /> {isRu ? 'Себестоимость и расходы' : 'Tannarx va xarajatlar'}: <strong className="tabular-nums">{money(statements.profitLoss.totalCogs)}</strong></span>
+              <span><span className="rp-dot rp-dot-costs" aria-hidden /> {tIn('tannarx_va_xarajatlar')}: <strong className="tabular-nums">{money(statements.profitLoss.totalCogs)}</strong></span>
               <span><span className="rp-dot rp-dot-profit" aria-hidden /> {isRu ? 'Валовая прибыль' : 'Yalpi foyda'}: <strong className="tabular-nums">{money(statements.profitLoss.grossProfit)}</strong></span>
             </div>
           </Card>

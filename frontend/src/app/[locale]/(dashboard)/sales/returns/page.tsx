@@ -111,6 +111,7 @@ export default function SalesReturnsPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const confirm = useConfirm();
 
   const invalidateApi = useInvalidateApi();
@@ -497,7 +498,7 @@ export default function SalesReturnsPage() {
   const columns: Column<SalesReturnRow>[] = [
     {
       key: 'number',
-      label: isRu ? '№ / Дата' : '№ / Sana',
+      label: tIn('sana'),
       primary: true,
       locked: true,
       sortValue: (r) => r.returnDate,
@@ -557,8 +558,8 @@ export default function SalesReturnsPage() {
 
   const statusChips = [
     { value: 'DRAFT', label: isRu ? 'Черновики' : 'Qoralamalar' },
-    { value: 'POSTED', label: isRu ? 'Проведённые' : 'Tasdiqlangan' },
-    { value: 'CANCELLED', label: isRu ? 'Отменённые' : 'Bekor qilingan' },
+    { value: 'POSTED', label: tIn('tasdiqlangan') },
+    { value: 'CANCELLED', label: tIn('bekor_qilingan') },
   ];
   const anyFilter = Boolean(searchQuery || statusFilter !== 'ALL' || period.key !== 'all');
   const clearAll = () => {

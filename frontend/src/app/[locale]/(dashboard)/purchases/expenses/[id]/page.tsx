@@ -2,7 +2,7 @@
 
 import { quantityWithUnit, unitLabel } from '@/lib/units';
 import { useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -36,6 +36,7 @@ type ExpenseDetail = AdditionalExpense & {
 export default function ExpenseDetailPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
@@ -265,7 +266,7 @@ export default function ExpenseDetailPage() {
           actions={
             <>
               <ActionsMenu
-                label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                label={tIn('boshqa_amallar')}
                 actions={[
                   { label: isRu ? 'Пересчитать и сохранить' : 'Qayta hisoblash va saqlash', onSelect: () => void handleResave(), hidden: expense.status !== 'DRAFT' },
                   { label: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish', onSelect: () => void handleCancel(), hidden: expense.status !== 'POSTED', danger: true },
@@ -307,6 +308,12 @@ export default function ExpenseDetailPage() {
             {isRu
               ? 'Этот черновик сохранён до хранения курсов: суммы ниже не пересчитаны в валюту закупки. Нажмите «Пересчитать и сохранить» и проверьте распределение перед проведением.'
               : 'Bu qoralama kurslar saqlanishidan oldin yozilgan: quyidagi summalar xarid valyutasiga o‘tkazilmagan. «Qayta hisoblash va saqlash» tugmasini bosing va tasdiqlashdan oldin taqsimotni tekshiring.'}
+            {/* The action the message asks for, right here (it is also in the ⋯ menu). */}
+            <span style={{ display: 'block', marginTop: 'var(--space-2)' }}>
+              <Button size="sm" onClick={() => void handleResave()}>
+                {isRu ? 'Пересчитать и сохранить' : 'Qayta hisoblash va saqlash'}
+              </Button>
+            </span>
           </span>
         </div>
       )}
@@ -439,7 +446,7 @@ export default function ExpenseDetailPage() {
       </div>
 
       {/* Side panel: the amount and status first, then facts, related documents and history */}
-      <aside className="doc-aside" aria-label={isRu ? 'Сводка документа' : 'Hujjat xulosasi'}>
+      <aside className="doc-aside" aria-label={tIn('hujjat_xulosasi')}>
         <Card style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {getStatusBadge(expense.status)}
@@ -517,19 +524,19 @@ export default function ExpenseDetailPage() {
       </div>
 
         <Card style={{ padding: 'var(--space-4)' }}>
-          <h2 style={cardTitle}>{isRu ? 'История' : 'Tarix'}</h2>
+          <h2 style={cardTitle}>{tIn('tarix')}</h2>
           <ol className="rd-timeline" style={{ marginTop: 'var(--space-2)' }}>
             <li>
-              <span>{isRu ? 'Создан' : 'Yaratildi'} · {formatDate(expense.createdAt, locale)}</span>
+              <span>{tIn('yaratildi')} · {formatDate(expense.createdAt, locale)}</span>
             </li>
             {expense.postedAt && (
               <li style={{ ['--rd-dot' as string]: 'var(--color-success-600)' }}>
-                <span>{isRu ? 'Проведён и распределён' : 'Tasdiqlandi va taqsimlandi'} · {formatDate(expense.postedAt, locale)}</span>
+                <span>{tIn('tasdiqlandi_va_taqsimlandi')} · {formatDate(expense.postedAt, locale)}</span>
               </li>
             )}
             {expense.status === 'CANCELLED' && (
               <li style={{ ['--rd-dot' as string]: 'var(--color-error-600)' }}>
-                <span>{isRu ? 'Проведение отменено' : 'Tasdiq bekor qilingan'}</span>
+                <span>{tIn('tasdiq_bekor_qilingan')}</span>
               </li>
             )}
           </ol>

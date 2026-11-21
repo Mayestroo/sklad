@@ -100,6 +100,8 @@ export default function InventoryPage() {
 
   const isRu = locale === 'ru';
 
+  const tIn = useTranslations('rd.inline');
+
   const getLocalizedName = (name: LocalizedName | null | undefined) => {
     if (!name) return '';
     if (typeof name === 'string') return name;
@@ -136,7 +138,7 @@ export default function InventoryPage() {
   const columns: Column<Product>[] = [
     {
       key: 'name',
-      label: isRu ? 'Товар' : 'Tovar',
+      label: tIn('tovar'),
       primary: true,
       locked: true,
       sortValue: (p) => getLocalizedName(p.name),
@@ -188,7 +190,7 @@ export default function InventoryPage() {
     },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (p) =>
         canEditProducts ? (
@@ -210,7 +212,7 @@ export default function InventoryPage() {
               <QrCode size={16} aria-hidden /> {isRu ? 'Сканер штрихкода' : 'Shtrix-kod skaner'}
             </Button>
             <Link href="/inventory/transfers" style={buttonStyle('outline')}>
-              <ArrowRightLeft size={16} aria-hidden /> {isRu ? 'Перемещение' : 'Omborlararo transfer'}
+              <ArrowRightLeft size={16} aria-hidden /> {tIn('omborlararo_transfer')}
             </Link>
             <Link href="/inventory/documents" style={buttonStyle('primary')}>
               <FileText size={16} aria-hidden /> {ti('documents')}
@@ -223,7 +225,7 @@ export default function InventoryPage() {
         <Signal tone="error" label={ti('sigLow')} value={lowStockAlerts.length} hint={ti('sigLowHint')} active={stockFocus === 'low'} onClick={() => setStockFocus(stockFocus === 'low' ? '' : 'low')} />
         <Signal tone="warning" label={ti('sigZero')} value={zeroCount} hint={ti('sigZeroHint')} active={stockFocus === 'zero'} onClick={() => setStockFocus(stockFocus === 'zero' ? '' : 'zero')} />
         <Signal tone="info" label={ti('sigItems')} value={goods.length} hint={ti('sigItemsHint')} />
-        <Signal tone="neutral" label={ti('sigWarehouses')} value={safeWarehouses.length} hint={<Link href="/settings/branches">{isRu ? 'Филиалы и склады' : 'Filial va omborlar'}</Link>} />
+        <Signal tone="neutral" label={ti('sigWarehouses')} value={safeWarehouses.length} hint={<Link href="/settings/branches">{tIn('filial_va_omborlar')}</Link>} />
       </SignalStrip>
 
       <div className="rd-toolbar">
@@ -249,7 +251,7 @@ export default function InventoryPage() {
             value={stockFocus}
             onChange={(v) => setStockFocus(v as typeof stockFocus)}
           />
-          <ChipGroup label={isRu ? 'Тип' : 'Turi'} showLabel options={productTypeOptions(locale, tl('all')).filter((o) => o.value !== 'SERVICE')} value={selectedType} onChange={setSelectedType} />
+          <ChipGroup label={tIn('turi')} showLabel options={productTypeOptions(locale, tl('all')).filter((o) => o.value !== 'SERVICE')} value={selectedType} onChange={setSelectedType} />
         </div>
       </div>
 

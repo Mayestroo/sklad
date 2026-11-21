@@ -132,6 +132,7 @@ export default function CounterpartiesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
 
   const invalidateApi = useInvalidateApi();
   // List, summary and folders all live under /sales/counterparties.
@@ -430,7 +431,7 @@ export default function CounterpartiesPage() {
     },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (c) => {
         const owesUs = (c.balancesByCurrency || []).find((b) => b.customerDebt > 0);
@@ -451,9 +452,9 @@ export default function CounterpartiesPage() {
               label={tl('rowActions')}
               actions={[
                 { label: isRu ? 'Акт сверки' : 'Akt sverka', onSelect: () => setStatementCounterpartyId(c.id) },
-                { label: isRu ? 'Карточка' : 'Kartochka', onSelect: () => setDetailItem(c) },
+                { label: tIn('kartochka'), onSelect: () => setDetailItem(c) },
                 { label: tc('anyPayment'), onSelect: () => openQuickPayment(c) },
-                { label: isRu ? 'В папку' : 'Papkaga ko‘chirish', onSelect: () => { setMoveItem(c); setTargetFolderId(c.folderId || ''); } },
+                { label: tIn('papkaga_kochirish'), onSelect: () => { setMoveItem(c); setTargetFolderId(c.folderId || ''); } },
                 { label: tl('edit'), onSelect: () => setEditingCounterparty(c) },
                 { label: tl('delete'), onSelect: () => setDeletingCounterparty(c), danger: true },
               ]}

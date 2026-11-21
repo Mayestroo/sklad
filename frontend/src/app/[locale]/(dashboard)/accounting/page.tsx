@@ -29,6 +29,7 @@ function isBalanced(debit: number, credit: number): boolean {
 export default function AccountingPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
 
   const osvQuery = useApiQuery<TrialBalanceReport>('/accounting/reports/osv');
   const osv = osvQuery.data ?? null;
@@ -77,7 +78,7 @@ export default function AccountingPage() {
 
       {osv && osv.items.length > 0 && (
         <SignalStrip label={tl('summary')}>
-          <Signal tone={balanced ? 'success' : 'error'} label={ta('check')} value={balanced ? (isRu ? 'Дебет = Кредит' : 'Debet = Kredit') : isRu ? 'Не сходится' : 'Teng emas'} hint={balanced ? ta('checkOk') : ta('checkBad')} />
+          <Signal tone={balanced ? 'success' : 'error'} label={ta('check')} value={balanced ? (isRu ? 'Дебет = Кредит' : 'Debet = Kredit') : tIn('teng_emas')} hint={balanced ? ta('checkOk') : ta('checkBad')} />
           {(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] as AccountType[]).map((type) => (
             <Signal
               key={type}

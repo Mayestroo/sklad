@@ -88,6 +88,7 @@ export default function PurchasesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const router = useRouter();
   const tl = useTranslations('rd.list');
   const td = useTranslations('rd.doc');
@@ -208,7 +209,7 @@ export default function PurchasesPage() {
   const columns: Column<InvoiceRow>[] = [
     {
       key: 'number',
-      label: isRu ? '№ / Дата' : '№ / Sana',
+      label: tIn('sana'),
       primary: true,
       locked: true,
       sortValue: (r) => r.docDate || r.createdAt || '',
@@ -243,7 +244,7 @@ export default function PurchasesPage() {
     },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (r) => (
         <div className="rd-row-actions">
@@ -286,7 +287,7 @@ export default function PurchasesPage() {
   return (
     <div className="rd-page">
       <PageHeader
-        title={isRu ? 'Приход товаров' : 'Tovar kirimi'}
+        title={tIn('tovar_kirimi')}
         subtitle={ts('subtitle')}
         actions={
           <Link href="/purchases/new" style={buttonStyle('primary')}>
@@ -528,12 +529,8 @@ export default function PurchasesPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {deletingInvoice.status === 'POSTED'
-                ? isRu
-                  ? `Накладная ${numberOf(deletingInvoice)} уже проведена. Удаление автоматически отменит проводку, скорректирует складские остатки, партии и задолженность перед поставщиком, после чего удалит документ. Вы уверены?`
-                  : `${numberOf(deletingInvoice)} raqamli xarid hujjati tasdiqlangan (o‘tkazilgan). O‘chirish ombor qoldiqlari, partiyalar va yetkazib beruvchi qarzini avtomatik bekor qilib, hujjatni butunlay o‘chiradi. Davom etasizmi?`
-                : isRu
-                  ? `Вы действительно хотите удалить накладную ${numberOf(deletingInvoice)}? Это действие необратимо.`
-                  : `Haqiqatan ham ${numberOf(deletingInvoice)} raqamli xarid hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+                ? tIn('p0_raqamli_xarid_hujjati_tasdiql', { p0: numberOf(deletingInvoice) })
+                : tIn('haqiqatan_ham_p0_raqamli_xarid_h', { p0: numberOf(deletingInvoice) })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
               <Button variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>

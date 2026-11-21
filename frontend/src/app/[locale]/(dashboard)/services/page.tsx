@@ -37,6 +37,7 @@ import type { ServiceActDetail } from '@/lib/service-act';
 export default function ServicesPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const confirm = useConfirm();
   const { token, company } = useAuth();
 
@@ -256,7 +257,7 @@ export default function ServicesPage() {
   const columns: Column<ServiceActDetail>[] = [
     {
       key: 'number',
-      label: isRu ? '№ / Дата' : '№ / Sana',
+      label: tIn('sana'),
       primary: true,
       locked: true,
       sortValue: (a) => a.actDate,
@@ -265,7 +266,7 @@ export default function ServicesPage() {
           <div className="rd-doc-no">{a.actNumber}</div>
           <div className="rd-sub">
             {formatDate(a.actDate, locale)}
-            {a.externalNumber ? ` · ${isRu ? 'внешний №' : 'tashqi №'} ${a.externalNumber}` : ''}
+            {a.externalNumber ? ` · ${tIn('tashqi')} ${a.externalNumber}` : ''}
           </div>
         </div>
       ),
@@ -301,7 +302,7 @@ export default function ServicesPage() {
         <div className="rd-row-actions">
           {a.status === 'DRAFT' ? (
             <button type="button" className="rd-next-btn" onClick={(e) => void handleEditAct(a, e)}>
-              {isRu ? 'Продолжить' : 'Davom ettirish'}
+              {tIn('davom_ettirish')}
             </button>
           ) : (
             <button type="button" className="rd-next-btn" onClick={() => setPrintAct(a)}>

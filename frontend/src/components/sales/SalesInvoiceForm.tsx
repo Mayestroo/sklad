@@ -131,6 +131,7 @@ interface SalesInvoiceFormProps {
 export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company, hasPermission } = useAuth();
   // New documents start in the tenant sales default, or blank (never a guessed USD).
   const salesDefault = useSalesDefaultCurrency();
@@ -1064,7 +1065,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             <>
               {/* Rare and risky actions behind one menu; the everyday ones stay visible. */}
               <ActionsMenu
-                label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                label={tIn('boshqa_amallar')}
                 actions={[
                   { label: isRu ? 'Редактировать' : 'Tahrirlash', onSelect: handleUnpostToEdit },
                   { label: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish', onSelect: handleUnpost },
@@ -1651,7 +1652,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>{tf('paymentTitle')}</h3>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
-              <span>{isRu ? 'Оплачено' : 'To‘langan'}</span>
+              <span>{tIn('tolangan')}</span>
               <span className="tabular-nums">{currency ? formatCurrency(Number(currentInvoiceData?.paidAmount || 0), locale, currency) : '—'}</span>
             </div>
             {currency && calculations.grandTotal - Number(currentInvoiceData?.paidAmount || 0) > 0 && (

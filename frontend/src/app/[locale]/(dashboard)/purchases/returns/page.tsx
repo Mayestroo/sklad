@@ -37,6 +37,7 @@ import { localIsoDate } from '@/lib/date-range';
 export default function ReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company } = useAuth();
   const confirm = useConfirm();
 
@@ -328,7 +329,7 @@ export default function ReturnsPage() {
 
       <SignalStrip label={tl('summary')}>
         <Signal tone="warning" label={tp('sigDrafts')} value={draftCount} hint={tp('sigDraftsHint')} active={statusFilter === 'DRAFT'} onClick={() => setStatusFilter(statusFilter === 'DRAFT' ? 'ALL' : 'DRAFT')} />
-        <Signal tone="info" label={isRu ? 'Всего возвращено (проведено)' : 'Jami qaytarilgan (tasdiqlangan)'} value={<MultiCurrencyValue items={totalReturnedByCurrency} locale={locale} />} hint={tp('postedCount', { count: postedCount })} />
+        <Signal tone="info" label={tIn('jami_qaytarilgan_tasdiqlangan')} value={<MultiCurrencyValue items={totalReturnedByCurrency} locale={locale} />} hint={tp('postedCount', { count: postedCount })} />
         <Signal tone="neutral" label={tp('sigAll')} value={returns.length} />
       </SignalStrip>
 

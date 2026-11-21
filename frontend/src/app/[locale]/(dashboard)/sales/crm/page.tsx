@@ -60,6 +60,7 @@ const EMPTY_FORM: DealForm = { title: '', counterpartyId: '', amount: 0, currenc
 export default function CrmKanbanPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const tcrm = useTranslations('rd.crm');
   const { token, company } = useAuth();
   const confirm = useConfirm();
@@ -262,7 +263,7 @@ export default function CrmKanbanPage() {
                         )}
                         <span style={{ marginLeft: 'auto' }}>
                           <ActionsMenu
-                            label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                            label={tIn('boshqa_amallar')}
                             actions={[
                               ...STAGES.filter((x) => x.slug !== deal.stage).map((x) => ({ label: `→ ${isRu ? x.nameRu : x.nameUz}`, onSelect: () => void handleMoveStage(deal, x.slug) })),
                               { label: isRu ? 'Изменить' : 'Tahrirlash', onSelect: () => openEdit(deal) },

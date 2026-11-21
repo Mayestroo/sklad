@@ -47,6 +47,7 @@ export default function PricesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
 
   const invalidateApi = useInvalidateApi();
   const priceListsQuery = useApiQuery<PriceList[]>('/sales/price-lists');
@@ -404,7 +405,7 @@ export default function PricesPage() {
                   <ChipGroup
                     label={tpr('show')}
                     options={[
-                      { value: 'all', label: isRu ? 'Все' : 'Hammasi', count: products.length },
+                      { value: 'all', label: tIn('hammasi'), count: products.length },
                       { value: 'priced', label: tpr('priced'), count: selectedPL.prices?.length ?? 0 },
                       { value: 'unpriced', label: tpr('unpriced'), count: Math.max(0, products.length - (selectedPL.prices?.length ?? 0)) },
                     ]}

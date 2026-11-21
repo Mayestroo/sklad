@@ -106,6 +106,7 @@ export default function SalesOrdersPage() {
   const { token, company, hasRole, hasPermission } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const confirm = useConfirm();
   const router = useRouter();
   const tl = useTranslations('rd.list');
@@ -321,7 +322,7 @@ export default function SalesOrdersPage() {
   const columns: Column<OrderItemSummary>[] = [
     {
       key: 'number',
-      label: isRu ? '№ / Дата' : '№ / Sana',
+      label: tIn('sana'),
       primary: true,
       locked: true,
       sortValue: (r) => r.createdAt,
@@ -386,7 +387,7 @@ export default function SalesOrdersPage() {
     },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (r) => {
         const step = nextStep(r);

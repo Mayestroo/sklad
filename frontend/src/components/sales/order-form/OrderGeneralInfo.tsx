@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { Card } from '@/components/ui/Card';
@@ -70,6 +71,7 @@ export function OrderGeneralInfo({
   onCommentChange,
 }: OrderGeneralInfoProps) {
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
 
   return (
     <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -188,7 +190,7 @@ export function OrderGeneralInfo({
 
         {/* Rare fields: folded unless one is filled */}
         <details className="doc-more" open={Boolean(deliveryAddress || comment) || undefined}>
-          <summary>{isRu ? 'Дополнительно: адрес доставки, комментарий' : 'Qo‘shimcha: yetkazish manzili, izoh'}</summary>
+          <summary>{tIn('qoshimcha_yetkazish_manzili_izoh')}</summary>
           <div className="doc-more-body">
         {/* Delivery Address */}
         <div style={{ minWidth: '220px', flex: '2 1 250px' }}>

@@ -92,6 +92,7 @@ interface PurchaseDocumentFormProps {
 export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const tf = useTranslations('rd.docForm');
   const [showDiscVatPref, setShowDiscVatPref] = usePersistentState<boolean>('docForm.showDiscVat', false);
   const { token, company } = useAuth();
@@ -920,7 +921,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             <>
               {/* Rare and risky actions behind one menu; the everyday ones stay visible. */}
               <ActionsMenu
-                label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                label={tIn('boshqa_amallar')}
                 actions={[
                   { label: isRu ? 'Редактировать' : 'Tahrirlash', onSelect: handleUnpostToEdit },
                   { label: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish', onSelect: handleUnpost },
@@ -1102,7 +1103,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
 
           {/* Rare fields: folded unless one is filled */}
           <details className="doc-more" open={Boolean(contractNumber || contractDate || comment) || undefined}>
-            <summary>{isRu ? 'Дополнительно: договор, комментарий' : 'Qo‘shimcha: shartnoma, izoh'}</summary>
+            <summary>{tIn('qoshimcha_shartnoma_izoh')}</summary>
             <div className="doc-more-body">
           {/* Contract Number */}
           <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
@@ -1629,7 +1630,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
           <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>{tf('paymentTitle')}</h3>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
-              <span>{isRu ? 'Оплачено' : 'To‘langan'}</span>
+              <span>{tIn('tolangan')}</span>
               <span className="tabular-nums">{currency ? formatCurrency(Number(currentReceiptData?.paidAmount || 0), locale, currency) : '—'}</span>
             </div>
             {currency && Number(currentReceiptData?.totalAmount || totals.grandTotal) - Number(currentReceiptData?.paidAmount || 0) > 0 && (

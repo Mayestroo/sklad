@@ -75,6 +75,7 @@ export default function CustomersPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const confirm = useConfirm();
 
   const customersQuery = useApiQuery<Customer[]>('/sales/counterparties?type=CUSTOMER');
@@ -154,7 +155,7 @@ export default function CustomersPage() {
     },
     {
       key: 'contact',
-      label: isRu ? 'Телефон и e-mail' : 'Telefon va e-pochta',
+      label: tIn('telefon_va_e_pochta'),
       render: (c) => (
         <div style={{ color: 'var(--color-text-secondary)' }}>
           {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>{c.phone}</a> : '—'}
@@ -162,7 +163,7 @@ export default function CustomersPage() {
         </div>
       ),
     },
-    { key: 'debt', label: isRu ? 'Долг клиента' : 'Mijoz qarzi', numeric: true, sortValue: debtValue, render: (c) => <DebtLines balances={c.balancesByCurrency || []} locale={locale} /> },
+    { key: 'debt', label: tIn('mijoz_qarzi'), numeric: true, sortValue: debtValue, render: (c) => <DebtLines balances={c.balancesByCurrency || []} locale={locale} /> },
     {
       key: 'actions',
       label: isRu ? 'Действия' : 'Amallar',
@@ -191,7 +192,7 @@ export default function CustomersPage() {
     <div className="rd-page">
       <PageHeader
         title={isRu ? 'Клиенты' : 'Mijozlar'}
-        subtitle={isRu ? 'Кому вы продаёте: контакты, долг и история покупок.' : 'Kimga sotasiz: aloqa, qarz va xaridlar tarixi.'}
+        subtitle={tIn('kimga_sotasiz_aloqa_qarz_va_xari')}
         actions={newButton}
       />
 
@@ -209,7 +210,7 @@ export default function CustomersPage() {
 
       <div className="rd-toolbar">
         <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Имя, телефон или e-mail' : 'Ism, telefon yoki e-pochta'} label={tl('search')} />
+          <SearchField value={search} onChange={setSearch} placeholder={tIn('ism_telefon_yoki_e_pochta')} label={tl('search')} />
           <ChipGroup
             label={tc('show')}
             options={[
@@ -240,7 +241,7 @@ export default function CustomersPage() {
             caption={tc('rowHint')}
             empty={
               customers.length === 0 ? (
-                <EmptyState icon={Users} title={isRu ? 'Клиентов пока нет' : 'Hozircha mijozlar yo‘q'} description={isRu ? 'Добавьте клиента — его можно будет выбрать в продаже, а долг будет считаться сам.' : 'Mijoz qo‘shing — uni sotuvda tanlash mumkin, qarzi esa o‘zi hisoblanadi.'} action={newButton} />
+                <EmptyState icon={Users} title={isRu ? 'Клиентов пока нет' : 'Hozircha mijozlar yo‘q'} description={tIn('mijoz_qoshing_uni_sotuvda_tanlas')} action={newButton} />
               ) : (
                 <EmptyState compact title={tl('nothingFound')} description={tl('nothingFoundHint')} />
               )

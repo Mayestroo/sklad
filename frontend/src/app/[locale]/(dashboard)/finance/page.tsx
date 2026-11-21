@@ -148,6 +148,7 @@ const OPS_VIEWS = ['journal', 'income', 'expense', 'transfers', 'deleted'] as co
 export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const tfin = useTranslations('rd.finance');
   const { token, company } = useAuth();
 
@@ -785,7 +786,7 @@ export default function FinancePage() {
                 setPage(1);
               }}
               options={[
-                { value: 'journal', label: isRu ? 'Все' : 'Hammasi' },
+                { value: 'journal', label: tIn('hammasi') },
                 { value: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
                 { value: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
                 { value: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },

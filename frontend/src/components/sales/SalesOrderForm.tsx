@@ -63,6 +63,7 @@ export interface SalesOrderFormProps {
 export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const tf = useTranslations('rd.docForm');
   const { token, company, hasPermission } = useAuth();
   // New documents start in the tenant sales default, or blank (never a guessed USD).
@@ -956,7 +957,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
       <Card style={{ padding: 'var(--space-4) var(--space-5)' }}>
         <details className="doc-more" style={{ borderTop: 'none', paddingTop: 0 }} open={Number(additionalChargeAmount) > 0 || undefined}>
-        <summary>{isRu ? 'Дополнительная сумма покупателю' : 'Mijozga qo‘shimcha summa'}</summary>
+        <summary>{tIn('mijozga_qoshimcha_summa')}</summary>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-4)', alignItems: 'end', paddingTop: 'var(--space-3)' }}>
           <MoneyInput
             label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Qo‘shimcha summa (${currency})`}
@@ -974,7 +975,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         </details>
       </Card>
       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-        * {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}
+        * {tIn('bilan_belgilangan_maydonlar_told')}
       </div>
       </div>
 

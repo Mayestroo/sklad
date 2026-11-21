@@ -38,6 +38,7 @@ export default function UsersPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company, hasPermission } = useAuth();
 
   const usersQuery = useApiQuery<StaffUser[]>('/users/staff');
@@ -232,7 +233,7 @@ export default function UsersPage() {
     },
     {
       key: 'role',
-      label: isRu ? 'Роль' : 'Roli',
+      label: tIn('roli'),
       sortValue: (u) => u.roles.join(','),
       render: (u) => (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -242,11 +243,11 @@ export default function UsersPage() {
         </div>
       ),
     },
-    { key: 'lang', label: isRu ? 'Язык' : 'Til', render: (u) => (u.preferredLanguage === 'ru' ? 'Русский' : 'O‘zbekcha') },
+    { key: 'lang', label: tIn('til'), render: (u) => (u.preferredLanguage === 'ru' ? 'Русский' : 'O‘zbekcha') },
     { key: 'status', label: tl('status'), sortValue: (u) => (u.isActive ? 0 : 1), render: (u) => (u.isActive ? <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge> : <Badge variant="neutral">{isRu ? 'Неактивный' : 'Nofaol'}</Badge>) },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (u) => (
         <div className="rd-row-actions">
@@ -266,7 +267,7 @@ export default function UsersPage() {
   return (
     <div className="rd-page">
       <PageHeader
-        title={isRu ? 'Пользователи и роли' : 'Foydalanuvchilar va rollar'}
+        title={tIn('foydalanuvchilar_va_rollar')}
         subtitle={tu('subtitle')}
         actions={
           hasPermission('users:create') ? (

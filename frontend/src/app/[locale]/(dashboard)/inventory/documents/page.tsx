@@ -37,6 +37,7 @@ export default function InventoryDocumentsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const tdoc = useTranslations('rd.invdocs');
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company } = useAuth();
 
   const documentsQuery = useApiQuery<InventoryDocument[]>('/inventory/documents');
@@ -185,7 +186,7 @@ export default function InventoryDocumentsPage() {
   const columns: Column<InventoryDocument>[] = [
     {
       key: 'number',
-      label: isRu ? '№ / Дата' : '№ / Sana',
+      label: tIn('sana'),
       primary: true,
       locked: true,
       sortValue: (d) => d.docDate,
@@ -201,14 +202,14 @@ export default function InventoryDocumentsPage() {
     { key: 'warehouse', label: tl('warehouse'), render: (d) => getLocalizedName(d.warehouse?.name, locale) || '—' },
     {
       key: 'amount',
-      label: isRu ? 'Сумма по себестоимости' : 'Tannarx bo‘yicha summa',
+      label: tIn('tannarx_boyicha_summa'),
       numeric: true,
       sortValue: (d) => Number(d.totalAmount),
       render: (d) => <strong>{formatCurrency(Number(d.totalAmount), locale, INVENTORY_COST_CURRENCY)}</strong>,
     },
     {
       key: 'actions',
-      label: isRu ? 'Действия' : 'Amallar',
+      label: tIn('amallar'),
       locked: true,
       render: (d) => (
         <div className="rd-row-actions">
@@ -280,7 +281,7 @@ export default function InventoryDocumentsPage() {
               <EmptyState
                 icon={FileText}
                 title={isRu ? 'Складских документов пока нет' : 'Hozircha ombor hujjatlari yo‘q'}
-                description={isRu ? 'Выберите задачу выше: оприходовать излишек, списать испорченное или провести инвентаризацию.' : 'Yuqoridan vazifani tanlang: ortiqchani kirim qilish, buzilganini hisobdan chiqarish yoki inventarizatsiya.'}
+                description={tIn('yuqoridan_vazifani_tanlang_ortiq')}
               />
             }
           />
@@ -289,7 +290,7 @@ export default function InventoryDocumentsPage() {
 
       {/* New Document dialog */}
       {showModal && (
-        <Modal isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (isRu ? 'Новый складской документ' : 'Yangi ombor hujjati')} size="lg">
+        <Modal isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg">
           <div>
             {createError && (
               <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
@@ -300,9 +301,9 @@ export default function InventoryDocumentsPage() {
             <form onSubmit={handleCreateDocument} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-3)' }}>
                 <div>
-                  <span className="rd-field-label">{isRu ? 'Тип документа' : 'Hujjat turi'}</span>
+                  <span className="rd-field-label">{tIn('hujjat_turi')}</span>
                   <ChipGroup
-                    label={isRu ? 'Тип документа' : 'Hujjat turi'}
+                    label={tIn('hujjat_turi')}
                     options={tasks.map((t) => ({ value: t.type, label: t.title }))}
                     value={docType}
                     onChange={(v) => v && setDocType(v as typeof docType)}
@@ -359,7 +360,7 @@ export default function InventoryDocumentsPage() {
                       onValueChange={(value) => setUnitPrice(Number(value) || 0)}
                     />
                   </div>
-                  <Button type="button" variant="primary" size="sm" onClick={handleAddItem} aria-label={isRu ? 'Добавить позицию' : 'Pozitsiya qo‘shish'}>
+                  <Button type="button" variant="primary" size="sm" onClick={handleAddItem} aria-label={tIn('pozitsiya_qoshish')}>
                     <Plus size={14} aria-hidden />
                   </Button>
                 </div>

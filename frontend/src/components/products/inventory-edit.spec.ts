@@ -13,7 +13,9 @@ const page = readFileSync(fileURLToPath(new URL('../../app/[locale]/(dashboard)/
 
 test('each product row can be opened in the product drawer for editing', () => {
   assert.match(page, /hasPermission\('inventory:edit'\)/);
-  assert.match(page, /onClick=\{\(\) => setEditingProduct\(product\)\}/);
+  // Row click (when allowed) and the row's ⋯ → Edit both open the drawer for that product.
+  assert.match(page, /onRowClick=\{canEditProducts \? \(p\) => setEditingProduct\(p\)/);
+  assert.match(page, /onSelect: \(\) => setEditingProduct\(p\)/);
   assert.match(page, /<CreateProductDrawer[\s\S]*?productToEdit=\{editingProduct\}/);
 });
 

@@ -66,6 +66,7 @@ interface CashAccount {
 export default function NewExpensePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const tf = useTranslations('rd.docForm');
   const te = useTranslations('rd.expenses');
   const router = useRouter();
@@ -411,7 +412,7 @@ export default function NewExpensePage() {
               </div>
               <div>
                 <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                  {isRu ? '1. Выбор закупки и метода' : '1. Xarid va taqsimot usulini tanlash'}
+                  {tIn('1_xarid_va_taqsimot_usulini_tanl')}
                 </h2>
                 <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
                   {isRu ? 'Целевая партия и формула распределения' : 'Qaysi xaridga va qanday formula bilan taqsimlash'}
@@ -703,7 +704,7 @@ export default function NewExpensePage() {
               </div>
               <div>
                 <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                  {isRu ? '2. Параметры расхода' : '2. Xarajat parametrlari'}
+                  {tIn('2_xarajat_parametrlari')}
                 </h2>
                 <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
                   {isRu ? 'Дата, тип, сумма и поставщик услуги' : 'Sana, xarajat turi, summa va kontragent'}
