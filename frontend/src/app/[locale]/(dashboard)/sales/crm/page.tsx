@@ -11,11 +11,12 @@ import { formatCurrency, formatPriceOrUnset, errorMessage, CURRENCY_OPTIONS } fr
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Plus, Building2, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Building2, ArrowRight } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -49,6 +50,11 @@ interface DealForm {
   currency: string;
   stage: string;
 }
+/** Won and lost deals share one column at the end of the board. */
+const CLOSED = { slug: 'CLOSED', nameUz: 'Yopilgan (yutildi / yutqazildi)', nameRu: 'Закрытые (выиграно / проиграно)', stripe: 'var(--color-border)' };
+const FORWARD: Record<string, string> = { LEAD: 'QUALIFICATION', QUALIFICATION: 'PROPOSAL', PROPOSAL: 'NEGOTIATION', NEGOTIATION: 'WON' };
+const nextStage = (stage: string): string | undefined => FORWARD[stage];
+
 const EMPTY_FORM: DealForm = { title: '', counterpartyId: '', amount: 0, currency: '', stage: 'LEAD' };
 
 export default function CrmKanbanPage() {
@@ -161,11 +167,6 @@ export default function CrmKanbanPage() {
 
   const counterpartyOptions = counterparties.map((c) => ({ value: c.id, label: c.name }));
   const stageOptions = STAGES.map((s) => ({ value: s.slug, label: isRu ? s.nameRu : s.nameUz }));
-  const iconBtn = (danger?: boolean): React.CSSProperties => ({
-    width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', cursor: 'pointer',
-    color: danger ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
-  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -196,9 +197,9 @@ export default function CrmKanbanPage() {
           ))}
         </div>
       ) : (
-        <div tabIndex={0} role="region" aria-label={isRu ? 'Воронка сделок' : 'Bitimlar voronkasi'} style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(240px, 1fr))', gap: 'var(--space-4)', overflowX: 'auto', paddingBottom: 'var(--space-4)' }}>
-          {STAGES.map((stg) => {
-            const deals = kanbanData[stg.slug] || [];
+        <div tabIndex={0} role="region" aria-label={isRu ? 'Воронка сделок' : 'Bitimlar voronkasi'} className="crm-board">
+          {[...STAGES.slice(0, 4), CLOSED].map((stg) => {
+            const deals = stg.slug === 'CLOSED' ? [...(kanbanData.WON || []), ...(kanbanData.LOST || [])] : kanbanData[stg.slug] || [];
             // Per currency (ADR 0023); legacy deals without a currency stay apart.
             const totals = new Map<string, number>();
             for (const d of deals) {
@@ -236,14 +237,6 @@ export default function CrmKanbanPage() {
                     <Card key={deal.id} style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: 'var(--shadow-sm)', opacity: movingId === deal.id ? 0.6 : 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                         <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>{deal.title}</h3>
-                        <div style={{ display: 'flex', gap: 2, flexShrink: 0, margin: '-6px -6px 0 0' }}>
-                          <button type="button" onClick={() => openEdit(deal)} style={iconBtn()} aria-label={isRu ? `Изменить сделку «${deal.title}»` : `«${deal.title}» bitimini tahrirlash`} title={isRu ? 'Изменить' : 'Tahrirlash'}>
-                            <Edit2 size={14} aria-hidden />
-                          </button>
-                          <button type="button" onClick={() => void handleDeleteDeal(deal)} style={iconBtn(true)} aria-label={isRu ? `Удалить сделку «${deal.title}»` : `«${deal.title}» bitimini o‘chirish`} title={isRu ? 'Удалить' : 'O‘chirish'}>
-                            <Trash2 size={14} aria-hidden />
-                          </button>
-                        </div>
                       </div>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Building2 size={12} aria-hidden />
@@ -252,15 +245,30 @@ export default function CrmKanbanPage() {
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
                         {formatPriceOrUnset(Number(deal.amount), locale, deal.currency)}
                       </div>
-                      <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 6 }}>
-                        <Select
-                          label={isRu ? 'Этап' : 'Bosqich'}
-                          size="sm"
-                          options={stageOptions}
-                          value={deal.stage}
-                          disabled={movingId === deal.id}
-                          onChange={(val) => void handleMoveStage(deal, val)}
-                        />
+                      {(deal.stage === 'WON' || deal.stage === 'LOST') && (
+                        <Badge variant={deal.stage === 'WON' ? 'success' : 'error'}>{stageName(deal.stage)}</Badge>
+                      )}
+                      <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {nextStage(deal.stage) && (
+                          <button type="button" className="rd-next-btn" disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, nextStage(deal.stage)!)}>
+                            {stageName(nextStage(deal.stage)!)} <ArrowRight size={13} aria-hidden />
+                          </button>
+                        )}
+                        {deal.stage === 'NEGOTIATION' && (
+                          <button type="button" className="rd-next-btn" style={{ background: 'var(--color-error-50)', color: 'var(--color-error-700)', borderColor: 'var(--color-error-200)' }} disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, 'LOST')}>
+                            {stageName('LOST')}
+                          </button>
+                        )}
+                        <span style={{ marginLeft: 'auto' }}>
+                          <ActionsMenu
+                            label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                            actions={[
+                              ...STAGES.filter((x) => x.slug !== deal.stage).map((x) => ({ label: `→ ${isRu ? x.nameRu : x.nameUz}`, onSelect: () => void handleMoveStage(deal, x.slug) })),
+                              { label: isRu ? 'Изменить' : 'Tahrirlash', onSelect: () => openEdit(deal) },
+                              { label: isRu ? 'Удалить' : 'O‘chirish', onSelect: () => void handleDeleteDeal(deal), danger: true },
+                            ]}
+                          />
+                        </span>
                       </div>
                     </Card>
                   ))}
