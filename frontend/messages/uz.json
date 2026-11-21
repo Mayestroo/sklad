@@ -1006,6 +1006,10 @@
       "noChanges": "O‘zgarish yo‘q",
       "f_multi": "ko‘p darajali narxlar va narx jadvallari",
       "f_override": "sotuvchilarga narxni qo‘lda o‘zgartirish"
+    },
+    "security": {
+      "changesOnly": "Faqat o‘zgarishlar (kirish-chiqishlarsiz)",
+      "dayLine": "{count, plural, other {# ta harakat}}{deleted, plural, =0 {} other {, shundan # ta o‘chirish}}"
     }
   }
 }

@@ -1,14 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { ChipGroup } from '@/components/ui/list/ListKit';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -42,6 +43,11 @@ export default function SecurityPage() {
   const auditLogs = useMemo(() => auditQuery.data ?? [], [auditQuery.data]);
   const [search, setSearch] = useState('');
   const [action, setAction] = useState('');
+  // Sign-ins are most of the log; by default the list shows what was changed.
+  const [changesOnly, setChangesOnly] = usePersistentState('security.changesOnly', true);
+  const tsec = useTranslations('rd.security');
+  // Group by the local calendar day the time is shown in (not the UTC date).
+  const dayKey = (iso: string) => new Date(iso).toDateString();
 
   const actionLabel = (a: string) => (ACTIONS[a] ? (isRu ? ACTIONS[a].ru : ACTIONS[a].uz) : a);
   const entityLabel = (e: string) => (ENTITIES[e] ? (isRu ? ENTITIES[e].ru : ENTITIES[e].uz) : e);
@@ -50,10 +56,10 @@ export default function SecurityPage() {
   const rows = useMemo(
     () =>
       auditLogs.filter(
-        (log) => (!action || log.action === action) && matchesSearch(search, userName(log), entityLabel(log.entityType), log.ipAddress),
+        (log) => (!action || log.action === action) && (!changesOnly || action || (log.action !== 'LOGIN' && log.action !== 'LOGOUT')) && matchesSearch(search, userName(log), entityLabel(log.entityType), log.ipAddress),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [auditLogs, action, search, locale],
+    [auditLogs, action, search, locale, changesOnly],
   );
 
   const th = { padding: '12px', fontWeight: 'var(--font-medium)' } as const;
@@ -84,13 +90,18 @@ export default function SecurityPage() {
         {auditLogs.length > 0 && (
           <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 'var(--space-4)' }}>
             <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Пользователь, объект или IP' : 'Foydalanuvchi, obyekt yoki IP'} style={{ maxWidth: 340 }} />
-            <Select
+            <ChipGroup
               label={isRu ? 'Действие' : 'Harakat'}
-              value={action || 'ALL'}
-              onChange={(v) => setAction(v === 'ALL' ? '' : v)}
-              options={[{ value: 'ALL', label: isRu ? 'Все действия' : 'Barcha harakatlar' }, ...Object.keys(ACTIONS).map((a) => ({ value: a, label: actionLabel(a) }))]}
-              style={{ width: 220 }}
+              options={[{ value: '', label: isRu ? 'Все действия' : 'Barcha harakatlar' }, ...Object.keys(ACTIONS).map((a) => ({ value: a, label: actionLabel(a), count: auditLogs.filter((l) => l.action === a).length }))]}
+              value={action}
+              onChange={setAction}
             />
+            {!action && (
+              <label className="auth-check">
+                <input type="checkbox" checked={changesOnly} onChange={(e) => setChangesOnly(e.target.checked)} />
+                {tsec('changesOnly')}
+              </label>
+            )}
           </div>
         )}
 
@@ -115,7 +126,19 @@ export default function SecurityPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((log) => (
+                {rows.map((log, i) => [
+                  ...(i === 0 || dayKey(rows[i - 1].createdAt) !== dayKey(log.createdAt)
+                    ? [
+                        <tr key={`d-${log.id}`} className="jr-day">
+                          <td colSpan={5}>
+                            <strong>{formatDate(log.createdAt, locale)}</strong>
+                            <span className="rd-sub" style={{ display: 'inline', marginLeft: 8 }}>
+                              {tsec('dayLine', { count: rows.filter((r) => dayKey(r.createdAt) === dayKey(log.createdAt)).length, deleted: rows.filter((r) => dayKey(r.createdAt) === dayKey(log.createdAt) && r.action === 'DELETE').length })}
+                            </span>
+                          </td>
+                        </tr>,
+                      ]
+                    : []),
                   <tr key={log.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                     <td data-primary style={{ padding: '12px', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }} className="tabular-nums">{formatDateTime(log.createdAt, locale)}</td>
                     <td data-label={isRu ? 'Пользователь' : 'Foydalanuvchi'} style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>{userName(log)}</td>
@@ -124,8 +147,8 @@ export default function SecurityPage() {
                     </td>
                     <td data-label={isRu ? 'Объект' : 'Obyekt'} style={{ padding: '12px' }} title={`${log.entityType} ${log.entityId}`}>{entityLabel(log.entityType)}</td>
                     <td data-label={isRu ? 'IP-адрес' : 'IP manzil'} style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{log.ipAddress || '—'}</td>
-                  </tr>
-                ))}
+                  </tr>,
+                ])}
               </tbody>
             </table>
           </div>
