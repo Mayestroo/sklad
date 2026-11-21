@@ -108,3 +108,23 @@ Screenshots: `screens/after/` (same routes, widths and languages; `report.json` 
 - Console errors: 0 (as before).
 - Large list (400 products, dev server): /products loads in ~1.06 s, typing in search ~119 ms; product picker on /sales/new opens in ~111 ms.
 - Production build passes; client JS ≈ 3.4 MB raw (all routes), CSS 26 KB.
+
+## Round 2 — screens that only had the app-wide fixes (2026-11-21)
+
+Each screen reworked individually (commits f33fe10…f3ae202). Real bugs found and fixed on the way:
+
+| Screen | Bug | Effect before |
+|---|---|---|
+| Settings › Branches | Warehouses without a branch were never listed | The demo's two warehouses could not be edited or deleted there |
+| Additional expense card | Links to `/sales/invoices/:id` (no such route); warehouse name always Uzbek | Every "retroactive sales" link was a 404 |
+| Sales return dialog | Load failure fell back to the invoice lines (ignoring earlier returns); no defect warehouse → first sellable one; "defective" box mutated state | Over-return offered; defective goods into sellable stock; box did nothing in dev |
+| Price lists | CurrencyInput blurs on Enter, cancelling the submit | Enter never saved an inline price |
+| Accounting (OSV) | Title claimed the current year; the API is all-time | Misleading period |
+| Reports (analytics) | "Net profit margin" card showed gross profit; bars had a minimum height | Wrong label; empty months looked like sales |
+| Services | KPI totals summed one page of 20 acts while the count showed all | Totals looked like company totals |
+| Customers / suppliers | Debt printed "UZS: 750 000 UZS" (ADR 0010) | Double currency |
+| CRM | First counterparty silently pre-selected; stage-move errors swallowed | Deals on the wrong client; silent failures |
+| Detail pages | 404 showed "Retry" | No way back to the list |
+| Super-admin | Fixed 260 px sidebar at every width | ~250 px horizontal scroll on phones |
+
+New shared pieces: `SearchField`, `DocumentLoadState`, `buttonStyle()` (links styled as buttons, no `<a><button>`), `lib/platform-labels.ts`, `AccountTypeBadge`, print CSS that hides the app chrome. Browser flows added to `e2e/ux/flows.mjs`: `crm`, `prices`, `service`, `sreturn` (screenshots in `flows/`).
