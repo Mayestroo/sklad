@@ -756,6 +756,18 @@
       "noSalesHint": "Birinchi kirimni yarating — tovar omborga tushadi, tannarx va qarz o‘zi hisoblanadi.",
       "deleteTitleDraft": "Qoralamani o‘chirish",
       "previewTitle": "Kirim {number}"
+    },
+    "expenses": {
+      "subtitle": "Transport, bojxona va boshqa xarajatlar — kirim tannarxiga taqsimlanadi",
+      "clickToFilter": "Bosing: faqat shu tur",
+      "allHint": "Barcha turlar bo‘yicha, valyutalar alohida",
+      "type": "Turi",
+      "provider": "Xizmat ko‘rsatuvchi",
+      "receipt": "Tegishli kirim",
+      "onCredit": "Qarzga",
+      "view": "Ko‘rinish",
+      "none": "Hali qo‘shimcha xarajat yo‘q",
+      "noneHint": "Kirim uchun transport yoki bojxona xarajatini kiriting — u tovar tannarxiga qo‘shiladi."
     }
   }
 }

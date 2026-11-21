@@ -2,7 +2,15 @@
 
 import { activateOnKey } from '@/lib/a11y';
 import { useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchField } from '@/components/ui/SearchField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { totalsByCurrency } from '@/lib/currency-totals';
+import { ChipGroup, ColumnChooser, CurrencyTotals, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -13,22 +21,12 @@ import { MultiCurrencyValue, type CurrencyAmountItem } from '@/components/ui/Mul
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import {
   Receipt,
-  Truck,
   Plus,
-  Building2,
-  TrendingUp,
-  FileText,
   CheckCircle2,
   XCircle,
   Clock,
-  Eye,
-  Pencil,
-  Trash2,
-  BarChart3,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -164,313 +162,203 @@ export default function ExpensesPage() {
     }
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+  const tl = useTranslations('rd.list');
+  const te = useTranslations('rd.expenses');
+  const td = useTranslations('rd.doc');
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('expenses.list.hidden', []);
+  const [sort, setSort] = usePersistentState<SortState | null>('expenses.list.sort', null);
+  const items = data?.items ?? [];
+  const open = (item: AdditionalExpense) => router.push(`/${locale}/purchases/expenses/${item.id}`);
+  const kpi = (list: CurrencyAmountItem[] | undefined) => (list && list.some((x) => x.amount !== 0) ? <MultiCurrencyValue items={list} locale={locale} /> : '—');
+  const toggleType = (t: string) => {
+    setTypeFilter(typeFilter === t ? 'ALL' : t);
+    setPage(1);
+  };
+  const typeLabel: Record<string, string> = {
+    TRANSPORT: isRu ? 'Транспорт' : 'Transport',
+    CUSTOMS: isRu ? 'Таможня' : 'Bojxona',
+    BROKER: isRu ? 'Брокер' : 'Broker',
+    INSURANCE: isRu ? 'Страхование' : 'Sug‘urta',
+    OTHER: isRu ? 'Прочее' : 'Boshqa',
+  };
+
+  const columns: Column<AdditionalExpense>[] = [
+    {
+      key: 'number',
+      label: isRu ? '№ / Дата' : '№ / Sana',
+      primary: true,
+      locked: true,
+      sortValue: (r) => r.docDate,
+      render: (r) => (
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Дополнительные расходы' : 'Qo‘shimcha xarajatlar'}
-          </h1>
+          <div className="rd-doc-no">{r.docNumber}</div>
+          <div className="rd-sub">{formatDate(r.docDate, locale)}</div>
         </div>
-        <Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}>
-          <Plus size={16} style={{ marginRight: '6px' }} />
-          {isRu ? 'Новый расход' : 'Yangi Xarajat'}
-        </Button>
-      </div>
+      ),
+      footer: <span>{tl('total')} · {tl('results', { count: items.length })}</span>,
+    },
+    { key: 'type', label: te('type'), sortValue: (r) => r.expenseType, render: (r) => getExpenseTypeBadge(r.expenseType) },
+    { key: 'provider', label: te('provider'), sortValue: (r) => r.counterparty?.name ?? '', render: (r) => <span style={{ fontWeight: 'var(--font-medium)' }}>{r.counterparty?.name || '—'}</span> },
+    {
+      key: 'receipt',
+      label: te('receipt'),
+      render: (r) => (
+        <div>
+          <div>{r.receipt?.docNumber ?? '—'}</div>
+          {r.receipt?.counterparty?.name && <div className="rd-sub">{r.receipt.counterparty.name}</div>}
+        </div>
+      ),
+    },
+    {
+      key: 'amount',
+      label: tl('amount'),
+      numeric: true,
+      sortValue: (r) => Number(r.amount) || 0,
+      render: (r) => <strong>{formatCurrency(Number(r.amount) || 0, locale, r.currency)}</strong>,
+      footer: <CurrencyTotals totals={totalsByCurrency(items.filter((r) => r.status !== 'CANCELLED'), (r) => r.currency, (r) => Number(r.amount) || 0)} locale={locale} />,
+    },
+    {
+      key: 'status',
+      label: tl('status'),
+      sortValue: (r) => r.status,
+      render: (r) => (
+        <div className="rd-status-stack">
+          {getStatusBadge(r.status)}
+          {r.status === 'POSTED' && (r.isPaid ? <Badge variant="success">{td('paid')}</Badge> : <Badge variant="warning">{te('onCredit')}</Badge>)}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (r) => (
+        <div className="rd-row-actions">
+          {r.status === 'DRAFT' && (
+            <button type="button" className="rd-next-btn" onClick={() => open(r)}>
+              {td('continue')}
+            </button>
+          )}
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tl('open'), onSelect: () => open(r) },
+              { label: tl('delete'), onSelect: () => void handleDeleteDraft(r, { stopPropagation() {} } as React.MouseEvent), danger: true },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
 
-      {/* KPI Cards */}
-      {(() => {
-        // No posted expense in a currency: show a dash, never a guessed currency label.
-        const kpi = (items: CurrencyAmountItem[] | undefined) =>
-          items && items.some((item) => item.amount !== 0)
-            ? <MultiCurrencyValue items={items} locale={locale} />
-            : '—';
-        return (
-          <div className="ux-kpi-grid">
-            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-700)' }}>
-                <Truck size={24} />
-              </div>
-              <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                  {isRu ? 'Транспортные расходы' : 'Transport Xarajatlari'}
-                </div>
-                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {kpi(data?.stats.transport)}
-                </div>
-              </div>
-            </Card>
+  const anyFilter = Boolean(search || statusFilter !== 'ALL' || typeFilter !== 'ALL');
+  const clearAll = () => {
+    setSearch('');
+    setStatusFilter('ALL');
+    setTypeFilter('ALL');
+    setPage(1);
+  };
 
-            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)' }}>
-                <Receipt size={24} />
-              </div>
-              <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                  {isRu ? 'Таможенные пошлины' : 'Bojxona To‘lovlari'}
-                </div>
-                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {kpi(data?.stats.customs)}
-                </div>
-              </div>
-            </Card>
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Дополнительные расходы' : 'Qo‘shimcha xarajatlar'}
+        subtitle={te('subtitle')}
+        actions={
+          <Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}>
+            <Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi Xarajat'}
+          </Button>
+        }
+      />
 
-            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-secondary-100)', color: 'var(--color-text-primary)' }}>
-                <Building2 size={24} />
-              </div>
-              <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                  {isRu ? 'Брокерские услуги' : 'Brokerlik Xizmatlari'}
-                </div>
-                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {kpi(data?.stats.broker)}
-                </div>
-              </div>
-            </Card>
+      {/* Totals by type — each tile filters the list to that type */}
+      <SignalStrip label={tl('summary')}>
+        <Signal tone="warning" label={isRu ? 'Транспортные расходы' : 'Transport xarajatlari'} value={kpi(data?.stats.transport)} hint={te('clickToFilter')} active={typeFilter === 'TRANSPORT'} onClick={() => toggleType('TRANSPORT')} />
+        <Signal tone="info" label={isRu ? 'Таможенные пошлины' : 'Bojxona to‘lovlari'} value={kpi(data?.stats.customs)} hint={te('clickToFilter')} active={typeFilter === 'CUSTOMS'} onClick={() => toggleType('CUSTOMS')} />
+        <Signal tone="neutral" label={isRu ? 'Брокерские услуги' : 'Brokerlik xizmatlari'} value={kpi(data?.stats.broker)} hint={te('clickToFilter')} active={typeFilter === 'BROKER'} onClick={() => toggleType('BROKER')} />
+        <Signal tone="success" label={isRu ? 'Всего распределено' : 'Jami taqsimlangan'} value={kpi(data?.stats.all)} hint={te('allHint')} />
+      </SignalStrip>
 
-            <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-700)' }}>
-                <TrendingUp size={24} />
-              </div>
-              <div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                  {isRu ? 'Всего распределено' : 'Jami Taqsimlangan'}
-                </div>
-                <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                  {kpi(data?.stats.all)}
-                </div>
-              </div>
-            </Card>
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder={isRu ? 'Поиск по номеру, поставщику, комментарию...' : 'Raqam, kontragent, izoh bo‘yicha qidiruv...'}
+            label={tl('search')}
+          />
+          <ChipGroup
+            label={te('view')}
+            options={[
+              { value: 'list', label: isRu ? 'Все расходы' : 'Barcha xarajatlar' },
+              { value: 'analytics', label: isRu ? 'Влияние на себестоимость' : 'Tannarxga ta’siri' },
+            ]}
+            value={activeTab}
+            onChange={(v) => setActiveTab((v || 'list') as 'list' | 'analytics')}
+          />
+          {activeTab === 'list' && <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+        </div>
+        {activeTab === 'list' && (
+          <div className="rd-toolbar-row">
+            <ChipGroup
+              label={tl('status')}
+              showLabel
+              options={[
+                { value: '', label: tl('all') },
+                { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+                { value: 'POSTED', label: isRu ? 'Проведен' : 'Tasdiqlangan' },
+                { value: 'CANCELLED', label: isRu ? 'Отменен' : 'Bekor qilingan' },
+              ]}
+              value={statusFilter === 'ALL' ? '' : statusFilter}
+              onChange={(v) => {
+                setStatusFilter(v || 'ALL');
+                setPage(1);
+              }}
+            />
+            <ChipGroup
+              label={te('type')}
+              showLabel
+              options={[{ value: '', label: tl('all') }, ...Object.entries(typeLabel).map(([value, label]) => ({ value, label }))]}
+              value={typeFilter === 'ALL' ? '' : typeFilter}
+              onChange={(v) => {
+                setTypeFilter(v || 'ALL');
+                setPage(1);
+              }}
+            />
           </div>
-        );
-      })()}
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '1px solid var(--color-border-subtle)', paddingBottom: 'var(--space-2)' }}>
-        <Button
-          variant={activeTab === 'list' ? 'primary' : 'ghost'}
-          onClick={() => setActiveTab('list')}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          <FileText size={16} />
-          {isRu ? 'Все расходы' : 'Barcha Xarajatlar'}
-        </Button>
-        <Button
-          variant={activeTab === 'analytics' ? 'primary' : 'ghost'}
-          onClick={() => setActiveTab('analytics')}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          <BarChart3 size={16} />
-          {isRu ? 'Влияние на себестоимость' : 'Tannarxga Ta’siri Tahlili'}
-        </Button>
+        )}
       </div>
 
       {activeTab === 'list' && (
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {/* Filters Bar */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'center', flex: 1 }}>
-              <div style={{ minWidth: '240px', maxWidth: '360px', flex: 1 }}>
-                <Input
-                  placeholder={isRu ? 'Поиск по номеру, поставщику, комментарию...' : 'Raqam, kontragent, izoh bo‘yicha qidiruv...'}
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </div>
-
-              {/* Status Select */}
-              <div style={{ minWidth: '160px' }}>
-                <Select
-                  value={statusFilter}
-                  onChange={(val) => {
-                    setStatusFilter(val);
-                    setPage(1);
-                  }}
-                  options={[
-                    { value: 'ALL', label: isRu ? 'Все статусы' : 'Barcha statuslar' },
-                    { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
-                    { value: 'POSTED', label: isRu ? 'Проведен' : 'Tasdiqlangan' },
-                    { value: 'CANCELLED', label: isRu ? 'Отменен' : 'Bekor qilingan' },
-                  ]}
-                />
-              </div>
-
-              {/* Type Select */}
-              <div style={{ minWidth: '160px' }}>
-                <Select
-                  value={typeFilter}
-                  onChange={(val) => {
-                    setTypeFilter(val);
-                    setPage(1);
-                  }}
-                  options={[
-                    { value: 'ALL', label: isRu ? 'Все типы' : 'Barcha turlar' },
-                    { value: 'TRANSPORT', label: isRu ? 'Транспорт' : 'Transport' },
-                    { value: 'CUSTOMS', label: isRu ? 'Таможня' : 'Bojxona' },
-                    { value: 'BROKER', label: isRu ? 'Брокер' : 'Broker' },
-                    { value: 'INSURANCE', label: isRu ? 'Страхование' : 'Sug‘urta' },
-                    { value: 'OTHER', label: isRu ? 'Прочее' : 'Boshqa' },
-                  ]}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'left', color: 'var(--color-text-secondary)' }}>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)' }}>
-                    {isRu ? 'Номер' : 'Hujjat raqami'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)' }}>
-                    {isRu ? 'Дата' : 'Sana'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)' }}>
-                    {isRu ? 'Тип расхода' : 'Xarajat turi'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)' }}>
-                    {isRu ? 'Поставщик / Перевозчик' : 'Xizmat ko‘rsatuvchi'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)' }}>
-                    {isRu ? 'Партия закупки' : 'Tegishli xarid'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)', textAlign: 'right' }}>
-                    {isRu ? 'Сумма' : 'Summa'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)', textAlign: 'center' }}>
-                    {isRu ? 'Оплата' : 'To‘lov'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-semibold)', textAlign: 'center' }}>
-                    {isRu ? 'Статус' : 'Status'}
-                  </th>
-                  <th style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {expensesQuery.isError ? (
-                  <tr>
-                    <td colSpan={9}>
-                      <LoadError error={expensesQuery.error} onRetry={fetchExpenses} retrying={expensesQuery.isFetching} />
-                    </td>
-                  </tr>
-                ) : loading ? (
-                  <tr>
-                    <td colSpan={9} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'Загрузка данных...' : 'Ma’lumotlar yuklanmoqda...'}
-                    </td>
-                  </tr>
-                ) : !data?.items.length ? (
-                  <tr>
-                    <td colSpan={9} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'Расходы не найдены' : 'Hech qanday qo‘shimcha xarajat topilmadi'}
-                    </td>
-                  </tr>
+        <div className="rd-table-card">
+          {expensesQuery.isError ? (
+            <LoadError error={expensesQuery.error} onRetry={fetchExpenses} retrying={expensesQuery.isFetching} />
+          ) : (
+            <DataTable
+              rows={items}
+              columns={columns}
+              rowKey={(r) => r.id}
+              hidden={hiddenCols}
+              sort={sort}
+              onSortChange={setSort}
+              onRowClick={open}
+              loading={loading}
+              empty={
+                anyFilter ? (
+                  <EmptyState icon={Receipt} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
                 ) : (
-                  data.items.map((item) => (
-                    <tr
-                      key={item.id}
-                      onClick={() => router.push(`/${locale}/purchases/expenses/${item.id}`)}
-                      tabIndex={0}
-                      onKeyDown={activateOnKey(() => router.push(`/${locale}/purchases/expenses/${item.id}`))}
-                      style={{
-                        borderBottom: '1px solid var(--color-border-subtle)',
-                        cursor: 'pointer',
-                        transition: 'background-color var(--transition-fast)',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      <td style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-medium)', color: 'var(--color-primary-600)' }}>
-                        {item.docNumber}
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)' }}>
-                        {formatDate(item.docDate, locale)}
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)' }}>
-                        {getExpenseTypeBadge(item.expenseType)}
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)', fontWeight: 'var(--font-medium)' }}>
-                        {item.counterparty?.name || '—'}
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ color: 'var(--color-text-secondary)' }}>{item.receipt?.docNumber}</span>
-                          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                            ({item.receipt?.counterparty?.name})
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {formatCurrency(Number(item.amount) || 0, locale, item.currency)}
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center' }}>
-                        {item.isPaid ? (
-                          <Badge variant="success">{isRu ? 'Оплачен' : 'To‘langan'}</Badge>
-                        ) : (
-                          <Badge variant="warning">{isRu ? 'В долг' : 'Qarz'}</Badge>
-                        )}
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center' }}>
-                        {getStatusBadge(item.status)}
-                      </td>
-                      <td style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/${locale}/purchases/expenses/${item.id}`);
-                            }}
-                            style={{ padding: '6px' }}
-                            title={isRu ? 'Просмотр' : 'Ko‘rish'}
-                          >
-                            <Eye size={14} />
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/${locale}/purchases/expenses/${item.id}`);
-                            }}
-                            style={{ padding: '6px' }}
-                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                          >
-                            <Pencil size={14} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => handleDeleteDraft(item, e)}
-                            style={{ color: 'var(--color-danger-700)', padding: '6px' }}
-                            title={isRu ? 'Удалить' : 'O‘chirish'}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
+                  <EmptyState icon={Receipt} title={te('none')} description={te('noneHint')} action={<Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}><Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi Xarajat'}</Button>} />
+                )
+              }
+            />
+          )}
           {data && data.totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--color-border-light)' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                {isRu
-                  ? `Показано ${data.items.length} из ${data.total}`
-                  : `Jami ${data.total} tadan ${data.items.length} tasi ko‘rsatilmoqda`}
+                {isRu ? `Показано ${data.items.length} из ${data.total}` : `Jami ${data.total} tadan ${data.items.length} tasi ko‘rsatilmoqda`}
               </div>
               <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                 <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
@@ -482,7 +370,7 @@ export default function ExpensesPage() {
               </div>
             </div>
           )}
-        </Card>
+        </div>
       )}
 
       {activeTab === 'analytics' && (
