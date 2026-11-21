@@ -2,7 +2,7 @@
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, FormEvent } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
@@ -60,6 +60,7 @@ const EMPTY_FORM: DealForm = { title: '', counterpartyId: '', amount: 0, currenc
 export default function CrmKanbanPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tcrm = useTranslations('rd.crm');
   const { token, company } = useAuth();
   const confirm = useConfirm();
 
@@ -213,7 +214,7 @@ export default function CrmKanbanPage() {
               <section key={stg.slug} aria-labelledby={headingId} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', backgroundColor: 'var(--color-bg-tertiary)', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', minHeight: 320 }}>
                 <div style={{ borderBottom: `3px solid ${stg.stripe}`, paddingBottom: 'var(--space-2)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <h2 id={headingId} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{isRu ? stg.nameRu : stg.nameUz}</h2>
+                    <h2 id={headingId} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{stg.slug === 'CLOSED' ? tcrm('closed') : isRu ? stg.nameRu : stg.nameUz}</h2>
                     <Badge variant="neutral">{deals.length}</Badge>
                   </div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4, fontWeight: 'var(--font-medium)' }} className="tabular-nums">
