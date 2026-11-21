@@ -960,6 +960,25 @@
       "aTopClient": "Eng katta mijoz:",
       "aReceivable": "Mijozlar bizga qarz:",
       "collect": "Undirish"
+    },
+    "users": {
+      "subtitle": "Kim tizimda ishlaydi va nimaga ruxsati bor",
+      "rolesTitle": "Rollar: kim nima qila oladi",
+      "people": "{count, plural, other {# kishi}}",
+      "inviteAs": "Shu rol bilan xodim qo‘shish",
+      "emptyHint": "Birinchi xodimni qo‘shing — yuqoridagi rollardan birini tanlang.",
+      "role_company_admin": "Administrator",
+      "role_accountant": "Buxgalter",
+      "role_cashier": "Kassir",
+      "role_warehouse_manager": "Omborchi",
+      "role_salesperson": "Sotuvchi",
+      "roleDesc_company_admin": "Hamma narsa: sozlamalar, xodimlar, hujjatlarni o‘chirish",
+      "roleDesc_accountant": "Moliya, buxgalteriya, hisobotlar, hujjatlarni tasdiqlash",
+      "roleDesc_cashier": "Sotuv va to‘lov qabul qilish, kassa",
+      "roleDesc_warehouse_manager": "Kirim, ko‘chirish, inventarizatsiya, buyurtmalarni jo‘natish",
+      "roleDesc_salesperson": "Buyurtma va sotuv yozish, mijozlar",
+      "role_viewer": "Faqat ko‘rish",
+      "roleDesc_viewer": "Hamma narsani ko‘radi, hech narsani o‘zgartira olmaydi"
     }
   }
 }

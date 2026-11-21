@@ -2,11 +2,14 @@
 
 import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { DataTable, type Column } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
@@ -15,8 +18,6 @@ import { toast } from '@/context/ToastContext';
 import {
   UserPlus,
   AlertCircle,
-  X,
-  Pencil,
   Trash2,
 } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
@@ -202,125 +203,118 @@ export default function UsersPage() {
     }
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Пользователи и Роли' : 'Foydalanuvchilar va Rollar'}
-          </h1>
+  const tu = useTranslations('rd.users');
+  const tl = useTranslations('rd.list');
+  const ROLES = ['company_admin', 'accountant', 'cashier', 'warehouse_manager', 'salesperson'] as const;
+  const roleName = (r: string) => ((ROLES as readonly string[]).includes(r) ? tu(`role_${r}`) : r);
+  const inviteAs = (role: string) => {
+    setRoleSlug(role);
+    setCreateError(null);
+    setShowModal(true);
+  };
+  const initials = (u: StaffUser) => `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase() || u.email[0]?.toUpperCase();
+  const columns: Column<StaffUser>[] = [
+    {
+      key: 'name',
+      label: isRu ? 'Сотрудник' : 'Xodim',
+      primary: true,
+      locked: true,
+      sortValue: (u) => `${u.firstName} ${u.lastName}`,
+      render: (u) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: u.isActive ? 1 : 0.6 }}>
+          <span className="auth-avatar" style={{ width: 34, height: 34, fontSize: 'var(--text-xs)' }} aria-hidden>{initials(u)}</span>
+          <div>
+            <div style={{ fontWeight: 'var(--font-semibold)' }}>{u.firstName} {u.lastName}</div>
+            <div className="rd-sub">{u.email}</div>
+          </div>
         </div>
+      ),
+    },
+    {
+      key: 'role',
+      label: isRu ? 'Роль' : 'Roli',
+      sortValue: (u) => u.roles.join(','),
+      render: (u) => (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {u.roles.map((r) => (
+            <Badge key={r} variant={getRoleBadgeVariant(r)}>{roleName(r)}</Badge>
+          ))}
+        </div>
+      ),
+    },
+    { key: 'lang', label: isRu ? 'Язык' : 'Til', render: (u) => (u.preferredLanguage === 'ru' ? 'Русский' : 'O‘zbekcha') },
+    { key: 'status', label: tl('status'), sortValue: (u) => (u.isActive ? 0 : 1), render: (u) => (u.isActive ? <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge> : <Badge variant="neutral">{isRu ? 'Неактивный' : 'Nofaol'}</Badge>) },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (u) => (
+        <div className="rd-row-actions">
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tl('edit'), onSelect: () => handleOpenEdit(u), hidden: !hasPermission('users:edit') },
+              { label: u.isActive ? (isRu ? 'Деактивировать' : 'Deaktivatsiya') : isRu ? 'Активировать' : 'Aktivlashtirish', onSelect: () => void toggleUserStatus(u.id, u.isActive), hidden: !hasPermission('users:edit') },
+              { label: tl('delete'), onSelect: () => { setDeletingUser(u); setDeleteError(null); }, danger: true, hidden: !hasPermission('users:delete') },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
 
-        {hasPermission('users:create') && (
-          <Button variant="primary" onClick={() => setShowModal(true)}>
-            <UserPlus size={16} />
-            {isRu ? 'Добавить сотрудника' : 'Xodim qo‘shish'}
-          </Button>
-        )}
-      </div>
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Пользователи и роли' : 'Foydalanuvchilar va rollar'}
+        subtitle={tu('subtitle')}
+        actions={
+          hasPermission('users:create') ? (
+            <Button variant="primary" onClick={() => inviteAs('salesperson')}>
+              <UserPlus size={16} aria-hidden /> {isRu ? 'Добавить сотрудника' : 'Xodim qo‘shish'}
+            </Button>
+          ) : undefined
+        }
+      />
 
-      {/* Main Staff List Card */}
-      <Card>
+      {/* Roles explained in words, with who has them and "invite as …" */}
+      <section aria-labelledby="roles-title">
+        <h2 id="roles-title" className="dash-section-title">{tu('rolesTitle')}</h2>
+        <ul className="role-grid">
+          {ROLES.map((r) => {
+            const count = users.filter((u) => u.roles.includes(r)).length;
+            return (
+              <li key={r} className="rd-signal rd-tone-neutral" style={{ minHeight: 0 }}>
+                <span className="rd-signal-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+                  <Badge variant={getRoleBadgeVariant(r)}>{roleName(r)}</Badge>
+                  <span className="tabular-nums">{tu('people', { count })}</span>
+                </span>
+                <span className="rd-signal-hint" style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>{tu(`roleDesc_${r}`)}</span>
+                {hasPermission('users:create') && (
+                  <button type="button" className="rd-linkbtn" style={{ paddingLeft: 0, marginTop: 4 }} onClick={() => inviteAs(r)}>
+                    {tu('inviteAs')}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <div className="rd-table-card">
         {usersQuery.isError ? (
           <LoadError error={usersQuery.error} onRetry={fetchUsers} retrying={usersQuery.isFetching} />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СОТРУДНИК' : 'XODIM'}</th>
-                  <th style={{ padding: '12px' }}>EMAIL</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'РОЛЬ' : 'ROLI'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'ЯЗЫК' : 'TIL'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'Сотрудников пока нет. Добавьте первого сотрудника кнопкой выше.' : 'Hozircha xodimlar yo‘q. Birinchi xodimni yuqoridagi tugma orqali qo‘shing.'}
-                    </td>
-                  </tr>
-                )}
-                {users.map((user) => (
-                  <tr key={user.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
-                      {user.firstName} {user.lastName}
-                    </td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {user.email}
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {user.roles.map((r) => (
-                          <Badge key={r} variant={getRoleBadgeVariant(r)}>
-                            {r}
-                          </Badge>
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <Badge variant="neutral">{user.preferredLanguage.toUpperCase()}</Badge>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      {user.isActive ? (
-                        <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge>
-                      ) : (
-                        <Badge variant="neutral">{isRu ? 'Неактивный' : 'Nofaol'}</Badge>
-                      )}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px' }}>
-                        {hasPermission('users:edit') && (
-                          <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleOpenEdit(user)}
-                              title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                              style={{ padding: '4px 8px' }}
-                            >
-                              <Pencil size={14} />
-                            </Button>
-                            <Button
-                              variant={user.isActive ? 'outline' : 'secondary'}
-                              size="sm"
-                              onClick={() => toggleUserStatus(user.id, user.isActive)}
-                            >
-                              {user.isActive ? (isRu ? 'Деактивировать' : 'Deaktivatsiya') : (isRu ? 'Активировать' : 'Aktivlashtirish')}
-                            </Button>
-                          </>
-                        )}
-                        {hasPermission('users:delete') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setDeletingUser(user);
-                              setDeleteError(null);
-                            }}
-                            style={{ color: 'var(--color-error-700)', padding: '4px 8px' }}
-                            title={isRu ? 'Удалить' : "O'chirish"}
-                          >
-                            <Trash2 size={15} />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rows={users}
+            columns={columns}
+            rowKey={(u) => u.id}
+            onRowClick={hasPermission('users:edit') ? (u) => handleOpenEdit(u) : undefined}
+            loading={loading}
+            empty={<EmptyState title={isRu ? 'Сотрудников пока нет' : 'Hozircha xodimlar yo‘q'} description={tu('emptyHint')} />}
+          />
         )}
-      </Card>
+      </div>
 
       {/* Invite User Modal */}
       <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md">
@@ -391,14 +385,7 @@ export default function UsersPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <Select
               label={isRu ? 'Системная роль' : 'Tizim Roli'}
-              options={[
-                { value: 'company_admin', label: 'Company Admin' },
-                { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
-                { value: 'cashier', label: isRu ? 'Кассир (Cashier)' : 'Kassir (Cashier)' },
-                { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
-                { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
-                { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
-              ]}
+              options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
               value={roleSlug}
               onChange={(val) => setRoleSlug(val)}
             />
@@ -477,13 +464,7 @@ export default function UsersPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <Select
               label={isRu ? 'Системная роль' : 'Tizim Roli'}
-              options={[
-                { value: 'company_admin', label: 'Company Admin' },
-                { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
-                { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
-                { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
-                { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
-              ]}
+              options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
               value={editRoleSlug}
               onChange={(val) => setEditRoleSlug(val)}
             />

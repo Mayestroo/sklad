@@ -960,6 +960,25 @@
       "aTopClient": "Самый крупный клиент:",
       "aReceivable": "Клиенты должны нам:",
       "collect": "Взыскать"
+    },
+    "users": {
+      "subtitle": "Кто работает в системе и что ему разрешено",
+      "rolesTitle": "Роли: кто что может",
+      "people": "{count, plural, one {# человек} few {# человека} other {# человек}}",
+      "inviteAs": "Добавить сотрудника с этой ролью",
+      "emptyHint": "Добавьте первого сотрудника — выберите одну из ролей выше.",
+      "role_company_admin": "Администратор",
+      "role_accountant": "Бухгалтер",
+      "role_cashier": "Кассир",
+      "role_warehouse_manager": "Кладовщик",
+      "role_salesperson": "Продавец",
+      "roleDesc_company_admin": "Всё: настройки, сотрудники, удаление документов",
+      "roleDesc_accountant": "Финансы, бухгалтерия, отчёты, проведение документов",
+      "roleDesc_cashier": "Продажи и приём оплаты, касса",
+      "roleDesc_warehouse_manager": "Приход, перемещения, инвентаризация, отгрузка заказов",
+      "roleDesc_salesperson": "Заказы и продажи, клиенты",
+      "role_viewer": "Только просмотр",
+      "roleDesc_viewer": "Видит всё, ничего не может изменить"
     }
   }
 }
