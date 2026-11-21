@@ -892,6 +892,11 @@
       "monthNet": "Oy bo‘yicha sof",
       "noAccounts": "Kassalar hali sozlanmagan",
       "openDebts": "Qarzdorlik nazoratida ochish"
+    },
+    "services": {
+      "newProvided": "Mijozga xizmat akti",
+      "newReceived": "Olingan xizmat akti",
+      "debtHint": "Bosing: tasdiqlangan, lekin to‘lanmagan aktlar"
     }
   }
 }

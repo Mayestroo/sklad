@@ -2,19 +2,20 @@
 
 import { totalsByCurrency, type CurrencyTotal } from '@/lib/currency-totals';
 import React, { useState, useMemo } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonRows } from '@/components/ui/Skeleton';
 import { SearchField } from '@/components/ui/SearchField';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { ServiceActDrawer } from '@/components/services/ServiceActDrawer';
@@ -26,11 +27,7 @@ import {
   Plus,
   ArrowUpRight,
   ArrowDownRight,
-  Eye,
   Printer,
-  Trash2,
-  Edit2,
-  RotateCcw,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -240,98 +237,141 @@ export default function ServicesPage() {
       : s === 'PARTIALLY_PAID'
         ? { variant: 'warning' as const, text: isRu ? 'Частично' : 'Qisman' }
         : { variant: 'neutral' as const, text: isRu ? 'Не оплачен' : 'To‘lanmagan' };
-  const iconBtn = (danger?: boolean): React.CSSProperties => ({
-    width: 32,
-    height: 32,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: 'none',
-    borderRadius: 'var(--radius-sm)',
-    background: 'transparent',
-    cursor: 'pointer',
-    color: danger ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
-  });
-  const th = { padding: '12px 16px', fontWeight: 'var(--font-medium)' } as const;
-  const newActButton = (
-    <Button variant="primary" onClick={handleOpenCreate}>
-      <Plus size={16} aria-hidden />
-      {activeType === 'PROVIDED' ? (isRu ? 'Новый акт оказанных услуг' : 'Ko‘rsatilgan xizmat akti') : isRu ? 'Новый акт полученных услуг' : 'Olingan xizmat akti'}
-    </Button>
-  );
-  const tab = (type: 'PROVIDED' | 'RECEIVED', label: string, Icon: typeof ArrowUpRight) => {
-    const on = activeType === type;
-    return (
-      <button
-        type="button"
-        aria-pressed={on}
-        onClick={() => {
-          setActiveType(type);
-          setPage(1);
-        }}
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          minHeight: 36,
-          padding: '6px 14px',
-          borderRadius: 'var(--radius-md)',
-          fontSize: 'var(--text-sm)',
-          fontWeight: on ? 600 : 500,
-          backgroundColor: on ? 'var(--color-segmented-active-bg)' : 'transparent',
-          color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-          boxShadow: on ? 'var(--color-segmented-active-shadow)' : 'none',
-          border: on ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
-          cursor: 'pointer',
-          minWidth: 0,
-        }}
-      >
-        <Icon size={16} aria-hidden style={{ flexShrink: 0 }} />
-        <span>{label}</span>
-      </button>
-    );
-  };
-  const kpi = (label: string, value: React.ReactNode, hint: string, tone?: string) => (
-    <Card style={{ padding: 'var(--space-4)' }}>
-      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{label}</div>
-      <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', marginTop: 4, color: tone }} className="tabular-nums">{value}</div>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{hint}</div>
-    </Card>
-  );
   const pageNote = total > acts.length
     ? isRu ? `по ${acts.length} актам на этой странице из ${total}` : `shu sahifadagi ${acts.length} ta akt bo‘yicha (jami ${total})`
     : isRu ? `актов: ${total}` : `aktlar: ${total}`;
 
+  const tl = useTranslations('rd.list');
+  const tsv = useTranslations('rd.services');
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('services.hidden', []);
+  const [sort, setSort] = usePersistentState<SortState | null>('services.sort', null);
+  /** Either kind of act can be started from the header, whatever list is shown. */
+  const openCreate = (type: 'PROVIDED' | 'RECEIVED') => {
+    if (type !== activeType) {
+      setActiveType(type);
+      setPage(1);
+    }
+    handleOpenCreate();
+  };
+  const columns: Column<ServiceActDetail>[] = [
+    {
+      key: 'number',
+      label: isRu ? '№ / Дата' : '№ / Sana',
+      primary: true,
+      locked: true,
+      sortValue: (a) => a.actDate,
+      render: (a) => (
+        <div>
+          <div className="rd-doc-no">{a.actNumber}</div>
+          <div className="rd-sub">
+            {formatDate(a.actDate, locale)}
+            {a.externalNumber ? ` · ${isRu ? 'внешний №' : 'tashqi №'} ${a.externalNumber}` : ''}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'counterparty',
+      label: counterpartyLabel,
+      sortValue: (a) => a.counterparty?.name ?? '',
+      render: (a) => (
+        <div>
+          <div style={{ fontWeight: 'var(--font-medium)' }}>{a.counterparty?.name || '—'}</div>
+          {a.counterparty?.inn && <div className="rd-sub">{isRu ? 'ИНН' : 'STIR'} {a.counterparty.inn}</div>}
+        </div>
+      ),
+    },
+    { key: 'amount', label: tl('amount'), numeric: true, sortValue: (a) => Number(a.totalAmount), render: (a) => <strong>{formatCurrency(Number(a.totalAmount), locale, a.currency)}</strong> },
+    { key: 'paid', label: tl('paid'), numeric: true, sortValue: (a) => Number(a.paidAmount), render: (a) => formatCurrency(Number(a.paidAmount), locale, a.currency) },
+    {
+      key: 'status',
+      label: tl('status'),
+      sortValue: (a) => `${a.status}-${a.paymentStatus}`,
+      render: (a) => {
+        const st = statusMeta(a.status);
+        const pay = payMeta(a.paymentStatus);
+        return a.status === 'POSTED' ? <Badge variant={pay.variant === 'neutral' ? 'error' : pay.variant}>{pay.text}</Badge> : <Badge variant={st.variant}>{st.text}</Badge>;
+      },
+    },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (a) => (
+        <div className="rd-row-actions">
+          {a.status === 'DRAFT' ? (
+            <button type="button" className="rd-next-btn" onClick={(e) => void handleEditAct(a, e)}>
+              {isRu ? 'Продолжить' : 'Davom ettirish'}
+            </button>
+          ) : (
+            <button type="button" className="rd-next-btn" onClick={() => setPrintAct(a)}>
+              <Printer size={14} aria-hidden /> {isRu ? 'Печать' : 'Chop etish'}
+            </button>
+          )}
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tl('open'), onSelect: () => void handleOpenDetails(a) },
+              { label: isRu ? 'Печать' : 'Chop etish', onSelect: () => setPrintAct(a), hidden: a.status !== 'DRAFT' },
+              { label: tl('edit'), onSelect: () => void handleEditAct(a) },
+              { label: tl('delete'), onSelect: () => void handleDeleteAct(a, { stopPropagation() {} } as React.MouseEvent), danger: true },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
+  const debtOnly = statusFilter === 'POSTED' && paymentStatusFilter === 'UNPAID';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
-        <PageHeader
-          title={isRu ? 'Услуги' : 'Xizmatlar'}
-          subtitle={isRu ? 'Акты оказанных клиентам и полученных от поставщиков услуг: долг и проводки создаются при проведении.' : 'Mijozlarga ko‘rsatilgan va yetkazib beruvchilardan olingan xizmatlar aktlari: tasdiqlanganda qarz va provodkalar yaratiladi.'}
-          actions={newActButton}
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Услуги' : 'Xizmatlar'}
+        subtitle={isRu ? 'Акты оказанных клиентам и полученных от поставщиков услуг: долг и проводки создаются при проведении.' : 'Mijozlarga ko‘rsatilgan va yetkazib beruvchilardan olingan xizmatlar aktlari: tasdiqlanganda qarz va provodkalar yaratiladi.'}
+        actions={
+          <>
+            <Button variant={activeType === 'RECEIVED' ? 'primary' : 'secondary'} onClick={() => openCreate('RECEIVED')}>
+              <ArrowDownRight size={16} aria-hidden /> {tsv('newReceived')}
+            </Button>
+            <Button variant={activeType === 'PROVIDED' ? 'primary' : 'secondary'} onClick={() => openCreate('PROVIDED')}>
+              <ArrowUpRight size={16} aria-hidden /> {tsv('newProvided')}
+            </Button>
+          </>
+        }
+      />
+
+      <SignalStrip label={tl('summary')}>
+        <Signal tone="info" label={isRu ? 'Сумма актов' : 'Aktlar summasi'} value={moneyLines(amountByCurrency)} hint={pageNote} />
+        <Signal tone="success" label={isRu ? 'Оплачено' : 'To‘langan'} value={moneyLines(paidByCurrency)} hint={paidShare} />
+        <Signal
+          tone="warning"
+          label={activeType === 'PROVIDED' ? (isRu ? 'Должны клиенты' : 'Mijozlar qarzi') : isRu ? 'Мы должны поставщикам' : 'Yetkazib beruvchilarga qarzimiz'}
+          value={moneyLines(debtByCurrency)}
+          hint={tsv('debtHint')}
+          active={debtOnly}
+          onClick={() => {
+            setStatusFilter(debtOnly ? '' : 'POSTED');
+            setPaymentStatusFilter(debtOnly ? '' : 'UNPAID');
+            setPage(1);
+          }}
         />
-      </div>
+      </SignalStrip>
 
-      <div role="group" aria-label={isRu ? 'Вид актов' : 'Aktlar turi'} style={{ display: 'inline-flex', backgroundColor: 'var(--color-segmented-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-segmented-border)', padding: 4, gap: 4, maxWidth: 460, width: '100%' }}>
-        {tab('PROVIDED', isRu ? 'Оказанные услуги' : 'Ko‘rsatilgan xizmatlar', ArrowUpRight)}
-        {tab('RECEIVED', isRu ? 'Полученные услуги' : 'Olingan xizmatlar', ArrowDownRight)}
-      </div>
-
-      <div className="ux-kpi-grid">
-        {kpi(isRu ? 'Сумма актов' : 'Aktlar summasi', moneyLines(amountByCurrency), pageNote)}
-        {kpi(isRu ? 'Оплачено' : 'To‘langan', moneyLines(paidByCurrency), paidShare)}
-        {kpi(
-          activeType === 'PROVIDED' ? (isRu ? 'Должны клиенты' : 'Mijozlar qarzi') : isRu ? 'Мы должны поставщикам' : 'Yetkazib beruvchilarga qarzimiz',
-          moneyLines(debtByCurrency),
-          debtByCurrency.length > 0 ? (isRu ? 'Закрывается оплатой в «Финансах»' : '«Moliya»dagi to‘lov bilan yopiladi') : isRu ? 'Долгов нет' : 'Qarz yo‘q',
-          debtByCurrency.length > 0 ? 'var(--color-warning-700)' : undefined,
-        )}
-      </div>
-
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end', padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)' }}>
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <ChipGroup
+            label={isRu ? 'Вид актов' : 'Aktlar turi'}
+            options={[
+              { value: 'PROVIDED', label: isRu ? 'Оказанные услуги' : 'Ko‘rsatilgan xizmatlar' },
+              { value: 'RECEIVED', label: isRu ? 'Полученные услуги' : 'Olingan xizmatlar' },
+            ]}
+            value={activeType}
+            onChange={(v) => {
+              if (!v) return;
+              setActiveType(v as 'PROVIDED' | 'RECEIVED');
+              setPage(1);
+            }}
+          />
           <SearchField
             value={search}
             onChange={(v) => {
@@ -339,122 +379,75 @@ export default function ServicesPage() {
               setPage(1);
             }}
             placeholder={isRu ? '№ акта, контрагент или заметка' : 'Akt №, kontragent yoki izoh'}
-            style={{ maxWidth: 360 }}
+            label={tl('search')}
           />
-          <Select
-            label={isRu ? 'Статус' : 'Holati'}
-            style={{ width: 200 }}
+          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
+        </div>
+        <div className="rd-toolbar-row">
+          <ChipGroup
+            label={tl('status')}
+            showLabel
             options={[
-              { value: '', label: isRu ? 'Все' : 'Hammasi' },
+              { value: '', label: tl('all') },
               { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
               { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
               { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
             ]}
             value={statusFilter}
-            onChange={(val) => {
-              setStatusFilter(val);
+            onChange={(v) => {
+              setStatusFilter(v);
               setPage(1);
             }}
           />
-          <Select
-            label={isRu ? 'Оплата' : 'To‘lov'}
-            style={{ width: 200 }}
+          <ChipGroup
+            label={tl('payment')}
+            showLabel
             options={[
-              { value: '', label: isRu ? 'Все' : 'Hammasi' },
               { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To‘lanmagan' },
-              { value: 'PARTIALLY_PAID', label: isRu ? 'Частично оплачен' : 'Qisman to‘langan' },
+              { value: 'PARTIALLY_PAID', label: isRu ? 'Частично' : 'Qisman' },
               { value: 'PAID', label: isRu ? 'Оплачен' : 'To‘langan' },
             ]}
             value={paymentStatusFilter}
-            onChange={(val) => {
-              setPaymentStatusFilter(val);
+            onChange={(v) => {
+              setPaymentStatusFilter(v);
               setPage(1);
             }}
           />
           {isFiltered && (
-            <Button variant="ghost" size="sm" onClick={handleResetFilters}>
-              <RotateCcw size={14} aria-hidden /> {isRu ? 'Сбросить' : 'Tozalash'}
-            </Button>
+            <button type="button" className="rd-linkbtn" onClick={handleResetFilters}>
+              {tl('clearAll')}
+            </button>
           )}
         </div>
+      </div>
 
+      <div className="rd-table-card">
         {actsQuery.isError ? (
           <LoadError error={actsQuery.error} onRetry={() => void fetchActs()} retrying={actsQuery.isFetching} />
-        ) : loading ? (
-          <SkeletonRows rows={6} columns={6} />
-        ) : acts.length === 0 ? (
-          isFiltered ? (
-            <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или фильтры.' : 'Qidiruv yoki filtrlarni o‘zgartiring.'} action={<Button variant="outline" size="sm" onClick={handleResetFilters}>{isRu ? 'Сбросить фильтры' : 'Filtrlarni tozalash'}</Button>} />
-          ) : (
-            <EmptyState
-              icon={FileText}
-              title={activeType === 'PROVIDED' ? (isRu ? 'Актов оказанных услуг пока нет' : 'Hozircha ko‘rsatilgan xizmat aktlari yo‘q') : isRu ? 'Актов полученных услуг пока нет' : 'Hozircha olingan xizmat aktlari yo‘q'}
-              description={activeType === 'PROVIDED' ? (isRu ? 'Оформите акт — после проведения долг клиента появится в расчётах.' : 'Akt rasmiylashtiring — tasdiqlangach mijoz qarzi hisob-kitoblarda paydo bo‘ladi.') : isRu ? 'Оформите акт — после проведения наш долг поставщику появится в расчётах.' : 'Akt rasmiylashtiring — tasdiqlangach yetkazib beruvchiga qarzimiz hisob-kitoblarda paydo bo‘ladi.'}
-              action={newActButton}
-            />
-          )
         ) : (
-          <div style={{ overflowX: 'auto', opacity: actsQuery.isFetching ? 0.7 : 1 }}>
-            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
-                  <th scope="col" style={th}>{isRu ? '№ акта' : 'Akt №'}</th>
-                  <th scope="col" style={th}>{isRu ? 'Дата' : 'Sana'}</th>
-                  <th scope="col" style={th}>{counterpartyLabel}</th>
-                  <th scope="col" style={th}>{isRu ? 'Статус' : 'Holati'}</th>
-                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Сумма' : 'Summa'}</th>
-                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Оплачено' : 'To‘langan'}</th>
-                  <th scope="col" style={th}>{isRu ? 'Оплата' : 'To‘lov'}</th>
-                  <th scope="col" style={th}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {acts.map((act) => {
-                  const st = statusMeta(act.status);
-                  const pay = payMeta(act.paymentStatus);
-                  return (
-                    <tr key={act.id} className="ux-row-hover" style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td data-primary style={{ padding: '12px 16px' }}>
-                        <button type="button" onClick={() => void handleOpenDetails(act)} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', cursor: 'pointer', textAlign: 'left' }}>
-                          {act.actNumber}
-                        </button>
-                        {act.externalNumber && (
-                          <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2, fontWeight: 'var(--font-normal)' }}>
-                            {isRu ? 'Внешний № ' : 'Tashqi № '}{act.externalNumber}
-                          </span>
-                        )}
-                      </td>
-                      <td data-label={isRu ? 'Дата' : 'Sana'} style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{formatDate(act.actDate, locale)}</td>
-                      <td data-label={counterpartyLabel} style={{ padding: '12px 16px' }}>
-                        <span style={{ fontWeight: 'var(--font-medium)' }}>{act.counterparty?.name || '—'}</span>
-                        {act.counterparty?.inn && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{isRu ? 'ИНН' : 'STIR'} {act.counterparty.inn}</span>}
-                      </td>
-                      <td data-label={isRu ? 'Статус' : 'Holati'} style={{ padding: '12px 16px' }}><Badge variant={st.variant}>{st.text}</Badge></td>
-                      <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }} className="tabular-nums">{formatCurrency(Number(act.totalAmount), locale, act.currency)}</td>
-                      <td data-label={isRu ? 'Оплачено' : 'To‘langan'} style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }} className="tabular-nums">{formatCurrency(Number(act.paidAmount), locale, act.currency)}</td>
-                      <td data-label={isRu ? 'Оплата' : 'To‘lov'} style={{ padding: '12px 16px' }}><Badge variant={pay.variant}>{pay.text}</Badge></td>
-                      <td style={{ padding: '8px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
-                          <button type="button" style={iconBtn()} onClick={() => void handleOpenDetails(act)} aria-label={isRu ? `Открыть акт ${act.actNumber}` : `${act.actNumber} aktini ochish`} title={isRu ? 'Открыть' : 'Ochish'}>
-                            <Eye size={16} aria-hidden />
-                          </button>
-                          <button type="button" style={iconBtn()} onClick={() => setPrintAct(act)} aria-label={isRu ? `Печать акта ${act.actNumber}` : `${act.actNumber} aktini chop etish`} title={isRu ? 'Печать' : 'Chop etish'}>
-                            <Printer size={16} aria-hidden />
-                          </button>
-                          <button type="button" style={iconBtn()} onClick={(e) => void handleEditAct(act, e)} aria-label={isRu ? `Изменить акт ${act.actNumber}` : `${act.actNumber} aktini tahrirlash`} title={isRu ? 'Изменить' : 'Tahrirlash'}>
-                            <Edit2 size={16} aria-hidden />
-                          </button>
-                          <button type="button" style={iconBtn(true)} onClick={(e) => void handleDeleteAct(act, e)} aria-label={isRu ? `Удалить акт ${act.actNumber}` : `${act.actNumber} aktini o‘chirish`} title={isRu ? 'Удалить' : 'O‘chirish'}>
-                            <Trash2 size={16} aria-hidden />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rows={acts}
+            columns={columns}
+            rowKey={(a) => a.id}
+            hidden={hiddenCols}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={(a) => void handleOpenDetails(a)}
+            loading={loading}
+            caption={tl('clickRowHint')}
+            empty={
+              isFiltered ? (
+                <EmptyState compact title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="outline" size="sm" onClick={handleResetFilters}>{tl('clearFilters')}</Button>} />
+              ) : (
+                <EmptyState
+                  icon={FileText}
+                  title={activeType === 'PROVIDED' ? (isRu ? 'Актов оказанных услуг пока нет' : 'Hozircha ko‘rsatilgan xizmat aktlari yo‘q') : isRu ? 'Актов полученных услуг пока нет' : 'Hozircha olingan xizmat aktlari yo‘q'}
+                  description={activeType === 'PROVIDED' ? (isRu ? 'Оформите акт — после проведения долг клиента появится в расчётах.' : 'Akt rasmiylashtiring — tasdiqlangach mijoz qarzi hisob-kitoblarda paydo bo‘ladi.') : isRu ? 'Оформите акт — после проведения наш долг поставщику появится в расчётах.' : 'Akt rasmiylashtiring — tasdiqlangach yetkazib beruvchiga qarzimiz hisob-kitoblarda paydo bo‘ladi.'}
+                  action={<Button onClick={() => openCreate(activeType)}><Plus size={16} aria-hidden /> {activeType === 'PROVIDED' ? tsv('newProvided') : tsv('newReceived')}</Button>}
+                />
+              )
+            }
+          />
         )}
 
         {total > pageSize && (
@@ -473,7 +466,7 @@ export default function ServicesPage() {
             </div>
           </nav>
         )}
-      </Card>
+      </div>
 
       <ServiceActDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} onSuccess={fetchActs} initialData={editingAct} defaultType={activeType} />
 
