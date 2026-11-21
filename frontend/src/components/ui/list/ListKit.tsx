@@ -6,7 +6,8 @@
  * a "More filters" disclosure, a column chooser, active-filter pills and a
  * result line with per-currency totals (ADR 0023: never summed across currencies).
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { readRemembered, remember } from '@/lib/usePersistentState';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, Columns3, SlidersHorizontal, X } from 'lucide-react';
 import { DateRangeField } from '@/components/ui/DateRangeField';
@@ -268,4 +269,41 @@ export function rowKeyOpen(open: () => void) {
 /** Clicks on buttons/links inside a row do their own thing, not "open the row". */
 export function isInteractiveTarget(e: React.MouseEvent): boolean {
   return Boolean((e.target as HTMLElement).closest('button, a, input, select, label, [role="menu"]'));
+}
+
+/**
+ * Filters a list remembers per browser; a link can still open the list
+ * pre-filtered (e.g. the dashboard's "2 sales not posted" → ?status=DRAFT).
+ * URL parameters, when present, win over the remembered values for the keys they name.
+ * Signed-in pages render on the client only, so window is available here.
+ */
+export function initialFilters<F extends Record<string, unknown>>(remembered: F, urlKeys: (keyof F & string)[]): F {
+  if (typeof window === 'undefined') return remembered;
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = urlKeys.filter((k) => params.has(k));
+  if (fromUrl.length === 0) return remembered;
+  const next: Record<string, unknown> = { ...remembered };
+  for (const k of fromUrl) next[k] = params.get(k) ?? '';
+  return next as F;
+}
+
+/** Remembered list filters (per browser) with URL overrides; `set` merges a patch. */
+export function useListFilters<F extends Record<string, unknown>>(key: string, defaults: F, urlKeys: (keyof F & string)[] = []) {
+  const [filters, setState] = useState<F>(() => initialFilters({ ...defaults, ...readRemembered<Partial<F>>(key, {}) }, urlKeys));
+  const set = useCallback(
+    (patch: Partial<F>) =>
+      setState((prev) => {
+        const next = { ...prev, ...patch };
+        remember(key, next);
+        return next;
+      }),
+    [key],
+  );
+  const reset = useCallback(() => {
+    remember(key, defaults);
+    setState(defaults);
+    // defaults is a constant object at the call site
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return [filters, set, reset] as const;
 }

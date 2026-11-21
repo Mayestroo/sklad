@@ -608,6 +608,54 @@
       "recentTitle": "Последние денежные операции",
       "period": "Период",
       "allCounterparties": "Все контрагенты"
+    },
+    "table": {
+      "sortBy": "Сортировать по «{name}»"
+    },
+    "doc": {
+      "draft": "Черновик",
+      "posted": "Проведён",
+      "cancelled": "Отменён",
+      "unpaid": "Не оплачен",
+      "partial": "Оплачен частично",
+      "paid": "Оплачен",
+      "takePayment": "Принять оплату",
+      "makePayment": "Оплатить",
+      "post": "Провести",
+      "continue": "Продолжить",
+      "return": "Возврат",
+      "createdBy": "Кто создал",
+      "postedAt": "Проведён",
+      "contract": "Договор",
+      "returns": "Возвраты",
+      "noLines": "Строк нет",
+      "qty": "Кол-во",
+      "price": "Цена",
+      "sum": "Сумма",
+      "product": "Товар",
+      "history": "История",
+      "created": "Создан",
+      "postedEvent": "Проведён",
+      "paidEvent": "Оплачено: {amount}"
+    },
+    "sales": {
+      "subtitle": "Документы продаж клиентам: кому, на сколько, оплачено ли",
+      "newSale": "Новая продажа",
+      "sigDebt": "Долг клиентов",
+      "sigDebtHint": "{count, plural, one {# клиент} few {# клиента} other {# клиентов}} — нажмите: неоплаченные",
+      "sigDrafts": "Не проведены",
+      "sigDraftsHint": "Черновики — нажмите: показать",
+      "sigMonth": "Продажи за месяц",
+      "sigMonthHint": "{count, plural, one {# документ} few {# документа} other {# документов}}",
+      "sigProfit": "Валовая прибыль (месяц)",
+      "sigProfitHint": "Маржа: {pct}",
+      "searchPh": "Номер документа, клиент, договор или комментарий",
+      "customer": "Клиент",
+      "anyCustomer": "Все клиенты",
+      "noSalesYet": "Продаж пока нет",
+      "noSalesHint": "Создайте первую продажу — остатки, себестоимость и долг клиента посчитаются сами.",
+      "deleteTitleDraft": "Удаление черновика",
+      "previewTitle": "Продажа {number}"
     }
   }
 }

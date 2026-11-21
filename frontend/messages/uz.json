@@ -608,6 +608,54 @@
       "recentTitle": "Oxirgi pul operatsiyalari",
       "period": "Davr",
       "allCounterparties": "Barcha kontragentlar"
+    },
+    "table": {
+      "sortBy": "«{name}» bo‘yicha saralash"
+    },
+    "doc": {
+      "draft": "Qoralama",
+      "posted": "O‘tkazilgan",
+      "cancelled": "Bekor qilingan",
+      "unpaid": "To‘lanmagan",
+      "partial": "Qisman to‘langan",
+      "paid": "To‘langan",
+      "takePayment": "To‘lov olish",
+      "makePayment": "To‘lash",
+      "post": "O‘tkazish",
+      "continue": "Davom ettirish",
+      "return": "Qaytarish",
+      "createdBy": "Kim yaratdi",
+      "postedAt": "O‘tkazilgan vaqti",
+      "contract": "Shartnoma",
+      "returns": "Qaytarishlar",
+      "noLines": "Qatorlar yo‘q",
+      "qty": "Miqdor",
+      "price": "Narx",
+      "sum": "Summa",
+      "product": "Tovar",
+      "history": "Tarix",
+      "created": "Yaratildi",
+      "postedEvent": "O‘tkazildi",
+      "paidEvent": "To‘langan: {amount}"
+    },
+    "sales": {
+      "subtitle": "Mijozlarga sotuv hujjatlari: kim, qancha, to‘langanmi",
+      "newSale": "Yangi sotuv",
+      "sigDebt": "Mijozlar qarzi",
+      "sigDebtHint": "{count, plural, other {# ta mijoz}} — bosing: to‘lanmaganlar",
+      "sigDrafts": "O‘tkazilmagan",
+      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "sigMonth": "Shu oy sotuv",
+      "sigMonthHint": "{count, plural, other {# ta hujjat}}",
+      "sigProfit": "Yalpi foyda (shu oy)",
+      "sigProfitHint": "Marja: {pct}",
+      "searchPh": "Hujjat raqami, mijoz, shartnoma yoki izoh",
+      "customer": "Mijoz",
+      "anyCustomer": "Barcha mijozlar",
+      "noSalesYet": "Hali sotuv yo‘q",
+      "noSalesHint": "Birinchi sotuvni yarating — qoldiq, tannarx va mijoz qarzi o‘zi hisoblanadi.",
+      "deleteTitleDraft": "Qoralamani o‘chirish",
+      "previewTitle": "Sotuv {number}"
     }
   }
 }
