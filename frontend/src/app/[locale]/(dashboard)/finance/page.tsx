@@ -1,6 +1,7 @@
 'use client';
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
+import { ChipGroup } from '@/components/ui/list/ListKit';
 import { useState, useEffect, useCallback } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
@@ -141,6 +142,9 @@ function AccountFlowTable({ today, month, locale }: { today: FinanceAccountFlow[
 }
 
 // ─── Main Finance Component ─────────────────────────────────────
+/** Transaction views shown as chips inside the Operations tab. */
+const OPS_VIEWS = ['journal', 'income', 'expense', 'transfers', 'deleted'] as const;
+
 export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -580,17 +584,15 @@ export default function FinancePage() {
       >
         {[
           { id: 'dashboard', label: tfin('overview') },
-          { id: 'journal', label: isRu ? 'Журнал операций' : 'Operatsiyalar jurnali' },
-          { id: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
-          { id: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
-          { id: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
+          { id: 'journal', label: tfin('operations') },
           { id: 'debts', label: isRu ? 'Взаиморасчеты (Долги)' : 'Qarzdorlik nazorati' },
-          { id: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
         ].map((tab) => {
-          const isActive = activeTab === tab.id;
+          const isActive = tab.id === 'journal' ? OPS_VIEWS.includes(activeTab as (typeof OPS_VIEWS)[number]) : activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              type="button"
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => {
                 setActiveTab(tab.id as typeof activeTab);
                 setPage(1);
@@ -773,6 +775,24 @@ export default function FinancePage() {
         activeTab === 'transfers' ||
         activeTab === 'deleted') && (
         <Card style={{ padding: 'var(--space-5)' }}>
+          {/* Which operations: all / income / expense / transfers / deleted (same views as the old tabs) */}
+          <div style={{ marginBottom: 'var(--space-3)' }}>
+            <ChipGroup
+              label={tfin('operations')}
+              value={activeTab as (typeof OPS_VIEWS)[number]}
+              onChange={(v) => {
+                setActiveTab((v || 'journal') as typeof activeTab);
+                setPage(1);
+              }}
+              options={[
+                { value: 'journal', label: isRu ? 'Все' : 'Hammasi' },
+                { value: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
+                { value: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
+                { value: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
+                { value: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
+              ]}
+            />
+          </div>
           {/* Filters Bar */}
           <div
             style={{

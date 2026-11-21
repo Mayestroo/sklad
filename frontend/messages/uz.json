@@ -891,7 +891,8 @@
       "month": "Shu oy",
       "monthNet": "Oy bo‘yicha sof",
       "noAccounts": "Kassalar hali sozlanmagan",
-      "openDebts": "Qarzdorlik nazoratida ochish"
+      "openDebts": "Qarzdorlik nazoratida ochish",
+      "operations": "Operatsiyalar"
     },
     "services": {
       "newProvided": "Mijozga xizmat akti",
