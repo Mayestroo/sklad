@@ -772,6 +772,22 @@
       "ckProvider": "Xizmat ko‘rsatuvchi tanlangan",
       "ckItems": "Taqsimlanadigan tovarlar belgilangan",
       "asideHint": "Avval kirimni tanlang — tovarlari va yangi tannarx pastda ko‘rinadi. Ctrl+S — qoralama, Ctrl+Enter — tasdiqlash."
+    },
+    "preturns": {
+      "subtitle": "Yetkazib beruvchiga qaytarilgan tovarlar: qoldiq kamayadi, qarz kamayadi",
+      "act": "akt",
+      "actSlip": "Qaytarish akti",
+      "supplier": "Yetkazib beruvchi",
+      "receipt": "Kirim hujjati",
+      "reason": "Sabab",
+      "sigDrafts": "Tasdiqlanmagan",
+      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "postedCount": "{count, plural, other {# ta tasdiqlangan}}",
+      "sigAll": "Jami hujjatlar",
+      "searchPh": "Qaytarish raqami, yetkazib beruvchi yoki sabab",
+      "view": "Ko‘rinish",
+      "none": "Hali qaytarish yo‘q",
+      "noneHint": "Nuqsonli yoki ortiqcha tovarni yetkazib beruvchiga qaytarish uchun yangi hujjat yarating."
     }
   }
 }
