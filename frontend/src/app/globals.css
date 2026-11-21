@@ -1423,3 +1423,5 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 @media (max-width: 900px) { .tk-inbox { grid-template-columns: minmax(0, 1fr); } }
 
 .ann-preview { display: flex; flex-direction: column; gap: 4px; padding: var(--space-3); border: 1px dashed var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-tertiary); font-size: var(--text-sm); }
+
+.br-attach { height: 32px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-input); color: var(--color-text-primary); font: inherit; font-size: var(--text-xs); max-width: 180px; }

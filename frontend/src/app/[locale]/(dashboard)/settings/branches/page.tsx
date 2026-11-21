@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
@@ -255,6 +255,31 @@ export default function BranchesPage() {
     }
   };
 
+  // Attach a warehouse to a branch in one step: the same PATCH the edit dialog sends when only the branch changes.
+  const tbr = useTranslations('rd.branches');
+  const [attachingId, setAttachingId] = useState<string | null>(null);
+  const attachWarehouse = async (wh: WarehouseRow, branchId: string) => {
+    if (!token || !company) return;
+    setAttachingId(wh.id);
+    try {
+      const uz = typeof wh.name === 'object' ? wh.name.uz || '' : wh.name || '';
+      const ru = typeof wh.name === 'object' ? wh.name.ru || '' : wh.name || '';
+      await apiFetch(`/tenants/warehouses/${wh.id}`, {
+        method: 'PATCH',
+        token,
+        tenantId: company.id,
+        locale,
+        body: JSON.stringify({ branchId, name: { uz, ru: ru || uz }, address: wh.address || '', phone: wh.phone || '' }),
+      });
+      fetchBranches();
+      toast.success(tbr('attached', { name: nameOf(wh.name), branch: nameOf(branches.find((b) => b.id === branchId)?.name ?? '') }));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось сохранить склад' : 'Omborni saqlab bo‘lmadi'));
+    } finally {
+      setAttachingId(null);
+    }
+  };
+
   const handleDeleteWarehouse = async (wh: WarehouseRow) => {
     if (!token || !company) return;
     const ok = await confirm({
@@ -354,7 +379,22 @@ export default function BranchesPage() {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignItems: 'center' }}>
+              {!wh.branchId && branches.length > 0 && (
+                <>
+                  <label htmlFor={`attach-${wh.id}`} className="sr-only">{tbr('attachTo', { name: wName })}</label>
+                  <Select
+                    id={`attach-${wh.id}`}
+                    size="sm"
+                    value=""
+                    placeholder={tbr('attach')}
+                    disabled={attachingId === wh.id}
+                    onChange={(v) => v && void attachWarehouse(wh, v)}
+                    options={branches.map((b) => ({ value: b.id, label: nameOf(b.name) }))}
+                    style={{ width: 190 }}
+                  />
+                </>
+              )}
               <button type="button" style={iconBtn()} onClick={() => handleOpenEditWarehouse(wh)} aria-label={isRu ? `Изменить склад «${wName}»` : `«${wName}» omborini tahrirlash`} title={isRu ? 'Изменить' : 'Tahrirlash'}>
                 <Edit2 size={14} aria-hidden />
               </button>
@@ -472,9 +512,16 @@ export default function BranchesPage() {
                   {isRu ? 'Склады без филиала' : 'Filialga biriktirilmagan omborlar'} ({unassigned.length})
                 </h2>
                 <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>
-                  {isRu ? 'Работают как обычно. Чтобы привязать к филиалу, нажмите «Изменить».' : 'Odatdagidek ishlaydi. Filialga biriktirish uchun «Tahrirlash»ni bosing.'}
+                  {branches.length ? tbr('attachHint') : tbr('noBranchHint')}
                 </p>
               </div>
+              {branches.length === 0 && (
+                <div>
+                  <Button size="sm" onClick={() => setBranchModalOpen(true)}>
+                    <Plus size={14} aria-hidden /> {isRu ? 'Новый филиал' : 'Yangi filial'}
+                  </Button>
+                </div>
+              )}
               {warehouseList(unassigned)}
             </Card>
           )}

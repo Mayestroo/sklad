@@ -1060,6 +1060,13 @@
       "showUz": "O‘zbekcha variantini ko‘rish",
       "active": "Ko‘rsatilmoqda",
       "hidden": "Yashirilgan"
+    },
+    "branches": {
+      "attachHint": "Odatdagidek ishlaydi. Filialga biriktirish uchun yonidagi ro‘yxatdan filialni tanlang.",
+      "noBranchHint": "Odatdagidek ishlaydi. Filialga biriktirish uchun avval filial yarating.",
+      "attach": "Filialga biriktirish…",
+      "attachTo": "«{name}» omborini filialga biriktirish",
+      "attached": "«{name}» → {branch}"
     }
   }
 }
