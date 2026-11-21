@@ -1030,6 +1030,15 @@
       "trialEnding": "Sinov 7 kun ichida tugaydi",
       "trialEndingHint": "Qo‘ng‘iroq qiling yoki tarif taklif qiling",
       "users": "{count, plural, other {jami # foydalanuvchi}}"
+    },
+    "adminBilling": {
+      "showCompanies": "Korxonalarni ko‘rsatish",
+      "showAll": "Hammasini ko‘rsatish",
+      "filtered": "{plan}: {count} ta",
+      "trialCol": "Sinov muddati",
+      "trialLeft": "{count} kun qoldi ({date})",
+      "trialEnded": "Tugagan",
+      "noneOnPlan": "Bu tarifda korxona yo‘q"
     }
   }
 }

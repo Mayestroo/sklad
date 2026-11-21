@@ -1030,6 +1030,15 @@
       "trialEnding": "Пробный период кончается за 7 дней",
       "trialEndingHint": "Позвоните или предложите тариф",
       "users": "{count, plural, one {всего # пользователь} few {всего # пользователя} other {всего # пользователей}}"
+    },
+    "adminBilling": {
+      "showCompanies": "Показать компании",
+      "showAll": "Показать все",
+      "filtered": "{plan}: {count}",
+      "trialCol": "Пробный период",
+      "trialLeft": "{count, plural, one {остался # день} few {осталось # дня} other {осталось # дней}} ({date})",
+      "trialEnded": "Закончился",
+      "noneOnPlan": "На этом тарифе компаний нет"
     }
   }
 }
