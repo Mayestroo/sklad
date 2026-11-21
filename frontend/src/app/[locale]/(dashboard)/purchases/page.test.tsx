@@ -3,7 +3,10 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderPage } from '@/test/render-page';
 
 const apiFetch = vi.fn();
-vi.mock('@/lib/api', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
+vi.mock('@/lib/api', () => ({
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+  listOf: <T,>(res: T[] | { items: T[] }) => (Array.isArray(res) ? res : res.items),
+}));
 const auth = { token: 'tok', company: { id: 'tenant-1' }, hasPermission: () => true };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
 vi.mock('next-intl', () => ({
@@ -12,6 +15,8 @@ vi.mock('next-intl', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => '/purchases',
 }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/components/purchases/CreateReturnModal', () => ({ CreateReturnModal: () => null }));
@@ -44,29 +49,26 @@ const receiptCalls = () =>
 describe('Purchases page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    window.localStorage.clear();
   });
 
-  it('loads the receipts once; typed filters apply on the filter button', async () => {
+  it('loads the receipts once; the search applies by itself once typing pauses', async () => {
     apiFetch.mockImplementation(async (endpoint: string) => respond(endpoint));
     renderPage(<PurchasesPage />);
 
     expect(await screen.findByText('PR-0001')).toBeTruthy();
-    expect(receiptCalls()).toEqual(['/purchases/receipts?']);
+    expect(receiptCalls().filter((e) => e !== '/purchases/receipts?status=DRAFT')).toEqual(['/purchases/receipts?']);
     expect(apiFetch.mock.calls.map((c) => c[0]).sort()).toEqual([
       '/purchases/receipts?',
+      '/purchases/receipts?status=DRAFT',
       '/purchases/summary',
       '/sales/counterparties',
       '/tenants/warehouses',
     ]);
 
-    fireEvent.change(screen.getByPlaceholderText('Qidirish uchun hujjat raqami, GTD yoki izohni kiriting...'), {
-      target: { value: 'PR-9' },
-    });
-    expect(receiptCalls()).toHaveLength(1);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Filtr' }));
-    expect(await screen.findByText('PR-0009')).toBeTruthy();
-    expect(receiptCalls()).toEqual(['/purchases/receipts?', '/purchases/receipts?search=PR-9']);
+    fireEvent.change(screen.getByPlaceholderText('searchPh'), { target: { value: 'PR-9' } });
+    expect(await screen.findByText('PR-0009', {}, { timeout: 2000 })).toBeTruthy();
+    expect(receiptCalls().filter((e) => e !== '/purchases/receipts?status=DRAFT')).toEqual(['/purchases/receipts?', '/purchases/receipts?search=PR-9']);
   });
 
   it('shows the error and reloads on retry', async () => {
@@ -83,6 +85,6 @@ describe('Purchases page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
 
     expect(await screen.findByText('PR-0001')).toBeTruthy();
-    await waitFor(() => expect(receiptCalls()).toHaveLength(2));
+    await waitFor(() => expect(receiptCalls().filter((e) => e === '/purchases/receipts?')).toHaveLength(2));
   });
 });

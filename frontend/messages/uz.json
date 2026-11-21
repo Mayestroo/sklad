@@ -735,6 +735,27 @@
       "defect": "Brak ombori: {name}",
       "noReturns": "Hali qaytarish yo‘q",
       "noReturnsHint": "Mijoz tovar qaytarsa, yuqoridagi qidiruvdan sotuvni toping."
+    },
+    "purchases": {
+      "subtitle": "Yetkazib beruvchidan kelgan tovarlar: kimdan, qancha, to‘langanmi",
+      "newSale": "Yangi kirim",
+      "sigDebt": "Yetkazib beruvchilarga qarz",
+      "sigDebtHint": "{count, plural, other {# ta yetkazib beruvchi}} — bosing: to‘lanmaganlar",
+      "sigDrafts": "O‘tkazilmagan",
+      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "sigMonth": "Shu oy kirim",
+      "sigMonthHint": "{count, plural, other {# ta hujjat}}",
+      "sigReturns": "Shu oy qaytarilgan",
+      "sigReturnsHint": "{count, plural, other {# ta qaytarish}}",
+      "searchPh": "Hujjat raqami, yetkazib beruvchi, shartnoma yoki izoh",
+      "supplier": "Yetkazib beruvchi",
+      "anySupplier": "Barcha yetkazib beruvchilar",
+      "currency": "Valyuta",
+      "anyCurrency": "Barcha valyutalar",
+      "noSalesYet": "Hali kirim yo‘q",
+      "noSalesHint": "Birinchi kirimni yarating — tovar omborga tushadi, tannarx va qarz o‘zi hisoblanadi.",
+      "deleteTitleDraft": "Qoralamani o‘chirish",
+      "previewTitle": "Kirim {number}"
     }
   }
 }
