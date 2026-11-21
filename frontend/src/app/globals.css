@@ -1268,3 +1268,38 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
   .auth-aside { border-left: none; border-top: 1px solid var(--color-border-light); padding: var(--space-5); }
   .auth-aside[data-phone="hide"] { display: none; }
 }
+
+/* ─── Dashboard (ux/redesign): today panel, money panel ─── */
+.dash-today-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-4); align-items: start; }
+.dash-debts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); }
+.dash-panel { padding: var(--space-5); }
+.dash-panel-title { font-size: var(--text-base); font-weight: var(--font-semibold); color: var(--color-text-primary); }
+.dash-panel-hint { font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 2px; }
+.dash-section-title { font-size: var(--text-base); font-weight: var(--font-semibold); margin-bottom: var(--space-3); }
+.dash-section-period { color: var(--color-text-tertiary); font-weight: var(--font-regular); }
+.dash-todo-list, .dash-money-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; }
+.dash-todo, .dash-money-list li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-top: 1px solid var(--color-border-light); }
+.dash-todo:first-child, .dash-money-list li:first-child { border-top: none; }
+.dash-todo-icon { width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; background: var(--rd-tone-bg, var(--color-bg-tertiary)); color: var(--rd-tone, var(--color-text-secondary)); }
+.dash-money-list .dash-todo-icon { width: 32px; height: 32px; color: var(--color-primary-700); background: var(--color-primary-50); }
+.dash-todo-text { min-width: 0; flex: 1; }
+.dash-todo-title { font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--color-text-primary); }
+.dash-todo-hint { font-size: var(--text-xs); color: var(--color-text-tertiary); }
+.dash-todo-amount { font-weight: var(--font-semibold); text-align: right; }
+.dash-all-clear { display: flex; gap: var(--space-3); align-items: flex-start; margin-top: var(--space-3); padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-success-50); color: var(--color-success-700); }
+.dash-all-clear > div { color: var(--color-text-primary); }
+.dash-period { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-secondary); color: var(--color-text-secondary); }
+.dash-period select { border: none; background: transparent; color: var(--color-text-primary); font: inherit; font-size: var(--text-sm); font-weight: var(--font-semibold); cursor: pointer; outline: none; }
+.dash-period:focus-within { outline: 2px solid var(--color-primary-600); outline-offset: 1px; }
+@media (max-width: 1023px) { .dash-today-grid { grid-template-columns: 1fr; } }
+@media (max-width: 639px) {
+  .dash-panel { padding: var(--space-4); }
+  .dash-todo { flex-wrap: wrap; }
+  .dash-todo .rd-next-btn { margin-left: 48px; }
+  .dash-todo-amount { flex-basis: 100%; text-align: left; padding-left: 48px; }
+}
+.dash-period-select { min-width: 170px; }
+@media (max-width: 639px) {
+  .dash-todo-text { flex: 1 1 calc(100% - 52px); }
+  .dash-quick-actions { gap: var(--space-2); }
+}
