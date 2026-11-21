@@ -1,29 +1,31 @@
 'use client';
 
-import { productTypeLabel, productTypeOptions, semiFinishedLabel } from '@/lib/product-types';
+import { productTypeLabel, productTypeOptions } from '@/lib/product-types';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchField } from '@/components/ui/SearchField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { buttonStyle } from '@/components/ui/Button';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { ChipGroup, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatCurrency, formatPriceOrUnset, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
+import { formatPriceOrUnset, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import {
   Package,
-  Plus,
-  Search,
-  Filter,
-  AlertTriangle,
   QrCode,
   FileText,
   ArrowRightLeft,
-  Building2,
-  Pencil,
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
 import type { Warehouse as WarehouseRow } from '@shared/types';
@@ -32,7 +34,6 @@ import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 
 export default function InventoryPage() {
   const t = useTranslations('inventory');
-  const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const { token, company, hasPermission } = useAuth();
   const canEditProducts = hasPermission('inventory:edit');
@@ -41,12 +42,12 @@ export default function InventoryPage() {
 
   const [search, setSearch] = useState('');
   // The typed search applies on Enter / the filter button, as before.
-  const [appliedSearch, setAppliedSearch] = useState('');
+  const appliedSearch = useDebouncedValue(search.trim(), 350);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   // TZ "Ishlab chiqarish" 7: finished products are filtered apart from raw materials.
   const [selectedType, setSelectedType] = useState<string>('');
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
-  const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
+  const filterLowStockOnly = false;
 
   // Barcode scanner modal state
   const [showScanner, setShowScanner] = useState(false);
@@ -70,10 +71,6 @@ export default function InventoryPage() {
 
   /** Enter / filter button: apply the typed search, or reload when it is unchanged. */
   const fetchData = () => {
-    if (search !== appliedSearch) {
-      setAppliedSearch(search);
-      return;
-    }
     inventoryQueries.forEach((q) => void q.refetch());
   };
 
@@ -119,249 +116,171 @@ export default function InventoryPage() {
     ...safeCategories.map((c) => ({ value: c.id, label: getLocalizedName(c.name) })),
   ];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Склад и остатки' : t('title')}
-          </h1>
-        </div>
+  const tl = useTranslations('rd.list');
+  const ti = useTranslations('rd.inv');
+  const [stockFocus, setStockFocus] = useState<'' | 'low' | 'zero' | 'instock'>('');
+  const [limit, setLimit] = useState(100);
+  const [sort, setSort] = usePersistentState<SortState | null>('inventory.sort', null);
+  const goods = filteredProducts.filter((p) => p.type !== 'SERVICE');
+  const qtyIn = (p: Product, warehouseId: string) =>
+    Number(((p as Product & { stockLevels?: Array<{ warehouseId: string; quantity: number | string }> }).stockLevels ?? []).find((l) => l.warehouseId === warehouseId)?.quantity ?? 0);
+  const total = (p: Product) => (selectedWarehouse ? qtyIn(p, selectedWarehouse) : Number(p.totalStock ?? 0));
+  const zeroCount = goods.filter((p) => Number(p.totalStock ?? 0) <= 0).length;
+  const shownRows = goods.filter((p) =>
+    stockFocus === 'low' ? p.isLowStock : stockFocus === 'zero' ? total(p) <= 0 : stockFocus === 'instock' ? total(p) > 0 : true,
+  );
+  const visibleRows = shownRows.slice(0, limit);
+  // One column per warehouse (up to four) so stock in each place is visible at a glance.
+  const warehouseCols = (selectedWarehouse ? safeWarehouses.filter((w) => w.id === selectedWarehouse) : safeWarehouses).slice(0, 4);
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <Link href="/settings/branches" style={{ textDecoration: 'none' }}>
-            <Button variant="outline">
-              <Building2 size={16} />
-              {isRu ? 'Филиалы и Склады' : 'Filial va Omborlar'}
+  const columns: Column<Product>[] = [
+    {
+      key: 'name',
+      label: isRu ? 'Товар' : 'Tovar',
+      primary: true,
+      locked: true,
+      sortValue: (p) => getLocalizedName(p.name),
+      render: (p) => (
+        <div>
+          <div style={{ fontWeight: 'var(--font-semibold)' }}>{getLocalizedName(p.name)}</div>
+          <div className="rd-sub">
+            {productTypeLabel(p.type, locale)}
+            {p.sku ? ` · ${p.sku}` : ''}
+            {p.barcode ? ` · ${p.barcode}` : ''}
+          </div>
+        </div>
+      ),
+    },
+    ...warehouseCols.map<Column<Product>>((w) => ({
+      key: `w-${w.id}`,
+      label: getLocalizedName(w.name),
+      numeric: true,
+      sortValue: (p: Product) => qtyIn(p, w.id),
+      render: (p: Product) => {
+        const q = qtyIn(p, w.id);
+        return <span style={{ color: q <= 0 ? 'var(--color-text-tertiary)' : undefined }}>{formatQuantity(q)}</span>;
+      },
+    })),
+    {
+      key: 'total',
+      label: selectedWarehouse ? ti('inWarehouse') : ti('total'),
+      numeric: true,
+      sortValue: total,
+      render: (p) => (
+        <strong style={{ color: p.isLowStock ? 'var(--color-error-700)' : undefined }}>
+          {formatQuantity(total(p))} {unitLabel(p.unitOfMeasure, locale)}
+        </strong>
+      ),
+    },
+    {
+      key: 'min',
+      label: ti('min'),
+      numeric: true,
+      sortValue: (p) => Number(p.minStockAlert ?? 0),
+      render: (p) => <span style={{ color: 'var(--color-text-secondary)' }}>{formatQuantity(Number(p.minStockAlert ?? 0))}</span>,
+    },
+    {
+      key: 'status',
+      label: tl('status'),
+      sortValue: (p) => (p.isLowStock ? 0 : 1),
+      render: (p) =>
+        Number(p.totalStock ?? 0) <= 0 ? <Badge variant="error">{ti('out')}</Badge> : p.isLowStock ? <Badge variant="warning">{ti('lowBadge')}</Badge> : <Badge variant="success">{ti('ok')}</Badge>,
+    },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (p) =>
+        canEditProducts ? (
+          <div className="rd-row-actions">
+            <ActionsMenu label={tl('rowActions')} actions={[{ label: tl('edit'), onSelect: () => setEditingProduct(p) }]} />
+          </div>
+        ) : null,
+    },
+  ];
+
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Склад и остатки' : t('title')}
+        subtitle={ti('subtitle')}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setShowScanner(true)}>
+              <QrCode size={16} aria-hidden /> {isRu ? 'Сканер штрихкода' : 'Shtrix-kod skaner'}
             </Button>
-          </Link>
-          <Link href="/inventory/transfers" style={{ textDecoration: 'none' }}>
-            <Button variant="outline">
-              <ArrowRightLeft size={16} />
-              {isRu ? 'Перемещение' : 'Omborlararo Transfer'}
-            </Button>
-          </Link>
-          <Button variant="outline" onClick={() => setShowScanner(true)}>
-            <QrCode size={16} />
-            {isRu ? 'Сканер штрихкода' : 'Shtrix-kod skaner'}
-          </Button>
-          <Link href="/inventory/documents" style={{ textDecoration: 'none' }}>
-            <Button variant="secondary">
-              <FileText size={16} />
-              {isRu ? 'Документы' : 'Hujjatlar (Kirim/Chiqim)'}
-            </Button>
-          </Link>
-          {hasPermission('inventory:create') && (
-            <Link href="/products/new" style={{ textDecoration: 'none' }}>
-              <Button variant="primary">
-                <Plus size={16} />
-                {isRu ? 'Добавить товар' : t('addProduct')}
-              </Button>
+            <Link href="/inventory/transfers" style={buttonStyle('outline')}>
+              <ArrowRightLeft size={16} aria-hidden /> {isRu ? 'Перемещение' : 'Omborlararo transfer'}
             </Link>
-          )}
+            <Link href="/inventory/documents" style={buttonStyle('primary')}>
+              <FileText size={16} aria-hidden /> {ti('documents')}
+            </Link>
+          </>
+        }
+      />
+
+      <SignalStrip label={tl('summary')}>
+        <Signal tone="error" label={ti('sigLow')} value={lowStockAlerts.length} hint={ti('sigLowHint')} active={stockFocus === 'low'} onClick={() => setStockFocus(stockFocus === 'low' ? '' : 'low')} />
+        <Signal tone="warning" label={ti('sigZero')} value={zeroCount} hint={ti('sigZeroHint')} active={stockFocus === 'zero'} onClick={() => setStockFocus(stockFocus === 'zero' ? '' : 'zero')} />
+        <Signal tone="info" label={ti('sigItems')} value={goods.length} hint={ti('sigItemsHint')} />
+        <Signal tone="neutral" label={ti('sigWarehouses')} value={safeWarehouses.length} hint={<Link href="/settings/branches">{isRu ? 'Филиалы и склады' : 'Filial va omborlar'}</Link>} />
+      </SignalStrip>
+
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField value={search} onChange={setSearch} placeholder={ti('searchPh')} label={tl('search')} />
+          <div style={{ minWidth: 200 }}>
+            <Select options={categoryOptions} value={selectedCategory} onChange={setSelectedCategory} searchable />
+          </div>
+        </div>
+        <div className="rd-toolbar-row">
+          <ChipGroup label={tl('warehouse')} showLabel options={warehouseOptions} value={selectedWarehouse} onChange={setSelectedWarehouse} />
+        </div>
+        <div className="rd-toolbar-row">
+          <ChipGroup
+            label={ti('stockFilter')}
+            showLabel
+            options={[
+              { value: '', label: tl('all') },
+              { value: 'instock', label: ti('inStock') },
+              { value: 'low', label: ti('lowBadge') },
+              { value: 'zero', label: ti('out') },
+            ]}
+            value={stockFocus}
+            onChange={(v) => setStockFocus(v as typeof stockFocus)}
+          />
+          <ChipGroup label={isRu ? 'Тип' : 'Turi'} showLabel options={productTypeOptions(locale, tl('all')).filter((o) => o.value !== 'SERVICE')} value={selectedType} onChange={setSelectedType} />
         </div>
       </div>
 
-      {/* Low Stock Banner Alert */}
-      {lowStockAlerts.length > 0 && (
-        <div
-          style={{
-            padding: 'var(--space-4)',
-            borderRadius: 'var(--radius-lg)',
-            backgroundColor: 'var(--color-warning-50)',
-            border: '1px solid var(--color-warning-100)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--color-warning-100)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <AlertTriangle size={20} />
-            </div>
-            <div>
-              <div style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
-                {lowStockAlerts.length} ta mahsulot bo&apos;yicha kam qoldiq ogohlantirishi!
-              </div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                Minimal zahira me&apos;yoridan kam qolgan tovarlar
-              </div>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFilterLowStockOnly(!filterLowStockOnly)}
-          >
-            {filterLowStockOnly ? 'Barcha tovarlar' : 'Kam qoldiqlarni ko\'rish'}
-          </Button>
-        </div>
-      )}
-
-      {/* Filter and Search Bar */}
-      <Card style={{ padding: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Search */}
-          <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchData()}
-              placeholder="SKU, Shtrix-kod bo'yicha qidiruv..."
-              style={{
-                width: '100%',
-                padding: '8px 12px 8px 36px',
-                fontSize: 'var(--text-sm)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-bg-input)',
-                color: 'var(--color-text-primary)',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          {/* Warehouse Filter */}
-          <div style={{ width: '220px' }}>
-            <Select
-              options={warehouseOptions}
-              value={selectedWarehouse}
-              onChange={(val) => setSelectedWarehouse(val)}
-              placeholder="Barcha Omborlar"
-            />
-          </div>
-
-          {/* Type Select */}
-          <div style={{ width: '200px' }}>
-            <Select
-              aria-label={isRu ? 'Тип номенклатуры' : 'Nomenklatura turi'}
-              options={productTypeOptions(locale, isRu ? 'Все типы' : 'Barcha turlar').filter((o) => o.value !== 'SERVICE')}
-              value={selectedType}
-              onChange={(val) => setSelectedType(val)}
-            />
-          </div>
-
-          {/* Category Select */}
-          <div style={{ width: '220px' }}>
-            <Select
-              options={categoryOptions}
-              value={selectedCategory}
-              onChange={(val) => setSelectedCategory(val)}
-              placeholder="Barcha kategoriyalar"
-            />
-          </div>
-
-          <Button variant="secondary" size="sm" onClick={fetchData}>
-            <Filter size={14} />
-            {tCommon('filter')}
-          </Button>
-        </div>
-      </Card>
-
-      {/* Product Catalog Table */}
-      <Card>
+      <div className="rd-table-card">
         {failedQuery ? (
           <LoadError
             error={failedQuery.error}
             onRetry={() => inventoryQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
             retrying={inventoryQueries.some((q) => q.isFetching)}
           />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
-        ) : filteredProducts.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <Package size={40} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>{tCommon('noData')}</div>
-          </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>MAHSULOT NOMI</th>
-                  <th style={{ padding: '12px' }}>SKU</th>
-                  <th style={{ padding: '12px' }}>SHTRIX-KOD</th>
-                  <th style={{ padding: '12px' }}>KATEGORIYA</th>
-                  <th style={{ padding: '12px' }}>O&apos;LCHOV BIRLIGI</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>TAN NARXI</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>SOTUV NARXI</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>JAMI QOLDIQ</th>
-                  <th style={{ padding: '12px', textAlign: 'center' }}>HOLAT</th>
-                  {canEditProducts && (
-                    <th style={{ padding: '12px', textAlign: 'center' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map((product) => {
-                  const isLow = product.isLowStock;
-                  return (
-                    <tr key={product.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td data-primary style={{ padding: '12px', fontWeight: 'var(--font-semibold)' }}>
-                        {getLocalizedName(product.name)}
-                        <div style={{ fontSize: 'var(--text-xs)', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
-                          {productTypeLabel(product.type, locale)}
-                          {product.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}
-                        </div>
-                      </td>
-                      <td data-label="SKU" style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
-                        {product.sku}
-                      </td>
-                      <td data-label="SHTRIX-KOD" style={{ padding: '12px', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
-                        {product.barcode || '—'}
-                      </td>
-                      <td data-label="KATEGORIYA" style={{ padding: '12px' }}>
-                        {product.category ? (
-                          <Badge variant="neutral">{getLocalizedName(product.category.name)}</Badge>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td data-label="O&apos;LCHOV BIRLIGI" style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                        {unitLabel(product.unitOfMeasure, locale)}
-                      </td>
-                      <td data-label="TAN NARXI" style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                        {formatCurrency(Number(product.costPrice), locale, product.costPriceCurrency)}
-                      </td>
-                      <td data-label="SOTUV NARXI" style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-medium)' }} className="tabular-nums">
-                        {formatPriceOrUnset(Number(product.salePrice), locale, product.salePriceCurrency)}
-                      </td>
-                      <td data-label="JAMI QOLDIQ" style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                        {formatQuantity(Number(product.totalStock ?? 0))} {unitLabel(product.unitOfMeasure, locale)}
-                      </td>
-                      <td data-label="HOLAT" style={{ padding: '12px', textAlign: 'center' }}>
-                        {isLow ? (
-                          <Badge variant="warning">Kam qoldiq</Badge>
-                        ) : (
-                          <Badge variant="success">Normal</Badge>
-                        )}
-                      </td>
-                      {canEditProducts && (
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingProduct(product)}
-                            aria-label={`${isRu ? 'Редактировать' : 'Tahrirlash'}: ${getLocalizedName(product.name)}`}
-                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                          >
-                            <Pencil size={16} />
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <DataTable
+            rows={visibleRows}
+            columns={columns}
+            rowKey={(p) => p.id}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={canEditProducts ? (p) => setEditingProduct(p) : undefined}
+            loading={loading}
+            empty={<EmptyState icon={Package} title={tl('nothingFound')} description={tl('nothingFoundHint')} />}
+          />
+        )}
+        {shownRows.length > visibleRows.length && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{ti('shownOf', { shown: visibleRows.length, total: shownRows.length })}</span>
+            <Button variant="secondary" size="sm" onClick={() => setLimit((n) => n + 200)}>
+              {ti('showMore')}
+            </Button>
           </div>
         )}
-      </Card>
+      </div>
 
       {editingProduct && (
         <CreateProductDrawer

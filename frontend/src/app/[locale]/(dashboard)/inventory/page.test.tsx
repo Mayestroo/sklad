@@ -12,6 +12,8 @@ vi.mock('next-intl', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => '/inventory',
 }));
 vi.mock('@/components/products/CreateProductDrawer', () => ({ CreateProductDrawer: () => null }));
 
@@ -41,9 +43,10 @@ const calls = () => apiFetch.mock.calls.map((c) => c[0] as string);
 describe('Inventory page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    window.localStorage.clear();
   });
 
-  it('loads products, categories, warehouses and alerts once; search applies on Enter only', async () => {
+  it('loads products, categories, warehouses and alerts once; the search applies once typing pauses', async () => {
     apiFetch.mockImplementation(async (endpoint: string) => respond(endpoint));
     renderPage(<InventoryPage />);
 
@@ -56,12 +59,11 @@ describe('Inventory page', () => {
       '/tenants/warehouses',
     ]);
 
-    const searchBox = screen.getByPlaceholderText("SKU, Shtrix-kod bo'yicha qidiruv...");
+    const searchBox = screen.getByPlaceholderText('searchPh');
     fireEvent.change(searchBox, { target: { value: 'un' } });
     expect(apiFetch).toHaveBeenCalledTimes(4);
 
-    fireEvent.keyDown(searchBox, { key: 'Enter' });
-    expect(await screen.findByText('Un 1-nav')).toBeTruthy();
+    expect(await screen.findByText('Un 1-nav', {}, { timeout: 2000 })).toBeTruthy();
     expect(calls()).toContain('/inventory/products?search=un');
     expect(apiFetch).toHaveBeenCalledTimes(5);
   });

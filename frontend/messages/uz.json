@@ -822,6 +822,28 @@
       "noName": "Nomi hali yo‘q",
       "noPrice": "Narx belgilanmagan",
       "barcode": "Shtrix-kod"
+    },
+    "inv": {
+      "subtitle": "Har bir ombordagi qoldiq: nima tugayapti, nima umuman yo‘q",
+      "documents": "Ombor hujjatlari",
+      "inWarehouse": "Shu omborda",
+      "total": "Jami qoldiq",
+      "min": "Minimal",
+      "out": "Qolmagan",
+      "lowBadge": "Kam qolgan",
+      "ok": "Yetarli",
+      "inStock": "Bor",
+      "stockFilter": "Qoldiq",
+      "sigLow": "Kam qolgan",
+      "sigLowHint": "Minimaldan kam — bosing: ko‘rsatish",
+      "sigZero": "Umuman qolmagan",
+      "sigZeroHint": "Qoldiq 0 — bosing: ko‘rsatish",
+      "sigItems": "Tovar pozitsiyalari",
+      "sigItemsHint": "Xizmatlarsiz",
+      "sigWarehouses": "Omborlar",
+      "searchPh": "Nomi, SKU yoki shtrix-kod",
+      "shownOf": "{total} tadan {shown} tasi ko‘rsatilmoqda",
+      "showMore": "Yana ko‘rsatish"
     }
   }
 }
