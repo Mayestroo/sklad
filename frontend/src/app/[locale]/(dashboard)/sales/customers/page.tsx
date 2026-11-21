@@ -1,20 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
+import { usePersistentState } from '@/lib/usePersistentState';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Users, Search, DollarSign, Eye, Pencil, Trash2, Plus } from 'lucide-react';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
+import { Users, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
 import { toast } from '@/context/ToastContext';
+import { useConfirm } from '@/context/ConfirmContext';
 
 interface Customer {
   id: string;
@@ -44,73 +53,65 @@ interface CustomerProfile {
   payments: unknown[];
 }
 
+/** Debt per currency: positive = the customer owes us, negative = an advance we hold. */
+function DebtLines({ balances, locale }: { balances: NonNullable<Customer['balancesByCurrency']>; locale: 'uz' | 'ru' }) {
+  const isRu = locale === 'ru';
+  const lines = balances.filter((b) => b.customerDebt !== 0);
+  if (lines.length === 0) return <span style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Нет долга' : 'Qarz yo‘q'}</span>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+      {lines.map((b) => (
+        <span key={b.currency} className="tabular-nums" style={{ fontWeight: 'var(--font-semibold)', color: b.customerDebt > 0 ? 'var(--color-warning-700)' : 'var(--color-info-700)', whiteSpace: 'nowrap' }}>
+          {b.customerDebt > 0 ? '' : isRu ? 'Аванс ' : 'Avans '}
+          {formatCurrency(Math.abs(b.customerDebt), locale, b.currency)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function CustomersPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const confirm = useConfirm();
 
   const customersQuery = useApiQuery<Customer[]>('/sales/counterparties?type=CUSTOMER');
-  const customers = customersQuery.data ?? [];
+  const customers = useMemo(() => customersQuery.data ?? [], [customersQuery.data]);
   const loading = customersQuery.isPending;
   const [search, setSearch] = useState('');
+  const [debtOnly, setDebtOnly] = usePersistentState('customers.debtOnly', false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [profile, setProfile] = useState<CustomerProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const profileQuery = useApiQuery<CustomerProfile>(selectedCustomer ? `/sales/customers/${selectedCustomer.id}/profile` : null);
+  const profile = profileQuery.data ?? null;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchCustomers = () => void customersQuery.refetch();
 
-  const handleDeleteCustomer = async () => {
-    if (!deletingCustomer || !token || !company) return;
-    setDeleteLoading(true);
+  const handleDeleteCustomer = async (customer: Customer) => {
+    if (!token || !company) return;
+    const ok = await confirm({
+      title: isRu ? 'Удалить клиента?' : 'Mijoz o‘chirilsinmi?',
+      description: isRu
+        ? `Клиент «${customer.name}» будет удалён. Если у него есть документы или долг, система не даст удалить.`
+        : `«${customer.name}» mijozi o‘chiriladi. Unda hujjatlar yoki qarz bo‘lsa, tizim o‘chirishga ruxsat bermaydi.`,
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
     try {
-      await apiFetch(`/sales/counterparties/${deletingCustomer.id}`, {
-        method: 'DELETE',
-        token,
-        tenantId: company.id,
-        locale,
-      });
-      setDeletingCustomer(null);
-      toast.success(isRu ? 'Клиент успешно удален' : 'Mijoz muvaffaqiyatli o‘chirildi');
+      await apiFetch(`/sales/counterparties/${customer.id}`, { method: 'DELETE', token, tenantId: company.id, locale });
+      toast.success(isRu ? `Клиент «${customer.name}» удалён` : `«${customer.name}» mijozi o‘chirildi`);
       fetchCustomers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении клиента' : 'Mijozni o‘chirishda xatolik yuz berdi'));
-    } finally {
-      setDeleteLoading(false);
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось удалить клиента' : 'Mijozni o‘chirib bo‘lmadi'));
     }
   };
 
-
-  const handleViewProfile = async (customer: Customer) => {
-    if (!token || !company) return;
-    setSelectedCustomer(customer);
-    setProfileLoading(true);
-    try {
-      const res = await apiFetch<CustomerProfile>(`/sales/customers/${customer.id}/profile`, {
-        token: token || undefined,
-        tenantId: company.id,
-        locale,
-      });
-      setProfile(res);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  const filtered = customers.filter((c) => {
-    const q = search.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      c.name.toLowerCase().includes(q) ||
-      (c.phone && c.phone.toLowerCase().includes(q)) ||
-      (c.email && c.email.toLowerCase().includes(q))
-    );
-  });
+  const hasDebt = (c: Customer) => Boolean(c.balancesByCurrency?.some((b) => b.customerDebt > 0));
+  const filtered = customers.filter((c) => (!debtOnly || hasDebt(c)) && matchesSearch(search, c.name, c.phone, c.email));
 
   const receivablesByCurrency = customers.reduce<Record<string, number>>((totals, customer) => {
     for (const balance of customer.balancesByCurrency || []) {
@@ -118,243 +119,197 @@ export default function CustomersPage() {
     }
     return totals;
   }, {});
-  const customersWithDebt = customers.filter((customer) =>
-    customer.balancesByCurrency?.some((balance) => balance.customerDebt > 0),
-  ).length;
+  const customersWithDebt = customers.filter(hasDebt).length;
 
-  const tableHeaders = [
-    isRu ? 'Имя клиента' : 'Mijoz nomi',
-    isRu ? 'Телефон' : 'Telefon',
-    isRu ? 'Email' : 'Email',
-    isRu ? 'Баланс долга' : 'Qarz balansi',
-    isRu ? 'Тип' : 'Tur',
-    isRu ? 'Действия' : 'Amallar',
-  ];
+  const iconBtn = (danger?: boolean): React.CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    background: 'none',
+    border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)',
+    cursor: 'pointer',
+    color: danger ? 'var(--color-error-700)' : 'var(--color-text-primary)',
+  });
+  const th = { padding: '10px 14px', textAlign: 'left' as const, fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' };
+  const formatByCurrency = (items: Array<{ currency: string; amount: number }>) =>
+    items.length > 0 ? items.map((item) => formatCurrency(item.amount, locale, item.currency)).join(' · ') : '—';
+
+  const newButton = (
+    <Button onClick={() => setIsCreateOpen(true)}>
+      <Plus size={16} aria-hidden /> {isRu ? 'Новый клиент' : 'Yangi mijoz'}
+    </Button>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Клиенты' : 'Mijozlar'}
-          </h1>
-        </div>
-        <Button
-          onClick={() => setIsCreateOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}
-        >
-          <Plus size={18} /> {isRu ? 'Новый клиент' : 'Yangi Mijoz'}
-        </Button>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          title={isRu ? 'Клиенты' : 'Mijozlar'}
+          subtitle={isRu ? 'Кому вы продаёте: контакты, долги и история покупок.' : 'Kimga sotasiz: kontaktlar, qarzlar va xaridlar tarixi.'}
+          actions={newButton}
+        />
       </div>
 
-      {/* Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 180px), 1fr))', gap: 'var(--space-4)' }}>
+      <div className="ux-kpi-grid">
         <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Users size={18} color="var(--color-primary-600)" />
-            </div>
-            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Всего клиентов' : 'Jami mijozlar'}</span>
-          </div>
-          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700 }}>{customers.length}</div>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Всего клиентов' : 'Jami mijozlar'}</div>
+          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: 4 }} className="tabular-nums">{customers.length}</div>
         </Card>
         <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <DollarSign size={18} color="var(--color-warning-700)" />
-            </div>
-            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Общий долг' : 'Umumiy qarz'}</span>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Нам должны' : 'Bizga qarzdor'}</div>
+          <div style={{ marginTop: 4 }}>
+            <MultiCurrencyValue items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} color="var(--color-warning-700)" />
           </div>
-          <MultiCurrencyValue
-            items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
-            locale={locale}
-            color="var(--color-warning-700)"
-          />
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{customersWithDebt} {isRu ? 'клиентов' : 'ta mijozda'}</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>
+            {isRu ? `Клиентов с долгом: ${customersWithDebt}` : `Qarzdor mijozlar: ${customersWithDebt}`}
+          </div>
         </Card>
       </div>
 
-      {/* Search */}
-      <Card style={{ padding: 'var(--space-4)' }}>
-        <div style={{ position: 'relative', maxWidth: 400 }}>
-          <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
-          <input
-            id="customer-search-input"
-            placeholder={isRu ? 'Имя, телефон или email...' : 'Ism, telefon yoki email...'}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '8px 12px 8px 34px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', boxSizing: 'border-box' }}
-          />
-        </div>
-      </Card>
-
-      {/* Table */}
       <Card>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                {tableHeaders.map((h) => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>
-                    {h}
-                  </th>
+        {customers.length > 0 && (
+          <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
+            <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Имя, телефон или email' : 'Ism, telefon yoki email'} style={{ maxWidth: 400 }} />
+            <Checkbox checked={debtOnly} onChange={(e) => setDebtOnly(e.target.checked)} label={isRu ? 'Только должники' : 'Faqat qarzdorlar'} />
+          </div>
+        )}
+
+        {customersQuery.isError ? (
+          <LoadError error={customersQuery.error} onRetry={fetchCustomers} retrying={customersQuery.isFetching} />
+        ) : loading ? (
+          <SkeletonRows rows={6} columns={5} />
+        ) : customers.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title={isRu ? 'Клиентов пока нет' : 'Hozircha mijozlar yo‘q'}
+            description={isRu ? 'Добавьте клиента — его можно будет выбрать в продаже, а долг будет считаться сам.' : 'Mijoz qo‘shing — uni sotuvda tanlash mumkin bo‘ladi, qarz esa o‘zi hisoblanadi.'}
+            action={newButton}
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={debtOnly ? (isRu ? 'Измените поиск или снимите «Только должники».' : 'Qidiruvni o‘zgartiring yoki «Faqat qarzdorlar»ni olib tashlang.') : isRu ? 'Измените поиск.' : 'Qidiruvni o‘zgartiring.'} />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                  <th scope="col" style={th}>{isRu ? 'Клиент' : 'Mijoz'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Телефон' : 'Telefon'}</th>
+                  <th scope="col" style={th}>Email</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Долг' : 'Qarz'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((c) => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                    <td data-primary style={{ padding: '12px 14px' }}>
+                      <button type="button" onClick={() => setSelectedCustomer(c)} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', cursor: 'pointer', textAlign: 'left' }}>
+                        {c.name}
+                      </button>
+                      {c.type === 'BOTH' && (
+                        <div style={{ marginTop: 2 }}><Badge variant="neutral">{isRu ? 'Также поставщик' : 'Yetkazib beruvchi ham'}</Badge></div>
+                      )}
+                    </td>
+                    <td data-label={isRu ? 'Телефон' : 'Telefon'} style={{ padding: '12px 14px', color: 'var(--color-text-secondary)' }}>
+                      {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>{c.phone}</a> : '—'}
+                    </td>
+                    <td data-label="Email" style={{ padding: '12px 14px', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
+                    <td data-label={isRu ? 'Долг' : 'Qarz'} style={{ padding: '12px 14px', textAlign: 'right' }}>
+                      <DebtLines balances={c.balancesByCurrency ?? []} locale={locale} />
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                        <button type="button" onClick={() => setSelectedCustomer(c)} aria-label={isRu ? `Профиль: ${c.name}` : `Profil: ${c.name}`} title={isRu ? 'Профиль' : 'Profil'} style={iconBtn()}>
+                          <Eye size={14} aria-hidden />
+                        </button>
+                        <button type="button" onClick={() => setEditingCustomer(c)} aria-label={isRu ? `Изменить: ${c.name}` : `Tahrirlash: ${c.name}`} title={isRu ? 'Изменить' : 'Tahrirlash'} style={iconBtn()}>
+                          <Pencil size={14} aria-hidden />
+                        </button>
+                        <button type="button" onClick={() => void handleDeleteCustomer(c)} aria-label={isRu ? `Удалить: ${c.name}` : `O‘chirish: ${c.name}`} title={isRu ? 'Удалить' : 'O‘chirish'} style={iconBtn(true)}>
+                          <Trash2 size={14} aria-hidden />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {customersQuery.isError ? (
-                <tr>
-                  <td colSpan={6}>
-                    <LoadError error={customersQuery.error} onRetry={fetchCustomers} retrying={customersQuery.isFetching} />
-                  </td>
-                </tr>
-              ) : loading ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>
-                    <Users size={36} style={{ margin: '0 auto 10px', opacity: 0.3, display: 'block' }} />
-                    {isRu ? 'Клиенты не найдены' : 'Mijozlar topilmadi'}
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((c) => {
-                  const balances = (c.balancesByCurrency || []).filter((balance) => balance.customerDebt !== 0);
-                  return (
-                    <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{c.name}</td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.phone || '—'}</td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
-                      <td style={{ padding: '12px 14px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                        {balances.length > 0
-                          ? balances.map((balance) => (
-                              <div key={balance.currency} style={{ color: balance.customerDebt > 0 ? 'var(--color-warning-700)' : 'var(--color-info-700)', fontWeight: 600 }}>
-                                {balance.currency}: {formatCurrency(balance.customerDebt, locale, balance.currency)}
-                              </div>
-                            ))
-                          : '—'}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <Badge variant={c.type === 'BOTH' ? 'warning' : 'neutral'}>
-                          {c.type === 'CUSTOMER' ? (isRu ? 'Клиент' : 'Mijoz') : c.type === 'BOTH' ? (isRu ? 'Клиент и Пост.' : 'Mijoz & Yetk.') : c.type}
-                        </Badge>
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                          <button
-                            id={`view-customer-${c.id}`}
-                            onClick={() => handleViewProfile(c)}
-                            title={isRu ? 'Профиль' : 'Profil'}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-text-primary)' }}
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <button
-                            id={`edit-customer-${c.id}`}
-                            onClick={() => setEditingCustomer(c)}
-                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-text-primary)' }}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            id={`delete-customer-${c.id}`}
-                            onClick={() => setDeletingCustomer(c)}
-                            title={isRu ? 'Удалить' : 'O‘chirish'}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '30px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--color-error-700)' }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
-      {/* Customer Profile Modal */}
-      {selectedCustomer && (() => {
-        const formatByCurrency = (items: Array<{ currency: string; amount: number }>) =>
-          items.length > 0
-            ? items.map((item) => formatCurrency(item.amount, locale, item.currency)).join(' · ')
-            : '0';
-        return (
-          <Modal isOpen={true} onClose={() => { setSelectedCustomer(null); setProfile(null); }} title={`${isRu ? 'Профиль клиента' : 'Mijoz'}: ${selectedCustomer.name}`} size="xl">
-            {profileLoading ? (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
-            ) : profile ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 150px), 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
-                  {[
-                    { label: isRu ? 'Всего продаж' : 'Jami sotuv', value: formatByCurrency(profile.metrics.totalSalesByCurrency), color: undefined },
-                    { label: isRu ? 'Оплачено' : 'To\'langan', value: formatByCurrency(profile.metrics.totalPaidByCurrency), color: 'var(--color-success-700)' },
-                    { label: isRu ? 'Долг по валютам' : 'Valyuta bo‘yicha qarz', value: profile.metrics.balancesByCurrency
-                      .filter((balance) => balance.customerDebt !== 0)
-                      .map((balance) => `${balance.currency}: ${formatCurrency(balance.customerDebt, locale, balance.currency)}`)
-                      .join(' · ') || '—', color: 'var(--color-warning-700)' },
-                    { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency), color: 'var(--color-error-700)' },
-                    { label: isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)', value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'), color: profile.metrics.grossProfit >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' },
-                  ].map((m) => (
-                    <div key={m.label} style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</div>
-                      <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 4, color: m.color }}>{m.value}</div>
-                    </div>
-                  ))}
-                </div>
+      {selectedCustomer && (
+        <Modal isOpen onClose={() => setSelectedCustomer(null)} title={selectedCustomer.name} size="xl">
+          {profileQuery.isError ? (
+            <LoadError error={profileQuery.error} onRetry={() => void profileQuery.refetch()} retrying={profileQuery.isFetching} />
+          ) : profileQuery.isPending || !profile ? (
+            <SkeletonRows rows={4} columns={4} />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+              <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)' }}>
+                {[
+                  { label: isRu ? 'Продано' : 'Sotildi', value: formatByCurrency(profile.metrics.totalSalesByCurrency) },
+                  { label: isRu ? 'Оплачено' : 'To‘landi', value: formatByCurrency(profile.metrics.totalPaidByCurrency) },
+                  {
+                    label: isRu ? 'Долг' : 'Qarz',
+                    value: <DebtLines balances={profile.metrics.balancesByCurrency} locale={locale} />,
+                  },
+                  { label: isRu ? 'Возвраты' : 'Qaytarishlar', value: formatByCurrency(profile.metrics.totalReturnedByCurrency) },
+                  {
+                    label: isRu ? 'Валовая прибыль' : 'Yalpi foyda',
+                    value: formatCurrency(profile.metrics.grossProfit, locale, 'UZS'),
+                    color: profile.metrics.grossProfit < 0 ? 'var(--color-error-700)' : undefined,
+                  },
+                ].map((m) => (
+                  <div key={m.label}>
+                    <dt style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</dt>
+                    <dd style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-base)', marginTop: 4, color: m.color, display: 'flex' }} className="tabular-nums">{m.value}</dd>
+                  </div>
+                ))}
+              </dl>
 
-                {profile.invoices.length > 0 && (
-                  <div>
-                    <h3 style={{ fontWeight: 600, marginBottom: 10 }}>{isRu ? 'Последние продажи' : 'So\'nggi sotuvlar'}</h3>
-                    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ background: 'var(--color-bg-subtle)' }}>
-                            {[isRu ? '№ Документа' : 'Hujjat №', isRu ? 'Дата' : 'Sana', isRu ? 'Сумма' : 'Summa', isRu ? 'Статус' : 'Holat'].map((h) => (
-                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
-                            ))}
+              <div>
+                <h3 style={{ fontWeight: 'var(--font-semibold)', marginBottom: 10 }}>{isRu ? 'Последние продажи' : 'So‘nggi sotuvlar'}</h3>
+                {profile.invoices.length === 0 ? (
+                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Продаж этому клиенту ещё не было.' : 'Bu mijozga hali sotuv bo‘lmagan.'}</p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                          <th scope="col" style={th}>{isRu ? '№ документа' : 'Hujjat №'}</th>
+                          <th scope="col" style={th}>{isRu ? 'Дата' : 'Sana'}</th>
+                          <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Сумма' : 'Summa'}</th>
+                          <th scope="col" style={th}>{isRu ? 'Статус' : 'Holati'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {profile.invoices.slice(0, 8).map((inv) => (
+                          <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                            <td data-primary style={{ padding: '8px 14px', fontWeight: 'var(--font-semibold)' }}>
+                              <Link href={`/sales/${inv.id}`} style={{ color: 'var(--color-primary-700)' }}>{inv.invoiceNumber}</Link>
+                            </td>
+                            <td data-label={isRu ? 'Дата' : 'Sana'} style={{ padding: '8px 14px', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate, locale)}</td>
+                            <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">{formatCurrency(Number(inv.totalAmount), locale, inv.currency)}</td>
+                            <td data-label={isRu ? 'Статус' : 'Holati'} style={{ padding: '8px 14px' }}><DocumentStatusBadge status={inv.status} locale={locale} /></td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {profile.invoices.slice(0, 8).map((inv) => (
-                            <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{inv.invoiceNumber}</td>
-                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{formatDate(inv.invoiceDate, locale)}</td>
-                              <td style={{ padding: '8px 12px', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(Number(inv.totalAmount), locale, inv.currency)}</td>
-                              <td style={{ padding: '8px 12px' }}>
-                                <Badge variant={inv.status === 'POSTED' ? 'success' : inv.status === 'DRAFT' ? 'warning' : 'error'}>
-                                  {inv.status === 'POSTED' ? (isRu ? 'Проведён' : 'Tasdiqlangan') : inv.status === 'DRAFT' ? (isRu ? 'Черновик' : 'Qoralama') : inv.status}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>{isRu ? 'Данные не загружены' : 'Ma\'lumot yuklanmadi'}</div>
-            )}
-          </Modal>
-        );
-      })()}
-      {/* Create Customer Drawer */}
-      {isCreateOpen && (
-        <CreateCounterpartyDrawer
-          isOpen={isCreateOpen}
-          onClose={() => setIsCreateOpen(false)}
-          defaultType="CUSTOMER"
-          onSuccess={() => fetchCustomers()}
-        />
+            </div>
+          )}
+        </Modal>
       )}
 
-      {/* Edit Customer Drawer */}
+      {isCreateOpen && (
+        <CreateCounterpartyDrawer isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} defaultType="CUSTOMER" onSuccess={() => fetchCustomers()} />
+      )}
       {editingCustomer && (
         <CreateCounterpartyDrawer
           isOpen={!!editingCustomer}
@@ -366,39 +321,6 @@ export default function CustomersPage() {
             fetchCustomers();
           }}
         />
-      )}
-
-      {/* Delete Customer Confirmation Modal */}
-      {deletingCustomer && (
-        <Modal
-          isOpen={true}
-          onClose={() => setDeletingCustomer(null)}
-          title={isRu ? 'Удаление клиента' : 'Mijozni o‘chirish'}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы действительно хотите удалить клиента "${deletingCustomer.name}"? Если у клиента есть связанные документы или долг, удаление будет отклонено.`
-                : `Haqiqatan ham "${deletingCustomer.name}" mijozini o‘chirmoqchimisiz? Agar mijozga bog‘langan hujjatlar yoki qarz bo‘lsa, o‘chirish rad etiladi.`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button
-                variant="secondary"
-                onClick={() => setDeletingCustomer(null)}
-                disabled={deleteLoading}
-              >
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleDeleteCustomer}
-                disabled={deleteLoading}
-              >
-                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
-              </Button>
-            </div>
-          </div>
-        </Modal>
       )}
     </div>
   );

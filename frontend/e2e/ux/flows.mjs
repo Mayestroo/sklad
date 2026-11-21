@@ -1,6 +1,6 @@
 // Real-flow checks in the browser against the local app (local DB only).
 // Usage: node e2e/ux/flows.mjs <flow> [locale] [width]
-// Flows: login, sale, receipt, palette, drawer, expense
+// Flows: login, sale, receipt, palette, drawer, expense, order, product, delorder, finance, users, crm, prices
 import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -250,6 +250,72 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
     log('closed by Esc:', !(await dlg.isVisible().catch(() => false)));
+  }
+
+  if (flow === 'crm') {
+    await signIn();
+    await page.goto(BASE + '/sales/crm', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: isRu ? 'Новая сделка' : 'Yangi bitim' }).first().click();
+    const dlg = page.getByRole('dialog');
+    await dlg.waitFor();
+    await page.waitForTimeout(200);
+    log('focus in title field:', await page.evaluate(() => document.activeElement?.tagName));
+    await page.keyboard.type('UX test bitim');
+    await page.keyboard.press('Control+Enter');
+    await page.waitForTimeout(300);
+    log('client required message:', (await dlg.locator('[role=alert]').allTextContents()).join(' | '));
+    await shot('1-missing-client');
+    await pick(isRu ? 'Клиент' : 'Mijoz', 'Baraka');
+    await dlg.getByRole('button', { name: isRu ? 'Создать сделку' : 'Bitim yaratish' }).click();
+    await dlg.waitFor({ state: 'hidden', timeout: 10000 });
+    const card = page.getByRole('heading', { name: 'UX test bitim' });
+    await card.waitFor({ timeout: 10000 });
+    log('deal on the board: yes');
+    await shot('2-created');
+    const cardRoot = card.locator('xpath=ancestor::div[contains(@style,"flex-direction: column")][1]');
+    await cardRoot.getByRole('combobox').click();
+    await page.getByRole('option', { name: isRu ? 'Переговоры' : 'Muzokara' }).click();
+    await page.waitForTimeout(1200);
+    const col = page.getByRole('region', { name: isRu ? 'Переговоры' : 'Muzokara' });
+    log('moved to negotiation:', await col.getByRole('heading', { name: 'UX test bitim' }).isVisible().catch(() => false));
+    await shot('3-moved');
+    await page.getByRole('button', { name: isRu ? 'Удалить сделку «UX test bitim»' : '«UX test bitim» bitimini o‘chirish' }).click();
+    const confirmDlg = page.getByRole('alertdialog').or(page.getByRole('dialog'));
+    await confirmDlg.first().waitFor();
+    log('confirm text:', (await confirmDlg.first().textContent())?.replace(/\s+/g, ' ').slice(0, 140));
+    await confirmDlg.first().getByRole('button', { name: isRu ? 'Удалить' : 'O‘chirish' }).click();
+    await page.waitForTimeout(1200);
+    log('deal removed:', !(await page.getByRole('heading', { name: 'UX test bitim' }).isVisible().catch(() => false)));
+  }
+
+  if (flow === 'prices') {
+    await signIn();
+    await page.goto(BASE + '/sales/prices', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali' }).first().click();
+    await page.locator('#pl-name-uz').fill('Ulgurji UX');
+    await pick(isRu ? 'Валюта' : 'Valyuta', 'UZS');
+    await page.getByRole('button', { name: isRu ? 'Создать' : 'Yaratish' }).click();
+    await page.getByRole('heading', { name: 'Ulgurji UX' }).waitFor({ timeout: 10000 });
+    log('list created and selected: yes');
+    await page.getByRole('searchbox').fill('Shakar');
+    const edit = page.getByRole('button', { name: new RegExp(isRu ? 'Указать цену: ' : 'Narx kiritish: ') }).first();
+    await edit.click();
+    await page.keyboard.press('Escape');
+    log('Esc cancels inline edit:', await edit.isVisible().catch(() => false));
+    await edit.click();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('250000');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(1500);
+    log('row after save:', (await page.locator('tbody tr').first().textContent())?.replace(/\s+/g, ' ').slice(0, 160));
+    await shot('1-priced');
+    await page.getByRole('button', { name: isRu ? 'Удалить' : 'O‘chirish' }).first().click();
+    const dlg = page.getByRole('alertdialog').or(page.getByRole('dialog')).first();
+    await dlg.waitFor();
+    log('confirm text:', (await dlg.textContent())?.replace(/\s+/g, ' ').slice(0, 160));
+    await dlg.getByRole('button', { name: isRu ? 'Удалить' : 'O‘chirish' }).click();
+    await page.waitForTimeout(1200);
+    log('list removed:', !(await page.getByRole('heading', { name: 'Ulgurji UX' }).isVisible().catch(() => false)));
   }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);

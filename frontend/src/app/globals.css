@@ -1130,3 +1130,6 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
   .ux-journal-line > :nth-child(2) { grid-row: 2; }
   .ux-journal-line > :nth-child(3) { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
 }
+
+/* SearchField draws its own clear button: hide the browser one */
+.ux-search-input::-webkit-search-cancel-button, .ux-search-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }

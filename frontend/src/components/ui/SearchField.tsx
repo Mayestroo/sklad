@@ -29,6 +29,7 @@ export function SearchField({ value, onChange, placeholder, label, style, autoFo
       <input
         id={id}
         type="search"
+        className="ux-search-input"
         value={value}
         autoFocus={autoFocus}
         aria-label={label ?? placeholder}

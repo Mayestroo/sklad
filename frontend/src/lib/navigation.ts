@@ -60,7 +60,7 @@ export const NAV_SECTIONS: NavSection[] = [
           { href: '/sales', label: 'salesOverview', icon: 'sales', exact: true, keywords: 'invoice faktura счет реализация' },
           { href: '/sales/orders', label: 'salesOrders', icon: 'orders', keywords: 'zakaz заказ' },
           { href: '/sales/returns', label: 'salesReturns', icon: 'returns', keywords: 'qaytarish возврат' },
-          { href: '/sales/prices', label: 'prices', icon: 'prices', keywords: 'narx chegirma цена скидка прайс' },
+          { href: '/sales/prices', label: 'prices', icon: 'prices', keywords: 'narx jadvali chegirma ulgurji цена скидка прайс опт' },
           { href: '/sales/customers', label: 'customers', icon: 'customers', keywords: 'mijoz клиент покупатель' },
           { href: '/sales/crm', label: 'crm', icon: 'crm', keywords: 'bitim сделка crm' },
           { href: SALES_EXPENSE_HREF, label: 'salesExpenses', icon: 'expenses' },
