@@ -1126,6 +1126,10 @@
       "mijozga_qoshimcha_summa": "Дополнительная сумма покупателю",
       "bilan_belgilangan_maydonlar_told": "поля, обязательные для заполнения",
       "qoshimcha_yetkazish_manzili_izoh": "Дополнительно: адрес доставки, комментарий"
+    },
+    "money": {
+      "readAsThousands": "«{raw}» прочитано как {value}.",
+      "itWasDecimal": "Это дробь: {value}"
     }
   }
 }

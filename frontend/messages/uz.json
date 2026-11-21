@@ -1126,6 +1126,10 @@
       "mijozga_qoshimcha_summa": "Mijozga qo‘shimcha summa",
       "bilan_belgilangan_maydonlar_told": "bilan belgilangan maydonlar to‘ldirilishi majburiy",
       "qoshimcha_yetkazish_manzili_izoh": "Qo‘shimcha: yetkazish manzili, izoh"
+    },
+    "money": {
+      "readAsThousands": "«{raw}» {value} deb o‘qildi.",
+      "itWasDecimal": "Kasr edi: {value}"
     }
   }
 }
