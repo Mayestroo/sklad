@@ -2,33 +2,21 @@
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
-import { Link } from '@/i18n/navigation';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link, useRouter } from '@/i18n/navigation';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonStyle } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Select, SelectOption } from '@/components/ui/Select';
-import { DatePicker } from '@/components/ui/DatePicker';
 import { Badge } from '@/components/ui/Badge';
-import {
-  ClipboardList,
-  Plus,
-  Eye,
-  Pencil,
-  CreditCard,
-  Filter,
-  Search,
-  RefreshCw,
-  Factory,
-  Truck,
-  CheckCircle,
-  PackageCheck,
-  Printer,
-  Trash2,
-} from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchField } from '@/components/ui/SearchField';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { ClipboardList, Plus, CreditCard, ExternalLink, PackageCheck } from 'lucide-react';
 import { ORDER_STATUS_LABELS } from '@/components/sales/SalesOrderForm';
 import { PaySalesOrderModal } from '@/components/sales/PaySalesOrderModal';
 import { OrderPickListModal } from '@/components/sales/OrderPickListModal';
@@ -37,6 +25,27 @@ import { invalidateApiCache } from '@/lib/cache';
 import { apiFetch } from '@/lib/api';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { totalsByCurrency } from '@/lib/currency-totals';
+import { localIsoDate } from '@/lib/date-range';
+import {
+  ActiveFilters,
+  ALL_TIME,
+  ChipGroup,
+  ColumnChooser,
+  CurrencyTotals,
+  MoreFiltersButton,
+  PeriodFilter,
+  resolvePeriod,
+  Signal,
+  SignalStrip,
+  useListFilters,
+  type ActiveFilter,
+  type PeriodValue,
+} from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
+import { Facts, PaidProgress, PreviewHead } from '@/components/ui/list/Preview';
 import type { SalesOrderDetail } from '@/components/sales/order-form/types';
 
 const ORDERS_PAGE_SIZE = 50;
@@ -71,63 +80,71 @@ interface OrderItemSummary {
   orderItems?: Array<{ id: string; quantity: number; readyQty?: number; isReady?: boolean }>;
 }
 
-interface OrderStatsSummary {
-  total?: number;
-  new?: number;
-  pendingApproval?: number;
-  inProduction?: number;
-  sentToProduction?: number;
-  readyToShip?: number;
-  completed?: number;
-  cancelled?: number;
-  totalOrders?: number;
-  totalAmount?: number;
-  totalPaid?: number;
-  totalDebt?: number;
-}
+type OrderStatsSummary = Partial<Record<string, number>>;
+
+const FINISHED = ['SHIPPED', 'COMPLETED', 'CANCELLED'];
+const STAGES = ['NEW', 'ACCEPTED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'COMPLETED', 'CANCELLED'] as const;
+const STAGE_STAT: Record<string, string> = {
+  NEW: 'new',
+  ACCEPTED: 'accepted',
+  PROCESSING: 'processing',
+  READY_FOR_SHIPMENT: 'readyToShip',
+  SHIPPED: 'shipped',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+};
+
+const FILTER_DEFAULTS = {
+  status: '',
+  paymentStatus: '',
+  counterpartyId: '',
+  assignedSellerId: '',
+  period: ALL_TIME as PeriodValue,
+};
 
 export default function SalesOrdersPage() {
   const { token, company, hasRole, hasPermission } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const confirm = useConfirm();
+  const router = useRouter();
+  const tl = useTranslations('rd.list');
+  const td = useTranslations('rd.doc');
+  const to = useTranslations('rd.orders');
 
-  // Filters
+  const [filters, setFilters, resetFilters] = useListFilters('orders.list', FILTER_DEFAULTS, ['status']);
   const [search, setSearch] = useState('');
-  const [counterpartyId, setCounterpartyId] = useState('');
-  const [status, setStatus] = useState('');
+  const debouncedSearch = useDebouncedValue(search.trim(), 350);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [pageSize, setPageSize] = useState(ORDERS_PAGE_SIZE);
-  const [paymentStatus, setPaymentStatus] = useState('');
-  const [assignedSellerId, setAssignedSellerId] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('orders.list.hidden', ['condition']);
+  const [sort, setSort] = usePersistentState<SortState | null>('orders.list.sort', null);
+  const range = resolvePeriod(filters.period);
+  const today = localIsoDate(new Date());
 
   // Modals
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [payOrder, setPayOrder] = useState<OrderItemSummary | null>(null);
   const [pickListOrder, setPickListOrder] = useState<SalesOrderDetail | null>(null);
   const [deliveryNoteOrder, setDeliveryNoteOrder] = useState<SalesOrderDetail | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   // Delete modal state
   const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<OrderItemSummary | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const invalidateApi = useInvalidateApi();
   const handleDeleteOrder = async () => {
     if (!token || !company || !deleteConfirmOrder) return;
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      await apiFetch(`/sales/orders/${deleteConfirmOrder.id}`, {
-        method: 'DELETE',
-        token,
-        tenantId: company.id,
-        locale,
-      });
+      await apiFetch(`/sales/orders/${deleteConfirmOrder.id}`, { method: 'DELETE', token, tenantId: company.id, locale });
+      if (previewId === deleteConfirmOrder.id) setPreviewId(null);
       setDeleteConfirmOrder(null);
-      fetchStats();
-      fetchOrders();
+      refresh();
     } catch (err) {
       setDeleteError(errorMessage(err) || (isRu ? 'Ошибка удаления заказа' : "Buyurtmani o'chirishda xatolik"));
     } finally {
@@ -137,12 +154,8 @@ export default function SalesOrdersPage() {
 
   // Role slugs are lowercase (common/auth/permission-catalog.ts SYSTEM_ROLES);
   // lifecycle actions are <module>:edit, there is no sales:post permission.
-  const isWarehouseOperator = Boolean(
-    hasRole('super_admin') ||
-    hasRole('company_admin') ||
-    hasRole('warehouse_manager') ||
-    hasPermission('inventory:create')
-  );
+  const isWarehouseOperator = Boolean(hasRole('super_admin') || hasRole('company_admin') || hasRole('warehouse_manager') || hasPermission('inventory:create'));
+  const canDelete = hasPermission('sales:delete') || hasRole('super_admin') || hasRole('company_admin');
 
   const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
     if (!token) return;
@@ -173,7 +186,6 @@ export default function SalesOrdersPage() {
       }
       return [];
     }
-
     switch (currentStatus) {
       case 'NEW':
         return [
@@ -205,592 +217,392 @@ export default function SalesOrdersPage() {
     }
   };
 
-  // Reference data, fresh for 5 minutes (TanStack Query, see docs/frontend-data-loading.md)
-  const invalidateApi = useInvalidateApi();
-  const { data: rawCp } = useApiQuery<CounterpartyItem[] | { data: CounterpartyItem[] }>(
-    '/sales/counterparties',
-    { staleTime: 5 * 60 * 1000 },
-  );
-  const counterparties: CounterpartyItem[] = useMemo(() => {
-    if (!rawCp) return [];
-    if (Array.isArray(rawCp)) return rawCp;
-    return (rawCp as { data: CounterpartyItem[] }).data || [];
-  }, [rawCp]);
+  /** Same confirmations as before for cancel and ship; other steps go straight through. */
+  const runStatus = async (ord: OrderItemSummary, next: string) => {
+    if (next === 'CANCELLED') {
+      const ok = await confirm({
+        title: isRu ? 'Отмена заказа' : 'Buyurtmani bekor qilish',
+        description: isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?',
+        variant: 'warning',
+        confirmText: isRu ? 'Отменить заказ' : 'Bekor qilish',
+        cancelText: isRu ? 'Назад' : 'Orqaga',
+      });
+      if (ok) void handleQuickStatusChange(ord.id, next);
+    } else if (next === 'SHIPPED') {
+      const ok = await confirm({
+        title: isRu ? 'Отгрузка заказа' : 'Buyurtmani otgruzka qilish',
+        description: isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?',
+        variant: 'info',
+        confirmText: isRu ? 'Отгрузить' : 'Otgruzka qilish',
+        cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+      });
+      if (ok) void handleQuickStatusChange(ord.id, next);
+    } else {
+      void handleQuickStatusChange(ord.id, next);
+    }
+  };
 
-  const { data: rawUsers } = useApiQuery<SellerItem[] | { data: SellerItem[] }>('/users', {
-    staleTime: 5 * 60 * 1000,
-  });
+  // Reference data, fresh for 5 minutes (TanStack Query, see docs/frontend-data-loading.md)
+  const { data: rawCp } = useApiQuery<CounterpartyItem[] | { data: CounterpartyItem[] }>('/sales/counterparties', { staleTime: 5 * 60 * 1000 });
+  const counterparties: CounterpartyItem[] = useMemo(() => (!rawCp ? [] : Array.isArray(rawCp) ? rawCp : rawCp.data || []), [rawCp]);
+  const { data: rawUsers } = useApiQuery<SellerItem[] | { data: SellerItem[] }>('/users', { staleTime: 5 * 60 * 1000 });
   const sellers: SellerItem[] = useMemo(() => {
     if (!rawUsers) return [];
-    const list = Array.isArray(rawUsers) ? rawUsers : (rawUsers as { data: SellerItem[] }).data || [];
-    return list.map((u) => ({
-      id: u.id,
-      firstName: u.firstName,
-      lastName: u.lastName,
-    }));
+    const list = Array.isArray(rawUsers) ? rawUsers : rawUsers.data || [];
+    return list.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName }));
   }, [rawUsers]);
 
   const statsQuery = useApiQuery<OrderStatsSummary>('/sales/orders/stats');
-  const stats = statsQuery.data ?? null;
-  const fetchStats = () => void statsQuery.refetch();
+  const stats = statsQuery.data ?? {};
 
-  // The endpoint string carries the filters: a new filter is a new query,
-  // the same filters reuse the cache (no refetch loop).
+  // The endpoint string carries the filters: a new filter is a new query.
   const ordersEndpoint = useMemo(() => {
     const query = new URLSearchParams();
-    if (search) query.append('search', search);
-    if (counterpartyId) query.append('counterpartyId', counterpartyId);
-    if (status) query.append('status', status);
-    if (paymentStatus) query.append('paymentStatus', paymentStatus);
-    if (assignedSellerId) query.append('assignedSellerId', assignedSellerId);
-    if (dateFrom) query.append('dateFrom', dateFrom);
-    if (dateTo) query.append('dateTo', dateTo);
+    if (debouncedSearch) query.append('search', debouncedSearch);
+    if (filters.counterpartyId) query.append('counterpartyId', filters.counterpartyId);
+    if (filters.status) query.append('status', filters.status);
+    if (filters.paymentStatus) query.append('paymentStatus', filters.paymentStatus);
+    if (filters.assignedSellerId) query.append('assignedSellerId', filters.assignedSellerId);
+    if (range.from) query.append('dateFrom', range.from);
+    if (range.to) query.append('dateTo', range.to);
     query.append('take', String(pageSize));
     return `/sales/orders?${query.toString()}`;
-  }, [search, counterpartyId, status, paymentStatus, assignedSellerId, dateFrom, dateTo, pageSize]);
+  }, [debouncedSearch, filters.counterpartyId, filters.status, filters.paymentStatus, filters.assignedSellerId, range.from, range.to, pageSize]);
 
-  const ordersQuery = useApiQuery<{ data: OrderItemSummary[]; total: number }>(ordersEndpoint, {
-    staleTime: 10000,
-  });
-  const rawOrders = ordersQuery.data;
-  const loading = ordersQuery.isPending;
-  const fetchOrders = () => void ordersQuery.refetch();
-
-  // GET /sales/orders returns { data, total, page, pageSize }
-  const orders: OrderItemSummary[] = rawOrders?.data ?? [];
-  const totalOrders = rawOrders?.total ?? 0;
-
-  const handleApplyFilter = () => {
-    fetchOrders();
+  const ordersQuery = useApiQuery<{ data: OrderItemSummary[]; total: number }>(ordersEndpoint, { staleTime: 10000, keepPrevious: true });
+  const allOrders = useMemo(() => ordersQuery.data?.data ?? [], [ordersQuery.data]);
+  const totalOrders = ordersQuery.data?.total ?? 0;
+  const refresh = () => {
+    void statsQuery.refetch();
+    void ordersQuery.refetch();
   };
 
-  const handleResetFilters = () => {
+  const isOverdue = (o: OrderItemSummary) => Boolean(o.deliveryDate && o.deliveryDate.slice(0, 10) < today && !FINISHED.includes(o.status));
+  const overdueCount = allOrders.filter(isOverdue).length;
+  const orders = overdueOnly ? allOrders.filter(isOverdue) : allOrders;
+  const preview = allOrders.find((o) => o.id === previewId) ?? null;
+
+  const statusMeta = (st: string) => ORDER_STATUS_LABELS[st] || { uz: st, ru: st, variant: 'neutral' };
+  const statusBadge = (st: string) => {
+    const m = statusMeta(st);
+    return <Badge variant={(m.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>{isRu ? m.ru : m.uz}</Badge>;
+  };
+  const paymentBadge = (pst: string) =>
+    pst === 'PAID' ? <Badge variant="success">{td('paid')}</Badge> : pst === 'PARTIALLY_PAID' || pst === 'PARTIAL' ? <Badge variant="warning">{td('partial')}</Badge> : <Badge variant="error">{td('unpaid')}</Badge>;
+  const conditionText = (o: OrderItemSummary) =>
+    o.paymentCondition === 'PREPAID_100' ? to('prepaid') : o.paymentCondition === 'PARTIAL' ? to('advance', { pct: o.requiredPaymentPercent ?? 0 }) : to('credit');
+  const readyText = (o: OrderItemSummary) => {
+    const items = o.orderItems ?? [];
+    if (items.length === 0) return null;
+    return to('readyOf', { ready: items.filter((i) => i.isReady).length, total: items.length });
+  };
+
+  /** The row's main next step: the first forward status (not cancel). */
+  const nextStep = (o: OrderItemSummary) => getNextStatuses(o.status).find((s) => s.status !== 'CANCELLED');
+
+  const rowMenu = (o: OrderItemSummary) => (
+    <ActionsMenu
+      label={tl('rowActions')}
+      actions={[
+        { label: tl('open'), onSelect: () => router.push(`/sales/orders/${o.id}`) },
+        { label: td('takePayment'), onSelect: () => setPayOrder(o), hidden: o.status === 'CANCELLED' || o.status === 'COMPLETED' },
+        { label: to('pickList'), onSelect: () => setPickListOrder(o as unknown as SalesOrderDetail) },
+        { label: to('deliveryNote'), onSelect: () => setDeliveryNoteOrder(o as unknown as SalesOrderDetail), hidden: o.status !== 'SHIPPED' },
+        ...getNextStatuses(o.status)
+          .filter((s) => s.status !== nextStep(o)?.status)
+          .map((s) => ({ label: isRu ? s.labelRu : s.labelUz, onSelect: () => void runStatus(o, s.status), danger: s.status === 'CANCELLED' })),
+        { label: tl('delete'), onSelect: () => { setDeleteConfirmOrder(o); setDeleteError(null); }, danger: true, hidden: !canDelete || o.status === 'SHIPPED' || o.status === 'COMPLETED' },
+      ]}
+    />
+  );
+
+  const totals = (amount: (r: OrderItemSummary) => number) => <CurrencyTotals totals={totalsByCurrency(orders, (r) => r.currency, amount)} locale={locale} />;
+
+  const columns: Column<OrderItemSummary>[] = [
+    {
+      key: 'number',
+      label: isRu ? '№ / Дата' : '№ / Sana',
+      primary: true,
+      locked: true,
+      sortValue: (r) => r.createdAt,
+      render: (r) => (
+        <div>
+          <div className="rd-doc-no">{r.orderNumber}</div>
+          <div className="rd-sub">{formatDate(r.createdAt)}</div>
+        </div>
+      ),
+      footer: <span>{tl('total')} · {tl('results', { count: orders.length })}</span>,
+    },
+    {
+      key: 'customer',
+      label: to('customer'),
+      sortValue: (r) => r.counterparty?.name ?? '',
+      render: (r) => (
+        <div>
+          <div style={{ fontWeight: 'var(--font-medium)' }}>{r.counterparty?.name || '—'}</div>
+          {r.assignedSeller && <div className="rd-sub">{r.assignedSeller.firstName} {r.assignedSeller.lastName}</div>}
+        </div>
+      ),
+    },
+    {
+      key: 'delivery',
+      label: to('delivery'),
+      sortValue: (r) => r.deliveryDate ?? '9999',
+      render: (r) =>
+        r.deliveryDate ? (
+          <span className={isOverdue(r) ? 'rd-due' : undefined}>
+            {formatDate(r.deliveryDate)}
+            {isOverdue(r) && <span className="rd-sub" style={{ color: 'inherit' }}> · {to('overdue')}</span>}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+        ),
+    },
+    {
+      key: 'status',
+      label: to('stage'),
+      sortValue: (r) => STAGES.indexOf(r.status as (typeof STAGES)[number]),
+      render: (r) => (
+        <div className="rd-status-stack">
+          {statusBadge(r.status)}
+          {readyText(r) && !FINISHED.includes(r.status) && <span className="rd-sub">{readyText(r)}</span>}
+        </div>
+      ),
+    },
+    { key: 'condition', label: to('condition'), render: (r) => <span className="rd-sub" style={{ marginTop: 0 }}>{conditionText(r)}</span> },
+    { key: 'amount', label: tl('amount'), numeric: true, sortValue: (r) => Number(r.totalAmount || 0), render: (r) => <strong>{formatCurrency(Number(r.totalAmount || 0), locale, r.currency)}</strong>, footer: totals((r) => Number(r.totalAmount || 0)) },
+    {
+      key: 'paid',
+      label: to('payment'),
+      numeric: true,
+      sortValue: (r) => Number(r.paidAmount || 0),
+      render: (r) => (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <span>{formatCurrency(Number(r.paidAmount || 0), locale, r.currency)}</span>
+          {r.status !== 'CANCELLED' && paymentBadge(r.paymentStatus)}
+        </div>
+      ),
+      footer: totals((r) => Number(r.paidAmount || 0)),
+    },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (r) => {
+        const step = nextStep(r);
+        return (
+          <div className="rd-row-actions">
+            {step && (
+              <button type="button" className="rd-next-btn" disabled={updatingOrderId === r.id} onClick={() => void runStatus(r, step.status)}>
+                {isRu ? step.labelRu : step.labelUz}
+              </button>
+            )}
+            {rowMenu(r)}
+          </div>
+        );
+      },
+    },
+  ];
+
+  const customerOptions: SelectOption[] = [{ value: '', label: to('anyCustomer') }, ...counterparties.map((c) => ({ value: c.id, label: c.name }))];
+  const sellerOptions: SelectOption[] = [{ value: '', label: to('anySeller') }, ...sellers.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` }))];
+  const stageOptions = [
+    { value: '', label: tl('all'), count: undefined as number | undefined },
+    ...STAGES.map((st) => ({ value: st as string, label: isRu ? statusMeta(st).ru : statusMeta(st).uz, count: stats[STAGE_STAT[st]] })),
+  ];
+  const paymentOptions = [
+    { value: 'UNPAID', label: td('unpaid') },
+    { value: 'PARTIALLY_PAID', label: td('partial') },
+    { value: 'PAID', label: td('paid') },
+  ];
+
+  const active: ActiveFilter[] = [];
+  if (debouncedSearch) active.push({ key: 'q', label: `«${debouncedSearch}»`, onClear: () => setSearch('') });
+  if (filters.counterpartyId) active.push({ key: 'c', label: counterparties.find((c) => c.id === filters.counterpartyId)?.name ?? to('customer'), onClear: () => setFilters({ counterpartyId: '' }) });
+  if (filters.assignedSellerId) {
+    const s = sellers.find((x) => x.id === filters.assignedSellerId);
+    active.push({ key: 's', label: s ? `${s.firstName} ${s.lastName}` : to('seller'), onClear: () => setFilters({ assignedSellerId: '' }) });
+  }
+  if (overdueOnly) active.push({ key: 'o', label: to('sigOverdue'), onClear: () => setOverdueOnly(false) });
+  const anyFilter = Boolean(debouncedSearch || filters.status || filters.paymentStatus || filters.counterpartyId || filters.assignedSellerId || filters.period.key !== 'all' || overdueOnly);
+  const clearAll = () => {
     setSearch('');
-    setCounterpartyId('');
-    setStatus('');
-    setPaymentStatus('');
-    setAssignedSellerId('');
-    setDateFrom('');
-    setDateTo('');
-    setTimeout(() => {
-      fetchOrders();
-    }, 0);
+    setOverdueOnly(false);
+    resetFilters();
   };
-
-  const customerOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все клиенты' : 'Barcha mijozlar' },
-    ...counterparties.map((c) => ({ value: c.id, label: c.name })),
-  ];
-
-  const sellerOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все продавцы' : 'Barcha sotuvchilar' },
-    ...sellers.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
-  ];
-
-  const statusOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
-    ...Object.entries(ORDER_STATUS_LABELS).map(([k, v]) => ({
-      value: k,
-      label: isRu ? v.ru : v.uz,
-    })),
-  ];
-
-  const hasActiveFilters = Boolean(search || counterpartyId || status || paymentStatus || assignedSellerId || dateFrom || dateTo);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Заказы покупателей' : 'Buyurtmalar'}
-          </h1>
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Заказы покупателей' : 'Buyurtmalar'}
+        subtitle={to('subtitle')}
+        actions={
+          <Link href="/sales/orders/new" style={buttonStyle('primary')}>
+            <Plus size={18} aria-hidden /> {to('newOrder')}
+          </Link>
+        }
+      />
+
+      <SignalStrip label={tl('summary')}>
+        <Signal tone="warning" label={to('sigNew')} value={(stats.new ?? 0) + (stats.pendingApproval ?? 0)} hint={to('sigNewHint')} active={filters.status === 'NEW'} onClick={() => setFilters({ status: filters.status === 'NEW' ? '' : 'NEW' })} />
+        <Signal tone="success" label={to('sigReady')} value={stats.readyToShip ?? 0} hint={to('sigReadyHint')} active={filters.status === 'READY_FOR_SHIPMENT'} onClick={() => setFilters({ status: filters.status === 'READY_FOR_SHIPMENT' ? '' : 'READY_FOR_SHIPMENT' })} />
+        <Signal tone="error" label={to('sigOverdue')} value={overdueCount} hint={to('sigOverdueHint')} active={overdueOnly} onClick={() => setOverdueOnly((v) => !v)} />
+        <Signal tone="info" label={to('sigActive')} value={stats.activeOrders ?? 0} hint={to('sigActiveHint')} />
+      </SignalStrip>
+
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField value={search} onChange={setSearch} placeholder={to('searchPh')} label={tl('search')} />
+          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
         </div>
-        <Link href="/sales/orders/new">
-          <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
-            <Plus size={18} /> {isRu ? 'Новый заказ' : 'Yangi Buyurtma'}
-          </Button>
-        </Link>
-      </div>
-
-      {/* Summary KPI Cards */}
-      <div className="ux-kpi-grid">
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ClipboardList size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Новые / Согласование' : 'Yangi / Tasdiqlashda'}
-            </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', marginTop: '2px' }} className="tabular-nums">
-              {(stats?.new || 0) + (stats?.pendingApproval || 0)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Требуют внимания' : 'E’tibor talab qiladi'}
-            </div>
-          </div>
-        </Card>
-
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Factory size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'В производстве' : 'Ishlab chiqarilmoqda'}
-            </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)', marginTop: '2px' }} className="tabular-nums">
-              {(stats?.inProduction || 0) + (stats?.sentToProduction || 0)}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Изготовление' : 'Tayyorlanmoqda'}
-            </div>
-          </div>
-        </Card>
-
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--color-success-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Truck size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Готовы к отгрузке' : 'Jo‘natishga tayyor'}
-            </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)', marginTop: '2px' }} className="tabular-nums">
-              {stats?.readyToShip || 0}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Оплата подтверждена' : 'To‘lov tasdiqlangan'}
-            </div>
-          </div>
-        </Card>
-
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(59, 130, 246, 0.12)', color: 'var(--color-info-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CheckCircle size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Завершено' : 'Bajarilgan'}
-            </div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-info-700)', marginTop: '2px' }} className="tabular-nums">
-              {stats?.completed || 0}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Закрытые сделки' : 'Yopilgan shartnomalar'}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Filter Toolbar */}
-      <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        {/* Search */}
-        <div>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-            {isRu ? 'Поиск (№ Заказа, Клиент, Комментарий...)' : 'Qidiruv (Buyurtma №, Mijoz, Izoh...)'}
-          </div>
-          <div style={{ position: 'relative' }}>
-            <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-            <input
-              placeholder={isRu ? 'Введите № заказа или имя клиента...' : 'Qidirish uchun buyurtma raqami yoki mijoz ismini kiriting...'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px 10px 42px',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-input)',
-                color: 'var(--color-text-primary)',
-                fontSize: 'var(--text-sm)',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
+        <div className="rd-toolbar-row">
+          <ChipGroup label={to('stage')} showLabel options={stageOptions} value={filters.status} onChange={(v) => setFilters({ status: v })} />
         </div>
-
-        {/* Filter grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 180px), 1fr))',
-            gap: 'var(--space-3)',
-            alignItems: 'end',
-            paddingTop: 'var(--space-2)',
-            borderTop: '1px solid var(--color-border-light)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Клиент' : 'Mijoz'}
-            </div>
-            <Select
-              options={customerOptions}
-              value={counterpartyId}
-              onChange={setCounterpartyId}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Статус заказа' : 'Buyurtma holati'}
-            </div>
-            <Select
-              options={statusOptions}
-              value={status}
-              onChange={setStatus}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Ответственный продавец' : 'Mas’ul sotuvchi'}
-            </div>
-            <Select
-              options={sellerOptions}
-              value={assignedSellerId}
-              onChange={setAssignedSellerId}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'С даты' : 'Sanadan'}
-            </div>
-            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder={isRu ? 'С даты...' : 'Sanadan...'} />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'По дату' : 'Sanagacha'}
-            </div>
-            <DatePicker value={dateTo} onChange={setDateTo} placeholder={isRu ? 'По дату...' : 'Sanagacha...'} />
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" onClick={handleApplyFilter} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '38px' }}>
-              <Filter size={15} /> {isRu ? 'Фильтр' : 'Filtr'}
-            </Button>
-            {hasActiveFilters && (
-              <Button variant="secondary" onClick={handleResetFilters} title={isRu ? 'Сбросить' : 'Tozalash'} style={{ padding: '0 12px', height: '38px', color: 'var(--color-text-secondary)' }}>
-                <RefreshCw size={14} />
-              </Button>
-            )}
-          </div>
+        <div className="rd-toolbar-row">
+          <ChipGroup label={to('payment')} showLabel options={paymentOptions} value={filters.paymentStatus} onChange={(v) => setFilters({ paymentStatus: v })} />
+          <span className="rd-toolbar-spacer" />
+          <MoreFiltersButton open={moreOpen} onToggle={() => setMoreOpen((o) => !o)} activeCount={(filters.counterpartyId ? 1 : 0) + (filters.assignedSellerId ? 1 : 0) + (filters.period.key !== 'all' ? 1 : 0)} controls="orders-more" />
         </div>
-      </Card>
-
-      {/* Orders Table */}
-      <Card style={{ overflow: 'hidden' }}>
-        {ordersQuery.isError ? (
-          <LoadError
-            error={ordersQuery.error}
-            onRetry={fetchOrders}
-            retrying={ordersQuery.isFetching}
-          />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
-            <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
-          </div>
-        ) : orders.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <ClipboardList size={48} style={{ margin: '0 auto var(--space-3)', opacity: 0.3 }} />
-            <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>
-              {isRu ? 'Заказы не найдены' : 'Buyurtmalar topilmadi'}
+        {moreOpen && (
+          <div id="orders-more" className="rd-more-panel">
+            <div>
+              <span className="rd-field-label">{to('customer')}</span>
+              <Select options={customerOptions} value={filters.counterpartyId} onChange={(v) => setFilters({ counterpartyId: v })} searchable />
             </div>
-            <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
-              {isRu ? 'Нажмите кнопку выше, чтобы создать новый заказ' : 'Yangi buyurtma yaratish uchun yuqoridagi tugmani bosing'}
+            <div>
+              <span className="rd-field-label">{to('seller')}</span>
+              <Select options={sellerOptions} value={filters.assignedSellerId} onChange={(v) => setFilters({ assignedSellerId: v })} />
             </div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {isRu ? '№ ЗАКАЗА / ДАТА' : 'BUYURTMA № / SANA'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {isRu ? 'КЛИЕНТ' : 'MIJOZ'}
-                  </th>
-                  <th style={{ padding: '12px 12px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '140px' }}>
-                    {isRu ? 'СТАТУС' : 'HOLAT'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {isRu ? 'УСЛОВИЕ ОПЛАТЫ' : 'TO‘LOV SHARTI'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
-                    {isRu ? 'СУММА ЗАКАЗА' : 'JAMI SUMMA'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
-                    {isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
-                    {isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((ord) => {
-                  const meta = ORDER_STATUS_LABELS[ord.status] || { uz: ord.status, ru: ord.status, variant: 'neutral' };
-                  return (
-                    <tr
-                      key={ord.id}
-                      style={{
-                        borderBottom: '1px solid var(--color-border-light)',
-                        transition: 'background-color 0.15s ease',
-                      }}
-                    >
-                      <td data-primary style={{ padding: '12px 16px' }}>
-                        <Link href={`/sales/orders/${ord.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
-                          {ord.orderNumber}
-                        </Link>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
-                          {formatDate(ord.createdAt)}
-                        </div>
-                      </td>
-
-                      <td data-label={isRu ? 'КЛИЕНТ' : 'MIJOZ'} style={{ padding: '12px 16px' }}>
-                        <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                          {ord.counterparty?.name || '—'}
-                        </div>
-                      </td>
-
-                      <td data-label={isRu ? 'СТАТУС' : 'HOLAT'} style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-block', position: 'relative' }}>
-                          {/* Clickable badge — opens dropdown if operator and has next statuses */}
-                          <button
-                            type="button"
-                            disabled={updatingOrderId === ord.id}
-                            onClick={() => {
-                              if (!isWarehouseOperator || getNextStatuses(ord.status).length === 0) return;
-                              setOpenDropdownId(openDropdownId === ord.id ? null : ord.id);
-                            }}
-                            style={{
-                              all: 'unset',
-                              cursor: (isWarehouseOperator && getNextStatuses(ord.status).length > 0 && updatingOrderId !== ord.id) ? 'pointer' : 'default',
-                              opacity: updatingOrderId === ord.id ? 0.5 : 1,
-                            }}
-                          >
-                            <Badge variant={(meta.variant as 'success' | 'warning' | 'error' | 'info' | 'neutral') || 'neutral'}>
-                              {isRu ? meta.ru : meta.uz}
-                              {isWarehouseOperator && getNextStatuses(ord.status).length > 0 && (
-                                <span style={{ marginLeft: '4px', fontSize: '9px', opacity: 0.7 }}>▾</span>
-                              )}
-                            </Badge>
-                          </button>
-
-                          {/* Floating dropdown menu */}
-                          {openDropdownId === ord.id && (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                top: 'calc(100% + 4px)',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                zIndex: 50,
-                                minWidth: '160px',
-                                backgroundColor: 'var(--color-bg-primary)',
-                                border: '1px solid var(--color-border)',
-                                borderRadius: 'var(--radius-md)',
-                                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              {getNextStatuses(ord.status).map((s) => (
-                                <button
-                                  key={s.status}
-                                  type="button"
-                                  onClick={async () => {
-                                    setOpenDropdownId(null);
-                                    if (s.status === 'CANCELLED') {
-                                      const ok = await confirm({
-                                        title: isRu ? 'Отмена заказа' : 'Buyurtmani bekor qilish',
-                                        description: isRu ? 'Вы уверены, что хотите отменить этот заказ?' : 'Haqiqatan ham bu buyurtmani bekor qilmoqchimisiz?',
-                                        variant: 'warning',
-                                        confirmText: isRu ? 'Отменить заказ' : 'Bekor qilish',
-                                        cancelText: isRu ? 'Назад' : 'Orqaga',
-                                      });
-                                      if (ok) {
-                                        handleQuickStatusChange(ord.id, s.status);
-                                      }
-                                    } else if (s.status === 'SHIPPED') {
-                                      const ok = await confirm({
-                                        title: isRu ? 'Отгрузка заказа' : 'Buyurtmani otgruzka qilish',
-                                        description: isRu ? 'Выполнить отгрузку (создать счет-фактуру и списать склад)?' : 'Otgruzka qilish (sotuv fakturasi yaratish va qoldiqdan ayirish)ni tasdiqlaysizmi?',
-                                        variant: 'info',
-                                        confirmText: isRu ? 'Отгрузить' : 'Otgruzka qilish',
-                                        cancelText: isRu ? 'Отмена' : 'Bekor qilish',
-                                      });
-                                      if (ok) {
-                                        handleQuickStatusChange(ord.id, s.status);
-                                      }
-                                    } else {
-                                      handleQuickStatusChange(ord.id, s.status);
-                                    }
-                                  }}
-                                  style={{
-                                    display: 'block',
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    padding: '8px 14px',
-                                    fontSize: 'var(--text-sm)',
-                                    color: s.status === 'CANCELLED' ? 'var(--color-error-700)' : 'var(--color-text-primary)',
-                                    background: 'none',
-                                    border: 'none',
-                                    borderBottom: '1px solid var(--color-border-light)',
-                                    cursor: 'pointer',
-                                  }}
-                                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--color-bg-subtle)'; }}
-                                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
-                                >
-                                  {isRu ? s.labelRu : s.labelUz}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-
-                      <td data-label={isRu ? 'УСЛОВИЕ ОПЛАТЫ' : 'TO‘LOV SHARTI'} style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                        {ord.paymentCondition === 'PREPAID_100' ? (isRu ? '100% Предоплата' : '100% Oldindan') : ord.paymentCondition === 'PARTIAL' ? `${ord.requiredPaymentPercent}% ${isRu ? 'Предоплата' : 'Avans'}` : (isRu ? 'Кредит' : 'Kredit')}
-                      </td>
-
-                      <td data-label={isRu ? 'СУММА ЗАКАЗА' : 'JAMI SUMMA'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                        {formatCurrency(Number(ord.totalAmount || 0), locale, ord.currency)}
-                      </td>
-
-                      <td data-label={isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'} style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-700)', fontWeight: 500 }} className="tabular-nums">
-                        {formatCurrency(Number(ord.paidAmount || 0), locale, ord.currency)}
-                      </td>
-
-                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                          <Link href={`/sales/orders/${ord.id}`}>
-                            <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
-                              <Eye size={14} />
-                            </Button>
-                          </Link>
-
-                          <Link href={`/sales/orders/${ord.id}`}>
-                            <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
-                              <Pencil size={14} />
-                            </Button>
-                          </Link>
-
-                          {/* Pick list print button */}
-                          <Button
-                            variant="secondary"
-                            onClick={() => setPickListOrder(ord)}
-                            style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-primary-600)' }}
-                            title={isRu ? 'Лист сборки (Pick List)' : 'Yig‘uv varaqasi'}
-                          >
-                            <PackageCheck size={14} />
-                          </Button>
-
-                          {/* Delivery note print button (if shipped) */}
-                          {ord.status === 'SHIPPED' && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => setDeliveryNoteOrder(ord)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-700)' }}
-                              title={isRu ? 'Накладная (Yuk xati)' : 'Yuk xati (Nakladnaya)'}
-                            >
-                              <Printer size={14} />
-                            </Button>
-                          )}
-
-                          {ord.status !== 'CANCELLED' && ord.status !== 'COMPLETED' && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => setPayOrder(ord)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-700)' }}
-                              title={isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
-                            >
-                              <CreditCard size={14} />
-                            </Button>
-                          )}
-
-                          {(hasPermission('sales:delete') || hasRole('super_admin') || hasRole('company_admin')) && ord.status !== 'SHIPPED' && ord.status !== 'COMPLETED' && (
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                setDeleteConfirmOrder(ord);
-                                setDeleteError(null);
-                              }}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)' }}
-                              title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {orders.length < totalOrders && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? `Показано ${orders.length} из ${totalOrders}` : `${totalOrders} tadan ${orders.length} tasi ko‘rsatilmoqda`}
-                </span>
-                <Button variant="secondary" size="sm" onClick={() => setPageSize((n) => n + ORDERS_PAGE_SIZE)}>
-                  {isRu ? 'Показать ещё' : 'Yana ko‘rsatish'}
-                </Button>
-              </div>
-            )}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <span className="rd-field-label">{tl('period')}</span>
+              <PeriodFilter value={filters.period} onChange={(p) => setFilters({ period: p })} locale={locale} />
+            </div>
           </div>
         )}
-      </Card>
+        <ActiveFilters items={active} onClearAll={clearAll} />
+      </div>
 
-      {/* Backdrop: closes dropdown when clicking outside */}
-      {openDropdownId && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-          onClick={() => setOpenDropdownId(null)}
-        />
+      <div className="rd-table-card">
+        {ordersQuery.isError ? (
+          <LoadError error={ordersQuery.error} onRetry={() => void ordersQuery.refetch()} retrying={ordersQuery.isFetching} />
+        ) : (
+          <DataTable
+            rows={orders}
+            columns={columns}
+            rowKey={(r) => r.id}
+            hidden={hiddenCols}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={(r) => setPreviewId(r.id)}
+            selectedKey={previewId}
+            loading={ordersQuery.isPending}
+            caption={tl('clickRowHint')}
+            empty={
+              anyFilter ? (
+                <EmptyState icon={ClipboardList} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
+              ) : (
+                <EmptyState
+                  icon={ClipboardList}
+                  title={to('noOrders')}
+                  description={to('noOrdersHint')}
+                  action={
+                    <Link href="/sales/orders/new" style={buttonStyle('primary')}>
+                      <Plus size={16} aria-hidden /> {to('newOrder')}
+                    </Link>
+                  }
+                />
+              )
+            }
+          />
+        )}
+        {allOrders.length < totalOrders && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)', borderTop: '1px solid var(--color-border-light)' }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{to('shownOf', { shown: allOrders.length, total: totalOrders })}</span>
+            <Button variant="secondary" size="sm" onClick={() => setPageSize((n) => n + ORDERS_PAGE_SIZE)}>
+              {to('showMore')}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {preview && (
+        <Drawer
+          isOpen
+          onClose={() => setPreviewId(null)}
+          title={to('previewTitle', { number: preview.orderNumber })}
+          description={`${preview.counterparty?.name ?? '—'} · ${formatDate(preview.createdAt)}`}
+          size="md"
+          footer={
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'flex-end', width: '100%' }}>
+              <Button variant="secondary" onClick={() => setPickListOrder(preview as unknown as SalesOrderDetail)}>
+                <PackageCheck size={16} aria-hidden /> {to('pickList')}
+              </Button>
+              <Link href={`/sales/orders/${preview.id}`} style={buttonStyle('secondary')}>
+                <ExternalLink size={16} aria-hidden /> {tl('openFull')}
+              </Link>
+              {preview.status !== 'CANCELLED' && preview.status !== 'COMPLETED' && preview.paymentStatus !== 'PAID' && (
+                <Button onClick={() => setPayOrder(preview)}>
+                  <CreditCard size={16} aria-hidden /> {td('takePayment')}
+                </Button>
+              )}
+            </div>
+          }
+        >
+          <PreviewHead
+            badges={
+              <>
+                {statusBadge(preview.status)}
+                {preview.status !== 'CANCELLED' && paymentBadge(preview.paymentStatus)}
+              </>
+            }
+            amount={formatCurrency(Number(preview.totalAmount || 0), locale, preview.currency)}
+            caption={
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <PaidProgress paid={Number(preview.paidAmount || 0)} total={Number(preview.totalAmount || 0)} label={tl('paidShare')} />
+                <span>
+                  {tl('paid')}: {formatCurrency(Number(preview.paidAmount || 0), locale, preview.currency)}
+                  {Number(preview.debtAmount || 0) > 0 && (
+                    <>
+                      {' · '}
+                      <span className="rd-due">
+                        {tl('due')}: {formatCurrency(Number(preview.debtAmount), locale, preview.currency)}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+            }
+          />
+          <Facts
+            items={[
+              { label: to('customer'), value: preview.counterparty?.name ?? '—' },
+              { label: to('phone'), value: preview.counterparty?.phone, hidden: !preview.counterparty?.phone },
+              { label: to('delivery'), value: preview.deliveryDate ? `${formatDate(preview.deliveryDate)}${isOverdue(preview) ? ` · ${to('overdue')}` : ''}` : '—' },
+              { label: to('condition'), value: conditionText(preview) },
+              { label: to('seller'), value: preview.assignedSeller ? `${preview.assignedSeller.firstName} ${preview.assignedSeller.lastName}` : '—' },
+              { label: to('items'), value: readyText(preview) ?? String(preview.orderItems?.length ?? 0) },
+            ]}
+          />
+          {nextStep(preview) && (
+            <Button style={{ width: '100%' }} disabled={updatingOrderId === preview.id} onClick={() => void runStatus(preview, nextStep(preview)!.status)}>
+              {isRu ? nextStep(preview)!.labelRu : nextStep(preview)!.labelUz}
+            </Button>
+          )}
+        </Drawer>
       )}
 
-      {/* Action Modals */}
-      {payOrder && (
-        <PaySalesOrderModal
-          isOpen={Boolean(payOrder)}
-          onClose={() => setPayOrder(null)}
-          order={payOrder}
-          onSuccess={() => {
-            fetchStats();
-            fetchOrders();
-          }}
-        />
-      )}
-
-      {pickListOrder && (
-        <OrderPickListModal
-          isOpen={Boolean(pickListOrder)}
-          onClose={() => setPickListOrder(null)}
-          order={pickListOrder}
-        />
-      )}
-
+      {payOrder && <PaySalesOrderModal isOpen onClose={() => setPayOrder(null)} order={payOrder} onSuccess={refresh} />}
+      {pickListOrder && <OrderPickListModal isOpen onClose={() => setPickListOrder(null)} order={pickListOrder} />}
       {deliveryNoteOrder && (
-        <OrderDeliveryNoteModal
-          isOpen={Boolean(deliveryNoteOrder)}
-          onClose={() => setDeliveryNoteOrder(null)}
-          companyName={company?.name ? getLocalizedName(company.name, locale) : undefined}
-          order={deliveryNoteOrder}
-        />
+        <OrderDeliveryNoteModal isOpen onClose={() => setDeliveryNoteOrder(null)} companyName={company?.name ? getLocalizedName(company.name, locale) : undefined} order={deliveryNoteOrder} />
       )}
 
       {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
       <Modal
         isOpen={Boolean(deleteConfirmOrder)}
-        onClose={() => { if (!deleteLoading) setDeleteConfirmOrder(null); }}
+        onClose={() => {
+          if (!deleteLoading) setDeleteConfirmOrder(null);
+        }}
         title={isRu ? 'Удалить заказ?' : 'Buyurtmani o‘chirish?'}
         size="sm"
         footer={
@@ -810,7 +622,10 @@ export default function SalesOrdersPage() {
           </div>
         )}
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-          {deleteConfirmOrder && (isRu ? `Заказ № ${deleteConfirmOrder.orderNumber} будет удалён, позиции и бронь товаров аннулированы.` : `№ ${deleteConfirmOrder.orderNumber} buyurtma o‘chiriladi, tovarlar va bron bekor qilinadi.`)}
+          {deleteConfirmOrder &&
+            (isRu
+              ? `Заказ № ${deleteConfirmOrder.orderNumber} будет удалён, позиции и бронь товаров аннулированы.`
+              : `№ ${deleteConfirmOrder.orderNumber} buyurtma o‘chiriladi, tovarlar va bron bekor qilinadi.`)}
         </p>
       </Modal>
     </div>
