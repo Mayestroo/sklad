@@ -800,6 +800,21 @@
       "rowHint": "Qatorni bosing — profil, qarz va tarix yon panelda ochiladi.",
       "lastSale": "Oxirgi sotuv",
       "noSales": "Sotuv yo‘q"
+    },
+    "products": {
+      "subtitle": "Katalog: narxlar, qoldiq va kam qolgan tovarlar bir joyda",
+      "stock": "Qoldiq",
+      "low": "minimal {min} dan kam",
+      "setPrice": "Narx qo‘yish",
+      "sigLow": "Kam qolgan",
+      "sigLowHint": "Qoldiq minimaldan kam — bosing: ko‘rsatish",
+      "sigNoPrice": "Sotuv narxi yo‘q",
+      "sigNoPriceHint": "Sotuvda narxni qo‘lda yozishga to‘g‘ri keladi — bosing",
+      "searchPh": "Nomi, SKU yoki shtrix-kod (skaner ham ishlaydi)",
+      "none": "Katalog hali bo‘sh",
+      "noneHint": "Birinchi tovarni qo‘shing yoki boshlang‘ich qoldiqlardan import qiling.",
+      "shownOf": "{total} tadan {shown} tasi ko‘rsatilmoqda",
+      "showMore": "Yana ko‘rsatish"
     }
   }
 }

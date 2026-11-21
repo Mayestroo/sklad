@@ -2,14 +2,19 @@
 
 import { useState, useMemo } from 'react';
 import { usePersistentState } from '@/lib/usePersistentState';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchField } from '@/components/ui/SearchField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatPercent, formatPriceOrUnset, errorMessage } from '@/lib/utils';
 import { catalogMarkupPercent } from '@/lib/inventory-cost';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
@@ -17,14 +22,10 @@ import { Modal } from '@/components/ui/Modal';
 import {
   Package,
   Plus,
-  Search,
   QrCode,
   Tag,
-  CheckCircle2,
-  Eye,
   Edit2,
   Trash2,
-  RefreshCw,
   Zap,
 } from 'lucide-react';
 import { Product, Category } from '@shared/types';
@@ -237,328 +238,201 @@ export default function ProductsPage() {
     { value: 'INACTIVE', label: isRu ? 'Неактивный' : 'Nofaol' },
   ];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }} className="animate-fade-in">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Товары и услуги' : 'Tovarlar va xizmatlar'}
-          </h1>
-        </div>
+  const tl = useTranslations('rd.list');
+  const tp = useTranslations('rd.products');
+  // Quick focus: low stock / no sale price, from the tiles or a link (?stock=low).
+  const [focus, setFocus] = useState<'' | 'low' | 'noprice'>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stock') === 'low' ? 'low' : ''));
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('products.hidden', ['unit']);
+  const [sort, setSort] = usePersistentState<SortState | null>('products.sort', null);
+  const [limit, setLimit] = useState(100);
+  const isGoods = (p: Product) => p.type !== 'SERVICE';
+  const stockOf = (p: Product) => Number((p as Product & { totalStock?: number }).totalStock ?? 0);
+  const lowOf = (p: Product) => Boolean((p as Product & { isLowStock?: boolean }).isLowStock);
+  const lowCount = products.filter(lowOf).length;
+  const noPriceCount = products.filter((p) => p.isActive && !(Number(p.salePrice) > 0)).length;
+  const focused = filteredProducts.filter((p) => (focus === 'low' ? lowOf(p) : focus === 'noprice' ? p.isActive && !(Number(p.salePrice) > 0) : true));
+  const visible = focused.slice(0, limit);
+  const openEdit = (p: Product) => {
+    setEditingProduct(p);
+    setIsCreateOpen(true);
+  };
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <Button variant="ghost" size="sm" onClick={fetchCatalogData} disabled={productsQuery.isFetching}>
-            <RefreshCw size={16} style={{ animation: productsQuery.isFetching ? 'spin 1s linear infinite' : undefined }} />
-            {isRu ? 'Обновить' : 'Yangilash'}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setIsCategoryModalOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Tag size={16} />
-            {isRu ? 'Категории' : 'Kategoriyalar'}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setEditingProduct(null);
-              setIsCreateOpen(true);
-            }}
-          >
-            <Plus size={18} />
-            {isRu ? 'Добавить товар' : 'Yangi tovar qo‘shish'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Metrics Row */}
-      <div className="ux-kpi-grid">
-        <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Package size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего товаров' : 'Jami Tovarlar'}</div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {totalProducts} {isRu ? 'шт' : 'ta'}
+  const columns: Column<Product>[] = [
+    {
+      key: 'name',
+      label: isRu ? 'Наименование' : 'Nomi',
+      primary: true,
+      locked: true,
+      sortValue: (p) => getProductName(p),
+      render: (p) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span aria-hidden style={{ width: 32, height: 32, borderRadius: 'var(--radius-sm)', backgroundColor: p.type === 'SERVICE' ? 'var(--color-info-50)' : 'var(--color-primary-50)', color: p.type === 'SERVICE' ? 'var(--color-info-700)' : 'var(--color-primary-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {p.type === 'SERVICE' ? <Zap size={16} /> : <Package size={16} />}
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 'var(--font-semibold)', opacity: p.isActive ? 1 : 0.6 }}>{getProductName(p)}</div>
+            <div className="rd-sub">
+              {productTypeLabel(p.type, locale)}
+              {p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}
+              {p.sku ? ` · ${p.sku}` : ''}
+              {!p.isActive ? ` · ${isRu ? 'неактивный' : 'nofaol'}` : ''}
             </div>
           </div>
-        </Card>
-
-        <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-success-50)', color: 'var(--color-success-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Активные позиции' : 'Faol Pozitsiyalar'}</div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {activeProducts} {isRu ? 'шт' : 'ta'}
-            </div>
-          </div>
-        </Card>
-
-        <Card style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-info-50)', color: 'var(--color-info-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Zap size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Услуги' : 'Xizmatlar'}</div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {servicesCount} {isRu ? 'шт' : 'ta'}
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          onClick={() => setIsCategoryModalOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', cursor: 'pointer' }}
-        >
-          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Tag size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Категории' : 'Kategoriyalar'}</div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-              {totalCategories} {isRu ? 'шт' : 'ta'}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Filters Bar */}
-      <Card style={{ padding: 'var(--space-4)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'center' }}>
-        <div style={{ flex: '1 1 240px', position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={isRu ? 'Название товара, артикул (SKU) или штрихкод...' : 'Tovar nomi, SKU yoki shtrix-kod...'}
-            style={{
-              width: '100%',
-              padding: '8px 12px 8px 38px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--color-border)',
-              backgroundColor: 'var(--color-bg-secondary)',
-              color: 'var(--color-text-primary)',
-              fontSize: 'var(--text-sm)',
-              outline: 'none',
-            }}
-          />
         </div>
-
-        <div style={{ width: '200px' }}>
-          <Select
-            value={selectedCategory}
-            onChange={setSelectedCategory}
-            options={categoryOptions}
-            placeholder={isRu ? 'Категория' : 'Kategoriya'}
-          />
-        </div>
-
-        <div style={{ width: '160px' }}>
-          <Select
-            value={selectedType}
-            onChange={setSelectedType}
-            options={typeOptions}
-            placeholder={isRu ? 'Тип' : 'Tur'}
-          />
-        </div>
-
-        <div style={{ width: '160px' }}>
-          <Select
-            value={selectedStatus}
-            onChange={setSelectedStatus}
-            options={statusOptions}
-            placeholder={isRu ? 'Статус' : 'Holat'}
-          />
-        </div>
-      </Card>
-
-      {/* Products Table */}
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
-        {productsQuery.isError ? (
-          <LoadError
-            error={productsQuery.error}
-            onRetry={() => void productsQuery.refetch()}
-            retrying={productsQuery.isFetching}
-          />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
-          </div>
-        ) : filteredProducts.length === 0 ? (
-          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <Package size={48} style={{ marginBottom: 'var(--space-3)', opacity: 0.4 }} />
-            <div style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
-              {isRu ? 'Товары не найдены' : 'Tovarlar topilmadi'}
-            </div>
-            <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
-              {isRu ? 'Измените условия поиска или добавьте новый товар' : 'Qidiruv shartlarini o‘zgartiring yoki yangi tovar qo‘shing'}
-            </div>
-          </div>
+      ),
+    },
+    { key: 'barcode', label: isRu ? 'Штрихкод' : 'Shtrix-kod', sortValue: (p) => p.barcode ?? '', render: (p) => (p.barcode ? <span className="tabular-nums" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><QrCode size={12} aria-hidden /> {p.barcode}</span> : '—') },
+    { key: 'category', label: isRu ? 'Категория' : 'Kategoriya', sortValue: (p) => getCategoryName(p.categoryId), render: (p) => <Badge variant="neutral">{getCategoryName(p.categoryId)}</Badge> },
+    { key: 'unit', label: isRu ? 'Ед. изм.' : 'O‘lchov birligi', render: (p) => unitLabel(p.unitOfMeasure, locale) },
+    {
+      key: 'stock',
+      label: tp('stock'),
+      numeric: true,
+      sortValue: (p) => (isGoods(p) ? stockOf(p) : -1),
+      render: (p) =>
+        isGoods(p) ? (
+          <span style={{ fontWeight: 'var(--font-semibold)', color: lowOf(p) ? 'var(--color-error-700)' : undefined }}>
+            {stockOf(p)} {unitLabel(p.unitOfMeasure, locale)}
+            {lowOf(p) && <span className="rd-sub" style={{ color: 'inherit', display: 'block' }}>{tp('low', { min: Number(p.minStockAlert ?? 0) })}</span>}
+          </span>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Наименование товара / услуги' : 'Tovar / Xizmat nomi'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'SKU / Штрихкод' : 'SKU / Barcode'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Категория' : 'Kategoriya'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Ед. изм.' : 'O‘lchov birligi'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Себестоимость' : 'Tannarx'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена продажи' : 'Sotuv narxi'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Наценка %' : 'Ustama %'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Статус' : 'Holat'}</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', textAlign: 'right' }}>{isRu ? 'Действия' : 'Amallar'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map((p, idx) => {
-                  // Markup across currencies too (a USD cost against a UZS price uses the cost's rate).
-                  const markup = catalogMarkupPercent(p);
-                  const isLastRow = idx === filteredProducts.length - 1;
+          <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>
+        ),
+    },
+    {
+      key: 'cost',
+      label: isRu ? 'Себестоимость' : 'Tannarx',
+      numeric: true,
+      sortValue: (p) => Number(p.costPrice || 0),
+      render: (p) => <span style={{ color: 'var(--color-text-secondary)' }}>{formatPriceOrUnset(Number(p.costPrice || 0), locale, p.costPriceCurrency)}</span>,
+    },
+    {
+      key: 'price',
+      label: isRu ? 'Цена продажи' : 'Sotuv narxi',
+      numeric: true,
+      sortValue: (p) => Number(p.salePrice || 0),
+      render: (p) => <strong style={{ color: Number(p.salePrice) > 0 ? undefined : 'var(--color-warning-700)' }}>{formatPriceOrUnset(Number(p.salePrice || 0), locale, p.salePriceCurrency)}</strong>,
+    },
+    {
+      key: 'markup',
+      label: isRu ? 'Наценка %' : 'Ustama %',
+      numeric: true,
+      sortValue: (p) => catalogMarkupPercent(p) ?? -999,
+      render: (p) => {
+        const markup = catalogMarkupPercent(p);
+        return markup !== null ? <Badge variant={markup >= 20 ? 'success' : markup > 0 ? 'warning' : 'error'}>{markup > 0 ? '+' : ''}{formatPercent(markup)}</Badge> : '—';
+      },
+    },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (p) => (
+        <div className="rd-row-actions">
+          {!(Number(p.salePrice) > 0) && p.isActive && (
+            <button type="button" className="rd-next-btn" onClick={() => openEdit(p)}>
+              {tp('setPrice')}
+            </button>
+          )}
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tl('open'), onSelect: () => setSelectedProduct(p) },
+              { label: tl('edit'), onSelect: () => openEdit(p) },
+              { label: tl('delete'), onSelect: () => setDeletingProduct(p), danger: true },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
 
-                  return (
-                    <tr
-                      key={p.id}
-                      style={{
-                        borderBottom: isLastRow ? 'none' : '1px solid var(--color-border-light)',
-                        transition: 'background-color var(--transition-fast)',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      {/* Name & Type */}
-                      <td data-primary style={{ padding: '12px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: 'var(--radius-sm)',
-                              backgroundColor: p.type === 'SERVICE' ? 'var(--color-info-50)' : 'var(--color-primary-50)',
-                              color: p.type === 'SERVICE' ? 'var(--color-info-700)' : 'var(--color-primary-600)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {p.type === 'SERVICE' ? <Zap size={16} /> : <Package size={16} />}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                              {getProductName(p)}
-                            </div>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                              {productTypeLabel(p.type, locale)}
-                              {p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
+  const anyFilter = Boolean(search || selectedCategory || selectedType || selectedStatus || focus);
+  const clearAll = () => {
+    setSearch('');
+    setSelectedCategory('');
+    setSelectedType('');
+    setSelectedStatus('');
+    setFocus('');
+  };
 
-                      {/* SKU & Barcode */}
-                      <td data-label={isRu ? 'SKU / Штрихкод' : 'SKU / Barcode'} style={{ padding: '12px 16px' }}>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-primary)' }}>
-                          {p.sku || '—'}
-                        </div>
-                        {p.barcode && (
-                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <QrCode size={12} /> {p.barcode}
-                          </div>
-                        )}
-                      </td>
+  return (
+    <div className="rd-page animate-fade-in">
+      <PageHeader
+        title={isRu ? 'Товары и услуги' : 'Tovarlar va xizmatlar'}
+        subtitle={tp('subtitle')}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setIsCategoryModalOpen(true)}>
+              <Tag size={16} aria-hidden /> {isRu ? 'Категории' : 'Kategoriyalar'}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditingProduct(null);
+                setIsCreateOpen(true);
+              }}
+            >
+              <Plus size={18} aria-hidden /> {isRu ? 'Добавить товар' : 'Yangi tovar qo‘shish'}
+            </Button>
+          </>
+        }
+      />
 
-                      {/* Category */}
-                      <td data-label={isRu ? 'Категория' : 'Kategoriya'} style={{ padding: '12px 16px' }}>
-                        <Badge variant="neutral">{getCategoryName(p.categoryId)}</Badge>
-                      </td>
+      <SignalStrip label={tl('summary')}>
+        <Signal tone="error" label={tp('sigLow')} value={lowCount} hint={tp('sigLowHint')} active={focus === 'low'} onClick={() => setFocus(focus === 'low' ? '' : 'low')} />
+        <Signal tone="warning" label={tp('sigNoPrice')} value={noPriceCount} hint={tp('sigNoPriceHint')} active={focus === 'noprice'} onClick={() => setFocus(focus === 'noprice' ? '' : 'noprice')} />
+        <Signal tone="info" label={isRu ? 'Активные позиции' : 'Faol pozitsiyalar'} value={`${activeProducts} / ${totalProducts}`} hint={isRu ? `Услуг: ${servicesCount}` : `Xizmatlar: ${servicesCount}`} />
+        <Signal tone="neutral" label={isRu ? 'Категории' : 'Kategoriyalar'} value={totalCategories} />
+      </SignalStrip>
 
-                      {/* Unit */}
-                      <td data-label={isRu ? 'Ед. изм.' : 'O‘lchov birligi'} style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
-                        {unitLabel(p.unitOfMeasure, locale)}
-                      </td>
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField value={search} onChange={setSearch} placeholder={tp('searchPh')} label={tl('search')} autoFocus />
+          <div style={{ minWidth: 200 }}>
+            <Select options={categoryOptions} value={selectedCategory} onChange={setSelectedCategory} searchable />
+          </div>
+          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
+        </div>
+        <div className="rd-toolbar-row">
+          <ChipGroup label={isRu ? 'Тип' : 'Turi'} showLabel options={typeOptions} value={selectedType} onChange={setSelectedType} />
+          <ChipGroup label={isRu ? 'Статус' : 'Holat'} showLabel options={statusOptions} value={selectedStatus} onChange={setSelectedStatus} />
+        </div>
+      </div>
 
-                      {/* Cost price */}
-                      <td data-label={isRu ? 'Себестоимость' : 'Tannarx'} style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary)' }}>
-                        {formatPriceOrUnset(Number(p.costPrice || 0), locale, p.costPriceCurrency)}
-                        {p.type === 'FINISHED_PRODUCT' && (
-                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                            {p.costSource === 'PRODUCTION_ACTUAL'
-                              ? isRu ? 'Фактическая (производство)' : 'Haqiqiy (ishlab chiqarish)'
-                              : p.costSource === 'RECIPE_ESTIMATE'
-                                ? isRu ? 'Оценка (рецептура)' : 'Taxminiy (retseptura)'
-                                : isRu ? 'Рецептура не создана' : 'Retseptura yaratilmagan'}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Sale price */}
-                      <td data-label={isRu ? 'Цена продажи' : 'Sotuv narxi'} style={{ padding: '12px 16px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                        {formatPriceOrUnset(Number(p.salePrice || 0), locale, p.salePriceCurrency)}
-                      </td>
-
-                      {/* Margin % */}
-                      <td data-label={isRu ? 'Наценка %' : 'Ustama %'} style={{ padding: '12px 16px' }}>
-                        {markup !== null ? (
-                          <Badge variant={markup >= 20 ? 'success' : markup > 0 ? 'warning' : 'error'}>
-                            {markup > 0 ? '+' : ''}{formatPercent(markup)}
-                          </Badge>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td data-label={isRu ? 'Статус' : 'Holat'} style={{ padding: '12px 16px' }}>
-                        {p.isActive ? (
-                          <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge>
-                        ) : (
-                          <Badge variant="neutral">{isRu ? 'Неактивный' : 'Nofaol'}</Badge>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedProduct(p)} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
-                            <Eye size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditingProduct(p);
-                              setIsCreateOpen(true);
-                            }}
-                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                            style={{ color: 'var(--color-primary-600)' }}
-                          >
-                            <Edit2 size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeletingProduct(p)}
-                            title={isRu ? 'Удалить' : 'O‘chirish'}
-                            style={{ color: 'var(--color-error-700)' }}
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <div className="rd-table-card">
+        {productsQuery.isError ? (
+          <LoadError error={productsQuery.error} onRetry={fetchCatalogData} retrying={productsQuery.isFetching} />
+        ) : (
+          <DataTable
+            rows={visible}
+            columns={columns}
+            rowKey={(p) => p.id}
+            hidden={hiddenCols}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={(p) => setSelectedProduct(p)}
+            selectedKey={selectedProduct?.id}
+            loading={productsQuery.isPending}
+            caption={tl('clickRowHint')}
+            empty={
+              anyFilter ? (
+                <EmptyState icon={Package} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
+              ) : (
+                <EmptyState icon={Package} title={tp('none')} description={tp('noneHint')} action={<Button onClick={() => { setEditingProduct(null); setIsCreateOpen(true); }}><Plus size={16} aria-hidden /> {isRu ? 'Добавить товар' : 'Yangi tovar qo‘shish'}</Button>} />
+              )
+            }
+          />
+        )}
+        {focused.length > visible.length && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{tp('shownOf', { shown: visible.length, total: focused.length })}</span>
+            <Button variant="secondary" size="sm" onClick={() => setLimit((n) => n + 200)}>
+              {tp('showMore')}
+            </Button>
           </div>
         )}
-      </Card>
+      </div>
 
       {/* Product Detail View Modal */}
       {selectedProduct && (
