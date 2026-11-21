@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
+import { Signal, SignalStrip } from '@/components/ui/list/ListKit';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, LEDGER_CURRENCY } from '@/lib/utils';
@@ -47,6 +49,7 @@ export default function FinancialReportsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const tUx = useTranslations('ux');
+  const trp = useTranslations('rd.reports');
   const statementsQuery = useApiQuery<FinancialStatements>('/accounting/reports/statements');
   const statements = statementsQuery.data ?? null;
   // Statements come from journal lines, which are always UZS (ADR 0006).
@@ -105,6 +108,43 @@ export default function FinancialReportsPage() {
           />
         </Card>
       ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+        {/* The answer first: profit, the result line, and whether the books balance (with where to look if not) */}
+        <SignalStrip label={trp('summary')}>
+          <Signal tone={statements.profitLoss.netProfit < 0 ? 'error' : 'success'} label={statements.profitLoss.netProfit < 0 ? (isRu ? 'Чистый убыток' : 'Sof zarar') : isRu ? 'Чистая прибыль' : 'Sof foyda'} value={money(statements.profitLoss.netProfit)} hint={trp('allTime')} />
+          <Signal tone="info" label={isRu ? 'Доходы (выручка)' : 'Daromadlar (tushum)'} value={money(statements.profitLoss.totalRevenue)} hint={trp('costs', { amount: money(statements.profitLoss.totalCogs) })} />
+          <Signal
+            tone={statements.balanceSheet.isBalanced ? 'success' : 'error'}
+            label={trp('balanceCheck')}
+            value={statements.balanceSheet.isBalanced ? (isRu ? 'Актив = Пассив' : 'Aktiv = Passiv') : isRu ? 'Актив ≠ Пассив' : 'Aktiv ≠ Passiv'}
+            hint={
+              statements.balanceSheet.isBalanced ? (
+                trp('balanced')
+              ) : (
+                <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+                  <Link href="/accounting" style={{ color: "var(--color-primary-700)", textDecoration: "underline" }}>{trp('openOsv')}</Link>
+                  <Link href="/opening-balances" style={{ color: "var(--color-primary-700)", textDecoration: "underline" }}>{trp('openOb')}</Link>
+                </span>
+              )
+            }
+          />
+        </SignalStrip>
+
+        {/* Where the money went: revenue split into costs and profit */}
+        {Number(statements.profitLoss.totalRevenue) > 0 && (
+          <Card>
+            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-3)' }}>{trp('whereTitle')}</h2>
+            <div className="rp-bar" role="img" aria-label={trp('whereAria', { revenue: money(statements.profitLoss.totalRevenue), costs: money(statements.profitLoss.totalCogs), profit: money(statements.profitLoss.grossProfit) })}>
+              <span className="rp-bar-costs" style={{ flexBasis: `${Math.min(100, Math.max(0, (Number(statements.profitLoss.totalCogs) / Number(statements.profitLoss.totalRevenue)) * 100))}%` }} />
+              <span className="rp-bar-profit" />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginTop: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+              <span><span className="rp-dot rp-dot-costs" aria-hidden /> {isRu ? 'Себестоимость и расходы' : 'Tannarx va xarajatlar'}: <strong className="tabular-nums">{money(statements.profitLoss.totalCogs)}</strong></span>
+              <span><span className="rp-dot rp-dot-profit" aria-hidden /> {isRu ? 'Валовая прибыль' : 'Yalpi foyda'}: <strong className="tabular-nums">{money(statements.profitLoss.grossProfit)}</strong></span>
+            </div>
+          </Card>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 'var(--space-6)', alignItems: 'start' }}>
           <Card>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 'var(--space-2)' }}>
@@ -160,6 +200,7 @@ export default function FinancialReportsPage() {
               tone={statements.profitLoss.netProfit < 0 ? 'negative' : 'positive'}
             />
           </Card>
+        </div>
         </div>
       )}
     </div>

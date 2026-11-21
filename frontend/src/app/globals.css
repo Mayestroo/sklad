@@ -1372,3 +1372,10 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .acc-item:hover { border-color: var(--color-primary-300); background: var(--color-primary-50); }
 .acc-item:focus-visible { outline: 2px solid var(--color-primary-600); outline-offset: 1px; }
 .acc-code { font-weight: var(--font-bold); min-width: 44px; color: var(--color-primary-700); }
+
+.rp-bar { display: flex; height: 18px; border-radius: var(--radius-full); overflow: hidden; background: var(--color-bg-tertiary); }
+.rp-bar-costs { background: var(--color-error-600); }
+.rp-bar-profit { flex: 1; background: var(--color-success-600); }
+.rp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+.rp-dot-costs { background: var(--color-error-600); }
+.rp-dot-profit { background: var(--color-success-600); }

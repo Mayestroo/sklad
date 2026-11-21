@@ -933,6 +933,17 @@
     },
     "crm": {
       "closed": "Yopilgan (yutildi / yutqazildi)"
+    },
+    "reports": {
+      "summary": "Asosiy natija",
+      "allTime": "Barcha davr uchun, jurnal bo‘yicha",
+      "costs": "Xarajatlar: {amount}",
+      "balanceCheck": "Balans tekshiruvi",
+      "balanced": "Hisoblar juft — hammasi joyida",
+      "openOsv": "Aylanma-saldo",
+      "openOb": "Boshlang‘ich qoldiqlar",
+      "whereTitle": "Tushum qayerga ketdi",
+      "whereAria": "Tushum {revenue}: xarajatlar {costs}, yalpi foyda {profit}"
     }
   }
 }
