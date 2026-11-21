@@ -1133,3 +1133,6 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
 
 /* SearchField draws its own clear button: hide the browser one */
 .ux-search-input::-webkit-search-cancel-button, .ux-search-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+
+/* Table rows that open something: quiet hover in both themes */
+.ux-row-hover:hover { background: var(--color-bg-tertiary); }

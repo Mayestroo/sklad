@@ -317,6 +317,51 @@ try {
     await page.waitForTimeout(1200);
     log('list removed:', !(await page.getByRole('heading', { name: 'Ulgurji UX' }).isVisible().catch(() => false)));
   }
+
+  if (flow === 'service') {
+    await signIn();
+    await page.goto(BASE + '/services', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: isRu ? 'Новый акт оказанных услуг' : 'Ko‘rsatilgan xizmat akti' }).first().click();
+    const drawer = page.getByRole('dialog');
+    await drawer.waitFor();
+    await page.keyboard.press('Control+Enter');
+    await page.waitForTimeout(400);
+    log('empty submit message:', (await drawer.locator('[role=alert]').first().textContent().catch(() => ''))?.trim());
+    await shot('1-empty-submit');
+    await pick(isRu ? 'Клиент' : 'Mijoz', 'Baraka');
+    await pick(isRu ? 'Валюта' : 'Valyuta', 'UZS');
+    await drawer.getByLabel(isRu ? 'Название услуги *' : 'Xizmat nomi *').fill('UX yetkazib berish');
+    await drawer.locator('#service-price-0').fill('150000');
+    log('footer total:', (await drawer.getByText(isRu ? 'Итого:' : 'Jami:').first().textContent())?.trim());
+    await drawer.getByRole('button', { name: isRu ? 'Сохранить черновик' : 'Qoralamani saqlash' }).click();
+    await drawer.waitFor({ state: 'hidden', timeout: 10000 });
+    const row = page.locator('tbody tr').first();
+    const actNo = (await row.locator('td').first().locator('button').textContent())?.trim();
+    log('draft created:', actNo);
+    await row.locator('td').first().locator('button').click();
+    const dlg = page.getByRole('dialog');
+    await dlg.waitFor();
+    await shot('2-details-draft');
+    await dlg.getByRole('button', { name: isRu ? 'Провести' : 'Tasdiqlash' }).click();
+    await page.getByRole('alertdialog').or(page.getByRole('dialog').filter({ hasText: isRu ? 'будет проведён' : 'tasdiqlanadi' })).first().getByRole('button', { name: isRu ? 'Провести' : 'Tasdiqlash' }).click();
+    await page.waitForTimeout(1500);
+    log('status after post:', (await page.locator('tbody tr').first().textContent())?.replace(/\s+/g, ' ').slice(0, 140));
+    await page.locator('tbody tr').first().locator('td').first().locator('button').click();
+    await page.getByRole('dialog').waitFor();
+    await page.getByRole('button', { name: isRu ? 'Принять оплату' : 'To‘lov qabul qilish' }).click();
+    await page.waitForTimeout(800);
+    log('payment view title:', (await page.getByRole('dialog').locator('h2, h3').first().textContent())?.trim());
+    log('dialogs open:', await page.getByRole('dialog').count());
+    await shot('3-payment');
+    await page.getByRole('button', { name: isRu ? 'Назад к акту' : 'Aktga qaytish' }).click();
+    log('back to details:', await page.getByRole('dialog').getByRole('button', { name: isRu ? 'Печать' : 'Chop etish' }).isVisible());
+    await page.getByRole('dialog').getByRole('button', { name: isRu ? 'Удалить' : 'O‘chirish' }).first().click();
+    const conf = page.getByRole('alertdialog').or(page.getByRole('dialog').filter({ hasText: isRu ? 'отменён' : 'bekor qilinadi' })).first();
+    await conf.waitFor();
+    await conf.getByRole('button', { name: isRu ? 'Удалить' : 'O‘chirish' }).click();
+    await page.waitForTimeout(1500);
+    log('act removed:', !(await page.getByText(actNo || '???', { exact: true }).isVisible().catch(() => false)));
+  }
 } catch (e) {
   log('FAILED:', String(e).split('\n')[0]);
   await shot('zz-failure');

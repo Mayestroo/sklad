@@ -1,7 +1,6 @@
 'use client';
 
 import { totalsByCurrency, type CurrencyTotal } from '@/lib/currency-totals';
-import { activateOnKey } from '@/lib/a11y';
 import React, { useState, useMemo } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
@@ -11,9 +10,13 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { SearchField } from '@/components/ui/SearchField';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { ServiceActDrawer } from '@/components/services/ServiceActDrawer';
 import { ServiceActDetailsModal } from '@/components/services/ServiceActDetailsModal';
 import { ServiceActPrintView } from '@/components/services/ServiceActPrintView';
@@ -21,12 +24,8 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import {
   Plus,
-  Search,
   ArrowUpRight,
   ArrowDownRight,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
   Eye,
   Printer,
   Trash2,
@@ -49,6 +48,7 @@ export default function ServicesPage() {
 
   // Filters
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -70,12 +70,12 @@ export default function ServicesPage() {
     params.append('type', activeType);
     params.append('page', String(page));
     params.append('limit', String(pageSize));
-    if (search.trim()) params.append('search', search.trim());
+    if (debouncedSearch.trim()) params.append('search', debouncedSearch.trim());
     if (statusFilter) params.append('status', statusFilter);
     if (paymentStatusFilter) params.append('paymentStatus', paymentStatusFilter);
     return `/services?${params.toString()}`;
-  }, [activeType, page, search, statusFilter, paymentStatusFilter]);
-  const actsQuery = useApiQuery<{ items: ServiceActDetail[]; total: number }>(actsEndpoint);
+  }, [activeType, page, debouncedSearch, statusFilter, paymentStatusFilter]);
+  const actsQuery = useApiQuery<{ items: ServiceActDetail[]; total: number }>(actsEndpoint, { keepPrevious: true });
   const acts = useMemo(() => actsQuery.data?.items ?? [], [actsQuery.data]);
   const total = actsQuery.data?.total ?? 0;
   const loading = actsQuery.isPending;
@@ -186,8 +186,8 @@ export default function ServicesPage() {
           ? 'Этот акт проведён. При удалении он будет автоматически отменён (с откатом проводок и задолженности) и удалён из базы. Продолжить?'
           : 'Ushbu akt tasdiqlangan. O‘chirish jarayonida u avtomatik bekor qilinadi (provodkalar va qarz orqaga qaytariladi) hamda bazadan o‘chiriladi. Davom ettirasizmi?'
         : isRu
-        ? 'Удалить этот акт?'
-        : 'Ushbu aktni o‘chirishni xohlaysizmi?',
+        ? `Черновик акта ${act.actNumber} будет удалён.`
+        : `${act.actNumber} akt qoralamasi o‘chiriladi.`,
       variant: 'danger',
       confirmText: isRu ? 'Удалить' : 'O‘chirish',
       cancelText: isRu ? 'Отмена' : 'Bekor qilish',
@@ -212,7 +212,7 @@ export default function ServicesPage() {
         tenantId: company?.id,
         locale,
       });
-      toast.success(isRu ? 'Акт успешно удален' : 'Akt muvaffaqiyatli o‘chirildi');
+      toast.success(isRu ? `Акт ${act.actNumber} удалён` : `${act.actNumber} akti o‘chirildi`);
       fetchActs();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik yuz berdi'));
@@ -227,330 +227,128 @@ export default function ServicesPage() {
   };
 
   const isFiltered = Boolean(search || statusFilter || paymentStatusFilter);
+  const counterpartyLabel = activeType === 'PROVIDED' ? (isRu ? 'Клиент' : 'Mijoz') : isRu ? 'Поставщик' : 'Yetkazib beruvchi';
+  const statusMeta = (s: string) =>
+    s === 'POSTED'
+      ? { variant: 'success' as const, text: isRu ? 'Проведён' : 'Tasdiqlangan' }
+      : s === 'DRAFT'
+        ? { variant: 'warning' as const, text: isRu ? 'Черновик' : 'Qoralama' }
+        : { variant: 'error' as const, text: isRu ? 'Отменён' : 'Bekor qilingan' };
+  const payMeta = (s: string) =>
+    s === 'PAID'
+      ? { variant: 'success' as const, text: isRu ? 'Оплачен' : 'To‘langan' }
+      : s === 'PARTIALLY_PAID'
+        ? { variant: 'warning' as const, text: isRu ? 'Частично' : 'Qisman' }
+        : { variant: 'neutral' as const, text: isRu ? 'Не оплачен' : 'To‘lanmagan' };
+  const iconBtn = (danger?: boolean): React.CSSProperties => ({
+    width: 32,
+    height: 32,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    borderRadius: 'var(--radius-sm)',
+    background: 'transparent',
+    cursor: 'pointer',
+    color: danger ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
+  });
+  const th = { padding: '12px 16px', fontWeight: 'var(--font-medium)' } as const;
+  const newActButton = (
+    <Button variant="primary" onClick={handleOpenCreate}>
+      <Plus size={16} aria-hidden />
+      {activeType === 'PROVIDED' ? (isRu ? 'Новый акт оказанных услуг' : 'Ko‘rsatilgan xizmat akti') : isRu ? 'Новый акт полученных услуг' : 'Olingan xizmat akti'}
+    </Button>
+  );
+  const tab = (type: 'PROVIDED' | 'RECEIVED', label: string, Icon: typeof ArrowUpRight) => {
+    const on = activeType === type;
+    return (
+      <button
+        type="button"
+        aria-pressed={on}
+        onClick={() => {
+          setActiveType(type);
+          setPage(1);
+        }}
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          minHeight: 36,
+          padding: '6px 14px',
+          borderRadius: 'var(--radius-md)',
+          fontSize: 'var(--text-sm)',
+          fontWeight: on ? 600 : 500,
+          backgroundColor: on ? 'var(--color-segmented-active-bg)' : 'transparent',
+          color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+          boxShadow: on ? 'var(--color-segmented-active-shadow)' : 'none',
+          border: on ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
+          cursor: 'pointer',
+          minWidth: 0,
+        }}
+      >
+        <Icon size={16} aria-hidden style={{ flexShrink: 0 }} />
+        <span>{label}</span>
+      </button>
+    );
+  };
+  const kpi = (label: string, value: React.ReactNode, hint: string, tone?: string) => (
+    <Card style={{ padding: 'var(--space-4)' }}>
+      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{label}</div>
+      <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', marginTop: 4, color: tone }} className="tabular-nums">{value}</div>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>{hint}</div>
+    </Card>
+  );
+  const pageNote = total > acts.length
+    ? isRu ? `по ${acts.length} актам на этой странице из ${total}` : `shu sahifadagi ${acts.length} ta akt bo‘yicha (jami ${total})`
+    : isRu ? `актов: ${total}` : `aktlar: ${total}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* ─── Top Header & Primary Action ──────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 'var(--space-4)',
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--font-bold)',
-              color: 'var(--color-text-primary)',
-              margin: 0,
-            }}
-          >
-            {isRu ? 'Услуги' : 'Xizmatlar'}
-          </h1>
-        </div>
-
-        <Button
-          variant="primary"
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>
-            {activeType === 'PROVIDED'
-              ? isRu
-                ? 'Новая услуга'
-                : 'Yangi xizmat'
-              : isRu
-              ? 'Новая услуга'
-              : 'Yangi xizmat'}
-          </span>
-        </Button>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          title={isRu ? 'Услуги' : 'Xizmatlar'}
+          subtitle={isRu ? 'Акты оказанных клиентам и полученных от поставщиков услуг: долг и проводки создаются при проведении.' : 'Mijozlarga ko‘rsatilgan va yetkazib beruvchilardan olingan xizmatlar aktlari: tasdiqlanganda qarz va provodkalar yaratiladi.'}
+          actions={newActButton}
+        />
       </div>
 
-      {/* ─── Segmented Navigation Switcher ────────────────────────── */}
-      <div
-        style={{
-          display: 'inline-flex',
-          backgroundColor: 'var(--color-segmented-bg)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--color-segmented-border)',
-          padding: '4px',
-          gap: '4px',
-          maxWidth: '440px',
-          width: '100%',
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            setActiveType('PROVIDED');
-            setPage(1);
-          }}
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            borderRadius: 'var(--radius-md)',
-            fontSize: 'var(--text-sm)',
-            fontWeight: activeType === 'PROVIDED' ? 600 : 500,
-            backgroundColor: activeType === 'PROVIDED' ? 'var(--color-segmented-active-bg)' : 'transparent',
-            color: activeType === 'PROVIDED' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-            boxShadow: activeType === 'PROVIDED' ? 'var(--color-segmented-active-shadow)' : 'none',
-            border: activeType === 'PROVIDED' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-            minWidth: 0,
-            textAlign: 'center',
-          }}
-        >
-          <ArrowUpRight className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{isRu ? 'Оказанные услуги' : 'Ko‘rsatilgan xizmatlar'}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setActiveType('RECEIVED');
-            setPage(1);
-          }}
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            borderRadius: 'var(--radius-md)',
-            fontSize: 'var(--text-sm)',
-            fontWeight: activeType === 'RECEIVED' ? 600 : 500,
-            backgroundColor: activeType === 'RECEIVED' ? 'var(--color-segmented-active-bg)' : 'transparent',
-            color: activeType === 'RECEIVED' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-            boxShadow: activeType === 'RECEIVED' ? 'var(--color-segmented-active-shadow)' : 'none',
-            border: activeType === 'RECEIVED' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-            minWidth: 0,
-            textAlign: 'center',
-          }}
-        >
-          <ArrowDownRight className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>{isRu ? 'Полученные услуги' : 'Olingan xizmatlar'}</span>
-        </button>
+      <div role="group" aria-label={isRu ? 'Вид актов' : 'Aktlar turi'} style={{ display: 'inline-flex', backgroundColor: 'var(--color-segmented-bg)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-segmented-border)', padding: 4, gap: 4, maxWidth: 460, width: '100%' }}>
+        {tab('PROVIDED', isRu ? 'Оказанные услуги' : 'Ko‘rsatilgan xizmatlar', ArrowUpRight)}
+        {tab('RECEIVED', isRu ? 'Полученные услуги' : 'Olingan xizmatlar', ArrowDownRight)}
       </div>
 
-      {/* ─── Executive KPI Cards ──────────────────────────────────── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-          gap: 'var(--space-4)',
-        }}
-      >
-        {/* Total Invoiced */}
-        <div
-          style={{
-            backgroundColor: 'var(--color-bg-secondary)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-light)',
-            borderLeft: '4px solid #3b82f6',
-            boxShadow: 'var(--shadow-sm)',
-            padding: 'var(--space-4) var(--space-5)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span
-              style={{
-                fontSize: 'var(--text-xs)',
-                fontWeight: 'var(--font-semibold)',
-                color: 'var(--color-text-tertiary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              {isRu ? 'Общая сумма услуг' : 'Jami xizmatlar summasi'}
-            </span>
-            <Clock style={{ width: 16, height: 16, color: 'var(--color-info-700)' }} />
-          </div>
-          <p
-            style={{
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--font-bold)',
-              color: 'var(--color-text-primary)',
-              marginTop: 'var(--space-2)',
-            }}
-          >
-            {moneyLines(amountByCurrency)}
-          </p>
-          <span
-            style={{
-              fontSize: 'var(--text-xs)',
-              color: 'var(--color-text-tertiary)',
-              marginTop: '4px',
-              display: 'block',
-            }}
-          >
-            {total} {isRu ? 'актов в текущей выборке' : 'ta xizmat akti'}
-          </span>
-        </div>
-
-        {/* Total Settled */}
-        <div
-          style={{
-            backgroundColor: 'var(--color-bg-secondary)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-light)',
-            borderLeft: '4px solid #10b981',
-            boxShadow: 'var(--shadow-sm)',
-            padding: 'var(--space-4) var(--space-5)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span
-              style={{
-                fontSize: 'var(--text-xs)',
-                fontWeight: 'var(--font-semibold)',
-                color: 'var(--color-text-tertiary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              {isRu ? 'Оплачено через Финансы' : 'Moliya orqali to‘langan'}
-            </span>
-            <CheckCircle2 style={{ width: 16, height: 16, color: 'var(--color-success-700)' }} />
-          </div>
-          <p
-            style={{
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--font-bold)',
-              color: 'var(--color-success-700)',
-              marginTop: 'var(--space-2)',
-            }}
-          >
-            {moneyLines(paidByCurrency)}
-          </p>
-          <span
-            style={{
-              fontSize: 'var(--text-xs)',
-              color: 'var(--color-text-tertiary)',
-              marginTop: '4px',
-              display: 'block',
-            }}
-          >
-            {paidShare}
-          </span>
-        </div>
-
-        {/* Outstanding Debt */}
-        <div
-          style={{
-            backgroundColor: 'var(--color-bg-secondary)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border-light)',
-            borderLeft: '4px solid #f59e0b',
-            boxShadow: 'var(--shadow-sm)',
-            padding: 'var(--space-4) var(--space-5)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span
-              style={{
-                fontSize: 'var(--text-xs)',
-                fontWeight: 'var(--font-semibold)',
-                color: 'var(--color-text-tertiary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              {activeType === 'PROVIDED'
-                ? isRu
-                  ? 'Остаток долга клиентов'
-                  : 'Mijozlar qarzdorligi (Haqdorlik)'
-                : isRu
-                ? 'Наш долг поставщикам'
-                : 'Yetkazib beruvchilarga qarzimiz'}
-            </span>
-            <AlertCircle style={{ width: 16, height: 16, color: 'var(--color-warning-700)' }} />
-          </div>
-          <p
-            style={{
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--font-bold)',
-              color: debtByCurrency.length > 0 ? 'var(--color-error-700)' : 'var(--color-text-primary)',
-              marginTop: 'var(--space-2)',
-            }}
-          >
-            {moneyLines(debtByCurrency)}
-          </p>
-          <span
-            style={{
-              fontSize: 'var(--text-xs)',
-              color: 'var(--color-text-tertiary)',
-              marginTop: '4px',
-              display: 'block',
-            }}
-          >
-            {debtByCurrency.length > 0
-              ? isRu
-                ? 'Ожидается погашение через кассу/банк'
-                : 'Moliya to‘lovi orqali yopilishi kutilmoqda'
-              : isRu
-              ? 'Полностью рассчитано'
-              : 'To‘liq hisob-kitob qilingan'}
-          </span>
-        </div>
+      <div className="ux-kpi-grid">
+        {kpi(isRu ? 'Сумма актов' : 'Aktlar summasi', moneyLines(amountByCurrency), pageNote)}
+        {kpi(isRu ? 'Оплачено' : 'To‘langan', moneyLines(paidByCurrency), paidShare)}
+        {kpi(
+          activeType === 'PROVIDED' ? (isRu ? 'Должны клиенты' : 'Mijozlar qarzi') : isRu ? 'Мы должны поставщикам' : 'Yetkazib beruvchilarga qarzimiz',
+          moneyLines(debtByCurrency),
+          debtByCurrency.length > 0 ? (isRu ? 'Закрывается оплатой в «Финансах»' : '«Moliya»dagi to‘lov bilan yopiladi') : isRu ? 'Долгов нет' : 'Qarz yo‘q',
+          debtByCurrency.length > 0 ? 'var(--color-warning-700)' : undefined,
+        )}
       </div>
 
-      {/* ─── Filter Toolbar ───────────────────────────────────────── */}
-      <Card style={{ padding: 'var(--space-4)' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
-            gap: 'var(--space-3)',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ position: 'relative' }}>
-            <Search
-              style={{
-                width: 16,
-                height: 16,
-                position: 'absolute',
-                left: 12,
-                top: 10,
-                color: 'var(--color-text-tertiary)',
-                pointerEvents: 'none',
-              }}
-            />
-            <Input
-              type="text"
-              placeholder={
-                isRu
-                  ? 'Поиск по номеру, контрагенту, заметкам...'
-                  : '№, kontragent yoki izoh bo‘yicha qidiruv...'
-              }
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              style={{ paddingLeft: '36px' }}
-            />
-          </div>
-
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end', padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)' }}>
+          <SearchField
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder={isRu ? '№ акта, контрагент или заметка' : 'Akt №, kontragent yoki izoh'}
+            style={{ maxWidth: 360 }}
+          />
           <Select
+            label={isRu ? 'Статус' : 'Holati'}
+            style={{ width: 200 }}
             options={[
-              { value: '', label: isRu ? 'Все статусы проведения' : 'Barcha o‘tkazma holatlari' },
-              { value: 'DRAFT', label: isRu ? 'Черновик (DRAFT)' : 'Qoralama (DRAFT)' },
-              { value: 'POSTED', label: isRu ? 'Проведён (POSTED)' : 'Tasdiqlangan (POSTED)' },
-              { value: 'CANCELLED', label: isRu ? 'Отменён (CANCELLED)' : 'Bekor qilingan (CANCELLED)' },
+              { value: '', label: isRu ? 'Все' : 'Hammasi' },
+              { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+              { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
+              { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
             ]}
             value={statusFilter}
             onChange={(val) => {
@@ -558,13 +356,14 @@ export default function ServicesPage() {
               setPage(1);
             }}
           />
-
           <Select
+            label={isRu ? 'Оплата' : 'To‘lov'}
+            style={{ width: 200 }}
             options={[
-              { value: '', label: isRu ? 'Все статусы оплаты' : 'Barcha to‘lov holatlari' },
-              { value: 'UNPAID', label: isRu ? 'Не оплачен (UNPAID)' : 'To‘lanmagan' },
+              { value: '', label: isRu ? 'Все' : 'Hammasi' },
+              { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To‘lanmagan' },
               { value: 'PARTIALLY_PAID', label: isRu ? 'Частично оплачен' : 'Qisman to‘langan' },
-              { value: 'PAID', label: isRu ? 'Полностью оплачен' : 'To‘langan' },
+              { value: 'PAID', label: isRu ? 'Оплачен' : 'To‘langan' },
             ]}
             value={paymentStatusFilter}
             onChange={(val) => {
@@ -572,353 +371,112 @@ export default function ServicesPage() {
               setPage(1);
             }}
           />
-
           {isFiltered && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleResetFilters}
-              className="flex items-center gap-1.5 justify-center"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>{isRu ? 'Сбросить' : 'Filtrni tozalash'}</span>
+            <Button variant="ghost" size="sm" onClick={handleResetFilters}>
+              <RotateCcw size={14} aria-hidden /> {isRu ? 'Сбросить' : 'Tozalash'}
             </Button>
           )}
         </div>
-      </Card>
 
-      {/* ─── Acts Table ───────────────────────────────────────────── */}
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              minWidth: '800px',
-              borderCollapse: 'collapse',
-              fontSize: 'var(--text-sm)',
-              textAlign: 'left',
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '1px solid var(--color-border)',
-                  color: 'var(--color-text-tertiary)',
-                  fontSize: 'var(--text-xs)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                <th style={{ padding: '12px 16px' }}>{isRu ? '№ Акта' : 'Akt №'}</th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата' : 'Sana'}</th>
-                <th style={{ padding: '12px 16px' }}>
-                  {activeType === 'PROVIDED'
-                    ? isRu ? 'Клиент' : 'Mijoz'
-                    : isRu ? 'Поставщик' : 'Yetkazib beruvchi'}
-                </th>
-                <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holati'}</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  {isRu ? 'Начислено' : 'Hisoblangan summa'}
-                </th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  {isRu ? 'Оплачено' : 'To‘langan summa'}
-                </th>
-                <th style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  {isRu ? 'Оплата' : 'To‘lov holati'}
-                </th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  {isRu ? 'Действия' : 'Amallar'}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {actsQuery.isError ? (
-                <tr>
-                  <td colSpan={8}>
-                    <LoadError error={actsQuery.error} onRetry={() => void fetchActs()} retrying={actsQuery.isFetching} />
-                  </td>
+        {actsQuery.isError ? (
+          <LoadError error={actsQuery.error} onRetry={() => void fetchActs()} retrying={actsQuery.isFetching} />
+        ) : loading ? (
+          <SkeletonRows rows={6} columns={6} />
+        ) : acts.length === 0 ? (
+          isFiltered ? (
+            <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или фильтры.' : 'Qidiruv yoki filtrlarni o‘zgartiring.'} action={<Button variant="outline" size="sm" onClick={handleResetFilters}>{isRu ? 'Сбросить фильтры' : 'Filtrlarni tozalash'}</Button>} />
+          ) : (
+            <EmptyState
+              icon={FileText}
+              title={activeType === 'PROVIDED' ? (isRu ? 'Актов оказанных услуг пока нет' : 'Hozircha ko‘rsatilgan xizmat aktlari yo‘q') : isRu ? 'Актов полученных услуг пока нет' : 'Hozircha olingan xizmat aktlari yo‘q'}
+              description={activeType === 'PROVIDED' ? (isRu ? 'Оформите акт — после проведения долг клиента появится в расчётах.' : 'Akt rasmiylashtiring — tasdiqlangach mijoz qarzi hisob-kitoblarda paydo bo‘ladi.') : isRu ? 'Оформите акт — после проведения наш долг поставщику появится в расчётах.' : 'Akt rasmiylashtiring — tasdiqlangach yetkazib beruvchiga qarzimiz hisob-kitoblarda paydo bo‘ladi.'}
+              action={newActButton}
+            />
+          )
+        ) : (
+          <div style={{ overflowX: 'auto', opacity: actsQuery.isFetching ? 0.7 : 1 }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                  <th scope="col" style={th}>{isRu ? '№ акта' : 'Akt №'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Дата' : 'Sana'}</th>
+                  <th scope="col" style={th}>{counterpartyLabel}</th>
+                  <th scope="col" style={th}>{isRu ? 'Статус' : 'Holati'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Сумма' : 'Summa'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Оплачено' : 'To‘langan'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Оплата' : 'To‘lov'}</th>
+                  <th scope="col" style={th}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>
                 </tr>
-              ) : loading ? (
-                <tr>
-                  <td colSpan={8} style={{ padding: '48px', textAlign: 'center' }}>
-                    <div className="inline-block animate-spin rounded-full h-7 w-7 border-2 border-blue-600 border-t-transparent"></div>
-                    <p style={{ marginTop: '8px', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'Загрузка актов...' : 'Xizmat aktlari yuklanmoqda...'}
-                    </p>
-                  </td>
-                </tr>
-              ) : acts.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ padding: '48px 16px', textAlign: 'center' }}>
-                    <FileText
-                      style={{
-                        width: 40,
-                        height: 40,
-                        margin: '0 auto 12px',
-                        color: 'var(--color-text-tertiary)',
-                        opacity: 0.6,
-                      }}
-                    />
-                    <p
-                      style={{
-                        fontWeight: 'var(--font-semibold)',
-                        color: 'var(--color-text-primary)',
-                        fontSize: 'var(--text-base)',
-                      }}
-                    >
-                      {isRu ? 'Акты не найдены' : 'Xizmat aktlari topilmadi'}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-text-tertiary)',
-                        marginTop: '4px',
-                        marginBottom: '16px',
-                      }}
-                    >
-                      {isFiltered
-                        ? isRu
-                          ? 'Попробуйте изменить параметры поиска или фильтры'
-                          : 'Qidiruv mezonlarini o‘zgartirib ko‘ring yoki filtrni tozalang'
-                        : isRu
-                        ? 'Создайте первый акт оказанных или полученных услуг'
-                        : 'Birinchi ko‘rsatilgan yoki olingan xizmat aktini shakllantiring'}
-                    </p>
-                    {!isFiltered && (
-                      <Button variant="primary" size="sm" onClick={handleOpenCreate}>
-                        <Plus className="w-3.5 h-3.5 mr-1" />
-                        <span>{isRu ? 'Создать акт' : 'Yangi akt yaratish'}</span>
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ) : (
-                acts.map((act, idx) => {
+              </thead>
+              <tbody>
+                {acts.map((act) => {
+                  const st = statusMeta(act.status);
+                  const pay = payMeta(act.paymentStatus);
                   return (
-                    <tr
-                      key={act.id}
-                      onClick={() => handleOpenDetails(act)}
-                      tabIndex={0}
-                      onKeyDown={activateOnKey(() => handleOpenDetails(act))}
-                      style={{
-                        borderBottom: idx === acts.length - 1 ? 'none' : '1px solid var(--color-border-light)',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s ease',
-                      }}
-                      className="hover:bg-gray-50/75 dark:hover:bg-gray-800/40"
-                    >
-                      <td style={{ padding: '12px 16px' }}>
-                        <span
-                          style={{
-                            fontWeight: 'var(--font-semibold)',
-                            color: 'var(--color-text-primary)',
-                          }}
-                        >
+                    <tr key={act.id} className="ux-row-hover" style={{ borderBottom: '1px solid var(--color-border-light)' }}>
+                      <td data-primary style={{ padding: '12px 16px' }}>
+                        <button type="button" onClick={() => void handleOpenDetails(act)} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', cursor: 'pointer', textAlign: 'left' }}>
                           {act.actNumber}
-                        </span>
+                        </button>
                         {act.externalNumber && (
-                          <span
-                            style={{
-                              display: 'block',
-                              fontSize: 'var(--text-xs)',
-                              color: 'var(--color-text-tertiary)',
-                              marginTop: '2px',
-                            }}
-                          >
-                            {isRu ? 'Внешний №: ' : 'Tashqi №: '}
-                            {act.externalNumber}
+                          <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2, fontWeight: 'var(--font-normal)' }}>
+                            {isRu ? 'Внешний № ' : 'Tashqi № '}{act.externalNumber}
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
-                        {formatDate(act.actDate, locale)}
+                      <td data-label={isRu ? 'Дата' : 'Sana'} style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{formatDate(act.actDate, locale)}</td>
+                      <td data-label={counterpartyLabel} style={{ padding: '12px 16px' }}>
+                        <span style={{ fontWeight: 'var(--font-medium)' }}>{act.counterparty?.name || '—'}</span>
+                        {act.counterparty?.inn && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{isRu ? 'ИНН' : 'STIR'} {act.counterparty.inn}</span>}
                       </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span
-                          style={{
-                            fontWeight: 'var(--font-medium)',
-                            color: 'var(--color-text-primary)',
-                          }}
-                        >
-                          {act.counterparty?.name || '—'}
-                        </span>
-                        {act.counterparty?.inn && (
-                          <span
-                            style={{
-                              display: 'block',
-                              fontSize: 'var(--text-xs)',
-                              color: 'var(--color-text-tertiary)',
-                              marginTop: '2px',
-                            }}
-                          >
-                            STIR: {act.counterparty.inn}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <Badge
-                          variant={
-                            act.status === 'POSTED'
-                              ? 'success'
-                              : act.status === 'DRAFT'
-                              ? 'warning'
-                              : 'error'
-                          }
-                        >
-                          {act.status === 'POSTED'
-                            ? isRu ? 'Проведён' : 'Tasdiqlangan'
-                            : act.status === 'DRAFT'
-                            ? isRu ? 'Черновик' : 'Qoralama'
-                            : isRu ? 'Отменён' : 'Bekor qilingan'}
-                        </Badge>
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px 16px',
-                          textAlign: 'right',
-                          fontWeight: 'var(--font-semibold)',
-                          color: 'var(--color-text-primary)',
-                        }}
-                      >
-                        {formatCurrency(Number(act.totalAmount), locale, act.currency)}
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px 16px',
-                          textAlign: 'right',
-                          fontWeight: 'var(--font-medium)',
-                          color: 'var(--color-success-700)',
-                        }}
-                      >
-                        {formatCurrency(Number(act.paidAmount), locale, act.currency)}
-                      </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <Badge
-                          variant={
-                            act.paymentStatus === 'PAID'
-                              ? 'success'
-                              : act.paymentStatus === 'PARTIALLY_PAID'
-                              ? 'warning'
-                              : 'neutral'
-                          }
-                        >
-                          {act.paymentStatus === 'PAID'
-                            ? isRu ? 'Оплачен' : 'To‘langan'
-                            : act.paymentStatus === 'PARTIALLY_PAID'
-                            ? isRu ? 'Частично' : 'Qisman'
-                            : isRu ? 'Не оплачен' : 'Kutilmoqda'}
-                        </Badge>
-                      </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'flex-end',
-                            gap: '6px',
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDetails(act)}
-                            className="p-1.5 rounded hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
-                            title={isRu ? 'Просмотр' : 'Ko‘rish'}
-                          >
-                            <Eye className="w-4 h-4" />
+                      <td data-label={isRu ? 'Статус' : 'Holati'} style={{ padding: '12px 16px' }}><Badge variant={st.variant}>{st.text}</Badge></td>
+                      <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }} className="tabular-nums">{formatCurrency(Number(act.totalAmount), locale, act.currency)}</td>
+                      <td data-label={isRu ? 'Оплачено' : 'To‘langan'} style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }} className="tabular-nums">{formatCurrency(Number(act.paidAmount), locale, act.currency)}</td>
+                      <td data-label={isRu ? 'Оплата' : 'To‘lov'} style={{ padding: '12px 16px' }}><Badge variant={pay.variant}>{pay.text}</Badge></td>
+                      <td style={{ padding: '8px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+                          <button type="button" style={iconBtn()} onClick={() => void handleOpenDetails(act)} aria-label={isRu ? `Открыть акт ${act.actNumber}` : `${act.actNumber} aktini ochish`} title={isRu ? 'Открыть' : 'Ochish'}>
+                            <Eye size={16} aria-hidden />
                           </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setPrintAct(act)}
-                            className="p-1.5 rounded hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
-                            title={isRu ? 'Печать' : 'Chop etish'}
-                          >
-                            <Printer className="w-4 h-4" />
+                          <button type="button" style={iconBtn()} onClick={() => setPrintAct(act)} aria-label={isRu ? `Печать акта ${act.actNumber}` : `${act.actNumber} aktini chop etish`} title={isRu ? 'Печать' : 'Chop etish'}>
+                            <Printer size={16} aria-hidden />
                           </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => handleEditAct(act, e)}
-                            className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800 transition-colors"
-                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                          >
-                            <Edit2 className="w-4 h-4" />
+                          <button type="button" style={iconBtn()} onClick={(e) => void handleEditAct(act, e)} aria-label={isRu ? `Изменить акт ${act.actNumber}` : `${act.actNumber} aktini tahrirlash`} title={isRu ? 'Изменить' : 'Tahrirlash'}>
+                            <Edit2 size={16} aria-hidden />
                           </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteAct(act, e)}
-                            className="p-1.5 rounded hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors"
-                            title={isRu ? 'Удалить' : 'O‘chirish'}
-                          >
-                            <Trash2 className="w-4 h-4" />
+                          <button type="button" style={iconBtn(true)} onClick={(e) => void handleDeleteAct(act, e)} aria-label={isRu ? `Удалить акт ${act.actNumber}` : `${act.actNumber} aktini o‘chirish`} title={isRu ? 'Удалить' : 'O‘chirish'}>
+                            <Trash2 size={16} aria-hidden />
                           </button>
                         </div>
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-        {/* Pagination Bar */}
         {total > pageSize && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              borderTop: '1px solid var(--color-border-light)',
-              backgroundColor: 'var(--color-bg-primary)',
-              fontSize: 'var(--text-xs)',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            <span>
-              {isRu ? 'Показано ' : 'Ko‘rsatilmoqda: '}
-              <strong>{(page - 1) * pageSize + 1}</strong> -{' '}
-              <strong>{Math.min(page * pageSize, total)}</strong> / {total}
+          <nav aria-label={isRu ? 'Страницы' : 'Sahifalar'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--color-border-light)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            <span className="tabular-nums">
+              {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} {isRu ? 'из' : '/'} {total}
             </span>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Button aria-label={isRu ? 'Предыдущая страница' : 'Oldingi sahifa'} title={isRu ? 'Предыдущая страница' : 'Oldingi sahifa'}
-                variant="secondary"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-              >
-                <ChevronLeft className="w-4 h-4" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Button aria-label={isRu ? 'Предыдущая страница' : 'Oldingi sahifa'} title={isRu ? 'Предыдущая страница' : 'Oldingi sahifa'} variant="secondary" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+                <ChevronLeft size={16} aria-hidden />
               </Button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <Button aria-label={isRu ? 'Следующая страница' : 'Keyingi sahifa'} title={isRu ? 'Следующая страница' : 'Keyingi sahifa'}
-                variant="secondary"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="w-4 h-4" />
+              <span className="tabular-nums">{page} / {totalPages}</span>
+              <Button aria-label={isRu ? 'Следующая страница' : 'Keyingi sahifa'} title={isRu ? 'Следующая страница' : 'Keyingi sahifa'} variant="secondary" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+                <ChevronRight size={16} aria-hidden />
               </Button>
             </div>
-          </div>
+          </nav>
         )}
       </Card>
 
-      {/* ─── Drawer Form ──────────────────────────────────────────── */}
-      <ServiceActDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        onSuccess={fetchActs}
-        initialData={editingAct}
-        defaultType={activeType}
-      />
+      <ServiceActDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} onSuccess={fetchActs} initialData={editingAct} defaultType={activeType} />
 
-      {/* ─── Details Modal ────────────────────────────────────────── */}
       {selectedAct && (
         <ServiceActDetailsModal
           act={selectedAct}
@@ -933,14 +491,8 @@ export default function ServicesPage() {
         />
       )}
 
-      {/* ─── Print View Modal ─────────────────────────────────────── */}
       {printAct && (
-        <ServiceActPrintView
-          act={printAct}
-          companyName={company?.name ? getLocalizedName(company.name, locale) : 'KORXONA'}
-          onClose={() => setPrintAct(null)}
-          locale={locale}
-        />
+        <ServiceActPrintView act={printAct} companyName={company?.name ? getLocalizedName(company.name, locale) : 'KORXONA'} onClose={() => setPrintAct(null)} locale={locale} />
       )}
     </div>
   );

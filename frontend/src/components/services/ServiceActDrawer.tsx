@@ -2,7 +2,7 @@
 
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -12,6 +12,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import type { ServiceActDetail } from '@/lib/service-act';
 import type { Counterparty, Product } from '@shared/types';
@@ -159,6 +160,13 @@ export function ServiceActDrawer({
     setError(null);
   }, [isOpen, initialData, defaultType]);
 
+  const formRef = useRef<HTMLFormElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  // The message is at the top of a long form: bring it into view.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [error]);
+
   const handleAddItem = () => {
     setItems([
       ...items,
@@ -251,7 +259,7 @@ export function ServiceActDrawer({
       onSuccess();
       onClose();
     } catch (err) {
-      setError(errorMessage(err) || 'Xatolik yuz berdi');
+      setError(errorMessage(err) || (isRu ? 'Не удалось сохранить акт' : 'Aktni saqlab bo‘lmadi'));
     } finally {
       setLoading(false);
     }
@@ -259,16 +267,19 @@ export function ServiceActDrawer({
 
   const counterpartyOptions = counterparties.map((c) => ({
     value: c.id,
-    label: `${c.name} ${c.inn ? `(${c.inn})` : ''}`,
+    label: c.inn ? `${c.name} (${c.inn})` : c.name,
   }));
 
   const serviceCatalogOptions = [
-    { value: '', label: isRu ? '-- Пользовательская услуга --' : '-- Erkin xizmat nomi --' },
+    { value: '', label: isRu ? 'Своя услуга (ввести название)' : 'Erkin xizmat (nomini kiriting)' },
     ...servicesCatalog.map((s) => ({
       value: s.id,
-      label: typeof s.name === 'object' ? s.name.uz || s.name.ru : s.name,
+      label: typeof s.name === 'object' ? (isRu ? s.name.ru || s.name.uz : s.name.uz || s.name.ru) : s.name,
     })),
   ];
+
+  const labelStyle: React.CSSProperties = { display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', marginBottom: 4 };
+  const money = (n: number) => (currency ? formatCurrency(n, locale, currency) : '—');
 
   return (
     <Drawer
@@ -277,330 +288,213 @@ export function ServiceActDrawer({
       title={
         initialData?.id
           ? isRu
-            ? `Редактирование акта ${initialData.actNumber}`
-            : `Xizmat aktini tahrirlash ${initialData.actNumber}`
+            ? `Акт ${initialData.actNumber}`
+            : `${initialData.actNumber} akti`
           : type === 'PROVIDED'
-          ? isRu
-            ? 'Новый акт оказанных услуг'
-            : 'Yangi ko\'rsatilgan xizmat akti'
-          : isRu
-          ? 'Новый акт полученных услуг'
-          : 'Yangi olingan xizmat akti'
+            ? isRu ? 'Новый акт оказанных услуг' : 'Yangi ko‘rsatilgan xizmat akti'
+            : isRu ? 'Новый акт полученных услуг' : 'Yangi olingan xizmat akti'
+      }
+      description={
+        initialData?.id
+          ? isRu ? 'Изменения сохраняются в черновике; проведите акт из карточки.' : 'O‘zgarishlar qoralamada saqlanadi; aktni kartochkadan tasdiqlang.'
+          : isRu ? 'Сохраняется черновиком. Долг и проводки появятся после проведения.' : 'Qoralama sifatida saqlanadi. Qarz va provodkalar tasdiqlangandan keyin paydo bo‘ladi.'
       }
       size="lg"
+      onSubmitShortcut={() => formRef.current?.requestSubmit()}
+      footer={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', width: '100%', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            {isRu ? 'Итого: ' : 'Jami: '}
+            <strong className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>{money(grandTotal)}</strong>
+          </span>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button type="submit" form="service-act-form" variant="primary" loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
+              {initialData?.id ? (isRu ? 'Сохранить' : 'Saqlash') : isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}
+            </Button>
+          </div>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col h-full space-y-6 pb-6">
+      <form id="service-act-form" ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
         {error && (
-          <div className="flex items-center gap-2 p-3 text-sm text-red-700 bg-red-50 rounded-md border border-red-200">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+          <div ref={errorRef} role="alert" className="doc-banner is-error" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={16} aria-hidden style={{ flexShrink: 0 }} />
             <span>{error}</span>
           </div>
         )}
 
-        {/* Type selector if creating new */}
         {!initialData?.id && (
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">
-              {isRu ? 'Тип акта' : 'Xizmat turi'}
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setType('PROVIDED')}
-                className={`py-2 px-3 text-sm rounded-md font-medium border text-center transition-all ${
-                  type === 'PROVIDED'
-                    ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {isRu ? 'Оказанная услуга (клиенту)' : 'Ko\'rsatilgan xizmat (mijozga)'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setType('RECEIVED')}
-                className={`py-2 px-3 text-sm rounded-md font-medium border text-center transition-all ${
-                  type === 'RECEIVED'
-                    ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {isRu ? 'Полученная услуга (от поставщика)' : 'Olingan xizmat (yetkazib beruvchidan)'}
-              </button>
+          <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
+            <legend style={labelStyle}>{isRu ? 'Вид акта' : 'Akt turi'}</legend>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-3)' }}>
+              {([
+                ['PROVIDED', isRu ? 'Оказали услугу клиенту' : 'Mijozga xizmat ko‘rsatdik'],
+                ['RECEIVED', isRu ? 'Получили услугу от поставщика' : 'Yetkazib beruvchidan xizmat oldik'],
+              ] as const).map(([value, label]) => {
+                const on = type === value;
+                return (
+                  <label
+                    key={value}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '0 12px', cursor: 'pointer',
+                      borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', fontWeight: on ? 600 : 500,
+                      border: on ? '2px solid var(--color-primary-600)' : '1px solid var(--color-border)',
+                      background: on ? 'var(--color-primary-50)' : 'var(--color-bg-secondary)',
+                      color: 'var(--color-text-primary)',
+                    }}
+                  >
+                    <input type="radio" name="service-act-type" value={value} checked={on} onChange={() => setType(value)} />
+                    {label}
+                  </label>
+                );
+              })}
             </div>
-          </div>
+          </fieldset>
         )}
 
-        {/* Header Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {type === 'PROVIDED'
-                ? isRu
-                  ? 'Клиент *'
-                  : 'Mijoz (Kontragent) *'
-                : isRu
-                ? 'Поставщик / Исполнитель *'
-                : 'Yetkazib beruvchi / Hamkor *'}
-            </label>
-            <Select
-              options={counterpartyOptions}
-              value={counterpartyId}
-              onChange={(val) => setCounterpartyId(val)}
-              placeholder={isRu ? 'Выберите контрагента' : 'Kontragentni tanlang'}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Дата акта *' : 'Akt sanasi *'}
-            </label>
-            <Input
-              type="date"
-              value={actDate}
-              onChange={(e) => setActDate(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Валюта *' : 'Valyuta *'}
-            </label>
-            <Select
-              options={CURRENCY_OPTIONS}
-              value={currency}
-              placeholder={isRu ? 'Валюта' : 'Valyuta'}
-              onChange={(val) => setCurrency(val)}
-            />
-          </div>
-
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
+          <Select
+            label={type === 'PROVIDED' ? (isRu ? 'Клиент *' : 'Mijoz *') : isRu ? 'Поставщик *' : 'Yetkazib beruvchi *'}
+            options={counterpartyOptions}
+            value={counterpartyId}
+            searchable
+            onChange={(val) => setCounterpartyId(val)}
+            placeholder={type === 'PROVIDED' ? (isRu ? 'Выберите клиента' : 'Mijozni tanlang') : isRu ? 'Выберите поставщика' : 'Yetkazib beruvchini tanlang'}
+          />
+          <DatePicker label={isRu ? 'Дата акта *' : 'Akt sanasi *'} value={actDate} onChange={setActDate} />
+          <Select
+            label={isRu ? 'Валюта *' : 'Valyuta *'}
+            options={CURRENCY_OPTIONS}
+            value={currency}
+            placeholder={isRu ? 'Выберите валюту' : 'Valyutani tanlang'}
+            onChange={(val) => setCurrency(val)}
+          />
           {currency && currency !== 'UZS' && (
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                {isRu ? 'Курс валюты' : 'Valyuta kursi'}
-              </label>
-              <MoneyInput
-                aria-label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
-                value={exchangeRate}
-                onValueChange={(value) => setExchangeRate(value === '' ? '' : Number(value))}
-                decimals={4}
-                placeholder="12,800"
-              />
+              <label htmlFor="service-act-rate" style={labelStyle}>{isRu ? `Курс: 1 ${currency} в UZS *` : `Kurs: 1 ${currency} = UZS *`}</label>
+              <MoneyInput id="service-act-rate" value={exchangeRate} onValueChange={(value) => setExchangeRate(value === '' ? '' : Number(value))} decimals={4} placeholder="12 800" />
             </div>
           )}
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Внешний № счета / акта' : 'Tashqi akt / schet №'}
-            </label>
-            <Input
-              type="text"
-              placeholder="e.g. 104-SF"
-              value={externalNumber}
-              onChange={(e) => setExternalNumber(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Дата внешнего акта' : 'Tashqi akt sanasi'}
-            </label>
-            <Input
-              type="date"
-              value={externalDate}
-              onChange={(e) => setExternalDate(e.target.value)}
-            />
-          </div>
+          <Input
+            label={isRu ? 'Номер документа контрагента' : 'Kontragent hujjati raqami'}
+            type="text"
+            placeholder={isRu ? 'напр. 104-СФ' : 'masalan, 104-SF'}
+            value={externalNumber}
+            onChange={(e) => setExternalNumber(e.target.value)}
+          />
+          <DatePicker label={isRu ? 'Дата документа контрагента' : 'Kontragent hujjati sanasi'} value={externalDate} onChange={setExternalDate} />
         </div>
 
-        {/* Line Items Table */}
-        <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900 uppercase">
-              {isRu ? 'Позиции услуг' : 'Xizmat qatorlari'}
+        <section aria-labelledby="service-act-lines" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <h3 id="service-act-lines" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
+              {isRu ? 'Услуги' : 'Xizmatlar'} ({items.length})
             </h3>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handleAddItem}
-              className="flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              {isRu ? 'Добавить строку' : 'Qator qo\'shish'}
-            </Button>
           </div>
 
-          <div className="space-y-4">
-            {items.map((item, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-3 relative group"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-500">#{idx + 1}</span>
+          {items.map((item, idx) => {
+            const n = idx + 1;
+            return (
+              <div key={idx} style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)' }}>{isRu ? `Строка ${n}` : `${n}-qator`}</span>
                   {items.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(idx)}
-                      className="text-red-500 hover:text-red-700 p-1"
-                      title={isRu ? 'Удалить' : 'O\'chirish'}
+                      aria-label={isRu ? `Удалить строку ${n}` : `${n}-qatorni o‘chirish`}
+                      title={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
+                      style={{ width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--color-error-700)', cursor: 'pointer' }}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 size={16} aria-hidden />
                     </button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-3)' }}>
                   {servicesCatalog.length > 0 && (
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                        {isRu ? 'Из каталога' : 'Katalogdan tanlash'}
-                      </label>
-                      <Select
-                        options={serviceCatalogOptions}
-                        value={item.productId || ''}
-                        onChange={(val) => handleItemChange(idx, 'productId', val)}
-                      />
-                    </div>
+                    <Select
+                      label={isRu ? 'Из каталога' : 'Katalogdan'}
+                      options={serviceCatalogOptions}
+                      value={item.productId || ''}
+                      searchable={servicesCatalog.length > 8}
+                      onChange={(val) => handleItemChange(idx, 'productId', val)}
+                    />
                   )}
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                      {isRu ? 'Наименование услуги *' : 'Xizmat nomi *'}
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="e.g. Yuk tashish / Ofis ijarasi"
-                      value={item.serviceName}
-                      onChange={(e) => handleItemChange(idx, 'serviceName', e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                      {isRu ? 'Ед. изм.' : 'Birlik'}
-                    </label>
-                    <Select
-                      options={UNIT_OPTIONS}
-                      value={item.unit}
-                      onChange={(val) => handleItemChange(idx, 'unit', val)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                      {isRu ? 'Количество *' : 'Miqdori *'}
-                    </label>
-                    <QuantityInput
-                      unit={item.unit}
-                      value={item.quantity}
-                      onValueChange={(value) => handleItemChange(idx, 'quantity', Number(value) || 0)}
-                      aria-label={isRu ? 'Количество' : 'Miqdor'}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                      {isRu ? 'Цена за ед. *' : 'Birlik narxi *'}
-                    </label>
-                    <MoneyInput
-                      aria-label={isRu ? 'Цена за ед.' : 'Birlik narxi'}
-                      value={item.unitPrice || ''}
-                      onValueChange={(value) => handleItemChange(idx, 'unitPrice', Number(value) || 0)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                      {isRu ? 'НДС (%)' : 'QQS (%)'}
-                    </label>
-                    <Select
-                      options={[
-                        { value: '0', label: '0% (QQSsiz)' },
-                        { value: '12', label: '12% QQS' },
-                      ]}
-                      value={String(item.vatRate)}
-                      onChange={(val) => handleItemChange(idx, 'vatRate', Number(val))}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                    {isRu ? 'Дополнительное описание / маршрут' : 'Batafsil tavsif / tafsilotlar'}
-                  </label>
                   <Input
+                    label={isRu ? 'Название услуги *' : 'Xizmat nomi *'}
                     type="text"
-                    placeholder={isRu ? 'Описание услуги...' : 'Tafsilotlar...'}
-                    value={item.description || ''}
-                    onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                    placeholder={isRu ? 'напр. Перевозка груза' : 'masalan, Yuk tashish'}
+                    value={item.serviceName}
+                    onChange={(e) => handleItemChange(idx, 'serviceName', e.target.value)}
+                    required
                   />
                 </div>
 
-                <div className="flex justify-end pt-1 text-xs text-gray-700">
-                  <span className="font-semibold">
-                    {isRu ? 'Итого по строке: ' : 'Qator summasi: '}
-                    {currency ? formatCurrency(calculatedRows[idx]?.total || 0, locale, currency) : '—'}
-                  </span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))', gap: 'var(--space-3)' }}>
+                  <Select label={isRu ? 'Единица' : 'Birlik'} options={UNIT_OPTIONS} value={item.unit} onChange={(val) => handleItemChange(idx, 'unit', val)} />
+                  <div>
+                    <label htmlFor={`service-qty-${idx}`} style={labelStyle}>{isRu ? 'Количество *' : 'Miqdori *'}</label>
+                    <QuantityInput id={`service-qty-${idx}`} unit={item.unit} value={item.quantity} onValueChange={(value) => handleItemChange(idx, 'quantity', Number(value) || 0)} />
+                  </div>
+                  <div>
+                    <label htmlFor={`service-price-${idx}`} style={labelStyle}>{isRu ? 'Цена за единицу *' : 'Birlik narxi *'}</label>
+                    <MoneyInput id={`service-price-${idx}`} value={item.unitPrice || ''} onValueChange={(value) => handleItemChange(idx, 'unitPrice', Number(value) || 0)} />
+                  </div>
+                  <Select
+                    label={isRu ? 'НДС' : 'QQS'}
+                    options={[
+                      { value: '0', label: isRu ? 'Без НДС' : 'QQSsiz' },
+                      { value: '12', label: isRu ? '12% НДС' : '12% QQS' },
+                    ]}
+                    value={String(item.vatRate)}
+                    onChange={(val) => handleItemChange(idx, 'vatRate', Number(val))}
+                  />
+                </div>
+
+                <Input
+                  label={isRu ? 'Описание (необязательно)' : 'Tavsif (ixtiyoriy)'}
+                  type="text"
+                  placeholder={isRu ? 'маршрут, период, детали' : 'yo‘nalish, davr, tafsilotlar'}
+                  value={item.description || ''}
+                  onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Сумма строки: ' : 'Qator summasi: '}
+                  <strong className="tabular-nums" style={{ color: 'var(--color-text-primary)', marginLeft: 4 }}>{money(calculatedRows[idx]?.total || 0)}</strong>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+            );
+          })}
 
-        {/* Notes */}
+          <Button type="button" variant="outline" size="sm" onClick={handleAddItem} style={{ alignSelf: 'flex-start' }}>
+            <Plus size={14} aria-hidden /> {isRu ? 'Добавить услугу' : 'Xizmat qo‘shish'}
+          </Button>
+        </section>
+
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            {isRu ? 'Примечание / Комментарий' : 'Umumiy izoh'}
-          </label>
+          <label htmlFor="service-act-notes" style={labelStyle}>{isRu ? 'Комментарий' : 'Izoh'}</label>
           <textarea
+            id="service-act-notes"
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder={isRu ? 'Дополнительные заметки...' : 'Qo\'shimcha ma\'lumotlar...'}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-input)', color: 'var(--color-text-primary)', resize: 'vertical' }}
           />
         </div>
 
-        {/* Summary Card */}
-        <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-100 space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>{isRu ? 'Сумма без НДС:' : 'QQSsiz summa:'}</span>
-            <span className="font-medium">{currency ? formatCurrency(totalSubtotal, locale, currency) : '—'}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>{isRu ? 'НДС:' : 'QQS summasi:'}</span>
-            <span className="font-medium">{currency ? formatCurrency(totalVat, locale, currency) : '—'}</span>
-          </div>
-          <div className="flex justify-between text-gray-900 font-bold text-base border-t border-blue-200 pt-2">
-            <span>{isRu ? 'ИТОГО К НАЧИСЛЕНИЮ:' : 'JAMI SUMMA:'}</span>
-            <span className="text-blue-700">{currency ? formatCurrency(grandTotal, locale, currency) : '—'}</span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 mt-auto">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button type="submit" variant="primary" disabled={loading}>
-            {loading
-              ? isRu
-                ? 'Сохранение...'
-                : 'Saqlanmoqda...'
-              : initialData?.id
-              ? isRu
-                ? 'Сохранить изменения'
-                : 'O\'zgarishlarni saqlash'
-              : isRu
-              ? 'Сохранить как черновик'
-              : 'Qoralama sifatida saqlash'}
-          </Button>
-        </div>
+        <dl style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-tertiary)', display: 'grid', gridTemplateColumns: '1fr auto', gap: '6px 12px', fontSize: 'var(--text-sm)' }}>
+          <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Без НДС' : 'QQSsiz'}</dt>
+          <dd className="tabular-nums" style={{ textAlign: 'right' }}>{money(totalSubtotal)}</dd>
+          <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'НДС' : 'QQS'}</dt>
+          <dd className="tabular-nums" style={{ textAlign: 'right' }}>{money(totalVat)}</dd>
+          <dt style={{ fontWeight: 'var(--font-semibold)', borderTop: '1px solid var(--color-border)', paddingTop: 6 }}>{isRu ? 'Итого' : 'Jami'}</dt>
+          <dd className="tabular-nums" style={{ textAlign: 'right', fontWeight: 'var(--font-bold)', borderTop: '1px solid var(--color-border)', paddingTop: 6 }}>{money(grandTotal)}</dd>
+        </dl>
       </form>
     </Drawer>
   );
