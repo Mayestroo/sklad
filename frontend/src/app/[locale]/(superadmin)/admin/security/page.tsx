@@ -1,13 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { ChipGroup } from '@/components/ui/list/ListKit';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
-import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -42,11 +43,17 @@ export default function SuperAdminSecurityPage() {
   }, [tenantsQuery.data, locale]);
   const [search, setSearch] = useState('');
   const [action, setAction] = useState('ALL');
+  // Sign-ins are most of the log; by default show what was changed (same as the company security page).
+  const [changesOnly, setChangesOnly] = usePersistentState('admin.security.changesOnly', true);
+  const tsec = useTranslations('rd.security');
+  // Group by the local calendar day the time is shown in.
+  const dayKey = (iso: string) => new Date(iso).toDateString();
 
   const userName = (log: AuditLogEntry) => (log.user ? `${log.user.firstName} ${log.user.lastName}`.trim() : isRu ? 'Система' : 'Tizim');
   const rows = logs.filter(
     (log) =>
       (action === 'ALL' || log.action === action) &&
+      (!changesOnly || action !== 'ALL' || (log.action !== 'LOGIN' && log.action !== 'LOGOUT')) &&
       matchesSearch(search, userName(log), log.user?.email, companyName(log.tenantId), labelOf(AUDIT_ENTITY_LABELS, log.entityType, locale), log.ipAddress),
   );
   const th: React.CSSProperties = { padding: '12px 16px', fontWeight: 'var(--font-medium)' };
@@ -77,13 +84,18 @@ export default function SuperAdminSecurityPage() {
           {logs.length > 0 && (
             <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Пользователь, компания, объект или IP' : 'Foydalanuvchi, korxona, obyekt yoki IP'} style={{ maxWidth: 380 }} />
-              <Select
+              <ChipGroup
                 label={isRu ? 'Действие' : 'Harakat'}
-                value={action}
-                onChange={setAction}
-                style={{ width: 220 }}
-                options={[{ value: 'ALL', label: isRu ? 'Все действия' : 'Barcha harakatlar' }, ...Object.keys(AUDIT_ACTION_LABELS).map((a) => ({ value: a, label: labelOf(AUDIT_ACTION_LABELS, a, locale) }))]}
+                value={action === 'ALL' ? '' : action}
+                onChange={(v) => setAction(v || 'ALL')}
+                options={[{ value: '', label: isRu ? 'Все действия' : 'Barcha harakatlar' }, ...Object.keys(AUDIT_ACTION_LABELS).map((a) => ({ value: a, label: labelOf(AUDIT_ACTION_LABELS, a, locale), count: logs.filter((l) => l.action === a).length }))]}
               />
+              {action === 'ALL' && (
+                <label className="auth-check">
+                  <input type="checkbox" checked={changesOnly} onChange={(e) => setChangesOnly(e.target.checked)} />
+                  {tsec('changesOnly')}
+                </label>
+              )}
             </div>
           )}
         </div>
@@ -110,7 +122,19 @@ export default function SuperAdminSecurityPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((log) => (
+                {rows.map((log, i) => [
+                  ...(i === 0 || dayKey(rows[i - 1].createdAt) !== dayKey(log.createdAt)
+                    ? [
+                        <tr key={`d-${log.id}`} className="jr-day">
+                          <td colSpan={6}>
+                            <strong>{formatDate(log.createdAt, locale)}</strong>
+                            <span className="rd-sub" style={{ display: 'inline', marginLeft: 8 }}>
+                              {tsec('dayLine', { count: rows.filter((r) => dayKey(r.createdAt) === dayKey(log.createdAt)).length, deleted: rows.filter((r) => dayKey(r.createdAt) === dayKey(log.createdAt) && r.action === 'DELETE').length })}
+                            </span>
+                          </td>
+                        </tr>,
+                      ]
+                    : []),
                   <tr key={log.id} className="ux-row-hover" style={{ borderBottom: '1px solid var(--color-border-light)' }}>
                     <td data-primary style={{ padding: '12px 16px', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }} className="tabular-nums">{formatDateTime(log.createdAt, locale)}</td>
                     <td data-label={isRu ? 'Пользователь' : 'Foydalanuvchi'} style={{ padding: '12px 16px' }}>
@@ -123,8 +147,8 @@ export default function SuperAdminSecurityPage() {
                     </td>
                     <td data-label={isRu ? 'Объект' : 'Obyekt'} style={{ padding: '12px 16px' }} title={`${log.entityType} ${log.entityId}`}>{labelOf(AUDIT_ENTITY_LABELS, log.entityType, locale)}</td>
                     <td data-label="IP" style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{log.ipAddress || '—'}</td>
-                  </tr>
-                ))}
+                  </tr>,
+                ])}
               </tbody>
             </table>
           </div>
