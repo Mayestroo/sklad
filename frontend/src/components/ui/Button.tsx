@@ -1,6 +1,6 @@
 'use client';
 
-import { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -23,7 +23,32 @@ export function Button({
   ...props
 }: ButtonProps) {
   const disabled = disabledProp || loading;
-  const getVariantStyles = () => {
+  return (
+    <button
+      type={props.type || 'button'}
+      disabled={disabled}
+      aria-disabled={disabled}
+      aria-busy={loading || undefined}
+      style={{
+        ...buttonStyle(variant, size),
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        ...style,
+      }}
+      {...props}
+    >
+      {loading && <Loader2 size={size === 'sm' ? 14 : 16} className="app-spinner" aria-hidden />}
+      {loading && loadingText ? loadingText : children}
+    </button>
+  );
+}
+
+/**
+ * The button look as a style object, for a link that should look like a button
+ * (`<Link style={buttonStyle('outline')}>`) — never nest a <button> inside a link.
+ */
+export function buttonStyle(variant: NonNullable<ButtonProps['variant']> = 'primary', size: NonNullable<ButtonProps['size']> = 'md'): CSSProperties {
+  const getVariantStyles = (): CSSProperties => {
     switch (variant) {
       case 'primary':
         return {
@@ -58,7 +83,7 @@ export function Button({
     }
   };
 
-  const getSizeStyles = () => {
+  const getSizeStyles = (): CSSProperties => {
     switch (size) {
       case 'sm':
         return { padding: '6px 12px', fontSize: 'var(--text-xs)', minHeight: 32 };
@@ -69,31 +94,18 @@ export function Button({
     }
   };
 
-  return (
-    <button
-      type={props.type || 'button'}
-      disabled={disabled}
-      aria-disabled={disabled}
-      aria-busy={loading || undefined}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 'var(--space-2)',
-        borderRadius: 'var(--radius-md)',
-        fontWeight: 'var(--font-medium)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
-        transition: 'all var(--transition-fast)',
-        boxShadow: variant === 'primary' ? 'var(--shadow-xs)' : 'none',
-        ...getVariantStyles(),
-        ...getSizeStyles(),
-        ...style,
-      }}
-      {...props}
-    >
-      {loading && <Loader2 size={size === 'sm' ? 14 : 16} className="app-spinner" aria-hidden />}
-      {loading && loadingText ? loadingText : children}
-    </button>
-  );
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'var(--space-2)',
+    borderRadius: 'var(--radius-md)',
+    fontWeight: 'var(--font-medium)',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    transition: 'all var(--transition-fast)',
+    boxShadow: variant === 'primary' ? 'var(--shadow-xs)' : 'none',
+    ...getVariantStyles(),
+    ...getSizeStyles(),
+  };
 }

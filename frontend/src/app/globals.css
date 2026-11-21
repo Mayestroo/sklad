@@ -950,7 +950,7 @@ textarea:focus-visible,
    Add className="app-table-stack" to a <table> and data-label="Column" to its
    <td>s: below 640 px each row becomes a card with label/value lines. */
 @media (max-width: 639px) {
-  table.app-table-stack, table.app-table-stack tbody, table.app-table-stack tr, table.app-table-stack td { display: block; width: 100%; }
+  table.app-table-stack, table.app-table-stack tbody, table.app-table-stack tfoot, table.app-table-stack tr, table.app-table-stack td { display: block; width: 100%; }
   table.app-table-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   table.app-table-stack tr {
     margin-bottom: var(--space-3);
@@ -1112,4 +1112,21 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
 @media (max-width: 639px) {
   .ux-kpi-grid * { min-width: 0; overflow-wrap: break-word; }
   .ux-kpi-grid [style*='--text-xl'], .ux-kpi-grid [style*='--text-2xl'], .ux-kpi-grid [style*='--text-lg'] { font-size: var(--text-base) !important; line-height: 1.3; }
+}
+
+/* ─── Printing a page (reports, journals): only the content, on white ─── */
+@media print {
+  .app-sidebar, .app-header, .app-skip-link, .app-nav-backdrop, .app-breadcrumbs, .no-print { display: none !important; }
+  .app-shell-main { margin-left: 0 !important; }
+  .app-shell-content { padding: 0 !important; max-width: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+}
+
+/* Journal entry lines: Dt | Kt | amount on one grid; Dt over Kt on phones */
+.ux-journal-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px; gap: var(--space-3); align-items: baseline; font-size: var(--text-xs); }
+@media (max-width: 639px) {
+  table.app-table-stack td.ux-cell-block { display: block; text-align: left; }
+  .ux-journal-line { grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--space-3); padding: 6px 0 !important; border-top: 1px solid var(--color-border-light); }
+  .ux-journal-line > :nth-child(2) { grid-row: 2; }
+  .ux-journal-line > :nth-child(3) { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
 }

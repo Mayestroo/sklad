@@ -10,9 +10,6 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,
 }));
-vi.mock('@/i18n/navigation', () => ({
-  Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
-}));
 
 import AccountingPage from './page';
 

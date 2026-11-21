@@ -63,6 +63,6 @@ describe('Journal page', () => {
   it('shows the empty state when there are no entries', async () => {
     apiFetch.mockResolvedValue([]);
     renderPage(<JournalPage />);
-    expect(await screen.findByText('Buxgalteriya provodkalari mavjud emas')).toBeTruthy();
+    expect(await screen.findByText('Hozircha provodkalar yo‘q')).toBeTruthy();
   });
 });

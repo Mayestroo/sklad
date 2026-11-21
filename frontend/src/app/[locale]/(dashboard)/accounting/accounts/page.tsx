@@ -1,96 +1,135 @@
 'use client';
 
-import { useTranslations, useLocale } from 'next-intl';
+import { useMemo, useState } from 'react';
+import { useLocale } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { Card } from '@/components/ui/Card';
 import { LoadError } from '@/components/ui/LoadError';
 import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { AccountTypeBadge, ACCOUNT_TYPES, accountTypeLabel } from '@/components/accounting/AccountTypeBadge';
+import { BookOpen } from 'lucide-react';
 import { Account } from '@shared/types';
 
 export default function ChartOfAccountsPage() {
-  const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const accountsQuery = useApiQuery<Account[]>('/accounting/accounts');
-  const accounts = accountsQuery.data ?? [];
+  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+  const [search, setSearch] = useState('');
+  const [type, setType] = useState<string>('');
 
-  const getAccountTypeBadge = (type: string) => {
-    switch (type) {
-      case 'ASSET':
-        return <Badge variant="info">{isRu ? 'Актив' : 'Aktiv'}</Badge>;
-      case 'LIABILITY':
-        return <Badge variant="warning">{isRu ? 'Обязательство' : 'Majburiyat'}</Badge>;
-      case 'EQUITY':
-        return <Badge variant="neutral">{isRu ? 'Капитал' : 'Kapital'}</Badge>;
-      case 'REVENUE':
-        return <Badge variant="success">{isRu ? 'Доход' : 'Daromad'}</Badge>;
-      case 'EXPENSE':
-        return <Badge variant="error">{isRu ? 'Расход' : 'Xarajat'}</Badge>;
-      default:
-        return <Badge variant="neutral">{type}</Badge>;
-    }
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const a of accounts) c[a.type] = (c[a.type] ?? 0) + 1;
+    return c;
+  }, [accounts]);
+
+  const rows = useMemo(
+    () => accounts.filter((a) => (!type || a.type === type) && matchesSearch(search, a.code, a.name.uz, a.name.ru)),
+    [accounts, search, type],
+  );
+
+  const chip = (value: string, label: string, count: number) => {
+    const active = type === value;
+    return (
+      <button
+        key={value || 'all'}
+        type="button"
+        aria-pressed={active}
+        onClick={() => setType(value)}
+        style={{
+          minHeight: 32,
+          padding: '4px 12px',
+          borderRadius: 'var(--radius-full)',
+          border: `1px solid ${active ? 'var(--color-primary-600)' : 'var(--color-border)'}`,
+          background: active ? 'var(--color-primary-50)' : 'var(--color-bg-secondary)',
+          color: active ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
+          fontSize: 'var(--text-xs)',
+          fontWeight: 'var(--font-medium)',
+          cursor: 'pointer',
+        }}
+      >
+        {label} <span className="tabular-nums" style={{ opacity: 0.8 }}>{count}</span>
+      </button>
+    );
   };
 
+  const th = { padding: '12px', fontWeight: 'var(--font-medium)' } as const;
+  const other = locale === 'ru' ? 'uz' : 'ru';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'План счетов (НСБУ)' : 'Hisoblar rejasi (BHMS)'}
-          </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {isRu
-              ? 'Счета, на которые документы делают проводки автоматически.'
-              : 'Hujjatlar avtomatik provodka qiladigan hisoblar.'}
-          </p>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title={isRu ? 'План счетов' : 'Hisoblar rejasi'}
+        subtitle={
+          isRu
+            ? 'Счета НСБУ, на которые документы делают проводки автоматически. Изменять их не нужно.'
+            : 'Hujjatlar avtomatik provodka qiladigan BHMS hisoblari. Ularni o‘zgartirish shart emas.'
+        }
+      />
 
       <Card>
+        {accounts.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+            <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Код или название счёта' : 'Hisob kodi yoki nomi'} style={{ maxWidth: 360 }} />
+            <div role="group" aria-label={isRu ? 'Тип счёта' : 'Hisob turi'} style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              {chip('', isRu ? 'Все' : 'Hammasi', accounts.length)}
+              {ACCOUNT_TYPES.filter((t) => counts[t]).map((t) => chip(t, accountTypeLabel(t, locale), counts[t]))}
+            </div>
+          </div>
+        )}
+
         {accountsQuery.isError ? (
-          <LoadError
-            error={accountsQuery.error}
-            onRetry={() => void accountsQuery.refetch()}
-            retrying={accountsQuery.isFetching}
-          />
+          <LoadError error={accountsQuery.error} onRetry={() => void accountsQuery.refetch()} retrying={accountsQuery.isFetching} />
         ) : accountsQuery.isPending ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
+          <SkeletonRows rows={8} columns={4} />
         ) : accounts.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {isRu
-              ? 'План счетов пуст. Счета создаются при первом запуске системы — обратитесь к администратору.'
-              : 'Hisoblar rejasi bo‘sh. Hisoblar tizim birinchi ishga tushganda yaratiladi — administratorga murojaat qiling.'}
-          </div>
+          <EmptyState
+            compact
+            icon={BookOpen}
+            title={isRu ? 'План счетов пуст' : 'Hisoblar rejasi bo‘sh'}
+            description={
+              isRu
+                ? 'Счета создаются автоматически при первом отчёте. Откройте «Бухгалтерию» или обратитесь к администратору.'
+                : 'Hisoblar birinchi hisobotda avtomatik yaratiladi. «Buxgalteriya»ni oching yoki administratorga murojaat qiling.'
+            }
+          />
+        ) : rows.length === 0 ? (
+          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или тип счёта.' : 'Qidiruv yoki hisob turini o‘zgartiring.'} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>{isRu ? 'Код счёта' : 'Hisob kodi'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'Название (узб.)' : 'Nomi (o‘zbekcha)'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'Название (рус.)' : 'Nomi (ruscha)'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'Тип счёта' : 'Hisob turi'}</th>
-                  <th style={{ padding: '12px', textAlign: 'center' }}>{isRu ? 'Статус' : 'Holati'}</th>
+                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                  <th scope="col" style={th}>{isRu ? 'Счёт' : 'Hisob'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Название' : 'Nomi'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Тип' : 'Turi'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Статус' : 'Holati'}</th>
                 </tr>
               </thead>
               <tbody>
-                {accounts.map((acc) => (
+                {rows.map((acc) => (
                   <tr key={acc.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>
-                      {acc.code}
+                    <td data-primary style={{ padding: '12px', fontWeight: 'var(--font-semibold)', fontFamily: 'var(--font-mono)' }}>{acc.code}</td>
+                    <td data-label={isRu ? 'Название' : 'Nomi'} style={{ padding: '12px' }}>
+                      <div style={{ fontWeight: 'var(--font-medium)' }}>{acc.name[locale] || acc.name[other]}</div>
+                      {acc.name[other] && acc.name[other] !== acc.name[locale] && (
+                        <div lang={other} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{acc.name[other]}</div>
+                      )}
                     </td>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
-                      {acc.name.uz}
-                    </td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {acc.name.ru}
-                    </td>
-                    <td style={{ padding: '12px' }}>{getAccountTypeBadge(acc.type)}</td>
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      <Badge variant="success">{isRu ? 'Системный' : 'Tizimiy'}</Badge>
+                    <td data-label={isRu ? 'Тип' : 'Turi'} style={{ padding: '12px' }}><AccountTypeBadge type={acc.type} /></td>
+                    <td data-label={isRu ? 'Статус' : 'Holati'} style={{ padding: '12px' }}>
+                      {acc.isActive === false ? (
+                        <Badge variant="neutral">{isRu ? 'Не используется' : 'Ishlatilmaydi'}</Badge>
+                      ) : acc.isSystem ? (
+                        <Badge variant="success">{isRu ? 'Системный' : 'Tizimiy'}</Badge>
+                      ) : (
+                        <Badge variant="info">{isRu ? 'Добавлен вручную' : 'Qo‘lda qo‘shilgan'}</Badge>
+                      )}
                     </td>
                   </tr>
                 ))}

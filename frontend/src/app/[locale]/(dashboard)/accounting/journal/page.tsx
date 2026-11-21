@@ -1,94 +1,182 @@
 'use client';
 
-import { useTranslations, useLocale } from 'next-intl';
+import { useMemo, useState } from 'react';
+import { useLocale } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, LEDGER_CURRENCY } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { Button } from '@/components/ui/Button';
+import { DateRangeField } from '@/components/ui/DateRangeField';
+import { SearchField, matchesSearch } from '@/components/ui/SearchField';
 import { FileText } from 'lucide-react';
 import { JournalEntry } from '@shared/types';
 
+/** Words for the document that created an entry (no raw type codes on screen). */
+const SOURCE_LABELS: Record<string, { uz: string; ru: string; href?: (id: string) => string }> = {
+  SalesInvoice: { uz: 'Sotuv hujjati', ru: 'Продажа', href: (id) => `/sales/${id}` },
+  SalesOrder: { uz: 'Buyurtma', ru: 'Заказ', href: (id) => `/sales/orders/${id}` },
+  SalesReturn: { uz: 'Mijozdan qaytarish', ru: 'Возврат покупателя' },
+  SalesReturnCancel: { uz: 'Qaytarishni bekor qilish', ru: 'Отмена возврата' },
+  PurchaseReceipt: { uz: 'Kirim hujjati', ru: 'Приходный документ', href: (id) => `/purchases/${id}` },
+  PurchaseReturn: { uz: 'Yetkazib beruvchiga qaytarish', ru: 'Возврат поставщику', href: (id) => `/purchases/returns/${id}` },
+  AdditionalExpense: { uz: 'Qo‘shimcha xarajat', ru: 'Доп. расход', href: (id) => `/purchases/expenses/${id}` },
+  PurchaseExpense: { uz: 'Xarid xarajati', ru: 'Расход по закупке' },
+  PurchasePayment: { uz: 'Yetkazib beruvchiga to‘lov', ru: 'Оплата поставщику' },
+  PAYMENT: { uz: 'To‘lov', ru: 'Оплата' },
+  Payment: { uz: 'To‘lov', ru: 'Оплата' },
+  FinanceTransaction: { uz: 'Kassa operatsiyasi', ru: 'Кассовая операция' },
+  InventoryDocument: { uz: 'Ombor hujjati', ru: 'Складской документ' },
+  StockTransfer: { uz: 'Omborlararo ko‘chirish', ru: 'Перемещение' },
+  ServiceAct: { uz: 'Xizmat dalolatnomasi', ru: 'Акт услуг' },
+  ProductionDocument: { uz: 'Ishlab chiqarish', ru: 'Производство' },
+  OpeningBalanceDocument: { uz: 'Boshlang‘ich qoldiq', ru: 'Начальный остаток' },
+  OpeningBalanceLine: { uz: 'Boshlang‘ich qoldiq', ru: 'Начальный остаток' },
+};
+
 export default function JournalPage() {
-  const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
   const journalQuery = useApiQuery<JournalEntry[]>('/accounting/journal');
-  const entries = journalQuery.data ?? [];
+  const entries = useMemo(() => journalQuery.data ?? [], [journalQuery.data]);
+  const [search, setSearch] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const rows = useMemo(
+    () =>
+      entries.filter((e) => {
+        const day = (e.entryDate ?? e.createdAt ?? '').slice(0, 10);
+        if (from && day < from) return false;
+        if (to && day > to) return false;
+        const accounts = (e.lines ?? []).flatMap((l) => [
+          l.debitAccount?.code,
+          l.creditAccount?.code,
+          l.debitAccount?.name?.[locale],
+          l.creditAccount?.name?.[locale],
+        ]);
+        return matchesSearch(search, e.entryNumber, e.description, ...accounts);
+      }),
+    [entries, search, from, to, locale],
+  );
+
+  const filtered = Boolean(search || from || to);
+  const th = { padding: '12px', fontWeight: 'var(--font-medium)' } as const;
+  const accountName = (a: { code: string; name?: { uz?: string; ru?: string } } | undefined) =>
+    a ? `${a.code} · ${a.name?.[locale] || a.name?.uz || ''}` : '—';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Журнал проводок' : 'Provodkalar jurnali'}
-          </h1>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title={isRu ? 'Журнал проводок' : 'Provodkalar jurnali'}
+        subtitle={
+          isRu
+            ? 'Каждая проведённая операция: какой счёт дебетуется, какой кредитуется и на какую сумму (в UZS).'
+            : 'Har bir tasdiqlangan operatsiya: qaysi hisob debetlanadi, qaysi biri kreditlanadi va qancha (UZS da).'
+        }
+      />
 
       <Card>
+        {entries.length > 0 && (
+          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 'var(--space-4)' }}>
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              placeholder={isRu ? '№ проводки, описание или счёт' : 'Provodka №, izoh yoki hisob'}
+              style={{ maxWidth: 380 }}
+            />
+            <DateRangeField
+              label={isRu ? 'Период' : 'Davr'}
+              from={from}
+              to={to}
+              onChange={(f, t) => {
+                setFrom(f);
+                setTo(t);
+              }}
+              locale={locale}
+              style={{ flex: '0 1 260px' }}
+            />
+            {filtered && (
+              <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFrom(''); setTo(''); }}>
+                {isRu ? 'Сбросить' : 'Tozalash'}
+              </Button>
+            )}
+            <span aria-live="polite" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+              {isRu ? `Проводок: ${rows.length}` : `Provodkalar: ${rows.length}`}
+            </span>
+          </div>
+        )}
+
         {journalQuery.isError ? (
-          <LoadError
-            error={journalQuery.error}
-            onRetry={() => void journalQuery.refetch()}
-            retrying={journalQuery.isFetching}
-          />
+          <LoadError error={journalQuery.error} onRetry={() => void journalQuery.refetch()} retrying={journalQuery.isFetching} />
         ) : journalQuery.isPending ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
+          <SkeletonRows rows={8} columns={5} />
         ) : entries.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <FileText size={40} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>Buxgalteriya provodkalari mavjud emas</div>
-          </div>
+          <EmptyState
+            compact
+            icon={FileText}
+            title={isRu ? 'Проводок пока нет' : 'Hozircha provodkalar yo‘q'}
+            description={
+              isRu
+                ? 'Проводки появятся сами, когда вы проведёте приход, продажу, оплату или другой документ.'
+                : 'Kirim, sotuv, to‘lov yoki boshqa hujjatni tasdiqlaganingizda provodkalar o‘zi paydo bo‘ladi.'
+            }
+          />
+        ) : rows.length === 0 ? (
+          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или период.' : 'Qidiruv yoki davrni o‘zgartiring.'} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>PROVODKA №</th>
-                  <th style={{ padding: '12px' }}>SANA</th>
-                  <th style={{ padding: '12px' }}>IZOH / MANBA HUJJAT</th>
-                  <th style={{ padding: '12px' }}>DEBET SCHYOT (Dt)</th>
-                  <th style={{ padding: '12px' }}>KREDIT SCHYOT (Kt)</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>SUMMA (SO&apos;M)</th>
+                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                  <th scope="col" style={th}>{isRu ? '№ проводки' : 'Provodka №'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Дата' : 'Sana'}</th>
+                  <th scope="col" style={th}>{isRu ? 'Описание' : 'Izoh'}</th>
+                  <th scope="col" style={th}>
+                    <div className="ux-journal-line" style={{ fontWeight: 'inherit' }}>
+                      <span>{isRu ? 'Дебет (Дт)' : 'Debet (Dt)'}</span>
+                      <span>{isRu ? 'Кредит (Кт)' : 'Kredit (Kt)'}</span>
+                      <span style={{ textAlign: 'right' }}>{isRu ? 'Сумма' : 'Summa'}</span>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => (
-                  <tr key={entry.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>
-                      {entry.entryNumber}
-                    </td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {formatDate(entry.entryDate, locale)}
-                    </td>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
-                      {entry.description}
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      {(entry.lines || []).map((line, idx) => (
-                        <div key={idx} style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)', fontFamily: 'var(--font-mono)' }}>
-                          Dt {line.debitAccount?.code} — {line.debitAccount?.name?.[locale] || line.debitAccount?.name?.uz}
-                        </div>
-                      ))}
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      {(entry.lines || []).map((line, idx) => (
-                        <div key={idx} style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)', fontFamily: 'var(--font-mono)' }}>
-                          Kt {line.creditAccount?.code} — {line.creditAccount?.name?.[locale] || line.creditAccount?.name?.uz}
-                        </div>
-                      ))}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {(entry.lines || []).map((line, idx) => (
-                        <div key={idx}>{formatCurrency(Number(line.amount), locale, LEDGER_CURRENCY)}</div>
-                      ))}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((entry) => {
+                  const source = entry.sourceDocType ? SOURCE_LABELS[entry.sourceDocType] : undefined;
+                  const href = source?.href && entry.sourceDocId ? source.href(entry.sourceDocId) : undefined;
+                  const lines = entry.lines ?? [];
+                  return (
+                    <tr key={entry.id} style={{ borderBottom: '1px solid var(--color-border-light)', verticalAlign: 'top' }}>
+                      <td data-primary style={{ padding: '12px', fontWeight: 'var(--font-semibold)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{entry.entryNumber}</td>
+                      <td data-label={isRu ? 'Дата' : 'Sana'} style={{ padding: '12px', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{formatDate(entry.entryDate, locale)}</td>
+                      <td data-label={isRu ? 'Описание' : 'Izoh'} style={{ padding: '12px' }}>
+                        <div style={{ fontWeight: 'var(--font-medium)' }}>{entry.description}</div>
+                        {source && (
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                            {href ? <Link href={href} style={{ color: 'var(--color-primary-700)' }}>{isRu ? source.ru : source.uz}</Link> : isRu ? source.ru : source.uz}
+                          </div>
+                        )}
+                      </td>
+                      <td className="ux-cell-block" style={{ padding: '12px' }}>
+                        {lines.map((line, idx) => (
+                          <div key={idx} className="ux-journal-line" style={{ padding: idx ? '6px 0 0' : 0 }}>
+                            <span><abbr title={isRu ? 'Дебет' : 'Debet'} style={{ textDecoration: 'none', color: 'var(--color-text-secondary)' }}>Dt</abbr> {accountName(line.debitAccount)}</span>
+                            <span><abbr title={isRu ? 'Кредит' : 'Kredit'} style={{ textDecoration: 'none', color: 'var(--color-text-secondary)' }}>Kt</abbr> {accountName(line.creditAccount)}</span>
+                            <span className="tabular-nums" style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }}>
+                              {formatCurrency(Number(line.amount), locale, LEDGER_CURRENCY)}
+                            </span>
+                          </div>
+                        ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
