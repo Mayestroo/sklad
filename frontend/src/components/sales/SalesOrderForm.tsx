@@ -11,6 +11,8 @@ import { invalidateApiCache } from '@/lib/cache';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DocChecklist, linesKeyDown } from '@/components/ui/DocChecklist';
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { SelectOption } from '@/components/ui/Select';
@@ -61,6 +63,7 @@ export interface SalesOrderFormProps {
 export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tf = useTranslations('rd.docForm');
   const { token, company, hasPermission } = useAuth();
   // New documents start in the tenant sales default, or blank (never a guessed USD).
   const salesDefault = useSalesDefaultCurrency();
@@ -901,6 +904,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         </div>
       )}
 
+      <div className="doc-layout">
+      <div className="doc-main">
       {/* Primary General Info */}
       <OrderGeneralInfo
         locale={locale}
@@ -932,7 +937,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         onCommentChange={(val) => { markDirty(); setComment(val); }}
       />
 
-      {/* Items Table Card */}
+      {/* Items Table Card — Enter moves down / adds a row */}
+      <div onKeyDown={linesKeyDown({ rowCount: items.length, addRow: () => addItemRow(), disabled: isLocked })}>
       <OrderItemsTable
         locale={locale}
         currency={currency}
@@ -946,9 +952,12 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         onAddItem={addItemRow}
         onRemoveItem={removeItemRow}
       />
+      </div>
 
-      <Card style={{ padding: 'var(--space-5)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
+      <Card style={{ padding: 'var(--space-4) var(--space-5)' }}>
+        <details className="doc-more" style={{ borderTop: 'none', paddingTop: 0 }} open={Number(additionalChargeAmount) > 0 || undefined}>
+        <summary>{isRu ? 'Дополнительная сумма покупателю' : 'Mijozga qo‘shimcha summa'}</summary>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-4)', alignItems: 'end', paddingTop: 'var(--space-3)' }}>
           <MoneyInput
             label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Qo‘shimcha summa (${currency})`}
             value={additionalChargeAmount}
@@ -962,8 +971,15 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             onChange={(event) => { markDirty(); setAdditionalChargeVatRate(event.target.value); }}
           />
         </div>
+        </details>
       </Card>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+        * {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}
+      </div>
+      </div>
 
+      {/* Side panel: totals, dispatch gate, linked invoices, what is missing */}
+      <aside className="doc-aside" aria-label={tf('sidePanel')}>
       {/* Totals Summary and Linked Invoices */}
       <OrderTotalsSummary
         locale={locale}
@@ -973,6 +989,26 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         requiredPaymentPercent={requiredPaymentPercent}
         salesInvoices={currentOrderData?.salesInvoices}
       />
+      {!isLocked && (
+        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <DocChecklist
+            items={[
+              { label: tf('ckCustomer'), done: Boolean(counterpartyId) },
+              { label: tf('ckWarehouse'), done: Boolean(effectiveWarehouseId) },
+              { label: currency && currency !== 'UZS' ? tf('ckCurrencyRate') : tf('ckCurrency'), done: Boolean(currency) && (currency === 'UZS' || Number(exchangeRate) > 0) },
+              { label: tf('ckLines'), done: items.some((i) => i.productId) },
+              { label: tf('ckQty'), done: items.some((i) => i.productId) && items.filter((i) => i.productId).every((i) => Number(i.quantity) > 0) },
+              { label: tf('ckPrice'), done: items.some((i) => i.productId) && items.filter((i) => i.productId).every((i) => Number(i.unitPrice) > 0) },
+            ]}
+          />
+          <Button onClick={handleSave} loading={loading} style={{ width: '100%' }}>
+            {!loading && <Save size={16} aria-hidden />} {isRu ? 'Сохранить' : 'Saqlash'}
+          </Button>
+          <p className="doc-aside-hint">{tf('orderHint')}</p>
+        </Card>
+      )}
+      </aside>
+      </div>
 
       {/* Drawers */}
       <CreateCounterpartyDrawer

@@ -677,7 +677,8 @@
       "ckPrice": "Har bir qatorda narx bor",
       "ckDate": "Sana kiritilgan",
       "ckAmount": "Summa kiritilgan",
-      "showDiscVat": "Chegirma va QQS ustunlari"
+      "showDiscVat": "Chegirma va QQS ustunlari",
+      "orderHint": "Ctrl+S — saqlash. Qatorda Enter — keyingi qator. Saqlangandan so‘ng holat tugmalari (tasdiqlash, jo‘natish) yuqorida chiqadi."
     },
     "orders": {
       "subtitle": "Mijoz buyurtmalari: qabul qilish, yig‘ish, jo‘natish va to‘lov",

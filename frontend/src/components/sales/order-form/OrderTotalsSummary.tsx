@@ -40,12 +40,8 @@ export function OrderTotalsSummary({
   const isRu = locale === 'ru';
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, padding: 'var(--space-2) 0' }}>
-        <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
-      </div>
-
-      <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <Card style={{ padding: 'var(--space-5)', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
           {isRu ? 'Финансовый итог' : 'Buyurtma Hisobi'}
         </h3>

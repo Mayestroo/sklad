@@ -186,6 +186,10 @@ export function OrderGeneralInfo({
           </div>
         )}
 
+        {/* Rare fields: folded unless one is filled */}
+        <details className="doc-more" open={Boolean(deliveryAddress || comment) || undefined}>
+          <summary>{isRu ? 'Дополнительно: адрес доставки, комментарий' : 'Qo‘shimcha: yetkazish manzili, izoh'}</summary>
+          <div className="doc-more-body">
         {/* Delivery Address */}
         <div style={{ minWidth: '220px', flex: '2 1 250px' }}>
           <Input
@@ -207,6 +211,8 @@ export function OrderGeneralInfo({
             disabled={isLocked}
           />
         </div>
+          </div>
+        </details>
       </div>
     </Card>
   );

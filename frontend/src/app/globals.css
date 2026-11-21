@@ -1325,3 +1325,4 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .doc-lines th, .doc-lines td { padding: 8px 6px !important; }
 .doc-lines th:first-child, .doc-lines td:first-child { width: 28px !important; }
 .doc-lines td:has([data-testid="quantity-unit"]) { min-width: 124px; }
+.doc-lines input { min-width: 56px; }

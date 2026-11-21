@@ -37,17 +37,17 @@ export function DocChecklist({ items }: { items: ChecklistItem[] }) {
 /**
  * Spreadsheet-like keys for a document's line table: Enter in a field moves to
  * the same field in the next row; in the last row it adds a row and puts the
- * cursor in its product picker. Attach to the <tbody>.
+ * cursor in its product picker. Attach to the <tbody> or any element around the table.
  */
 export function linesKeyDown(opts: { rowCount: number; addRow: () => void; disabled?: boolean }) {
-  return (e: React.KeyboardEvent<HTMLTableSectionElement>) => {
+  return (e: React.KeyboardEvent<HTMLElement>) => {
     if (opts.disabled || e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
     const target = e.target as HTMLElement;
     if (target.tagName !== 'INPUT') return;
     const cell = target.closest('td');
     const row = target.closest('tr');
-    const body = e.currentTarget;
-    if (!cell || !row) return;
+    const body = target.closest('tbody');
+    if (!cell || !row || !body) return;
     const rows = Array.from(body.querySelectorAll(':scope > tr'));
     const rowIndex = rows.indexOf(row);
     const colIndex = Array.from(row.children).indexOf(cell);
