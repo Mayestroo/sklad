@@ -716,6 +716,25 @@
       "phone": "Telefon",
       "shownOf": "{total} tadan {shown} tasi ko‘rsatilmoqda",
       "showMore": "Yana ko‘rsatish"
+    },
+    "sreturns": {
+      "subtitle": "Mijoz tovarni qaytardi: sotuvni toping, qaytgan miqdorni belgilang, tasdiqlang",
+      "quickTitle": "Qaysi sotuvdan qaytaryapti?",
+      "quickHint": "Sotuv raqami yoki mijoz nomini yozing va «Qaytarish»ni bosing — mijoz, ombor va tovarlar o‘zi to‘ladi.",
+      "quickPh": "INV-… yoki mijoz",
+      "quickNone": "Bunday tasdiqlangan sotuv topilmadi",
+      "returnThis": "Qaytarish",
+      "sigDrafts": "Tasdiqlanmagan",
+      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "sigMonth": "Shu oy qaytarildi",
+      "sigMonthHint": "Tasdiqlangan qaytarishlar",
+      "sigAll": "Jami hujjatlar",
+      "searchPh": "Qaytarish raqami, sotuv, mijoz yoki sabab",
+      "origin": "Asl sotuv",
+      "reason": "Sabab",
+      "defect": "Brak ombori: {name}",
+      "noReturns": "Hali qaytarish yo‘q",
+      "noReturnsHint": "Mijoz tovar qaytarsa, yuqoridagi qidiruvdan sotuvni toping."
     }
   }
 }
