@@ -42,6 +42,10 @@ function Form({ initial }: { initial: Method }) {
   const canEdit = hasPermission('settings:edit');
   const [method, setMethod] = useState<Method>(initial);
   const [saving, setSaving] = useState(false);
+  // What the server has now; the save bar compares the choice with it.
+  const [saved, setSaved] = useState<Method>(initial);
+  const tset = useTranslations('rd.settings');
+  const tc = useTranslations('rd.costSettings');
 
   const save = async () => {
     if (!token || !company) return;
@@ -55,6 +59,7 @@ function Form({ initial }: { initial: Method }) {
         body: JSON.stringify({ production: { estimatedCostMethod: method } }),
       });
       if (updated) updateCompanySettings(updated);
+      setSaved(method);
       toast.success(t('sozlamaSaqlandi'));
     } catch (error) {
       toast.error(errorMessage(error) || t('saqlabBolmadi'));
@@ -82,18 +87,12 @@ function Form({ initial }: { initial: Method }) {
         <PageHeader
           title={t('tannarxSozlamasi')}
           subtitle={t('haqiqiyTannarxIshlabChiqarishVa')}
-          actions={
-            canEdit ? (
-              <Button onClick={() => void save()} disabled={method === initial} loading={saving} loadingText={t('saqlanmoqda')}>
-                <Save size={16} aria-hidden /> {t('saqlash')}
-              </Button>
-            ) : undefined
-          }
         />
       </div>
       <Card style={{ padding: 'var(--space-6)' }}>
         <fieldset disabled={!canEdit} style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <legend style={{ fontWeight: 600, marginBottom: 12, color: 'var(--color-text-primary)' }}>{t('taxminiyTannarxTovarKartasi')}</legend>
+          <legend style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-primary)' }}>{t('taxminiyTannarxTovarKartasi')}</legend>
+          <p style={{ margin: '0 0 8px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{tc('example')}</p>
           {options.map((option) => (
             <label
               key={option.value}
@@ -103,6 +102,7 @@ function Form({ initial }: { initial: Method }) {
               <span>
                 <span style={{ display: 'block', fontWeight: 600, color: 'var(--color-text-primary)' }}>{option.title}</span>
                 <span style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{option.text}</span>
+                <span style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', marginTop: 4 }}>{tc(option.value === 'LAST' ? 'exampleLast' : 'exampleAverage')}</span>
               </span>
             </label>
           ))}
@@ -113,6 +113,23 @@ function Form({ initial }: { initial: Method }) {
           </p>
         </fieldset>
       </Card>
+
+      {canEdit && method !== saved && (
+        <div className="set-savebar" role="region" aria-label={tset('unsaved', { count: 1 })}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <strong style={{ fontSize: 'var(--text-sm)' }}>{tset('unsaved', { count: 1 })}</strong>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+              {tc('change', { from: options.find((o) => o.value === saved)?.title ?? saved, to: options.find((o) => o.value === method)?.title ?? method })}
+            </div>
+          </div>
+          <Button variant="ghost" onClick={() => setMethod(saved)} disabled={saving}>
+            {tset('discard')}
+          </Button>
+          <Button onClick={() => void save()} loading={saving} loadingText={t('saqlanmoqda')}>
+            <Save size={16} aria-hidden /> {t('saqlash')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

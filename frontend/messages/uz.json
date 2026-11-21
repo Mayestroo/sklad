@@ -1018,6 +1018,12 @@
       "nextPayment": "keyingi to‘lov {date}",
       "changePlan": "Tarifni o‘zgartirish",
       "changePlanHint": "{count} ta tarifni solishtiring"
+    },
+    "costSettings": {
+      "example": "Misol: avval 10 dona 100 000 dan, keyin 10 dona 120 000 dan kirim qilindi.",
+      "exampleLast": "Misolda kartada: 120 000",
+      "exampleAverage": "Misolda kartada: 110 000",
+      "change": "{from} → {to}. Eski hujjatlar o‘zgarmaydi."
     }
   }
 }
