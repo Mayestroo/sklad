@@ -10,6 +10,7 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,
 }));
+vi.mock('@/context/ConfirmContext', () => ({ useConfirm: () => vi.fn(async () => true) }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import BranchesPage from './page';
@@ -24,34 +25,55 @@ const branches = [
   },
 ];
 
+const unassigned = [{ id: 'w2', branchId: null, name: { uz: 'Chilonzor do‘koni', ru: 'Магазин Чиланзар' } }];
+
+/** Answers each endpoint; `fail` makes /tenants/branches reject once. */
+function serve(opts: { fail?: boolean; warehouses?: unknown[] } = {}) {
+  let failed = false;
+  apiFetch.mockImplementation(async (path: string) => {
+    if (path === '/tenants/branches') {
+      if (opts.fail && !failed) {
+        failed = true;
+        throw new Error('Server error');
+      }
+      return branches;
+    }
+    if (path === '/tenants/warehouses') return opts.warehouses ?? branches[0].warehouses;
+    throw new Error('unexpected ' + path);
+  });
+}
+
 describe('Branches settings page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
   });
 
   it('loads the branches with their warehouses once', async () => {
-    apiFetch.mockResolvedValue(branches);
+    serve();
     renderPage(<BranchesPage />);
 
     expect(await screen.findByText('Asosiy filial')).toBeTruthy();
     expect(screen.getByText('Asosiy ombor')).toBeTruthy();
-    expect(apiFetch).toHaveBeenCalledTimes(1);
-    expect(apiFetch).toHaveBeenCalledWith(
-      '/tenants/branches',
-      expect.objectContaining({ token: 'tok', tenantId: 'tenant-1' }),
-    );
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    expect(apiFetch).toHaveBeenCalledWith('/tenants/branches', expect.objectContaining({ token: 'tok', tenantId: 'tenant-1' }));
+  });
+
+  it('lists warehouses that belong to no branch, so they can be edited', async () => {
+    serve({ warehouses: [...branches[0].warehouses, ...unassigned] });
+    renderPage(<BranchesPage />);
+
+    expect(await screen.findByText('Chilonzor do‘koni')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '«Chilonzor do‘koni» omborini tahrirlash' })).toBeTruthy();
   });
 
   it('shows the error and reloads on retry', async () => {
-    apiFetch.mockRejectedValueOnce(new Error('Server error'));
+    serve({ fail: true });
     renderPage(<BranchesPage />);
 
     expect((await screen.findByRole('alert')).textContent).toContain('Server error');
-
-    apiFetch.mockResolvedValueOnce(branches);
     fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
 
     expect(await screen.findByText('Asosiy filial')).toBeTruthy();
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
   });
 });
