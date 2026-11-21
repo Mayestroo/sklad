@@ -26,7 +26,7 @@ console.log('before: ' + JSON.stringify((await page.locator(checkSel).allInnerTe
 await page.locator(clickSel).nth(Number(nthArg)).click();
 await page.waitForTimeout(500);
 const dialog = page.locator('[role="alertdialog"], [role="dialog"]');
-if (await dialog.count()) {
+if (await dialog.count() && process.env.NOCONFIRM !== '1') {
   const btns = dialog.last().locator('button');
   const n = await btns.count();
   console.log('dialog: ' + JSON.stringify((await dialog.last().innerText()).slice(0, 160)));
@@ -34,6 +34,7 @@ if (await dialog.count()) {
   await btns.nth(n - 1).click();
 }
 await page.waitForTimeout(1800);
+if (process.env.NOCONFIRM === '1') console.log('dialog text: ' + JSON.stringify((await page.locator('[role="dialog"]').last().innerText().catch(() => '')).slice(0, 200)));
 console.log('after: ' + JSON.stringify((await page.locator(checkSel).allInnerTexts()).slice(0, 6)));
 if (shot) await page.screenshot({ path: shot, type: 'jpeg', quality: 60 });
 console.log('errors: ' + JSON.stringify(errors.slice(0, 3)));

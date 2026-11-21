@@ -788,6 +788,18 @@
       "view": "Ko‘rinish",
       "none": "Hali qaytarish yo‘q",
       "noneHint": "Nuqsonli yoki ortiqcha tovarni yetkazib beruvchiga qaytarish uchun yangi hujjat yarating."
+    },
+    "cp": {
+      "pay": "To‘lash",
+      "collect": "To‘lov olish",
+      "profile": "Profil va tarix",
+      "owedHint": "{count, plural, other {# tasiga qarzmiz}} — bosing: faqat ular",
+      "owesUsHint": "{count, plural, other {# ta mijoz qarzdor}} — bosing: faqat ular",
+      "show": "Ko‘rsatish",
+      "withDebt": "Qarzi borlar",
+      "rowHint": "Qatorni bosing — profil, qarz va tarix yon panelda ochiladi.",
+      "lastSale": "Oxirgi sotuv",
+      "noSales": "Sotuv yo‘q"
     }
   }
 }
