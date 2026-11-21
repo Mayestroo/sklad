@@ -913,6 +913,22 @@
       "empty": "hali kiritilmagan",
       "stepsHint": "Kerakli bo‘limlarni to‘ldiring — bo‘sh qolgan bo‘lim nolga teng deb olinadi. Kapital o‘zi hisoblanadi.",
       "nextSection": "Keyingi: {name}"
+    },
+    "acc": {
+      "check": "Balans tekshiruvi",
+      "checkOk": "Barcha provodkalar juft — xato yo‘q",
+      "checkBad": "Aylanmalar teng emas — buxgalterga murojaat qiling",
+      "type_ASSET": "Aktiv hisoblar",
+      "type_LIABILITY": "Majburiyatlar",
+      "type_EQUITY": "Kapital",
+      "type_REVENUE": "Daromadlar",
+      "type_EXPENSE": "Xarajatlar",
+      "accountsWithMovement": "harakatli hisoblar — bosing: filtr",
+      "rowHint": "Qatorni bosing — shu hisob provodkalari jurnalda ochiladi."
+    },
+    "journal": {
+      "source": "Manba",
+      "dayLine": "{count, plural, other {# ta provodka}} · aylanma {total}"
     }
   }
 }

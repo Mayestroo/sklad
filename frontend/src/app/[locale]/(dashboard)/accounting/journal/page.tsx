@@ -1,7 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { ALL_TIME, ChipGroup, PeriodFilter, resolvePeriod, type PeriodValue } from '@/components/ui/list/ListKit';
+import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
@@ -11,7 +13,6 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
-import { DateRangeField } from '@/components/ui/DateRangeField';
 import { SearchField, matchesSearch } from '@/components/ui/SearchField';
 import { FileText } from 'lucide-react';
 import { JournalEntry } from '@shared/types';
@@ -44,9 +45,13 @@ export default function JournalPage() {
 
   const journalQuery = useApiQuery<JournalEntry[]>('/accounting/journal');
   const entries = useMemo(() => journalQuery.data ?? [], [journalQuery.data]);
-  const [search, setSearch] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  // A link from the trial balance opens the journal on one account (?q=2910).
+  const [search, setSearch] = useState(() => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') ?? '' : ''));
+  const [period, setPeriod] = usePersistentState<PeriodValue>('journal.period', ALL_TIME);
+  const [sourceFilter, setSourceFilter] = useState('');
+  const { from, to } = resolvePeriod(period);
+  const tj = useTranslations('rd.journal');
+  const tl = useTranslations('rd.list');
 
   const rows = useMemo(
     () =>
@@ -54,6 +59,7 @@ export default function JournalPage() {
         const day = (e.entryDate ?? e.createdAt ?? '').slice(0, 10);
         if (from && day < from) return false;
         if (to && day > to) return false;
+        if (sourceFilter && e.sourceDocType !== sourceFilter) return false;
         const accounts = (e.lines ?? []).flatMap((l) => [
           l.debitAccount?.code,
           l.creditAccount?.code,
@@ -62,10 +68,23 @@ export default function JournalPage() {
         ]);
         return matchesSearch(search, e.entryNumber, e.description, ...accounts);
       }),
-    [entries, search, from, to, locale],
+    [entries, search, from, to, locale, sourceFilter],
   );
 
-  const filtered = Boolean(search || from || to);
+  const filtered = Boolean(search || from || to || sourceFilter);
+  const sourceTypes = [...new Set(entries.map((e) => e.sourceDocType).filter((x): x is NonNullable<typeof x> => Boolean(x)))];
+  // Day book: entries grouped by date, each day with its count and turnover.
+  const days: Array<{ day: string; items: typeof rows; total: number }> = [];
+  for (const e of rows) {
+    const day = (e.entryDate ?? e.createdAt ?? '').slice(0, 10);
+    let g = days[days.length - 1];
+    if (!g || g.day !== day) {
+      g = { day, items: [], total: 0 };
+      days.push(g);
+    }
+    g.items.push(e);
+    g.total += (e.lines ?? []).reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  }
   const th = { padding: '12px', fontWeight: 'var(--font-medium)' } as const;
   const accountName = (a: { code: string; name?: { uz?: string; ru?: string } } | undefined) =>
     a ? `${a.code} · ${a.name?.[locale] || a.name?.uz || ''}` : '—';
@@ -90,25 +109,26 @@ export default function JournalPage() {
               placeholder={isRu ? '№ проводки, описание или счёт' : 'Provodka №, izoh yoki hisob'}
               style={{ maxWidth: 380 }}
             />
-            <DateRangeField
-              label={isRu ? 'Период' : 'Davr'}
-              from={from}
-              to={to}
-              onChange={(f, t) => {
-                setFrom(f);
-                setTo(t);
-              }}
-              locale={locale}
-              style={{ flex: '0 1 260px' }}
-            />
+            <PeriodFilter value={period} onChange={setPeriod} locale={locale} />
             {filtered && (
-              <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFrom(''); setTo(''); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setPeriod(ALL_TIME); setSourceFilter(''); }}>
                 {isRu ? 'Сбросить' : 'Tozalash'}
               </Button>
             )}
             <span aria-live="polite" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
               {isRu ? `Проводок: ${rows.length}` : `Provodkalar: ${rows.length}`}
             </span>
+          </div>
+        )}
+        {sourceTypes.length > 1 && (
+          <div style={{ marginBottom: 'var(--space-4)' }}>
+            <ChipGroup
+              label={tj('source')}
+              showLabel
+              options={[{ value: '', label: tl('all') }, ...sourceTypes.map((st) => ({ value: st, label: SOURCE_LABELS[st] ? (isRu ? SOURCE_LABELS[st].ru : SOURCE_LABELS[st].uz) : st, count: entries.filter((e) => e.sourceDocType === st).length }))]}
+              value={sourceFilter}
+              onChange={setSourceFilter}
+            />
           </div>
         )}
 
@@ -147,7 +167,16 @@ export default function JournalPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((entry) => {
+                {days.map((g) => [
+                  <tr key={`day-${g.day}`} className="jr-day">
+                    <td colSpan={4}>
+                      <strong>{formatDate(g.day, locale)}</strong>
+                      <span className="rd-sub" style={{ marginLeft: 8, marginTop: 0, display: 'inline' }}>
+                        {tj('dayLine', { count: g.items.length, total: formatCurrency(g.total, locale, LEDGER_CURRENCY) })}
+                      </span>
+                    </td>
+                  </tr>,
+                  ...g.items.map((entry) => {
                   const source = entry.sourceDocType ? SOURCE_LABELS[entry.sourceDocType] : undefined;
                   const href = source?.href && entry.sourceDocId ? source.href(entry.sourceDocId) : undefined;
                   const lines = entry.lines ?? [];
@@ -176,7 +205,8 @@ export default function JournalPage() {
                       </td>
                     </tr>
                   );
-                })}
+                  }),
+                ])}
               </tbody>
             </table>
           </div>
