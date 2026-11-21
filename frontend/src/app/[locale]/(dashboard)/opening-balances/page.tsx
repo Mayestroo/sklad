@@ -3,7 +3,7 @@
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -59,6 +59,7 @@ import {
   TrendingDown,
   Building,
   ArrowRight,
+  Check,
   Calculator,
 } from 'lucide-react';
 import type {
@@ -192,6 +193,7 @@ function NotesInput({ line, index, isReadOnly, isRu, onUpdate, placeholder }: {
 export default function OpeningBalancesPage() {
   const locale = useLocale() as Locale;
   const isRu = locale === 'ru';
+  const tob = useTranslations('rd.ob');
   const { token, company } = useAuth();
   const confirm = useConfirm();
   const companyId = company?.id;
@@ -855,39 +857,35 @@ export default function OpeningBalancesPage() {
 
           {isPosted && <PostedLinks isRu={isRu} />}
 
-          {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border-light)', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: '2px' }}>
-            {navTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 16px',
-                    border: 'none',
-                    background: 'none',
-                    borderBottom: isActive ? '2px solid var(--color-primary-600)' : '2px solid transparent',
-                    color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                    fontWeight: isActive ? 600 : 500,
-                    fontSize: 'var(--text-sm)',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <Icon size={16} />
-                  <span>{tab.label}</span>
-                  {tab.count > 0 && <Badge variant={isActive ? 'info' : 'neutral'}>{tab.count}</Badge>}
-                </button>
-              );
-            })}
-          </div>
-
+          {/* Sections as a numbered checklist on the left; the chosen section on the right, with "next section" at its end */}
+          <div className="ob-layout">
+          <nav className="ob-steps" aria-label={tob('sections')}>
+            <ol>
+              {navTabs.map((tab, i) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.key;
+                return (
+                  <li key={tab.key}>
+                    <button type="button" aria-current={isActive ? 'step' : undefined} onClick={() => setActiveTab(tab.key)} className="ob-step" data-active={isActive ? 'true' : undefined}>
+                      <span className="ob-step-num" data-done={tab.count > 0 ? 'true' : undefined} aria-hidden>
+                        {tab.count > 0 ? <Check size={14} /> : i + 1}
+                      </span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icon size={14} aria-hidden /> {tab.label}
+                        </span>
+                        <span className="rd-sub" style={{ display: 'block' }}>
+                          {tab.count > 0 ? tob('linesCount', { count: tab.count }) : tob('empty')}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="doc-aside-hint" style={{ padding: '0 var(--space-2)' }}>{tob('stepsHint')}</p>
+          </nav>
+          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {activeTab === 'cash' && (
             <SubledgerCard
               title={isRu ? 'Деньги в кассах и на счетах' : 'Kassa va bankdagi pul'}
@@ -982,6 +980,19 @@ export default function OpeningBalancesPage() {
               <OtherTable {...tableProps} />
             </SubledgerCard>
           )}
+          {(() => {
+            const idx = navTabs.findIndex((t) => t.key === activeTab);
+            const next = navTabs[idx + 1];
+            return next ? (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => setActiveTab(next.key)}>
+                  {tob('nextSection', { name: next.label })} <ArrowRight size={16} aria-hidden />
+                </Button>
+              </div>
+            ) : null;
+          })()}
+          </div>
+          </div>
         </>
       )}
 
