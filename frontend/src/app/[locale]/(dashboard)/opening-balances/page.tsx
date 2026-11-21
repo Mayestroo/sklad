@@ -124,10 +124,8 @@ const localized = (name: unknown, locale: Locale, fallback: string): string => {
 const th = (extra?: React.CSSProperties): React.CSSProperties => ({
   padding: '12px 16px',
   fontSize: 'var(--text-xs)',
-  fontWeight: 600,
+  fontWeight: 500,
   color: 'var(--color-text-secondary)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
   ...extra,
 });
 const td: React.CSSProperties = { padding: '10px 16px' };
@@ -779,16 +777,16 @@ export default function OpeningBalancesPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                 {currentDoc && !isReadOnly && (
                   <>
-                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Save size={14} />
+                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ color: 'var(--color-error-700)' }}>
+                      <Trash2 size={14} aria-hidden />
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading}>
+                      <Save size={14} aria-hidden />
                       <span>{isRu ? 'Сохранить' : 'Saqlash'}</span>
                     </Button>
-                    <Button variant="primary" size="sm" onClick={handlePost} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <CheckCircle2 size={14} />
-                      <span>{actionLoading ? (isRu ? 'Подождите...' : 'Kuting...') : isRu ? 'Провести' : 'Tasdiqlash'}</span>
-                    </Button>
-                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}>
-                      <Trash2 size={14} />
+                    <Button variant="primary" size="sm" onClick={handlePost} loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'}>
+                      <CheckCircle2 size={14} aria-hidden />
+                      <span>{isRu ? 'Провести' : 'Tasdiqlash'}</span>
                     </Button>
                   </>
                 )}
@@ -800,6 +798,13 @@ export default function OpeningBalancesPage() {
                 )}
               </div>
             </div>
+            {isPosted && (
+              <p role="note" style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                {isRu
+                  ? 'Документ проведён, поля только для просмотра. Чтобы исправить остатки, нажмите «Переоткрыть» — проводки будут отменены, затем проведите снова.'
+                  : 'Hujjat tasdiqlangan, maydonlar faqat ko‘rish uchun. Qoldiqlarni tuzatish uchun «Qayta ochish»ni bosing — provodkalar bekor qilinadi, keyin qayta tasdiqlang.'}
+              </p>
+            )}
             {ratesWereMixed && !isReadOnly && (
               <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
                 {isRu
@@ -1279,7 +1284,10 @@ function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemo
                     { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
                     ...usable.map((account) => ({
                       value: account.id,
-                      label: `${localized(account.name, locale, 'Kassa')} (${account.currency})`,
+                      label: (() => {
+                        const name = localized(account.name, locale, 'Kassa');
+                        return name.includes(account.currency) ? name : `${name} (${account.currency})`;
+                      })(),
                     })),
                   ]}
                 />
