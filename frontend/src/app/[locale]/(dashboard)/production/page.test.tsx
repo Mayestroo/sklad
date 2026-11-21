@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { renderPage } from '@/test/render-page';
 
 const apiFetch = vi.fn();
@@ -67,8 +67,10 @@ describe('Production page (TZ Ishlab chiqarish 6, 11)', () => {
     await waitFor(() => expect(callsTo('/users/staff')).toBe(1));
     expect(docCalls()).toHaveLength(1);
     for (const url of REFERENCE) expect(callsTo(url)).toBe(1);
-    expect(screen.getByRole('button', { name: /Jarayonda\s*1/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Yakunlangan\s*3/ })).toBeTruthy();
+    // The flow strip: step 2 (in work) and step 3 (finished) carry the document statistics.
+    const steps = screen.getByRole('list', { name: /bosqichlari/ });
+    expect(steps.textContent).toMatch(/Jarayonda\s*1/);
+    expect(steps.textContent).toMatch(/Yakunlangan\s*3/);
   });
 
   it('a typed search reloads only the documents, once typing pauses', async () => {
@@ -88,11 +90,12 @@ describe('Production page (TZ Ishlab chiqarish 6, 11)', () => {
     expect(screen.getByRole('button', { name: /Filtrni olib tashlash: «PR»/ })).toBeTruthy();
   });
 
-  it('clicking a statistics card filters by that status', async () => {
+  it('"show in the list" on the finished step filters by that status', async () => {
     routes();
     renderPage(<ProductionPage />);
     await screen.findAllByText('PR-0001');
-    fireEvent.click(screen.getByRole('button', { name: /Yakunlangan\s*3/ }));
+    const showButtons = within(screen.getByRole('list', { name: /bosqichlari/ })).getAllByRole('button', { name: /Ro‘yxatda ko‘rsatish/ });
+    fireEvent.click(showButtons[showButtons.length - 1]);
     await waitFor(() => expect(docCalls().some((u) => u.includes('status=COMPLETED'))).toBe(true));
   });
 

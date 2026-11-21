@@ -1348,3 +1348,7 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .crm-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 0.9fr); gap: var(--space-3); padding-bottom: var(--space-4); }
 @media (max-width: 1279px) { .crm-board { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 767px) { .crm-board { grid-template-columns: 1fr; } }
+
+.prod-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.prod-steps > li { min-height: 120px; }
+@media (max-width: 767px) { .prod-steps { grid-template-columns: 1fr; } }

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, Clock3, Factory, FileText, Layers3, ListChecks, Plus } from 'lucide-react';
+import { AlertTriangle, FileText, Layers3, ListChecks, Plus } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
@@ -33,6 +33,7 @@ const PAGE_SIZE = 20;
 export default function ProductionPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const t = useTranslations('production');
+  const tp = useTranslations('rd.production');
   const { token, company, user, hasPermission } = useAuth();
   const confirm = useConfirm();
   const invalidateApi = useInvalidateApi();
@@ -188,7 +189,12 @@ export default function ProductionPage() {
           subtitle={t('retsepturaXomashyoSarfiVaTayyor')}
           actions={
             <>
-              {tab === 'documents' && can.create && (
+              {tab === 'documents' && can.create && recipeStats.active === 0 && (
+                <Button onClick={() => setRecipeForm('new')}>
+                  <Plus size={16} aria-hidden /> {t('yangiRetseptura')}
+                </Button>
+              )}
+              {tab === 'documents' && can.create && recipeStats.active > 0 && (
                 <Button onClick={() => setDocForm({ document: null })} disabled={noWarehouse} aria-describedby={noWarehouse ? 'production-no-warehouse' : undefined}>
                   <Plus size={16} aria-hidden /> {t('ishlabChiqarishHujjati')}
                 </Button>
@@ -214,14 +220,48 @@ export default function ProductionPage() {
 
       {failed && <LoadError error={failed.error} onRetry={() => queries.forEach((q) => q.isError && void q.refetch())} retrying={queries.some((q) => q.isFetching)} />}
 
-      <div className="ux-kpi-grid">
-        {tab === 'documents' ? (
-          <>
-            <Kpi icon={<Clock3 size={20} aria-hidden />} title={t('jarayonda')} value={stats ? String(stats.inProgress) : null} color="var(--color-warning-700)" active={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })} />
-            <Kpi icon={<CheckCircle2 size={20} aria-hidden />} title={t('yakunlangan')} value={stats ? String(stats.completed) : null} color="var(--color-success-700)" active={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })} />
-            <Kpi icon={<Factory size={20} aria-hidden />} title={t('ishlabChiqarishTannarxi')} hint={t('yakunlanganHujjatlarTanlanganDavrVa')} value={stats ? formatCurrency(stats.completedCost, locale, 'UZS') : null} color="var(--color-primary-600)" active={false} onClick={() => setDocFilter({ status: 'COMPLETED' })} />
-          </>
-        ) : (
+      {/* The production flow in three steps: what exists, what is in work, what is finished — each with its next action */}
+      {tab === 'documents' && (
+        <ol className="prod-steps" aria-label={tp('flow')}>
+          <li className={`rd-signal rd-tone-${recipeStats.active > 0 ? 'success' : 'warning'}`}>
+            <span className="rd-signal-label">1 · {tp('stepRecipe')}</span>
+            <span className="rd-signal-value">{recipeStats.active}</span>
+            <span className="rd-signal-hint">{recipeStats.active > 0 ? tp('stepRecipeOk', { uncosted: recipeStats.uncosted }) : tp('stepRecipeNone')}</span>
+            {can.create && (
+              <button type="button" className="rd-next-btn" style={{ marginTop: 6 }} onClick={() => (recipeStats.active > 0 ? setTab('recipes') : setRecipeForm('new'))}>
+                {recipeStats.active > 0 ? tp('openRecipes') : t('yangiRetseptura')}
+              </button>
+            )}
+          </li>
+          <li className="rd-signal rd-tone-warning">
+            <span className="rd-signal-label">2 · {t('jarayonda')}</span>
+            <span className="rd-signal-value">{stats ? String(stats.inProgress) : '—'}</span>
+            <span className="rd-signal-hint">{tp('stepWorkHint')}</span>
+            <span style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+              {can.create && recipeStats.active > 0 && (
+                <button type="button" className="rd-next-btn" disabled={noWarehouse} onClick={() => setDocForm({ document: null })}>
+                  <Plus size={13} aria-hidden /> {t('ishlabChiqarishHujjati')}
+                </button>
+              )}
+              <button type="button" className="rd-chip" aria-pressed={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })}>
+                {tp('showThese')}
+              </button>
+            </span>
+          </li>
+          <li className="rd-signal rd-tone-success">
+            <span className="rd-signal-label">3 · {t('yakunlangan')}</span>
+            <span className="rd-signal-value">{stats ? String(stats.completed) : '—'}</span>
+            <span className="rd-signal-hint">{t('ishlabChiqarishTannarxi')}: {stats ? formatCurrency(stats.completedCost, locale, 'UZS') : '—'}</span>
+            <span style={{ marginTop: 6 }}>
+              <button type="button" className="rd-chip" aria-pressed={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })}>
+                {tp('showThese')}
+              </button>
+            </span>
+          </li>
+        </ol>
+      )}
+      <div className="ux-kpi-grid" hidden={tab === 'documents'}>
+        {tab === 'documents' ? null : (
           <>
             <Kpi icon={<Layers3 size={20} aria-hidden />} title={t('jamiRetseptura')} value={String(recipeStats.total)} color="var(--color-primary-600)" active={recipeStatus === 'all' && !uncostedOnly} onClick={() => { setRecipeStatus('all'); setUncostedOnly(false); }} />
             <Kpi icon={<ListChecks size={20} aria-hidden />} title={t('faol')} value={String(recipeStats.active)} color="var(--color-success-700)" active={recipeStatus === 'active'} onClick={() => setRecipeStatus(recipeStatus === 'active' ? 'all' : 'active')} />

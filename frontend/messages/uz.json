@@ -897,6 +897,15 @@
       "newProvided": "Mijozga xizmat akti",
       "newReceived": "Olingan xizmat akti",
       "debtHint": "Bosing: tasdiqlangan, lekin to‘lanmagan aktlar"
+    },
+    "production": {
+      "flow": "Ishlab chiqarish bosqichlari",
+      "stepRecipe": "Faol retsepturalar",
+      "stepRecipeOk": "{uncosted, plural, =0 {Hammasining tannarxi hisoblangan} other {# tasida xomashyo narxi yo‘q}}",
+      "stepRecipeNone": "Avval mahsulot uchun retseptura kerak",
+      "openRecipes": "Retsepturalarni ko‘rish",
+      "stepWorkHint": "Xomashyo chiqarilgan, mahsulot hali omborga kirmagan",
+      "showThese": "Ro‘yxatda ko‘rsatish"
     }
   }
 }
