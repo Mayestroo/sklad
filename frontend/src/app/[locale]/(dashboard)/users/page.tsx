@@ -2,20 +2,22 @@
 
 import { useState, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { DataTable, type Column } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
 import {
   UserPlus,
   AlertCircle,
-  X,
-  Pencil,
   Trash2,
 } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
@@ -36,6 +38,7 @@ export default function UsersPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company, hasPermission } = useAuth();
 
   const usersQuery = useApiQuery<StaffUser[]>('/users/staff');
@@ -201,384 +204,293 @@ export default function UsersPage() {
     }
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Пользователи и Роли' : 'Foydalanuvchilar va Rollar'}
-          </h1>
+  const tu = useTranslations('rd.users');
+  const tl = useTranslations('rd.list');
+  const ROLES = ['company_admin', 'accountant', 'cashier', 'warehouse_manager', 'salesperson'] as const;
+  const roleName = (r: string) => ((ROLES as readonly string[]).includes(r) ? tu(`role_${r}`) : r);
+  const inviteAs = (role: string) => {
+    setRoleSlug(role);
+    setCreateError(null);
+    setShowModal(true);
+  };
+  const initials = (u: StaffUser) => `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase() || u.email[0]?.toUpperCase();
+  const columns: Column<StaffUser>[] = [
+    {
+      key: 'name',
+      label: isRu ? 'Сотрудник' : 'Xodim',
+      primary: true,
+      locked: true,
+      sortValue: (u) => `${u.firstName} ${u.lastName}`,
+      render: (u) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: u.isActive ? 1 : 0.6 }}>
+          <span className="auth-avatar" style={{ width: 34, height: 34, fontSize: 'var(--text-xs)' }} aria-hidden>{initials(u)}</span>
+          <div>
+            <div style={{ fontWeight: 'var(--font-semibold)' }}>{u.firstName} {u.lastName}</div>
+            <div className="rd-sub">{u.email}</div>
+          </div>
         </div>
+      ),
+    },
+    {
+      key: 'role',
+      label: tIn('roli'),
+      sortValue: (u) => u.roles.join(','),
+      render: (u) => (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {u.roles.map((r) => (
+            <Badge key={r} variant={getRoleBadgeVariant(r)}>{roleName(r)}</Badge>
+          ))}
+        </div>
+      ),
+    },
+    { key: 'lang', label: tIn('til'), render: (u) => (u.preferredLanguage === 'ru' ? 'Русский' : 'O‘zbekcha') },
+    { key: 'status', label: tl('status'), sortValue: (u) => (u.isActive ? 0 : 1), render: (u) => (u.isActive ? <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge> : <Badge variant="neutral">{isRu ? 'Неактивный' : 'Nofaol'}</Badge>) },
+    {
+      key: 'actions',
+      label: tIn('amallar'),
+      locked: true,
+      render: (u) => (
+        <div className="rd-row-actions">
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tl('edit'), onSelect: () => handleOpenEdit(u), hidden: !hasPermission('users:edit') },
+              { label: u.isActive ? (isRu ? 'Деактивировать' : 'Deaktivatsiya') : isRu ? 'Активировать' : 'Aktivlashtirish', onSelect: () => void toggleUserStatus(u.id, u.isActive), hidden: !hasPermission('users:edit') },
+              { label: tl('delete'), onSelect: () => { setDeletingUser(u); setDeleteError(null); }, danger: true, hidden: !hasPermission('users:delete') },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
 
-        {hasPermission('users:create') && (
-          <Button variant="primary" onClick={() => setShowModal(true)}>
-            <UserPlus size={16} />
-            {isRu ? 'Добавить сотрудника' : 'Xodim qo‘shish'}
-          </Button>
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={tIn('foydalanuvchilar_va_rollar')}
+        subtitle={tu('subtitle')}
+        actions={
+          hasPermission('users:create') ? (
+            <Button variant="primary" onClick={() => inviteAs('salesperson')}>
+              <UserPlus size={16} aria-hidden /> {isRu ? 'Добавить сотрудника' : 'Xodim qo‘shish'}
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {/* Roles explained in words, with who has them and "invite as …" */}
+      <section aria-labelledby="roles-title">
+        <h2 id="roles-title" className="dash-section-title">{tu('rolesTitle')}</h2>
+        <ul className="role-grid">
+          {ROLES.map((r) => {
+            const count = users.filter((u) => u.roles.includes(r)).length;
+            return (
+              <li key={r} className="rd-signal rd-tone-neutral" style={{ minHeight: 0 }}>
+                <span className="rd-signal-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+                  <Badge variant={getRoleBadgeVariant(r)}>{roleName(r)}</Badge>
+                  <span className="tabular-nums">{tu('people', { count })}</span>
+                </span>
+                <span className="rd-signal-hint" style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>{tu(`roleDesc_${r}`)}</span>
+                {hasPermission('users:create') && (
+                  <button type="button" className="rd-linkbtn" style={{ paddingLeft: 0, marginTop: 4 }} onClick={() => inviteAs(r)}>
+                    {tu('inviteAs')}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <div className="rd-table-card">
+        {usersQuery.isError ? (
+          <LoadError error={usersQuery.error} onRetry={fetchUsers} retrying={usersQuery.isFetching} />
+        ) : (
+          <DataTable
+            rows={users}
+            columns={columns}
+            rowKey={(u) => u.id}
+            onRowClick={hasPermission('users:edit') ? (u) => handleOpenEdit(u) : undefined}
+            loading={loading}
+            empty={<EmptyState title={isRu ? 'Сотрудников пока нет' : 'Hozircha xodimlar yo‘q'} description={tu('emptyHint')} />}
+          />
         )}
       </div>
 
-      {/* Main Staff List Card */}
-      <Card>
-        {usersQuery.isError ? (
-          <LoadError error={usersQuery.error} onRetry={fetchUsers} retrying={usersQuery.isFetching} />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СОТРУДНИК' : 'XODIM'}</th>
-                  <th style={{ padding: '12px' }}>EMAIL</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'РОЛЬ' : 'ROLI'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'ЯЗЫК' : 'TIL'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                      {isRu ? 'Сотрудников пока нет. Добавьте первого сотрудника кнопкой выше.' : 'Hozircha xodimlar yo‘q. Birinchi xodimni yuqoridagi tugma orqali qo‘shing.'}
-                    </td>
-                  </tr>
-                )}
-                {users.map((user) => (
-                  <tr key={user.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
-                      {user.firstName} {user.lastName}
-                    </td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {user.email}
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {user.roles.map((r) => (
-                          <Badge key={r} variant={getRoleBadgeVariant(r)}>
-                            {r}
-                          </Badge>
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <Badge variant="neutral">{user.preferredLanguage.toUpperCase()}</Badge>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      {user.isActive ? (
-                        <Badge variant="success">{isRu ? 'Активный' : 'Faol'}</Badge>
-                      ) : (
-                        <Badge variant="neutral">{isRu ? 'Неактивный' : 'Nofaol'}</Badge>
-                      )}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px' }}>
-                        {hasPermission('users:edit') && (
-                          <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleOpenEdit(user)}
-                              title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                              style={{ padding: '4px 8px' }}
-                            >
-                              <Pencil size={14} />
-                            </Button>
-                            <Button
-                              variant={user.isActive ? 'outline' : 'secondary'}
-                              size="sm"
-                              onClick={() => toggleUserStatus(user.id, user.isActive)}
-                            >
-                              {user.isActive ? (isRu ? 'Деактивировать' : 'Deaktivatsiya') : (isRu ? 'Активировать' : 'Aktivlashtirish')}
-                            </Button>
-                          </>
-                        )}
-                        {hasPermission('users:delete') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setDeletingUser(user);
-                              setDeleteError(null);
-                            }}
-                            style={{ color: 'var(--color-error-600)', padding: '4px 8px' }}
-                            title={isRu ? 'Удалить' : "O'chirish"}
-                          >
-                            <Trash2 size={15} />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Invite User Modal */}
+      <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md">
+
+        {createError && (
+          <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
+            {createError}
           </div>
         )}
-      </Card>
 
-      {/* Invite User Modal */}
-      {showModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '480px',
-              backgroundColor: 'var(--color-bg-secondary)',
-              borderRadius: 'var(--radius-xl)',
-              boxShadow: 'var(--shadow-xl)',
-              padding: 'var(--space-6)',
-              position: 'relative',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>
-                {isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'}
-              </h3>
-              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
-                type="button"
-                onClick={() => setShowModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
-              >
-                <X size={20} />
-              </button>
+        <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Имя' : 'Ism'}
+              </label>
+              <input
+                type="text"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Jasur"
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
             </div>
-
-            {createError && (
-              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
-                {createError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Имя' : 'Ism'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Jasur"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Фамилия' : 'Familiya'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Karimov"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jasur@company.uz"
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                  {isRu ? 'Временный пароль' : 'Vaqtinchalik Parol'}
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <Select
-                  label={isRu ? 'Системная роль' : 'Tizim Roli'}
-                  options={[
-                    { value: 'company_admin', label: 'Company Admin' },
-                    { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
-                    { value: 'cashier', label: isRu ? 'Кассир (Cashier)' : 'Kassir (Cashier)' },
-                    { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
-                    { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
-                    { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
-                  ]}
-                  value={roleSlug}
-                  onChange={(val) => setRoleSlug(val)}
-                />
-
-                <Select
-                  label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
-                  options={[
-                    { value: 'uz', label: 'O\'zbekcha (UZ)' },
-                    { value: 'ru', label: 'Русский (RU)' },
-                  ]}
-                  value={preferredLanguage}
-                  onChange={(val) => setPreferredLanguage(val as typeof preferredLanguage)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button type="submit" variant="primary" disabled={createLoading}>
-                  {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
-                </Button>
-              </div>
-            </form>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Фамилия' : 'Familiya'}
+              </label>
+              <input
+                type="text"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Karimov"
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="jasur@company.uz"
+              style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+              {isRu ? 'Временный пароль' : 'Vaqtinchalik Parol'}
+            </label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <Select
+              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
+              value={roleSlug}
+              onChange={(val) => setRoleSlug(val)}
+            />
+
+            <Select
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              options={[
+                { value: 'uz', label: 'O\'zbekcha (UZ)' },
+                { value: 'ru', label: 'Русский (RU)' },
+              ]}
+              value={preferredLanguage}
+              onChange={(val) => setPreferredLanguage(val as typeof preferredLanguage)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button type="submit" variant="primary" disabled={createLoading}>
+              {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--color-bg-primary)',
-              borderRadius: 'var(--radius-lg)',
-              maxWidth: '500px',
-              width: '100%',
-              padding: 'var(--space-6)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }}>
-                {isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'}
-              </h2>
-              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'}
-                type="button"
-                onClick={() => setEditingUser(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <Modal isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md">
 
-            {editError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
-                <AlertCircle size={16} />
-                <span>{editError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Имя' : 'Ism'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editFirstName}
-                    onChange={(e) => setEditFirstName(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                    {isRu ? 'Фамилия' : 'Familiya'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editLastName}
-                    onChange={(e) => setEditLastName(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
-                <input
-                  type="email"
-                  disabled
-                  value={editingUser.email}
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-subtle)', color: 'var(--color-text-tertiary)', outline: 'none' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <Select
-                  label={isRu ? 'Системная роль' : 'Tizim Roli'}
-                  options={[
-                    { value: 'company_admin', label: 'Company Admin' },
-                    { value: 'accountant', label: isRu ? 'Бухгалтер (Accountant)' : 'Buxgalter (Accountant)' },
-                    { value: 'warehouse_manager', label: isRu ? 'Менеджер склада' : 'Ombor menejeri' },
-                    { value: 'salesperson', label: isRu ? 'Продавец (Salesperson)' : 'Sotuvchi (Salesperson)' },
-                    { value: 'viewer', label: isRu ? 'Только чтение (Viewer)' : 'Faqat ko\'rish (Viewer)' },
-                  ]}
-                  value={editRoleSlug}
-                  onChange={(val) => setEditRoleSlug(val)}
-                />
-
-                <Select
-                  label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
-                  options={[
-                    { value: 'uz', label: 'O\'zbekcha (UZ)' },
-                    { value: 'ru', label: 'Русский (RU)' },
-                  ]}
-                  value={editPreferredLanguage}
-                  onChange={(val) => setEditPreferredLanguage(val as typeof editPreferredLanguage)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button type="submit" variant="primary" disabled={editLoading}>
-                  {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
-                </Button>
-              </div>
-            </form>
+        {editError && (
+          <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+            <AlertCircle size={16} />
+            <span>{editError}</span>
           </div>
-        </div>
+        )}
+
+        <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Имя' : 'Ism'}
+              </label>
+              <input
+                type="text"
+                required
+                value={editFirstName}
+                onChange={(e) => setEditFirstName(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
+                {isRu ? 'Фамилия' : 'Familiya'}
+              </label>
+              <input
+                type="text"
+                required
+                value={editLastName}
+                onChange={(e) => setEditLastName(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>Email</label>
+            <input
+              type="email"
+              disabled
+              value={editingUser.email}
+              style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-subtle)', color: 'var(--color-text-tertiary)', outline: 'none' }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <Select
+              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
+              value={editRoleSlug}
+              onChange={(val) => setEditRoleSlug(val)}
+            />
+
+            <Select
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              options={[
+                { value: 'uz', label: 'O\'zbekcha (UZ)' },
+                { value: 'ru', label: 'Русский (RU)' },
+              ]}
+              value={editPreferredLanguage}
+              onChange={(val) => setEditPreferredLanguage(val as typeof editPreferredLanguage)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
+            <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
+              {tCommon('cancel')}
+            </Button>
+            <Button type="submit" variant="primary" disabled={editLoading}>
+              {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
       )}
 
       {/* Delete Confirmation Modal */}
@@ -605,7 +517,7 @@ export default function UsersPage() {
               boxShadow: 'var(--shadow-xl)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-700)' }}>
               <Trash2 size={24} />
               <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {isRu ? 'Удалить сотрудника?' : 'Foydalanuvchini o‘chirish?'}
@@ -613,7 +525,7 @@ export default function UsersPage() {
             </div>
 
             {deleteError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
                 <AlertCircle size={16} />
                 <span>{deleteError}</span>
               </div>

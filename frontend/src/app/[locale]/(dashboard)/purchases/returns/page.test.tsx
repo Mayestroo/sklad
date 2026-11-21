@@ -13,6 +13,8 @@ vi.mock('next-intl', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => '/purchases/returns',
 }));
 vi.mock('@/components/purchases/ReturnActModal', () => ({ ReturnActModal: () => null }));
 vi.mock('@/context/ConfirmContext', () => ({ useConfirm: () => vi.fn() }));
@@ -36,13 +38,14 @@ const ret = (returnNumber: string) => ({
 describe('Purchase returns page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    window.localStorage.clear();
   });
 
-  it('loads the returns once; the typed search applies on submit', async () => {
+  it('loads the returns once; the typed search applies once typing pauses', async () => {
     apiFetch.mockImplementation(async (endpoint: string) =>
       endpoint.includes('search=') ? [ret('PRT-0009')] : [ret('PRT-0001')],
     );
-    const { container } = renderPage(<PurchaseReturnsPage />);
+    renderPage(<PurchaseReturnsPage />);
 
     expect(await screen.findByText('PRT-0001')).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledTimes(1);
@@ -51,13 +54,10 @@ describe('Purchase returns page', () => {
       expect.objectContaining({ token: 'tok', tenantId: 'tenant-1' }),
     );
 
-    fireEvent.change(screen.getByPlaceholderText('Raqam, akt yoki yetkazib beruvchi bo‘yicha qidiruv...'), {
-      target: { value: 'PRT-9' },
-    });
+    fireEvent.change(screen.getByPlaceholderText('searchPh'), { target: { value: 'PRT-9' } });
     expect(apiFetch).toHaveBeenCalledTimes(1);
-    fireEvent.submit(container.querySelector('form') as HTMLFormElement);
 
-    expect(await screen.findByText('PRT-0009')).toBeTruthy();
+    expect(await screen.findByText('PRT-0009', {}, { timeout: 2000 })).toBeTruthy();
     expect(apiFetch).toHaveBeenLastCalledWith('/purchases/returns?search=PRT-9', expect.anything());
   });
 

@@ -2,7 +2,8 @@
 
 import { productTypeLabel, semiFinishedLabel } from '@/lib/product-types';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import { type ComponentProps, useState, useEffect, useMemo } from 'react';
+import { type ComponentProps, useState, useEffect, useMemo, useRef } from 'react';
+import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -10,6 +11,8 @@ import { invalidateApiCache } from '@/lib/cache';
 import { useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DocChecklist, linesKeyDown } from '@/components/ui/DocChecklist';
+import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { SelectOption } from '@/components/ui/Select';
@@ -60,6 +63,8 @@ export interface SalesOrderFormProps {
 export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
+  const tf = useTranslations('rd.docForm');
   const { token, company, hasPermission } = useAuth();
   // New documents start in the tenant sales default, or blank (never a guessed USD).
   const salesDefault = useSalesDefaultCurrency();
@@ -174,13 +179,11 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   const effectiveWarehouseId =
     warehouseId || (mode === 'create' ? (warehouses[0]?.id ?? '') : '');
 
-  // Set default counterparty if empty in create mode
+  // The customer is always chosen by the user: a silent default puts the order on the wrong client.
+  const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!counterpartyId && counterparties.length > 0 && mode === 'create') {
-      const defaultCp = counterparties[0];
-      setCounterpartyId(defaultCp.id);
-    }
-  }, [counterpartyId, counterparties, mode]);
+    if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [error]);
 
   // Drawer handlers
   const handleCustomerAdded = (newCustomer: { id: string; name: string; type: string; balancesByCurrency?: CounterpartyDropdownItem['balancesByCurrency'] }) => {
@@ -363,6 +366,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
   // Save Order
   const handleSave = async () => {
     setError(null);
+    if (!counterpartyId) {
+      setError(isRu ? 'Выберите клиента' : 'Mijozni tanlang');
+      return;
+    }
     if (!effectiveWarehouseId) {
       setError(isRu ? 'Выберите склад' : 'Omborni tanlang');
       return;
@@ -665,6 +672,9 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
     description: `${productTypeLabel(p.type, locale)}${p.isSemiFinished ? ` · ${semiFinishedLabel(locale)}` : ''}`,
   }));
 
+  // Ctrl+S saves the order while it can be edited.
+  useDocumentShortcuts({ enabled: !isLocked && !loading, onSave: () => void handleSave() });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'var(--space-12)' }}>
       {/* Sticky Top Header & Toolbar */}
@@ -694,12 +704,12 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
           </Button>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2) var(--space-3)', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {mode === 'create' && !orderNumber
                   ? isRu
                     ? 'Новый заказ покупателя'
-                    : 'Yangi Xaridor Buyurtmasi'
+                    : 'Yangi xaridor buyurtmasi'
                   : `${isRu ? 'Заказ покупателя' : 'Xaridor buyurtmasi'} ${orderNumber}`}
               </h1>
               <Badge variant={statusMeta.variant as ComponentProps<typeof Badge>['variant']}>
@@ -717,7 +727,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               onClick={() => setIsPayOpen(true)}
               style={{
                 backgroundColor: 'var(--color-success-50)',
-                color: 'var(--color-success-600)',
+                color: 'var(--color-success-700)',
                 border: '1px solid var(--color-success-200)',
                 display: 'flex',
                 alignItems: 'center',
@@ -751,7 +761,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
                 variant="secondary"
                 onClick={() => handleTransition('REJECT')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
               >
                 <XCircle size={16} /> {isRu ? 'Отклонить' : 'Rad etish'}
               </Button>
@@ -827,7 +837,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={() => setIsDeliveryNoteOpen(true)}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-success-700)' }}
             >
               <Printer size={16} /> {isRu ? 'Накладная' : 'Yuk xati'}
             </Button>
@@ -848,7 +858,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={() => handleTransition('CANCEL')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
             >
               <XCircle size={16} /> {isRu ? 'Отменить' : 'Bekor qilish'}
             </Button>
@@ -870,7 +880,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="ghost"
               onClick={handleDeleteOrder}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
               title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
             >
               <Trash2 size={16} /> {isRu ? 'Удалить' : "O'chirish"}
@@ -889,12 +899,14 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
       {/* Error Banner */}
       {error && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <AlertCircle size={20} />
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
-        </Card>
+        <div ref={errorRef} role="alert" tabIndex={-1} className="doc-banner is-error">
+          <AlertCircle size={20} aria-hidden />
+          <span>{error}</span>
+        </div>
       )}
 
+      <div className="doc-layout">
+      <div className="doc-main">
       {/* Primary General Info */}
       <OrderGeneralInfo
         locale={locale}
@@ -926,7 +938,8 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         onCommentChange={(val) => { markDirty(); setComment(val); }}
       />
 
-      {/* Items Table Card */}
+      {/* Items Table Card — Enter moves down / adds a row */}
+      <div onKeyDown={linesKeyDown({ rowCount: items.length, addRow: () => addItemRow(), disabled: isLocked })}>
       <OrderItemsTable
         locale={locale}
         currency={currency}
@@ -940,9 +953,12 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         onAddItem={addItemRow}
         onRemoveItem={removeItemRow}
       />
+      </div>
 
-      <Card style={{ padding: 'var(--space-5)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
+      <Card style={{ padding: 'var(--space-4) var(--space-5)' }}>
+        <details className="doc-more" style={{ borderTop: 'none', paddingTop: 0 }} open={Number(additionalChargeAmount) > 0 || undefined}>
+        <summary>{tIn('mijozga_qoshimcha_summa')}</summary>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-4)', alignItems: 'end', paddingTop: 'var(--space-3)' }}>
           <MoneyInput
             label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Qo‘shimcha summa (${currency})`}
             value={additionalChargeAmount}
@@ -956,8 +972,15 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             onChange={(event) => { markDirty(); setAdditionalChargeVatRate(event.target.value); }}
           />
         </div>
+        </details>
       </Card>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+        * {tIn('bilan_belgilangan_maydonlar_told')}
+      </div>
+      </div>
 
+      {/* Side panel: totals, dispatch gate, linked invoices, what is missing */}
+      <aside className="doc-aside" aria-label={tf('sidePanel')}>
       {/* Totals Summary and Linked Invoices */}
       <OrderTotalsSummary
         locale={locale}
@@ -967,6 +990,26 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
         requiredPaymentPercent={requiredPaymentPercent}
         salesInvoices={currentOrderData?.salesInvoices}
       />
+      {!isLocked && (
+        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <DocChecklist
+            items={[
+              { label: tf('ckCustomer'), done: Boolean(counterpartyId) },
+              { label: tf('ckWarehouse'), done: Boolean(effectiveWarehouseId) },
+              { label: currency && currency !== 'UZS' ? tf('ckCurrencyRate') : tf('ckCurrency'), done: Boolean(currency) && (currency === 'UZS' || Number(exchangeRate) > 0) },
+              { label: tf('ckLines'), done: items.some((i) => i.productId) },
+              { label: tf('ckQty'), done: items.some((i) => i.productId) && items.filter((i) => i.productId).every((i) => Number(i.quantity) > 0) },
+              { label: tf('ckPrice'), done: items.some((i) => i.productId) && items.filter((i) => i.productId).every((i) => Number(i.unitPrice) > 0) },
+            ]}
+          />
+          <Button onClick={handleSave} loading={loading} style={{ width: '100%' }}>
+            {!loading && <Save size={16} aria-hidden />} {isRu ? 'Сохранить' : 'Saqlash'}
+          </Button>
+          <p className="doc-aside-hint">{tf('orderHint')}</p>
+        </Card>
+      )}
+      </aside>
+      </div>
 
       {/* Drawers */}
       <CreateCounterpartyDrawer

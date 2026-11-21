@@ -35,10 +35,10 @@ describe('Security page (audit log)', () => {
     renderPage(<SecurityPage />);
 
     expect(screen.getByText('loading')).toBeTruthy();
-    expect(await screen.findByText('AccountingPeriod', { exact: false })).toBeTruthy();
+    expect(await screen.findByText('Hisob davri')).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledTimes(1);
     expect(apiFetch).toHaveBeenCalledWith(
-      '/audit-logs',
+      '/audit-logs?limit=50',
       expect.objectContaining({ token: 'tok', tenantId: 'tenant-1' }),
     );
   });
@@ -52,7 +52,7 @@ describe('Security page (audit log)', () => {
     apiFetch.mockResolvedValueOnce(logs);
     fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
 
-    expect(await screen.findByText('AccountingPeriod', { exact: false })).toBeTruthy();
+    expect(await screen.findByText('Hisob davri')).toBeTruthy();
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
   });
 });

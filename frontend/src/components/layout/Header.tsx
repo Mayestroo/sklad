@@ -8,10 +8,9 @@ import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 import { Badge } from '../ui/Badge';
 import {
-  Bell,
+  Menu,
   Search,
   User,
-  Settings,
   ShieldCheck,
   CreditCard,
   Building2,
@@ -21,9 +20,16 @@ import {
   ArrowLeftRight,
 } from 'lucide-react';
 
-export function Header() {
+interface HeaderProps {
+  onOpenMenu?: () => void;
+  onOpenGoTo?: () => void;
+}
+
+export function Header({ onOpenMenu, onOpenGoTo }: HeaderProps) {
   const t = useTranslations('common');
   const tAuth = useTranslations('auth');
+  const tUx = useTranslations('ux');
+  const tNav = useTranslations('nav');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { user, company, logout, hasRole, isImpersonated, exitImpersonation } = useAuth();
@@ -91,85 +97,68 @@ export function Header() {
         : 'U';
 
   return (
-    <header
-      style={{
-        height: 'var(--header-height)',
-        backgroundColor: 'var(--color-bg-secondary)',
-        borderBottom: '1px solid var(--color-border-light)',
-        padding: '0 var(--space-6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        position: 'sticky',
-        top: 0,
-        zIndex: 20,
-      }}
-    >
-      {/* Search Input */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', position: 'relative', width: '320px' }}>
-        <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--color-text-tertiary)' }} />
-        <input
-          type="text"
-          placeholder={`${t('search')}...`}
-          style={{
-            width: '100%',
-            padding: '8px 12px 8px 36px',
-            fontSize: 'var(--text-sm)',
-            borderRadius: 'var(--radius-full)',
-            border: '1px solid var(--color-border)',
-            backgroundColor: 'var(--color-bg-tertiary)',
-            outline: 'none',
-            transition: 'border-color var(--transition-fast)',
-            color: 'var(--color-text-primary)',
-          }}
-        />
-      </div>
+    <header className="app-header">
+      <button
+        type="button"
+        className="app-header-menu"
+        onClick={onOpenMenu}
+        aria-label={tUx('openMenu')}
+        title={tUx('openMenu')}
+        style={{
+          width: '40px',
+          height: '40px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--color-border-light)',
+          backgroundColor: 'transparent',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: 'var(--color-text-secondary)',
+          flexShrink: 0,
+        }}
+      >
+        <Menu size={20} aria-hidden />
+      </button>
+
+      {/* "Go to" — search sections and quick actions (Ctrl+K) */}
+      <button
+        type="button"
+        className="app-header-goto"
+        onClick={onOpenGoTo}
+        aria-label={`${tUx('goToHint')} (Ctrl+K)`}
+        aria-keyshortcuts="Control+K"
+      >
+        <Search size={16} aria-hidden style={{ flexShrink: 0 }} />
+        <span className="app-header-goto-text">{tUx('goToHint')}…</span>
+        <kbd className="app-kbd">Ctrl K</kbd>
+      </button>
 
       {/* Right Action Items */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+      <div className="app-header-actions">
         {/* Trial Badge */}
         <div
+          className="app-header-trial"
           style={{
             padding: '4px 12px',
             borderRadius: 'var(--radius-full)',
             backgroundColor: 'var(--color-warning-50)',
-            color: 'var(--color-warning-600)',
+            color: 'var(--color-warning-700)',
             border: '1px solid var(--color-warning-100)',
             fontSize: 'var(--text-xs)',
             fontWeight: 'var(--font-medium)',
+            whiteSpace: 'nowrap',
           }}
         >
           {tAuth('trialDays')}
         </div>
 
         {/* Theme Switcher (Light / Dark) */}
-        <ThemeSwitcher />
+        <span className="app-header-hide-sm" style={{ display: 'contents' }}>
+          <ThemeSwitcher />
+        </span>
 
         {/* Language Switcher */}
         <LanguageSwitcher />
-
-        {/* Notification Bell */}
-        <button
-          type="button"
-          aria-label="Notifications"
-          style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: 'var(--radius-full)',
-            border: '1px solid var(--color-border-light)',
-            backgroundColor: 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'var(--color-text-secondary)',
-            transition: 'background-color var(--transition-fast)',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-        >
-          <Bell size={18} />
-        </button>
 
         {/* Interactive User Profile Menu */}
         <div ref={dropdownRef} style={{ position: 'relative' }}>
@@ -178,6 +167,7 @@ export function Header() {
             onClick={() => setIsDropdownOpen((prev) => !prev)}
             aria-expanded={isDropdownOpen}
             aria-haspopup="menu"
+            aria-label={[user?.firstName, user?.lastName].filter(Boolean).join(' ') || tNav('profile')}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -328,7 +318,7 @@ export function Header() {
                       width: '100%',
                       background: 'none',
                       border: 'none',
-                      color: 'var(--color-warning-600)',
+                      color: 'var(--color-warning-700)',
                       fontSize: 'var(--text-xs)',
                       fontWeight: 'var(--font-bold)',
                       cursor: 'pointer',
@@ -365,32 +355,6 @@ export function Header() {
                     <span>{isRu ? 'SuperAdmin консоль' : 'SuperAdmin konsoli'}</span>
                   </Link>
                 )}
-
-                <Link
-                  href="/settings"
-                  onClick={() => setIsDropdownOpen(false)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-3)',
-                    padding: '8px var(--space-4)',
-                    fontSize: 'var(--text-sm)',
-                    color: 'var(--color-text-secondary)',
-                    textDecoration: 'none',
-                    transition: 'all var(--transition-fast)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)';
-                    e.currentTarget.style.color = 'var(--color-text-primary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = 'var(--color-text-secondary)';
-                  }}
-                >
-                  <Settings size={16} style={{ color: 'var(--color-text-tertiary)' }} />
-                  <span>{isRu ? 'Настройки профиля' : 'Profil sozlamalari'}</span>
-                </Link>
 
                 <Link
                   href="/settings/branches"
@@ -488,7 +452,7 @@ export function Header() {
                   padding: '10px var(--space-4)',
                   fontSize: 'var(--text-sm)',
                   fontWeight: 'var(--font-medium)',
-                  color: 'var(--color-error-600)',
+                  color: 'var(--color-error-700)',
                   background: 'none',
                   border: 'none',
                   textAlign: 'left',

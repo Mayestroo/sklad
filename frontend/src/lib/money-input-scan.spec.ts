@@ -21,7 +21,7 @@ const MONEY_FORMS: Array<[string, number]> = [
   ['components/sales/SalesOrderForm.tsx', 1],
   ['app/[locale]/(dashboard)/products/new/page.tsx', 2],
   ['app/[locale]/(dashboard)/finance/page.tsx', 2],
-  ['app/[locale]/(dashboard)/sales/crm/page.tsx', 2],
+  ['app/[locale]/(dashboard)/sales/crm/page.tsx', 1], // one deal form for create and edit
   ['app/[locale]/(dashboard)/purchases/expenses/new/page.tsx', 1],
   ['app/[locale]/(dashboard)/inventory/documents/page.tsx', 1],
 ];

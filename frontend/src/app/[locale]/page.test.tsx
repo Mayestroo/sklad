@@ -12,6 +12,7 @@ vi.mock('next-intl', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  usePathname: () => '/',
 }));
 
 import DashboardPage from './page';
@@ -44,6 +45,7 @@ function routes(handler: (url: string) => Promise<unknown>) {
 describe('Dashboard page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    window.localStorage.clear();
   });
 
   it('loads the dashboard and the order pipeline once', async () => {
@@ -67,7 +69,9 @@ describe('Dashboard page', () => {
     renderPage(<DashboardPage />);
     await screen.findByText('Mijoz MChJ');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bugun' }));
+    // The period picker (shared Select, named by its placeholder key in this mock).
+    fireEvent.click(screen.getByRole('combobox', { name: 'period' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Bugun/ }));
     await waitFor(() => expect(dashboardCalls()).toHaveLength(2));
     expect(screen.getByText('Mijoz MChJ')).toBeTruthy();
 

@@ -1,161 +1,210 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useEffect, useState, useRef, useSyncExternalStore, FormEvent } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
-import { Lock, Mail, AlertCircle } from 'lucide-react';
+import { AuthCard, AuthError, AuthField } from '@/components/auth/AuthCard';
+import { Boxes, Languages, Lock, Mail, ShoppingCart, Wallet } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
+import { readRemembered, remember } from '@/lib/usePersistentState';
 import type { AuthResponse } from '@shared/types';
+
+/** Browser-only convenience: the e-mail of the last sign-in, when the user asked to keep it. */
+const REMEMBERED_EMAIL = 'auth.rememberedEmail';
+const noSubscribe = () => () => {};
 
 export default function LoginPage() {
   const t = useTranslations('auth');
-  const tCommon = useTranslations('common');
+  const tr = useTranslations('rd.auth');
   const locale = useLocale();
   const { login } = useAuth();
 
+  // Returning user: the remembered e-mail is shown as "Sign in as …" and only
+  // the password is asked (one field instead of two).
+  // Read after hydration (the server has no browser storage).
+  const storedEmail = useSyncExternalStore(
+    noSubscribe,
+    () => readRemembered<string>(REMEMBERED_EMAIL, ''),
+    () => '',
+  );
+  const [forgotten, setForgotten] = useState(false);
+  const rememberedEmail = forgotten ? '' : storedEmail;
   const [email, setEmail] = useState('');
+  const [keepEmail, setKeepEmail] = useState(true);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  const forgetEmail = () => {
+    remember(REMEMBERED_EMAIL, '');
+    setForgotten(true);
+    setEmail('');
+    setPassword('');
+    setError(null);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    const signInEmail = (rememberedEmail || email).trim();
 
     try {
       const response = await apiFetch<AuthResponse>('/auth/login', {
         method: 'POST',
         locale,
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: signInEmail, password }),
       });
-
+      remember(REMEMBERED_EMAIL, keepEmail ? signInEmail : '');
       login(response);
     } catch (err) {
-      setError(errorMessage(err) || (locale === 'ru' ? 'Не удалось войти' : 'Kirib bo‘lmadi'));
+      // Wrong credentials / rate limit: our own translated text (the API answers in English).
+      const status = err instanceof ApiError ? err.status : 0;
+      setError(status === 401 ? t('loginFailed') : status === 429 ? tr('tooManyAttempts') : errorMessage(err) || t('loginFailed'));
+      // Select the password so retyping replaces it (clearing it could swallow keys typed meanwhile).
+      passwordRef.current?.focus();
+      passwordRef.current?.select();
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: 'var(--color-bg-primary)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 'var(--space-6)',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '440px',
-          backgroundColor: 'var(--color-bg-secondary)',
-          borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--color-border-light)',
-          boxShadow: 'var(--shadow-lg)',
-          padding: 'var(--space-8)',
-        }}
-      >
-        {/* Title */}
-        <div style={{ marginBottom: 'var(--space-6)', textAlign: 'center' }}>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-            {t('login')}
-          </h1>
-        </div>
+  const aside = (
+    <>
+      <h2>{tr('asideTitle')}</h2>
+      <ul>
+        <li>
+          <span className="auth-aside-icon" aria-hidden>
+            <ShoppingCart size={15} />
+          </span>
+          {tr('asideSales')}
+        </li>
+        <li>
+          <span className="auth-aside-icon" aria-hidden>
+            <Boxes size={15} />
+          </span>
+          {tr('asideStock')}
+        </li>
+        <li>
+          <span className="auth-aside-icon" aria-hidden>
+            <Wallet size={15} />
+          </span>
+          {tr('asideMoney')}
+        </li>
+        <li>
+          <span className="auth-aside-icon" aria-hidden>
+            <Languages size={15} />
+          </span>
+          {tr('asideLang')}
+        </li>
+      </ul>
+    </>
+  );
 
-        {/* Error Alert */}
-        {error && (
-          <div
+  const returning = Boolean(rememberedEmail);
+  // The remembered e-mail appears after hydration: put the cursor in the password then.
+  useEffect(() => {
+    if (returning) passwordRef.current?.focus();
+  }, [returning]);
+
+  return (
+    <AuthCard
+      title={returning ? tr('welcomeBack') : t('login')}
+      subtitle={returning ? undefined : t('loginSubtitle')}
+      aside={aside}
+      asideOnPhone="hide"
+      maxWidth={600}
+      footer={
+        <>
+          {t('noAccount')}{' '}
+          <Link
+            href="/register"
             style={{
-              padding: '12px',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--color-error-50)',
-              border: '1px solid var(--color-error-100)',
-              color: 'var(--color-error-600)',
-              fontSize: 'var(--text-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-2)',
-              marginBottom: 'var(--space-4)',
+              color: 'var(--color-primary-700)',
+              fontWeight: 'var(--font-semibold)',
+              textDecoration: 'underline',
+              textUnderlineOffset: 3,
             }}
           >
-            <AlertCircle size={18} />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {t('email')}
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@company.uz"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px 10px 38px',
-                  fontSize: 'var(--text-sm)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: 'var(--color-bg-primary)',
-                  outline: 'none',
-                }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-              {t('password')}
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px 10px 38px',
-                  fontSize: 'var(--text-sm)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: 'var(--color-bg-primary)',
-                  outline: 'none',
-                }}
-              />
-            </div>
-          </div>
-
-          <Button type="submit" variant="primary" disabled={loading} style={{ width: '100%', marginTop: 'var(--space-2)' }}>
-            {loading ? tCommon('loading') : t('login')}
-          </Button>
-        </form>
-
-        {/* Footer link to Register */}
-        <div style={{ marginTop: 'var(--space-6)', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-          {t('noAccount')}{' '}
-          <Link href="/register" style={{ color: 'var(--color-primary-600)', fontWeight: 'var(--font-semibold)', textDecoration: 'none' }}>
             {t('startTrial')}
           </Link>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <AuthError message={error} />
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-4)',
+        }}
+      >
+        {returning ? (
+          <div className="auth-who">
+            <span className="auth-avatar" aria-hidden>
+              {rememberedEmail.charAt(0).toUpperCase()}
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 'var(--text-sm)',
+                  fontWeight: 'var(--font-semibold)',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {rememberedEmail}
+              </div>
+              <button type="button" className="rd-linkbtn" style={{ paddingLeft: 0 }} onClick={forgetEmail}>
+                {tr('notYou')}
+              </button>
+            </div>
+            {/* Kept for password managers: they pair the password with this username. */}
+            <input type="hidden" name="email" autoComplete="username" value={rememberedEmail} readOnly />
+          </div>
+        ) : (
+          <AuthField
+            label={t('email')}
+            icon={Mail}
+            type="email"
+            name="email"
+            autoComplete="username"
+            inputMode="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            autoFocus
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="admin@company.uz"
+          />
+        )}
+        <AuthField
+          label={t('password')}
+          icon={Lock}
+          password
+          ref={passwordRef}
+          name="password"
+          autoComplete="current-password"
+          autoFocus={returning}
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {!returning && (
+          <label className="auth-check">
+            <input type="checkbox" checked={keepEmail} onChange={(e) => setKeepEmail(e.target.checked)} />
+            {tr('rememberEmail')}
+          </label>
+        )}
+        <Button type="submit" variant="primary" size="lg" loading={loading} loadingText={t('signingIn')} style={{ width: '100%' }}>
+          {t('login')}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }

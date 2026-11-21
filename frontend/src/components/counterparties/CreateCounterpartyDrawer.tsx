@@ -252,7 +252,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
             padding: '12px 14px',
             backgroundColor: 'rgba(239, 68, 68, 0.08)',
             border: '1px solid #ef4444',
-            color: 'var(--color-error-600)',
+            color: 'var(--color-error-700)',
             borderRadius: 'var(--radius-md)',
             fontSize: 'var(--text-xs)',
             display: 'flex',
@@ -428,7 +428,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 600, paddingTop: '8px', borderTop: '1px solid var(--color-border-light)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, paddingTop: '8px', borderTop: '1px solid var(--color-border-light)' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
       </form>

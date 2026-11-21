@@ -3,7 +3,12 @@
 import { isSellable, productTypeLabel, semiFinishedLabel } from '@/lib/product-types';
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { readRemembered, remember, usePersistentState } from '@/lib/usePersistentState';
+import { useDocumentShortcuts } from '@/lib/useDocumentShortcuts';
+import { DocChecklist, linesKeyDown } from '@/components/ui/DocChecklist';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { useTranslations } from 'next-intl';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch, listOf, type ListResponse } from '@/lib/api';
@@ -47,6 +52,7 @@ import { convertSalePriceToDocumentCurrency } from '@/lib/sales-pricing';
 import { convertCostPriceToDocumentCurrency } from '@/lib/inventory-cost';
 import { unitLabel } from '@/lib/units';
 import { stockLabel } from '@/lib/stock-label';
+import { localIsoDate } from '@/lib/date-range';
 
 interface CounterpartyOption {
   id: string;
@@ -125,6 +131,7 @@ interface SalesInvoiceFormProps {
 export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company, hasPermission } = useAuth();
   // New documents start in the tenant sales default, or blank (never a guessed USD).
   const salesDefault = useSalesDefaultCurrency();
@@ -133,6 +140,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const confirm = useConfirm();
   const searchParams = useSearchParams();
   const isEditRequested = searchParams?.get('edit') === 'true';
+  const tf = useTranslations('rd.docForm');
+  const [showDiscVatPref, setShowDiscVatPref] = usePersistentState<boolean>('docForm.showDiscVat', false);
 
   const isPriceOverrideAllowed =
     hasPermission('sales:override_price') ||
@@ -152,7 +161,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [counterpartyId, setCounterpartyId] = useState(initialData?.counterpartyId || '');
   const [warehouseId, setWarehouseId] = useState(initialData?.warehouseId || '');
   const [docDate, setDocDate] = useState(
-    initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10))
+    initialData?.invoiceDate ? initialData.invoiceDate.slice(0, 10) : (initialData?.createdAt ? initialData.createdAt.slice(0, 10) : localIsoDate(new Date()))
   );
   const [currency, setCurrency] = useState(initialDocumentCurrency(initialData?.currency, salesDefault));
   const [exchangeRate, setExchangeRate] = useState<number | string>(
@@ -210,6 +219,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const [warehouseStockMap, setWarehouseStockMap] = useState<Record<string, { physical: number; reserved: number; free: number }>>({});
 
   const isReadOnly = docStatus === 'POSTED' || docStatus === 'CANCELLED';
+  /** Set on the first save/post attempt: missing required fields are then marked next to the field. */
+  const [attempted, setAttempted] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  // Bring a new error into view: the save buttons are in the sticky header, the message may be off-screen.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [error]);
 
   const markDirty = () => {
     if (!isDirty) setIsDirty(true);
@@ -244,15 +260,14 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       const cpList = listOf(cpRes);
       setCounterparties(cpList);
-      if (!counterpartyId && cpList.length > 0 && mode === 'create') {
-        const defaultCp = cpList[0];
-        setCounterpartyId(defaultCp.id);
-      }
+      // The customer is always chosen by the user: a silent default puts the debt on the wrong client.
 
       const whList = listOf(whRes);
       setWarehouses(whList);
       if (!warehouseId && whList.length > 0 && mode === 'create') {
-        setWarehouseId(whList[0].id);
+        // Last warehouse used for a sale on this browser, else the first one.
+        const last = readRemembered<string>('sales.warehouseId', '');
+        setWarehouseId(whList.some((w) => w.id === last) ? last : whList[0].id);
       }
 
       // TZ "Ishlab chiqarish" 4.6: a semi-finished product is sold only with a sale price.
@@ -563,6 +578,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   // Save Document
   const saveDocument = async (postImmediately = false): Promise<SalesInvoice | null> => {
     setError(null);
+    setAttempted(true);
     if (!counterpartyId) {
       setError(isRu ? 'Выберите клиента' : 'Mijozni tanlang');
       return null;
@@ -709,6 +725,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       setDocStatus('POSTED');
       if (posted) setCurrentInvoiceData(posted);
       setIsDirty(false);
+      toast.success(isRu ? `Продажа ${posted?.invoiceNumber ?? ''} проведена: товар списан, долг клиента обновлён` : `Sotuv ${posted?.invoiceNumber ?? ''} tasdiqlandi: tovar chiqarildi, mijoz qarzi yangilandi`);
 
       router.push('/sales');
     } catch (err) {
@@ -770,7 +787,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         setCurrentInvoiceData(res);
         setIsDirty(true);
       }
-      toast.success(isRu ? 'Накладная переведена в черновик' : 'Nukladnoy qoralamaga qaytarildi');
+      toast.success(isRu ? 'Накладная переведена в черновик' : 'Sotuv hujjati qoralamaga qaytarildi');
     } catch (err) {
       console.error(err);
       const msg = errorMessage(err) || (isRu ? 'Не удалось отменить проведение' : 'Hujjat o‘tkazmasini bekor qilib bo‘lmadi');
@@ -784,7 +801,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
   const handleDeleteInvoice = async () => {
     if (!invoiceId || mode !== 'edit') return;
     const confirmed = await confirm({
-      title: isRu ? 'Удаление накладной' : 'Nukladnoyni o‘chirish',
+      title: isRu ? 'Удаление накладной' : 'Hujjatni o‘chirish',
       description:
         docStatus === 'POSTED'
           ? isRu
@@ -816,7 +833,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         locale,
       });
       setIsDirty(false);
-      toast.success(isRu ? 'Накладная успешно удалена' : 'Nukladnoy muvaffaqiyatli o‘chirildi');
+      toast.success(isRu ? 'Накладная успешно удалена' : 'Sotuv hujjati o‘chirildi');
       router.push('/sales');
     } catch (err) {
       console.error(err);
@@ -935,6 +952,19 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
     }
   };
 
+  const showDiscVat = showDiscVatPref || items.some((i) => Number(i.discount) > 0);
+  const checklist = [
+    { label: tf('ckCustomer'), done: Boolean(counterpartyId) },
+    { label: tf('ckWarehouse'), done: Boolean(warehouseId) },
+    { label: currency && currency !== 'UZS' ? tf('ckCurrencyRate') : tf('ckCurrency'), done: Boolean(currency) && (currency === 'UZS' || Number(exchangeRate) > 0) },
+    { label: tf('ckLines'), done: items.some((i) => i.productId) },
+    { label: tf('ckQty'), done: items.filter((i) => i.productId).length > 0 && items.filter((i) => i.productId).every((i) => Number(i.quantity) > 0) },
+    { label: tf('ckPrice'), done: items.filter((i) => i.productId).length > 0 && items.filter((i) => i.productId).every((i) => Number(i.unitPrice) > 0) },
+  ];
+
+  // Ctrl+S saves the draft, Ctrl+Enter posts (only while the document is editable).
+  useDocumentShortcuts({ enabled: !isReadOnly && !loading, onSave: handleSaveDraft, onPost: handlePost });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)', paddingBottom: 'var(--space-12)' }}>
       {/* Sticky Top Header & Toolbar (Exact Purchases Match) */}
@@ -953,7 +983,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap', minWidth: 0 }}>
           <Button
             variant="ghost"
             size="sm"
@@ -964,17 +994,22 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           </Button>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2) var(--space-3)', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
                 {mode === 'create' && !docNumber
                   ? isRu
                     ? 'Новая накладная продажи'
-                    : 'Yangi Sotuv Hujjati'
+                    : 'Yangi sotuv hujjati'
                   : `${isRu ? 'Накладная продажи' : 'Sotuv hujjati'} ${docNumber}`}
               </h1>
               {getDocStatusBadge(docStatus)}
               {getPaymentBadge(paymentStatus)}
             </div>
+            {currency && calculations.grandTotal > 0 && (
+              <div className="doc-live-total" aria-live="polite">
+                {isRu ? 'Итого' : 'Jami'}: <strong className="tabular-nums">{formatCurrency(calculations.grandTotal, locale, currency)}</strong>
+              </div>
+            )}
           </div>
         </div>
 
@@ -982,32 +1017,36 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           {!isReadOnly && (
             <>
+              {mode === 'edit' && invoiceId && (
+                <Button
+                  variant="ghost"
+                  onClick={handleDeleteInvoice}
+                  disabled={loading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
+                >
+                  <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 onClick={handleSaveDraft}
-                disabled={loading}
+                loading={loading}
+                title="Ctrl+S"
+                aria-keyshortcuts="Control+S"
                 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <Save size={16} /> {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+                {!loading && <Save size={16} aria-hidden />} {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
               </Button>
               <Button
                 onClick={handlePost}
-                disabled={loading}
+                loading={loading}
+                loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}
+                title="Ctrl+Enter"
+                aria-keyshortcuts="Control+Enter"
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
               >
-                <CheckCircle2 size={16} /> {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
+                {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
               </Button>
-
-              {mode === 'edit' && invoiceId && (
-                <Button
-                  variant="danger"
-                  onClick={handleDeleteInvoice}
-                  disabled={loading}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <Trash2 size={16} /> {isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
-                </Button>
-              )}
             </>
           )}
 
@@ -1024,38 +1063,20 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
           {docStatus === 'POSTED' && (
             <>
-              <Button
-                variant="secondary"
-                onClick={handleUnpostToEdit}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-warning-600)', borderColor: 'var(--color-warning-600)', fontWeight: 600 }}
-              >
-                <Pencil size={16} /> {isRu ? 'Редактировать' : 'Tahrirlash'}
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={handleUnpost}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <RotateCcw size={16} /> {isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish'}
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={() => setIsPayOpen(true)}
-                style={{
-                  backgroundColor: 'var(--color-success-50)',
-                  color: 'var(--color-success-600)',
-                  border: '1px solid var(--color-success-200)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <CreditCard size={16} /> {isRu ? 'Оплатить' : 'To‘lash'}
-              </Button>
+              {/* Rare and risky actions behind one menu; the everyday ones stay visible. */}
+              <ActionsMenu
+                label={tIn('boshqa_amallar')}
+                actions={[
+                  { label: isRu ? 'Редактировать' : 'Tahrirlash', onSelect: handleUnpostToEdit },
+                  { label: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish', onSelect: handleUnpost },
+                  { label: isRu ? 'Удалить' : 'O‘chirish', onSelect: handleDeleteInvoice, danger: true },
+                ]}
+              />
+              {paymentStatus !== 'PAID' && (
+                <Button onClick={() => setIsPayOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CreditCard size={16} aria-hidden /> {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
+                </Button>
+              )}
 
               <Button
                 variant="secondary"
@@ -1065,20 +1086,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 <RotateCcw size={16} /> {isRu ? 'Возврат' : 'Qaytarish'}
               </Button>
 
-              <Button
-                variant="danger"
-                onClick={handleDeleteInvoice}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Trash2 size={16} /> {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
             </>
           )}
 
           <Button
             variant="ghost"
             onClick={() => window.print()}
+            className="app-header-hide-sm"
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <Printer size={16} /> {isRu ? 'Печать' : 'Chop etish'}
@@ -1090,7 +1104,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       {docStatus === 'POSTED' && (
         <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-700)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <AlertTriangle size={20} color="var(--color-warning-600)" />
+            <AlertTriangle size={20} color="var(--color-warning-700)" />
             <div>
               <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                 {isRu ? 'Накладная проведена и заблокирована от изменений' : 'Sotuv hujjati tasdiqlangan va o‘zgarishlardan qulflangan'}
@@ -1106,7 +1120,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-500)', color: '#fff', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-600)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -1115,40 +1129,42 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
       {/* Error notification banner */}
       {error && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <AlertCircle size={20} />
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{error}</span>
-        </Card>
+        <div ref={errorRef} role="alert" tabIndex={-1} className="doc-banner is-error">
+          <AlertCircle size={20} aria-hidden />
+          <span>{error}</span>
+        </div>
       )}
 
       {/* Insufficient free stock alert */}
       {!isReadOnly && calculations.insufficientStockCount > 0 && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: 'var(--color-error-500)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <AlertCircle size={20} />
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
+        <div role="status" className="doc-banner is-error">
+          <AlertCircle size={20} aria-hidden />
+          <span>
             {isRu
               ? `Внимание! В ${calculations.insufficientStockCount} поз. указанное количество превышает свободный остаток на складе.`
-              : `Diqqat! ${calculations.insufficientStockCount} ta tovar bo'yicha kiritilgan miqdor ombordagi erkin qoldiqdan ko'p.`}
+              : `Diqqat! ${calculations.insufficientStockCount} ta tovar bo‘yicha kiritilgan miqdor ombordagi erkin qoldiqdan ko‘p.`}
           </span>
-        </Card>
+        </div>
       )}
 
       {/* Below-cost alert */}
       {calculations.belowCostCount > 0 && (
-        <Card style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-warning-500)', color: 'var(--color-warning-600)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <AlertTriangle size={20} />
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
+        <div role="status" className="doc-banner is-warning">
+          <AlertTriangle size={20} aria-hidden />
+          <span>
             {isRu
-              ? `Внимание! ${calculations.belowCostCount} поз. продаются ниже себестоимости (Below-Cost Guardrail).`
-              : `Diqqat! ${calculations.belowCostCount} ta tovar tannarxidan arzon sotilmoqda (Below-Cost Guardrail).`}
+              ? `Внимание! ${calculations.belowCostCount} поз. продаются ниже себестоимости — проверьте цену или скидку.`
+              : `Diqqat! ${calculations.belowCostCount} ta tovar tannarxidan arzon sotilmoqda — narx yoki chegirmani tekshiring.`}
           </span>
-        </Card>
+        </div>
       )}
 
+      <div className="doc-layout">
+      <div className="doc-main">
       {/* Document Primary Metadata Form Card */}
       <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-          {isRu ? 'Основная информация' : 'Asosiy Hujjat Ma’lumotlari'}
+          {isRu ? 'Основная информация' : 'Asosiy ma’lumotlar'}
         </h3>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
@@ -1160,6 +1176,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               value={counterpartyId}
               onChange={handleCounterpartySelect}
               placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
+              error={attempted && !counterpartyId ? (isRu ? 'Выберите клиента — на него запишется долг' : 'Mijozni tanlang — qarz shu mijozga yoziladi') : undefined}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickCustomerOpen(true) : undefined}
               createNewLabel={isRu ? 'Добавить клиента' : 'Yangi mijoz qo‘shish'}
@@ -1176,7 +1193,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                   <span
                     style={{
                       fontWeight: 600,
-                      color: debt > 0 ? 'var(--color-error-600)' : debt < 0 ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
+                      color: debt > 0 ? 'var(--color-error-700)' : debt < 0 ? 'var(--color-success-700)' : 'var(--color-text-secondary)',
                     }}
                   >
                     {currency ? formatCurrency(debt, locale, currency) : '—'}
@@ -1192,8 +1209,9 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               label={isRu ? 'Склад списания *' : 'Chiqim ombori *'}
               options={warehouseOptions}
               value={warehouseId}
-              onChange={(val) => { markDirty(); setWarehouseId(val); }}
+              onChange={(val) => { markDirty(); setWarehouseId(val); remember('sales.warehouseId', val); }}
               placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
+              error={attempted && !warehouseId ? (isRu ? 'Выберите склад' : 'Omborni tanlang') : undefined}
               disabled={isReadOnly}
               onCreateNew={!isReadOnly ? () => setIsQuickWarehouseOpen(true) : undefined}
               createNewLabel={isRu ? 'Создать новый склад' : 'Yangi ombor qo‘shish'}
@@ -1210,6 +1228,37 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             />
           </div>
 
+          {/* Currency */}
+          <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
+            <Select
+              label={isRu ? 'Валюта *' : 'Valyuta *'}
+              options={CURRENCY_OPTIONS}
+              value={currency}
+              placeholder={isRu ? 'Валюта' : 'Valyuta'}
+              error={attempted && !currency ? (isRu ? 'Выберите валюту' : 'Valyutani tanlang') : undefined}
+              onChange={handleCurrencyChange}
+              disabled={isReadOnly}
+            />
+          </div>
+
+          {/* Exchange Rate */}
+          {currency && currency !== 'UZS' && (
+            <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
+              <MoneyInput
+                label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
+                value={exchangeRate}
+                onValueChange={(value) => handleExchangeRateChange(value)}
+                decimals={4}
+                placeholder="12,800"
+                disabled={isReadOnly}
+              />
+            </div>
+          )}
+
+          {/* Rare fields: folded unless one is filled */}
+          <details className="doc-more" open={Boolean(contractNumber || contractDate || paymentTerms || comment || Number(additionalChargeAmount) > 0) || undefined}>
+            <summary>{tf('moreOptions')}</summary>
+            <div className="doc-more-body">
           {/* Contract Number */}
           <div style={{ minWidth: '110px', flex: '1 1 120px' }}>
             <Input
@@ -1230,32 +1279,6 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               disabled={isReadOnly}
             />
           </div>
-
-          {/* Currency */}
-          <div style={{ minWidth: '90px', flex: '0.8 1 100px' }}>
-            <Select
-              label={isRu ? 'Валюта *' : 'Valyuta *'}
-              options={CURRENCY_OPTIONS}
-              value={currency}
-              placeholder={isRu ? 'Валюта' : 'Valyuta'}
-              onChange={handleCurrencyChange}
-              disabled={isReadOnly}
-            />
-          </div>
-
-          {/* Exchange Rate */}
-          {currency && currency !== 'UZS' && (
-            <div style={{ minWidth: '100px', flex: '0.8 1 110px' }}>
-              <MoneyInput
-                label={isRu ? 'Курс валюты' : 'Valyuta kursi'}
-                value={exchangeRate}
-                onValueChange={(value) => handleExchangeRateChange(value)}
-                decimals={4}
-                placeholder="12,800"
-                disabled={isReadOnly}
-              />
-            </div>
-          )}
 
           {/* Payment Terms */}
           <div style={{ minWidth: '180px', flex: '1.5 1 200px' }}>
@@ -1278,6 +1301,32 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
               disabled={isReadOnly}
             />
           </div>
+              {!isReadOnly && (
+                <div style={{ flexBasis: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)', alignItems: 'end' }}>
+            <MoneyInput
+              label={isRu ? `Дополнительная сумма покупателю${currency ? ` (${currency})` : ''}` : `Mijozga qo‘shimcha summa${currency ? ` (${currency})` : ''}`}
+              value={additionalChargeAmount}
+              onValueChange={(value) => {
+                markDirty();
+                setAdditionalChargeAmount(Number(value));
+              }}
+            />
+            <Input
+              label={isRu ? 'НДС на доплату, %' : 'Qo‘shimcha QQS, %'}
+              type="text"
+              inputMode="decimal"
+              value={additionalChargeVatRate}
+              onChange={(event) => {
+                markDirty();
+                setAdditionalChargeVatRate(event.target.value);
+              }}
+            />
+          </div>
+                </div>
+              )}
+            </div>
+          </details>
         </div>
       </Card>
 
@@ -1285,17 +1334,20 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
       <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Товары в документе' : 'Hujjatdagi Tovarlar'} ({items.length})
+            {isRu ? 'Товары в документе' : 'Hujjatdagi tovarlar'} ({items.length})
           </h3>
 
           {!isReadOnly && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <div style={{ position: 'relative', width: '240px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', flex: '1 1 280px', justifyContent: 'flex-end', minWidth: 0 }}>
+              <form onSubmit={handleBarcodeSubmit} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: '1 1 240px', maxWidth: 360, minWidth: 0 }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                   <Input
                     value={barcodeSearch}
                     onChange={(e) => setBarcodeSearch(e.target.value)}
                     placeholder={isRu ? 'Штрих-код или SKU...' : 'Shtrix-kod yoki SKU...'}
+                    aria-label={isRu ? 'Штрих-код или SKU — Enter добавит товар' : 'Shtrix-kod yoki SKU — Enter tovarni qo‘shadi'}
+                    autoComplete="off"
+                    enterKeyHint="search"
                     style={{ paddingLeft: '32px' }}
                   />
                   <Barcode size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
@@ -1309,33 +1361,37 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         </div>
 
         {/* Table container */}
-        <div style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
-          <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+        <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto', minHeight: '220px', paddingBottom: '40px' }}>
+          <table className="doc-lines" style={{ width: '100%', minWidth: showDiscVat ? '900px' : '680px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', minWidth: '240px' }}>
                   {isRu ? 'Товар / Номенклатура' : 'Tovar / Mahsulot'}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
+                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '130px', whiteSpace: 'nowrap' }}>
                   {isRu ? 'Количество' : 'Miqdor'}
                 </th>
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '150px', whiteSpace: 'nowrap' }}>
-                  {isRu ? `Цена продажи (${currency})` : `Sotish narxi (${currency})`}
+                  {isRu ? `Цена продажи${currency ? ` (${currency})` : ''}` : `Sotish narxi${currency ? ` (${currency})` : ''}`}
                 </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
-                  {isRu ? 'Скидка %' : 'Skidka %'}
-                </th>
-                <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
-                  {isRu ? 'НДС %' : 'QQS %'}
-                </th>
+                {showDiscVat && (
+                  <>
+                    <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '100px', whiteSpace: 'nowrap' }}>
+                      {isRu ? 'Скидка %' : 'Chegirma %'}
+                    </th>
+                    <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '80px', whiteSpace: 'nowrap' }}>
+                      {isRu ? 'НДС %' : 'QQS %'}
+                    </th>
+                  </>
+                )}
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '180px', whiteSpace: 'nowrap' }}>
-                  {isRu ? `Итого (${currency})` : `Jami Summa (${currency})`}
+                  {isRu ? `Итого${currency ? ` (${currency})` : ''}` : `Jami summa${currency ? ` (${currency})` : ''}`}
                 </th>
                 {!isReadOnly && <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '44px' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>}
               </tr>
             </thead>
-            <tbody>
+            <tbody onKeyDown={linesKeyDown({ rowCount: items.length, addRow: () => addItemRow(), disabled: isReadOnly })}>
               {items.map((item, idx) => {
                 const prd = products.find((p) => p.id === item.productId);
                 const qty = Number(item.quantity) || 0;
@@ -1374,13 +1430,25 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                           })()}</span>
                           <span>•</span>
                           <span>{isRu ? 'Ед.' : 'Birlik'}: {unitLabel(prd.unitOfMeasure, locale)}</span>
+                          {!showDiscVat && (
+                            <>
+                              <span>•</span>
+                              <span>{isRu ? 'НДС' : 'QQS'}: {Number(item.vatRate) || 0}%</span>
+                              {Number(item.discount) > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span>{isRu ? 'Скидка' : 'Chegirma'}: {Number(item.discount)}%</span>
+                                </>
+                              )}
+                            </>
+                          )}
                           {warehouseStockMap[item.productId] !== undefined && (
                             <>
                               <span>•</span>
                               <span
                                 style={{
                                   fontWeight: 600,
-                                  color: warehouseStockMap[item.productId].free >= qty ? 'var(--color-success-600)' : 'var(--color-error-600)',
+                                  color: warehouseStockMap[item.productId].free >= qty ? 'var(--color-success-700)' : 'var(--color-error-700)',
                                 }}
                               >
                                 {isRu ? 'Свободный остаток' : 'Erkin qoldiq'}: {warehouseStockMap[item.productId].free}
@@ -1404,7 +1472,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       {!isReadOnly &&
                         warehouseStockMap[item.productId] !== undefined &&
                         qty > warehouseStockMap[item.productId].free && (
-                          <div style={{ fontSize: '10px', color: 'var(--color-error-600)', marginTop: 2, textAlign: 'right', fontWeight: 600 }}>
+                          <div style={{ fontSize: '10px', color: 'var(--color-error-700)', marginTop: 2, textAlign: 'right', fontWeight: 600 }}>
                             {isRu ? 'Недостаточно!' : 'Yetarli emas!'}
                           </div>
                         )}
@@ -1420,12 +1488,13 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                         aria-label={`${isRu ? 'Цена продажи для строки' : 'Sotish narxi'} ${idx + 1}`}
                         style={{
                           borderColor: isBelowCost ? 'var(--color-error-500)' : undefined,
-                          color: isBelowCost ? 'var(--color-error-600)' : undefined,
+                          color: isBelowCost ? 'var(--color-error-700)' : undefined,
                           ...(!isPriceOverrideAllowed ? { backgroundColor: 'var(--color-bg-secondary)', cursor: 'not-allowed' } : {}),
                         }}
                       />
                     </td>
 
+                    {showDiscVat && (<>
                     {/* Discount */}
                     <td style={{ padding: '10px 12px' }}>
                       <Input
@@ -1454,6 +1523,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                       />
                     </td>
 
+                    </>)}
                     {/* Line Total */}
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }} className="tabular-nums">
                       {currency ? formatCurrency(lineTotal, locale, currency) : '—'}
@@ -1483,7 +1553,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
 
         {/* Add Row Button */}
         {!isReadOnly && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
             <Button
               type="button"
               variant="secondary"
@@ -1494,44 +1564,24 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             >
               <Plus size={16} /> {isRu ? 'Добавить позицию' : 'Qator qo‘shish'}
             </Button>
+            <label className="auth-check" style={{ marginLeft: 'auto' }}>
+              <input type="checkbox" checked={showDiscVat} onChange={(e) => setShowDiscVatPref(e.target.checked)} />
+              {tf('showDiscVat')}
+            </label>
           </div>
         )}
       </Card>
 
-      {!isReadOnly && (
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', alignItems: 'end' }}>
-            <MoneyInput
-              label={isRu ? `Дополнительная сумма покупателю (${currency})` : `Mijozga qo‘shimcha summa (${currency})`}
-              value={additionalChargeAmount}
-              onValueChange={(value) => {
-                markDirty();
-                setAdditionalChargeAmount(Number(value));
-              }}
-            />
-            <Input
-              label={isRu ? 'НДС на доплату, %' : 'Qo‘shimcha QQS, %'}
-              type="text"
-              inputMode="decimal"
-              value={additionalChargeVatRate}
-              onChange={(event) => {
-                markDirty();
-                setAdditionalChargeVatRate(event.target.value);
-              }}
-            />
-          </div>
-        </Card>
-      )}
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+        * {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}
+      </div>
+      </div>
 
-      {/* Summary Footer Panel with Required notice */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 600, padding: 'var(--space-2) 0' }}>
-          <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
-        </div>
-
-        <Card style={{ padding: 'var(--space-6)', width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
+      {/* Side panel: live totals, what is still missing, the next step */}
+      <aside className="doc-aside" aria-label={tf('sidePanel')}>
+        <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
           <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
-            {isRu ? 'Финансовый итог' : 'Hisob-kitob Xulosasi'}
+            {isRu ? 'Финансовый итог' : 'Hisob-kitob'}
           </h3>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -1540,7 +1590,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           </div>
 
           {calculations.totalDiscount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-success-600)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-success-700)' }}>
               <span>{isRu ? 'Сумма скидки:' : 'Chegirma summasi:'}</span>
               <span className="tabular-nums font-medium">- {currency ? formatCurrency(calculations.totalDiscount, locale, currency) : '—'}</span>
             </div>
@@ -1561,8 +1611,8 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
-            <span>{isRu ? 'ИТОГО К ОПЛАТЕ:' : 'JAMI TO‘LOV:'}</span>
-            <span className="tabular-nums" style={{ color: 'var(--color-primary-600)' }}>
+            <span>{isRu ? 'Итого к оплате:' : 'Jami to‘lov:'}</span>
+            <span className="tabular-nums" style={{ color: 'var(--color-primary-700)' }}>
               {currency ? formatCurrency(calculations.grandTotal, locale, currency) : '—'}
             </span>
           </div>
@@ -1570,23 +1620,55 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           {/* Profitability insight */}
           <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginTop: 'var(--space-2)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              <TrendingUp size={14} color="var(--color-success-600)" />
+              <TrendingUp size={14} color="var(--color-success-700)" />
               <span>{isRu ? 'Ожидаемая маржинальность' : 'Kutilayotgan marja'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Валовая прибыль:' : 'Yalpi foyda:'}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }} className="tabular-nums">
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: calculations.estimatedProfit >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }} className="tabular-nums">
                  {formatCurrency(calculations.estimatedProfit, locale, 'UZS')}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Маржа (%):' : 'Marja (%):'}</span>
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: calculations.marginPercent >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }} className="tabular-nums">
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: calculations.marginPercent >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }} className="tabular-nums">
                 {formatPercent(calculations.marginPercent)}
               </span>
             </div>
           </div>
         </Card>
+        {!isReadOnly ? (
+          <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <DocChecklist items={checklist} />
+            <Button onClick={handlePost} loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} style={{ width: '100%', backgroundColor: 'var(--color-success-600)' }}>
+              {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
+            </Button>
+            <Button variant="secondary" onClick={handleSaveDraft} loading={loading} style={{ width: '100%' }}>
+              {!loading && <Save size={16} aria-hidden />} {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+            </Button>
+            <p className="doc-aside-hint">{tf('shortcutsHint')}</p>
+          </Card>
+        ) : docStatus === 'POSTED' ? (
+          <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>{tf('paymentTitle')}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
+              <span>{tIn('tolangan')}</span>
+              <span className="tabular-nums">{currency ? formatCurrency(Number(currentInvoiceData?.paidAmount || 0), locale, currency) : '—'}</span>
+            </div>
+            {currency && calculations.grandTotal - Number(currentInvoiceData?.paidAmount || 0) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-700)' }}>
+                <span>{tf('debtLeft')}</span>
+                <span className="tabular-nums">{formatCurrency(calculations.grandTotal - Number(currentInvoiceData?.paidAmount || 0), locale, currency)}</span>
+              </div>
+            )}
+            {paymentStatus !== 'PAID' && (
+              <Button onClick={() => setIsPayOpen(true)} style={{ width: '100%' }}>
+                <CreditCard size={16} aria-hidden /> {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
+              </Button>
+            )}
+          </Card>
+        ) : null}
+      </aside>
       </div>
 
       {/* Drawers & Modals (Standardized with Purchases) */}

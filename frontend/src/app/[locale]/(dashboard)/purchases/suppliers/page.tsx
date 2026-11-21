@@ -2,21 +2,26 @@
 
 import { useMemo, useState } from 'react';
 import { useApiQuery } from '@/lib/query/useApiQuery';
+import { usePersistentState } from '@/lib/usePersistentState';
 import { LoadError } from '@/components/ui/LoadError';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { QuickPaymentModal } from '@/components/counterparties/QuickPaymentModal';
+import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, errorMessage } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/Badge';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SearchField, matchesSearch } from '@/components/ui/SearchField';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
-import { Building2, Eye, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Building2, CreditCard, Plus } from 'lucide-react';
 import { SupplierProfileDrawer } from '@/components/purchases/SupplierProfileDrawer';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
-import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
+import { useConfirm } from '@/context/ConfirmContext';
 
 interface Counterparty {
   id: string;
@@ -33,6 +38,7 @@ export default function SuppliersPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
+  const confirm = useConfirm();
 
   const suppliersQuery = useApiQuery<Counterparty[]>('/sales/counterparties');
   const suppliers = useMemo(
@@ -41,41 +47,36 @@ export default function SuppliersPage() {
   );
   const loading = suppliersQuery.isPending;
   const [search, setSearch] = useState('');
+  const [debtOnly, setDebtOnly] = usePersistentState('suppliers.debtOnly', false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<Counterparty | null>(null);
-  const [deletingSupplier, setDeletingSupplier] = useState<Counterparty | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchSuppliers = () => void suppliersQuery.refetch();
 
-  const handleDeleteSupplier = async () => {
-    if (!deletingSupplier || !token || !company) return;
-    setDeleteLoading(true);
+  const handleDeleteSupplier = async (supplier: Counterparty) => {
+    if (!token || !company) return;
+    const ok = await confirm({
+      title: isRu ? 'Удалить поставщика?' : 'Yetkazib beruvchi o‘chirilsinmi?',
+      description: isRu
+        ? `Поставщик «${supplier.name}» будет удалён. Если у него есть документы или долг, система не даст удалить.`
+        : `«${supplier.name}» o‘chiriladi. Unda hujjatlar yoki qarz bo‘lsa, tizim o‘chirishga ruxsat bermaydi.`,
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
     try {
-      await apiFetch(`/sales/counterparties/${deletingSupplier.id}`, {
-        method: 'DELETE',
-        token,
-        tenantId: company.id,
-        locale,
-      });
-      setDeletingSupplier(null);
-      toast.success(isRu ? 'Поставщик успешно удален' : 'Yetkazib beruvchi muvaffaqiyatli o‘chirildi');
+      await apiFetch(`/sales/counterparties/${supplier.id}`, { method: 'DELETE', token, tenantId: company.id, locale });
+      toast.success(isRu ? `Поставщик «${supplier.name}» удалён` : `«${supplier.name}» o‘chirildi`);
       fetchSuppliers();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении поставщика' : 'Yetkazib beruvchini o‘chirishda xatolik yuz berdi'));
-    } finally {
-      setDeleteLoading(false);
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось удалить поставщика' : 'Yetkazib beruvchini o‘chirib bo‘lmadi'));
     }
   };
 
-
-  const filteredSuppliers = suppliers.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.inn && s.inn.includes(search)) ||
-      (s.phone && s.phone.includes(search))
-  );
+  const owes = (s: Counterparty) => Boolean(s.balancesByCurrency?.some((b) => b.supplierDebt > 0));
+  const filteredSuppliers = suppliers.filter((s) => (!debtOnly || owes(s)) && matchesSearch(search, s.name, s.inn, s.phone, s.address));
 
   const payablesByCurrency = suppliers.reduce<Record<string, number>>((totals, supplier) => {
     for (const balance of supplier.balancesByCurrency || []) {
@@ -84,167 +85,177 @@ export default function SuppliersPage() {
     return totals;
   }, {});
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+  const tl = useTranslations('rd.list');
+  const tc = useTranslations('rd.cp');
+  const [payFor, setPayFor] = useState<Counterparty | null>(null);
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('suppliers.hidden', []);
+  // Biggest debt first: the usual question is "whom do we owe most?"
+  const [sort, setSort] = usePersistentState<SortState | null>('suppliers.sort', { key: 'debt', dir: 'desc' });
+  const debtValue = (s: Counterparty) => (s.balancesByCurrency || []).reduce((m, b) => Math.max(m, b.supplierDebt), 0);
+  const owingCount = suppliers.filter(owes).length;
+  const newButton = (
+    <Button onClick={() => setIsCreateOpen(true)}>
+      <Plus size={16} aria-hidden /> {isRu ? 'Новый поставщик' : 'Yangi yetkazib beruvchi'}
+    </Button>
+  );
+
+  const columns: Column<Counterparty>[] = [
+    {
+      key: 'name',
+      label: isRu ? 'Поставщик' : 'Yetkazib beruvchi',
+      primary: true,
+      locked: true,
+      sortValue: (s) => s.name,
+      render: (s) => (
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Поставщики' : 'Ta’minotchilar'}
-          </h1>
+          <div className="rd-doc-no">{s.name}</div>
+          {s.type === 'BOTH' && <div className="rd-sub">{isRu ? 'Также клиент' : 'Mijoz ham'}</div>}
         </div>
-        <Button
-          onClick={() => setIsCreateOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}
-        >
-          <Plus size={18} /> {isRu ? 'Новый поставщик' : 'Yangi Yetkazib Beruvchi'}
-        </Button>
-      </div>
-
-      {/* KPI & Search Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)' }}>
-            <Building2 size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего поставщиков' : 'Jami Yetkazib Beruvchilar'}</div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-              {suppliers.length} {isRu ? 'пост.' : 'ta'}
-            </div>
-          </div>
-        </Card>
-
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div style={{ padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-danger-50)', color: 'var(--color-danger-600)' }}>
-            <Building2 size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Наш общий долг' : 'Umumiy Bizning Qarzimiz'}</div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-600)' }} className="tabular-nums">
-              <MultiCurrencyValue
-                items={Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount }))}
-                locale={locale}
-                color="var(--color-danger-600)"
-              />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Card style={{ padding: 'var(--space-4)' }}>
-        <Input
-          placeholder={isRu ? 'Поиск по названию, ИНН, телефону...' : 'Yetkazib beruvchi nomi, STIR, telefon bo\'yicha qidiruv...'}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </Card>
-
-      {/* Suppliers Grid / List */}
-      <Card>
-        {suppliersQuery.isError ? (
-          <LoadError
-            error={suppliersQuery.error}
-            onRetry={fetchSuppliers}
-            retrying={suppliersQuery.isFetching}
-          />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
-          </div>
-        ) : filteredSuppliers.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <Building2 size={44} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>{isRu ? 'Поставщики не найдены' : 'Yetkazib beruvchilar topilmadi'}</div>
+      ),
+    },
+    { key: 'inn', label: isRu ? 'ИНН' : 'STIR', sortValue: (s) => s.inn ?? '', render: (s) => <span className="tabular-nums">{s.inn || '—'}</span> },
+    {
+      key: 'contact',
+      label: isRu ? 'Телефон и адрес' : 'Telefon va manzil',
+      render: (s) => (
+        <div style={{ color: 'var(--color-text-secondary)' }}>
+          {s.phone ? <a href={`tel:${s.phone}`} style={{ color: 'inherit' }}>{s.phone}</a> : '—'}
+          {s.address && <div className="rd-sub">{s.address}</div>}
+        </div>
+      ),
+    },
+    {
+      key: 'debt',
+      label: isRu ? 'Наш долг' : 'Bizning qarzimiz',
+      numeric: true,
+      sortValue: debtValue,
+      render: (s) => {
+        const balances = (s.balancesByCurrency || []).filter((b) => b.supplierDebt !== 0);
+        return balances.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            {balances.map((b) => (
+              <span key={b.currency} style={{ fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap', color: b.supplierDebt > 0 ? 'var(--color-error-700)' : 'var(--color-info-700)' }}>
+                {b.supplierDebt > 0 ? '' : isRu ? 'Аванс ' : 'Avans '}
+                {formatCurrency(Math.abs(b.supplierDebt), locale, b.currency)}
+              </span>
+            ))}
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-xs)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}>
-                  <th style={{ padding: '12px' }}>{isRu ? 'НАИМЕНОВАНИЕ' : 'NOMI'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'ИНН (STIR)' : 'STIR (INN)'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'ТЕЛЕФОН / АДРЕС' : 'TELEFON / MANZIL'}</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'НАШ ДОЛГ' : 'BIZNING QARZIMIZ'}</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSuppliers.map((s) => {
-                  const balances = (s.balancesByCurrency || []).filter((balance) => balance.supplierDebt !== 0);
-                  return (
-                    <tr key={s.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td style={{ padding: '12px', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
-                        {s.name}
-                        {s.type === 'BOTH' && (
-                          <span style={{ marginLeft: '6px' }}>
-                            <Badge variant="neutral">{isRu ? 'Поставщик и Покупатель' : 'Hamkor & Xaridor'}</Badge>
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px', fontFamily: 'var(--font-mono)' }}>{s.inn || '—'}</td>
-                      <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                        {s.phone || '—'} {s.address ? `(${s.address})` : ''}
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px',
-                          textAlign: 'right',
-                          fontWeight: 'var(--font-bold)',
-                          color: 'var(--color-text-primary)',
-                        }}
-                        className="tabular-nums"
-                      >
-                        {balances.length > 0
-                          ? balances.map((balance) => (
-                              <div key={balance.currency} style={{ color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-info-600)' }}>
-                                {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
-                              </div>
-                            ))
-                          : '—'}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                          <Button size="sm" variant="secondary" onClick={() => setSelectedSupplierId(s.id)} title={isRu ? 'Профиль и история' : 'Profil va Tarix'}>
-                            <Eye size={14} />
-                          </Button>
-                          <Button size="sm" variant="secondary" onClick={() => setEditingSupplier(s)} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
-                            <Pencil size={14} />
-                          </Button>
-                          <Button size="sm" variant="secondary" style={{ color: 'var(--color-error-600)' }} onClick={() => setDeletingSupplier(s)} title={isRu ? 'Удалить' : 'O‘chirish'}>
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Нет долга' : 'Qarz yo‘q'}</span>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (s) => (
+        <div className="rd-row-actions">
+          {owes(s) && (
+            <button type="button" className="rd-next-btn" onClick={() => setPayFor(s)}>
+              <CreditCard size={14} aria-hidden /> {tc('pay')}
+            </button>
+          )}
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tc('profile'), onSelect: () => setSelectedSupplierId(s.id) },
+              { label: tl('edit'), onSelect: () => setEditingSupplier(s) },
+              { label: tl('delete'), onSelect: () => void handleDeleteSupplier(s), danger: true },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
+        subtitle={isRu ? 'У кого вы закупаете: реквизиты, наш долг и история поставок.' : 'Kimdan xarid qilasiz: rekvizitlar, bizning qarzimiz va yetkazib berishlar tarixi.'}
+        actions={newButton}
+      />
+
+      <SignalStrip label={tl('summary')}>
+        <Signal
+          tone="error"
+          label={isRu ? 'Мы должны' : 'Bizning qarzimiz'}
+          value={Object.keys(payablesByCurrency).length > 0 ? <MultiCurrencyValue items={Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} /> : '—'}
+          hint={tc('owedHint', { count: owingCount })}
+          active={debtOnly}
+          onClick={() => setDebtOnly(!debtOnly)}
+        />
+        <Signal tone="neutral" label={isRu ? 'Всего поставщиков' : 'Jami yetkazib beruvchilar'} value={suppliers.length} />
+      </SignalStrip>
+
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Название, ИНН, телефон или адрес' : 'Nomi, STIR, telefon yoki manzil'} label={tl('search')} />
+          <ChipGroup
+            label={tc('show')}
+            options={[
+              { value: 'all', label: tl('all') },
+              { value: 'debt', label: tc('withDebt'), count: owingCount },
+            ]}
+            value={debtOnly ? 'debt' : 'all'}
+            onChange={(v) => setDebtOnly(v === 'debt')}
+          />
+          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
+        </div>
+      </div>
+
+      <div className="rd-table-card">
+        {suppliersQuery.isError ? (
+          <LoadError error={suppliersQuery.error} onRetry={fetchSuppliers} retrying={suppliersQuery.isFetching} />
+        ) : (
+          <DataTable
+            rows={filteredSuppliers}
+            columns={columns}
+            rowKey={(s) => s.id}
+            hidden={hiddenCols}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={(s) => setSelectedSupplierId(s.id)}
+            selectedKey={selectedSupplierId}
+            loading={loading}
+            caption={tc('rowHint')}
+            empty={
+              suppliers.length === 0 ? (
+                <EmptyState
+                  icon={Building2}
+                  title={isRu ? 'Поставщиков пока нет' : 'Hozircha yetkazib beruvchilar yo‘q'}
+                  description={isRu ? 'Добавьте поставщика — его можно будет выбрать в приходе, а наш долг будет считаться сам.' : 'Yetkazib beruvchi qo‘shing — uni kirimda tanlash mumkin bo‘ladi, qarzimiz esa o‘zi hisoblanadi.'}
+                  action={newButton}
+                />
+              ) : (
+                <EmptyState compact title={tl('nothingFound')} description={tl('nothingFoundHint')} />
+              )
+            }
+          />
         )}
-      </Card>
+      </div>
 
-      {/* Supplier Profile Drawer */}
+      {payFor && (
+        <QuickPaymentModal
+          isOpen
+          counterparty={payFor as unknown as Parameters<typeof QuickPaymentModal>[0]['counterparty']}
+          initialSide="SUPPLIER"
+          initialCurrency={payFor.balancesByCurrency?.find((b) => b.supplierDebt > 0)?.currency}
+          onClose={() => setPayFor(null)}
+          onSuccess={() => {
+            setPayFor(null);
+            fetchSuppliers();
+          }}
+        />
+      )}
+
       {selectedSupplierId && (
-        <SupplierProfileDrawer
-          isOpen={!!selectedSupplierId}
-          onClose={() => setSelectedSupplierId(null)}
-          supplierId={selectedSupplierId}
-        />
+        <SupplierProfileDrawer isOpen={!!selectedSupplierId} onClose={() => setSelectedSupplierId(null)} supplierId={selectedSupplierId} />
       )}
-
-      {/* Create Supplier Slide-Over Drawer */}
       {isCreateOpen && (
-        <CreateCounterpartyDrawer
-          isOpen={isCreateOpen}
-          onClose={() => setIsCreateOpen(false)}
-          defaultType="SUPPLIER"
-          onSuccess={() => fetchSuppliers()}
-        />
+        <CreateCounterpartyDrawer isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} defaultType="SUPPLIER" onSuccess={() => fetchSuppliers()} />
       )}
-
-      {/* Edit Supplier Slide-Over Drawer */}
       {editingSupplier && (
         <CreateCounterpartyDrawer
           isOpen={!!editingSupplier}
@@ -256,39 +267,6 @@ export default function SuppliersPage() {
             fetchSuppliers();
           }}
         />
-      )}
-
-      {/* Delete Supplier Modal */}
-      {deletingSupplier && (
-        <Modal
-          isOpen={true}
-          onClose={() => setDeletingSupplier(null)}
-          title={isRu ? 'Удаление поставщика' : 'Yetkazib beruvchini o‘chirish'}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы действительно хотите удалить поставщика "${deletingSupplier.name}"? Если у поставщика есть связанные документы или долг, удаление будет отклонено.`
-                : `Haqiqatan ham "${deletingSupplier.name}" yetkazib beruvchisini o‘chirmoqchimisiz? Agar unga bog‘langan hujjatlar yoki qarz bo‘lsa, o‘chirish rad etiladi.`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button
-                variant="secondary"
-                onClick={() => setDeletingSupplier(null)}
-                disabled={deleteLoading}
-              >
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleDeleteSupplier}
-                disabled={deleteLoading}
-              >
-                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
-              </Button>
-            </div>
-          </div>
-        </Modal>
       )}
     </div>
   );

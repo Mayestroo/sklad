@@ -1,8 +1,9 @@
 'use client';
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
+import { ChipGroup } from '@/components/ui/list/ListKit';
 import { useState, useEffect, useCallback } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { financeQuickAction } from '@/lib/finance-quick-action';
 import { useAuth } from '@/context/AuthContext';
@@ -48,7 +49,6 @@ import {
   CheckCircle2,
   Edit2,
   XCircle,
-  TrendingUp,
   Building,
   DollarSign,
   Users,
@@ -90,86 +90,66 @@ function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
   }
 }
 
-function AccountNetRows({
-  items,
-  locale,
-}: {
-  items: FinanceAccountFlow[];
-  locale: 'uz' | 'ru';
-  isRu: boolean;
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 'var(--text-sm)', fontWeight: 700 }}>
-      {items.map((account) => (
-        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
-            {account.name[locale]} · {account.currency}
-          </span>
-          <span style={{ color: account.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
-            {formatCurrency(account.netCashFlow, locale, account.currency)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
-function AccountFlowRows({
-  title,
-  items,
-  locale,
-  isRu,
-}: {
-  title: string;
-  items: FinanceAccountFlow[];
-  locale: 'uz' | 'ru';
-  isRu: boolean;
-}) {
-  if (items.length === 0) {
+
+/** One row per cash desk / account: today's and this month's in / out / net (per currency, never summed). */
+function AccountFlowTable({ today, month, locale }: { today: FinanceAccountFlow[]; month: FinanceAccountFlow[]; locale: 'uz' | 'ru' }) {
+  const tf = useTranslations('rd.finance');
+  const key = (a: FinanceAccountFlow) => a.accountId ?? `unassigned-${a.currency}`;
+  const rows = [...month, ...today.filter((t) => !month.some((m) => key(m) === key(t)))];
+  if (rows.length === 0) return <p className="dash-panel-hint">{tf('noAccounts')}</p>;
+  const cell = (a: FinanceAccountFlow | undefined, currency: string) => {
+    if (!a || (a.income === 0 && a.expense === 0 && a.transferIn === 0 && a.transferOut === 0)) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
+    const inn = a.income + a.transferIn;
+    const out = a.expense + a.transferOut;
     return (
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-        {isRu ? 'Счета пока не настроены' : 'Kassalar hali sozlanmagan'}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+        {inn !== 0 && <span style={{ color: 'var(--color-success-700)' }}>+{formatCurrency(inn, locale, currency)}</span>}
+        {out !== 0 && <span style={{ color: 'var(--color-error-700)' }}>−{formatCurrency(out, locale, currency)}</span>}
       </div>
     );
-  }
-
+  };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
-      {items.map((account) => (
-        <div key={account.accountId ?? `unassigned-${account.currency}`} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: account.accountId ? 'var(--color-text-secondary)' : 'var(--color-error-600)' }}>
-            {account.name[locale]} · {account.currency}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-            {[
-              { label: isRu ? 'Поступления' : 'Kirim', amount: account.income, color: 'var(--color-success-600)' },
-              { label: isRu ? 'Расходы' : 'Chiqim', amount: account.expense, color: 'var(--color-error-600)' },
-              { label: isRu ? 'Перевод входящий' : 'O‘tkazma kirim', amount: account.transferIn, color: 'var(--color-info-600)' },
-              { label: isRu ? 'Перевод исходящий' : 'O‘tkazma chiqim', amount: account.transferOut, color: '#7c3aed' },
-            ].map((movement) => (
-              <div key={movement.label} style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 'var(--text-xs)' }}>
-                <span style={{ color: 'var(--color-text-tertiary)' }}>{movement.label}</span>
-                <span style={{ color: movement.color }}>{formatCurrency(movement.amount, locale, account.currency)}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-xs)' }}>
-            <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистое движение' : 'Sof harakat'}</span>
-            <Badge variant={account.netCashFlow >= 0 ? 'success' : 'error'}>
-              {formatCurrency(account.netCashFlow, locale, account.currency)}
-            </Badge>
-          </div>
-        </div>
-      ))}
+    <div style={{ overflowX: 'auto' }} role="region" tabIndex={0} aria-label={tf('account')}>
+    <table className="rd-mini-table">
+      <thead>
+        <tr>
+          <th scope="col">{tf('account')}</th>
+          <th scope="col" style={{ textAlign: 'right' }}>{tf('today')}</th>
+          <th scope="col" style={{ textAlign: 'right' }}>{tf('month')}</th>
+          <th scope="col" style={{ textAlign: 'right' }}>{tf('monthNet')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const t = today.find((x) => key(x) === key(r));
+          const m = month.find((x) => key(x) === key(r));
+          return (
+            <tr key={key(r)}>
+              <td style={{ color: r.accountId ? undefined : 'var(--color-error-700)' }}>{r.name[locale]} <span className="rd-sub">· {r.currency}</span></td>
+              <td className="tabular-nums" style={{ textAlign: 'right' }}>{cell(t, r.currency)}</td>
+              <td className="tabular-nums" style={{ textAlign: 'right' }}>{cell(m, r.currency)}</td>
+              <td className="tabular-nums" style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)', color: (m?.netCashFlow ?? 0) >= 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
+                {m ? formatCurrency(m.netCashFlow, locale, r.currency) : '—'}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
     </div>
   );
 }
 
 // ─── Main Finance Component ─────────────────────────────────────
+/** Transaction views shown as chips inside the Operations tab. */
+const OPS_VIEWS = ['journal', 'income', 'expense', 'transfers', 'deleted'] as const;
+
 export default function FinancePage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
+  const tfin = useTranslations('rd.finance');
   const { token, company } = useAuth();
 
   // Active Tab: dashboard | journal | income | expense | transfers | debts | deleted
@@ -417,48 +397,42 @@ export default function FinancePage() {
         }}
       >
         <div>
-          <h1
-            style={{
-              fontSize: 'var(--text-2xl)',
-              fontWeight: 'var(--font-bold)',
-              color: 'var(--color-text-primary)',
-              margin: 0,
-            }}
-          >
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
             {isRu ? 'Финансы' : 'Moliya'}
           </h1>
+          <p style={{ marginTop: 'var(--space-1)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{tfin('subtitle')}</p>
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <Button
             variant="primary"
             onClick={() => handleOpenDrawer('income')}
             style={{
-              backgroundColor: 'var(--color-success-500)',
-              borderColor: 'var(--color-success-500)',
+              backgroundColor: 'var(--color-success-600)',
+              borderColor: 'var(--color-success-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
             }}
           >
-            <Plus size={16} />
-            <span>{isRu ? 'Приход (Кирим)' : 'Kirim qo‘shish'}</span>
+            <Plus size={16} aria-hidden />
+            <span>{isRu ? 'Приход' : 'Kirim qo‘shish'}</span>
           </Button>
 
           <Button
             variant="primary"
             onClick={() => handleOpenDrawer('expense')}
             style={{
-              backgroundColor: 'var(--color-error-500)',
-              borderColor: 'var(--color-error-500)',
+              backgroundColor: 'var(--color-error-600)',
+              borderColor: 'var(--color-error-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
             }}
           >
             <Minus size={16} />
-            <span>{isRu ? 'Расход (Чиким)' : 'Chiqim qo‘shish'}</span>
+            <span>{isRu ? 'Расход' : 'Chiqim qo‘shish'}</span>
           </Button>
 
           <Button
@@ -476,7 +450,7 @@ export default function FinancePage() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))',
           gap: 'var(--space-4)',
         }}
       >
@@ -499,7 +473,7 @@ export default function FinancePage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--color-success-600)',
+              color: 'var(--color-success-700)',
               flexShrink: 0,
             }}
           >
@@ -511,7 +485,7 @@ export default function FinancePage() {
                 ? 'Долларовая касса'
                 : 'Dollar kassa'}
             </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-success-600)' }}>
+            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-success-700)' }}>
               {dashboardMetrics
                 ? formatCurrency(dashboardMetrics.balances.dollarKassa, locale, dashboardMetrics.balances.accountCurrencies.dollarKassa)
                 : '—'}
@@ -538,7 +512,7 @@ export default function FinancePage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--color-info-600)',
+              color: 'var(--color-info-700)',
               flexShrink: 0,
             }}
           >
@@ -597,38 +571,6 @@ export default function FinancePage() {
           </div>
         </Card>
 
-        {/* Jami Sof Pul Oqimi (Bu oy) */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid var(--color-primary-500)',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(99, 102, 241, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-primary-600)',
-              flexShrink: 0,
-            }}
-          >
-            <TrendingUp size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Чистый денежный поток (Месяц)' : 'Sof pul oqimi (Shu oy)'}
-            </div>
-            <AccountNetRows items={dashboardMetrics?.month.byAccount ?? []} locale={locale} isRu={isRu} />
-          </div>
-        </Card>
       </div>
 
       {/* ─── Navigation Tabs ────────────────────────────────────────── */}
@@ -642,18 +584,16 @@ export default function FinancePage() {
         }}
       >
         {[
-          { id: 'dashboard', label: isRu ? 'Дашборд' : 'Dashboard' },
-          { id: 'journal', label: isRu ? 'Журнал операций' : 'Operatsiyalar jurnali' },
-          { id: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
-          { id: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
-          { id: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
+          { id: 'dashboard', label: tfin('overview') },
+          { id: 'journal', label: tfin('operations') },
           { id: 'debts', label: isRu ? 'Взаиморасчеты (Долги)' : 'Qarzdorlik nazorati' },
-          { id: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
         ].map((tab) => {
-          const isActive = activeTab === tab.id;
+          const isActive = tab.id === 'journal' ? OPS_VIEWS.includes(activeTab as (typeof OPS_VIEWS)[number]) : activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              type="button"
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => {
                 setActiveTab(tab.id as typeof activeTab);
                 setPage(1);
@@ -686,7 +626,7 @@ export default function FinancePage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
               gap: 'var(--space-4)',
             }}
           >
@@ -707,20 +647,7 @@ export default function FinancePage() {
                 <span>{isRu ? 'Динамика поступлений и списаний' : 'Kirim va Chiqim dinamikasi'}</span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                <AccountFlowRows
-                  title={isRu ? 'Сегодня' : 'Bugun'}
-                  items={dashboardMetrics?.today.byAccount ?? []}
-                  locale={locale}
-                  isRu={isRu}
-                />
-                <AccountFlowRows
-                  title={isRu ? 'В этом месяце' : 'Shu oyda'}
-                  items={dashboardMetrics?.month.byAccount ?? []}
-                  locale={locale}
-                  isRu={isRu}
-                />
-              </div>
+              <AccountFlowTable today={dashboardMetrics?.today.byAccount ?? []} month={dashboardMetrics?.month.byAccount ?? []} locale={locale} />
             </Card>
 
             {/* Qarzdorlik Balansi (Segregated Debts) */}
@@ -742,7 +669,7 @@ export default function FinancePage() {
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)' }}>
                 {/* Kutilayotgan tushumlar */}
                 <div
                   style={{
@@ -752,13 +679,13 @@ export default function FinancePage() {
                     border: '1px solid rgba(16, 185, 129, 0.2)',
                   }}
                 >
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', fontWeight: 500 }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-700)', fontWeight: 500 }}>
                     {isRu ? 'Ожидаемые поступления (Дебиторка)' : 'Kutilayotgan tushumlar (Debitorlik)'}
                   </div>
                   <MultiCurrencyValue
                     items={dashboardMetrics?.debts.receivablesByCurrency}
                     locale={locale}
-                    color="var(--color-success-600)"
+                    color="var(--color-success-700)"
                   />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Клиенты должны нам' : 'Mijozlar bizga to‘lashi kerak'}
@@ -766,7 +693,7 @@ export default function FinancePage() {
                   {(dashboardMetrics?.debts.customerAdvancesByCurrency.length ?? 0) > 0 && (
                     <div style={{ marginTop: 8, borderTop: '1px solid rgba(16, 185, 129, 0.18)', paddingTop: 6 }}>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы клиентов' : 'Mijozlar avansi'}</div>
-                      <MultiCurrencyValue items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} color="var(--color-info-600)" />
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} color="var(--color-info-700)" />
                     </div>
                   )}
                 </div>
@@ -780,13 +707,13 @@ export default function FinancePage() {
                     border: '1px solid rgba(239, 68, 68, 0.2)',
                   }}
                 >
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 500 }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 500 }}>
                     {isRu ? 'К оплате поставщикам (Кредиторка)' : 'Bizning qarzlarimiz (Kreditorlik)'}
                   </div>
                   <MultiCurrencyValue
                     items={dashboardMetrics?.debts.payablesByCurrency}
                     locale={locale}
-                    color="var(--color-error-600)"
+                    color="var(--color-error-700)"
                   />
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                     {isRu ? 'Мы должны поставщикам' : 'Ta’minotchilarga to‘lashimiz kerak'}
@@ -794,7 +721,7 @@ export default function FinancePage() {
                   {(dashboardMetrics?.debts.supplierAdvancesByCurrency.length ?? 0) > 0 && (
                     <div style={{ marginTop: 8, borderTop: '1px solid rgba(239, 68, 68, 0.18)', paddingTop: 6 }}>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы поставщикам' : 'Ta’minotchilarga avanslar'}</div>
-                      <MultiCurrencyValue items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} color="var(--color-info-600)" />
+                      <MultiCurrencyValue items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} color="var(--color-info-700)" />
                     </div>
                   )}
                 </div>
@@ -849,6 +776,24 @@ export default function FinancePage() {
         activeTab === 'transfers' ||
         activeTab === 'deleted') && (
         <Card style={{ padding: 'var(--space-5)' }}>
+          {/* Which operations: all / income / expense / transfers / deleted (same views as the old tabs) */}
+          <div style={{ marginBottom: 'var(--space-3)' }}>
+            <ChipGroup
+              label={tfin('operations')}
+              value={activeTab as (typeof OPS_VIEWS)[number]}
+              onChange={(v) => {
+                setActiveTab((v || 'journal') as typeof activeTab);
+                setPage(1);
+              }}
+              options={[
+                { value: 'journal', label: tIn('hammasi') },
+                { value: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
+                { value: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
+                { value: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
+                { value: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
+              ]}
+            />
+          </div>
           {/* Filters Bar */}
           <div
             style={{
@@ -1004,7 +949,7 @@ export default function FinancePage() {
                 borderRadius: 'var(--radius-md)',
                 backgroundColor:
                   debtsSubTab === 'receivables' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                color: debtsSubTab === 'receivables' ? 'var(--color-success-600)' : 'var(--color-text-secondary)',
+                color: debtsSubTab === 'receivables' ? 'var(--color-success-700)' : 'var(--color-text-secondary)',
                 fontWeight: debtsSubTab === 'receivables' ? 600 : 500,
                 border: 'none',
                 cursor: 'pointer',
@@ -1019,7 +964,7 @@ export default function FinancePage() {
                 borderRadius: 'var(--radius-md)',
                 backgroundColor:
                   debtsSubTab === 'payables' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                color: debtsSubTab === 'payables' ? 'var(--color-error-600)' : 'var(--color-text-secondary)',
+                color: debtsSubTab === 'payables' ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
                 fontWeight: debtsSubTab === 'payables' ? 600 : 500,
                 border: 'none',
                 cursor: 'pointer',
@@ -1065,7 +1010,7 @@ export default function FinancePage() {
                             {cp.inn && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>STIR: {cp.inn}</span>}
                           </td>
                           <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>{cp.phone || '—'}</td>
-                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? 'var(--color-success-600)' : 'var(--color-error-600)' }}>
+                          <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: debtsSubTab === 'receivables' ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
                             {formatCurrency(amount, locale, balance.currency)}
                           </td>
                           <td style={{ padding: '12px', textAlign: 'center' }}>
@@ -1193,7 +1138,7 @@ export default function FinancePage() {
                 background: 'var(--color-error-50)',
                 border: '1px solid var(--color-error-100)',
                 borderRadius: 'var(--radius-md)',
-                color: 'var(--color-error-600)',
+                color: 'var(--color-error-700)',
                 fontSize: 'var(--text-sm)',
                 display: 'flex',
                 alignItems: 'center',
@@ -1268,7 +1213,7 @@ export default function FinancePage() {
                 background: 'var(--color-error-50)',
                 border: '1px solid var(--color-error-100)',
                 borderRadius: 'var(--radius-md)',
-                color: 'var(--color-error-600)',
+                color: 'var(--color-error-700)',
                 fontSize: 'var(--text-sm)',
                 display: 'flex',
                 alignItems: 'center',
@@ -1393,9 +1338,9 @@ function TransactionsTable({
 
                 <td style={{ padding: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {isIncome && <ArrowUpRight size={16} color="var(--color-success-600)" />}
-                    {isExpense && <ArrowDownLeft size={16} color="var(--color-error-600)" />}
-                    {!isIncome && !isExpense && <ArrowLeftRight size={16} color="var(--color-info-600)" />}
+                    {isIncome && <ArrowUpRight size={16} color="var(--color-success-700)" />}
+                    {isExpense && <ArrowDownLeft size={16} color="var(--color-error-700)" />}
+                    {!isIncome && !isExpense && <ArrowLeftRight size={16} color="var(--color-info-700)" />}
                     <span style={{ fontWeight: 500 }}>
                       {isIncome
                         ? isRu
@@ -1441,24 +1386,24 @@ function TransactionsTable({
                     color: isCancelled
                       ? 'var(--color-text-tertiary)'
                       : isIncome
-                      ? 'var(--color-success-600)'
+                      ? 'var(--color-success-700)'
                       : isExpense
-                      ? 'var(--color-error-600)'
+                      ? 'var(--color-error-700)'
                       : 'var(--color-text-primary)',
                     textDecoration: isCancelled ? 'line-through' : 'none',
                   }}
                 >
                   {tx.direction === 'TRANSFER' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-                      <span style={{ color: 'var(--color-error-600)' }}>
+                      <span style={{ color: 'var(--color-error-700)' }}>
                         −{formatCurrency(Number(tx.amount), locale, tx.currency)}
                       </span>
                       {tx.transferToAccount && tx.transferToAmount != null ? (
-                        <span style={{ color: 'var(--color-success-600)' }}>
+                        <span style={{ color: 'var(--color-success-700)' }}>
                           +{formatCurrency(Number(tx.transferToAmount), locale, tx.transferToAccount.currency)}
                         </span>
                       ) : (
-                        <span style={{ color: 'var(--color-error-600)', fontSize: 'var(--text-xs)' }}>
+                        <span style={{ color: 'var(--color-error-700)', fontSize: 'var(--text-xs)' }}>
                           {isRu ? 'Нет суммы зачисления' : 'Kirim summasi aniqlanmagan'}
                         </span>
                       )}
@@ -1544,7 +1489,7 @@ function TransactionsTable({
                               size="sm"
                               variant="secondary"
                               onClick={() => onStorno(tx)}
-                              style={{ color: 'var(--color-error-600)' }}
+                              style={{ color: 'var(--color-error-700)' }}
                               aria-label={isRu ? 'Аннулировать операцию' : 'Operatsiyani bekor qilish'}
                             >
                               <XCircle size={14} />
@@ -1555,7 +1500,7 @@ function TransactionsTable({
                           size="sm"
                           variant="secondary"
                           onClick={() => onDelete(tx)}
-                          style={{ color: 'var(--color-error-600)' }}
+                          style={{ color: 'var(--color-error-700)' }}
                           aria-label={isRu ? 'Переместить в корзину' : 'Savatga ko‘chirish'}
                         >
                           <Trash2 size={14} />
@@ -1844,10 +1789,11 @@ function FinanceTransactionDrawer({
   };
 
   const colorMap = {
-    income: 'var(--color-success-500)',
-    expense: 'var(--color-error-500)',
-    transfer: 'var(--color-info-500)',
-    exchange: '#7c3aed',
+    // -600 tones: white button text meets WCAG AA (the -500 tones were 2.3–3.8:1)
+    income: 'var(--color-success-600)',
+    expense: 'var(--color-error-600)',
+    transfer: 'var(--color-info-600)',
+    exchange: 'var(--color-primary-600)',
   };
 
   return (
@@ -1856,8 +1802,8 @@ function FinanceTransactionDrawer({
       title={titleMap[mode]}
       description={
         isRu
-          ? 'Оформление кассовой операции и взаиморасчетов по стандартам 1С'
-          : '1C mantiqida kassa amaliyoti va hisob-kitoblarni rasmiylashtirish'
+          ? 'После проведения сразу меняются остаток кассы и долг контрагента'
+          : 'Tasdiqlangach kassa qoldig‘i va kontragent qarzi darhol o‘zgaradi'
       }
       icon={<Wallet size={20} />}
       size="md"
@@ -1872,6 +1818,7 @@ function FinanceTransactionDrawer({
             variant="primary"
             onClick={() => handleSubmit()}
             disabled={loading}
+            title="Ctrl+Enter"
             style={{
               backgroundColor: colorMap[mode],
               borderColor: colorMap[mode],
@@ -1880,8 +1827,8 @@ function FinanceTransactionDrawer({
               gap: '6px',
             }}
           >
-            <CheckCircle2 size={16} />
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Провести' : 'Tasdiqlash'}
+            <CheckCircle2 size={16} aria-hidden />
+            {loading ? (isRu ? 'Сохранение…' : 'Saqlanmoqda…') : isRu ? 'Провести' : 'Tasdiqlash'}
           </Button>
         </>
       }
@@ -1895,7 +1842,7 @@ function FinanceTransactionDrawer({
               border: '1px solid var(--color-error-100)',
               borderRadius: 'var(--radius-md)',
               fontSize: 'var(--text-sm)',
-              color: 'var(--color-error-600)',
+              color: 'var(--color-error-700)',
               fontWeight: 500,
               display: 'flex',
               alignItems: 'center',
@@ -2030,7 +1977,7 @@ function FinanceTransactionDrawer({
               gap: '10px',
             }}
           >
-            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#7c3aed' }}>
+            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary-700)' }}>
               {isRu ? 'Конвертация валюты' : 'Valyuta konvertatsiyasi'}
             </span>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

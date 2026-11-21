@@ -1,0 +1,1510 @@
+[
+  {
+    "route": "/",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 2578,
+    "overflowX": 0,
+    "url": "/",
+    "h1": [
+      "Bosh sahifa"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\dashboard-uz-1440.jpg"
+  },
+  {
+    "route": "/sales",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1712,
+    "overflowX": 0,
+    "url": "/sales",
+    "h1": [
+      "Sotuvlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales-uz-1440.jpg"
+  },
+  {
+    "route": "/sales/orders",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1878,
+    "overflowX": 0,
+    "url": "/sales/orders",
+    "h1": [
+      "Buyurtmalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_orders-uz-1440.jpg"
+  },
+  {
+    "route": "/sales/returns",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1503,
+    "overflowX": 0,
+    "url": "/sales/returns",
+    "h1": [
+      "Mijozdan qaytarish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_returns-uz-1440.jpg"
+  },
+  {
+    "route": "/sales/prices",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1499,
+    "overflowX": 0,
+    "url": "/sales/prices",
+    "h1": [
+      "Narx jadvallari"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_prices-uz-1440.jpg"
+  },
+  {
+    "route": "/sales/customers",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1465,
+    "overflowX": 0,
+    "url": "/sales/customers",
+    "h1": [
+      "Mijozlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_customers-uz-1440.jpg"
+  },
+  {
+    "route": "/sales/crm",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1722,
+    "overflowX": 0,
+    "url": "/sales/crm",
+    "h1": [
+      "Bitimlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_crm-uz-1440.jpg"
+  },
+  {
+    "route": "/purchases",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 2040,
+    "overflowX": 0,
+    "url": "/purchases",
+    "h1": [
+      "Tovar kirimi"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases-uz-1440.jpg"
+  },
+  {
+    "route": "/purchases/expenses",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1463,
+    "overflowX": 0,
+    "url": "/purchases/expenses",
+    "h1": [
+      "Qo‘shimcha xarajatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_expenses-uz-1440.jpg"
+  },
+  {
+    "route": "/purchases/returns",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1433,
+    "overflowX": 0,
+    "url": "/purchases/returns",
+    "h1": [
+      "Ta’minotchiga qaytarish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_returns-uz-1440.jpg"
+  },
+  {
+    "route": "/purchases/suppliers",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1406,
+    "overflowX": 0,
+    "url": "/purchases/suppliers",
+    "h1": [
+      "Yetkazib beruvchilar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_suppliers-uz-1440.jpg"
+  },
+  {
+    "route": "/products",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1669,
+    "overflowX": 0,
+    "url": "/products",
+    "h1": [
+      "Tovarlar va xizmatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\products-uz-1440.jpg"
+  },
+  {
+    "route": "/inventory",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1749,
+    "overflowX": 0,
+    "url": "/inventory",
+    "h1": [
+      "Ombor boshqaruvi"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory-uz-1440.jpg"
+  },
+  {
+    "route": "/inventory/documents",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1525,
+    "overflowX": 0,
+    "url": "/inventory/documents",
+    "h1": [
+      "Ombor hujjatlari"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_documents-uz-1440.jpg"
+  },
+  {
+    "route": "/inventory/transfers",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1560,
+    "overflowX": 0,
+    "url": "/inventory/transfers",
+    "h1": [
+      "Omborlararo ko‘chirish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_transfers-uz-1440.jpg"
+  },
+  {
+    "route": "/counterparties",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1509,
+    "overflowX": 0,
+    "url": "/counterparties",
+    "h1": [
+      "Kontragentlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\counterparties-uz-1440.jpg"
+  },
+  {
+    "route": "/finance",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1657,
+    "overflowX": 0,
+    "url": "/finance",
+    "h1": [
+      "Moliya"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\finance-uz-1440.jpg"
+  },
+  {
+    "route": "/services",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1465,
+    "overflowX": 0,
+    "url": "/services",
+    "h1": [
+      "Xizmatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\services-uz-1440.jpg"
+  },
+  {
+    "route": "/production",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1561,
+    "overflowX": 0,
+    "url": "/production",
+    "h1": [
+      "Ishlab chiqarish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\production-uz-1440.jpg"
+  },
+  {
+    "route": "/opening-balances",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1495,
+    "overflowX": 0,
+    "url": "/opening-balances",
+    "h1": [
+      "Boshlang‘ich qoldiqlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\opening-balances-uz-1440.jpg"
+  },
+  {
+    "route": "/accounting",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1313,
+    "overflowX": 0,
+    "url": "/accounting",
+    "h1": [
+      "Buxgalteriya"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting-uz-1440.jpg"
+  },
+  {
+    "route": "/accounting/accounts",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1361,
+    "overflowX": 0,
+    "url": "/accounting/accounts",
+    "h1": [
+      "Hisoblar rejasi"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_accounts-uz-1440.jpg"
+  },
+  {
+    "route": "/accounting/journal",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1372,
+    "overflowX": 0,
+    "url": "/accounting/journal",
+    "h1": [
+      "Provodkalar jurnali"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_journal-uz-1440.jpg"
+  },
+  {
+    "route": "/accounting/reports",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1280,
+    "overflowX": 0,
+    "url": "/accounting/reports",
+    "h1": [
+      "Moliyaviy hisobotlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_reports-uz-1440.jpg"
+  },
+  {
+    "route": "/analytics",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1445,
+    "overflowX": 0,
+    "url": "/analytics",
+    "h1": [
+      "Hisobotlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\analytics-uz-1440.jpg"
+  },
+  {
+    "route": "/users",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1319,
+    "overflowX": 0,
+    "url": "/users",
+    "h1": [
+      "Foydalanuvchilar va rollar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\users-uz-1440.jpg"
+  },
+  {
+    "route": "/settings/security",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1317,
+    "overflowX": 0,
+    "url": "/settings/security",
+    "h1": [
+      "Xavfsizlik"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_security-uz-1440.jpg"
+  },
+  {
+    "route": "/settings/branches",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1323,
+    "overflowX": 0,
+    "url": "/settings/branches",
+    "h1": [
+      "Filiallar va omborlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_branches-uz-1440.jpg"
+  },
+  {
+    "route": "/settings/billing",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1403,
+    "overflowX": 0,
+    "url": "/settings/billing",
+    "h1": [
+      "Tarif va to‘lov"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_billing-uz-1440.jpg"
+  },
+  {
+    "route": "/",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 2400,
+    "overflowX": 0,
+    "url": "/",
+    "h1": [
+      "Bosh sahifa"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\dashboard-uz-390.jpg"
+  },
+  {
+    "route": "/sales",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1670,
+    "overflowX": 0,
+    "url": "/sales",
+    "h1": [
+      "Sotuvlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales-uz-390.jpg"
+  },
+  {
+    "route": "/sales/orders",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1583,
+    "overflowX": 0,
+    "url": "/sales/orders",
+    "h1": [
+      "Buyurtmalar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_orders-uz-390.jpg"
+  },
+  {
+    "route": "/sales/returns",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1536,
+    "overflowX": 0,
+    "url": "/sales/returns",
+    "h1": [
+      "Mijozdan qaytarish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_returns-uz-390.jpg"
+  },
+  {
+    "route": "/sales/prices",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1478,
+    "overflowX": 0,
+    "url": "/sales/prices",
+    "h1": [
+      "Narx jadvallari"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_prices-uz-390.jpg"
+  },
+  {
+    "route": "/sales/customers",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1421,
+    "overflowX": 0,
+    "url": "/sales/customers",
+    "h1": [
+      "Mijozlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_customers-uz-390.jpg"
+  },
+  {
+    "route": "/sales/crm",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1429,
+    "overflowX": 0,
+    "url": "/sales/crm",
+    "h1": [
+      "Bitimlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_crm-uz-390.jpg"
+  },
+  {
+    "route": "/purchases",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1510,
+    "overflowX": 0,
+    "url": "/purchases",
+    "h1": [
+      "Tovar kirimi"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases-uz-390.jpg"
+  },
+  {
+    "route": "/purchases/expenses",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1411,
+    "overflowX": 0,
+    "url": "/purchases/expenses",
+    "h1": [
+      "Qo‘shimcha xarajatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_expenses-uz-390.jpg"
+  },
+  {
+    "route": "/purchases/returns",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1504,
+    "overflowX": 0,
+    "url": "/purchases/returns",
+    "h1": [
+      "Ta’minotchiga qaytarish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_returns-uz-390.jpg"
+  },
+  {
+    "route": "/purchases/suppliers",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1397,
+    "overflowX": 0,
+    "url": "/purchases/suppliers",
+    "h1": [
+      "Yetkazib beruvchilar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_suppliers-uz-390.jpg"
+  },
+  {
+    "route": "/products",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1437,
+    "overflowX": 0,
+    "url": "/products",
+    "h1": [
+      "Tovarlar va xizmatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\products-uz-390.jpg"
+  },
+  {
+    "route": "/inventory",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1409,
+    "overflowX": 0,
+    "url": "/inventory",
+    "h1": [
+      "Ombor boshqaruvi"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory-uz-390.jpg"
+  },
+  {
+    "route": "/inventory/documents",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1395,
+    "overflowX": 0,
+    "url": "/inventory/documents",
+    "h1": [
+      "Ombor hujjatlari"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_documents-uz-390.jpg"
+  },
+  {
+    "route": "/inventory/transfers",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1334,
+    "overflowX": 0,
+    "url": "/inventory/transfers",
+    "h1": [
+      "Omborlararo ko‘chirish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_transfers-uz-390.jpg"
+  },
+  {
+    "route": "/counterparties",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1310,
+    "overflowX": 0,
+    "url": "/counterparties",
+    "h1": [
+      "Kontragentlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\counterparties-uz-390.jpg"
+  },
+  {
+    "route": "/finance",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1335,
+    "overflowX": 0,
+    "url": "/finance",
+    "h1": [
+      "Moliya"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\finance-uz-390.jpg"
+  },
+  {
+    "route": "/services",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1255,
+    "overflowX": 0,
+    "url": "/services",
+    "h1": [
+      "Xizmatlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\services-uz-390.jpg"
+  },
+  {
+    "route": "/production",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1317,
+    "overflowX": 0,
+    "url": "/production",
+    "h1": [
+      "Ishlab chiqarish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\production-uz-390.jpg"
+  },
+  {
+    "route": "/opening-balances",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1356,
+    "overflowX": 0,
+    "url": "/opening-balances",
+    "h1": [
+      "Boshlang‘ich qoldiqlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\opening-balances-uz-390.jpg"
+  },
+  {
+    "route": "/accounting",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1280,
+    "overflowX": 0,
+    "url": "/accounting",
+    "h1": [
+      "Buxgalteriya"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting-uz-390.jpg"
+  },
+  {
+    "route": "/accounting/accounts",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1398,
+    "overflowX": 0,
+    "url": "/accounting/accounts",
+    "h1": [
+      "Hisoblar rejasi"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_accounts-uz-390.jpg"
+  },
+  {
+    "route": "/accounting/journal",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1317,
+    "overflowX": 0,
+    "url": "/accounting/journal",
+    "h1": [
+      "Provodkalar jurnali"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_journal-uz-390.jpg"
+  },
+  {
+    "route": "/accounting/reports",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1581,
+    "overflowX": 0,
+    "url": "/accounting/reports",
+    "h1": [
+      "Moliyaviy hisobotlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_reports-uz-390.jpg"
+  },
+  {
+    "route": "/analytics",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1354,
+    "overflowX": 0,
+    "url": "/analytics",
+    "h1": [
+      "Hisobotlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\analytics-uz-390.jpg"
+  },
+  {
+    "route": "/users",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1285,
+    "overflowX": 0,
+    "url": "/users",
+    "h1": [
+      "Foydalanuvchilar va rollar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\users-uz-390.jpg"
+  },
+  {
+    "route": "/settings/security",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1258,
+    "overflowX": 0,
+    "url": "/settings/security",
+    "h1": [
+      "Xavfsizlik"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_security-uz-390.jpg"
+  },
+  {
+    "route": "/settings/branches",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1379,
+    "overflowX": 0,
+    "url": "/settings/branches",
+    "h1": [
+      "Filiallar va omborlar"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_branches-uz-390.jpg"
+  },
+  {
+    "route": "/settings/billing",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1412,
+    "overflowX": 0,
+    "url": "/settings/billing",
+    "h1": [
+      "Tarif va to‘lov"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_billing-uz-390.jpg"
+  },
+  {
+    "route": "/",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 2434,
+    "overflowX": 0,
+    "url": "/",
+    "h1": [
+      "Главная"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\dashboard-ru-1440.jpg"
+  },
+  {
+    "route": "/sales",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1495,
+    "overflowX": 0,
+    "url": "/sales",
+    "h1": [
+      "Продажи"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales-ru-1440.jpg"
+  },
+  {
+    "route": "/sales/orders",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1425,
+    "overflowX": 0,
+    "url": "/sales/orders",
+    "h1": [
+      "Заказы покупателей"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_orders-ru-1440.jpg"
+  },
+  {
+    "route": "/sales/returns",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1457,
+    "overflowX": 0,
+    "url": "/sales/returns",
+    "h1": [
+      "Возврат от покупателей"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_returns-ru-1440.jpg"
+  },
+  {
+    "route": "/sales/prices",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1467,
+    "overflowX": 0,
+    "url": "/sales/prices",
+    "h1": [
+      "Прайс-листы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_prices-ru-1440.jpg"
+  },
+  {
+    "route": "/sales/customers",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1378,
+    "overflowX": 0,
+    "url": "/sales/customers",
+    "h1": [
+      "Клиенты"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_customers-ru-1440.jpg"
+  },
+  {
+    "route": "/sales/crm",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1568,
+    "overflowX": 0,
+    "url": "/sales/crm",
+    "h1": [
+      "Сделки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_crm-ru-1440.jpg"
+  },
+  {
+    "route": "/purchases",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1357,
+    "overflowX": 0,
+    "url": "/purchases",
+    "h1": [
+      "Приход товаров"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases-ru-1440.jpg"
+  },
+  {
+    "route": "/purchases/expenses",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1323,
+    "overflowX": 0,
+    "url": "/purchases/expenses",
+    "h1": [
+      "Дополнительные расходы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_expenses-ru-1440.jpg"
+  },
+  {
+    "route": "/purchases/returns",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1258,
+    "overflowX": 0,
+    "url": "/purchases/returns",
+    "h1": [
+      "Возврат поставщикам"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_returns-ru-1440.jpg"
+  },
+  {
+    "route": "/purchases/suppliers",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1295,
+    "overflowX": 0,
+    "url": "/purchases/suppliers",
+    "h1": [
+      "Поставщики"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_suppliers-ru-1440.jpg"
+  },
+  {
+    "route": "/products",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1347,
+    "overflowX": 0,
+    "url": "/products",
+    "h1": [
+      "Товары и услуги"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\products-ru-1440.jpg"
+  },
+  {
+    "route": "/inventory",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1345,
+    "overflowX": 0,
+    "url": "/inventory",
+    "h1": [
+      "Склад и остатки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory-ru-1440.jpg"
+  },
+  {
+    "route": "/inventory/documents",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1328,
+    "overflowX": 0,
+    "url": "/inventory/documents",
+    "h1": [
+      "Складские документы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_documents-ru-1440.jpg"
+  },
+  {
+    "route": "/inventory/transfers",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1311,
+    "overflowX": 0,
+    "url": "/inventory/transfers",
+    "h1": [
+      "Перемещение товаров"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_transfers-ru-1440.jpg"
+  },
+  {
+    "route": "/counterparties",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1370,
+    "overflowX": 0,
+    "url": "/counterparties",
+    "h1": [
+      "Контрагенты"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\counterparties-ru-1440.jpg"
+  },
+  {
+    "route": "/finance",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1495,
+    "overflowX": 0,
+    "url": "/finance",
+    "h1": [
+      "Финансы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\finance-ru-1440.jpg"
+  },
+  {
+    "route": "/services",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1388,
+    "overflowX": 0,
+    "url": "/services",
+    "h1": [
+      "Услуги"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\services-ru-1440.jpg"
+  },
+  {
+    "route": "/production",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1506,
+    "overflowX": 0,
+    "url": "/production",
+    "h1": [
+      "Производство"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\production-ru-1440.jpg"
+  },
+  {
+    "route": "/opening-balances",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1546,
+    "overflowX": 0,
+    "url": "/opening-balances",
+    "h1": [
+      "Начальные остатки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\opening-balances-ru-1440.jpg"
+  },
+  {
+    "route": "/accounting",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1386,
+    "overflowX": 0,
+    "url": "/accounting",
+    "h1": [
+      "Бухгалтерия"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting-ru-1440.jpg"
+  },
+  {
+    "route": "/accounting/accounts",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1443,
+    "overflowX": 0,
+    "url": "/accounting/accounts",
+    "h1": [
+      "План счетов"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_accounts-ru-1440.jpg"
+  },
+  {
+    "route": "/accounting/journal",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1365,
+    "overflowX": 0,
+    "url": "/accounting/journal",
+    "h1": [
+      "Журнал проводок"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_journal-ru-1440.jpg"
+  },
+  {
+    "route": "/accounting/reports",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1366,
+    "overflowX": 0,
+    "url": "/accounting/reports",
+    "h1": [
+      "Финансовая отчётность"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_reports-ru-1440.jpg"
+  },
+  {
+    "route": "/analytics",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1468,
+    "overflowX": 0,
+    "url": "/analytics",
+    "h1": [
+      "Отчёты"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\analytics-ru-1440.jpg"
+  },
+  {
+    "route": "/users",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1366,
+    "overflowX": 0,
+    "url": "/users",
+    "h1": [
+      "Пользователи и роли"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\users-ru-1440.jpg"
+  },
+  {
+    "route": "/settings/security",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1404,
+    "overflowX": 0,
+    "url": "/settings/security",
+    "h1": [
+      "Безопасность"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_security-ru-1440.jpg"
+  },
+  {
+    "route": "/settings/branches",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1466,
+    "overflowX": 0,
+    "url": "/settings/branches",
+    "h1": [
+      "Филиалы и склады"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_branches-ru-1440.jpg"
+  },
+  {
+    "route": "/settings/billing",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1485,
+    "overflowX": 0,
+    "url": "/settings/billing",
+    "h1": [
+      "Тариф и оплата"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_billing-ru-1440.jpg"
+  },
+  {
+    "route": "/",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 2335,
+    "overflowX": 0,
+    "url": "/",
+    "h1": [
+      "Главная"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\dashboard-ru-390.jpg"
+  },
+  {
+    "route": "/sales",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1536,
+    "overflowX": 0,
+    "url": "/sales",
+    "h1": [
+      "Продажи"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales-ru-390.jpg"
+  },
+  {
+    "route": "/sales/orders",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1466,
+    "overflowX": 0,
+    "url": "/sales/orders",
+    "h1": [
+      "Заказы покупателей"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_orders-ru-390.jpg"
+  },
+  {
+    "route": "/sales/returns",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1448,
+    "overflowX": 0,
+    "url": "/sales/returns",
+    "h1": [
+      "Возврат от покупателей"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_returns-ru-390.jpg"
+  },
+  {
+    "route": "/sales/prices",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1407,
+    "overflowX": 0,
+    "url": "/sales/prices",
+    "h1": [
+      "Прайс-листы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_prices-ru-390.jpg"
+  },
+  {
+    "route": "/sales/customers",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1401,
+    "overflowX": 0,
+    "url": "/sales/customers",
+    "h1": [
+      "Клиенты"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_customers-ru-390.jpg"
+  },
+  {
+    "route": "/sales/crm",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1717,
+    "overflowX": 0,
+    "url": "/sales/crm",
+    "h1": [
+      "Сделки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\sales_crm-ru-390.jpg"
+  },
+  {
+    "route": "/purchases",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1612,
+    "overflowX": 0,
+    "url": "/purchases",
+    "h1": [
+      "Приход товаров"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases-ru-390.jpg"
+  },
+  {
+    "route": "/purchases/expenses",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1412,
+    "overflowX": 0,
+    "url": "/purchases/expenses",
+    "h1": [
+      "Дополнительные расходы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_expenses-ru-390.jpg"
+  },
+  {
+    "route": "/purchases/returns",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1492,
+    "overflowX": 0,
+    "url": "/purchases/returns",
+    "h1": [
+      "Возврат поставщикам"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_returns-ru-390.jpg"
+  },
+  {
+    "route": "/purchases/suppliers",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1381,
+    "overflowX": 0,
+    "url": "/purchases/suppliers",
+    "h1": [
+      "Поставщики"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\purchases_suppliers-ru-390.jpg"
+  },
+  {
+    "route": "/products",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1725,
+    "overflowX": 0,
+    "url": "/products",
+    "h1": [
+      "Товары и услуги"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\products-ru-390.jpg"
+  },
+  {
+    "route": "/inventory",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1763,
+    "overflowX": 0,
+    "url": "/inventory",
+    "h1": [
+      "Склад и остатки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory-ru-390.jpg"
+  },
+  {
+    "route": "/inventory/documents",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1539,
+    "overflowX": 0,
+    "url": "/inventory/documents",
+    "h1": [
+      "Складские документы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_documents-ru-390.jpg"
+  },
+  {
+    "route": "/inventory/transfers",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1553,
+    "overflowX": 0,
+    "url": "/inventory/transfers",
+    "h1": [
+      "Перемещение товаров"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\inventory_transfers-ru-390.jpg"
+  },
+  {
+    "route": "/counterparties",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1414,
+    "overflowX": 0,
+    "url": "/counterparties",
+    "h1": [
+      "Контрагенты"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\counterparties-ru-390.jpg"
+  },
+  {
+    "route": "/finance",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1478,
+    "overflowX": 0,
+    "url": "/finance",
+    "h1": [
+      "Финансы"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\finance-ru-390.jpg"
+  },
+  {
+    "route": "/services",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1416,
+    "overflowX": 0,
+    "url": "/services",
+    "h1": [
+      "Услуги"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\services-ru-390.jpg"
+  },
+  {
+    "route": "/production",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1567,
+    "overflowX": 0,
+    "url": "/production",
+    "h1": [
+      "Производство"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\production-ru-390.jpg"
+  },
+  {
+    "route": "/opening-balances",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1542,
+    "overflowX": 0,
+    "url": "/opening-balances",
+    "h1": [
+      "Начальные остатки"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\opening-balances-ru-390.jpg"
+  },
+  {
+    "route": "/accounting",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1442,
+    "overflowX": 0,
+    "url": "/accounting",
+    "h1": [
+      "Бухгалтерия"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting-ru-390.jpg"
+  },
+  {
+    "route": "/accounting/accounts",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1414,
+    "overflowX": 0,
+    "url": "/accounting/accounts",
+    "h1": [
+      "План счетов"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_accounts-ru-390.jpg"
+  },
+  {
+    "route": "/accounting/journal",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1926,
+    "overflowX": 0,
+    "url": "/accounting/journal",
+    "h1": [
+      "Журнал проводок"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_journal-ru-390.jpg"
+  },
+  {
+    "route": "/accounting/reports",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1314,
+    "overflowX": 0,
+    "url": "/accounting/reports",
+    "h1": [
+      "Финансовая отчётность"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\accounting_reports-ru-390.jpg"
+  },
+  {
+    "route": "/analytics",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1707,
+    "overflowX": 0,
+    "url": "/analytics",
+    "h1": [
+      "Отчёты"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\analytics-ru-390.jpg"
+  },
+  {
+    "route": "/users",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1370,
+    "overflowX": 0,
+    "url": "/users",
+    "h1": [
+      "Пользователи и роли"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\users-ru-390.jpg"
+  },
+  {
+    "route": "/settings/security",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1415,
+    "overflowX": 0,
+    "url": "/settings/security",
+    "h1": [
+      "Безопасность"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_security-ru-390.jpg"
+  },
+  {
+    "route": "/settings/branches",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1359,
+    "overflowX": 0,
+    "url": "/settings/branches",
+    "h1": [
+      "Филиалы и склады"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_branches-ru-390.jpg"
+  },
+  {
+    "route": "/settings/billing",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1432,
+    "overflowX": 0,
+    "url": "/settings/billing",
+    "h1": [
+      "Тариф и оплата"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\filters-cards\\_before\\settings_billing-ru-390.jpg"
+  }
+]

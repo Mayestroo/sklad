@@ -61,6 +61,8 @@ test('the scan sees the files it is meant to scan', () => {
 
 test('inventory stock quantities use formatQuantity (seen as "1250.5 dona" in the visual check)', () => {
   const page = readFileSync(join(SRC, 'app/[locale]/(dashboard)/inventory/page.tsx'), 'utf8');
-  assert.ok(page.includes('formatQuantity(Number(product.totalStock ?? 0))'));
+  // Stock column: total(p) is Number(p.totalStock ?? 0) (or the selected warehouse's quantity), shown via formatQuantity.
+  assert.ok(page.includes('formatQuantity(total(p))'));
+  assert.ok(page.includes('Number(p.totalStock ?? 0)'));
   assert.ok(!page.includes('{product.totalStock || 0}'));
 });

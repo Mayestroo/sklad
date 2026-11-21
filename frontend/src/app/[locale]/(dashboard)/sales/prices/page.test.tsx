@@ -11,6 +11,7 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,
 }));
+vi.mock('@/context/ConfirmContext', () => ({ useConfirm: () => vi.fn(async () => true) }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import PricesPage from './page';

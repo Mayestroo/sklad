@@ -3,7 +3,16 @@
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { totalsByCurrency } from '@/lib/currency-totals';
 import { useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchField } from '@/components/ui/SearchField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { buttonStyle } from '@/components/ui/Button';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { ALL_TIME, ChipGroup, ColumnChooser, CurrencyTotals, PeriodFilter, resolvePeriod, Signal, SignalStrip, type PeriodValue } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
@@ -12,48 +21,42 @@ import { formatCurrency, formatDate, errorMessage, type LocalizedName } from '@/
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
 import {
   RotateCcw,
   Plus,
-  Search,
-  Printer,
   Download,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  RefreshCw,
-  Trash2,
 } from 'lucide-react';
 import { PurchaseReturn } from '@shared/types';
-import { Link } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { ReturnActModal } from '@/components/purchases/ReturnActModal';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { localIsoDate } from '@/lib/date-range';
 
 export default function ReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company } = useAuth();
   const confirm = useConfirm();
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
-  // The typed search applies on submit (as before); the status at once.
-  const [appliedSearch, setAppliedSearch] = useState('');
+  // The typed search applies once typing pauses; the status at once.
+  const debouncedSearch = useDebouncedValue(searchTerm.trim(), 350);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [startDate] = useState('');
   const [endDate] = useState('');
 
   const returnsEndpoint = useMemo(() => {
     const queryParams = new URLSearchParams();
-    if (appliedSearch) queryParams.set('search', appliedSearch);
+    if (debouncedSearch) queryParams.set('search', debouncedSearch);
     if (statusFilter !== 'ALL') queryParams.set('status', statusFilter);
     if (startDate) queryParams.set('startDate', startDate);
     if (endDate) queryParams.set('endDate', endDate);
     return `/purchases/returns${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  }, [appliedSearch, statusFilter, startDate, endDate]);
+  }, [debouncedSearch, statusFilter, startDate, endDate]);
   const returnsQuery = useApiQuery<PurchaseReturn[]>(returnsEndpoint);
   const returns = useMemo(() => returnsQuery.data ?? [], [returnsQuery.data]);
   const loading = returnsQuery.isPending;
@@ -89,11 +92,6 @@ export default function ReturnsPage() {
 
   const fetchReturns = () => void returnsQuery.refetch();
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchTerm === appliedSearch) fetchReturns();
-    else setAppliedSearch(searchTerm);
-  };
 
   const getProductName = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
@@ -197,7 +195,7 @@ export default function ReturnsPage() {
     link.setAttribute('href', encodedUri);
     link.setAttribute(
       'download',
-      `purchase_returns_${new Date().toISOString().split('T')[0]}.csv`,
+      `purchase_returns_${localIsoDate(new Date())}.csv`,
     );
     document.body.appendChild(link);
     link.click();
@@ -231,310 +229,179 @@ export default function ReturnsPage() {
     }
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', paddingBottom: '40px' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+  const tl = useTranslations('rd.list');
+  const td = useTranslations('rd.doc');
+  const tp = useTranslations('rd.preturns');
+  const router = useRouter();
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('preturns.hidden', []);
+  const [sort, setSort] = usePersistentState<SortState | null>('preturns.sort', null);
+  const [period, setPeriod] = usePersistentState<PeriodValue>('preturns.period', ALL_TIME);
+  const range = resolvePeriod(period);
+  const shown = returns.filter((r) => {
+    const d = (r.returnDate || '').slice(0, 10);
+    return (!range.from || d >= range.from) && (!range.to || d <= range.to);
+  });
+  const openReturn = (r: PurchaseReturn) => router.push(`/purchases/returns/${r.id}`);
+  const statusBadge = (st: string) =>
+    st === 'POSTED' ? <Badge variant="success">{td('posted')}</Badge> : st === 'CANCELLED' ? <Badge variant="error">{td('cancelled')}</Badge> : <Badge variant="warning">{td('draft')}</Badge>;
+
+  const columns: Column<PurchaseReturn>[] = [
+    {
+      key: 'number',
+      label: isRu ? '№ / Дата' : '№ / Sana',
+      primary: true,
+      locked: true,
+      sortValue: (r) => r.returnDate,
+      render: (r) => (
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Возврат поставщикам' : 'Ta’minotchiga qaytarish'}
-          </h1>
+          <div className="rd-doc-no">{r.returnNumber}</div>
+          <div className="rd-sub">{formatDate(r.returnDate, locale)}{r.actNumber ? ` · ${tp('act')} ${r.actNumber}` : ''}</div>
         </div>
-
-        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-segmented-bg)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-segmented-border)' }}>
-            <button
-              onClick={() => setActiveTab('LIST')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-sm)',
-                fontWeight: 600,
-                fontSize: 'var(--text-xs)',
-                backgroundColor: activeTab === 'LIST' ? 'var(--color-segmented-active-bg)' : 'transparent',
-                color: activeTab === 'LIST' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                border: activeTab === 'LIST' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
-                cursor: 'pointer',
-                boxShadow: activeTab === 'LIST' ? 'var(--color-segmented-active-shadow)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isRu ? 'Документы' : 'Hujjatlar'}
-            </button>
-            <button
-              onClick={() => setActiveTab('ANALYTICS')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-sm)',
-                fontWeight: 600,
-                fontSize: 'var(--text-xs)',
-                backgroundColor: activeTab === 'ANALYTICS' ? 'var(--color-segmented-active-bg)' : 'transparent',
-                color: activeTab === 'ANALYTICS' ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                border: activeTab === 'ANALYTICS' ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
-                cursor: 'pointer',
-                boxShadow: activeTab === 'ANALYTICS' ? 'var(--color-segmented-active-shadow)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isRu ? 'Аналитика причин' : 'Sabablar tahlili'}
-            </button>
-          </div>
-
-          <Link href="/purchases/returns/new">
-            <Button variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={16} /> {isRu ? 'Новый возврат' : 'Yangi qaytarish'}
-            </Button>
+      ),
+      footer: <span>{tl('total')} · {tl('results', { count: shown.length })}</span>,
+    },
+    { key: 'supplier', label: tp('supplier'), sortValue: (r) => r.counterparty?.name ?? '', render: (r) => <span style={{ fontWeight: 'var(--font-medium)' }}>{r.counterparty?.name || '—'}</span> },
+    {
+      key: 'receipt',
+      label: tp('receipt'),
+      render: (r) =>
+        r.receipt ? (
+          <Link href={`/purchases/${r.receipt.id}`} style={{ color: 'var(--color-primary-700)' }}>
+            {r.receipt.docNumber}
           </Link>
+        ) : (
+          '—'
+        ),
+    },
+    { key: 'warehouse', label: tl('warehouse'), render: (r) => getProductName(r.warehouse?.name) },
+    {
+      key: 'amount',
+      label: tl('amount'),
+      numeric: true,
+      sortValue: (r) => Number(r.totalAmount),
+      render: (r) => <strong>{formatCurrency(Number(r.totalAmount), locale, r.currency)}</strong>,
+      footer: <CurrencyTotals totals={totalsByCurrency(shown.filter((r) => r.status !== 'CANCELLED'), (r) => r.currency, (r) => Number(r.totalAmount))} locale={locale} />,
+    },
+    { key: 'status', label: tl('status'), sortValue: (r) => r.status, render: (r) => statusBadge(r.status) },
+    { key: 'reason', label: tp('reason'), render: (r) => <span style={{ color: 'var(--color-text-secondary)', display: 'inline-block', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>{r.reason || '—'}</span> },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (r) => (
+        <div className="rd-row-actions">
+          {r.status === 'DRAFT' && (
+            <button type="button" className="rd-next-btn" disabled={actionLoadingId === r.id} onClick={() => void handleApprove(r.id)}>
+              {td('post')}
+            </button>
+          )}
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tl('open'), onSelect: () => openReturn(r) },
+              { label: tp('actSlip'), onSelect: () => setSelectedReturnForAct(r) },
+              { label: isRu ? 'Отменить' : 'Bekor qilish', onSelect: () => void handleCancel(r.id), danger: true, hidden: r.status === 'CANCELLED' },
+              { label: tl('delete'), onSelect: () => { setDeleteConfirmReturn(r); setDeleteError(null); }, danger: true, hidden: r.status === 'POSTED' },
+            ]}
+          />
         </div>
-      </div>
+      ),
+    },
+  ];
+  const anyFilter = Boolean(debouncedSearch || statusFilter !== 'ALL' || period.key !== 'all');
+  const clearAll = () => {
+    setSearchTerm('');
+    setStatusFilter('ALL');
+    setPeriod(ALL_TIME);
+  };
 
-      {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {isRu ? 'Всего возвращено (Проведено)' : 'Jami Qaytarilgan (Tasdiqlangan)'}
-          </div>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-primary-600)', marginTop: '6px' }}>
-            <MultiCurrencyValue items={totalReturnedByCurrency} locale={locale} color="var(--color-primary-600)" />
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-            {postedCount} {isRu ? 'проведенных операций' : 'ta tasdiqlangan hujjat'}
-          </div>
-        </Card>
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Возврат поставщикам' : 'Ta’minotchiga qaytarish'}
+        subtitle={tp('subtitle')}
+        actions={
+          <Link href="/purchases/returns/new" style={buttonStyle('primary')}>
+            <Plus size={16} aria-hidden /> {isRu ? 'Новый возврат' : 'Yangi qaytarish'}
+          </Link>
+        }
+      />
 
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {isRu ? 'Черновики к утверждению' : 'Kutilayotgan Qoralamalar'}
-          </div>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: draftCount > 0 ? 'var(--color-warning-600)' : 'var(--color-text-secondary)', marginTop: '6px' }}>
-            {draftCount} {isRu ? 'документов' : 'ta hujjat'}
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-            {isRu ? 'Требуют проведения на складе' : 'Ombordan tasdiqlanishi lozim'}
-          </div>
-        </Card>
+      <SignalStrip label={tl('summary')}>
+        <Signal tone="warning" label={tp('sigDrafts')} value={draftCount} hint={tp('sigDraftsHint')} active={statusFilter === 'DRAFT'} onClick={() => setStatusFilter(statusFilter === 'DRAFT' ? 'ALL' : 'DRAFT')} />
+        <Signal tone="info" label={tIn('jami_qaytarilgan_tasdiqlangan')} value={<MultiCurrencyValue items={totalReturnedByCurrency} locale={locale} />} hint={tp('postedCount', { count: postedCount })} />
+        <Signal tone="neutral" label={tp('sigAll')} value={returns.length} />
+      </SignalStrip>
 
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {isRu ? 'Всего операций возврата' : 'Jami Operatsiyalar Soni'}
-          </div>
-          <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '6px' }}>
-            {returns.length}
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-            {isRu ? 'За все время' : 'Barcha davr bo‘yicha'}
-          </div>
-        </Card>
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder={tp('searchPh')}
+            label={tl('search')}
+          />
+          <ChipGroup
+            label={tp('view')}
+            options={[
+              { value: 'LIST', label: isRu ? 'Документы' : 'Hujjatlar' },
+              { value: 'ANALYTICS', label: isRu ? 'Аналитика причин' : 'Sabablar tahlili' },
+            ]}
+            value={activeTab}
+            onChange={(v) => setActiveTab((v || 'LIST') as 'LIST' | 'ANALYTICS')}
+          />
+          {activeTab === 'LIST' && <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+          <Button variant="ghost" size="sm" onClick={handleExportCsv} disabled={returns.length === 0}>
+            <Download size={14} aria-hidden /> CSV
+          </Button>
+        </div>
+        {activeTab === 'LIST' && (
+          <>
+            <div className="rd-toolbar-row">
+              <ChipGroup
+                label={tl('status')}
+                showLabel
+                options={[
+                  { value: '', label: tl('all') },
+                  { value: 'DRAFT', label: td('draft') },
+                  { value: 'POSTED', label: td('posted') },
+                  { value: 'CANCELLED', label: td('cancelled') },
+                ]}
+                value={statusFilter === 'ALL' ? '' : statusFilter}
+                onChange={(v) => setStatusFilter(v || 'ALL')}
+              />
+            </div>
+            <div className="rd-toolbar-row">
+              <PeriodFilter value={period} onChange={setPeriod} locale={locale} />
+            </div>
+          </>
+        )}
       </div>
 
       {activeTab === 'LIST' ? (
-        <>
-          {/* Search and Filters Bar */}
-          <Card style={{ padding: 'var(--space-4)' }}>
-            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
-              <div style={{ flex: '1 1 240px', minWidth: '200px' }}>
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={isRu ? 'Поиск по номеру, акту, поставщику...' : 'Raqam, akt yoki yetkazib beruvchi bo‘yicha qidiruv...'}
-                />
-              </div>
-
-              <div style={{ width: '160px' }}>
-                <Select
-                  value={statusFilter}
-                  onChange={setStatusFilter}
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: 'ALL', label: isRu ? 'Все статусы' : 'Barcha statuslar' },
-                    { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
-                    { value: 'POSTED', label: isRu ? 'Проведено' : 'Tasdiqlangan' },
-                    { value: 'CANCELLED', label: isRu ? 'Отменено' : 'Bekor qilingan' },
-                  ]}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button type="submit" variant="secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Search size={14} /> {isRu ? 'Найти' : 'Qidirish'}
-                </Button>
-                <Button type="button" variant="secondary" onClick={handleExportCsv} disabled={returns.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Download size={14} /> CSV
-                </Button>
-              </div>
-            </form>
-          </Card>
-
-          {/* Table Card */}
-          <Card style={{ padding: 0, overflow: 'hidden' }}>
-            {returnsQuery.isError ? (
-              <LoadError error={returnsQuery.error} onRetry={fetchReturns} retrying={returnsQuery.isFetching} />
-            ) : loading ? (
-              <div style={{ padding: '48px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
-                <div>{isRu ? 'Загрузка документов...' : 'Hujjatlar yuklanmoqda...'}</div>
-              </div>
-            ) : returns.length === 0 ? (
-              <div style={{ padding: '48px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-                <RotateCcw size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Документы возврата не найдены' : 'Qaytarish hujjatlari topilmadi'}
-                </div>
-                <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
-                  {isRu
-                    ? 'Нажмите кнопку «Новый возврат», чтобы оформить возврат поставщику'
-                    : 'Yangi qaytarish hujjatini yaratish uchun yuqoridagi tugmani bosing'}
-                </div>
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                        {isRu ? '№ / Дата' : '№ / Sana'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                        {isRu ? 'Номер акта' : 'Akt raqami'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                        {isRu ? 'Поставщик' : 'Yetkazib beruvchi'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                        {isRu ? 'Склад' : 'Ombor'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                        {isRu ? 'Основание' : 'Asos xarid'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' }}>
-                        {isRu ? 'Причина' : 'Sababi'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', textAlign: 'right' }}>
-                        {isRu ? 'Сумма' : 'Summa'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', textAlign: 'center' }}>
-                        {isRu ? 'Статус' : 'Holati'}
-                      </th>
-                      <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', textAlign: 'right' }}>
-                        {isRu ? 'Действия' : 'Amallar'}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {returns.map((ret, idx) => (
-                      <tr
-                        key={ret.id}
-                        style={{ borderBottom: idx === returns.length - 1 ? 'none' : '1px solid var(--color-border-light)', transition: 'background-color 0.15s ease' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <td style={{ padding: '12px 16px' }}>
-                          <Link href={`/purchases/returns/${ret.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
-                            {ret.returnNumber}
-                          </Link>
-                          <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                            {formatDate(ret.returnDate, locale)}
-                          </div>
-                        </td>
-                        <td style={{ padding: '12px 16px', color: ret.actNumber ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>
-                          {ret.actNumber || '—'}
-                        </td>
-                        <td style={{ padding: '12px 16px', fontWeight: 500 }}>
-                          {ret.counterparty?.name || '—'}
-                        </td>
-                        <td style={{ padding: '12px 16px' }}>
-                          {getProductName(ret.warehouse?.name)}
-                        </td>
-                        <td style={{ padding: '12px 16px' }}>
-                          {ret.receipt ? (
-                            <Link href={`/purchases/${ret.receipt.id}`} style={{ fontSize: '12px', color: 'var(--color-primary-600)' }}>
-                              № {ret.receipt.docNumber}
-                            </Link>
-                          ) : (
-                            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                              {isRu ? 'С нуля' : 'Noldan'}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 16px', maxWidth: '200px' }}>
-                          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                            {ret.reason || '—'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>
-                          {formatCurrency(Number(ret.totalAmount), locale, ret.currency)}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          {renderStatusBadge(ret.status)}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setSelectedReturnForAct(ret)}
-                              title={isRu ? 'Печать акта' : 'Aktni chop etish'}
-                              style={{ padding: '4px 8px' }}
-                            >
-                              <Printer size={15} />
-                            </Button>
-
-                            <Link href={`/purchases/returns/${ret.id}`}>
-                              <Button size="sm" variant="secondary" style={{ padding: '4px 8px' }} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
-                                <Eye size={15} />
-                              </Button>
-                            </Link>
-
-                            {ret.status === 'DRAFT' && (
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                disabled={actionLoadingId === ret.id}
-                                onClick={() => handleApprove(ret.id)}
-                                title={isRu ? 'Провести' : 'Tasdiqlash'}
-                                style={{ padding: '4px 8px' }}
-                              >
-                                <CheckCircle2 size={15} />
-                              </Button>
-                            )}
-
-                            {ret.status !== 'CANCELLED' && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={actionLoadingId === ret.id}
-                                onClick={() => handleCancel(ret.id)}
-                                title={isRu ? 'Отменить' : 'Bekor qilish'}
-                                style={{ padding: '4px 8px', color: 'var(--color-danger-500)' }}
-                              >
-                                <XCircle size={15} />
-                              </Button>
-                            )}
-
-                            {(ret.status === 'DRAFT' || ret.status === 'CANCELLED') && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={actionLoadingId === ret.id}
-                                onClick={() => {
-                                  setDeleteConfirmReturn(ret);
-                                  setDeleteError(null);
-                                }}
-                                title={isRu ? 'Удалить' : "O'chirish"}
-                                style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
-                              >
-                                <Trash2 size={15} />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        </>
+        <div className="rd-table-card">
+          {returnsQuery.isError ? (
+            <LoadError error={returnsQuery.error} onRetry={fetchReturns} retrying={returnsQuery.isFetching} />
+          ) : (
+            <DataTable
+              rows={shown}
+              columns={columns}
+              rowKey={(r) => r.id}
+              hidden={hiddenCols}
+              sort={sort}
+              onSortChange={setSort}
+              onRowClick={openReturn}
+              loading={loading}
+              empty={
+                anyFilter ? (
+                  <EmptyState icon={RotateCcw} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
+                ) : (
+                  <EmptyState icon={RotateCcw} title={tp('none')} description={tp('noneHint')} action={<Link href="/purchases/returns/new" style={buttonStyle('primary')}><Plus size={16} aria-hidden /> {isRu ? 'Новый возврат' : 'Yangi qaytarish'}</Link>} />
+                )
+              }
+            />
+          )}
+        </div>
       ) : (
         /* Analytics Tab */
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -586,65 +453,32 @@ export default function ReturnsPage() {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmReturn && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--color-bg-primary)',
-              borderRadius: 'var(--radius-lg)',
-              maxWidth: '440px',
-              width: '100%',
-              padding: 'var(--space-6)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
-              <Trash2 size={24} />
-              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                {isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
-              </h2>
-            </div>
-
-            {deleteError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
-                {deleteError}
-              </div>
-            )}
-
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
-              {isRu
-                ? `Вы уверены, что хотите удалить возврат № ${deleteConfirmReturn.returnNumber}?`
-                : `Haqiqatan ham № ${deleteConfirmReturn.returnNumber} qaytarish hujjatini o‘chirmoqchimisiz?`}
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button
-                type="button"
-                onClick={handleDeleteReturn}
-                disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
-              >
-                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
-              </Button>
-            </div>
+      {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
+      <Modal
+        isOpen={Boolean(deleteConfirmReturn)}
+        onClose={() => { if (!deleteLoading) setDeleteConfirmReturn(null); }}
+        title={isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
+        size="sm"
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button type="button" variant="danger" onClick={handleDeleteReturn} loading={deleteLoading} loadingText={isRu ? 'Удаление…' : 'O‘chirilmoqda…'}>
+              {isRu ? 'Да, удалить' : 'Ha, o‘chirish'}
+            </Button>
+          </>
+        }
+      >
+        {deleteError && (
+          <div role="alert" className="doc-banner is-error" style={{ marginBottom: 'var(--space-4)' }}>
+            {deleteError}
           </div>
-        </div>
-      )}
+        )}
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+          {deleteConfirmReturn && (isRu ? `Возврат № ${deleteConfirmReturn.returnNumber} будет удалён. Это действие нельзя отменить.` : `№ ${deleteConfirmReturn.returnNumber} qaytarish hujjati o‘chiriladi. Bu amalni qaytarib bo‘lmaydi.`)}
+        </p>
+      </Modal>
     </div>
   );
 }

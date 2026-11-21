@@ -43,3 +43,42 @@ export function formatRange(from: string, to: string): string {
 export function orderedRange(from: string, to: string): [string, string] {
   return from && to && to < from ? [to, from] : [from, to];
 }
+
+/** The user's local calendar date as 'YYYY-MM-DD' (never UTC: after midnight in Tashkent, UTC is still "yesterday"). */
+export function localIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export type QuickPeriod =
+  | 'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'custom';
+
+/**
+ * Local-date range of a quick period. Weeks start on Monday (Uzbekistan and
+ * Russia), the range ends today for "this …" periods.
+ */
+export function quickPeriodRange(period: QuickPeriod, now: Date = new Date()): { date_from: string; date_to: string } {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const today = localIsoDate(now);
+  const day = (offset: number) => localIsoDate(new Date(y, m, now.getDate() + offset));
+  const mondayOffset = -((now.getDay() + 6) % 7);
+  switch (period) {
+    case 'today':
+      return { date_from: today, date_to: today };
+    case 'yesterday':
+      return { date_from: day(-1), date_to: day(-1) };
+    case 'this_week':
+      return { date_from: day(mondayOffset), date_to: today };
+    case 'last_week':
+      return { date_from: day(mondayOffset - 7), date_to: day(mondayOffset - 1) };
+    case 'last_month':
+      return { date_from: localIsoDate(new Date(y, m - 1, 1)), date_to: localIsoDate(new Date(y, m, 0)) };
+    case 'this_quarter':
+      return { date_from: localIsoDate(new Date(y, Math.floor(m / 3) * 3, 1)), date_to: today };
+    case 'this_year':
+      return { date_from: `${y}-01-01`, date_to: today };
+    case 'this_month':
+    default:
+      return { date_from: localIsoDate(new Date(y, m, 1)), date_to: today };
+  }
+}

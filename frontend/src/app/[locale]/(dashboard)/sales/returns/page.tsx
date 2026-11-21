@@ -4,14 +4,22 @@ import { quantityWithUnit } from '@/lib/units';
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { SearchField } from '@/components/ui/SearchField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { totalsByCurrency } from '@/lib/currency-totals';
+import { ALL_TIME, ChipGroup, ColumnChooser, CurrencyTotals, PeriodFilter, resolvePeriod, Signal, SignalStrip, type PeriodValue } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { salesReturnHeaderFromInvoice } from '@/lib/sales-return';
 import { formatCurrency, formatCurrencyIfAvailable, formatDate, formatPercent, errorMessage, type LocalizedName } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -20,19 +28,16 @@ import { Badge } from '@/components/ui/Badge';
 import {
   RotateCcw,
   Plus,
-  Trash2,
   AlertTriangle,
   Barcode,
   CheckCircle2,
-  Eye,
   ShieldCheck,
   XCircle,
-  Search,
-  Filter,
   PackageCheck,
 } from 'lucide-react';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
+import { localIsoDate } from '@/lib/date-range';
 
 interface SalesReturnRow {
   id: string;
@@ -106,6 +111,7 @@ export default function SalesReturnsPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const confirm = useConfirm();
 
   const invalidateApi = useInvalidateApi();
@@ -134,7 +140,7 @@ export default function SalesReturnsPage() {
   // A return is booked in the invoice's own warehouse and currency
   const selectedInvoice = invoices.find((inv) => inv.id === invoiceId);
   const returnCurrency = selectedInvoice?.currency;
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
+  const [returnDate, setReturnDate] = useState(localIsoDate(new Date()));
   const [reason, setReason] = useState('');
   const [items, setItems] = useState<ReturnableItemRow[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -452,220 +458,208 @@ export default function SalesReturnsPage() {
     }
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+  const tl = useTranslations('rd.list');
+  const td = useTranslations('rd.doc');
+  const tr = useTranslations('rd.sreturns');
+  const [period, setPeriod] = usePersistentState<PeriodValue>('sreturns.period', ALL_TIME);
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('sreturns.hidden', []);
+  const [sort, setSort] = usePersistentState<SortState | null>('sreturns.sort', null);
+  const [quickSearch, setQuickSearch] = useState('');
+  const range = resolvePeriod(period);
+  const shownReturns = filteredReturns.filter((r) => {
+    const d = (r.returnDate || '').slice(0, 10);
+    return (!range.from || d >= range.from) && (!range.to || d <= range.to);
+  });
+  const monthStart = localIsoDate(new Date()).slice(0, 8) + '01';
+  const monthPosted = returns.filter((r) => r.status === 'POSTED' && (r.returnDate || '').slice(0, 10) >= monthStart);
+  const draftCount = returns.filter((r) => r.status === 'DRAFT').length;
+  const quickMatches = quickSearch.trim()
+    ? invoices
+        .filter((inv) => {
+          const q = quickSearch.trim().toLowerCase();
+          const cp = counterparties.find((c) => c.id === inv.counterpartyId)?.name ?? '';
+          return inv.invoiceNumber.toLowerCase().includes(q) || cp.toLowerCase().includes(q);
+        })
+        .slice(0, 5)
+    : [];
+  /** "Return from this sale": the create drawer opens with customer, invoice and its items loaded. */
+  const startFromInvoice = (inv: InvoiceItem) => {
+    setFormError(null);
+    setCounterpartyId(inv.counterpartyId);
+    handleInvoiceChange(inv.id);
+    setShowCreateModal(true);
+    setQuickSearch('');
+  };
+  const openDetails = (ret: SalesReturnRow) => {
+    setSelectedReturn(ret);
+    setShowDetailsModal(true);
+  };
+
+  const columns: Column<SalesReturnRow>[] = [
+    {
+      key: 'number',
+      label: tIn('sana'),
+      primary: true,
+      locked: true,
+      sortValue: (r) => r.returnDate,
+      render: (r) => (
         <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Возврат от покупателей' : 'Mijozdan qaytarish'}
-          </h1>
+          <div className="rd-doc-no">{r.returnNumber}</div>
+          <div className="rd-sub">{formatDate(r.returnDate, locale)}</div>
         </div>
-        <Button
-          id="create-return-btn"
-          onClick={() => {
-            setFormError(null);
-            setShowCreateModal(true);
-          }}
-          style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-        >
-          <Plus size={16} /> {isRu ? 'Новый возврат' : 'Yangi qaytarish'}
-        </Button>
+      ),
+      footer: <span>{tl('total')} · {tl('results', { count: shownReturns.length })}</span>,
+    },
+    { key: 'customer', label: isRu ? 'Клиент' : 'Mijoz', sortValue: (r) => r.counterparty?.name ?? '', render: (r) => <span style={{ fontWeight: 'var(--font-medium)' }}>{r.counterparty?.name || '—'}</span> },
+    { key: 'origin', label: tr('origin'), sortValue: (r) => r.invoice?.invoiceNumber ?? '', render: (r) => r.invoice?.invoiceNumber ?? '—' },
+    {
+      key: 'warehouse',
+      label: tl('warehouse'),
+      render: (r) => (
+        <div>
+          <div>{getLocalizedName(r.warehouse?.name)}</div>
+          {r.defectWarehouse && <div className="rd-sub" style={{ color: 'var(--color-error-700)' }}>{tr('defect', { name: getLocalizedName(r.defectWarehouse.name) })}</div>}
+        </div>
+      ),
+    },
+    {
+      key: 'amount',
+      label: tl('amount'),
+      numeric: true,
+      sortValue: (r) => Number(r.totalAmount),
+      render: (r) => <strong>{formatCurrency(Number(r.totalAmount), locale, r.currency)}</strong>,
+      footer: <CurrencyTotals totals={totalsByCurrency(shownReturns.filter((r) => r.status !== 'CANCELLED'), (r) => r.currency, (r) => Number(r.totalAmount))} locale={locale} />,
+    },
+    { key: 'status', label: tl('status'), sortValue: (r) => r.status, render: (r) => getStatusBadge(r.status) },
+    { key: 'reason', label: tr('reason'), render: (r) => <span style={{ color: 'var(--color-text-secondary)', display: 'inline-block', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>{r.reason || '—'}</span> },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (r) => (
+        <div className="rd-row-actions">
+          {r.status === 'DRAFT' && (
+            <button type="button" className="rd-next-btn" disabled={actionLoadingId === r.id} onClick={() => void handleConfirmReturn(r.id)}>
+              <PackageCheck size={14} aria-hidden /> {td('post')}
+            </button>
+          )}
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tl('open'), onSelect: () => openDetails(r) },
+              { label: isRu ? 'Отменить' : 'Bekor qilish', onSelect: () => void handleCancelReturn(r), danger: true, hidden: r.status === 'CANCELLED' },
+              { label: tl('delete'), onSelect: () => { setDeleteConfirmReturn(r); setDeleteError(null); }, danger: true, hidden: !(r.status === 'DRAFT' || r.status === 'CANCELLED') },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
+
+  const statusChips = [
+    { value: 'DRAFT', label: isRu ? 'Черновики' : 'Qoralamalar' },
+    { value: 'POSTED', label: tIn('tasdiqlangan') },
+    { value: 'CANCELLED', label: tIn('bekor_qilingan') },
+  ];
+  const anyFilter = Boolean(searchQuery || statusFilter !== 'ALL' || period.key !== 'all');
+  const clearAll = () => {
+    setSearchQuery('');
+    setStatusFilter('ALL');
+    setPeriod(ALL_TIME);
+  };
+
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Возврат от покупателей' : 'Mijozdan qaytarish'}
+        subtitle={tr('subtitle')}
+        actions={
+          <Button
+            id="create-return-btn"
+            variant="secondary"
+            onClick={() => {
+              setFormError(null);
+              setShowCreateModal(true);
+            }}
+          >
+            <Plus size={16} aria-hidden /> {isRu ? 'Новый возврат' : 'Yangi qaytarish'}
+          </Button>
+        }
+      />
+
+      {/* Start from the sale: the usual way a return begins */}
+      <section className="rd-table-card dash-panel" aria-labelledby="sr-quick">
+        <h2 id="sr-quick" className="dash-panel-title">{tr('quickTitle')}</h2>
+        <p className="dash-panel-hint">{tr('quickHint')}</p>
+        <div style={{ marginTop: 'var(--space-3)', maxWidth: 560 }}>
+          <SearchField value={quickSearch} onChange={setQuickSearch} placeholder={tr('quickPh')} label={tr('quickTitle')} />
+        </div>
+        {quickSearch.trim() && (
+          quickMatches.length === 0 ? (
+            <p className="dash-panel-hint" style={{ marginTop: 'var(--space-3)' }}>{tr('quickNone')}</p>
+          ) : (
+            <ul className="dash-todo-list">
+              {quickMatches.map((inv) => (
+                <li key={inv.id} className="dash-todo">
+                  <div className="dash-todo-text">
+                    <div className="dash-todo-title">{inv.invoiceNumber}</div>
+                    <div className="dash-todo-hint">{counterparties.find((c) => c.id === inv.counterpartyId)?.name ?? '—'}</div>
+                  </div>
+                  <div className="dash-todo-amount tabular-nums">{formatCurrency(Number(inv.totalAmount), locale, inv.currency)}</div>
+                  <button type="button" className="rd-next-btn" onClick={() => startFromInvoice(inv)}>
+                    <RotateCcw size={14} aria-hidden /> {tr('returnThis')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+      </section>
+
+      <SignalStrip label={tl('summary')}>
+        <Signal tone="warning" label={tr('sigDrafts')} value={draftCount} hint={tr('sigDraftsHint')} active={statusFilter === 'DRAFT'} onClick={() => setStatusFilter(statusFilter === 'DRAFT' ? 'ALL' : 'DRAFT')} />
+        <Signal tone="info" label={tr('sigMonth')} value={<CurrencyTotals totals={totalsByCurrency(monthPosted, (r) => r.currency, (r) => Number(r.totalAmount))} locale={locale} />} hint={tr('sigMonthHint')} />
+        <Signal tone="neutral" label={tr('sigAll')} value={returns.length} />
+      </SignalStrip>
+
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField value={searchQuery} onChange={setSearchQuery} placeholder={tr('searchPh')} label={tl('search')} />
+          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
+        </div>
+        <div className="rd-toolbar-row">
+          <ChipGroup label={tl('status')} showLabel options={[{ value: '', label: tl('all') }, ...statusChips]} value={statusFilter === 'ALL' ? '' : statusFilter} onChange={(v) => setStatusFilter(v || 'ALL')} />
+        </div>
+        <div className="rd-toolbar-row">
+          <PeriodFilter value={period} onChange={setPeriod} locale={locale} />
+        </div>
       </div>
 
-      {/* Search & Filter Bar */}
-      <Card style={{ padding: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-            <input
-              type="text"
-              placeholder={isRu ? 'Поиск по номеру возврата, накладной или клиенту...' : 'Qaytarish raqami, sotuv yoki mijoz bo\'yicha qidiruv...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px 8px 36px',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-input)',
-                color: 'var(--color-text-primary)',
-                fontSize: 'var(--text-sm)',
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Filter size={15} style={{ color: 'var(--color-text-secondary)' }} />
-            {['ALL', 'DRAFT', 'POSTED', 'CANCELLED'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  border: statusFilter === st ? '1px solid var(--color-primary-600)' : '1px solid var(--color-border)',
-                  background: statusFilter === st ? 'var(--color-primary-100)' : 'var(--color-bg-subtle)',
-                  color: statusFilter === st ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
-                }}
-              >
-                {st === 'ALL'
-                  ? (isRu ? 'Все' : 'Barchasi')
-                  : st === 'DRAFT'
-                  ? (isRu ? 'Черновики' : 'Qoralamalar')
-                  : st === 'POSTED'
-                  ? (isRu ? 'Проведенные' : 'Tasdiqlangan')
-                  : (isRu ? 'Отмененные' : 'Bekor qilingan')}
-              </button>
-            ))}
-          </div>
-        </div>
-      </Card>
-
-      {/* Main Table */}
-      <Card>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? '№ Документа' : 'Hujjat №'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Дата' : 'Sana'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Клиент' : 'Mijoz'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Исходная продажа' : 'Asl sotuv'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Склад' : 'Ombor'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Сумма' : 'Summa'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Статус' : 'Holati'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Причина' : 'Sabab'}</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>{isRu ? 'Действия' : 'Amallar'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {returnsQuery.isError ? (
-                <tr>
-                  <td colSpan={9}>
-                    <LoadError
-                      error={returnsQuery.error}
-                      onRetry={() => void returnsQuery.refetch()}
-                      retrying={returnsQuery.isFetching}
-                    />
-                  </td>
-                </tr>
-              ) : returnsQuery.isPending ? (
-                <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Загрузка документов...' : 'Hujjatlar yuklanmoqda...'}
-                  </td>
-                </tr>
-              ) : filteredReturns.length === 0 ? (
-                <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-secondary)' }}>
-                    <RotateCcw size={36} style={{ margin: '0 auto 10px', opacity: 0.3, display: 'block' }} />
-                    {isRu ? 'Документы возврата от покупателя не найдены' : 'Qaytarish hujjatlari topilmadi'}
-                  </td>
-                </tr>
+      <div className="rd-table-card">
+        {returnsQuery.isError ? (
+          <LoadError error={returnsQuery.error} onRetry={() => void returnsQuery.refetch()} retrying={returnsQuery.isFetching} />
+        ) : (
+          <DataTable
+            rows={shownReturns}
+            columns={columns}
+            rowKey={(r) => r.id}
+            hidden={hiddenCols}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={openDetails}
+            selectedKey={showDetailsModal ? selectedReturn?.id : null}
+            loading={returnsQuery.isPending}
+            caption={tl('clickRowHint')}
+            empty={
+              anyFilter ? (
+                <EmptyState icon={RotateCcw} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
               ) : (
-                filteredReturns.map((ret) => (
-                  <tr key={ret.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-                      <button type="button" style={{ cursor: 'pointer', color: 'var(--color-primary-600)', background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 600 }} onClick={() => { setSelectedReturn(ret); setShowDetailsModal(true); }}>
-                        {ret.returnNumber}
-                      </button>
-                    </td>
-                    <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                      {formatDate(ret.returnDate, locale)}
-                    </td>
-                    <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)' }}>
-                      {ret.counterparty?.name || '—'}
-                    </td>
-                    <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)' }}>
-                      {ret.invoice ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 500, color: 'var(--color-primary-700)' }}>
-                          {ret.invoice.invoiceNumber}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)' }}>
-                      <div>{getLocalizedName(ret.warehouse?.name)}</div>
-                      {ret.defectWarehouse && (
-                        <div style={{ fontSize: '11px', color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <span>Brak: {getLocalizedName(ret.defectWarehouse.name)}</span>
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)' }} className="tabular-nums">
-                      {formatCurrency(Number(ret.totalAmount), locale, ret.currency)}
-                    </td>
-                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                      {getStatusBadge(ret.status)}
-                    </td>
-                    <td style={{ padding: '12px 14px', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {ret.reason || '—'}
-                    </td>
-                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => { setSelectedReturn(ret); setShowDetailsModal(true); }}
-                          title={isRu ? 'Просмотр' : 'Ko\'rish'}
-                          style={{ padding: '4px 8px' }}
-                        >
-                          <Eye size={14} />
-                        </Button>
-
-                        {ret.status === 'DRAFT' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleConfirmReturn(ret.id)}
-                            disabled={actionLoadingId === ret.id}
-                            title={isRu ? 'Провести' : 'Tasdiqlash'}
-                            style={{ padding: '4px 8px', background: 'var(--color-success-500)' }}
-                          >
-                            <PackageCheck size={14} />
-                          </Button>
-                        )}
-
-                        {ret.status !== 'CANCELLED' && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => handleCancelReturn(ret)}
-                            disabled={actionLoadingId === ret.id}
-                            title={isRu ? 'Отменить' : 'Bekor qilish'}
-                            style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
-                          >
-                            <XCircle size={14} />
-                          </Button>
-                        )}
-
-                        {(ret.status === 'DRAFT' || ret.status === 'CANCELLED') && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              setDeleteConfirmReturn(ret);
-                              setDeleteError(null);
-                            }}
-                            title={isRu ? 'Удалить' : "O'chirish"}
-                            style={{ padding: '4px 8px', color: 'var(--color-error-600)' }}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                <EmptyState icon={RotateCcw} title={tr('noReturns')} description={tr('noReturnsHint')} />
+              )
+            }
+          />
+        )}
+      </div>
 
       {/* Create Return Drawer */}
       <Drawer
@@ -702,13 +696,13 @@ export default function SalesReturnsPage() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {formError && (
-            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--color-error-500)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 'var(--radius-md)', padding: '10px 14px', color: 'var(--color-error-700)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={16} /> {formError}
             </div>
           )}
 
           {/* Form Fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-3)' }}>
             <Select id="ret-counterparty" label={isRu ? 'Клиент *' : 'Mijoz *'} value={counterpartyId} onChange={handleCounterpartyChange} options={cpOptions} />
             <Select id="ret-invoice" label={isRu ? 'Исходная продажа *' : 'Asl sotuv hujjati *'} value={invoiceId} onChange={handleInvoiceChange} options={invoiceOptions} />
             <Select id="ret-warehouse" label={isRu ? 'Склад (из продажи)' : 'Ombor (sotuvdagi)'} value={selectedInvoice?.warehouseId ?? ''} onChange={() => {}} options={whOptions} disabled />
@@ -837,7 +831,7 @@ export default function SalesReturnsPage() {
                             />
                           </td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: 'var(--text-sm)' }}>
-                            <div style={{ color: item.returnableQuantity > 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontWeight: 600 }}>
+                            <div style={{ color: item.returnableQuantity > 0 ? 'var(--color-success-700)' : 'var(--color-error-700)', fontWeight: 600 }}>
                               {quantityWithUnit(item.returnableQuantity, item.unit, locale)}
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
@@ -872,7 +866,7 @@ export default function SalesReturnsPage() {
                       <td colSpan={5} style={{ padding: '10px', textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
                         {isRu ? 'Итого к возврату:' : 'Jami qaytariladigan summa:'}
                       </td>
-                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--color-warning-600)' }} className="tabular-nums">
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 'var(--text-base)', color: 'var(--color-warning-700)' }} className="tabular-nums">
                         {(formatCurrencyIfAvailable(totalReturnAmount, locale, returnCurrency) ?? '—')}
                       </td>
                     </tr>
@@ -895,7 +889,7 @@ export default function SalesReturnsPage() {
           size="md"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', padding: 14, borderRadius: 'var(--radius-md)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)', background: 'var(--color-bg-subtle)', padding: 14, borderRadius: 'var(--radius-md)' }}>
               <div>
                 <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', display: 'block' }}>{isRu ? 'Статус:' : 'Holati:'}</span>
                 <div style={{ marginTop: 2 }}>{getStatusBadge(selectedReturn.status)}</div>
@@ -910,8 +904,8 @@ export default function SalesReturnsPage() {
               </div>
               {selectedReturn.defectWarehouse && (
                 <div>
-                  <span style={{ fontSize: '12px', color: 'var(--color-error-600)', display: 'block' }}>{isRu ? 'Склад брака:' : 'Brak ombori:'}</span>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-error-600)' }}>{getLocalizedName(selectedReturn.defectWarehouse.name)}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--color-error-700)', display: 'block' }}>{isRu ? 'Склад брака:' : 'Brak ombori:'}</span>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-error-700)' }}>{getLocalizedName(selectedReturn.defectWarehouse.name)}</span>
                 </div>
               )}
               <div style={{ gridColumn: 'span 2' }}>
@@ -945,7 +939,7 @@ export default function SalesReturnsPage() {
                         </td>
                         <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                           {item.isDefective ? (
-                            <span style={{ fontSize: '11px', color: 'var(--color-error-600)', fontWeight: 600 }}>{isRu ? 'Да' : 'Ha'}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--color-error-700)', fontWeight: 600 }}>{isRu ? 'Да' : 'Ha'}</span>
                           ) : (
                             <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>—</span>
                           )}
@@ -959,7 +953,7 @@ export default function SalesReturnsPage() {
                   <tfoot>
                     <tr style={{ background: 'var(--color-bg-subtle)' }}>
                       <td colSpan={4} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{isRu ? 'Итого:' : 'Jami:'}</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--color-warning-600)' }} className="tabular-nums">
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--color-warning-700)' }} className="tabular-nums">
                         {formatCurrency(Number(selectedReturn.totalAmount), locale, selectedReturn.currency)}
                       </td>
                     </tr>
@@ -975,7 +969,7 @@ export default function SalesReturnsPage() {
                 </Button>
               )}
               {selectedReturn.status !== 'CANCELLED' && (
-                <Button variant="secondary" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }} style={{ color: 'var(--color-error-600)' }}>
+                <Button variant="secondary" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }} style={{ color: 'var(--color-error-700)' }}>
                   <XCircle size={16} /> {isRu ? 'Отменить документ' : 'Hujjatni bekor qilish'}
                 </Button>
               )}
@@ -984,65 +978,34 @@ export default function SalesReturnsPage() {
         </Drawer>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmReturn && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 60,
-            padding: 'var(--space-4)',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--color-bg-primary)',
-              borderRadius: 'var(--radius-lg)',
-              maxWidth: '440px',
-              width: '100%',
-              padding: 'var(--space-6)',
-              boxShadow: 'var(--shadow-xl)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-4)', color: 'var(--color-error-600)' }}>
-              <Trash2 size={24} />
-              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                {isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
-              </h2>
-            </div>
-
-            {deleteError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
-                {deleteError}
-              </div>
-            )}
-
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-6)', lineHeight: 1.5 }}>
-              {isRu
-                ? `Вы уверены, что хотите удалить возврат покупателя № ${deleteConfirmReturn.returnNumber}?`
-                : `Haqiqatan ham № ${deleteConfirmReturn.returnNumber} xaridor qaytarish hujjatini o‘chirmoqchimisiz?`}
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button
-                type="button"
-                onClick={handleDeleteReturn}
-                disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
-              >
-                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
-              </Button>
-            </div>
+      {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
+      <Modal
+        isOpen={Boolean(deleteConfirmReturn)}
+        onClose={() => { if (!deleteLoading) setDeleteConfirmReturn(null); }}
+        title={isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}
+        size="sm"
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button type="button" variant="danger" onClick={handleDeleteReturn} loading={deleteLoading} loadingText={isRu ? 'Удаление…' : 'O‘chirilmoqda…'}>
+              {isRu ? 'Да, удалить' : 'Ha, o‘chirish'}
+            </Button>
+          </>
+        }
+      >
+        {deleteError && (
+          <div role="alert" className="doc-banner is-error" style={{ marginBottom: 'var(--space-4)' }}>
+            {deleteError}
           </div>
-        </div>
-      )}
+        )}
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+          {deleteConfirmReturn && (isRu
+            ? `Возврат покупателя № ${deleteConfirmReturn.returnNumber} будет удалён. Это действие нельзя отменить.`
+            : `№ ${deleteConfirmReturn.returnNumber} xaridor qaytarish hujjati o‘chiriladi. Bu amalni qaytarib bo‘lmaydi.`)}
+        </p>
+      </Modal>
     </div>
   );
 }

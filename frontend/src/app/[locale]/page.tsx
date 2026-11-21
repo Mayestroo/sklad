@@ -4,8 +4,6 @@ import { useState, useMemo } from 'react';
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -13,70 +11,44 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { quickPeriodRange } from '@/lib/date-range';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { formatDate, formatCurrency, formatAmount, formatMoney, formatCompactNumber } from '@/lib/utils';
+import { formatDate, formatCurrency, formatMoney, formatCompactNumber } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { FullDashboard, DashboardPeriod, CashFlowPoint } from '@shared/types';
 import {
   TrendingUp,
   TrendingDown,
   Wallet,
   ShoppingCart,
-  BarChart3,
   Building2,
   ArrowRight,
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
   Calendar,
+  Plus,
+  PackagePlus,
+  PackageX,
+  Receipt,
+  CreditCard,
+  Truck,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Select } from '@/components/ui/Select';
+import { Signal } from '@/components/ui/list/ListKit';
 
 // ─── Helpers ─────────────────────────────────────────────────────
-
-function getPeriodDates(period: DashboardPeriod): { date_from: string; date_to: string } {
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-
-  switch (period) {
-    case 'today':
-      return { date_from: todayStr, date_to: todayStr };
-    case 'yesterday': {
-      const y = new Date(now); y.setDate(y.getDate() - 1);
-      const s = y.toISOString().slice(0, 10);
-      return { date_from: s, date_to: s };
-    }
-    case 'this_week': {
-      const start = new Date(now); start.setDate(now.getDate() - now.getDay());
-      return { date_from: start.toISOString().slice(0, 10), date_to: todayStr };
-    }
-    case 'last_week': {
-      const end = new Date(now); end.setDate(now.getDate() - now.getDay() - 1);
-      const start = new Date(end); start.setDate(end.getDate() - 6);
-      return { date_from: start.toISOString().slice(0, 10), date_to: end.toISOString().slice(0, 10) };
-    }
-    case 'this_month':
-      return { date_from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, date_to: todayStr };
-    case 'last_month': {
-      const d = new Date(now.getFullYear(), now.getMonth(), 0);
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return { date_from: start.toISOString().slice(0, 10), date_to: d.toISOString().slice(0, 10) };
-    }
-    case 'this_quarter': {
-      const q = Math.floor(now.getMonth() / 3);
-      const start = new Date(now.getFullYear(), q * 3, 1);
-      return { date_from: start.toISOString().slice(0, 10), date_to: todayStr };
-    }
-    case 'this_year':
-      return { date_from: `${now.getFullYear()}-01-01`, date_to: todayStr };
-    default:
-      return { date_from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, date_to: todayStr };
-  }
-}
 
 // ─── Cash Flow Chart (Recharts) ──────────────────────────────────
 
@@ -133,8 +105,8 @@ function CashFlowChart({
                 cursor: 'pointer',
                 fontSize: 'var(--text-xs)',
                 fontWeight: activeCurrency === cur ? 600 : 400,
-                background: activeCurrency === cur ? 'var(--color-primary-600)' : 'var(--color-bg-secondary)',
-                color: activeCurrency === cur ? '#fff' : 'var(--color-text-secondary)',
+                background: activeCurrency === cur ? 'var(--color-btn-primary-bg, var(--color-primary-600))' : 'var(--color-bg-secondary)',
+                color: activeCurrency === cur ? 'var(--color-btn-primary-text, #fff)' : 'var(--color-text-secondary)',
                 transition: 'all 0.15s',
               }}
             >
@@ -216,147 +188,140 @@ function CashFlowChart({
   );
 }
 
-// ─── Sales Bar Chart (Recharts) ───────────────────────────────────
+// ─── "What needs attention" row ──────────────────────────────────
 
-function SalesBarChart({ dynamics, isRu }: { dynamics: { period: string; amount: number }[]; isRu: boolean }) {
-  if (!dynamics || dynamics.length === 0) {
-    return (
-      <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-        {isRu ? 'Нет данных' : 'Ma\'lumot yo\'q'}
-      </div>
-    );
-  }
-
-  const data = dynamics.map((d) => ({
-    period: d.period.slice(5),
-    [isRu ? 'Sotuv' : 'Sotuv']: d.amount,
-  }));
-
-  return (
-    <ResponsiveContainer width="100%" height={120}>
-      <BarChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }} barSize={12}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false} />
-        <XAxis
-          dataKey="period"
-          tick={{ fontSize: 10, fill: 'var(--color-text-tertiary)' }}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis hide />
-        <Tooltip
-          contentStyle={{
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 8,
-            fontSize: 12,
-          }}
-          formatter={(value: number | string | readonly (number | string)[] | undefined) => [
-            formatMoney(typeof value === 'number' ? value : Number(value) || 0, 'UZS'),
-            isRu ? 'Продажи' : 'Sotuv',
-          ]}
-          cursor={{ fill: 'var(--color-bg-hover)' }}
-        />
-        <Bar
-          dataKey={isRu ? 'Sotuv' : 'Sotuv'}
-          fill="#4f46e5"
-          radius={[4, 4, 0, 0]}
-          opacity={0.85}
-        />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-// ─── KPI Card ────────────────────────────────────────────────
-
-interface KpiCardProps {
-  title: string;
-  value: string;
-  subtitle?: string;
+function AttentionRow({ icon: Icon, tone, title, hint, amount, href, action }: {
   icon: React.ElementType;
-  iconColor: string;
-  iconBg: string;
-  trend?: number;
-  currency?: string;
-}
-
-function KpiCard({ title, value, subtitle, icon: Icon, iconColor, iconBg, currency }: KpiCardProps) {
+  tone: 'error' | 'warning' | 'info' | 'success';
+  title: string;
+  hint?: React.ReactNode;
+  amount?: React.ReactNode;
+  href: string;
+  action: string;
+}) {
   return (
-    <Card>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-        <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', backgroundColor: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={22} style={{ color: iconColor }} />
-        </div>
-        {currency && (
-          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', background: 'var(--color-bg-tertiary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
-            {currency}
-          </span>
-        )}
+    <li className={`dash-todo rd-tone-${tone}`}>
+      <span className="dash-todo-icon" aria-hidden><Icon size={18} /></span>
+      <div className="dash-todo-text">
+        <div className="dash-todo-title">{title}</div>
+        {hint && <div className="dash-todo-hint">{hint}</div>}
       </div>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>{title}</div>
-      <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
-        {value}
-      </div>
-      {subtitle && (
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>{subtitle}</div>
-      )}
-    </Card>
+      {amount && <div className="dash-todo-amount tabular-nums">{amount}</div>}
+      <Link href={href} className="rd-next-btn">
+        {action} <ArrowRight size={14} aria-hidden />
+      </Link>
+    </li>
   );
 }
 
 // ─── Dashboard Page ───────────────────────────────────────────
 
+const PERIODS: DashboardPeriod[] = ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'last_month', 'this_quarter', 'this_year'];
+
 export default function DashboardPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const [period, setPeriod] = useState<DashboardPeriod>('this_month');
-  const [cashFlowGranularity, setCashFlowGranularity] = useState<'day' | 'week' | 'month'>('day');
+  const t = useTranslations('dashboard');
+  const td = useTranslations('rd.dash');
+  // The chosen period and chart step are remembered per browser.
+  const [period, setPeriod] = usePersistentState<DashboardPeriod>('dashboard.period', 'this_month');
+  const [cashFlowGranularity, setCashFlowGranularity] = usePersistentState<'day' | 'week' | 'month'>('dashboard.granularity', 'day');
 
   const dashboardEndpoint = useMemo(() => {
-    const { date_from, date_to } = getPeriodDates(period);
+    const { date_from, date_to } = quickPeriodRange(period);
     return `/dashboard?${new URLSearchParams({ date_from, date_to, granularity: cashFlowGranularity })}`;
   }, [period, cashFlowGranularity]);
   // keepPrevious: switching the period keeps the current numbers until the
   // new ones arrive, as before.
   const dashboardQuery = useApiQuery<FullDashboard>(dashboardEndpoint, { keepPrevious: true });
-  // Optional: the order pipeline card stays empty if this fails.
-  const ordersQuery = useApiQuery<{ pipeline?: Partial<Record<string, number>> }>('/dashboard/sales-orders');
+  // The "needs attention" sources are optional: a failed one just drops its row.
+  const ordersQuery = useApiQuery<{ pipeline?: Partial<Record<string, number>>; upcomingDeadlines?: unknown[] }>('/dashboard/sales-orders');
+  const draftSalesQuery = useApiQuery<unknown[]>('/sales/invoices?status=DRAFT');
+  const draftReceiptsQuery = useApiQuery<unknown[]>('/purchases/receipts?status=DRAFT');
+  const lowStockQuery = useApiQuery<unknown[]>('/inventory/products/low-stock');
   const data = dashboardQuery.data ?? null;
-  const orderStats = ordersQuery.data ?? null;
+  const pipeline = ordersQuery.data?.pipeline ?? {};
   const loading = dashboardQuery.isFetching;
   const fetchDashboard = () => {
-    void dashboardQuery.refetch();
-    void ordersQuery.refetch();
+    for (const q of [dashboardQuery, ordersQuery, draftSalesQuery, draftReceiptsQuery, lowStockQuery]) void q.refetch();
   };
 
-  const periodsList: { label: string; value: DashboardPeriod }[] = [
-    { label: isRu ? 'Сегодня' : 'Bugun', value: 'today' },
-    { label: isRu ? 'Вчера' : 'Kecha', value: 'yesterday' },
-    { label: isRu ? 'Эта неделя' : 'Bu hafta', value: 'this_week' },
-    { label: isRu ? 'Прошлая неделя' : 'O\'tgan hafta', value: 'last_week' },
-    { label: isRu ? 'Этот месяц' : 'Bu oy', value: 'this_month' },
-    { label: isRu ? 'Прошлый месяц' : 'O\'tgan oy', value: 'last_month' },
-    { label: isRu ? 'Этот квартал' : 'Bu kvartal', value: 'this_quarter' },
-    { label: isRu ? 'Этот год' : 'Bu yil', value: 'this_year' },
-  ];
+  const periodLabels: Record<DashboardPeriod, string> = {
+    today: isRu ? 'Сегодня' : 'Bugun',
+    yesterday: isRu ? 'Вчера' : 'Kecha',
+    this_week: isRu ? 'Эта неделя' : 'Bu hafta',
+    last_week: isRu ? 'Прошлая неделя' : 'O\'tgan hafta',
+    this_month: isRu ? 'Этот месяц' : 'Bu oy',
+    last_month: isRu ? 'Прошлый месяц' : 'O\'tgan oy',
+    this_quarter: isRu ? 'Этот квартал' : 'Bu kvartal',
+    this_year: isRu ? 'Этот год' : 'Bu yil',
+    custom: '',
+  };
 
-  // Get primary currency summary (UZS by default)
-  const uzsSummary = data?.finance?.summaryByCurrency?.find((s) => s.currency === 'UZS');
-  const usdSummary = data?.finance?.summaryByCurrency?.find((s) => s.currency === 'USD');
+  const count = (q: { data?: unknown[] }) => (Array.isArray(q.data) ? q.data.length : 0);
+  const draftSales = count(draftSalesQuery);
+  const draftReceipts = count(draftReceiptsQuery);
+  const lowStock = count(lowStockQuery);
+  const ordersReady = (pipeline.READY_TO_SHIP ?? 0) + (pipeline.READY ?? 0) + (pipeline.PAYMENT_CONFIRMED ?? 0);
+  const ordersAwaitingPayment = pipeline.AWAITING_PAYMENT ?? 0;
+  const deadlines = ordersQuery.data?.upcomingDeadlines?.length ?? 0;
+  const receivable = data?.debts?.receivable;
+  const payable = data?.debts?.payable;
+  const money = (items: { currency: string; amount: number }[] | undefined) =>
+    items && items.length > 0 ? <MultiCurrencyValue items={items} locale={locale} /> : undefined;
+
+  const todo: React.ReactNode[] = [];
+  if (draftSales > 0) todo.push(<AttentionRow key="ds" icon={ShoppingCart} tone="warning" title={td('draftSales', { count: draftSales })} hint={td('draftSalesHint')} href="/sales?status=DRAFT" action={td('actPost')} />);
+  if (draftReceipts > 0) todo.push(<AttentionRow key="dr" icon={PackagePlus} tone="warning" title={td('draftReceipts', { count: draftReceipts })} hint={td('draftReceiptsHint')} href="/purchases?status=DRAFT" action={td('actPost')} />);
+  if (ordersReady > 0) todo.push(<AttentionRow key="or" icon={Truck} tone="info" title={td('ordersReady', { count: ordersReady })} href="/sales/orders" action={td('actDispatch')} />);
+  if (deadlines > 0) todo.push(<AttentionRow key="dl" icon={Clock} tone="error" title={td('deadlines', { count: deadlines })} href="/sales/orders" action={td('actView')} />);
+  if (ordersAwaitingPayment > 0) todo.push(<AttentionRow key="op" icon={CreditCard} tone="warning" title={td('ordersAwaitingPayment', { count: ordersAwaitingPayment })} href="/sales/orders" action={td('actView')} />);
+  if (lowStock > 0) todo.push(<AttentionRow key="ls" icon={PackageX} tone="error" title={td('lowStock', { count: lowStock })} hint={td('lowStockHint')} href="/products?stock=low" action={td('actRestock')} />);
+  if ((receivable?.count ?? 0) > 0) todo.push(<AttentionRow key="rc" icon={ArrowDownRight} tone="success" title={td('receivable', { count: receivable?.count ?? 0 })} amount={money(receivable?.byCurrency)} href="/counterparties" action={td('actCollect')} />);
+  if ((payable?.count ?? 0) > 0) todo.push(<AttentionRow key="pb" icon={ArrowUpRight} tone="error" title={td('payable', { count: payable?.count ?? 0 })} amount={money(payable?.byCurrency)} href="/counterparties" action={td('actPay')} />);
+
+  const accountMovement = new Map((data?.finance.summaryByAccount ?? []).map((a) => [a.accountId, a]));
+  const attentionLoading = dashboardQuery.isPending || draftSalesQuery.isPending || lowStockQuery.isPending;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }} className="animate-fade-in">
+    <div className="rd-page animate-fade-in">
+      <PageHeader
+        title={isRu ? 'Главная' : 'Bosh sahifa'}
+        subtitle={t('subtitle')}
+        actions={
+          <>
+            <div className="dash-period-select">
+              <Select
+                size="sm"
+                placeholder={td('period')}
+                options={PERIODS.map((p) => ({ value: p, label: periodLabels[p], icon: <Calendar size={14} aria-hidden /> }))}
+                value={period}
+                onChange={(v) => setPeriod(v as DashboardPeriod)}
+              />
+            </div>
+            <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading} aria-label={isRu ? 'Обновить' : 'Yangilash'}>
+              <RefreshCw size={16} aria-hidden className={loading ? 'app-spinner' : undefined} />
+              <span className="app-header-hide-sm">{isRu ? 'Обновить' : 'Yangilash'}</span>
+            </Button>
+          </>
+        }
+      />
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-          {isRu ? 'Главная' : 'Bosh sahifa'}
-        </h1>
-        <Button variant="ghost" size="sm" onClick={fetchDashboard} disabled={loading}>
-          <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : undefined }} />
-          {isRu ? 'Обновить' : 'Yangilash'}
-        </Button>
-      </div>
+      {/* Quick actions: the documents people start most often */}
+      <nav aria-label={t('quickActions')} className="dash-quick-actions">
+        {[
+          { href: '/sales/new', label: t('qaNewSale'), Icon: ShoppingCart, primary: true },
+          { href: '/purchases/new', label: t('qaNewReceipt'), Icon: PackagePlus },
+          { href: '/finance', label: t('qaPayment'), Icon: CreditCard },
+          { href: '/purchases/expenses/new', label: t('qaNewExpense'), Icon: Receipt },
+          { href: '/products/new', label: t('qaNewProduct'), Icon: Plus },
+        ].map(({ href, label, Icon, primary }) => (
+          <Link key={href} href={href} className={`dash-quick-action${primary ? ' is-primary' : ''}`}>
+            <Icon size={18} aria-hidden />
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
 
       {dashboardQuery.isError && (
         <Card>
@@ -364,427 +329,181 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Period Selector */}
-      <div style={{
-        background: 'var(--color-bg-secondary)',
-        border: '1px solid var(--color-border-light)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--space-2)',
-        display: 'flex',
-        gap: 'var(--space-1)',
-        flexWrap: 'wrap',
-        boxShadow: 'var(--shadow-sm)',
-      }}>
-        <Calendar size={18} style={{ color: 'var(--color-text-tertiary)', alignSelf: 'center', marginLeft: '8px', marginRight: '4px' }} />
-        {periodsList.map((p) => (
-          <button
-            key={p.value}
-            onClick={() => setPeriod(p.value)}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 'var(--text-sm)',
-              fontWeight: period === p.value ? 'var(--font-semibold)' : 'var(--font-regular)',
-              background: period === p.value ? 'var(--color-primary-600)' : 'transparent',
-              color: period === p.value ? '#fff' : 'var(--color-text-secondary)',
-              transition: 'all var(--transition-fast)',
-            }}
-          >
-            {p.label}
-          </button>
+      {/* Today: what to do first (left) and where the money is (right) */}
+      <div className="dash-today-grid">
+        <section className="rd-table-card dash-panel" aria-labelledby="dash-attention">
+          <h2 id="dash-attention" className="dash-panel-title">{td('attentionTitle')}</h2>
+          <p className="dash-panel-hint">{td('attentionHint')}</p>
+          {attentionLoading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', paddingTop: 'var(--space-3)' }}>
+              {[0, 1, 2].map((i) => <Skeleton key={i} height={44} />)}
+            </div>
+          ) : todo.length === 0 ? (
+            <div className="dash-all-clear" role="status">
+              <CheckCircle2 size={22} aria-hidden />
+              <div>
+                <div style={{ fontWeight: 'var(--font-semibold)' }}>{td('allClear')}</div>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{td('allClearHint')}</div>
+              </div>
+            </div>
+          ) : (
+            <ul className="dash-todo-list">{todo}</ul>
+          )}
+        </section>
+
+        <section className="rd-table-card dash-panel" aria-labelledby="dash-money">
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', alignItems: 'baseline' }}>
+            <h2 id="dash-money" className="dash-panel-title">{td('moneyTitle')}</h2>
+            <Link href="/finance" className="dash-card-link">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} aria-hidden /></Link>
+          </div>
+          <p className="dash-panel-hint">{td('moneyHint')}</p>
+          {(data?.finance?.accounts ?? []).length === 0 ? (
+            dashboardQuery.isPending ? <Skeleton height={44} /> : <EmptyState compact icon={Wallet} title={td('noAccounts')} />
+          ) : (
+            <ul className="dash-money-list">
+              {data?.finance.accounts.map((account) => {
+                const mv = accountMovement.get(account.id);
+                const Icon = account.accountType === 'BANK' ? Building2 : Wallet;
+                return (
+                  <li key={account.id}>
+                    <span className="dash-todo-icon" aria-hidden><Icon size={16} /></span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', overflowWrap: 'anywhere' }}>{account.name[locale]}</div>
+                      {mv && (mv.totalIncome !== 0 || mv.totalExpense !== 0) && (
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', display: 'flex', gap: 8, flexWrap: 'wrap' }} className="tabular-nums">
+                          {mv.totalIncome !== 0 && <span><span style={{ color: 'var(--color-success-700)' }}>+{formatCurrency(mv.totalIncome, locale, account.currency)}</span> {td('periodIn')}</span>}
+                          {mv.totalExpense !== 0 && <span><span style={{ color: 'var(--color-error-700)' }}>−{formatCurrency(mv.totalExpense, locale, account.currency)}</span> {td('periodOut')}</span>}
+                        </div>
+                      )}
+                    </div>
+                    <div className="tabular-nums" style={{ fontWeight: 'var(--font-bold)', textAlign: 'right' }}>{formatCurrency(account.balance, locale, account.currency)}</div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {/* Results of the chosen period */}
+      <section aria-labelledby="dash-results">
+        <h2 id="dash-results" className="dash-section-title">
+          {td('resultsTitle')} <span className="dash-section-period">· {periodLabels[period]}</span>
+        </h2>
+        <div className="rd-signals">
+          <Signal
+            tone="info"
+            label={td('sales')}
+            value={
+              data?.sales.byCurrency?.length
+                ? <MultiCurrencyValue items={data.sales.byCurrency} locale={locale} />
+                : formatCurrency(data?.sales?.totalSales ?? 0, locale, 'UZS')
+            }
+            hint={td('salesDocs', { count: data?.sales?.invoiceCount ?? 0 })}
+          />
+          <Signal tone="success" label={`${td('grossProfit')} (UZS)`} value={formatCurrency(data?.finance?.profit?.grossProfit ?? 0, locale, 'UZS')} hint={td('grossProfitHint')} />
+          <Signal
+            tone="error"
+            label={td('expenses')}
+            value={
+              (data?.finance?.summaryByCurrency ?? []).some((s) => s.totalExpense !== 0)
+                ? <MultiCurrencyValue items={(data?.finance?.summaryByCurrency ?? []).filter((s) => s.totalExpense !== 0).map((s) => ({ currency: s.currency, amount: s.totalExpense }))} locale={locale} />
+                : formatCurrency(0, locale, 'UZS')
+            }
+            hint={td('expensesHint')}
+          />
+        </div>
+      </section>
+
+      {/* Who owes whom */}
+      <div className="dash-debts-grid">
+        {([
+          { key: 'in', title: td('debtsIn'), list: receivable?.topDebtors ?? [], empty: td('noDebtsIn'), color: 'var(--color-success-700)', total: receivable?.byCurrency },
+          { key: 'out', title: td('debtsOut'), list: payable?.topCreditors ?? [], empty: td('noDebtsOut'), color: 'var(--color-error-700)', total: payable?.byCurrency },
+        ] as const).map((block) => (
+          <section key={block.key} className="rd-table-card dash-panel" aria-labelledby={`dash-debt-${block.key}`}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', alignItems: 'baseline', flexWrap: 'wrap' }}>
+              <h2 id={`dash-debt-${block.key}`} className="dash-panel-title">{block.title}</h2>
+              {block.total && block.total.length > 0 && <MultiCurrencyValue items={block.total} locale={locale} color={block.color} />}
+            </div>
+            {block.list.length === 0 ? (
+              <p className="dash-panel-hint" style={{ marginTop: 'var(--space-3)' }}>{block.empty}</p>
+            ) : (
+              <table className="rd-mini-table" style={{ marginTop: 'var(--space-3)' }}>
+                <tbody>
+                  {block.list.slice(0, 5).map((d) => (
+                    <tr key={`${d.id}-${d.currency}`}>
+                      <td style={{ overflowWrap: 'anywhere' }}>{d.name}</td>
+                      <td className="tabular-nums" style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)', color: block.color, whiteSpace: 'nowrap' }}>{formatCurrency(d.amount, locale, d.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <Link href="/counterparties" className="dash-card-link" style={{ marginTop: 'var(--space-3)', display: 'inline-flex' }}>
+              {td('allCounterparties')} <ArrowRight size={14} aria-hidden />
+            </Link>
+          </section>
         ))}
       </div>
 
-      {/* Core KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-        {/* Bank and cash balances */}
-        {data?.finance?.accounts.map((account) => {
-          const isBank = account.accountType === 'BANK';
-          const Icon = isBank ? Building2 : Wallet;
-          const accent = account.accountType === 'UZS_CASH'
-            ? 'var(--color-success-600)'
-            : account.accountType === 'USD_CASH'
-              ? 'var(--color-info-600)'
-              : 'var(--color-primary-600)';
-          const iconBackground = account.accountType === 'UZS_CASH'
-            ? 'var(--color-success-50)'
-            : account.accountType === 'USD_CASH'
-              ? 'var(--color-info-50)'
-              : 'var(--color-primary-50)';
-
-          return (
-            <div key={account.id} style={{
-              minWidth: 0,
-              padding: 'var(--space-4)',
-              borderRadius: 'var(--radius-lg)',
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border-light)',
-              borderTop: `3px solid ${accent}`,
-              boxShadow: 'var(--shadow-sm)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                <div style={{
-                  width: 40,
-                  height: 40,
-                  flexShrink: 0,
-                  borderRadius: 'var(--radius-md)',
-                  background: iconBackground,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <Icon size={20} style={{ color: accent }} />
-                </div>
-                <span style={{
-                  minWidth: 0,
-                  fontSize: 'var(--text-sm)',
-                  color: 'var(--color-text-secondary)',
-                  overflowWrap: 'anywhere',
-                }}>
-                  {account.name[locale]}
-                </span>
-              </div>
-              <div style={{
-                fontSize: 'var(--text-xl)',
-                fontWeight: 'var(--font-bold)',
-                color: 'var(--color-text-primary)',
-                fontVariantNumeric: 'tabular-nums',
-                lineHeight: 1.25,
-                overflowWrap: 'anywhere',
-              }}>
-                {formatCurrency(account.balance, locale, account.currency)}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Sales */}
-        <KpiCard
-          title={isRu ? 'Объём продаж' : 'Sotuv hajmi'}
-          value={
-            data?.sales.byCurrency?.length
-              ? data.sales.byCurrency.map((summary) => formatCurrency(summary.amount, locale, summary.currency)).join(' / ')
-              : `${formatMoney(data?.sales?.totalSales ?? 0, 'UZS')} (equiv.)`
-          }
-          subtitle={`${data?.sales?.invoiceCount ?? 0} ${isRu ? 'документов' : 'ta hujjat'}`}
-          icon={ShoppingCart}
-          iconColor="var(--color-info-600)"
-          iconBg="var(--color-info-50)"
-        />
-
-        {/* Expenses */}
-        <KpiCard
-          title={isRu ? 'Всего расходов' : 'Jami chiqim'}
-          value={formatMoney(uzsSummary?.totalExpense ?? 0, 'UZS')}
-          subtitle={usdSummary ? `+ ${formatMoney(usdSummary.totalExpense, 'USD')}` : undefined}
-          icon={TrendingDown}
-          iconColor="var(--color-error-600)"
-          iconBg="var(--color-error-50)"
-        />
-
-        {/* Profit */}
-        <KpiCard
-          title={isRu ? 'Валовая прибыль (UZS)' : 'Yalpi foyda (UZS)'}
-          value={formatMoney(data?.finance?.profit?.grossProfit ?? 0, 'UZS')}
-          subtitle={`${isRu ? 'Продажи' : 'Sotuv'}: ${formatMoney(data?.finance?.profit?.revenue ?? 0, 'UZS')}`}
-          icon={BarChart3}
-          iconColor="var(--color-warning-600)"
-          iconBg="var(--color-warning-50)"
-        />
-      </div>
-
-      <Card title={isRu ? 'Движение по каждой кассе и банковскому счёту' : 'Har bir kassa va bank hisobi harakati'}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--space-3)' }}>
-          {(data?.finance.summaryByAccount ?? []).map((account) => (
-            <div
-              key={account.accountId}
-              style={{
-                padding: 'var(--space-3)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-secondary)',
-                borderLeft: `3px solid ${account.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)'}`,
-              }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 8 }}>
-                {account.name[locale]} · {account.currency}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 'var(--text-xs)' }}>
-                <span style={{ color: 'var(--color-success-700)' }}>
-                  {isRu ? 'Приход' : 'Kirim'}: {formatCurrency(account.totalIncome, locale, account.currency)}
-                </span>
-                <span style={{ color: '#b91c1c' }}>
-                  {isRu ? 'Расход' : 'Chiqim'}: {formatCurrency(account.totalExpense, locale, account.currency)}
-                </span>
-                <span style={{ color: '#1d4ed8' }}>
-                  {isRu ? 'Перевод входящий' : 'O‘tkazma kirim'}: {formatCurrency(account.transferIn, locale, account.currency)}
-                </span>
-                <span style={{ color: '#a16207' }}>
-                  {isRu ? 'Перевод исходящий' : 'O‘tkazma chiqim'}: {formatCurrency(account.transferOut, locale, account.currency)}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Orders Pipeline (Buyurtmalar voronkasi) */}
-      {orderStats && (
-        <Card
-          title={isRu ? 'Воронка заказов и производство' : 'Buyurtmalar voronkasi va ishlab chiqarish'}
-          action={
-            <Link href="/sales/orders" style={{ textDecoration: 'none' }}>
-              <Button variant="ghost" size="sm">
-                {isRu ? 'Все заказы' : 'Barcha buyurtmalar'} <ArrowRight size={14} />
-              </Button>
-            </Link>
-          }
-        >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-              gap: 'var(--space-3)',
-              marginTop: 'var(--space-2)',
-            }}
-          >
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-primary-500)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'НОВЫЕ / СОГЛАСОВАНИЕ' : 'YANGI / TASDIQLASHDA'}
-              </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px' }}>
-                {(orderStats.pipeline?.NEW || 0) + (orderStats.pipeline?.PENDING_APPROVAL || 0)}
-              </div>
-            </div>
-
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-warning-500)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'В ПРОИЗВОДСТВЕ' : 'ISHLAB CHIQARISHDA'}
-              </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-warning-600)' }}>
-                {(orderStats.pipeline?.SENT_TO_PRODUCTION || 0) + (orderStats.pipeline?.IN_PRODUCTION || 0) + (orderStats.pipeline?.PARTIALLY_READY || 0)}
-              </div>
-            </div>
-
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-error-500)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'ОЖИДАЮТ ОПЛАТЫ' : 'TO‘LOV KUTILMOQDA'}
-              </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-error-600)' }}>
-                {orderStats.pipeline?.AWAITING_PAYMENT || 0}
-              </div>
-            </div>
-
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-success-500)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'ГОТОВЫ К ОТГРУЗКЕ' : 'JO‘NATISHGA TAYYOR'}
-              </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-success-600)' }}>
-                {orderStats.pipeline?.READY_TO_SHIP || 0}
-              </div>
-            </div>
-
-            <div style={{ padding: '12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--color-info-500)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                {isRu ? 'ОТГРУЖЕНЫ' : 'JO‘NATILGAN'}
-              </div>
-              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '4px', color: 'var(--color-info-600)' }}>
-                {orderStats.pipeline?.SHIPPED || 0}
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Receivables & Payables */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-        {/* Receivables */}
-        <Card
-          title={isRu ? 'Дебиторы (нам должны)' : 'Debitorlar (bizga qarzdorlar)'}
-          action={<Link href="/accounting" style={{ textDecoration: 'none' }}><Button variant="ghost" size="sm">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} /></Button></Link>}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-            <div>
-              <MultiCurrencyValue
-                items={data?.debts?.receivable?.byCurrency}
-                locale={locale}
-                color="var(--color-success-600)"
-              />
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                {data?.debts?.receivable?.count ?? 0} {isRu ? 'контрагентов' : 'ta kontragent'}
-              </div>
-            </div>
-            <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-full)', background: 'var(--color-success-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowDownRight size={24} style={{ color: 'var(--color-success-600)' }} />
-            </div>
-          </div>
-          {data?.debts?.receivable?.topDebtors?.slice(0, 3).map((d) => (
-            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{d.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(d.amount, locale, d.currency)}</span>
-            </div>
-          ))}
-        </Card>
-
-        {/* Payables */}
-        <Card
-          title={isRu ? 'Кредиторы (мы должны)' : 'Kreditorlar (biz qarzdormiz)'}
-          action={<Link href="/accounting" style={{ textDecoration: 'none' }}><Button variant="ghost" size="sm">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} /></Button></Link>}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-            <div>
-              <MultiCurrencyValue
-                items={data?.debts?.payable?.byCurrency}
-                locale={locale}
-                color="var(--color-error-600)"
-              />
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                {data?.debts?.payable?.count ?? 0} {isRu ? 'контрагентов' : 'ta kontragent'}
-              </div>
-            </div>
-            <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-full)', background: 'var(--color-error-50)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ArrowUpRight size={24} style={{ color: 'var(--color-error-600)' }} />
-            </div>
-          </div>
-          {data?.debts?.payable?.topCreditors?.slice(0, 3).map((c) => (
-            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', marginBottom: '6px' }}>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{c.name}</span>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(c.amount, locale, c.currency)}</span>
-            </div>
-          ))}
-        </Card>
-      </div>
-
-      {/* Cash Flow Chart */}
+      {/* Cash flow: one chart, one question */}
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-          <div>
-            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>
-              {isRu ? 'График движения денежных средств' : 'Pul oqimi grafigi'}
-            </h2>
-          </div>
-          <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
+          <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{td('cashFlowQ')}</h2>
+          <div className="rd-chips" role="group" aria-label={td('period')}>
             {(['day', 'week', 'month'] as const).map((g) => (
-              <button
-                key={g}
-                onClick={() => setCashFlowGranularity(g)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--color-border)',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: cashFlowGranularity === g ? 'var(--font-semibold)' : 'var(--font-regular)',
-                  background: cashFlowGranularity === g ? 'var(--color-primary-600)' : 'var(--color-bg-secondary)',
-                  color: cashFlowGranularity === g ? '#fff' : 'var(--color-text-secondary)',
-                  transition: 'all var(--transition-fast)',
-                }}
-              >
+              <button key={g} type="button" className="rd-chip" aria-pressed={cashFlowGranularity === g} onClick={() => setCashFlowGranularity(g)}>
                 {g === 'day' ? (isRu ? 'День' : 'Kun') : g === 'week' ? (isRu ? 'Неделя' : 'Hafta') : (isRu ? 'Месяц' : 'Oy')}
               </button>
             ))}
           </div>
         </div>
         <CashFlowChart seriesByCurrency={data?.cashFlow?.seriesByCurrency ?? []} isRu={isRu} />
-        {uzsSummary && (
-          <div style={{ display: 'flex', gap: 'var(--space-6)', marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--color-border-light)' }}>
-            <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего приход (UZS)' : 'Jami kirim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalIncome, 'UZS')}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Всего расход (UZS)' : 'Jami chiqim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(uzsSummary.totalExpense, 'UZS')}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Чистый поток (UZS)' : 'Sof oqim (UZS)'}</div>
-              <div style={{ fontWeight: 'var(--font-bold)', color: uzsSummary.netCashFlow >= 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontVariantNumeric: 'tabular-nums' }}>
-                {uzsSummary.netCashFlow >= 0 ? '+' : ''}{formatAmount(uzsSummary.netCashFlow, 'UZS')}
-              </div>
-            </div>
-          </div>
-        )}
       </Card>
 
-      {/* Bottom Row: Sales Chart + Recent Transactions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-4)' }}>
-        {/* Sales Dynamics */}
-        <Card title={isRu ? 'Динамика продаж (эквивалент UZS)' : 'Sotuv dinamikasi (UZS ekv.)'}>
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', fontVariantNumeric: 'tabular-nums', marginBottom: 'var(--space-2)' }}>
-              {formatAmount(data?.sales?.totalSales ?? 0, 'UZS')} <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-regular)' }}>UZS</span>
-            </div>
-            <SalesBarChart dynamics={data?.sales?.dynamics ?? []} isRu={isRu} />
-          </div>
-        </Card>
-
-        {/* Recent Transactions */}
-        <Card
-          title={isRu ? 'Последние операции' : 'Oxirgi operatsiyalar'}
-          action={
-            <Link href="/finance" style={{ textDecoration: 'none' }}>
-              <Button variant="ghost" size="sm">{isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} /></Button>
-            </Link>
-          }
-        >
-          {!data?.recentTransactions || data.recentTransactions.length === 0 ? (
-            <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-              {isRu ? 'Операции не найдены' : 'Hech qanday operatsiya topilmadi'}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: 'var(--space-2)' }}>
+      {/* Recent money operations */}
+      <Card
+        title={td('recentTitle')}
+        action={
+          <Link href="/finance" className="dash-card-link">
+            {isRu ? 'Все' : 'Barchasi'} <ArrowRight size={14} aria-hidden />
+          </Link>
+        }
+      >
+        {!data?.recentTransactions || data.recentTransactions.length === 0 ? (
+          <EmptyState compact icon={Wallet} title={isRu ? 'Операций за период нет' : 'Bu davrda operatsiyalar yo‘q'} description={t('noTransactionsHint')} />
+        ) : (
+          <table className="rd-mini-table" style={{ marginTop: 'var(--space-2)' }}>
+            <tbody>
               {data.recentTransactions.slice(0, 7).map((tx) => (
-                <div key={tx.id} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  transition: 'background var(--transition-fast)',
-                  cursor: 'default',
-                }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <div style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 'var(--radius-full)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: tx.direction === 'INCOME' ? 'var(--color-success-50)' : tx.direction === 'EXPENSE' ? 'var(--color-error-50)' : 'var(--color-info-50)',
-                    }}>
-                      {tx.direction === 'INCOME' && <TrendingUp size={16} style={{ color: 'var(--color-success-600)' }} />}
-                      {tx.direction === 'EXPENSE' && <TrendingDown size={16} style={{ color: 'var(--color-error-600)' }} />}
-                      {tx.direction === 'TRANSFER' && <ArrowRight size={16} style={{ color: 'var(--color-info-600)' }} />}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
-                        {tx.counterparty?.name ?? tx.account?.name?.[locale] ?? (isRu ? 'Операция' : 'Operatsiya')}
-                      </div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                        {formatDate(tx.transactionDate, locale)} · {tx.account?.name?.[locale] ?? ''}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{
-                    fontSize: 'var(--text-sm)',
-                    fontWeight: 'var(--font-semibold)',
-                    fontVariantNumeric: 'tabular-nums',
-                    color: tx.direction === 'INCOME' ? 'var(--color-success-600)' : tx.direction === 'EXPENSE' ? 'var(--color-error-600)' : 'var(--color-info-600)',
-                  }}>
+                <tr key={tx.id}>
+                  <td style={{ width: 36 }}>
+                    {tx.direction === 'INCOME' && <TrendingUp size={16} aria-hidden style={{ color: 'var(--color-success-700)' }} />}
+                    {tx.direction === 'EXPENSE' && <TrendingDown size={16} aria-hidden style={{ color: 'var(--color-error-700)' }} />}
+                    {tx.direction === 'TRANSFER' && <ArrowRight size={16} aria-hidden style={{ color: 'var(--color-info-700)' }} />}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 'var(--font-medium)' }}>{tx.counterparty?.name ?? tx.account?.name?.[locale] ?? (isRu ? 'Операция' : 'Operatsiya')}</div>
+                    <div className="rd-sub">{formatDate(tx.transactionDate, locale)} · {tx.account?.name?.[locale] ?? ''}</div>
+                  </td>
+                  <td
+                    className="tabular-nums"
+                    style={{
+                      textAlign: 'right',
+                      whiteSpace: 'nowrap',
+                      fontWeight: 'var(--font-semibold)',
+                      color: tx.direction === 'INCOME' ? 'var(--color-success-700)' : tx.direction === 'EXPENSE' ? 'var(--color-error-700)' : 'var(--color-info-700)',
+                    }}
+                  >
                     {tx.direction === 'INCOME' ? '+' : tx.direction === 'EXPENSE' ? '−' : ''}{formatMoney(Number(tx.amount), tx.currency)}
-                  </div>
-                </div>
+                  </td>
+                </tr>
               ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
+            </tbody>
+          </table>
+        )}
+      </Card>
     </div>
   );
 }

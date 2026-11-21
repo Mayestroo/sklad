@@ -15,6 +15,8 @@ vi.mock('next-intl', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => '/sales',
 }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/components/sales/PaySalesInvoiceModal', () => ({ PaySalesInvoiceModal: () => null }));
@@ -47,10 +49,14 @@ const invoiceCalls = () =>
 
 describe('Sales invoices page', () => {
   beforeEach(() => {
+    // Filters live in the URL and localStorage: each test starts from a clean view.
+    window.history.replaceState(null, '', '/');
+    window.localStorage.clear();
     apiFetch.mockReset();
   });
 
-  it('loads the invoices once; typed filters apply on the filter button', async () => {
+  it('loads the invoices once; the search applies by itself once typing pauses', async () => {
+    window.localStorage.clear();
     apiFetch.mockImplementation(async (endpoint: string) => respond(endpoint));
     renderPage(<SalesPage />);
 
@@ -58,18 +64,14 @@ describe('Sales invoices page', () => {
     expect(apiFetch.mock.calls.map((c) => c[0]).sort()).toEqual([
       '/sales/counterparties',
       '/sales/invoices?',
+      '/sales/invoices?status=DRAFT',
       '/sales/summary',
       '/tenants/warehouses',
     ]);
 
-    fireEvent.change(screen.getByPlaceholderText('Qidirish uchun faktura raqami yoki izohni kiriting...'), {
-      target: { value: 'INV-9' },
-    });
-    expect(invoiceCalls()).toHaveLength(1);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Filtr' }));
-    expect(await screen.findByText('INV-0009')).toBeTruthy();
-    expect(invoiceCalls()).toEqual(['/sales/invoices?', '/sales/invoices?search=INV-9']);
+    fireEvent.change(screen.getByPlaceholderText('searchPh'), { target: { value: 'INV-9' } });
+    expect(await screen.findByText('INV-0009', {}, { timeout: 2000 })).toBeTruthy();
+    expect(invoiceCalls().filter((e) => e !== '/sales/invoices?status=DRAFT')).toEqual(['/sales/invoices?', '/sales/invoices?search=INV-9']);
   });
 
   it('shows the error and reloads on retry', async () => {
@@ -86,6 +88,6 @@ describe('Sales invoices page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
 
     expect(await screen.findByText('INV-0001')).toBeTruthy();
-    await waitFor(() => expect(invoiceCalls()).toHaveLength(2));
+    await waitFor(() => expect(invoiceCalls().filter((e) => e === '/sales/invoices?')).toHaveLength(2));
   });
 });

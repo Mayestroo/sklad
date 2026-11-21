@@ -11,25 +11,25 @@ export function Badge({ variant = 'neutral', children }: BadgeProps) {
       case 'success':
         return {
           backgroundColor: 'var(--color-success-50)',
-          color: 'var(--color-success-600)',
+          color: 'var(--color-success-700)',
           border: '1px solid var(--color-success-100)',
         };
       case 'warning':
         return {
           backgroundColor: 'var(--color-warning-50)',
-          color: 'var(--color-warning-600)',
+          color: 'var(--color-warning-700)',
           border: '1px solid var(--color-warning-100)',
         };
       case 'error':
         return {
           backgroundColor: 'var(--color-error-50)',
-          color: 'var(--color-error-600)',
+          color: 'var(--color-error-700)',
           border: '1px solid var(--color-error-100)',
         };
       case 'info':
         return {
           backgroundColor: 'var(--color-info-50)',
-          color: 'var(--color-info-600)',
+          color: 'var(--color-info-700)',
           border: '1px solid var(--color-info-100)',
         };
       case 'neutral':

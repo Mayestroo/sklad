@@ -529,7 +529,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             padding: '12px 14px',
             backgroundColor: 'rgba(239, 68, 68, 0.08)',
             border: '1px solid #ef4444',
-            color: 'var(--color-error-600)',
+            color: 'var(--color-error-700)',
             borderRadius: 'var(--radius-md)',
             fontSize: 'var(--text-xs)',
             display: 'flex',
@@ -832,7 +832,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                     dirty.current = true;
                     setUnitRows((rows) => rows.filter((r) => r.key !== row.key));
                   }}
-                  style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-600)', cursor: 'pointer' }}
+                  style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-700)', cursor: 'pointer' }}
                 >
                   <Trash2 size={16} aria-hidden />
                 </button>

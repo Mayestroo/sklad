@@ -11,7 +11,10 @@ vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => key,
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'ret-1' }) }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
 vi.mock('@/components/purchases/PurchaseReturnDocumentForm', () => ({
   PurchaseReturnDocumentForm: ({ initialData }: { initialData: { returnNumber: string } }) => (
     <div>form:{initialData.returnNumber}</div>

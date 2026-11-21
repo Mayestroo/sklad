@@ -4,32 +4,27 @@ import { useMemo, useState } from 'react';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
-import { Link } from '@/i18n/navigation';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link, useRouter } from '@/i18n/navigation';
 import { apiFetch, listOf, type ListResponse } from '@/lib/api';
-import { formatCurrency, formatPercent, formatDate, errorMessage, type LocalizedName } from '@/lib/utils';
+import { formatCurrency, formatPercent, formatDate, formatDateTime, errorMessage, type LocalizedName } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Select, SelectOption } from '@/components/ui/Select';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { Button, buttonStyle } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { toast } from '@/context/ToastContext';
-import {
-  ShoppingCart,
-  Plus,
-  Eye,
-  CreditCard,
-  Pencil,
-  RotateCcw,
-  Filter,
-  Search,
-  RefreshCw,
-  TrendingUp,
-  Building2,
-  Trash2,
-} from 'lucide-react';
+import { totalsByCurrency } from '@/lib/currency-totals';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { CurrencyTotals } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, periodRange, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
+import { Facts, PaidProgress, PreviewHead, SectionTitle } from '@/components/ui/list/Preview';
+import { CreditCard, Plus, RotateCcw, ShoppingCart, ExternalLink } from 'lucide-react';
 import { SalesInvoice, SalesSummaryStats } from '@shared/types';
 import { PaySalesInvoiceModal } from '@/components/sales/PaySalesInvoiceModal';
 import { CreateSalesReturnModal } from '@/components/sales/CreateSalesReturnModal';
@@ -44,6 +39,21 @@ interface WarehouseItem {
   name: LocalizedName;
 }
 
+type InvoiceRow = SalesInvoice & {
+  docNumber?: string;
+  items?: Array<{ id: string; quantity: number | string; unitPrice: number | string; totalPrice: number | string; product?: { name?: LocalizedName; unitOfMeasure?: string } }>;
+  createdBy?: { firstName?: string; lastName?: string } | null;
+  postedAt?: string | null;
+};
+
+const FILTER_DEFAULTS = {
+  status: '',
+  paymentStatus: '',
+  counterpartyId: '',
+  warehouseId: '',
+  period: '',
+};
+
 /** GET /sales/invoices with the non-empty filters. */
 function invoicesEndpointFor(filters: Record<string, string>): string {
   const query = new URLSearchParams();
@@ -53,54 +63,71 @@ function invoicesEndpointFor(filters: Record<string, string>): string {
   return `/sales/invoices?${query.toString()}`;
 }
 
+const numberOf = (inv: InvoiceRow) => inv.invoiceNumber || inv.docNumber || '—';
+const dueOf = (inv: InvoiceRow) => Math.max(0, Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+
 export default function SalesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
+  const router = useRouter();
+  const tl = useTranslations('rd.list');
+  const td = useTranslations('rd.doc');
+  const ts = useTranslations('rd.sales');
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const [counterpartyId, setCounterpartyId] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
-  const [status, setStatus] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  // Filters apply on the filter button (as before): the list follows this snapshot.
-  const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
+  // Filters live in the URL and are remembered per user; a link may open the list pre-filtered (?status=DRAFT).
+  const lf = useFilterState('sales.list', FILTER_DEFAULTS);
+  const filters = lf.values;
+  const debouncedSearch = lf.debouncedSearch;
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('sales.list.hidden', ['warehouse']);
+  const [sort, setSort] = usePersistentState<SortState | null>('sales.list.sort', null);
+  const range = periodRange(filters.period);
 
-  const invoicesEndpoint = useMemo(() => invoicesEndpointFor(appliedFilters), [appliedFilters]);
-  const invoicesQuery = useApiQuery<SalesInvoice[]>(invoicesEndpoint);
-  const invoices = invoicesQuery.data ?? [];
-  const loading = invoicesQuery.isPending;
-  // Summary cards and dropdown lists are optional: a failure leaves them empty.
+  const invoicesEndpoint = useMemo(
+    () =>
+      invoicesEndpointFor({
+        search: debouncedSearch,
+        status: filters.status,
+        paymentStatus: filters.paymentStatus,
+        counterpartyId: filters.counterpartyId,
+        warehouseId: filters.warehouseId,
+        dateFrom: range.from,
+        dateTo: range.to,
+      }),
+    [debouncedSearch, filters.status, filters.paymentStatus, filters.counterpartyId, filters.warehouseId, range.from, range.to],
+  );
+  const invoicesQuery = useApiQuery<InvoiceRow[]>(invoicesEndpoint, { keepPrevious: true });
+  const invoices = useMemo(() => invoicesQuery.data ?? [], [invoicesQuery.data]);
+  // Summary tiles and dropdown lists are optional: a failure leaves them empty.
   const statsQuery = useApiQuery<SalesSummaryStats>('/sales/summary');
   const stats = statsQuery.data ?? null;
+  const draftsQuery = useApiQuery<InvoiceRow[]>('/sales/invoices?status=DRAFT');
+  const draftCount = draftsQuery.data?.length ?? 0;
   const counterpartiesQuery = useApiQuery<ListResponse<CounterpartyItem>>('/sales/counterparties');
   const warehousesQuery = useApiQuery<ListResponse<WarehouseItem>>('/tenants/warehouses');
-  const counterparties = useMemo(
-    () => (counterpartiesQuery.data ? listOf(counterpartiesQuery.data) : []),
-    [counterpartiesQuery.data],
-  );
-  const warehouses = useMemo(
-    () => (warehousesQuery.data ? listOf(warehousesQuery.data) : []),
-    [warehousesQuery.data],
-  );
+  const counterparties = useMemo(() => (counterpartiesQuery.data ? listOf(counterpartiesQuery.data) : []), [counterpartiesQuery.data]);
+  const warehouses = useMemo(() => (warehousesQuery.data ? listOf(warehousesQuery.data) : []), [warehousesQuery.data]);
 
-  // Modals
-  const [payInvoice, setPayInvoice] = useState<SalesInvoice | null>(null);
-  const [returnInvoice, setReturnInvoice] = useState<SalesInvoice | null>(null);
-  const [deletingInvoice, setDeletingInvoice] = useState<SalesInvoice | null>(null);
+  // Preview drawer and action modals
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const preview = invoices.find((i) => i.id === previewId) ?? null;
+  const [payInvoice, setPayInvoice] = useState<InvoiceRow | null>(null);
+  const [returnInvoice, setReturnInvoice] = useState<InvoiceRow | null>(null);
+  const [deletingInvoice, setDeletingInvoice] = useState<InvoiceRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const getLocalizedName = (name: LocalizedName | null | undefined) => {
+  const nameOf = (name: LocalizedName | null | undefined) => {
     if (!name) return '—';
     if (typeof name === 'string') return name;
     return name[locale] || name.ru || name.uz || Object.values(name)[0] || '—';
   };
 
-  const fetchStats = () => void statsQuery.refetch();
-  const fetchInvoices = () => void invoicesQuery.refetch();
+  const refresh = () => {
+    void statsQuery.refetch();
+    void invoicesQuery.refetch();
+    void draftsQuery.refetch();
+  };
 
   const handleDeleteInvoice = async () => {
     if (!deletingInvoice || !token || !company) return;
@@ -108,24 +135,14 @@ export default function SalesPage() {
     try {
       if (deletingInvoice.status === 'POSTED') {
         // Step 1: Unpost (reverses stock levels, batches, ledger entries, customer debt)
-        await apiFetch(`/sales/invoices/${deletingInvoice.id}/unpost`, {
-          method: 'POST',
-          token,
-          tenantId: company.id,
-          locale,
-        });
+        await apiFetch(`/sales/invoices/${deletingInvoice.id}/unpost`, { method: 'POST', token, tenantId: company.id, locale });
       }
       // Step 2: Delete invoice
-      await apiFetch(`/sales/invoices/${deletingInvoice.id}`, {
-        method: 'DELETE',
-        token,
-        tenantId: company.id,
-        locale,
-      });
+      await apiFetch(`/sales/invoices/${deletingInvoice.id}`, { method: 'DELETE', token, tenantId: company.id, locale });
       setDeletingInvoice(null);
+      if (previewId === deletingInvoice.id) setPreviewId(null);
       toast.success(isRu ? 'Накладная успешно удалена' : 'Nukladnoy muvaffaqiyatli o‘chirildi');
-      fetchStats();
-      fetchInvoices();
+      refresh();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении накладной' : 'Nukladnoyni o‘chirishda xatolik'));
     } finally {
@@ -133,452 +150,290 @@ export default function SalesPage() {
     }
   };
 
-  const handleApplyFilter = () => {
-    const next = { search, counterpartyId, warehouseId, status, paymentStatus, dateFrom, dateTo };
-    // Same filters again: reload; new filters: the new endpoint loads.
-    if (invoicesEndpointFor(next) === invoicesEndpoint) fetchInvoices();
-    else setAppliedFilters(next);
-  };
+  const statusBadge = (st: string) =>
+    st === 'DRAFT' ? <Badge variant="warning">{td('draft')}</Badge> : st === 'POSTED' ? <Badge variant="success">{td('posted')}</Badge> : st === 'CANCELLED' ? <Badge variant="error">{td('cancelled')}</Badge> : <Badge>{st}</Badge>;
+  const paymentBadge = (pst: string | undefined) =>
+    pst === 'PAID' ? <Badge variant="success">{td('paid')}</Badge> : pst === 'PARTIALLY_PAID' ? <Badge variant="warning">{td('partial')}</Badge> : <Badge variant="error">{td('unpaid')}</Badge>;
 
-  const handleResetFilters = () => {
-    setSearch('');
-    setCounterpartyId('');
-    setWarehouseId('');
-    setStatus('');
-    setPaymentStatus('');
-    setDateFrom('');
-    setDateTo('');
-    setAppliedFilters({});
-  };
-
-  const getDocStatusBadge = (st: string) => {
-    switch (st) {
-      case 'DRAFT':
-        return <Badge variant="warning">{isRu ? 'Черновик' : 'Qoralama'}</Badge>;
-      case 'POSTED':
-        return <Badge variant="success">{isRu ? 'Проведён' : 'Tasdiqlangan'}</Badge>;
-      case 'CANCELLED':
-        return <Badge variant="error">{isRu ? 'Отменён' : 'Bekor qilingan'}</Badge>;
-      default:
-        return <Badge variant="neutral">{st}</Badge>;
-    }
-  };
-
-  const getPaymentBadge = (pst: string) => {
-    switch (pst) {
-      case 'UNPAID':
-        return <Badge variant="error">{isRu ? 'Не оплачен' : 'To‘lanmagan'}</Badge>;
-      case 'PARTIALLY_PAID':
-        return <Badge variant="warning">{isRu ? 'Частично' : 'Qisman to‘langan'}</Badge>;
-      case 'PAID':
-        return <Badge variant="success">{isRu ? 'Оплачен' : 'To‘langan'}</Badge>;
-      default:
-        return null;
-    }
-  };
-
-  const customerOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все клиенты' : 'Barcha mijozlar' },
-    ...counterparties.map((c) => ({ value: c.id, label: c.name })),
-  ];
-
-  const warehouseOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все склады' : 'Barcha omborlar' },
-    ...warehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) })),
-  ];
-
-  const statusOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
-    { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
-    { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
-    { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
-  ];
-
-  const paymentStatusOptions: SelectOption[] = [
-    { value: '', label: isRu ? 'Любой статус оплаты' : 'Barcha to‘lov holatlari' },
-    { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To‘lanmagan' },
-    { value: 'PARTIALLY_PAID', label: isRu ? 'Частично оплачен' : 'Qisman to‘langan' },
-    { value: 'PAID', label: isRu ? 'Оплачен' : 'To‘liq to‘langan' },
-  ];
-
-  const hasActiveFilters = Boolean(search || counterpartyId || warehouseId || status || paymentStatus || dateFrom || dateTo);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Продажи' : 'Sotuvlar'}
-          </h1>
-        </div>
-        <Link href="/sales/new">
-          <Button style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px' }}>
-            <Plus size={18} /> {isRu ? 'Новая накладная продажи' : 'Yangi Sotuv Hujjati'}
-          </Button>
+  /** The one next step of a row: finish the draft, or take the money. */
+  const nextAction = (inv: InvoiceRow) => {
+    if (inv.status === 'DRAFT')
+      return (
+        <Link href={`/sales/${inv.id}`} className="rd-next-btn">
+          {td('continue')}
         </Link>
-      </div>
+      );
+    if (inv.status === 'POSTED' && inv.paymentStatus !== 'PAID')
+      return (
+        <button type="button" className="rd-next-btn" onClick={() => setPayInvoice(inv)}>
+          <CreditCard size={14} aria-hidden /> {td('takePayment')}
+        </button>
+      );
+    return null;
+  };
 
-      {/* Summary KPI Cards (Purchases style) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(99, 102, 241, 0.12)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ShoppingCart size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Продажи за месяц' : 'Shu Oydagi Sotuvlar'}
-            </div>
-            <MultiCurrencyValue
-              items={stats?.monthlySalesByCurrency}
-              locale={locale}
-            />
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {stats?.monthlySalesCount || 0} {isRu ? 'накладных' : 'ta faktura'}
-            </div>
-          </div>
-        </Card>
+  const rowMenu = (inv: InvoiceRow) => (
+    <ActionsMenu
+      label={tl('rowActions')}
+      actions={[
+        { label: tl('open'), onSelect: () => router.push(`/sales/${inv.id}`) },
+        { label: tl('edit'), onSelect: () => router.push(`/sales/${inv.id}?edit=true`) },
+        { label: td('return'), onSelect: () => setReturnInvoice(inv), hidden: inv.status !== 'POSTED' },
+        { label: tl('delete'), onSelect: () => setDeletingInvoice(inv), danger: true },
+      ]}
+    />
+  );
 
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Building2 size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Дебиторская задолженность' : 'Mijozlarning Qarzdorligi'}
-            </div>
-            <MultiCurrencyValue
-              items={stats?.totalCustomerDebtByCurrency}
-              locale={locale}
-              color="var(--color-error-600)"
-            />
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {stats?.customersWithDebtCount || 0} {isRu ? 'клиентов' : 'ta mijoz qarzdor'}
-            </div>
-          </div>
-        </Card>
+  const totals = (amount: (r: InvoiceRow) => number) => <CurrencyTotals totals={totalsByCurrency(invoices, (r) => r.currency, amount)} locale={locale} />;
 
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: 'var(--color-warning-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <RotateCcw size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Возвраты (За месяц)' : 'Qaytarishlar (Shu oy)'}
-            </div>
-            <MultiCurrencyValue
-              items={stats?.monthlyReturnsByCurrency}
-              locale={locale}
-              color="var(--color-warning-600)"
-            />
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Сумма возвратов' : 'Qaytarilgan tovarlar'}
-            </div>
-          </div>
-        </Card>
-
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-lg)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--color-success-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <TrendingUp size={24} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Валовая прибыль' : 'Yalpi Foyda (Marja)'}
-            </div>
-            <MultiCurrencyValue
-              items={stats?.monthlyGrossProfitByCurrency}
-              locale={locale}
-              color="var(--color-success-600)"
-            />
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Маржинальность:' : 'Marja:'} {formatPercent(Number(stats?.monthlyGrossProfitMargin || 0))}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Filter & Search Toolbar (Purchases Style) */}
-      <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        {/* Row 1: Search Input */}
+  const columns: Column<InvoiceRow>[] = [
+    {
+      key: 'number',
+      label: tIn('sana'),
+      primary: true,
+      locked: true,
+      sortValue: (r) => r.invoiceDate || r.createdAt || '',
+      render: (r) => (
         <div>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-            {isRu ? 'Поиск (№ Накладной, Договор, Клиент, Комментарий...)' : 'Qidiruv (Hujjat №, Shartnoma, Mijoz, Izoh...)'}
-          </div>
-          <div style={{ position: 'relative' }}>
-            <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-tertiary)' }} />
-            <input
-              placeholder={isRu ? 'Введите № накладной, договор или комментарий...' : 'Qidirish uchun faktura raqami yoki izohni kiriting...'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px 10px 42px',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-input)',
-                color: 'var(--color-text-primary)',
-                fontSize: 'var(--text-sm)',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
+          <div className="rd-doc-no">{numberOf(r)}</div>
+          <div className="rd-sub">{formatDate(r.invoiceDate || r.createdAt)}</div>
         </div>
-
-        {/* Row 2: Filters Grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-            gap: 'var(--space-3)',
-            alignItems: 'end',
-            paddingTop: 'var(--space-2)',
-            borderTop: '1px solid var(--color-border-light)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Клиент' : 'Mijoz'}
-            </div>
-            <Select
-              options={customerOptions}
-              value={counterpartyId}
-              onChange={setCounterpartyId}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Склад' : 'Ombor'}
-            </div>
-            <Select
-              options={warehouseOptions}
-              value={warehouseId}
-              onChange={setWarehouseId}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Статус документа' : 'Hujjat holati'}
-            </div>
-            <Select
-              options={statusOptions}
-              value={status}
-              onChange={setStatus}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Статус оплаты' : 'To‘lov holati'}
-            </div>
-            <Select
-              options={paymentStatusOptions}
-              value={paymentStatus}
-              onChange={setPaymentStatus}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'С даты' : 'Sanadan'}
-            </div>
-            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder={isRu ? 'С даты...' : 'Sanadan...'} />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'По дату' : 'Sanagacha'}
-            </div>
-            <DatePicker value={dateTo} onChange={setDateTo} placeholder={isRu ? 'По дату...' : 'Sanagacha...'} />
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" onClick={handleApplyFilter} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '38px' }}>
-              <Filter size={15} /> {isRu ? 'Фильтр' : 'Filtr'}
-            </Button>
-            {hasActiveFilters && (
-              <Button variant="secondary" onClick={handleResetFilters} title={isRu ? 'Сбросить' : 'Tozalash'} style={{ padding: '0 12px', height: '38px', color: 'var(--color-text-secondary)' }}>
-                <RefreshCw size={14} />
-              </Button>
-            )}
-          </div>
+      ),
+      footer: <span>{tl('total')} · {tl('results', { count: invoices.length })}</span>,
+    },
+    { key: 'customer', label: ts('customer'), sortValue: (r) => r.counterparty?.name ?? '', render: (r) => <span style={{ fontWeight: 'var(--font-medium)' }}>{r.counterparty?.name || '—'}</span> },
+    { key: 'warehouse', label: tl('warehouse'), sortValue: (r) => nameOf(r.warehouse?.name), render: (r) => <span style={{ color: 'var(--color-text-secondary)' }}>{nameOf(r.warehouse?.name)}</span> },
+    { key: 'amount', label: tl('amount'), numeric: true, sortValue: (r) => Number(r.totalAmount || 0), render: (r) => <strong>{formatCurrency(Number(r.totalAmount || 0), locale, r.currency)}</strong>, footer: totals((r) => Number(r.totalAmount || 0)) },
+    { key: 'paid', label: tl('paid'), numeric: true, sortValue: (r) => Number(r.paidAmount || 0), render: (r) => formatCurrency(Number(r.paidAmount || 0), locale, r.currency), footer: totals((r) => Number(r.paidAmount || 0)) },
+    {
+      key: 'due',
+      label: tl('due'),
+      numeric: true,
+      sortValue: (r) => (r.status === 'POSTED' ? dueOf(r) : 0),
+      render: (r) => (r.status === 'POSTED' && dueOf(r) > 0 ? <span className="rd-due">{formatCurrency(dueOf(r), locale, r.currency)}</span> : <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>),
+      footer: totals((r) => (r.status === 'POSTED' ? dueOf(r) : 0)),
+    },
+    {
+      key: 'status',
+      label: tl('status'),
+      sortValue: (r) => `${r.status}-${r.paymentStatus}`,
+      render: (r) => (
+        // Posted is the normal state: show what matters about it — paid or not.
+        <div className="rd-status-stack">{r.status === 'POSTED' ? paymentBadge(r.paymentStatus) : statusBadge(r.status)}</div>
+      ),
+    },
+    {
+      key: 'actions',
+      label: tIn('amallar'),
+      locked: true,
+      render: (r) => (
+        <div className="rd-row-actions">
+          {nextAction(r)}
+          {rowMenu(r)}
         </div>
-      </Card>
+      ),
+    },
+  ];
 
-      {/* Invoices Table */}
-      <Card style={{ overflow: 'hidden' }}>
+  const filterDefs: FilterDef[] = [
+    { key: 'status', kind: 'segmented', label: tl('status'), options: [{ value: 'DRAFT', label: td('draft') }, { value: 'POSTED', label: td('posted') }, { value: 'CANCELLED', label: td('cancelled') }] },
+    { key: 'paymentStatus', kind: 'select', label: tl('payment'), options: [{ value: 'UNPAID', label: td('unpaid') }, { value: 'PARTIALLY_PAID', label: td('partial') }, { value: 'PAID', label: td('paid') }] },
+    { key: 'counterpartyId', kind: 'select', label: ts('customer'), searchable: true, options: counterparties.map((c) => ({ value: c.id, label: c.name })) },
+    { key: 'warehouseId', kind: 'select', label: tl('warehouse'), options: warehouses.map((w) => ({ value: w.id, label: nameOf(w.name) })) },
+    { key: 'period', kind: 'period', label: tl('period') },
+  ];
+  const anyFilter = Boolean(debouncedSearch || lf.activeCount > 0);
+  const clearAll = lf.reset;
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Продажи' : 'Sotuvlar'}
+        subtitle={ts('subtitle')}
+        actions={
+          <Link href="/sales/new" style={buttonStyle('primary')}>
+            <Plus size={18} aria-hidden /> {ts('newSale')}
+          </Link>
+        }
+      />
+
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard
+          label={ts('sigDebt')}
+          loading={statsQuery.isPending}
+          value={stats?.totalCustomerDebtByCurrency?.some((i) => i.amount !== 0) ? <MultiCurrencyValue inherit items={stats.totalCustomerDebtByCurrency} locale={locale} /> : formatCurrency(0, locale, 'UZS')}
+          secondary={ts('sigDebtHint', { count: stats?.customersWithDebtCount ?? 0 })}
+        />
+        <StatCard label={ts('sigDrafts')} loading={draftsQuery.isPending} value={draftCount} secondary={ts('sigDraftsHint')} />
+        <StatCard label={ts('sigMonth')} loading={statsQuery.isPending} value={<MultiCurrencyValue inherit items={stats?.monthlySalesByCurrency} locale={locale} />} secondary={ts('sigMonthHint', { count: stats?.monthlySalesCount ?? 0 })} />
+        <StatCard label={ts('sigProfit')} loading={statsQuery.isPending} value={<MultiCurrencyValue inherit items={stats?.monthlyGrossProfitByCurrency} locale={locale} />} secondary={ts('sigProfitHint', { pct: formatPercent(Number(stats?.monthlyGrossProfitMargin || 0)) })} />
+      </StatCardGrid>
+
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={ts('searchPh')}
+        resultCount={invoicesQuery.isPending ? null : invoices.length}
+        columns={<ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
+
+      <div className="rd-table-card">
         {invoicesQuery.isError ? (
-          <LoadError error={invoicesQuery.error} onRetry={fetchInvoices} retrying={invoicesQuery.isFetching} />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
-            <div>{isRu ? 'Загрузка...' : 'Yuklanmoqda...'}</div>
-          </div>
-        ) : invoices.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <ShoppingCart size={48} style={{ margin: '0 auto var(--space-3)', opacity: 0.3 }} />
-            <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>
-              {isRu ? 'Накладные продаж не найдены' : 'Sotuv fakturalari topilmadi'}
-            </div>
-            <div style={{ fontSize: 'var(--text-xs)', marginTop: '4px' }}>
-              {isRu ? 'Нажмите кнопку выше, чтобы создать новую накладную продажи' : 'Yangi sotuv hujjatini yaratish uchun yuqoridagi tugmani bosing'}
-            </div>
-          </div>
+          <LoadError error={invoicesQuery.error} onRetry={() => void invoicesQuery.refetch()} retrying={invoicesQuery.isFetching} />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
+          <DataTable
+            rows={invoices}
+            columns={columns}
+            rowKey={(r) => r.id}
+            hidden={hiddenCols}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={(r) => setPreviewId(r.id)}
+            selectedKey={previewId}
+            loading={invoicesQuery.isPending}
+            caption={tl('clickRowHint')}
+            empty={
+              anyFilter ? (
+                <EmptyState icon={ShoppingCart} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
+              ) : (
+                <EmptyState
+                  icon={ShoppingCart}
+                  title={ts('noSalesYet')}
+                  description={ts('noSalesHint')}
+                  action={
+                    <Link href="/sales/new" style={buttonStyle('primary')}>
+                      <Plus size={16} aria-hidden /> {ts('newSale')}
+                    </Link>
+                  }
+                />
+              )
+            }
+          />
+        )}
+      </div>
+
+      {/* Row preview: check a sale without leaving the list */}
+      {preview && (
+        <Drawer
+          isOpen
+          onClose={() => setPreviewId(null)}
+          title={ts('previewTitle', { number: numberOf(preview) })}
+          description={`${preview.counterparty?.name ?? '—'} · ${formatDate(preview.invoiceDate || preview.createdAt)}`}
+          size="lg"
+          footer={
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'flex-end', width: '100%' }}>
+              {preview.status === 'POSTED' && (
+                <Button variant="secondary" onClick={() => setReturnInvoice(preview)}>
+                  <RotateCcw size={16} aria-hidden /> {td('return')}
+                </Button>
+              )}
+              <Link href={`/sales/${preview.id}`} style={buttonStyle('secondary')}>
+                <ExternalLink size={16} aria-hidden /> {tl('openFull')}
+              </Link>
+              {preview.status === 'POSTED' && preview.paymentStatus !== 'PAID' && (
+                <Button onClick={() => setPayInvoice(preview)}>
+                  <CreditCard size={16} aria-hidden /> {td('takePayment')}
+                </Button>
+              )}
+              {preview.status === 'DRAFT' && (
+                <Link href={`/sales/${preview.id}`} style={buttonStyle('primary')}>
+                  {td('continue')}
+                </Link>
+              )}
+            </div>
+          }
+        >
+          <PreviewHead
+            badges={
+              <>
+                {statusBadge(preview.status)}
+                {preview.status === 'POSTED' && paymentBadge(preview.paymentStatus)}
+              </>
+            }
+            amount={formatCurrency(Number(preview.totalAmount || 0), locale, preview.currency)}
+            caption={
+              preview.status === 'POSTED' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <PaidProgress paid={Number(preview.paidAmount || 0)} total={Number(preview.totalAmount || 0)} label={tl('paidShare')} />
+                  <span>
+                    {tl('paid')}: {formatCurrency(Number(preview.paidAmount || 0), locale, preview.currency)}
+                    {dueOf(preview) > 0 && (
+                      <>
+                        {' · '}
+                        <span className="rd-due">
+                          {tl('due')}: {formatCurrency(dueOf(preview), locale, preview.currency)}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </div>
+              ) : undefined
+            }
+          />
+          <Facts
+            items={[
+              { label: ts('customer'), value: preview.counterparty?.name ?? '—' },
+              { label: tl('warehouse'), value: nameOf(preview.warehouse?.name) },
+              { label: tl('date'), value: formatDate(preview.invoiceDate || preview.createdAt) },
+              { label: td('contract'), value: preview.contractNumber, hidden: !preview.contractNumber },
+              { label: td('createdBy'), value: [preview.createdBy?.firstName, preview.createdBy?.lastName].filter(Boolean).join(' '), hidden: !preview.createdBy },
+              { label: td('postedAt'), value: formatDateTime(preview.postedAt), hidden: !preview.postedAt },
+              { label: tl('comment'), value: preview.comment, hidden: !preview.comment },
+            ]}
+          />
+          <SectionTitle>
+            {tl('lines')} ({preview.items?.length ?? 0})
+          </SectionTitle>
+          {preview.items && preview.items.length > 0 ? (
+            <table className="rd-mini-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {isRu ? '№ НАКЛАДНОЙ / ДАТА' : 'FAKTURA № / SANA'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {isRu ? 'КЛИЕНТ' : 'MIJOZ'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {isRu ? 'СКЛАД' : 'OMBOR'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
-                    {isRu ? 'ОБЩАЯ СУММА' : 'JAMI SUMMA'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
-                    {isRu ? 'ОПЛАЧЕНО' : 'TO‘LANGAN'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
-                    {isRu ? 'СТАТУС' : 'HOLATI'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
-                    {isRu ? 'ОПЛАТА' : 'TO‘LOV'}
-                  </th>
-                  <th style={{ padding: '12px 16px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
-                    {isRu ? 'ДЕЙСТВИЯ' : 'AMALLAR'}
-                  </th>
+                <tr>
+                  <th scope="col">{td('product')}</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>{td('qty')}</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>{td('price')}</th>
+                  <th scope="col" style={{ textAlign: 'right' }}>{td('sum')}</th>
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv) => (
-                  <tr
-                    key={inv.id}
-                    style={{
-                      borderBottom: '1px solid var(--color-border-light)',
-                      transition: 'background-color 0.15s ease',
-                    }}
-                  >
-                    <td style={{ padding: '12px 16px' }}>
-                      <Link href={`/sales/${inv.id}`} style={{ fontWeight: 600, color: 'var(--color-primary-600)', textDecoration: 'none' }}>
-                        {inv.invoiceNumber || (inv as { docNumber?: string } | null | undefined)?.docNumber}
-                      </Link>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
-                        {formatDate(inv.invoiceDate || inv.createdAt)}
-                      </div>
-                    </td>
-
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                        {inv.counterparty?.name || '—'}
-                      </div>
-                    </td>
-
-                    <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>
-                      {getLocalizedName(inv.warehouse?.name)}
-                    </td>
-
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text-primary)' }} className="tabular-nums">
-                      {formatCurrency(Number(inv.totalAmount || 0), locale, inv.currency)}
-                    </td>
-
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--color-success-600)', fontWeight: 500 }} className="tabular-nums">
-                      {formatCurrency(Number(inv.paidAmount || 0), locale, inv.currency)}
-                    </td>
-
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      {getDocStatusBadge(inv.status)}
-                    </td>
-
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      {getPaymentBadge(inv.paymentStatus || 'UNPAID')}
-                    </td>
-
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                        <Link href={`/sales/${inv.id}`}>
-                          <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Просмотр' : 'Ko‘rish'}>
-                            <Eye size={14} />
-                          </Button>
-                        </Link>
-
-                        <Link href={`/sales/${inv.id}?edit=true`}>
-                          <Button variant="secondary" style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)' }} title={isRu ? 'Редактировать' : 'Tahrirlash'}>
-                            <Pencil size={14} />
-                          </Button>
-                        </Link>
-
-                        {inv.status === 'POSTED' && (
-                          <>
-                            <Button
-                              variant="secondary"
-                              onClick={() => setPayInvoice(inv)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-success-600)' }}
-                              title={isRu ? 'Принять оплату' : 'To‘lov olish'}
-                            >
-                              <CreditCard size={14} />
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => setReturnInvoice(inv)}
-                              style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-warning-600)' }}
-                              title={isRu ? 'Оформить возврат' : 'Qaytaruv'}
-                            >
-                              <RotateCcw size={14} />
-                            </Button>
-                          </>
-                        )}
-
-                        <Button
-                          variant="secondary"
-                          onClick={() => setDeletingInvoice(inv)}
-                          style={{ padding: '4px 8px', height: '30px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}
-                          title={isRu ? 'Удалить документ' : 'Hujjatni o‘chirish'}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-                    </td>
+                {preview.items.map((it) => (
+                  <tr key={it.id}>
+                    <td>{nameOf(it.product?.name)}</td>
+                    <td className="tabular-nums" style={{ textAlign: 'right' }}>{Number(it.quantity)}</td>
+                    <td className="tabular-nums" style={{ textAlign: 'right' }}>{formatCurrency(Number(it.unitPrice), locale, preview.currency)}</td>
+                    <td className="tabular-nums" style={{ textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{formatCurrency(Number(it.totalPrice), locale, preview.currency)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </Card>
-
-      {/* Action Modals */}
-      {payInvoice && (
-        <PaySalesInvoiceModal
-          isOpen={Boolean(payInvoice)}
-          onClose={() => setPayInvoice(null)}
-          invoice={payInvoice}
-          onSuccess={() => {
-            fetchStats();
-            fetchInvoices();
-          }}
-        />
+          ) : (
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>{td('noLines')}</p>
+          )}
+          <SectionTitle>{td('history')}</SectionTitle>
+          <ol className="rd-timeline">
+            <li>
+              <span>
+                {td('created')} · {formatDateTime(preview.createdAt)}
+              </span>
+            </li>
+            {preview.postedAt && (
+              <li style={{ ['--rd-dot' as string]: 'var(--color-success-600)' }}>
+                <span>
+                  {td('postedEvent')} · {formatDateTime(preview.postedAt)}
+                </span>
+              </li>
+            )}
+            {Number(preview.paidAmount || 0) > 0 && (
+              <li style={{ ['--rd-dot' as string]: 'var(--color-primary-600)' }}>
+                <span>{td('paidEvent', { amount: formatCurrency(Number(preview.paidAmount), locale, preview.currency) })}</span>
+              </li>
+            )}
+          </ol>
+        </Drawer>
       )}
 
-      {returnInvoice && (
-        <CreateSalesReturnModal
-          isOpen={Boolean(returnInvoice)}
-          onClose={() => setReturnInvoice(null)}
-          invoice={returnInvoice}
-          onSuccess={() => {
-            fetchStats();
-            fetchInvoices();
-          }}
-        />
-      )}
+      {payInvoice && <PaySalesInvoiceModal isOpen onClose={() => setPayInvoice(null)} invoice={payInvoice} onSuccess={refresh} />}
+      {returnInvoice && <CreateSalesReturnModal isOpen onClose={() => setReturnInvoice(null)} invoice={returnInvoice} onSuccess={refresh} />}
 
-      {/* Delete Draft Modal */}
+      {/* Delete confirmation (posted documents are unposted first) */}
       {deletingInvoice && (
         <Modal
           isOpen={true}
@@ -589,40 +444,24 @@ export default function SalesPage() {
                 ? 'Удаление проведённого документа'
                 : 'Tasdiqlangan hujjatni o‘chirish'
               : deletingInvoice.status === 'CANCELLED'
-              ? isRu
-                ? 'Удаление отменённого документа'
-                : 'Bekor qilingan hujjatni o‘chirish'
-              : isRu
-              ? 'Удаление черновика'
-              : 'Qoralamani o‘chirish'
+                ? isRu
+                  ? 'Удаление отменённого документа'
+                  : 'Bekor qilingan hujjatni o‘chirish'
+                : ts('deleteTitleDraft')
           }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {deletingInvoice.status === 'POSTED'
-                ? isRu
-                  ? `Накладная продажи ${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber} уже проведена. Удаление автоматически вернёт товары на склад, отменит проводки и задолженность клиента, после чего удалит документ. Вы уверены?`
-                  : `${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber} raqamli sotuv hujjati tasdiqlangan (o‘tkazilgan). O‘chirish tovarlarni omborga qaytaradi, buxgalteriya o‘tkazmasi va mijoz qarzini avtomatik bekor qilib, hujjatni o‘chiradi. Davom etasizmi?`
-                : isRu
-                ? `Вы действительно хотите удалить накладную ${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber}? Это действие необратимо.`
-                : `Haqiqatan ham ${deletingInvoice.invoiceNumber || (deletingInvoice as { docNumber?: string } | null | undefined)?.docNumber} raqamli sotuv hujjatini o‘chirmoqchimisiz? Ushbu amalni ortga qaytarib bo‘lmaydi.`}
+                ? tIn('p0_raqamli_sotuv_hujjati_tasdiql', { p0: numberOf(deletingInvoice) })
+                : tIn('haqiqatan_ham_p0_raqamli_sotuv_h', { p0: numberOf(deletingInvoice) })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button
-                variant="secondary"
-                onClick={() => setDeletingInvoice(null)}
-                disabled={deleteLoading}
-              >
+              <Button variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
-              <Button
-                variant="danger"
-                onClick={handleDeleteInvoice}
-                disabled={deleteLoading}
-              >
-                {deleteLoading
-                  ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...')
-                  : (isRu ? 'Удалить' : 'O‘chirish')}
+              <Button variant="danger" onClick={handleDeleteInvoice} loading={deleteLoading} loadingText={isRu ? 'Удаление...' : 'O‘chirilmoqda...'}>
+                {isRu ? 'Удалить' : 'O‘chirish'}
               </Button>
             </div>
           </div>

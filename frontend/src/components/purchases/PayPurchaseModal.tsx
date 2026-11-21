@@ -14,6 +14,7 @@ import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 import { CreditCard } from 'lucide-react';
+import { localIsoDate } from '@/lib/date-range';
 
 interface PayPurchaseModalProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export function PayPurchaseModal({
   const [amount, setAmount] = useState<number>(0);
   const [exchangeRate, setExchangeRate] = useState('');
   const [paymentDate, setPaymentDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
+    localIsoDate(new Date())
   );
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,7 +56,7 @@ export function PayPurchaseModal({
       setAmount(remaining);
       setExchangeRate('');
       setNote('');
-      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentDate(localIsoDate(new Date()));
       setError('');
     }
 
@@ -188,7 +189,7 @@ export function PayPurchaseModal({
               borderRadius: 'var(--radius-md)',
               backgroundColor: 'var(--color-error-50)',
               border: '1px solid var(--color-error-100)',
-              color: 'var(--color-error-600)',
+              color: 'var(--color-error-700)',
               fontSize: 'var(--text-sm)',
               fontWeight: 500,
             }}
@@ -248,7 +249,7 @@ export function PayPurchaseModal({
             <span style={{ color: 'var(--color-text-secondary)' }}>
               {isRu ? 'Уже оплачено:' : 'To‘langan:'}
             </span>
-            <span style={{ color: 'var(--color-success-600)', fontWeight: 600 }}>
+            <span style={{ color: 'var(--color-success-700)', fontWeight: 600 }}>
               {formatCurrency(Number(receipt.paidAmount || 0), locale, receipt.currency)}
             </span>
           </div>
@@ -256,7 +257,7 @@ export function PayPurchaseModal({
             <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>
               {isRu ? 'Остаток долга:' : 'Qarz qoldig‘i:'}
             </span>
-            <span style={{ color: 'var(--color-error-600)', fontWeight: 700 }}>
+            <span style={{ color: 'var(--color-error-700)', fontWeight: 700 }}>
               {formatCurrency(remaining, locale, receipt.currency)}
             </span>
           </div>

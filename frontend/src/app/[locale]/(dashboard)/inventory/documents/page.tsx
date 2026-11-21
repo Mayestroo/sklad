@@ -10,14 +10,21 @@ import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { ChipGroup } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import {
   FileText,
+  PackagePlus,
+  PackageMinus,
+  ClipboardCheck,
   Plus,
-  X,
   Printer,
 } from 'lucide-react';
 import { InventoryDocument, Product, Warehouse } from '@shared/types';
@@ -28,7 +35,9 @@ const INVENTORY_COST_CURRENCY = 'UZS';
 export default function InventoryDocumentsPage() {
   const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
+  const tdoc = useTranslations('rd.invdocs');
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
   const { token, company } = useAuth();
 
   const documentsQuery = useApiQuery<InventoryDocument[]>('/inventory/documents');
@@ -132,11 +141,11 @@ export default function InventoryDocumentsPage() {
   const getDocTypeBadge = (type: string) => {
     switch (type) {
       case 'INBOUND':
-        return <Badge variant="success">{isRu ? 'Приход (Inbound)' : 'Kirim (Inbound)'}</Badge>;
+        return <Badge variant="success">{tdoc('inTitle')}</Badge>;
       case 'OUTBOUND':
-        return <Badge variant="error">{isRu ? 'Расход (Outbound)' : 'Chiqim (Outbound)'}</Badge>;
+        return <Badge variant="error">{tdoc('outTitle')}</Badge>;
       case 'STOCKTAKING':
-        return <Badge variant="warning">{isRu ? 'Инвентаризация' : 'Inventarizatsiya'}</Badge>;
+        return <Badge variant="warning">{tdoc('countTitle')}</Badge>;
       default:
         return <Badge variant="neutral">{type}</Badge>;
     }
@@ -158,115 +167,148 @@ export default function InventoryDocumentsPage() {
     label: `${p.name[locale] || p.name.ru || p.name.uz} (${p.sku})`,
   }));
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Складские документы' : 'Ombor hujjatlari'}
-          </h1>
-        </div>
+  const tl = useTranslations('rd.list');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [sort, setSort] = usePersistentState<SortState | null>('invdocs.sort', null);
+  const startDocument = (type: 'INBOUND' | 'OUTBOUND' | 'STOCKTAKING') => {
+    setDocType(type);
+    setCreateError(null);
+    setShowModal(true);
+  };
+  const shownDocs = typeFilter ? documents.filter((d) => d.docType === typeFilter) : documents;
+  const countOf = (type: string) => documents.filter((d) => d.docType === type).length;
+  const tasks = [
+    { type: 'INBOUND' as const, Icon: PackagePlus, tone: 'success', title: tdoc('inTitle'), hint: tdoc('inHint') },
+    { type: 'OUTBOUND' as const, Icon: PackageMinus, tone: 'error', title: tdoc('outTitle'), hint: tdoc('outHint') },
+    { type: 'STOCKTAKING' as const, Icon: ClipboardCheck, tone: 'warning', title: tdoc('countTitle'), hint: tdoc('countHint') },
+  ];
 
-        <Button variant="primary" onClick={() => setShowModal(true)}>
-          <Plus size={16} />
-          {isRu ? 'Оформить документ' : 'Hujjat Rasmiylashtirish'}
-        </Button>
+  const columns: Column<InventoryDocument>[] = [
+    {
+      key: 'number',
+      label: tIn('sana'),
+      primary: true,
+      locked: true,
+      sortValue: (d) => d.docDate,
+      render: (d) => (
+        <div>
+          <div className="rd-doc-no">{d.docNumber}</div>
+          <div className="rd-sub">{formatDate(d.docDate, locale)}</div>
+        </div>
+      ),
+      footer: <span>{tl('total')} · {tl('results', { count: shownDocs.length })}</span>,
+    },
+    { key: 'type', label: isRu ? 'Тип' : 'Turi', sortValue: (d) => d.docType, render: (d) => getDocTypeBadge(d.docType) },
+    { key: 'warehouse', label: tl('warehouse'), render: (d) => getLocalizedName(d.warehouse?.name, locale) || '—' },
+    {
+      key: 'amount',
+      label: tIn('tannarx_boyicha_summa'),
+      numeric: true,
+      sortValue: (d) => Number(d.totalAmount),
+      render: (d) => <strong>{formatCurrency(Number(d.totalAmount), locale, INVENTORY_COST_CURRENCY)}</strong>,
+    },
+    {
+      key: 'actions',
+      label: tIn('amallar'),
+      locked: true,
+      render: (d) => (
+        <div className="rd-row-actions">
+          <button type="button" className="rd-next-btn" onClick={() => setPrintDoc(d)}>
+            <Printer size={14} aria-hidden /> {isRu ? 'Печать' : 'Chop etish'}
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Складские документы' : 'Ombor hujjatlari'}
+        subtitle={isRu ? 'Инвентаризация, оприходование излишков и списание' : 'Inventarizatsiya, ortiqcha tovarni kirim qilish va hisobdan chiqarish'}
+      />
+
+      {/* Start from the task, not from a "document type" field */}
+      <section aria-labelledby="invdocs-start">
+        <h2 id="invdocs-start" className="dash-section-title">{tdoc('startTitle')}</h2>
+        <div className="rd-signals">
+          {tasks.map(({ type, Icon, tone, title, hint }) => (
+            <button key={type} type="button" className={`rd-signal rd-tone-${tone}`} onClick={() => startDocument(type)}>
+              <span className="rd-signal-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Icon size={16} aria-hidden /> {title}
+              </span>
+              <span className="rd-signal-hint" style={{ color: 'var(--color-text-secondary)' }}>{hint}</span>
+              <span className="rd-signal-hint">{tdoc('docsSoFar', { count: countOf(type) })}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <ChipGroup
+            label={isRu ? 'Тип' : 'Turi'}
+            showLabel
+            options={[
+              { value: '', label: tl('all') },
+              { value: 'INBOUND', label: tdoc('inTitle'), count: countOf('INBOUND') },
+              { value: 'OUTBOUND', label: tdoc('outTitle'), count: countOf('OUTBOUND') },
+              { value: 'STOCKTAKING', label: tdoc('countTitle'), count: countOf('STOCKTAKING') },
+            ]}
+            value={typeFilter}
+            onChange={setTypeFilter}
+          />
+        </div>
       </div>
 
-      {/* Document History Table */}
-      <Card>
+      <div className="rd-table-card">
         {failedQuery ? (
           <LoadError
             error={failedQuery.error}
             onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
             retrying={pageQueries.some((q) => q.isFetching)}
           />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
-        ) : documents.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <FileText size={40} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>{isRu ? 'Документы отсутствуют' : 'Hujjatlar mavjud emas'}</div>
-          </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>{isRu ? '№ ДОКУМЕНТА' : 'HUJJAT №'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'ТИП' : 'TURI'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СКЛАД' : 'OMBORXONA'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ОБЩАЯ СУММА' : 'UMUMIY SUMMA'}</th>
-                  <th style={{ padding: '12px', textAlign: 'center' }}>{isRu ? 'СТАТУС' : 'HOLAT'}</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ПЕЧАТЬ' : 'CHOP ETISH'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc) => (
-                  <tr key={doc.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-semibold)', fontFamily: 'var(--font-mono)' }}>
-                      {doc.docNumber}
-                    </td>
-                    <td style={{ padding: '12px' }}>{getDocTypeBadge(doc.docType)}</td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {doc.warehouse?.name?.[locale] || doc.warehouse?.name?.ru || doc.warehouse?.name?.uz || 'Ombor'}
-                    </td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {formatDate(doc.docDate, locale)}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-bold)' }} className="tabular-nums">
-                      {formatCurrency(Number(doc.totalAmount), locale, INVENTORY_COST_CURRENCY)}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'center' }}>
-                      <Badge variant="success">{isRu ? 'Проведён' : 'O\'tkazilgan'}</Badge>
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
-                      <Button variant="outline" size="sm" onClick={() => setPrintDoc(doc)}>
-                        <Printer size={14} />
-                        {isRu ? 'Печать' : 'Chop etish'}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rows={shownDocs}
+            columns={columns}
+            rowKey={(d) => d.id}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={(d) => setPrintDoc(d)}
+            loading={loading}
+            empty={
+              <EmptyState
+                icon={FileText}
+                title={isRu ? 'Складских документов пока нет' : 'Hozircha ombor hujjatlari yo‘q'}
+                description={tIn('yuqoridan_vazifani_tanlang_ortiq')}
+              />
+            }
+          />
         )}
-      </Card>
+      </div>
 
-      {/* New Document Modal */}
+      {/* New Document dialog */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 'var(--space-4)' }}>
-          <div style={{ width: '100%', maxWidth: '640px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Новый складской документ' : 'Yangi Ombor Hujjati'}</h3>
-              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'} type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
-            </div>
-
+        <Modal isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg">
+          <div>
             {createError && (
-              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
+              <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
                 {createError}
               </div>
             )}
 
             <form onSubmit={handleCreateDocument} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <Select
-                  label={isRu ? 'Тип документа' : 'Hujjat Turi'}
-                  options={[
-                    { value: 'INBOUND', label: isRu ? 'Приход (Inbound)' : 'Kirim (Inbound - Tushum)' },
-                    { value: 'OUTBOUND', label: isRu ? 'Расход (Outbound)' : 'Chiqim (Outbound - Chiqarish)' },
-                    { value: 'STOCKTAKING', label: isRu ? 'Инвентаризация (Корректировка)' : 'Inventarizatsiya (Tuzatish)' },
-                  ]}
-                  value={docType}
-                  onChange={(val) => setDocType(val as typeof docType)}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-3)' }}>
+                <div>
+                  <span className="rd-field-label">{tIn('hujjat_turi')}</span>
+                  <ChipGroup
+                    label={tIn('hujjat_turi')}
+                    options={tasks.map((t) => ({ value: t.type, label: t.title }))}
+                    value={docType}
+                    onChange={(v) => v && setDocType(v as typeof docType)}
+                  />
+                </div>
 
                 <Select
                   label={isRu ? 'Склад' : 'Omborxona'}
@@ -278,8 +320,17 @@ export default function InventoryDocumentsPage() {
               </div>
 
               {/* Line Item Entry Block */}
-              <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)' }}>{isRu ? 'Добавить позицию' : 'Pozitsiya qo\'shish'}</div>
+              <div
+                style={{ padding: '12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}
+                onKeyDown={(e) => {
+                  // Enter in quantity or price adds the line (the form is not submitted).
+                  if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                    e.preventDefault();
+                    handleAddItem();
+                  }
+                }}
+              >
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)' }}>{isRu ? 'Добавить позицию' : 'Pozitsiya qo\'shish'} <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)' }}>· {tdoc('enterAdds')}</span></div>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 'var(--space-2)', alignItems: 'end' }}>
                   <Select
                     options={productOptions}
@@ -309,8 +360,8 @@ export default function InventoryDocumentsPage() {
                       onValueChange={(value) => setUnitPrice(Number(value) || 0)}
                     />
                   </div>
-                  <Button type="button" variant="primary" size="sm" onClick={handleAddItem}>
-                    +
+                  <Button type="button" variant="primary" size="sm" onClick={handleAddItem} aria-label={tIn('pozitsiya_qoshish')}>
+                    <Plus size={14} aria-hidden />
                   </Button>
                 </div>
               </div>
@@ -338,7 +389,7 @@ export default function InventoryDocumentsPage() {
                             {formatCurrency(item.quantity * item.unitPrice, locale, INVENTORY_COST_CURRENCY)}
                           </td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
-                            <button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'} type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-600)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+                            <button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'} type="button" onClick={() => handleRemoveItem(idx)} style={{ color: 'var(--color-error-700)', border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
                           </td>
                         </tr>
                       ))}
@@ -363,12 +414,12 @@ export default function InventoryDocumentsPage() {
                   {tCommon('cancel')}
                 </Button>
                 <Button type="submit" variant="primary" disabled={createLoading || items.length === 0}>
-                  {createLoading ? tCommon('loading') : (isRu ? 'Провести документ' : 'Rasmiylashtirish va O\'tkazish')}
+                  {createLoading ? tCommon('loading') : (isRu ? 'Провести документ' : 'Rasmiylashtirish va o‘tkazish')}
                 </Button>
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Printable Document Modal */}

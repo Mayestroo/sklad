@@ -96,7 +96,7 @@ export function SupplierProfileDrawer({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
                     gap: 'var(--space-4)',
                   }}
                 >
@@ -127,7 +127,7 @@ export function SupplierProfileDrawer({
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
                       {isRu ? 'Оплаченная сумма' : 'To\'langan Summa'}
                     </div>
-                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
+                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)' }} className="tabular-nums">
                       {perCurrency(data.metrics.totalPaidByCurrency)}
                     </div>
                   </div>
@@ -147,7 +147,7 @@ export function SupplierProfileDrawer({
                       ? data.metrics.balancesByCurrency
                           .filter((balance) => balance.supplierDebt !== 0)
                           .map((balance) => (
-                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-600)' : 'var(--color-info-600)' }} className="tabular-nums">
+                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-700)' : 'var(--color-info-700)' }} className="tabular-nums">
                               {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
                             </div>
                           ))
@@ -243,7 +243,7 @@ export function SupplierProfileDrawer({
 
             {/* Tab Contents */}
             {activeTab === 'info' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
                 <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
                   <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>ИНН / STIR</div>
                   <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{data.supplier.inn || '—'}</strong>
@@ -321,7 +321,7 @@ export function SupplierProfileDrawer({
                           <td style={{ padding: '10px 14px' }}>{formatDate(p.transactionDate, locale)}</td>
                           <td style={{ padding: '10px 14px' }}>{typeof p.account?.name === 'object' ? (p.account?.name[locale] || p.account?.name?.uz) : (p.account?.name || (isRu ? 'Касса' : 'Kassa'))}</td>
                           <td style={{ padding: '10px 14px' }}>{p.comment || (isRu ? 'Оплата поставщику' : 'Yetkazib beruvchiga to\'lov')}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-success-600)' }} className="tabular-nums">
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)' }} className="tabular-nums">
                             {formatCurrency(Number(p.amount), locale, p.currency)}
                           </td>
                         </tr>

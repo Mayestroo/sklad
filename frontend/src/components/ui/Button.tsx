@@ -1,11 +1,15 @@
 'use client';
 
-import { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
+import { Loader2 } from 'lucide-react';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   children: ReactNode;
+  /** Request in flight: disables the button, shows a spinner and, if given, `loadingText`. */
+  loading?: boolean;
+  loadingText?: ReactNode;
 }
 
 export function Button({
@@ -13,10 +17,38 @@ export function Button({
   size = 'md',
   children,
   style,
-  disabled,
+  disabled: disabledProp,
+  loading = false,
+  loadingText,
   ...props
 }: ButtonProps) {
-  const getVariantStyles = () => {
+  const disabled = disabledProp || loading;
+  return (
+    <button
+      type={props.type || 'button'}
+      disabled={disabled}
+      aria-disabled={disabled}
+      aria-busy={loading || undefined}
+      style={{
+        ...buttonStyle(variant, size),
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        ...style,
+      }}
+      {...props}
+    >
+      {loading && <Loader2 size={size === 'sm' ? 14 : 16} className="app-spinner" aria-hidden />}
+      {loading && loadingText ? loadingText : children}
+    </button>
+  );
+}
+
+/**
+ * The button look as a style object, for a link that should look like a button
+ * (`<Link style={buttonStyle('outline')}>`) — never nest a <button> inside a link.
+ */
+export function buttonStyle(variant: NonNullable<ButtonProps['variant']> = 'primary', size: NonNullable<ButtonProps['size']> = 'md'): CSSProperties {
+  const getVariantStyles = (): CSSProperties => {
     switch (variant) {
       case 'primary':
         return {
@@ -45,13 +77,13 @@ export function Button({
       case 'danger':
         return {
           backgroundColor: 'var(--color-error-600)',
-          color: '#ffffff',
+          color: 'var(--color-text-inverse)',
           border: 'none',
         };
     }
   };
 
-  const getSizeStyles = () => {
+  const getSizeStyles = (): CSSProperties => {
     switch (size) {
       case 'sm':
         return { padding: '6px 12px', fontSize: 'var(--text-xs)', minHeight: 32 };
@@ -62,29 +94,18 @@ export function Button({
     }
   };
 
-  return (
-    <button
-      type={props.type || 'button'}
-      disabled={disabled}
-      aria-disabled={disabled}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 'var(--space-2)',
-        borderRadius: 'var(--radius-md)',
-        fontWeight: 'var(--font-medium)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
-        transition: 'all var(--transition-fast)',
-        boxShadow: variant === 'primary' ? 'var(--shadow-xs)' : 'none',
-        ...getVariantStyles(),
-        ...getSizeStyles(),
-        ...style,
-      }}
-      {...props}
-    >
-      {children}
-    </button>
-  );
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'var(--space-2)',
+    borderRadius: 'var(--radius-md)',
+    fontWeight: 'var(--font-medium)',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    transition: 'all var(--transition-fast)',
+    boxShadow: variant === 'primary' ? 'var(--shadow-xs)' : 'none',
+    ...getVariantStyles(),
+    ...getSizeStyles(),
+  };
 }

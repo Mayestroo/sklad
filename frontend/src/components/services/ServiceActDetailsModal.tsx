@@ -21,7 +21,7 @@ import {
   XCircle,
   Edit,
   Trash2,
-  DollarSign,
+  ArrowLeft,
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
@@ -64,6 +64,7 @@ export function ServiceActDetailsModal({
   const [paymentComment, setPaymentComment] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
   const matchingPaymentAccounts = accounts.filter(
     (account) => account.currency === act?.currency && isCashAccountCurrencyValid(account),
   );
@@ -83,7 +84,7 @@ export function ServiceActDetailsModal({
   const handlePost = async () => {
     const confirmed = await confirm({
       title: isRu ? 'Проведение акта' : 'Aktni tasdiqlash',
-      description: isRu ? 'Вы уверены, что хотите провести данный акт?' : 'Ushbu aktni tasdiqlamoqchimisiz? Kontragent balansi va provodkalar shakllanadi.',
+      description: isRu ? `Акт ${act.actNumber} будет проведён: появятся долг контрагента и проводки.` : `${act.actNumber} akt tasdiqlanadi: kontragent qarzi va provodkalar paydo bo‘ladi.`,
       variant: 'info',
       confirmText: isRu ? 'Провести' : 'Tasdiqlash',
       cancelText: isRu ? 'Отмена' : 'Bekor qilish',
@@ -99,7 +100,7 @@ export function ServiceActDetailsModal({
         tenantId: company?.id,
         locale,
       });
-      toast.success(isRu ? 'Акт успешно проведен' : 'Akt muvaffaqiyatli tasdiqlandi');
+      toast.success(isRu ? `Акт ${act.actNumber} проведён` : `${act.actNumber} akt tasdiqlandi`);
       onRefresh();
       onClose();
     } catch (err) {
@@ -119,8 +120,8 @@ export function ServiceActDetailsModal({
         ? 'Вы уверены, что хотите отменить этот акт? Контрагентский долг и проводки будут отменены.'
         : 'Ushbu aktni bekor qilmoqchimisiz? Kontragent qarzi va provodkalar bekor qilinadi.',
       variant: 'warning',
-      confirmText: isRu ? 'Да' : 'Ha',
-      cancelText: isRu ? 'Нет' : 'Yo‘q',
+      confirmText: isRu ? 'Отменить акт' : 'Aktni bekor qilish',
+      cancelText: isRu ? 'Не отменять' : 'Bekor qilmaslik',
     });
     if (!confirmed) return;
 
@@ -133,7 +134,7 @@ export function ServiceActDetailsModal({
         tenantId: company?.id,
         locale,
       });
-      toast.success(isRu ? 'Акт успешно отменен' : 'Akt muvaffaqiyatli bekor qilindi');
+      toast.success(isRu ? `Акт ${act.actNumber} отменён` : `${act.actNumber} akt bekor qilindi`);
       onRefresh();
       onClose();
     } catch (err) {
@@ -189,7 +190,7 @@ export function ServiceActDetailsModal({
         ? (isRu
             ? 'Этот акт проведён. При удалении он будет автоматически отменён (с откатом проводок и задолженности) и удалён из базы. Продолжить?'
             : 'Ushbu akt tasdiqlangan. O‘chirish jarayonida u avtomatik bekor qilinadi (provodkalar va qarz orqaga qaytariladi) hamda bazadan o‘chiriladi. Davom ettirasizmi?')
-        : (isRu ? 'Удалить этот акт?' : 'Ushbu aktni o‘chirishni xohlaysizmi?'),
+        : (isRu ? `Черновик акта ${act.actNumber} будет удалён.` : `${act.actNumber} akt qoralamasi o‘chiriladi.`),
       variant: 'danger',
       confirmText: isRu ? 'Удалить' : 'O‘chirish',
       cancelText: isRu ? 'Отмена' : 'Bekor qilish',
@@ -214,7 +215,7 @@ export function ServiceActDetailsModal({
         tenantId: company?.id,
         locale,
       });
-      toast.success(isRu ? 'Акт успешно удален' : 'Akt muvaffaqiyatli o‘chirildi');
+      toast.success(isRu ? `Акт ${act.actNumber} удалён` : `${act.actNumber} akt o‘chirildi`);
       onRefresh();
       onClose();
     } catch (err) {
@@ -226,40 +227,29 @@ export function ServiceActDetailsModal({
     }
   };
 
-  // Open Finance Payment Dialog
+  // Payment form opens inside the same dialog (no dialog on top of a dialog).
   const handleOpenPayment = async () => {
     setPaymentAmount(remaining);
-    setPaymentComment(
-      isProvided
-        ? `Xizmat to'lovi: Akt № ${act.actNumber}`
-        : `Xizmat uchun to'lov: Akt № ${act.actNumber}`,
-    );
+    setPaymentComment(isRu ? `Оплата по акту № ${act.actNumber}` : `${act.actNumber} akt bo‘yicha to‘lov`);
     setPaymentError(null);
     setIsPaymentModalOpen(true);
-
+    setAccountsError(null);
     try {
-      const res = await apiFetch<CashAccount[]>('/finance/accounts', {
-        token: token || undefined,
-        tenantId: company?.id,
-        locale,
-      });
+      const res = await apiFetch<CashAccount[]>('/finance/accounts', { token: token || undefined, tenantId: company?.id, locale });
       if (res && Array.isArray(res)) {
         setAccounts(res);
-        const matchingAccounts = res.filter(
-          (account) => account.currency === act.currency && isCashAccountCurrencyValid(account),
-        );
+        const matchingAccounts = res.filter((account) => account.currency === act.currency && isCashAccountCurrencyValid(account));
         setSelectedAccountId(matchingAccounts[0]?.id || '');
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setAccountsError(errorMessage(err) || (isRu ? 'Не удалось загрузить кассы' : 'Kassalarni yuklab bo‘lmadi'));
     }
   };
 
-  // Submit payment to Finance module API
-  const handleSubmitPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitPayment = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!selectedAccountId) {
-      setPaymentError(isRu ? 'Выберите кассу/счет' : 'Iltimos, kassani tanlang');
+      setPaymentError(isRu ? 'Выберите кассу или счёт' : 'Kassa yoki hisobni tanlang');
       return;
     }
     if (!act.currency) {
@@ -271,13 +261,12 @@ export function ServiceActDetailsModal({
       return;
     }
     if (paymentAmount <= 0) {
-      setPaymentError(isRu ? 'Сумма должна быть больше 0' : 'Summa 0 dan katta bo\'lishi kerak');
+      setPaymentError(isRu ? 'Сумма должна быть больше 0' : 'Summa 0 dan katta bo‘lishi kerak');
       return;
     }
 
     setPaymentLoading(true);
     setPaymentError(null);
-
     try {
       const endpoint = isProvided ? '/finance/income' : '/finance/expense';
       await apiFetch(endpoint, {
@@ -296,465 +285,279 @@ export function ServiceActDetailsModal({
           comment: paymentComment,
         }),
       });
-
+      toast.success(
+        isProvided
+          ? isRu ? `Оплата ${formatCurrency(paymentAmount, locale, act.currency)} принята` : `${formatCurrency(paymentAmount, locale, act.currency)} to‘lov qabul qilindi`
+          : isRu ? `Выплата ${formatCurrency(paymentAmount, locale, act.currency)} проведена` : `${formatCurrency(paymentAmount, locale, act.currency)} to‘lov amalga oshirildi`,
+      );
       setIsPaymentModalOpen(false);
       onRefresh();
       onClose();
     } catch (err) {
-      setPaymentError(errorMessage(err) || 'To\'lovni kiritishda xatolik');
+      setPaymentError(errorMessage(err) || (isRu ? 'Не удалось провести оплату' : 'To‘lovni amalga oshirib bo‘lmadi'));
     } finally {
       setPaymentLoading(false);
     }
   };
 
-  return (
+  const status =
+    act.status === 'POSTED'
+      ? { variant: 'success' as const, text: isRu ? 'Проведён' : 'Tasdiqlangan' }
+      : act.status === 'DRAFT'
+        ? { variant: 'warning' as const, text: isRu ? 'Черновик' : 'Qoralama' }
+        : { variant: 'error' as const, text: isRu ? 'Отменён' : 'Bekor qilingan' };
+  const pay =
+    act.paymentStatus === 'PAID'
+      ? { variant: 'success' as const, text: isRu ? 'Оплачен' : 'To‘langan' }
+      : act.paymentStatus === 'PARTIALLY_PAID'
+        ? { variant: 'warning' as const, text: isRu ? 'Оплачен частично' : 'Qisman to‘langan' }
+        : { variant: 'neutral' as const, text: isRu ? 'Не оплачен' : 'To‘lanmagan' };
+  const cell: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid var(--color-border-light)' };
+  const head: React.CSSProperties = { padding: '8px 10px', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', borderBottom: '1px solid var(--color-border)' };
+  const quietDanger: React.CSSProperties = { color: 'var(--color-error-700)', borderColor: 'var(--color-error-200)' };
+  const money = (n: number | string | null | undefined) => formatCurrency(Number(n) || 0, locale, act.currency);
+
+  const detailsFooter = (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', width: '100%' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+        <Button variant="ghost" size="sm" onClick={() => void handleDeleteFromModal()} disabled={loading} style={{ color: 'var(--color-error-700)' }}>
+          <Trash2 size={14} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
+        </Button>
+        {isPosted && paid === 0 && (
+          <Button variant="outline" size="sm" onClick={() => void handleCancel()} disabled={loading} style={quietDanger}>
+            <XCircle size={14} aria-hidden /> {isRu ? 'Отменить акт' : 'Aktni bekor qilish'}
+          </Button>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+        <Button variant="outline" size="sm" onClick={() => onPrint(act)}>
+          <Printer size={14} aria-hidden /> {isRu ? 'Печать' : 'Chop etish'}
+        </Button>
+        {isDraft && (
+          <Button variant="outline" size="sm" onClick={() => { onClose(); onEdit(act); }}>
+            <Edit size={14} aria-hidden /> {isRu ? 'Изменить' : 'Tahrirlash'}
+          </Button>
+        )}
+        {isPosted && paid === 0 && (
+          <Button variant="outline" size="sm" onClick={() => void handleUnpostAndEdit()} disabled={loading}>
+            <Edit size={14} aria-hidden /> {isRu ? 'Отменить проведение и изменить' : 'Tasdiqni bekor qilib tahrirlash'}
+          </Button>
+        )}
+        {isDraft && (
+          <Button variant="primary" size="sm" onClick={() => void handlePost()} loading={loading} loadingText={isRu ? 'Проведение…' : 'Tasdiqlanmoqda…'}>
+            <CheckCircle2 size={14} aria-hidden /> {isRu ? 'Провести' : 'Tasdiqlash'}
+          </Button>
+        )}
+        {isPosted && remaining > 0 && (
+          <Button variant="primary" size="sm" onClick={() => void handleOpenPayment()}>
+            <Wallet size={14} aria-hidden /> {isProvided ? (isRu ? 'Принять оплату' : 'To‘lov qabul qilish') : isRu ? 'Оплатить поставщику' : 'Yetkazib beruvchiga to‘lash'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
+  const paymentFooter = (
     <>
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        title={`${isRu ? 'Акт услуг' : 'Xizmatlar dalolatnomasi'} № ${act.actNumber}`}
-        size="lg"
-      >
-        <div className="space-y-6">
-          {/* Top Status Banner */}
-          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-            <span className="text-xs text-gray-500 font-medium uppercase">
-              {isRu ? 'Операционный статус документа' : 'Hujjatning operatsion holati'}
-            </span>
-            <Badge
-              variant={
-                act.status === 'POSTED'
-                  ? 'success'
-                  : act.status === 'DRAFT'
-                  ? 'warning'
-                  : 'error'
-              }
-            >
-              {act.status === 'POSTED'
-                ? isRu ? 'Проведён' : 'Tasdiqlangan'
-                : act.status === 'DRAFT'
-                ? isRu ? 'Черновик' : 'Qoralama'
-                : isRu ? 'Отменён' : 'Bekor qilingan'}
-            </Badge>
+      <Button type="button" variant="outline" onClick={() => setIsPaymentModalOpen(false)} disabled={paymentLoading}>
+        <ArrowLeft size={14} aria-hidden /> {isRu ? 'Назад к акту' : 'Aktga qaytish'}
+      </Button>
+      <Button type="submit" form="service-act-payment" variant="primary" loading={paymentLoading} loadingText={isRu ? 'Проведение…' : 'Bajarilmoqda…'} disabled={matchingPaymentAccounts.length === 0}>
+        {isProvided ? (isRu ? 'Принять оплату' : 'To‘lovni qabul qilish') : isRu ? 'Оплатить' : 'To‘lash'}
+      </Button>
+    </>
+  );
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        isPaymentModalOpen
+          ? isProvided ? (isRu ? `Оплата по акту ${act.actNumber}` : `${act.actNumber} akt bo‘yicha to‘lov`) : isRu ? `Выплата по акту ${act.actNumber}` : `${act.actNumber} akt bo‘yicha to‘lov`
+          : isRu ? `Акт услуг ${act.actNumber}` : `${act.actNumber} xizmat akti`
+      }
+      size="lg"
+      footer={isPaymentModalOpen ? paymentFooter : detailsFooter}
+      onSubmitShortcut={isPaymentModalOpen ? () => void handleSubmitPayment() : undefined}
+    >
+      {isPaymentModalOpen ? (
+        <form id="service-act-payment" onSubmit={handleSubmitPayment} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {(paymentError || accountsError) && (
+            <div role="alert" className="doc-banner is-error" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertCircle size={16} aria-hidden style={{ flexShrink: 0 }} />
+              <span>{paymentError || accountsError}</span>
+            </div>
+          )}
+          <dl style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', fontSize: 'var(--text-sm)' }}>
+            <dt style={{ color: 'var(--color-text-secondary)' }}>{isProvided ? (isRu ? 'Клиент' : 'Mijoz') : isRu ? 'Поставщик' : 'Yetkazib beruvchi'}</dt>
+            <dd style={{ fontWeight: 'var(--font-medium)' }}>{act.counterparty?.name || '—'}</dd>
+            <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Осталось оплатить' : 'To‘lanmagan qoldiq'}</dt>
+            <dd style={{ fontWeight: 'var(--font-semibold)' }} className="tabular-nums">{money(remaining)}</dd>
+            {act.currency === 'USD' && (
+              <>
+                <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Курс акта' : 'Akt kursi'}</dt>
+                <dd className="tabular-nums">1 USD = {Number(act.exchangeRate)} UZS</dd>
+              </>
+            )}
+          </dl>
+          {accounts.length > 0 && matchingPaymentAccounts.length === 0 ? (
+            <p className="doc-banner is-warning" role="note">
+              {isRu
+                ? `Нет кассы или счёта в ${act.currency}. Создайте его в разделе «Финансы» — деньги разных валют не смешиваются.`
+                : `${act.currency} dagi kassa yoki hisob yo‘q. Uni «Moliya» bo‘limida yarating — turli valyutadagi pullar aralashtirilmaydi.`}
+            </p>
+          ) : (
+            <Select
+              label={isRu ? 'Касса или счёт *' : 'Kassa yoki hisob *'}
+              options={matchingPaymentAccounts.map((a) => ({
+                value: a.id,
+                label: `${typeof a.name === 'object' ? a.name[locale] || a.name.uz : a.name} (${CASH_ACCOUNT_TYPE_LABELS[a.accountType]?.[locale] ?? a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
+              }))}
+              value={selectedAccountId}
+              onChange={(val) => setSelectedAccountId(val)}
+              placeholder={isRu ? 'Выберите кассу' : 'Kassani tanlang'}
+            />
+          )}
+          <div>
+            <label htmlFor="service-act-pay-amount" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              {isRu ? `Сумма, ${act.currency} *` : `Summa, ${act.currency} *`}
+            </label>
+            <MoneyInput id="service-act-pay-amount" value={paymentAmount || ''} max={remaining} onValueChange={(value) => setPaymentAmount(Number(value) || 0)} />
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>
+              {isRu ? 'Можно оплатить частично.' : 'Qisman to‘lash mumkin.'}
+            </p>
           </div>
+          <Input label={isRu ? 'Комментарий' : 'Izoh'} type="text" value={paymentComment} onChange={(e) => setPaymentComment(e.target.value)} />
+        </form>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
           {error && (
-            <div className="flex items-center gap-2 p-3 text-sm text-red-700 bg-red-50 rounded-md border border-red-200">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div role="alert" className="doc-banner is-error" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertCircle size={16} aria-hidden style={{ flexShrink: 0 }} />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Top Info Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-3 bg-gray-50 rounded border border-gray-200">
-              <span className="text-[11px] text-gray-500 block uppercase">
-                {isRu ? 'Тип' : 'Xizmat turi'}
-              </span>
-              <span className="font-semibold text-sm flex items-center gap-1.5 mt-0.5">
-                {isProvided ? (
-                  <>
-                    <ArrowUpRight className="w-4 h-4 text-green-600" />
-                    <span>{isRu ? 'Оказанная' : 'Ko\'rsatilgan'}</span>
-                  </>
-                ) : (
-                  <>
-                    <ArrowDownRight className="w-4 h-4 text-blue-600" />
-                    <span>{isRu ? 'Полученная' : 'Olingan'}</span>
-                  </>
-                )}
-              </span>
-            </div>
+          <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 'var(--space-3)' }}>
+            {[
+              {
+                label: isRu ? 'Вид' : 'Turi',
+                value: (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {isProvided ? <ArrowUpRight size={14} aria-hidden /> : <ArrowDownRight size={14} aria-hidden />}
+                    {isProvided ? (isRu ? 'Оказанная услуга' : 'Ko‘rsatilgan xizmat') : isRu ? 'Полученная услуга' : 'Olingan xizmat'}
+                  </span>
+                ),
+              },
+              { label: isProvided ? (isRu ? 'Клиент' : 'Mijoz') : isRu ? 'Поставщик' : 'Yetkazib beruvchi', value: act.counterparty?.name || '—' },
+              { label: isRu ? 'Дата' : 'Sana', value: formatDate(act.actDate, locale) },
+              { label: isRu ? 'Статус' : 'Holati', value: <Badge variant={status.variant}>{status.text}</Badge> },
+            ].map((m) => (
+              <div key={m.label} style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)' }}>
+                <dt style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{m.label}</dt>
+                <dd style={{ fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)', marginTop: 2, overflowWrap: 'anywhere' }}>{m.value}</dd>
+              </div>
+            ))}
+          </dl>
 
-            <div className="p-3 bg-gray-50 rounded border border-gray-200">
-              <span className="text-[11px] text-gray-500 block uppercase">
-                {isProvided ? (isRu ? 'Клиент' : 'Mijoz') : (isRu ? 'Поставщик' : 'Yetkazib beruvchi')}
-              </span>
-              <span className="font-semibold text-sm mt-0.5 truncate block" title={act.counterparty?.name}>
-                {act.counterparty?.name || '—'}
-              </span>
-            </div>
-
-            <div className="p-3 bg-gray-50 rounded border border-gray-200">
-              <span className="text-[11px] text-gray-500 block uppercase">
-                {isRu ? 'Дата акта' : 'Sana'}
-              </span>
-              <span className="font-semibold text-sm mt-0.5 block">
-                {formatDate(act.actDate, locale)}
-              </span>
-            </div>
-
-            <div className="p-3 bg-gray-50 rounded border border-gray-200">
-              <span className="text-[11px] text-gray-500 block uppercase">
-                {isRu ? 'Статус оплаты' : 'To\'lov holati'}
-              </span>
-              <div className="mt-1">
-                <Badge
-                  variant={
-                    act.paymentStatus === 'PAID'
-                      ? 'success'
-                      : act.paymentStatus === 'PARTIALLY_PAID'
-                      ? 'warning'
-                      : 'neutral'
-                  }
-                >
-                  {act.paymentStatus === 'PAID'
-                    ? isRu ? 'Оплачен' : 'To\'langan'
-                    : act.paymentStatus === 'PARTIALLY_PAID'
-                    ? isRu ? 'Частично' : 'Qisman to\'langan'
-                    : isRu ? 'Не оплачен' : 'To\'lanmagan'}
-                </Badge>
+          {act.status !== 'DRAFT' && (
+            <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-tertiary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-sm)' }}>
+                <span style={{ fontWeight: 'var(--font-medium)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  {isRu ? 'Оплата' : 'To‘lov'} <Badge variant={pay.variant}>{pay.text}</Badge>
+                </span>
+                <span className="tabular-nums" style={{ fontWeight: 'var(--font-semibold)' }}>{progressPercent}%</span>
+              </div>
+              <div role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={isRu ? 'Оплачено' : 'To‘langan'} style={{ height: 8, borderRadius: 'var(--radius-full)', background: 'var(--color-border)', overflow: 'hidden' }}>
+                <div style={{ width: `${progressPercent}%`, height: '100%', borderRadius: 'var(--radius-full)', background: progressPercent >= 100 ? 'var(--color-success-600)' : 'var(--color-warning-500)' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                <span>{isRu ? 'Оплачено: ' : 'To‘langan: '}<strong className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>{money(paid)}</strong></span>
+                <span>{isRu ? 'Осталось: ' : 'Qoldiq: '}<strong className="tabular-nums" style={{ color: remaining > 0 ? 'var(--color-error-700)' : 'var(--color-text-primary)' }}>{money(remaining)}</strong></span>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Payment Progress Bar */}
-          <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-medium text-gray-700">
-                {isRu ? 'Ход оплаты (Moliya so\'ndiruvi):' : 'To\'lov holati (Moliya so\'ndiruvi):'}
-              </span>
-              <span className="font-bold text-gray-900">{progressPercent}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-              <div
-                className={`h-2.5 rounded-full transition-all duration-300 ${
-                  progressPercent >= 100
-                    ? 'bg-green-600'
-                    : progressPercent > 0
-                    ? 'bg-amber-500'
-                    : 'bg-gray-300'
-                }`}
-                style={{ width: `${progressPercent}%` }}
-              ></div>
-            </div>
-            <div className="flex justify-between items-center text-xs text-gray-600 pt-1">
-              <span>
-                {isRu ? 'Оплачено: ' : 'To\'langan: '}
-                <strong className="text-green-700">
-                  {formatCurrency(paid, locale, act.currency)}
-                </strong>
-              </span>
-              <span>
-                {isRu ? 'Остаток долга: ' : 'Qarz qoldig\'i: '}
-                <strong className={remaining > 0 ? 'text-red-700' : 'text-gray-700'}>
-                  {formatCurrency(remaining, locale, act.currency)}
-                </strong>
-              </span>
-            </div>
-          </div>
-
-          {/* Items Table */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold text-gray-700 uppercase">
-              {isRu ? 'Позиции акта' : 'Xizmat qatorlari'} ({act.items?.length || 0})
-            </h4>
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-gray-100 text-gray-700">
+          <section aria-labelledby="service-act-items">
+            <h3 id="service-act-items" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 8 }}>
+              {isRu ? 'Услуги' : 'Xizmatlar'} ({act.items?.length || 0})
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)', textAlign: 'left' }}>
+                <thead>
                   <tr>
-                    <th className="p-2.5 w-8 text-center">№</th>
-                    <th className="p-2.5">{isRu ? 'Услуга' : 'Xizmat nomi'}</th>
-                    <th className="p-2.5 w-20 text-center">{isRu ? 'Ед. изм.' : 'Birlik'}</th>
-                    <th className="p-2.5 w-16 text-right">{isRu ? 'Кол-во' : 'Miqdor'}</th>
-                    <th className="p-2.5 w-24 text-right">{isRu ? 'Цена' : 'Narx'}</th>
-                    <th className="p-2.5 w-20 text-right">{isRu ? 'НДС' : 'QQS'}</th>
-                    <th className="p-2.5 w-28 text-right">{isRu ? 'Итого' : 'Jami'}</th>
+                    <th scope="col" style={head}>{isRu ? 'Услуга' : 'Xizmat'}</th>
+                    <th scope="col" style={{ ...head, textAlign: 'right' }}>{isRu ? 'Количество' : 'Miqdor'}</th>
+                    <th scope="col" style={{ ...head, textAlign: 'right' }}>{isRu ? 'Цена' : 'Narx'}</th>
+                    <th scope="col" style={{ ...head, textAlign: 'right' }}>{isRu ? 'НДС' : 'QQS'}</th>
+                    <th scope="col" style={{ ...head, textAlign: 'right' }}>{isRu ? 'Сумма' : 'Summa'}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody>
                   {act.items?.map((item, idx: number) => (
-                    <tr key={item.id || idx} className="hover:bg-gray-50/50">
-                      <td className="p-2.5 text-center text-gray-500">{idx + 1}</td>
-                      <td className="p-2.5">
-                        <span className="font-medium text-gray-900">{item.serviceName}</span>
-                        {item.description && (
-                          <p className="text-gray-500 text-[11px] mt-0.5">{item.description}</p>
-                        )}
+                    <tr key={item.id || idx}>
+                      <td data-primary style={cell}>
+                        <span style={{ fontWeight: 'var(--font-medium)' }}>{idx + 1}. {item.serviceName}</span>
+                        {item.description && <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2, fontWeight: 'var(--font-normal)' }}>{item.description}</span>}
                       </td>
-                      <td className="p-2.5 text-center text-gray-600">{unitLabel(item.unit, locale)}</td>
-                      <td className="p-2.5 text-right font-medium">{Number(item.quantity)}</td>
-                      <td className="p-2.5 text-right">
-                        {formatCurrency(Number(item.unitPrice), locale, act.currency)}
-                      </td>
-                      <td className="p-2.5 text-right text-gray-600">
-                        {Number(item.vatRate)}%
-                      </td>
-                      <td className="p-2.5 text-right font-semibold text-gray-900">
-                        {formatCurrency(Number(item.lineTotal), locale, act.currency)}
-                      </td>
+                      <td data-label={isRu ? 'Количество' : 'Miqdor'} style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }} className="tabular-nums">{Number(item.quantity)} {unitLabel(item.unit, locale)}</td>
+                      <td data-label={isRu ? 'Цена' : 'Narx'} style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }} className="tabular-nums">{money(item.unitPrice)}</td>
+                      <td data-label={isRu ? 'НДС' : 'QQS'} style={{ ...cell, textAlign: 'right' }} className="tabular-nums">{Number(item.vatRate) ? `${Number(item.vatRate)}%` : isRu ? 'без НДС' : 'QQSsiz'}</td>
+                      <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ ...cell, textAlign: 'right', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }} className="tabular-nums">{money(item.lineTotal)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50 font-medium">
-                  <tr>
-                    <td colSpan={5} className="p-2.5 text-right text-gray-600">
-                      {isRu ? 'Сумма без НДС:' : 'QQSsiz summa:'}
-                    </td>
-                    <td colSpan={2} className="p-2.5 text-right">
-                      {formatCurrency(Number(act.subtotal), locale, act.currency)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colSpan={5} className="p-2.5 text-right text-gray-600">
-                      {isRu ? 'Сумма НДС:' : 'QQS summasi:'}
-                    </td>
-                    <td colSpan={2} className="p-2.5 text-right">
-                      {formatCurrency(Number(act.vatAmount), locale, act.currency)}
-                    </td>
-                  </tr>
-                  <tr className="border-t border-gray-300 font-bold text-sm">
-                    <td colSpan={5} className="p-2.5 text-right text-gray-900">
-                      {isRu ? 'ИТОГО К НАЧИСЛЕНИЮ:' : 'JAMI HISOB-KITOB SUMMASI:'}
-                    </td>
-                    <td colSpan={2} className="p-2.5 text-right text-blue-700">
-                      {formatCurrency(Number(act.totalAmount), locale, act.currency)}
-                    </td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
-          </div>
+            <dl style={{ marginTop: 'var(--space-3)', marginLeft: 'auto', maxWidth: 320, display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 12px', fontSize: 'var(--text-sm)' }}>
+              <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Без НДС' : 'QQSsiz'}</dt>
+              <dd className="tabular-nums" style={{ textAlign: 'right' }}>{money(act.subtotal)}</dd>
+              <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'НДС' : 'QQS'}</dt>
+              <dd className="tabular-nums" style={{ textAlign: 'right' }}>{money(act.vatAmount)}</dd>
+              <dt style={{ fontWeight: 'var(--font-semibold)', borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>{isRu ? 'Итого' : 'Jami'}</dt>
+              <dd className="tabular-nums" style={{ textAlign: 'right', fontWeight: 'var(--font-bold)', borderTop: '1px solid var(--color-border)', paddingTop: 4 }}>{money(act.totalAmount)}</dd>
+            </dl>
+          </section>
 
-          {/* Linked Finance Transactions History */}
           {act.payments && act.payments.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
-                <Wallet className="w-3.5 h-3.5 text-blue-600" />
-                <span>{isRu ? 'Связанные платежи (Модуль Финансы)' : 'Bog\'langan moliya to\'lovlari'}</span>
-              </h4>
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-gray-100 text-gray-700">
+            <section aria-labelledby="service-act-payments">
+              <h3 id="service-act-payments" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Wallet size={14} aria-hidden /> {isRu ? 'Оплаты' : 'To‘lovlar'}
+              </h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)', textAlign: 'left' }}>
+                  <thead>
                     <tr>
-                      <th className="p-2">{isRu ? 'Дата' : 'Sana'}</th>
-                      <th className="p-2">{isRu ? 'Касса / Счет' : 'Kassa / Hisob'}</th>
-                      <th className="p-2">{isRu ? 'Примечание' : 'Izoh'}</th>
-                      <th className="p-2 text-right">{isRu ? 'Сумма' : 'Summa'}</th>
+                      <th scope="col" style={head}>{isRu ? 'Дата' : 'Sana'}</th>
+                      <th scope="col" style={head}>{isRu ? 'Касса' : 'Kassa'}</th>
+                      <th scope="col" style={head}>{isRu ? 'Комментарий' : 'Izoh'}</th>
+                      <th scope="col" style={{ ...head, textAlign: 'right' }}>{isRu ? 'Сумма' : 'Summa'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody>
                     {act.payments.map((p) => (
                       <tr key={p.id}>
-                        <td className="p-2">{formatDate(p.transactionDate, locale)}</td>
-                        <td className="p-2 font-medium">
-                          {typeof p.account?.name === 'object'
-                            ? p.account.name[locale] || p.account.name.uz
-                            : p.account?.name || 'Kassa'}
-                        </td>
-                        <td className="p-2 text-gray-500">{p.comment || '—'}</td>
-                        <td className="p-2 text-right font-bold text-green-700">
-                          {formatCurrency(Number(p.amount), locale, p.currency)}
-                        </td>
+                        <td data-primary style={cell}>{formatDate(p.transactionDate, locale)}</td>
+                        <td data-label={isRu ? 'Касса' : 'Kassa'} style={cell}>{typeof p.account?.name === 'object' ? p.account.name[locale] || p.account.name.uz : p.account?.name || '—'}</td>
+                        <td data-label={isRu ? 'Комментарий' : 'Izoh'} style={{ ...cell, color: 'var(--color-text-secondary)' }}>{p.comment || '—'}</td>
+                        <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ ...cell, textAlign: 'right', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">{formatCurrency(Number(p.amount), locale, p.currency)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </section>
           )}
 
           {act.notes && (
-            <div className="p-3 bg-gray-50 rounded border border-gray-200 text-xs">
-              <span className="font-semibold text-gray-700 block mb-0.5">
-                {isRu ? 'Примечание:' : 'Izoh:'}
-              </span>
-              <p className="text-gray-600">{act.notes}</p>
+            <div style={{ padding: 12, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)', fontSize: 'var(--text-sm)' }}>
+              <span style={{ fontWeight: 'var(--font-medium)', display: 'block', marginBottom: 2 }}>{isRu ? 'Комментарий' : 'Izoh'}</span>
+              <p style={{ color: 'var(--color-text-secondary)' }}>{act.notes}</p>
             </div>
           )}
-
-          {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onPrint(act)}
-                className="flex items-center gap-1.5"
-              >
-                <Printer className="w-4 h-4" />
-                {isRu ? 'Печать' : 'Chop etish'}
-              </Button>
-
-              {isDraft && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    onClose();
-                    onEdit(act);
-                  }}
-                  className="flex items-center gap-1.5"
-                >
-                  <Edit className="w-4 h-4" />
-                  {isRu ? 'Редактировать' : 'Tahrirlash'}
-                </Button>
-              )}
-
-              {isPosted && paid === 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleUnpostAndEdit}
-                  disabled={loading}
-                  className="flex items-center gap-1.5"
-                >
-                  <Edit className="w-4 h-4" />
-                  {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
-                </Button>
-              )}
-
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={handleDeleteFromModal}
-                disabled={loading}
-                className="flex items-center gap-1.5"
-              >
-                <Trash2 className="w-4 h-4" />
-                {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {isDraft && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handlePost}
-                  disabled={loading}
-                  className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {loading
-                    ? isRu ? 'Проведение...' : 'Tasdiqlanmoqda...'
-                    : isRu ? 'Провести акт' : 'Aktni tasdiqlash'}
-                </Button>
-              )}
-
-              {isPosted && remaining > 0 && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleOpenPayment}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700"
-                >
-                  <DollarSign className="w-4 h-4" />
-                  {isRu ? 'Внести платеж в Финансы' : 'Moliya to\'lovi kiritish'}
-                </Button>
-              )}
-
-              {isPosted && paid === 0 && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={loading}
-                  className="flex items-center gap-1.5"
-                >
-                  <XCircle className="w-4 h-4" />
-                  {isRu ? 'Отменить акт' : 'Aktni bekor qilish'}
-                </Button>
-              )}
-            </div>
-          </div>
         </div>
-      </Modal>
-
-      {/* Quick Finance Payment Sub-modal */}
-      <Modal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        title={
-          isProvided
-            ? isRu ? 'Принять оплату от клиента (Финансы)' : 'Mijozdan to\'lov qabul qilish (Moliya)'
-            : isRu ? 'Выплатить поставщику (Финансы)' : 'Yetkazib beruvchiga to\'lov qilish (Moliya)'
-        }
-        size="md"
-      >
-        <form onSubmit={handleSubmitPayment} className="space-y-4">
-          {paymentError && (
-            <div className="flex items-center gap-2 p-3 text-sm text-red-700 bg-red-50 rounded-md border border-red-200">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{paymentError}</span>
-            </div>
-          )}
-
-          <div className="p-3 bg-blue-50 rounded border border-blue-100 text-xs text-blue-900 space-y-1">
-            <p className="font-semibold">
-              {isRu ? 'Акт №' : 'Dalolatnoma №'} {act.actNumber} ({act.counterparty?.name})
-            </p>
-            <p>
-              {isRu ? 'Неоплаченный остаток: ' : 'To\'lanmagan qoldiq: '}
-              <strong>{formatCurrency(remaining, locale, act.currency)}</strong>
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Касса / Банковский счет *' : 'Kassa / Bank hisobi *'}
-            </label>
-            <Select
-               options={matchingPaymentAccounts.map((a) => ({
-                 value: a.id,
-                 label: `${typeof a.name === 'object' ? a.name[locale] || a.name.uz : a.name} (${CASH_ACCOUNT_TYPE_LABELS[a.accountType]?.[locale === 'ru' ? 'ru' : 'uz'] ?? a.accountType}) — ${formatCurrency(Number(a.balance), locale, a.currency)}`,
-               }))}
-              value={selectedAccountId}
-              onChange={(val) => setSelectedAccountId(val)}
-            />
-          </div>
-
-          {act.currency === 'USD' && (
-            <div className="text-xs text-gray-600">
-              {isRu ? 'Учётный курс: 1 USD = ' : 'Hisob kursi: 1 USD = '}
-              {Number(act.exchangeRate)} UZS
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Сумма платежа *' : 'To\'lov summasi *'}
-            </label>
-            <MoneyInput
-              aria-label={isRu ? 'Сумма платежа' : 'To‘lov summasi'}
-              value={paymentAmount || ''}
-              max={remaining}
-              onValueChange={(value) => setPaymentAmount(Number(value) || 0)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              {isRu ? 'Комментарий к платежу' : 'To\'lov izohi'}
-            </label>
-            <Input
-              type="text"
-              value={paymentComment}
-              onChange={(e) => setPaymentComment(e.target.value)}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsPaymentModalOpen(false)}
-              disabled={paymentLoading}
-            >
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={paymentLoading}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {paymentLoading
-                ? isRu ? 'Проведение...' : 'Bajarilmoqda...'
-                : isRu ? 'Зафиксировать в Финансах' : 'Moliyaga kirim/chiqim qilish'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-    </>
+      )}
+    </Modal>
   );
 }

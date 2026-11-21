@@ -592,7 +592,7 @@ export function Select({
         <span
           style={{
             fontSize: 'var(--text-xs)',
-            color: 'var(--color-error-500)',
+            color: 'var(--color-error-700)',
           }}
         >
           {error}

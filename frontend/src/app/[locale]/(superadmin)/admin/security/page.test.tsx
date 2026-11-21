@@ -29,9 +29,10 @@ describe('Super-admin Security page', () => {
     renderPage(<SuperAdminSecurityPage />);
 
     expect(await screen.findByText('TENANT_BLOCKED')).toBeTruthy();
-    expect(apiFetch).toHaveBeenCalledTimes(1);
+    // The audit log once (the company list for names is a separate request).
+    expect(callsTo(ENDPOINT)).toBe(1);
     expect(apiFetch).toHaveBeenCalledWith(ENDPOINT, expect.objectContaining({ token: 'tok' }));
-    expect(apiFetch.mock.calls[0][1].tenantId).toBeUndefined();
+    for (const call of apiFetch.mock.calls) expect(call[1].tenantId).toBeUndefined();
   });
 
   it('shows the error and reloads on retry', async () => {

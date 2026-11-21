@@ -18,6 +18,8 @@ vi.mock('next-intl', () => ({
 }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => '/sales/orders',
 }));
 vi.mock('@/context/ConfirmContext', () => ({ useConfirm: () => async () => true }));
 vi.mock('@/context/ToastContext', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -63,6 +65,7 @@ const ordersCalls = () =>
 describe('Sales orders page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    window.localStorage.clear();
   });
 
   it('loads the orders once with a stable query (no refetch loop)', async () => {

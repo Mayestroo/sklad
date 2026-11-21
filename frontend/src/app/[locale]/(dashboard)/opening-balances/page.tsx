@@ -3,7 +3,7 @@
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -59,6 +59,7 @@ import {
   TrendingDown,
   Building,
   ArrowRight,
+  Check,
   Calculator,
 } from 'lucide-react';
 import type {
@@ -124,10 +125,8 @@ const localized = (name: unknown, locale: Locale, fallback: string): string => {
 const th = (extra?: React.CSSProperties): React.CSSProperties => ({
   padding: '12px 16px',
   fontSize: 'var(--text-xs)',
-  fontWeight: 600,
+  fontWeight: 500,
   color: 'var(--color-text-secondary)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
   ...extra,
 });
 const td: React.CSSProperties = { padding: '10px 16px' };
@@ -162,7 +161,7 @@ function RemoveCell({ isReadOnly, isRu, onClick }: { isReadOnly: boolean; isRu: 
       <button
         type="button"
         onClick={onClick}
-        style={{ background: 'none', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '4px' }}
+        style={{ background: 'none', border: 'none', color: 'var(--color-error-700)', cursor: 'pointer', padding: '4px' }}
         title={isRu ? 'Удалить' : 'O‘chirish'}
       >
         <Trash2 size={16} />
@@ -194,6 +193,7 @@ function NotesInput({ line, index, isReadOnly, isRu, onUpdate, placeholder }: {
 export default function OpeningBalancesPage() {
   const locale = useLocale() as Locale;
   const isRu = locale === 'ru';
+  const tob = useTranslations('rd.ob');
   const { token, company } = useAuth();
   const confirm = useConfirm();
   const companyId = company?.id;
@@ -779,27 +779,34 @@ export default function OpeningBalancesPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                 {currentDoc && !isReadOnly && (
                   <>
-                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Save size={14} />
+                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ color: 'var(--color-error-700)' }}>
+                      <Trash2 size={14} aria-hidden />
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading}>
+                      <Save size={14} aria-hidden />
                       <span>{isRu ? 'Сохранить' : 'Saqlash'}</span>
                     </Button>
-                    <Button variant="primary" size="sm" onClick={handlePost} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <CheckCircle2 size={14} />
-                      <span>{actionLoading ? (isRu ? 'Подождите...' : 'Kuting...') : isRu ? 'Провести' : 'Tasdiqlash'}</span>
-                    </Button>
-                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="secondary" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
-                      <Trash2 size={14} />
+                    <Button variant="primary" size="sm" onClick={handlePost} loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'}>
+                      <CheckCircle2 size={14} aria-hidden />
+                      <span>{isRu ? 'Провести' : 'Tasdiqlash'}</span>
                     </Button>
                   </>
                 )}
                 {currentDoc && isPosted && (
-                  <Button variant="secondary" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-600)' }}>
+                  <Button variant="secondary" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}>
                     <RotateCcw size={14} />
                     <span>{isRu ? 'Переоткрыть' : 'Qayta ochish'}</span>
                   </Button>
                 )}
               </div>
             </div>
+            {isPosted && (
+              <p role="note" style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                {isRu
+                  ? 'Документ проведён, поля только для просмотра. Чтобы исправить остатки, нажмите «Переоткрыть» — проводки будут отменены, затем проведите снова.'
+                  : 'Hujjat tasdiqlangan, maydonlar faqat ko‘rish uchun. Qoldiqlarni tuzatish uchun «Qayta ochish»ni bosing — provodkalar bekor qilinadi, keyin qayta tasdiqlang.'}
+              </p>
+            )}
             {ratesWereMixed && !isReadOnly && (
               <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
                 {isRu
@@ -810,16 +817,16 @@ export default function OpeningBalancesPage() {
           </Card>
 
           {/* Summary: assets, liabilities, capital (balances itself) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
             <SummaryCard
-              color="var(--color-success-600)"
+              color="var(--color-success-700)"
               icon={<TrendingUp size={20} />}
               title={isRu ? 'Активы' : 'Aktivlar'}
               value={formatCurrency(totals.totalAssets, locale, docCurrency)}
               hint={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
             />
             <SummaryCard
-              color="var(--color-error-600)"
+              color="var(--color-error-700)"
               icon={<TrendingDown size={20} />}
               title={isRu ? 'Обязательства' : 'Majburiyatlar'}
               value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
@@ -850,39 +857,35 @@ export default function OpeningBalancesPage() {
 
           {isPosted && <PostedLinks isRu={isRu} />}
 
-          {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border-light)', gap: 'var(--space-2)', overflowX: 'auto', paddingBottom: '2px' }}>
-            {navTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 16px',
-                    border: 'none',
-                    background: 'none',
-                    borderBottom: isActive ? '2px solid var(--color-primary-600)' : '2px solid transparent',
-                    color: isActive ? 'var(--color-primary-600)' : 'var(--color-text-secondary)',
-                    fontWeight: isActive ? 600 : 500,
-                    fontSize: 'var(--text-sm)',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <Icon size={16} />
-                  <span>{tab.label}</span>
-                  {tab.count > 0 && <Badge variant={isActive ? 'info' : 'neutral'}>{tab.count}</Badge>}
-                </button>
-              );
-            })}
-          </div>
-
+          {/* Sections as a numbered checklist on the left; the chosen section on the right, with "next section" at its end */}
+          <div className="ob-layout">
+          <nav className="ob-steps" aria-label={tob('sections')}>
+            <ol>
+              {navTabs.map((tab, i) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.key;
+                return (
+                  <li key={tab.key}>
+                    <button type="button" aria-current={isActive ? 'step' : undefined} onClick={() => setActiveTab(tab.key)} className="ob-step" data-active={isActive ? 'true' : undefined}>
+                      <span className="ob-step-num" data-done={tab.count > 0 ? 'true' : undefined} aria-hidden>
+                        {tab.count > 0 ? <Check size={14} /> : i + 1}
+                      </span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icon size={14} aria-hidden /> {tab.label}
+                        </span>
+                        <span className="rd-sub" style={{ display: 'block' }}>
+                          {tab.count > 0 ? tob('linesCount', { count: tab.count }) : tob('empty')}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="doc-aside-hint" style={{ padding: '0 var(--space-2)' }}>{tob('stepsHint')}</p>
+          </nav>
+          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {activeTab === 'cash' && (
             <SubledgerCard
               title={isRu ? 'Деньги в кассах и на счетах' : 'Kassa va bankdagi pul'}
@@ -977,6 +980,19 @@ export default function OpeningBalancesPage() {
               <OtherTable {...tableProps} />
             </SubledgerCard>
           )}
+          {(() => {
+            const idx = navTabs.findIndex((t) => t.key === activeTab);
+            const next = navTabs[idx + 1];
+            return next ? (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => setActiveTab(next.key)}>
+                  {tob('nextSection', { name: next.label })} <ArrowRight size={16} aria-hidden />
+                </Button>
+              </div>
+            ) : null;
+          })()}
+          </div>
+          </div>
         </>
       )}
 
@@ -1063,10 +1079,10 @@ export default function OpeningBalancesPage() {
 
           {importErrors.length > 0 && (
             <div style={{ backgroundColor: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', maxHeight: '180px', overflowY: 'auto' }}>
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-error-600)', display: 'block', marginBottom: '4px' }}>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-error-700)', display: 'block', marginBottom: '4px' }}>
                 {isRu ? 'Ошибки в файле Excel:' : 'Excel fayldagi xatoliklar:'}
               </span>
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: 'var(--color-error-600)' }}>
+              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)' }}>
                 {importErrors.map((err, idx) => (
                   <li key={idx}>
                     <strong>
@@ -1098,7 +1114,7 @@ export default function OpeningBalancesPage() {
                 </div>
               )}
               {importSummary.canCommit && (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', color: 'var(--color-warning-600)' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', color: 'var(--color-warning-700)' }}>
                   <AlertTriangle size={16} style={{ flexShrink: 0 }} />
                   <span>
                     {isRu
@@ -1133,7 +1149,7 @@ export default function OpeningBalancesPage() {
       <Modal isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', border: '1px solid var(--color-warning-100)', display: 'flex', gap: '10px' }}>
-            <AlertTriangle size={20} color="var(--color-warning-600)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <AlertTriangle size={20} color="var(--color-warning-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
               {isRu
                 ? 'Документ вернётся в черновик, а кассы, склады, расчёты и журнал — в состояние до проведения. Если товары из начальных партий уже проданы или деньги из кассы потрачены, переоткрыть нельзя.'
@@ -1279,7 +1295,10 @@ function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemo
                     { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
                     ...usable.map((account) => ({
                       value: account.id,
-                      label: `${localized(account.name, locale, 'Kassa')} (${account.currency})`,
+                      label: (() => {
+                        const name = localized(account.name, locale, 'Kassa');
+                        return name.includes(account.currency) ? name : `${name} (${account.currency})`;
+                      })(),
                     })),
                   ]}
                 />
@@ -1508,7 +1527,7 @@ function DebtsTable({
                     decimals={2}
                     placeholder="0"
                     className="tabular-nums"
-                    style={field('180px', { fontWeight: 600, textAlign: 'right', color: isAsset ? 'var(--color-success-600)' : 'var(--color-error-600)' })}
+                    style={field('180px', { fontWeight: 600, textAlign: 'right', color: isAsset ? 'var(--color-success-700)' : 'var(--color-error-700)' })}
                   />
                 </td>
                 <td style={td}>
@@ -1594,10 +1613,10 @@ function FixedAssetsTable({
                 <td style={{ ...td, textAlign: 'right' }} className="tabular-nums">
                   {line.fixedAssetId ? formatCurrency(initCost, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ ...td, textAlign: 'right', color: 'var(--color-error-600)' }} className="tabular-nums">
+                <td style={{ ...td, textAlign: 'right', color: 'var(--color-error-700)' }} className="tabular-nums">
                   {line.fixedAssetId ? formatCurrency(accDep, locale, 'UZS') : '—'}
                 </td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-600)' : 'var(--color-success-600)' }} className="tabular-nums">
+                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: overDepreciated ? 'var(--color-error-700)' : 'var(--color-success-700)' }} className="tabular-nums">
                   {overDepreciated ? (
                     <span data-testid="fixed-asset-over-depreciated">{isRu ? 'Амортизация больше стоимости' : 'Eskirish qiymatdan katta'}</span>
                   ) : line.fixedAssetId ? (

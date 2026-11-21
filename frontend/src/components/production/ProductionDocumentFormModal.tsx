@@ -19,6 +19,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { DateRangeField } from '@/components/ui/DateRangeField';
 import { COST_TYPES, localName, type CostType, type Locale, type ProductionDocument, type Recipe } from './types';
 import { thStyle } from './TableParts';
+import { localIsoDate } from '@/lib/date-range';
 
 interface PreviewMaterial {
   productId: string;
@@ -56,7 +57,7 @@ export interface ProductionDocumentFormModalProps {
   onSaved: (document: ProductionDocument, message: string) => void | Promise<void>;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localIsoDate(new Date());
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 /** «+ Ishlab chiqarish hujjati» (TZ "Ishlab chiqarish" 5.1). */
@@ -198,13 +199,13 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
   };
 
   const label = (text: string, htmlFor?: string) => (
-    <label htmlFor={htmlFor} style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+    <label htmlFor={htmlFor} style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
       {text}
     </label>
   );
   const err = (key: string) =>
     errors[key] ? (
-      <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', marginTop: 4 }}>
+      <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', marginTop: 4 }}>
         <AlertTriangle size={12} aria-hidden /> {errors[key]}
       </div>
     ) : null;
@@ -243,7 +244,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
             <AlertTriangle size={16} aria-hidden /> {formError}
           </div>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12, alignItems: 'start' }}>
           <div data-invalid={Boolean(errors.product)}>
             <Select
               label={`${t('mahsulot')} *`}
@@ -372,7 +373,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
                       </td>
                       <td style={{ padding: '10px 16px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(m.estimatedTotalCost, locale, 'UZS')}
-                        {!m.hasPrice && <AlertTriangle size={13} aria-label={t('narxYoq')} style={{ marginLeft: 4, color: 'var(--color-warning-600)' }} />}
+                        {!m.hasPrice && <AlertTriangle size={13} aria-label={t('narxYoq')} style={{ marginLeft: 4, color: 'var(--color-warning-700)' }} />}
                       </td>
                     </tr>
                   ))}
@@ -394,7 +395,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
         <section aria-label={t('qoshimchaXarajatlar')} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <strong style={{ fontSize: 'var(--text-sm)' }}>{t('qoshimchaXarajatlarUzs')}</strong>
           {costs.map((cost, i) => (
-            <div key={cost.key} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) minmax(140px, 1fr) minmax(160px, 2fr) 40px', gap: 8, alignItems: 'start' }}>
+            <div key={cost.key} style={{ display: 'grid', gridTemplateColumns: 'minmax(min(100%, 140px), 1fr) minmax(min(100%, 140px), 1fr) minmax(160px, 2fr) 40px', gap: 8, alignItems: 'start' }}>
               <Select
                 aria-label={`${t('xarajatTuri')} ${i + 1}`}
                 options={COST_TYPES.map((type) => ({ value: type, label: t(`cost${type}`) }))}
@@ -425,7 +426,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
                   touch();
                   setCosts((rows) => rows.filter((r) => r.key !== cost.key));
                 }}
-                style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-600)', cursor: 'pointer' }}
+                style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-700)', cursor: 'pointer' }}
               >
                 <Trash2 size={16} aria-hidden />
               </button>
@@ -446,7 +447,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
           </div>
         </section>
 
-        <div aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)' }}>
+        <div aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12, padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)' }}>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{t('qoshimchaXarajatlar')}</div>
             <div className="tabular-nums" style={{ fontWeight: 600, textAlign: 'right' }}>{formatCurrency(extraTotal, locale, 'UZS')}</div>

@@ -42,7 +42,7 @@ describe('Super-admin tenants page', () => {
     renderPage(<SuperAdminTenantsPage />);
 
     expect(await screen.findByText('Javox-BRO LLC')).toBeTruthy();
-    expect(await screen.findByText('31')).toBeTruthy();
+    expect(await screen.findByText('7')).toBeTruthy(); // active companies from /metrics
     expect(callsTo('/super-admin/metrics')).toBe(1);
     expect(callsTo('/super-admin/tenants')).toBe(1);
     for (const [, options] of apiFetch.mock.calls) expect(options.tenantId).toBeUndefined();

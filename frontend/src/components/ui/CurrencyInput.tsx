@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
+import { formatMoneyInput, parseMoneyInput } from '@/lib/money-input';
 
 export interface CurrencyInputProps {
   value: number | string;
@@ -26,78 +28,38 @@ export interface CurrencyInputProps {
 }
 
 /**
- * Text of a number in an input: comma groups, dot decimal, at most
- * `decimals` places and no trailing zeros (D9: `1`, not `1.000`, which reads
- * as one thousand in Uzbek/Russian notation).
+ * Text of a number in an input — the same text as everywhere else in the app
+ * (`15 000,5`: non-breaking-space groups, comma decimal), at most `decimals`
+ * places and no trailing zeros (D9: `1`, not `1,000`). Typing accepts both
+ * `15,000.5` and `15.000,5`; see `lib/money-input.ts` for the rules.
  */
 export function formatCurrencyValue(val: number | string | null | undefined, decimals = 3): string {
-  // An unset amount stays empty so the placeholder shows (it used to read "0").
-  if (val === '' || val === null || val === undefined) return '';
-  const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/,/g, ''));
-  if (isNaN(num)) return '0';
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  }).format(num);
+  return formatMoneyInput(val, decimals);
 }
 
-function parseCurrencyValue(str: string): number {
-  if (!str) return 0;
-  const clean = str.replace(/,/g, '').trim();
-  const num = parseFloat(clean);
-  return isNaN(num) ? 0 : num;
-}
-
-function formatNumberWithCommas(raw: string, maxDecimals: number): { formatted: string; rawNumber: number } {
-  if (!raw) return { formatted: '', rawNumber: 0 };
-
-  // Replace comma with dot if user typed comma as decimal separator
-  const normalized = raw.replace(/,/g, (match, offset, full) => {
-    // If there's already a dot, comma was a thousand separator
-    if (full.includes('.')) return '';
-    // If it's towards the end and has only 1-3 digits after it, user might have hit comma on numpad
-    const afterComma = full.slice(offset + 1);
-    if (!afterComma.includes(',') && afterComma.length <= maxDecimals) {
-      return '.';
-    }
-    return '';
-  });
-
-  const parts = normalized.split('.');
-  const intDigits = parts[0].replace(/[^0-9]/g, '');
-  const formattedInt = intDigits ? Number(intDigits).toLocaleString('en-US') : '';
-
-  let formatted = formattedInt;
-  if (parts.length > 1) {
-    const decDigits = parts[1].replace(/[^0-9]/g, '').slice(0, maxDecimals);
-    formatted = `${formattedInt || '0'}.${decDigits}`;
-  }
-
-  const rawNum = parseCurrencyValue(formatted);
-  return { formatted, rawNumber: rawNum };
-}
-
-function getNewCursorPos(oldValue: string, oldCursor: number, newFormatted: string): number {
-  const dotIndexOld = oldValue.indexOf('.');
-  if (dotIndexOld !== -1 && oldCursor > dotIndexOld) {
-    const decOffset = oldCursor - dotIndexOld;
-    const dotIndexNew = newFormatted.indexOf('.');
-    if (dotIndexNew !== -1) {
-      return Math.min(newFormatted.length, dotIndexNew + decOffset);
-    }
-  }
-
-  const digitsBefore = oldValue.slice(0, oldCursor).replace(/\D/g, '').length;
+/** Cursor after the same number of digits as before (and after the decimal comma if it was just typed). */
+function getNewCursorPos(oldValue: string, oldCursor: number, newText: string): number {
+  const before = oldValue.slice(0, oldCursor);
+  const digitsBefore = before.replace(/\D/g, '').length;
+  const justTypedSeparator = /[.,]$/.test(before);
+  if (digitsBefore === 0) return justTypedSeparator ? Math.min(newText.length, newText.indexOf(',') + 1 || newText.length) : 0;
   let count = 0;
-  for (let i = 0; i < newFormatted.length; i++) {
-    if (/\d/.test(newFormatted[i])) {
+  for (let i = 0; i < newText.length; i++) {
+    if (/\d/.test(newText[i])) {
       count++;
       if (count >= digitsBefore) {
+        if (justTypedSeparator && newText[i + 1] === ',') return i + 2;
         return i + 1;
       }
     }
   }
-  return newFormatted.length;
+  return newText.length;
+}
+
+/** After an ambiguous paste ("15,000"): how it was read, and the other reading one click away. */
+interface AmbiguousNote {
+  raw: string;
+  asDecimal: { text: string; value: number };
 }
 
 export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
@@ -125,6 +87,9 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [isFocused, setIsFocused] = useState(false);
     const [textValue, setTextValue] = useState<string>(() => formatCurrencyValue(value, decimals));
+    const [note, setNote] = useState<AmbiguousNote | null>(null);
+    const tm = useTranslations('rd.money');
+    const pastedRef = useRef(false);
 
     // When value changes from props and input is NOT focused, sync textValue
     useEffect(() => {
@@ -156,33 +121,53 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         onClear();
         return;
       }
-      const num = parseCurrencyValue(textValue);
-      const clamped = max !== undefined ? Math.min(max, Math.max(min, num)) : Math.max(min, num);
+      // The field text is what the person sees; read it back the same way (never re-guess an ambiguity here).
+      const num = parseMoneyInput(textValue, decimals).value ?? 0;
+      const clamped = clampValue(num);
       onChange(clamped);
       setTextValue(formatCurrencyValue(clamped, decimals));
     };
 
+    const clampValue = (n: number) => (max !== undefined ? Math.min(max, Math.max(min, n)) : Math.max(min, n));
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
       const cursorPos = e.target.selectionStart || 0;
+      // Typed one character at a time, "15,000" is a decimal being typed. Arriving at once
+      // (paste, autofill) it is read as thousands, and the note below says so (explicit, not silent).
+      const inputType = (e.nativeEvent as InputEvent | undefined)?.inputType;
+      const pasted = pastedRef.current || inputType === 'insertFromPaste' || inputType === 'insertFromDrop' || (!inputType && raw.length - textValue.length > 1);
+      pastedRef.current = false;
+      const parsed = parseMoneyInput(raw, decimals, pasted ? 'grouped' : 'decimal');
+      if (pasted && parsed.reading === 'ambiguous') {
+        const asDecimal = parseMoneyInput(raw, decimals, 'decimal');
+        setNote({ raw: raw.trim(), asDecimal: { text: asDecimal.text, value: asDecimal.value ?? 0 } });
+      } else {
+        setNote(null);
+      }
 
-      const { formatted, rawNumber } = formatNumberWithCommas(raw, decimals);
-
-      setTextValue(formatted);
-      if (formatted === '' && onClear) {
+      setTextValue(parsed.text);
+      if (parsed.text === '' && onClear) {
         onClear();
         return;
       }
-      const clamped = max !== undefined ? Math.min(max, Math.max(min, rawNumber)) : Math.max(min, rawNumber);
-      onChange(clamped);
+      onChange(clampValue(parsed.value ?? 0));
 
       // Restore cursor position seamlessly
       setTimeout(() => {
-        if (inputRef.current) {
-          const newPos = getNewCursorPos(raw, cursorPos, formatted);
+        if (inputRef.current && document.activeElement === inputRef.current) {
+          const newPos = getNewCursorPos(raw, cursorPos, parsed.text);
           inputRef.current.setSelectionRange(newPos, newPos);
         }
       }, 0);
+    };
+
+    const applyDecimalReading = () => {
+      if (!note) return;
+      const clamped = clampValue(note.asDecimal.value);
+      onChange(clamped);
+      setTextValue(formatCurrencyValue(clamped, decimals));
+      setNote(null);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -192,6 +177,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     };
 
     return (
+      <>
       <input
         ref={(el) => {
           inputRef.current = el;
@@ -213,6 +199,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         onFocus={handleFocus}
         onBlur={handleBlur}
         onChange={handleChange}
+        onPaste={() => { pastedRef.current = true; }}
         onKeyDown={handleKeyDown}
         className={className}
         style={{
@@ -239,6 +226,15 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
           ...style,
         }}
       />
+      {note && (
+        <span role="status" className="money-note">
+          {tm('readAsThousands', { raw: note.raw, value: formatCurrencyValue(value, decimals) })}{' '}
+          <button type="button" className="rd-linkbtn" onMouseDown={(e) => e.preventDefault()} onClick={applyDecimalReading}>
+            {tm('itWasDecimal', { value: note.asDecimal.text })}
+          </button>
+        </span>
+      )}
+      </>
     );
   }
 );

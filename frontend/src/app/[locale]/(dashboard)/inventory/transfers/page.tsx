@@ -4,25 +4,25 @@ import { quantityWithUnit } from '@/lib/units';
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatDate, errorMessage } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { ArrowRightLeft, Send, CheckCircle, Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, Send, CheckCircle, Plus, Trash2, X } from 'lucide-react';
 import { StockTransfer, Product } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import type { Warehouse as WarehouseRow } from '@shared/types';
 
 export default function StockTransfersPage() {
-  const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
@@ -179,18 +179,7 @@ export default function StockTransfersPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'DRAFT':
-        return <Badge variant="neutral">{isRu ? 'Черновик (DRAFT)' : 'Qoralama (DRAFT)'}</Badge>;
-      case 'IN_TRANSIT':
-        return <Badge variant="warning">{isRu ? 'В пути (IN_TRANSIT)' : 'Yo\'lda (IN_TRANSIT)'}</Badge>;
-      case 'RECEIVED':
-        return <Badge variant="success">{isRu ? 'Принято (RECEIVED)' : 'Qabul qilindi (RECEIVED)'}</Badge>;
-      default:
-        return <Badge variant="neutral">{status}</Badge>;
-    }
-  };
+
 
   const warehouseOptions = warehouses.map((w) => ({
     value: w.id,
@@ -202,109 +191,112 @@ export default function StockTransfersPage() {
     label: `${p.name[locale] || p.name.ru || p.name.uz} (${p.sku})`,
   }));
 
+  const tt = useTranslations('rd.transfers');
+  const whName = (w?: { name?: { uz?: string; ru?: string } | null } | null) => (w?.name ? w.name[locale] || w.name.ru || w.name.uz || '—' : '—');
+  const columnsDef = [
+    { status: 'DRAFT', title: tt('colDraft'), hint: tt('colDraftHint'), tone: 'warning' },
+    { status: 'IN_TRANSIT', title: tt('colTransit'), hint: tt('colTransitHint'), tone: 'info' },
+    { status: 'RECEIVED', title: tt('colReceived'), hint: tt('colReceivedHint'), tone: 'success' },
+  ] as const;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Перемещение товаров' : 'Omborlararo ko‘chirish'}
-          </h1>
-        </div>
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Перемещение товаров' : 'Omborlararo ko‘chirish'}
+        subtitle={tt('subtitle')}
+        actions={
+          <Button variant="primary" onClick={() => setModalOpen(true)}>
+            <Plus size={16} aria-hidden /> {isRu ? 'Создать перемещение' : 'Yangi o‘tkazma'}
+          </Button>
+        }
+      />
 
-        <Button variant="primary" onClick={() => setModalOpen(true)}>
-          <Plus size={16} /> {isRu ? 'Создать перемещение' : 'Yangi o‘tkazma'}
-        </Button>
-      </div>
-
-      <Card>
-        {failedQuery ? (
-          <LoadError
-            error={failedQuery.error}
-            onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
-            retrying={pageQueries.some((q) => q.isFetching)}
+      {failedQuery ? (
+        <LoadError
+          error={failedQuery.error}
+          onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
+          retrying={pageQueries.some((q) => q.isFetching)}
+        />
+      ) : loading ? (
+        <SkeletonRows rows={4} columns={3} />
+      ) : transfers.length === 0 ? (
+        <div className="rd-table-card">
+          <EmptyState
+            icon={ArrowRightLeft}
+            title={isRu ? 'Перемещения отсутствуют' : 'Hozircha omborlararo ko‘chirishlar mavjud emas'}
+            description={tt('emptyHint')}
+            action={<Button onClick={() => setModalOpen(true)}><Plus size={16} aria-hidden /> {isRu ? 'Создать перемещение' : 'Yangi o‘tkazma'}</Button>}
           />
-        ) : loading ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            {tCommon('loading')}
-          </div>
-        ) : transfers.length === 0 ? (
-          <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-            <ArrowRightLeft size={40} style={{ margin: '0 auto var(--space-2)', opacity: 0.4 }} />
-            <div>{isRu ? 'Перемещения отсутствуют' : 'Hozircha omborlararo ko‘chirishlar mavjud emas'}</div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  <th style={{ padding: '12px' }}>{isRu ? '№ ТРАНСФЕРА' : 'TRANSFER №'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'ДАТА' : 'SANA'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СКЛАД ОТПРАВИТЕЛЬ' : 'CHIQUVCHI OMBOR'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СКЛАД ПОЛУЧАТЕЛЬ' : 'KIRUVCHI OMBOR'}</th>
-                  <th style={{ padding: '12px' }}>{isRu ? 'СТАТУС' : 'HOLATI'}</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>{isRu ? 'ДЕЙСТВИЯ (WORKFLOW)' : 'AMALLAR (WORKFLOW)'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transfers.map((tr) => (
-                  <tr key={tr.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-bold)', fontFamily: 'var(--font-mono)' }}>
-                      {tr.transferNumber}
-                    </td>
-                    <td style={{ padding: '12px', color: 'var(--color-text-secondary)' }}>
-                      {formatDate(tr.transferDate, locale)}
-                    </td>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
-                      {tr.sourceWarehouse?.name?.[locale] || tr.sourceWarehouse?.name?.ru || tr.sourceWarehouse?.name?.uz || 'Chiquvchi ombor'}
-                    </td>
-                    <td style={{ padding: '12px', fontWeight: 'var(--font-medium)', color: 'var(--color-primary-600)' }}>
-                      {tr.targetWarehouse?.name?.[locale] || tr.targetWarehouse?.name?.ru || tr.targetWarehouse?.name?.uz || 'Kiruvchi ombor'}
-                    </td>
-                    <td style={{ padding: '12px' }}>{getStatusBadge(tr.status)}</td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>
-                      {tr.status === 'DRAFT' && (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          <Button size="sm" variant="primary" onClick={() => handleShip(tr.id)}>
-                            <Send size={14} /> 1. {isRu ? 'Отправить (Ship)' : 'Jo‘natish (Ship)'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setDeleteConfirmTransfer(tr);
-                              setDeleteError(null);
-                            }}
-                            style={{ color: 'var(--color-error-600)', padding: '4px 8px' }}
-                            title={isRu ? 'Удалить перемещение' : "O'chirish"}
-                          >
-                            <Trash2 size={15} />
-                          </Button>
+        </div>
+      ) : (
+        /* Workflow board: created → on the way → received; the next step is on each card */
+        <div className="tr-board">
+          {columnsDef.map((col) => {
+            const list = transfers.filter((t) => t.status === col.status);
+            return (
+              <section key={col.status} className={`tr-col rd-tone-${col.tone}`} aria-labelledby={`tr-${col.status}`}>
+                <header>
+                  <h2 id={`tr-${col.status}`}>{col.title} <span className="rd-chip-count">{list.length}</span></h2>
+                  <p>{col.hint}</p>
+                </header>
+                {list.length === 0 ? (
+                  <p className="tr-empty">{tt('none')}</p>
+                ) : (
+                  <ul>
+                    {list.map((tr) => (
+                      <li key={tr.id} className="tr-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                          <strong className="tabular-nums">{tr.transferNumber}</strong>
+                          <span className="rd-sub" style={{ marginTop: 0 }}>{formatDate(tr.transferDate, locale)}</span>
                         </div>
-                      )}
-                      {tr.status === 'IN_TRANSIT' && (
-                        <Button size="sm" variant="primary" onClick={() => handleReceive(tr.id)} style={{ backgroundColor: 'var(--color-success-600)' }}>
-                          <CheckCircle size={14} /> 2. {isRu ? 'Принять (Receive)' : 'Qabul qilish (Receive)'}
-                        </Button>
-                      )}
-                      {tr.status === 'RECEIVED' && (
-                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-600)', fontWeight: 'bold' }}>
-                          ✓ {isRu ? 'Завершено' : 'Yakunlandi'}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                        <div className="tr-route">
+                          <span>{whName(tr.sourceWarehouse)}</span>
+                          <ArrowRight size={14} aria-hidden />
+                          <span style={{ color: 'var(--color-primary-700)' }}>{whName(tr.targetWarehouse)}</span>
+                        </div>
+                        {(tr as { items?: unknown[] }).items && <div className="rd-sub">{tt('lines', { count: ((tr as { items?: unknown[] }).items ?? []).length })}</div>}
+                        <div className="tr-actions">
+                          {tr.status === 'DRAFT' && (
+                            <>
+                              <Button size="sm" onClick={() => handleShip(tr.id)}>
+                                <Send size={14} aria-hidden /> {tt('ship')}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setDeleteConfirmTransfer(tr);
+                                  setDeleteError(null);
+                                }}
+                                style={{ color: 'var(--color-error-700)' }}
+                                aria-label={isRu ? 'Удалить перемещение' : "O'chirish"}
+                                title={isRu ? 'Удалить перемещение' : "O'chirish"}
+                              >
+                                <Trash2 size={15} aria-hidden />
+                              </Button>
+                            </>
+                          )}
+                          {tr.status === 'IN_TRANSIT' && (
+                            <Button size="sm" onClick={() => handleReceive(tr.id)} style={{ backgroundColor: 'var(--color-success-600)' }}>
+                              <CheckCircle size={14} aria-hidden /> {tt('receive')}
+                            </Button>
+                          )}
+                          {tr.status === 'RECEIVED' && <span className="rd-sub" style={{ color: 'var(--color-success-700)', marginTop: 0 }}>✓ {isRu ? 'Завершено' : 'Yakunlandi'}</span>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
 
       {/* New Transfer Modal */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isRu ? 'Новое перемещение между складами' : 'Yangi Omborlararo Transfer'}>
         <form onSubmit={handleCreateTransfer} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: 'var(--space-2)', alignItems: 'end' }}>
             <Select
               label={isRu ? 'Склад отправитель *' : 'Chiquvchi Ombor *'}
               options={warehouseOptions}
@@ -312,6 +304,18 @@ export default function StockTransfersPage() {
               onChange={(val) => setSourceWarehouseId(val)}
               placeholder={isRu ? 'Выберите склад' : 'Chiquvchi omborni tanlang'}
             />
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={tt('swap')}
+              title={tt('swap')}
+              onClick={() => {
+                setSourceWarehouseId(targetWarehouseId);
+                setTargetWarehouseId(sourceWarehouseId);
+              }}
+            >
+              <ArrowRightLeft size={16} aria-hidden />
+            </Button>
 
             <Select
               label={isRu ? 'Склад получатель *' : 'Kiruvchi Ombor *'}
@@ -326,7 +330,16 @@ export default function StockTransfersPage() {
 
           <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)' }}>{isRu ? 'Перемещаемые товары:' : 'Ko‘chiriladigan Tovarlar:'}</div>
-            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+            <div
+              style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-1)', flexWrap: 'wrap' }}
+              onKeyDown={(e) => {
+                // Enter in the quantity adds the line instead of submitting the form.
+                if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                  e.preventDefault();
+                  handleAddItem();
+                }
+              }}
+            >
               <Select
                 options={productOptions}
                 value={selectedProductId}
@@ -343,13 +356,25 @@ export default function StockTransfersPage() {
               />
               <Button type="button" variant="outline" onClick={handleAddItem}>{isRu ? 'Добавить' : 'Qo‘shish'}</Button>
             </div>
+            {selectedProductId && sourceWarehouseId && (
+              <div className="rd-sub" style={{ marginBottom: 'var(--space-3)' }}>
+                {tt('inSource', {
+                  qty: Number(((products.find((p) => p.id === selectedProductId) as { stockLevels?: Array<{ warehouseId: string; quantity: number | string }> } | undefined)?.stockLevels ?? []).find((l) => l.warehouseId === sourceWarehouseId)?.quantity ?? 0),
+                })}
+              </div>
+            )}
 
             {items.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {items.map((it, idx) => (
                   <div key={idx} style={{ padding: '6px 12px', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)' }}>
                     <span>{it.productName}</span>
-                    <strong>{quantityWithUnit(it.quantity, it.unit, locale)}</strong>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <strong>{quantityWithUnit(it.quantity, it.unit, locale)}</strong>
+                      <button type="button" className="rd-linkbtn" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))} aria-label={tt('removeLine', { name: it.productName })}>
+                        <X size={14} aria-hidden />
+                      </button>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -372,7 +397,7 @@ export default function StockTransfersPage() {
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {deleteError && (
-              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-600)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
+              <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
                 {deleteError}
               </div>
             )}

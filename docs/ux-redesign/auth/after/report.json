@@ -1,0 +1,106 @@
+[
+  {
+    "route": "/login",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 2273,
+    "overflowX": 0,
+    "url": "/login",
+    "h1": [
+      "Kirish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\login-uz-1440.jpg"
+  },
+  {
+    "route": "/register",
+    "locale": "uz",
+    "width": 1440,
+    "loadMs": 1170,
+    "overflowX": 0,
+    "url": "/register",
+    "h1": [
+      "Sinov muddatini boshlash"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\register-uz-1440.jpg"
+  },
+  {
+    "route": "/login",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 2195,
+    "overflowX": 0,
+    "url": "/login",
+    "h1": [
+      "Kirish"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\login-uz-390.jpg"
+  },
+  {
+    "route": "/register",
+    "locale": "uz",
+    "width": 390,
+    "loadMs": 1148,
+    "overflowX": 0,
+    "url": "/register",
+    "h1": [
+      "Sinov muddatini boshlash"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\register-uz-390.jpg"
+  },
+  {
+    "route": "/login",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 2573,
+    "overflowX": 0,
+    "url": "/login",
+    "h1": [
+      "Войти"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\login-ru-1440.jpg"
+  },
+  {
+    "route": "/register",
+    "locale": "ru",
+    "width": 1440,
+    "loadMs": 1139,
+    "overflowX": 0,
+    "url": "/register",
+    "h1": [
+      "Начать пробный период"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\register-ru-1440.jpg"
+  },
+  {
+    "route": "/login",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 2328,
+    "overflowX": 0,
+    "url": "/login",
+    "h1": [
+      "Войти"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\login-ru-390.jpg"
+  },
+  {
+    "route": "/register",
+    "locale": "ru",
+    "width": 390,
+    "loadMs": 1150,
+    "overflowX": 0,
+    "url": "/register",
+    "h1": [
+      "Начать пробный период"
+    ],
+    "errors": [],
+    "shot": "..\\docs\\ux-redesign\\auth\\after\\register-ru-390.jpg"
+  }
+]

@@ -89,13 +89,13 @@ describe('Additional expenses KPI totals (F8, ADR 0023)', () => {
     });
     renderPage(<ExpensesPage />);
 
-    const transportLabel = await screen.findByText('Transport Xarajatlari');
+    const transportLabel = await screen.findByText('transport_xarajatlari'); // rd.inline key (translations are mocked as keys)
     const card = transportLabel.parentElement as HTMLElement;
     await waitFor(() => expect(card.textContent).toContain(formatCurrency(500000, 'uz', 'UZS')));
     expect(card.textContent).toContain(formatCurrency(100, 'uz', 'USD'));
     expect(card.textContent).not.toContain(formatCurrency(500100, 'uz', 'UZS'));
 
-    const customsCard = screen.getByText('Bojxona To‘lovlari').parentElement as HTMLElement;
+    const customsCard = screen.getByText('bojxona_tolovlari').parentElement as HTMLElement;
     expect(customsCard.textContent).toContain('—');
   });
 });

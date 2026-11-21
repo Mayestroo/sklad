@@ -100,7 +100,7 @@ export function QuantityInput({
         )}
       </div>
       {error && (
-        <span role="alert" style={{ fontSize: '11px', color: 'var(--color-error-600)' }}>
+        <span role="alert" style={{ fontSize: '11px', color: 'var(--color-error-700)' }}>
           {error}
         </span>
       )}

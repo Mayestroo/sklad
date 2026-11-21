@@ -58,8 +58,8 @@ export function OrderItemsTable({
         </h3>
       </div>
 
-      <div style={{ overflowX: 'auto', minHeight: '280px', paddingBottom: '40px' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+      <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto', minHeight: '280px', paddingBottom: '40px' }}>
+        <table className="doc-lines" style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>#</th>
@@ -130,7 +130,7 @@ export function OrderItemsTable({
                   {/* Ready Qty (read-only display) */}
                   {orderStatus !== 'NEW' && (
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? 'var(--color-success-600)' : 'var(--color-warning-600)' }}>
+                      <span style={{ fontWeight: 600, color: (item.readyQty || 0) >= item.quantity ? 'var(--color-success-700)' : 'var(--color-warning-700)' }}>
                         {item.readyQty || 0} / {quantityWithUnit(item.quantity, products.find((product) => product.id === item.productId)?.unitOfMeasure, locale)}
                       </span>
                     </td>

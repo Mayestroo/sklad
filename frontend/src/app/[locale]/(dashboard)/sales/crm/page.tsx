@@ -2,7 +2,7 @@
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { useState, FormEvent } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
@@ -11,17 +11,17 @@ import { formatCurrency, formatPriceOrUnset, errorMessage, CURRENCY_OPTIONS } fr
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import {
-  Plus,
-  Building2,
-  X,
-  Edit2,
-  Trash2,
-} from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Plus, Building2, ArrowRight } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
+import { useConfirm } from '@/context/ConfirmContext';
 import { Counterparty } from '@shared/types';
+
 interface Deal {
   id: string;
   title: string;
@@ -33,20 +33,37 @@ interface Deal {
   counterparty?: { name: string } | null;
 }
 
-const STAGES: { slug: string; nameUz: string; nameRu: string; color: string }[] = [
-  { slug: 'LEAD', nameUz: 'Lidlar (Yangi)', nameRu: 'Лиды (Новые)', color: 'var(--color-primary-600)' },
-  { slug: 'QUALIFICATION', nameUz: 'Saralash', nameRu: 'Квалификация', color: '#8b5cf6' },
-  { slug: 'PROPOSAL', nameUz: 'Tijorat Taklifi', nameRu: 'Коммерческое предл.', color: '#ec4899' },
-  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', color: 'var(--color-warning-600)' },
-  { slug: 'WON', nameUz: 'G\'alaba (Shartnoma)', nameRu: 'Успешно (Выиграно)', color: 'var(--color-success-600)' },
-  { slug: 'LOST', nameUz: 'Mag\'lubiyat', nameRu: 'Проиграно', color: 'var(--color-error-600)' },
+/** Pipeline stages; the stripe colour only decorates the named column. */
+const STAGES: { slug: string; nameUz: string; nameRu: string; stripe: string }[] = [
+  { slug: 'LEAD', nameUz: 'Yangi', nameRu: 'Новые', stripe: 'var(--color-primary-300)' },
+  { slug: 'QUALIFICATION', nameUz: 'Saralash', nameRu: 'Квалификация', stripe: 'var(--color-primary-400)' },
+  { slug: 'PROPOSAL', nameUz: 'Tijorat taklifi', nameRu: 'Коммерческое предложение', stripe: 'var(--color-primary-500)' },
+  { slug: 'NEGOTIATION', nameUz: 'Muzokara', nameRu: 'Переговоры', stripe: 'var(--color-primary-600)' },
+  { slug: 'WON', nameUz: 'Yutildi', nameRu: 'Выиграно', stripe: 'var(--color-success-600)' },
+  { slug: 'LOST', nameUz: 'Yutqazildi', nameRu: 'Проиграно', stripe: 'var(--color-error-600)' },
 ];
 
+interface DealForm {
+  title: string;
+  counterpartyId: string;
+  amount: number;
+  currency: string;
+  stage: string;
+}
+/** Won and lost deals share one column at the end of the board. */
+const CLOSED = { slug: 'CLOSED', nameUz: 'Yopilgan (yutildi / yutqazildi)', nameRu: 'Закрытые (выиграно / проиграно)', stripe: 'var(--color-border)' };
+const FORWARD: Record<string, string> = { LEAD: 'QUALIFICATION', QUALIFICATION: 'PROPOSAL', PROPOSAL: 'NEGOTIATION', NEGOTIATION: 'WON' };
+const nextStage = (stage: string): string | undefined => FORWARD[stage];
+
+const EMPTY_FORM: DealForm = { title: '', counterpartyId: '', amount: 0, currency: '', stage: 'LEAD' };
+
 export default function CrmKanbanPage() {
-  const tCommon = useTranslations('common');
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
+  const tIn = useTranslations('rd.inline');
+  const tcrm = useTranslations('rd.crm');
   const { token, company } = useAuth();
+  const confirm = useConfirm();
 
   const kanbanQuery = useApiQuery<Record<string, Deal[]>>('/sales/deals/kanban');
   const counterpartiesQuery = useApiQuery<Counterparty[]>('/sales/counterparties');
@@ -56,191 +73,135 @@ export default function CrmKanbanPage() {
   const loading = pageQueries.some((q) => q.isPending);
   const failedQuery = pageQueries.find((q) => q.isError);
 
-  // New Deal Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [pickedCounterpartyId, setCounterpartyId] = useState('');
-  // The new-deal form starts on the first counterparty until one is picked.
-  const counterpartyId = pickedCounterpartyId || counterparties[0]?.id || '';
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState<number>(0);
-  // Blank until chosen (ADR 0022): required when the amount is not zero.
-  const [currency, setCurrency] = useState('');
-  const [stage, setStage] = useState<string>('LEAD');
-  const [createLoading, setCreateLoading] = useState(false);
+  // null = closed; editingId null + open = new deal
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<DealForm>(EMPTY_FORM);
+  const [errors, setErrors] = useState<{ counterpartyId?: string; currency?: string }>({});
+  const [saving, setSaving] = useState(false);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
-  // Edit Deal Modal State
-  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editAmount, setEditAmount] = useState<number>(0);
-  const [editCurrency, setEditCurrency] = useState('');
-  const [editCounterpartyId, setEditCounterpartyId] = useState('');
-  const [editStage, setEditStage] = useState('LEAD');
-  const [editLoading, setEditLoading] = useState(false);
-
-  // Delete Deal Modal State
-  const [deletingDeal, setDeletingDeal] = useState<Deal | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-
-  const fetchData = () => {
-    pageQueries.forEach((q) => void q.refetch());
+  const fetchData = () => pageQueries.forEach((q) => void q.refetch());
+  const stageName = (slug: string) => {
+    const s = STAGES.find((x) => x.slug === slug);
+    return s ? (isRu ? s.nameRu : s.nameUz) : slug;
   };
 
-  const handleCreateDeal = async (e: FormEvent) => {
-    e.preventDefault();
+  const openNew = () => {
+    setEditingId(null);
+    // No client is pre-selected: a deal on the wrong client is worse than one more click.
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setFormOpen(true);
+  };
+  const openEdit = (deal: Deal) => {
+    setEditingId(deal.id);
+    setForm({ title: deal.title || '', counterpartyId: deal.counterpartyId || '', amount: Number(deal.amount) || 0, currency: deal.currency ?? '', stage: deal.stage || 'LEAD' });
+    setErrors({});
+    setFormOpen(true);
+  };
+
+  const handleSave = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (!token || !company || saving) return;
+    const nextErrors: typeof errors = {};
+    if (!form.counterpartyId) nextErrors.counterpartyId = isRu ? 'Выберите клиента' : 'Mijozni tanlang';
+    if (form.amount > 0 && !form.currency) nextErrors.currency = isRu ? 'Выберите валюту' : 'Valyutani tanlang';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0 || !form.title.trim()) return;
+    setSaving(true);
+    try {
+      const body = JSON.stringify({
+        title: form.title.trim(),
+        counterpartyId: form.counterpartyId,
+        amount: Number(form.amount),
+        ...(form.currency ? { currency: form.currency } : {}),
+        stage: form.stage,
+      });
+      if (editingId) {
+        await apiFetch<Deal>(`/sales/deals/${editingId}`, { method: 'PATCH', token, tenantId: company.id, locale, body });
+        toast.success(isRu ? 'Сделка сохранена' : 'Bitim saqlandi');
+      } else {
+        await apiFetch<Deal>('/sales/deals', { method: 'POST', token, tenantId: company.id, locale, body });
+        toast.success(isRu ? 'Сделка создана' : 'Bitim yaratildi');
+      }
+      setFormOpen(false);
+      fetchData();
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось сохранить сделку' : 'Bitimni saqlab bo‘lmadi'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteDeal = async (deal: Deal) => {
     if (!token || !company) return;
-    if (amount > 0 && !currency) {
-      toast.error(isRu ? 'Выберите валюту суммы сделки' : 'Bitim summasining valyutasini tanlang');
-      return;
-    }
-    setCreateLoading(true);
-
+    const ok = await confirm({
+      title: isRu ? 'Удалить сделку?' : 'Bitim o‘chirilsinmi?',
+      description: isRu ? `Сделка «${deal.title}» будет удалена без возможности восстановления.` : `«${deal.title}» bitimi butunlay o‘chiriladi.`,
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
     try {
-      await apiFetch<Deal>('/sales/deals', {
-        method: 'POST',
-        token,
-        tenantId: company.id,
-        locale,
-        body: JSON.stringify({
-          counterpartyId,
-          title,
-          amount: Number(amount),
-          ...(currency ? { currency } : {}),
-          stage,
-        }),
-      });
-
-      setShowModal(false);
-      setTitle('');
-      setAmount(0);
-      setCurrency('');
-      toast.success(isRu ? 'Сделка создана' : 'Bitim yaratildi');
+      await apiFetch<unknown>(`/sales/deals/${deal.id}`, { method: 'DELETE', token, tenantId: company.id, locale });
+      toast.success(isRu ? `Сделка «${deal.title}» удалена` : `«${deal.title}» o‘chirildi`);
       fetchData();
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Не удалось создать сделку' : 'Bitimni yaratib bo‘lmadi'));
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось удалить сделку' : 'Bitimni o‘chirib bo‘lmadi'));
+    }
+  };
+
+  const handleMoveStage = async (deal: Deal, newStage: string) => {
+    if (!token || !company || newStage === deal.stage) return;
+    setMovingId(deal.id);
+    try {
+      await apiFetch<Deal>(`/sales/deals/${deal.id}/stage`, { method: 'PATCH', token, tenantId: company.id, locale, body: JSON.stringify({ stage: newStage }) });
+      toast.success(isRu ? `«${deal.title}» → ${stageName(newStage)}` : `«${deal.title}» → ${stageName(newStage)}`);
+      fetchData();
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось перенести сделку' : 'Bitimni ko‘chirib bo‘lmadi'));
     } finally {
-      setCreateLoading(false);
+      setMovingId(null);
     }
   };
 
-  const handleOpenEditDeal = (deal: Deal) => {
-    setEditingDeal(deal);
-    setEditTitle(deal.title || '');
-    setEditAmount(Number(deal.amount) || 0);
-    setEditCurrency(deal.currency ?? '');
-    setEditCounterpartyId(deal.counterpartyId || '');
-    setEditStage(deal.stage || 'LEAD');
-  };
-
-  const handleSaveEditDeal = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!token || !company || !editingDeal) return;
-    if (editAmount > 0 && !editCurrency) {
-      toast.error(isRu ? 'Выберите валюту суммы сделки' : 'Bitim summasining valyutasini tanlang');
-      return;
-    }
-    setEditLoading(true);
-    try {
-      await apiFetch<Deal>(`/sales/deals/${editingDeal.id}`, {
-        method: 'PATCH',
-        token,
-        tenantId: company.id,
-        locale,
-        body: JSON.stringify({
-          title: editTitle,
-          amount: Number(editAmount),
-          ...(editCurrency ? { currency: editCurrency } : {}),
-          counterpartyId: editCounterpartyId,
-          stage: editStage,
-        }),
-      });
-      setEditingDeal(null);
-      toast.success(isRu ? 'Сделка успешно обновлена' : 'Bitim muvaffaqiyatli yangilandi');
-      fetchData();
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка при обновлении сделки' : 'Bitimni yangilashda xatolik'));
-    } finally {
-      setEditLoading(false);
-    }
-  };
-
-  const handleDeleteDeal = async () => {
-    if (!token || !company || !deletingDeal) return;
-    setDeleteLoading(true);
-    try {
-      await apiFetch<unknown>(`/sales/deals/${deletingDeal.id}`, {
-        method: 'DELETE',
-        token,
-        tenantId: company.id,
-        locale,
-      });
-      setDeletingDeal(null);
-      toast.success(isRu ? 'Сделка успешно удалена' : 'Bitim muvaffaqiyatli o‘chirildi');
-      fetchData();
-    } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении сделки' : 'Bitimni o‘chirishda xatolik'));
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  const handleMoveStage = async (dealId: string, newStage: string) => {
-    if (!token || !company) return;
-    try {
-      await apiFetch<Deal>(`/sales/deals/${dealId}/stage`, {
-        method: 'PATCH',
-        token,
-        tenantId: company.id,
-        locale,
-        body: JSON.stringify({ stage: newStage }),
-      });
-      fetchData();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const counterpartyOptions = counterparties.map((c) => ({
-    value: c.id,
-    label: c.name,
-  }));
-
-  const stageOptions = STAGES.map((s) => ({
-    value: s.slug,
-    label: locale === 'uz' ? s.nameUz : s.nameRu,
-  }));
+  const counterpartyOptions = counterparties.map((c) => ({ value: c.id, label: c.name }));
+  const stageOptions = STAGES.map((s) => ({ value: s.slug, label: isRu ? s.nameRu : s.nameUz }));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'CRM Сделки' : 'CRM Bitimlar'}
-          </h1>
-        </div>
-
-        <Button variant="primary" onClick={() => setShowModal(true)}>
-          <Plus size={16} />
-          {isRu ? 'Создать сделку' : 'Yangi Bitim Yaratish'}
-        </Button>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          title={isRu ? 'Сделки' : 'Bitimlar'}
+          subtitle={isRu ? 'Воронка продаж: от первого контакта до договора. Меняйте этап в карточке сделки.' : 'Savdo voronkasi: birinchi aloqadan shartnomagacha. Bosqichni bitim kartochkasida o‘zgartiring.'}
+          actions={
+            <Button variant="primary" onClick={openNew}>
+              <Plus size={16} aria-hidden /> {isRu ? 'Новая сделка' : 'Yangi bitim'}
+            </Button>
+          }
+        />
       </div>
 
-      {/* Kanban Board Layout */}
       {failedQuery ? (
-        <LoadError
-          error={failedQuery.error}
-          onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())}
-          retrying={pageQueries.some((q) => q.isFetching)}
-        />
+        <Card>
+          <LoadError error={failedQuery.error} onRetry={() => pageQueries.filter((q) => q.isError).forEach((q) => void q.refetch())} retrying={pageQueries.some((q) => q.isFetching)} />
+        </Card>
       ) : loading ? (
-        <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-          {tCommon('loading')}
+        <div role="status" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
+          <span className="sr-only">{isRu ? 'Загрузка…' : 'Yuklanmoqda…'}</span>
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-3)' }}>
+              <Skeleton height={14} width="50%" />
+              <Skeleton height={80} style={{ marginTop: 12 }} />
+            </div>
+          ))}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(240px, 1fr))', gap: 'var(--space-4)', overflowX: 'auto', paddingBottom: 'var(--space-4)' }}>
-          {STAGES.map((stg) => {
-            const deals = kanbanData[stg.slug] || [];
+        <div tabIndex={0} role="region" aria-label={isRu ? 'Воронка сделок' : 'Bitimlar voronkasi'} className="crm-board">
+          {[...STAGES.slice(0, 4), CLOSED].map((stg) => {
+            const deals = stg.slug === 'CLOSED' ? [...(kanbanData.WON || []), ...(kanbanData.LOST || [])] : kanbanData[stg.slug] || [];
             // Per currency (ADR 0023); legacy deals without a currency stay apart.
             const totals = new Map<string, number>();
             for (const d of deals) {
@@ -248,241 +209,135 @@ export default function CrmKanbanPage() {
               totals.set(key, (totals.get(key) ?? 0) + Number(d.amount));
             }
             const columnTotals = [...totals.entries()].filter(([, sum]) => sum !== 0);
+            const headingId = `crm-stage-${stg.slug}`;
 
             return (
-              <div key={stg.slug} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', backgroundColor: 'var(--color-bg-tertiary)', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', minHeight: '500px' }}>
-                {/* Column Header */}
-                <div style={{ borderBottom: `3px solid ${stg.color}`, paddingBottom: 'var(--space-2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                      {locale === 'uz' ? stg.nameUz : stg.nameRu}
-                    </span>
+              <section key={stg.slug} aria-labelledby={headingId} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', backgroundColor: 'var(--color-bg-tertiary)', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', minHeight: 320 }}>
+                <div style={{ borderBottom: `3px solid ${stg.stripe}`, paddingBottom: 'var(--space-2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <h2 id={headingId} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>{stg.slug === 'CLOSED' ? tcrm('closed') : isRu ? stg.nameRu : stg.nameUz}</h2>
                     <Badge variant="neutral">{deals.length}</Badge>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4, fontWeight: 'var(--font-medium)' }} className="tabular-nums">
                     {columnTotals.length === 0
-                      ? '0'
+                      ? '—'
                       : columnTotals.map(([cur, sum]) => (
-                          <span key={cur || 'none'} style={{ display: 'block' }}>
-                            {cur ? formatCurrency(sum, locale, cur) : formatPriceOrUnset(sum, locale, null)}
-                          </span>
+                          <span key={cur || 'none'} style={{ display: 'block' }}>{cur ? formatCurrency(sum, locale, cur) : formatPriceOrUnset(sum, locale, null)}</span>
                         ))}
                   </div>
                 </div>
 
-                {/* Cards List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', flex: 1 }}>
                   {deals.length === 0 && (
-                    <div style={{ padding: 'var(--space-6) var(--space-2)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-                      {isRu ? 'Нет сделок на этом этапе' : 'Bu bosqichda bitim yo‘q'}
+                    <div style={{ padding: 'var(--space-6) var(--space-2)', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                      {stg.slug === 'LEAD'
+                        ? isRu ? 'Новых сделок нет. Нажмите «Новая сделка».' : 'Yangi bitimlar yo‘q. «Yangi bitim»ni bosing.'
+                        : isRu ? 'Нет сделок на этом этапе' : 'Bu bosqichda bitim yo‘q'}
                     </div>
                   )}
                   {deals.map((deal) => (
-                    <Card key={deal.id} style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: 'var(--shadow-sm)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>
-                          {deal.title}
-                        </div>
-                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditDeal(deal)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: 'var(--color-text-secondary)' }}
-                            title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingDeal(deal)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', color: 'var(--color-error-500)' }}
-                            title={isRu ? 'Удалить' : 'O‘chirish'}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
+                    <Card key={deal.id} style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, boxShadow: 'var(--shadow-sm)', opacity: movingId === deal.id ? 0.6 : 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                        <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', wordBreak: 'break-word' }}>{deal.title}</h3>
                       </div>
-
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Building2 size={12} />
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Building2 size={12} aria-hidden />
                         <span>{deal.counterparty?.name || '—'}</span>
                       </div>
-
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: stg.color, marginTop: '2px' }} className="tabular-nums">
+                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
                         {formatPriceOrUnset(Number(deal.amount), locale, deal.currency)}
                       </div>
-
-                      {/* Stage Selector Action */}
-                      <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: '6px', marginTop: '4px' }}>
-                        <Select
-                          options={stageOptions}
-                          value={deal.stage}
-                          onChange={(val) => handleMoveStage(deal.id, val)}
-                        />
+                      {(deal.stage === 'WON' || deal.stage === 'LOST') && (
+                        <Badge variant={deal.stage === 'WON' ? 'success' : 'error'}>{stageName(deal.stage)}</Badge>
+                      )}
+                      <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 6, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {nextStage(deal.stage) && (
+                          <button type="button" className="rd-next-btn" disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, nextStage(deal.stage)!)}>
+                            {stageName(nextStage(deal.stage)!)} <ArrowRight size={13} aria-hidden />
+                          </button>
+                        )}
+                        {deal.stage === 'NEGOTIATION' && (
+                          <button type="button" className="rd-next-btn" style={{ background: 'var(--color-error-50)', color: 'var(--color-error-700)', borderColor: 'var(--color-error-200)' }} disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, 'LOST')}>
+                            {stageName('LOST')}
+                          </button>
+                        )}
+                        <span style={{ marginLeft: 'auto' }}>
+                          <ActionsMenu
+                            label={tIn('boshqa_amallar')}
+                            actions={[
+                              ...STAGES.filter((x) => x.slug !== deal.stage).map((x) => ({ label: `→ ${isRu ? x.nameRu : x.nameUz}`, onSelect: () => void handleMoveStage(deal, x.slug) })),
+                              { label: isRu ? 'Изменить' : 'Tahrirlash', onSelect: () => openEdit(deal) },
+                              { label: isRu ? 'Удалить' : 'O‘chirish', onSelect: () => void handleDeleteDeal(deal), danger: true },
+                            ]}
+                          />
+                        </span>
                       </div>
                     </Card>
                   ))}
                 </div>
-              </div>
+              </section>
             );
           })}
         </div>
       )}
 
-      {/* New Deal Modal */}
-      {showModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 'var(--space-4)' }}>
-          <div style={{ width: '100%', maxWidth: '460px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', boxShadow: 'var(--shadow-xl)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Новая сделка CRM' : 'Yangi CRM Bitim Yaratish'}</h3>
-              <button aria-label={isRu ? 'Закрыть' : 'Yopish'} title={isRu ? 'Закрыть' : 'Yopish'} type="button" onClick={() => setShowModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
-            </div>
-
-            <form onSubmit={handleCreateDeal} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>{isRu ? 'Название сделки *' : 'Bitim Nomi *'}</label>
-                <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isRu ? 'Напр: Поставка 500 шт Coca-Cola' : 'Misol: 500 dona Coca-Cola etkazish shartnomasi'} style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }} />
-              </div>
-
-              <Select
-                label={isRu ? 'Клиент (Контрагент) *' : 'Mijoz (Kontragent) *'}
-                options={counterpartyOptions}
-                value={counterpartyId}
-                onChange={(val) => setCounterpartyId(val)}
-                placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
-              />
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 'var(--space-2)', alignItems: 'end' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>{isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}</label>
-                  <MoneyInput
-                    aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
-                    value={amount || ''}
-                    onValueChange={(value) => setAmount(Number(value) || 0)}
-                  />
-                </div>
-                <Select
-                  label={isRu ? 'Валюта' : 'Valyuta'}
-                  options={CURRENCY_OPTIONS}
-                  value={currency}
-                  onChange={(val) => setCurrency(val)}
-                  placeholder={isRu ? 'Выбрать' : 'Tanlang'}
-                />
-              </div>
-
-              <Select
-                label={isRu ? 'Начальный этап' : 'Boshlang‘ich Bosqich'}
-                options={stageOptions}
-                value={stage}
-                onChange={(val) => setStage(val)}
-              />
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>{tCommon('cancel')}</Button>
-                <Button type="submit" variant="primary" disabled={createLoading}>{createLoading ? tCommon('loading') : tCommon('save')}</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Deal Modal */}
-      {editingDeal && (
-        <Modal
-          isOpen={Boolean(editingDeal)}
-          onClose={() => setEditingDeal(null)}
-          title={isRu ? 'Редактировать сделку' : 'Bitimni tahrirlash'}
-        >
-          <form onSubmit={handleSaveEditDeal} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                {isRu ? 'Название сделки *' : 'Bitim Nomi *'}
+      <Modal
+        isOpen={formOpen}
+        onClose={() => setFormOpen(false)}
+        title={editingId ? (isRu ? 'Изменить сделку' : 'Bitimni tahrirlash') : isRu ? 'Новая сделка' : 'Yangi bitim'}
+        onSubmitShortcut={() => void handleSave()}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button type="submit" form="crm-deal-form" variant="primary" loading={saving} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
+              {editingId ? (isRu ? 'Сохранить' : 'Saqlash') : isRu ? 'Создать сделку' : 'Bitim yaratish'}
+            </Button>
+          </>
+        }
+      >
+        <form id="crm-deal-form" onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <Input
+            autoFocus
+            required
+            label={isRu ? 'Название сделки *' : 'Bitim nomi *'}
+            value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            placeholder={isRu ? 'Напр.: поставка 500 коробок воды' : 'Masalan: 500 quti suv yetkazish'}
+          />
+          <Select
+            label={isRu ? 'Клиент *' : 'Mijoz *'}
+            options={counterpartyOptions}
+            value={form.counterpartyId}
+            searchable
+            error={errors.counterpartyId}
+            onChange={(val) => {
+              setForm((f) => ({ ...f, counterpartyId: val }));
+              setErrors((er) => ({ ...er, counterpartyId: undefined }));
+            }}
+            placeholder={isRu ? 'Выберите клиента' : 'Mijozni tanlang'}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 120px', gap: 'var(--space-2)', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label htmlFor="crm-deal-amount" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+                {isRu ? 'Ожидаемая сумма' : 'Taxminiy summa'}
               </label>
-              <input
-                type="text"
-                required
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-              />
+              <MoneyInput id="crm-deal-amount" value={form.amount || ''} onValueChange={(value) => setForm((f) => ({ ...f, amount: Number(value) || 0 }))} />
             </div>
-
             <Select
-              label={isRu ? 'Клиент (Контрагент) *' : 'Mijoz (Kontragent) *'}
-              options={counterpartyOptions}
-              value={editCounterpartyId}
-              onChange={(val) => setEditCounterpartyId(val)}
+              label={isRu ? 'Валюта' : 'Valyuta'}
+              options={CURRENCY_OPTIONS}
+              value={form.currency}
+              error={errors.currency}
+              onChange={(val) => {
+                setForm((f) => ({ ...f, currency: val }));
+                setErrors((er) => ({ ...er, currency: undefined }));
+              }}
+              placeholder={isRu ? 'Выбрать' : 'Tanlang'}
             />
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 'var(--space-2)', alignItems: 'end' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                  {isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
-                </label>
-                <MoneyInput
-                  aria-label={isRu ? 'Ориентировочная сумма' : 'Taxminiy summa'}
-                  value={editAmount || ''}
-                  onValueChange={(value) => setEditAmount(Number(value) || 0)}
-                />
-              </div>
-              <Select
-                label={isRu ? 'Валюта' : 'Valyuta'}
-                options={CURRENCY_OPTIONS}
-                value={editCurrency}
-                onChange={(val) => setEditCurrency(val)}
-                placeholder={isRu ? 'Выбрать' : 'Tanlang'}
-              />
-            </div>
-
-            <Select
-              label={isRu ? 'Этап сделки' : 'Bitim Bosqichi'}
-              options={stageOptions}
-              value={editStage}
-              onChange={(val) => setEditStage(val)}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-              <Button type="button" variant="secondary" onClick={() => setEditingDeal(null)}>
-                {tCommon('cancel')}
-              </Button>
-              <Button type="submit" variant="primary" disabled={editLoading}>
-                {editLoading ? tCommon('loading') : tCommon('save')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* Delete Deal Modal */}
-      {deletingDeal && (
-        <Modal
-          isOpen={Boolean(deletingDeal)}
-          onClose={() => setDeletingDeal(null)}
-          title={isRu ? 'Удаление сделки' : 'Bitimni o‘chirish'}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы уверены, что хотите удалить сделку "${deletingDeal.title}"? Это действие необратимо.`
-                : `Haqiqatan ham "${deletingDeal.title}" bitimini o‘chirmoqchimisiz? Bu amalni ortga qaytarib bo‘lmaydi.`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setDeletingDeal(null)}>
-                {tCommon('cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                style={{ backgroundColor: 'var(--color-error-500)' }}
-                onClick={handleDeleteDeal}
-                disabled={deleteLoading}
-              >
-                {deleteLoading ? tCommon('loading') : (isRu ? 'Удалить' : 'O‘chirish')}
-              </Button>
-            </div>
           </div>
-        </Modal>
-      )}
+          <Select label={isRu ? 'Этап' : 'Bosqich'} options={stageOptions} value={form.stage} onChange={(val) => setForm((f) => ({ ...f, stage: val }))} />
+        </form>
+      </Modal>
     </div>
   );
 }
-

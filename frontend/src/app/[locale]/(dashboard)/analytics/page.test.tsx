@@ -33,7 +33,7 @@ describe('Analytics page', () => {
     apiFetch.mockImplementation(async (endpoint: string) => respond(endpoint));
     renderPage(<AnalyticsPage />);
 
-    expect(await screen.findByText('JAMI SOTUV TUSHUMI')).toBeTruthy();
+    expect(await screen.findByText('Sotuv tushumi')).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledTimes(6);
     expect(calledEndpoints()).toEqual(
       expect.arrayContaining([
@@ -59,7 +59,7 @@ describe('Analytics page', () => {
     });
     renderPage(<AnalyticsPage />);
 
-    expect(await screen.findByText('JAMI SOTUV TUSHUMI')).toBeTruthy();
+    expect(await screen.findByText('Sotuv tushumi')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -76,7 +76,7 @@ describe('Analytics page', () => {
     failKpi = false;
     fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
 
-    expect(await screen.findByText('JAMI SOTUV TUSHUMI')).toBeTruthy();
+    expect(await screen.findByText('Sotuv tushumi')).toBeTruthy();
     expect(calledEndpoints().filter((e) => e.startsWith('/analytics/kpi-summary'))).toHaveLength(2);
   });
 });

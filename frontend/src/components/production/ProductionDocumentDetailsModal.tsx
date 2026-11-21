@@ -215,7 +215,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
               {t('bekorQilishSababi')}: {doc.cancelReason}
             </div>
           )}
-          <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, margin: 0 }}>
+          <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 10, margin: 0 }}>
             <Detail label={t('holat')} value={<StatusBadge status={doc.status} locale={locale} />} />
             <Detail label={t('sana')} value={formatDate(doc.docDate, locale)} />
             <Detail label={t('rejaBoyichaMiqdor2')} value={`${formatQuantity(Number(doc.plannedQuantity))} ${productUnit}`} />
@@ -291,7 +291,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
             {costs.length === 0 && !running && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>—</div>}
             {costs.map((cost, i) =>
               running && props.canEdit ? (
-                <div key={cost.key} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) minmax(140px, 1fr) minmax(160px, 2fr) 40px', gap: 8 }}>
+                <div key={cost.key} style={{ display: 'grid', gridTemplateColumns: 'minmax(min(100%, 140px), 1fr) minmax(min(100%, 140px), 1fr) minmax(160px, 2fr) 40px', gap: 8 }}>
                   <Select
                     aria-label={`${t('xarajatTuri')} ${i + 1}`}
                     options={COST_TYPES.map((type) => ({ value: type, label: t(`cost${type}`) }))}
@@ -310,7 +310,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
                     aria-label={`${t('xarajatniOchirish')} ${i + 1}`}
                     title={t('xarajatniOchirish')}
                     onClick={() => setCosts((rows) => rows.filter((r) => r.key !== cost.key))}
-                    style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-600)', cursor: 'pointer' }}
+                    style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-700)', cursor: 'pointer' }}
                   >
                     <Trash2 size={16} aria-hidden />
                   </button>
@@ -336,7 +336,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
 
           {running && (
             <div style={{ maxWidth: 320 }}>
-              <label htmlFor="produced-qty" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              <label htmlFor="produced-qty" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 {t('haqiqiyChiqqanMiqdor')} *
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -344,7 +344,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
                 <span style={{ color: 'var(--color-text-secondary)' }}>{productUnit}</span>
               </div>
               {!(producedValue > 0) && (
-                <div role="alert" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', marginTop: 4 }}>
+                <div role="alert" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', marginTop: 4 }}>
                   {t('n0DanKattaBolishiKerak')}
                 </div>
               )}
@@ -352,7 +352,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
           )}
 
           {!isOpenStatus(doc.status) && (
-            <div aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: 16, borderRadius: 'var(--radius-md)', background: doc.status === 'COMPLETED' ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)' }}>
+            <div aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 12, padding: 16, borderRadius: 'var(--radius-md)', background: doc.status === 'COMPLETED' ? 'var(--color-success-50)' : 'var(--color-bg-tertiary)' }}>
               <Total label={t('xomashyoFifo')} value={formatCurrency(Number(doc.actualMaterialCost), locale, 'UZS')} />
               <Total label={t('qoshimchaXarajatlar')} value={formatCurrency(running ? extraTotal : Number(doc.extraCost), locale, 'UZS')} />
               <Total label={t('umumiyTannarx')} value={formatCurrency(running ? roundMoney(Number(doc.actualMaterialCost) + extraTotal) : Number(doc.totalCost), locale, 'UZS')} strong />
@@ -403,7 +403,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
                   : t('qoralamaBekorQilinadiOmborgaTasiri')}
             </div>
             <div>
-              <label htmlFor="cancel-reason" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              <label htmlFor="cancel-reason" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 {t('sabab')} *
               </label>
               <textarea

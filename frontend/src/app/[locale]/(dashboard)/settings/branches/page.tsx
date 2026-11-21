@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
@@ -14,7 +14,11 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
-import { GitBranch, Warehouse, Building2, MapPin, Phone, Edit2, Trash2 } from 'lucide-react';
+import { GitBranch, Warehouse, Building2, MapPin, Phone, Edit2, Trash2, Plus } from 'lucide-react';
+import { useConfirm } from '@/context/ConfirmContext';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { errorMessage } from '@/lib/utils';
 
 /** GET /tenants/branches: branches with their warehouses. */
@@ -34,14 +38,23 @@ interface BranchRow {
   warehouses: WarehouseRow[];
 }
 
+const NO_BRANCH = 'none';
+
 export default function BranchesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
+  const confirm = useConfirm();
+  const nameOf = (n: BranchRow['name'] | string) => (typeof n === 'object' ? n[locale] || n.uz || n.ru : n);
+
   const branchesQuery = useApiQuery<BranchRow[]>('/tenants/branches');
   const branches = branchesQuery.data ?? [];
-  const loading = branchesQuery.isPending;
+  // Warehouses without a branch are not inside any branch row: list them separately.
+  const warehousesQuery = useApiQuery<WarehouseRow[]>('/tenants/warehouses');
+  const unassigned = (warehousesQuery.data ?? []).filter((w) => !w.branchId);
+  const loading = branchesQuery.isPending || warehousesQuery.isPending;
+  const hasAny = branches.length > 0 || unassigned.length > 0;
 
   // Modals state
   const [branchModalOpen, setBranchModalOpen] = useState(false);
@@ -56,7 +69,7 @@ export default function BranchesPage() {
   // Warehouse form
   const [pickedBranchId, setSelectedBranchId] = useState('');
   // The new-warehouse form starts on the first branch until one is picked.
-  const selectedBranchId = pickedBranchId || branches[0]?.id || '';
+  const selectedBranchId = pickedBranchId || branches[0]?.id || NO_BRANCH;
   const [warehouseNameUz, setWarehouseNameUz] = useState('');
   const [warehouseNameRu, setWarehouseNameRu] = useState('');
   const [warehouseAddress, setWarehouseAddress] = useState('');
@@ -72,10 +85,6 @@ export default function BranchesPage() {
   const [createBranchLoading, setCreateBranchLoading] = useState(false);
   const [createWarehouseLoading, setCreateWarehouseLoading] = useState(false);
 
-  // Delete Branch state
-  const [deletingBranch, setDeletingBranch] = useState<BranchRow | null>(null);
-  const [deleteBranchLoading, setDeleteBranchLoading] = useState(false);
-
   // Edit Warehouse state
   const [editingWarehouse, setEditingWarehouse] = useState<WarehouseRow | null>(null);
   const [editWarehouseBranchId, setEditWarehouseBranchId] = useState('');
@@ -85,11 +94,10 @@ export default function BranchesPage() {
   const [editWarehousePhone, setEditWarehousePhone] = useState('');
   const [editWarehouseLoading, setEditWarehouseLoading] = useState(false);
 
-  // Delete Warehouse state
-  const [deletingWarehouse, setDeletingWarehouse] = useState<WarehouseRow | null>(null);
-  const [deleteWarehouseLoading, setDeleteWarehouseLoading] = useState(false);
-
-  const fetchBranches = () => void branchesQuery.refetch();
+  const fetchBranches = () => {
+    void branchesQuery.refetch();
+    void warehousesQuery.refetch();
+  };
 
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +121,7 @@ export default function BranchesPage() {
       setBranchAddress('');
       setBranchIsMain(false);
       fetchBranches();
-      toast.success(isRu ? 'Филиал успешно создан' : 'Filial muvaffaqiyatli yaratildi');
+      toast.success(isRu ? 'Филиал создан' : 'Filial yaratildi');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка создания филиала' : 'Filial yaratishda xatolik'));
     } finally {
@@ -149,7 +157,7 @@ export default function BranchesPage() {
       });
       setEditingBranch(null);
       fetchBranches();
-      toast.success(isRu ? 'Филиал успешно обновлен' : 'Filial muvaffaqiyatli yangilandi');
+      toast.success(isRu ? 'Филиал сохранён' : 'Filial saqlandi');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления филиала' : 'Filialni tahrirlashda xatolik'));
     } finally {
@@ -157,23 +165,24 @@ export default function BranchesPage() {
     }
   };
 
-  const handleDeleteBranch = async () => {
-    if (!token || !company || !deletingBranch) return;
-    setDeleteBranchLoading(true);
+  const handleDeleteBranch = async (branch: BranchRow) => {
+    if (!token || !company) return;
+    const ok = await confirm({
+      title: isRu ? 'Удалить филиал?' : 'Filial o‘chirilsinmi?',
+      description: isRu
+        ? `Филиал «${nameOf(branch.name)}» будет удалён. Если в нём есть склады или документы, система не даст удалить.`
+        : `«${nameOf(branch.name)}» filiali o‘chiriladi. Unda omborlar yoki hujjatlar bo‘lsa, tizim o‘chirishga ruxsat bermaydi.`,
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
     try {
-      await apiFetch(`/tenants/branches/${deletingBranch.id}`, {
-        method: 'DELETE',
-        token,
-        tenantId: company.id,
-        locale,
-      });
-      setDeletingBranch(null);
+      await apiFetch(`/tenants/branches/${branch.id}`, { method: 'DELETE', token, tenantId: company.id, locale });
       fetchBranches();
-      toast.success(isRu ? 'Филиал успешно удален' : 'Filial muvaffaqiyatli o‘chirildi');
+      toast.success(isRu ? `Филиал «${nameOf(branch.name)}» удалён` : `«${nameOf(branch.name)}» filiali o‘chirildi`);
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении филиала' : 'Filialni o‘chirishda xatolik'));
-    } finally {
-      setDeleteBranchLoading(false);
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось удалить филиал' : 'Filialni o‘chirib bo‘lmadi'));
     }
   };
 
@@ -188,7 +197,7 @@ export default function BranchesPage() {
         tenantId: company.id,
         locale,
         body: JSON.stringify({
-          branchId: selectedBranchId,
+          branchId: selectedBranchId === NO_BRANCH ? null : selectedBranchId,
           name: { uz: warehouseNameUz, ru: warehouseNameRu || warehouseNameUz },
           address: warehouseAddress,
           phone: warehousePhone,
@@ -200,9 +209,9 @@ export default function BranchesPage() {
       setWarehouseAddress('');
       setWarehousePhone('');
       fetchBranches();
-      toast.success(isRu ? 'Склад успешно создан' : 'Omborxona muvaffaqiyatli yaratildi');
+      toast.success(isRu ? 'Склад создан' : 'Ombor yaratildi');
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка привязки склада' : 'Omborxona yaratishda xatolik'));
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось создать склад' : 'Omborni yaratib bo‘lmadi'));
     } finally {
       setCreateWarehouseLoading(false);
     }
@@ -210,7 +219,7 @@ export default function BranchesPage() {
 
   const handleOpenEditWarehouse = (wh: WarehouseRow) => {
     setEditingWarehouse(wh);
-    setEditWarehouseBranchId(wh.branchId || selectedBranchId || '');
+    setEditWarehouseBranchId(wh.branchId || NO_BRANCH);
     const uz = typeof wh.name === 'object' ? (wh.name.uz || '') : wh.name || '';
     const ru = typeof wh.name === 'object' ? (wh.name.ru || '') : wh.name || '';
     setEditWarehouseNameUz(uz);
@@ -230,7 +239,7 @@ export default function BranchesPage() {
         tenantId: company.id,
         locale,
         body: JSON.stringify({
-          branchId: editWarehouseBranchId || null,
+          branchId: editWarehouseBranchId && editWarehouseBranchId !== NO_BRANCH ? editWarehouseBranchId : null,
           name: { uz: editWarehouseNameUz, ru: editWarehouseNameRu || editWarehouseNameUz },
           address: editWarehouseAddress,
           phone: editWarehousePhone,
@@ -238,290 +247,326 @@ export default function BranchesPage() {
       });
       setEditingWarehouse(null);
       fetchBranches();
-      toast.success(isRu ? 'Склад успешно обновлен' : 'Omborxona muvaffaqiyatli yangilandi');
+      toast.success(isRu ? 'Склад сохранён' : 'Ombor saqlandi');
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка обновления склада' : 'Omborxonani tahrirlashda xatolik'));
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось сохранить склад' : 'Omborni saqlab bo‘lmadi'));
     } finally {
       setEditWarehouseLoading(false);
     }
   };
 
-  const handleDeleteWarehouse = async () => {
-    if (!token || !company || !deletingWarehouse) return;
-    setDeleteWarehouseLoading(true);
+  // Attach a warehouse to a branch in one step: the same PATCH the edit dialog sends when only the branch changes.
+  const tbr = useTranslations('rd.branches');
+  const [attachingId, setAttachingId] = useState<string | null>(null);
+  const attachWarehouse = async (wh: WarehouseRow, branchId: string) => {
+    if (!token || !company) return;
+    setAttachingId(wh.id);
     try {
-      await apiFetch(`/tenants/warehouses/${deletingWarehouse.id}`, {
-        method: 'DELETE',
+      const uz = typeof wh.name === 'object' ? wh.name.uz || '' : wh.name || '';
+      const ru = typeof wh.name === 'object' ? wh.name.ru || '' : wh.name || '';
+      await apiFetch(`/tenants/warehouses/${wh.id}`, {
+        method: 'PATCH',
         token,
         tenantId: company.id,
         locale,
+        body: JSON.stringify({ branchId, name: { uz, ru: ru || uz }, address: wh.address || '', phone: wh.phone || '' }),
       });
-      setDeletingWarehouse(null);
       fetchBranches();
-      toast.success(isRu ? 'Склад успешно удален' : 'Omborxona muvaffaqiyatli o‘chirildi');
+      toast.success(tbr('attached', { name: nameOf(wh.name), branch: nameOf(branches.find((b) => b.id === branchId)?.name ?? '') }));
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении склада' : 'Omborxonani o‘chirishda xatolik'));
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось сохранить склад' : 'Omborni saqlab bo‘lmadi'));
     } finally {
-      setDeleteWarehouseLoading(false);
+      setAttachingId(null);
     }
   };
 
+  const handleDeleteWarehouse = async (wh: WarehouseRow) => {
+    if (!token || !company) return;
+    const ok = await confirm({
+      title: isRu ? 'Удалить склад?' : 'Ombor o‘chirilsinmi?',
+      description: isRu
+        ? `Склад «${nameOf(wh.name)}» будет удалён. Если на нём есть остатки или документы, система не даст удалить.`
+        : `«${nameOf(wh.name)}» ombori o‘chiriladi. Unda qoldiq yoki hujjatlar bo‘lsa, tizim o‘chirishga ruxsat bermaydi.`,
+      variant: 'danger',
+      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      cancelText: isRu ? 'Отмена' : 'Bekor qilish',
+    });
+    if (!ok) return;
+    try {
+      await apiFetch(`/tenants/warehouses/${wh.id}`, { method: 'DELETE', token, tenantId: company.id, locale });
+      fetchBranches();
+      toast.success(isRu ? `Склад «${nameOf(wh.name)}» удалён` : `«${nameOf(wh.name)}» ombori o‘chirildi`);
+    } catch (err) {
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось удалить склад' : 'Omborni o‘chirib bo‘lmadi'));
+    }
+  };
 
-  const branchOptions: SelectOption[] = branches.map((b) => ({
-    value: b.id,
-    label: typeof b.name === 'object' ? (b.name[locale] || b.name.uz || b.name.ru) : b.name,
-  }));
+  const branchOptions: SelectOption[] = [
+    ...branches.map((b) => ({ value: b.id, label: nameOf(b.name) })),
+    { value: NO_BRANCH, label: isRu ? 'Без филиала' : 'Filialsiz' },
+  ];
+
+  const openNewWarehouse = (branchId?: string) => {
+    if (branchId) setSelectedBranchId(branchId);
+    setWarehouseModalOpen(true);
+  };
+
+  const iconBtn = (danger?: boolean): React.CSSProperties => ({
+    width: 32,
+    height: 32,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    borderRadius: 'var(--radius-sm)',
+    background: 'transparent',
+    cursor: 'pointer',
+    color: danger ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
+  });
+
+  const branchFields = (
+    v: { uz: string; ru: string; address: string; isMain: boolean },
+    set: { uz: (s: string) => void; ru: (s: string) => void; address: (s: string) => void; isMain: (b: boolean) => void },
+  ) => (
+    <>
+      <Input autoFocus label={isRu ? 'Название филиала (по-узбекски)' : 'Filial nomi (o‘zbekcha)'} value={v.uz} onChange={(e) => set.uz(e.target.value)} required />
+      <Input label={isRu ? 'Название филиала (по-русски)' : 'Filial nomi (ruscha)'} placeholder={isRu ? 'Если пусто — как по-узбекски' : 'Bo‘sh bo‘lsa — o‘zbekchadagidek'} value={v.ru} onChange={(e) => set.ru(e.target.value)} />
+      <Input label={isRu ? 'Адрес' : 'Manzil'} value={v.address} onChange={(e) => set.address(e.target.value)} />
+      <Checkbox
+        checked={v.isMain}
+        onChange={(e) => set.isMain(e.target.checked)}
+        label={isRu ? 'Главный филиал' : 'Bosh filial'}
+        description={isRu ? 'Подставляется по умолчанию в новых документах.' : 'Yangi hujjatlarda sukut bo‘yicha tanlanadi.'}
+        size="sm"
+      />
+    </>
+  );
+
+  const warehouseFields = (
+    v: { branchId: string; uz: string; ru: string; address: string; phone: string },
+    set: { branchId: (s: string) => void; uz: (s: string) => void; ru: (s: string) => void; address: (s: string) => void; phone: (s: string) => void },
+  ) => (
+    <>
+      <Select label={isRu ? 'Филиал' : 'Filial'} options={branchOptions} value={v.branchId} onChange={(val) => set.branchId(val)} />
+      <Input autoFocus label={isRu ? 'Название склада (по-узбекски)' : 'Ombor nomi (o‘zbekcha)'} value={v.uz} onChange={(e) => set.uz(e.target.value)} required />
+      <Input label={isRu ? 'Название склада (по-русски)' : 'Ombor nomi (ruscha)'} placeholder={isRu ? 'Если пусто — как по-узбекски' : 'Bo‘sh bo‘lsa — o‘zbekchadagidek'} value={v.ru} onChange={(e) => set.ru(e.target.value)} />
+      <Input label={isRu ? 'Адрес' : 'Manzil'} value={v.address} onChange={(e) => set.address(e.target.value)} />
+      <Input type="tel" autoComplete="tel" label={isRu ? 'Телефон' : 'Telefon'} placeholder="+998 90 123 45 67" value={v.phone} onChange={(e) => set.phone(e.target.value)} />
+    </>
+  );
+
+  const formFooter = (formId: string, onCancel: () => void, loading: boolean) => (
+    <>
+      <Button type="button" variant="outline" onClick={onCancel}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+      <Button type="submit" form={formId} variant="primary" loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
+        {isRu ? 'Сохранить' : 'Saqlash'}
+      </Button>
+    </>
+  );
+
+  const warehouseList = (list: WarehouseRow[]) => (
+    <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      {list.map((wh) => {
+        const wName = nameOf(wh.name);
+        return (
+          <li key={wh.id} style={{ padding: 'var(--space-2) var(--space-3)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>{wName}</div>
+              {(wh.phone || wh.address) && (
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {wh.phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={10} aria-hidden /> {wh.phone}</span>}
+                  {wh.address && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={10} aria-hidden /> {wh.address}</span>}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignItems: 'center' }}>
+              {!wh.branchId && branches.length > 0 && (
+                <>
+                  <label htmlFor={`attach-${wh.id}`} className="sr-only">{tbr('attachTo', { name: wName })}</label>
+                  <Select
+                    id={`attach-${wh.id}`}
+                    size="sm"
+                    value=""
+                    placeholder={tbr('attach')}
+                    disabled={attachingId === wh.id}
+                    onChange={(v) => v && void attachWarehouse(wh, v)}
+                    options={branches.map((b) => ({ value: b.id, label: nameOf(b.name) }))}
+                    style={{ width: 190 }}
+                  />
+                </>
+              )}
+              <button type="button" style={iconBtn()} onClick={() => handleOpenEditWarehouse(wh)} aria-label={isRu ? `Изменить склад «${wName}»` : `«${wName}» omborini tahrirlash`} title={isRu ? 'Изменить' : 'Tahrirlash'}>
+                <Edit2 size={14} aria-hidden />
+              </button>
+              <button type="button" style={iconBtn(true)} onClick={() => void handleDeleteWarehouse(wh)} aria-label={isRu ? `Удалить склад «${wName}»` : `«${wName}» omborini o‘chirish`} title={isRu ? 'Удалить' : 'O‘chirish'}>
+                <Trash2 size={14} aria-hidden />
+              </button>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const newBranchButton = (
+    <Button variant={hasAny ? 'outline' : 'primary'} onClick={() => setBranchModalOpen(true)}>
+      <GitBranch size={16} aria-hidden /> {isRu ? 'Новый филиал' : 'Yangi filial'}
+    </Button>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
-            {isRu ? 'Филиалы и склады' : 'Filiallar va omborlar'}
-          </h1>
-        </div>
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <Button variant="secondary" onClick={() => setBranchModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <GitBranch size={16} /> {isRu ? 'Новый филиал' : 'Yangi Filial'}
-          </Button>
-          <Button variant="primary" onClick={() => setWarehouseModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Warehouse size={16} /> {isRu ? 'Новый склад' : 'Yangi Omborxona'}
-          </Button>
-        </div>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          title={isRu ? 'Филиалы и склады' : 'Filiallar va omborlar'}
+          subtitle={isRu ? 'Где хранится товар: у каждого филиала свои склады, остатки ведутся по складам.' : 'Tovar qayerda saqlanadi: har bir filialning o‘z omborlari bor, qoldiqlar ombor bo‘yicha yuritiladi.'}
+          actions={
+            hasAny ? (
+              <>
+                {newBranchButton}
+                <Button variant="primary" onClick={() => openNewWarehouse()}>
+                  <Warehouse size={16} aria-hidden /> {isRu ? 'Новый склад' : 'Yangi ombor'}
+                </Button>
+              </>
+            ) : undefined
+          }
+        />
       </div>
 
-      {/* Content */}
       {branchesQuery.isError ? (
         <Card>
           <LoadError error={branchesQuery.error} onRetry={fetchBranches} retrying={branchesQuery.isFetching} />
         </Card>
       ) : loading ? (
-        <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-          {isRu ? 'Загрузка структуры...' : 'Filiallar yuklanmoqda...'}
-        </Card>
-      ) : branches.length === 0 ? (
-        <Card style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-          {isRu ? 'Филиалы еще не созданы' : 'Hozircha filiallar yaratilmagan.'}
+        <div role="status" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-4)' }}>
+          <span className="sr-only">{isRu ? 'Загрузка…' : 'Yuklanmoqda…'}</span>
+          {[0, 1].map((i) => (
+            <Card key={i}><Skeleton height={18} width="50%" /><Skeleton height={36} style={{ marginTop: 16 }} /><Skeleton height={36} style={{ marginTop: 8 }} /></Card>
+          ))}
+        </div>
+      ) : !hasAny ? (
+        <Card>
+          <EmptyState
+            icon={Building2}
+            title={isRu ? 'Филиалов пока нет' : 'Hozircha filiallar yo‘q'}
+            description={isRu ? 'Создайте филиал, затем добавьте в него склад — после этого можно принимать товар.' : 'Filial yarating, keyin unga ombor qo‘shing — shundan so‘ng tovar qabul qilish mumkin.'}
+            action={newBranchButton}
+          />
         </Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
-          {branches.map((branch) => (
-            <Card key={branch.id} style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-600)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Building2 size={20} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-4)', alignItems: 'start' }}>
+          {branches.map((branch) => {
+            const bName = nameOf(branch.name);
+            return (
+              <Card key={branch.id} style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                    <div aria-hidden style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-primary-50)', color: 'var(--color-primary-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Building2 size={20} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {bName}
+                        {branch.isMain && <Badge variant="success">{isRu ? 'Главный' : 'Bosh filial'}</Badge>}
+                      </h2>
+                      {branch.address && (
+                        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          <MapPin size={12} aria-hidden /> {branch.address}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {typeof branch.name === 'object' ? (branch.name[locale] || branch.name.uz || branch.name.ru) : branch.name}
-                      {branch.isMain && <Badge variant="success">{isRu ? 'Главный' : 'Bosh Filial'}</Badge>}
-                    </h3>
-                    {branch.address && (
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                        <MapPin size={12} /> {branch.address}
-                      </p>
-                    )}
+                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                    <button type="button" style={iconBtn()} onClick={() => handleOpenEditBranch(branch)} aria-label={isRu ? `Изменить филиал «${bName}»` : `«${bName}» filialini tahrirlash`} title={isRu ? 'Изменить' : 'Tahrirlash'}>
+                      <Edit2 size={15} aria-hidden />
+                    </button>
+                    <button type="button" style={iconBtn(true)} onClick={() => void handleDeleteBranch(branch)} aria-label={isRu ? `Удалить филиал «${bName}»` : `«${bName}» filialini o‘chirish`} title={isRu ? 'Удалить' : 'O‘chirish'}>
+                      <Trash2 size={15} aria-hidden />
+                    </button>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenEditBranch(branch)}
-                    style={{ padding: '6px', height: 'auto', color: 'var(--color-text-secondary)' }}
-                    title={isRu ? 'Редактировать филиал' : 'Filialni tahrirlash'}
-                  >
-                    <Edit2 size={15} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeletingBranch(branch)}
-                    style={{ padding: '6px', height: 'auto', color: 'var(--color-error-600)' }}
-                    title={isRu ? 'Удалить филиал' : 'Filialni o‘chirish'}
-                  >
-                    <Trash2 size={15} />
+                <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
+                  <h3 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Warehouse size={14} aria-hidden /> {isRu ? 'Склады' : 'Omborlar'} ({branch.warehouses?.length || 0})
+                  </h3>
+                  {branch.warehouses && branch.warehouses.length > 0 ? (
+                    warehouseList(branch.warehouses)
+                  ) : (
+                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                      {isRu ? 'Складов нет — без склада сюда нельзя принять товар.' : 'Ombor yo‘q — omborsiz bu filialga tovar qabul qilib bo‘lmaydi.'}
+                    </p>
+                  )}
+                  <Button variant="ghost" size="sm" style={{ marginTop: 'var(--space-2)' }} onClick={() => openNewWarehouse(branch.id)}>
+                    <Plus size={14} aria-hidden /> {isRu ? 'Добавить склад' : 'Ombor qo‘shish'}
                   </Button>
                 </div>
+              </Card>
+            );
+          })}
+          {unassigned.length > 0 && (
+            <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <div>
+                <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Warehouse size={18} aria-hidden style={{ color: 'var(--color-text-secondary)' }} />
+                  {isRu ? 'Склады без филиала' : 'Filialga biriktirilmagan omborlar'} ({unassigned.length})
+                </h2>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                  {branches.length ? tbr('attachHint') : tbr('noBranchHint')}
+                </p>
               </div>
-
-              <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-                <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Warehouse size={14} /> {isRu ? 'Склады филиала' : 'Filial Omborxonalari'} ({branch.warehouses?.length || 0})
-                </h4>
-                {branch.warehouses && branch.warehouses.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                    {branch.warehouses.map((wh) => (
-                      <div key={wh.id} style={{ padding: 'var(--space-2) var(--space-3)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
-                            {typeof wh.name === 'object' ? (wh.name[locale] || wh.name.uz || wh.name.ru) : wh.name}
-                          </div>
-                          {wh.phone && (
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Phone size={10} /> {wh.phone}
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditWarehouse(wh)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-text-secondary)' }}
-                            title={isRu ? 'Редактировать склад' : 'Omborxonani tahrirlash'}
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingWarehouse(wh)}
-                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: 'var(--color-error-500)' }}
-                            title={isRu ? 'Удалить склад' : 'Omborxonani o‘chirish'}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-                    {isRu ? 'Склады отсутствуют' : 'Omborxonalar yo\'q'}
-                  </div>
-                )}
-              </div>
+              {branches.length === 0 && (
+                <div>
+                  <Button size="sm" onClick={() => setBranchModalOpen(true)}>
+                    <Plus size={14} aria-hidden /> {isRu ? 'Новый филиал' : 'Yangi filial'}
+                  </Button>
+                </div>
+              )}
+              {warehouseList(unassigned)}
             </Card>
-          ))}
+          )}
         </div>
       )}
 
-      {/* Add Branch Modal */}
-      <Modal isOpen={branchModalOpen} onClose={() => setBranchModalOpen(false)} title={isRu ? 'Создание филиала' : 'Yangi Filial Yaratish'}>
-        <form onSubmit={handleCreateBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <Input label={isRu ? 'Название филиала (Узбекский)' : "Filial Nomi (O'zbekcha)"} value={branchNameUz} onChange={(e) => setBranchNameUz(e.target.value)} required />
-          <Input label={isRu ? 'Название филиала (Русский)' : 'Название Филиала (Русский)'} value={branchNameRu} onChange={(e) => setBranchNameRu(e.target.value)} />
-          <Input label={isRu ? 'Адрес' : 'Manzili'} value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} />
-          <Checkbox
-            checked={branchIsMain}
-            onChange={(e) => setBranchIsMain(e.target.checked)}
-            label={isRu ? 'Отметить как главный филиал' : 'Bosh filial deb belgilash (Main Branch)'}
-            size="sm"
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-            <Button type="button" variant="outline" onClick={() => setBranchModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" variant="primary" disabled={createBranchLoading}>{isRu ? 'Сохранить' : 'Saqlash'}</Button>
-          </div>
+      <Modal isOpen={branchModalOpen} onClose={() => setBranchModalOpen(false)} title={isRu ? 'Новый филиал' : 'Yangi filial'} footer={formFooter('branch-create-form', () => setBranchModalOpen(false), createBranchLoading)}>
+        <form id="branch-create-form" onSubmit={handleCreateBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {branchFields(
+            { uz: branchNameUz, ru: branchNameRu, address: branchAddress, isMain: branchIsMain },
+            { uz: setBranchNameUz, ru: setBranchNameRu, address: setBranchAddress, isMain: setBranchIsMain },
+          )}
         </form>
       </Modal>
 
-      {/* Edit Branch Modal */}
       {editingBranch && (
-        <Modal isOpen={Boolean(editingBranch)} onClose={() => setEditingBranch(null)} title={isRu ? 'Редактировать филиал' : 'Filialni Tahrirlash'}>
-          <form onSubmit={handleSaveEditBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <Input label={isRu ? 'Название филиала (Узбекский)' : "Filial Nomi (O'zbekcha)"} value={editBranchNameUz} onChange={(e) => setEditBranchNameUz(e.target.value)} required />
-            <Input label={isRu ? 'Название филиала (Русский)' : 'Название Филиала (Русский)'} value={editBranchNameRu} onChange={(e) => setEditBranchNameRu(e.target.value)} />
-            <Input label={isRu ? 'Адрес' : 'Manzili'} value={editBranchAddress} onChange={(e) => setEditBranchAddress(e.target.value)} />
-            <Checkbox
-              checked={editBranchIsMain}
-              onChange={(e) => setEditBranchIsMain(e.target.checked)}
-              label={isRu ? 'Отметить как главный филиал' : 'Bosh filial deb belgilash (Main Branch)'}
-              size="sm"
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="outline" onClick={() => setEditingBranch(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button type="submit" variant="primary" disabled={editBranchLoading}>
-                {editBranchLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
+        <Modal isOpen onClose={() => setEditingBranch(null)} title={isRu ? 'Изменить филиал' : 'Filialni tahrirlash'} footer={formFooter('branch-edit-form', () => setEditingBranch(null), editBranchLoading)}>
+          <form id="branch-edit-form" onSubmit={handleSaveEditBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {branchFields(
+              { uz: editBranchNameUz, ru: editBranchNameRu, address: editBranchAddress, isMain: editBranchIsMain },
+              { uz: setEditBranchNameUz, ru: setEditBranchNameRu, address: setEditBranchAddress, isMain: setEditBranchIsMain },
+            )}
           </form>
         </Modal>
       )}
 
-      {/* Delete Branch Confirm Modal */}
-      {deletingBranch && (
-        <Modal isOpen={Boolean(deletingBranch)} onClose={() => setDeletingBranch(null)} title={isRu ? 'Удаление филиала' : 'Filialni O‘chirish'}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы уверены, что хотите удалить филиал "${typeof deletingBranch.name === 'object' ? (deletingBranch.name[locale] || deletingBranch.name.ru || deletingBranch.name.uz) : deletingBranch.name}"?`
-                : `Haqiqatan ham "${typeof deletingBranch.name === 'object' ? (deletingBranch.name[locale] || deletingBranch.name.uz || deletingBranch.name.ru) : deletingBranch.name}" filialini o‘chirmoqchimisiz?`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button type="button" variant="outline" onClick={() => setDeletingBranch(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button type="button" variant="primary" style={{ backgroundColor: 'var(--color-error-500)' }} onClick={handleDeleteBranch} disabled={deleteBranchLoading}>
-                {deleteBranchLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Add Warehouse Modal */}
-      <Modal isOpen={warehouseModalOpen} onClose={() => setWarehouseModalOpen(false)} title={isRu ? 'Привязка нового склада' : 'Yangi Omborxona Biriktirish'}>
-        <form onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <Select
-            label={isRu ? 'Выберите филиал:' : 'Tegishli Filialni Tanlang:'}
-            options={branchOptions}
-            value={selectedBranchId}
-            onChange={(val) => setSelectedBranchId(val)}
-          />
-          <Input label={isRu ? 'Название склада (Узбекский)' : "Ombor Nomi (O'zbekcha)"} value={warehouseNameUz} onChange={(e) => setWarehouseNameUz(e.target.value)} required />
-          <Input label={isRu ? 'Название склада (Русский)' : 'Название Склада (Русский)'} value={warehouseNameRu} onChange={(e) => setWarehouseNameRu(e.target.value)} />
-          <Input label={isRu ? 'Адрес' : 'Manzili'} value={warehouseAddress} onChange={(e) => setWarehouseAddress(e.target.value)} />
-          <Input label={isRu ? 'Телефон' : 'Telefon'} value={warehousePhone} onChange={(e) => setWarehousePhone(e.target.value)} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-            <Button type="button" variant="outline" onClick={() => setWarehouseModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" variant="primary" disabled={createWarehouseLoading}>{isRu ? 'Сохранить' : 'Saqlash'}</Button>
-          </div>
+      <Modal isOpen={warehouseModalOpen} onClose={() => setWarehouseModalOpen(false)} title={isRu ? 'Новый склад' : 'Yangi ombor'} footer={formFooter('warehouse-create-form', () => setWarehouseModalOpen(false), createWarehouseLoading)}>
+        <form id="warehouse-create-form" onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {warehouseFields(
+            { branchId: selectedBranchId, uz: warehouseNameUz, ru: warehouseNameRu, address: warehouseAddress, phone: warehousePhone },
+            { branchId: setSelectedBranchId, uz: setWarehouseNameUz, ru: setWarehouseNameRu, address: setWarehouseAddress, phone: setWarehousePhone },
+          )}
         </form>
       </Modal>
 
-      {/* Edit Warehouse Modal */}
       {editingWarehouse && (
-        <Modal isOpen={Boolean(editingWarehouse)} onClose={() => setEditingWarehouse(null)} title={isRu ? 'Редактировать склад' : 'Omborxonani Tahrirlash'}>
-          <form onSubmit={handleSaveEditWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <Select
-              label={isRu ? 'Выберите филиал:' : 'Tegishli Filialni Tanlang:'}
-              options={branchOptions}
-              value={editWarehouseBranchId}
-              onChange={(val) => setEditWarehouseBranchId(val)}
-            />
-            <Input label={isRu ? 'Название склада (Узбекский)' : "Ombor Nomi (O'zbekcha)"} value={editWarehouseNameUz} onChange={(e) => setEditWarehouseNameUz(e.target.value)} required />
-            <Input label={isRu ? 'Название склада (Русский)' : 'Название Склада (Русский)'} value={editWarehouseNameRu} onChange={(e) => setEditWarehouseNameRu(e.target.value)} />
-            <Input label={isRu ? 'Адрес' : 'Manzili'} value={editWarehouseAddress} onChange={(e) => setEditWarehouseAddress(e.target.value)} />
-            <Input label={isRu ? 'Телефон' : 'Telefon'} value={editWarehousePhone} onChange={(e) => setEditWarehousePhone(e.target.value)} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="outline" onClick={() => setEditingWarehouse(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button type="submit" variant="primary" disabled={editWarehouseLoading}>
-                {editWarehouseLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
+        <Modal isOpen onClose={() => setEditingWarehouse(null)} title={isRu ? 'Изменить склад' : 'Omborni tahrirlash'} footer={formFooter('warehouse-edit-form', () => setEditingWarehouse(null), editWarehouseLoading)}>
+          <form id="warehouse-edit-form" onSubmit={handleSaveEditWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {warehouseFields(
+              { branchId: editWarehouseBranchId, uz: editWarehouseNameUz, ru: editWarehouseNameRu, address: editWarehouseAddress, phone: editWarehousePhone },
+              { branchId: setEditWarehouseBranchId, uz: setEditWarehouseNameUz, ru: setEditWarehouseNameRu, address: setEditWarehouseAddress, phone: setEditWarehousePhone },
+            )}
           </form>
-        </Modal>
-      )}
-
-      {/* Delete Warehouse Confirm Modal */}
-      {deletingWarehouse && (
-        <Modal isOpen={Boolean(deletingWarehouse)} onClose={() => setDeletingWarehouse(null)} title={isRu ? 'Удаление склада' : 'Omborxonani O‘chirish'}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы уверены, что хотите удалить склад "${typeof deletingWarehouse.name === 'object' ? (deletingWarehouse.name[locale] || deletingWarehouse.name.ru || deletingWarehouse.name.uz) : deletingWarehouse.name}"?`
-                : `Haqiqatan ham "${typeof deletingWarehouse.name === 'object' ? (deletingWarehouse.name[locale] || deletingWarehouse.name.uz || deletingWarehouse.name.ru) : deletingWarehouse.name}" omborxonasini o‘chirmoqchimisiz?`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button type="button" variant="outline" onClick={() => setDeletingWarehouse(null)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-              <Button type="button" variant="primary" style={{ backgroundColor: 'var(--color-error-500)' }} onClick={handleDeleteWarehouse} disabled={deleteWarehouseLoading}>
-                {deleteWarehouseLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
-              </Button>
-            </div>
-          </div>
         </Modal>
       )}
     </div>
   );
 }
-

@@ -3,16 +3,22 @@
 import { useState } from 'react';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { ChipGroup } from '@/components/ui/list/ListKit';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { formatDate, errorMessage } from '@/lib/utils';
+import { formatDate, formatDateTime, errorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { LifeBuoy } from 'lucide-react';
 import { SupportTicket } from '@shared/types';
 import { toast } from '@/context/ToastContext';
+
+/** Higher first in the inbox. */
+const PRIO: Record<string, number> = { HIGH: 2, MEDIUM: 1, LOW: 0 };
 
 export default function SuperAdminTicketsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -23,196 +29,145 @@ export default function SuperAdminTicketsPage() {
   const ticketsQuery = useApiQuery<SupportTicket[]>('/super-admin/tickets', { scope: 'platform' });
   const tickets = ticketsQuery.data ?? [];
 
-  // Reply modal
+  // Conversation shown on the right (first in the list when none chosen)
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [replyLoading, setReplyLoading] = useState(false);
 
 
-  const handleReply = async (e: React.FormEvent) => {
+  const handleReply = async (e: React.FormEvent, ticket: SupportTicket) => {
     e.preventDefault();
-    if (!token || !selectedTicket || !replyMessage.trim()) return;
+    if (!token || !replyMessage.trim()) return;
     setReplyLoading(true);
     try {
-      await apiFetch(`/super-admin/tickets/${selectedTicket.id}/reply`, {
+      await apiFetch(`/super-admin/tickets/${ticket.id}/reply`, {
         token,
         locale,
         method: 'POST',
         body: JSON.stringify({ message: replyMessage }),
       });
 
-      toast.success(isRu ? 'Ответ успешно отправлен' : 'Javob muvaffaqiyatli yuborildi');
-      setSelectedTicket(null);
+      toast.success(isRu ? 'Ответ отправлен компании' : 'Javob korxonaga yuborildi');
+      setSelectedTicket(ticket); // stay on the conversation that was answered
       setReplyMessage('');
       void invalidateApi('/super-admin/tickets');
     } catch (err) {
-      toast.error(errorMessage(err) || (isRu ? 'Ошибка отправки ответа' : 'Xatolik yuz berdi'));
+      toast.error(errorMessage(err) || (isRu ? 'Не удалось отправить ответ' : 'Javobni yuborib bo‘lmadi'));
     } finally {
       setReplyLoading(false);
     }
   };
 
+  const tt = useTranslations('rd.tickets');
+  type Msg = { id?: string; message: string; isFromAdmin?: boolean; senderName?: string; createdAt?: string };
+  const msgsOf = (t: SupportTicket) => ((t as { messages?: Msg[] }).messages ?? []);
+  const companyOf = (t: SupportTicket) => {
+    const c = (t as { company?: { name?: { uz?: string; ru?: string } | string; slug?: string } }).company;
+    return (typeof c?.name === 'string' ? c.name : c?.name?.[locale] || c?.name?.uz) || c?.slug || '—';
+  };
+  // Waiting = not resolved/closed and the last word is the company's.
+  const waiting = (t: SupportTicket) => t.status !== 'RESOLVED' && t.status !== 'CLOSED' && !msgsOf(t).at(-1)?.isFromAdmin;
+  const [view, setView] = useState<'waiting' | 'all'>('waiting');
+  const waitingCount = tickets.filter(waiting).length;
+  const listed = (view === 'waiting' ? tickets.filter(waiting) : tickets)
+    .slice()
+    .sort((a, b) => Number(waiting(b)) - Number(waiting(a)) || PRIO[b.priority as string] - PRIO[a.priority as string] || b.createdAt.localeCompare(a.createdAt));
+  const current = selectedTicket ? tickets.find((t) => t.id === selectedTicket.id) ?? selectedTicket : listed[0] ?? null;
+  const statusBadge = (t: SupportTicket) =>
+    waiting(t) ? <Badge variant="warning">{tt('waiting')}</Badge> : t.status === 'RESOLVED' || t.status === 'CLOSED' ? <Badge variant="success">{tt('resolved')}</Badge> : <Badge variant="info">{tt('answered')}</Badge>;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <div>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', letterSpacing: '-0.02em', margin: 0 }}>
-          {isRu ? 'Техподдержка' : 'Mijozlar murojaatlari'}
-        </h1>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          showBreadcrumbs={false}
+          title={isRu ? 'Обращения' : 'Murojaatlar'}
+          subtitle={isRu ? 'Вопросы компаний в поддержку. Ответ приходит компании в её кабинет.' : 'Korxonalarning qo‘llab-quvvatlashga savollari. Javob korxona kabinetiga boradi.'}
+        />
       </div>
 
-      <div
-        style={{
-          backgroundColor: 'var(--color-bg-secondary)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-sm)',
-          overflow: 'hidden',
-        }}
-      >
-        {ticketsQuery.isError ? (
-          <LoadError error={ticketsQuery.error} onRetry={() => void ticketsQuery.refetch()} retrying={ticketsQuery.isFetching} />
-        ) : ticketsQuery.isPending ? (
-          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            Yuklanmoqda...
-          </div>
-        ) : tickets.length === 0 ? (
-          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            {isRu ? 'Нет активных тикетов' : 'Hozircha hech qanday murojaat yo‘q'}
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-bg-tertiary)',
-                    color: 'var(--color-text-secondary)',
-                    fontSize: 'var(--text-xs)',
-                    fontWeight: 'var(--font-semibold)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  <th style={{ padding: '12px 20px' }}>{isRu ? 'Тема' : 'Mavzu'}</th>
-                  <th style={{ padding: '12px 16px' }}>{isRu ? 'Предприятие' : 'Korxona'}</th>
-                  <th style={{ padding: '12px 16px' }}>{isRu ? 'Статус' : 'Holat'}</th>
-                  <th style={{ padding: '12px 16px' }}>{isRu ? 'Дата' : 'Sana'}</th>
-                  <th style={{ padding: '12px 20px', textAlign: 'right' }}>{isRu ? 'Действие' : 'Amal'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((ticket) => (
-                  <tr
-                    key={ticket.id}
-                    style={{
-                      borderBottom: '1px solid var(--color-border-light)',
-                      transition: 'background-color var(--transition-fast)',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td style={{ padding: '14px 20px', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                      <div>{ticket.subject}</div>
-                      {ticket.messages?.[0]?.message && (
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)', marginTop: '2px' }}>
-                          {ticket.messages[0].message}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--color-text-secondary)' }}>
-                      {(ticket as { company?: { name?: { uz?: string }; slug?: string } }).company?.name?.uz || (ticket as { company?: { slug?: string } }).company?.slug || 'Korxona'}
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      {ticket.status === 'RESOLVED' ? (
-                        <Badge variant="success">
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={12} /> {isRu ? 'Решен' : 'Hal qilindi'}
-                          </span>
-                        </Badge>
-                      ) : (
-                        <Badge variant="warning">
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Clock size={12} /> {isRu ? 'Открыт' : 'Ochiq'}
-                          </span>
-                        </Badge>
-                      )}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                      {formatDate(ticket.createdAt, locale)}
-                    </td>
-                    <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setSelectedTicket(ticket)}
-                      >
-                        {isRu ? 'Ответить' : 'Javob berish'}
-                      </Button>
-                    </td>
-                  </tr>
+      {ticketsQuery.isError ? (
+        <LoadError error={ticketsQuery.error} onRetry={() => void ticketsQuery.refetch()} retrying={ticketsQuery.isFetching} />
+      ) : ticketsQuery.isPending ? (
+        <SkeletonRows rows={4} columns={2} />
+      ) : tickets.length === 0 ? (
+        <div className="rd-table-card">
+          <EmptyState icon={LifeBuoy} title={isRu ? 'Обращений пока нет' : 'Hozircha murojaatlar yo‘q'} description={isRu ? 'Когда компания напишет в поддержку, обращение появится здесь.' : 'Korxona qo‘llab-quvvatlashga yozganda murojaat shu yerda paydo bo‘ladi.'} />
+        </div>
+      ) : (
+        <div className="tk-inbox">
+          <div className="tk-list">
+            <ChipGroup
+              label={tt('show')}
+              value={view}
+              onChange={(v) => setView((v || 'all') as 'waiting' | 'all')}
+              options={[
+                { value: 'waiting', label: tt('waiting'), count: waitingCount },
+                { value: 'all', label: tt('all'), count: tickets.length },
+              ]}
+            />
+            {listed.length === 0 ? (
+              <p className="rd-sub" style={{ padding: 'var(--space-4)' }}>{tt('allAnswered')}</p>
+            ) : (
+              <ul>
+                {listed.map((t) => (
+                  <li key={t.id}>
+                    <button type="button" className="tk-item" aria-current={current?.id === t.id ? 'true' : undefined} onClick={() => { setSelectedTicket(t); setReplyMessage(''); }}>
+                      <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                        <strong className="tk-subj">{t.subject}</strong>
+                        {statusBadge(t)}
+                      </span>
+                      <span className="rd-sub">{companyOf(t)} · {formatDate(t.createdAt, locale)}{t.priority === 'HIGH' ? ` · ${tt('urgent')}` : ''}</span>
+                      {msgsOf(t).at(-1)?.message && <span className="tk-snippet">{msgsOf(t).at(-1)?.message}</span>}
+                    </button>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Reply Modal */}
-      <Modal
-        isOpen={!!selectedTicket}
-        onClose={() => setSelectedTicket(null)}
-        title={isRu ? 'Ответ на обращение' : 'Murojaatga javob berish'}
-        size="md"
-      >
-        {selectedTicket && (
-          <form onSubmit={handleReply} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>
-                {isRu ? 'Тема обращения:' : 'Murojaat mavzusi:'}
-              </div>
-              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-                {selectedTicket.subject}
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                {isRu ? 'Текст ответа' : 'Javob matni'} *
-              </label>
-              <textarea
-                required
-                rows={4}
-                value={replyMessage}
-                onChange={(e) => setReplyMessage(e.target.value)}
-                placeholder={isRu ? 'Введите текст ответа...' : 'Javob matnini kiriting...'}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  backgroundColor: 'var(--color-bg-tertiary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--color-text-primary)',
-                  fontSize: 'var(--text-sm)',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  resize: 'vertical',
-                  fontFamily: 'inherit',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setSelectedTicket(null)}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="primary" type="submit" disabled={replyLoading}>
-                {replyLoading ? (isRu ? 'Отправка...' : 'Yuborilmoqda...') : isRu ? 'Отправить ответ' : 'Yuborish'}
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
+          {current && (
+            <section className="tk-thread" aria-label={current.subject}>
+              <header style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', margin: 0 }}>{current.subject}</h2>
+                  <div className="rd-sub">{companyOf(current)} · {formatDate(current.createdAt, locale)}</div>
+                </div>
+                {statusBadge(current)}
+              </header>
+              <ol className="tk-msgs">
+                {msgsOf(current).map((m, i) => (
+                  <li key={m.id ?? i} className={m.isFromAdmin ? 'tk-msg tk-msg-admin' : 'tk-msg'}>
+                    <span className="rd-sub">{m.isFromAdmin ? tt('we') : m.senderName || companyOf(current)}{m.createdAt ? ` · ${formatDateTime(m.createdAt, locale)}` : ''}</span>
+                    <span style={{ whiteSpace: 'pre-wrap' }}>{m.message}</span>
+                  </li>
+                ))}
+              </ol>
+              <form onSubmit={(e) => void handleReply(e, current)} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <label htmlFor="sa-ticket-reply-text" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>
+                  {isRu ? 'Текст ответа' : 'Javob matni'}
+                </label>
+                <textarea
+                  id="sa-ticket-reply-text"
+                  required
+                  rows={3}
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit(); }}
+                  placeholder={isRu ? 'Введите текст ответа...' : 'Javob matnini kiriting...'}
+                  className="tk-reply"
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span className="rd-sub">{tt('replyNote')}</span>
+                  <Button type="submit" loading={replyLoading} loadingText={isRu ? 'Отправка…' : 'Yuborilmoqda…'} disabled={!replyMessage.trim()}>
+                    {isRu ? 'Отправить ответ' : 'Javobni yuborish'}
+                  </Button>
+                </div>
+              </form>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 }

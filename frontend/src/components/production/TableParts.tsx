@@ -124,13 +124,14 @@ export function SkeletonRows({ columns, rows = 5 }: { columns: number; rows?: nu
   );
 }
 
-export function EmptyState({ icon, text, action }: { icon: React.ReactNode; text: string; action?: React.ReactNode }) {
+export function EmptyState({ icon, text, hint, action }: { icon: React.ReactNode; text: string; hint?: string; action?: React.ReactNode }) {
   return (
     <div style={{ padding: '48px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
       <div aria-hidden style={{ width: 56, height: 56, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>
         {icon}
       </div>
-      <div style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{text}</div>
+      <div style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text-primary)' }}>{text}</div>
+      {hint && <p style={{ maxWidth: 440, fontSize: 'var(--text-sm)', lineHeight: 1.5 }}>{hint}</p>}
       {action}
     </div>
   );

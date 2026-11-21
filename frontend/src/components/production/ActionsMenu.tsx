@@ -95,7 +95,7 @@ export function ActionsMenu({ label, actions }: { label: string; actions: MenuAc
                 close();
                 action.onSelect();
               }}
-              style={{ display: 'block', width: '100%', minHeight: 40, padding: '8px 12px', textAlign: 'left', border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', cursor: 'pointer', fontSize: 'var(--text-sm)', color: action.danger ? 'var(--color-error-600)' : 'var(--color-text-primary)' }}
+              style={{ display: 'block', width: '100%', minHeight: 40, padding: '8px 12px', textAlign: 'left', border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', cursor: 'pointer', fontSize: 'var(--text-sm)', color: action.danger ? 'var(--color-error-700)' : 'var(--color-text-primary)' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >

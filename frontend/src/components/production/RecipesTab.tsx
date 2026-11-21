@@ -130,7 +130,7 @@ export function RecipesTab(props: RecipesTabProps) {
     <span title={t('xomashyoKartalaridagiNarxBoyicha')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
       {t('taxminiy')}
       {recipe.estimate.missingPrice && (
-        <AlertTriangle size={14} aria-label={t('narxiYoqXomashyoBor')} style={{ color: 'var(--color-warning-600)' }} />
+        <AlertTriangle size={14} aria-label={t('narxiYoqXomashyoBor')} style={{ color: 'var(--color-warning-700)' }} />
       )}
     </span>
   );
@@ -181,7 +181,7 @@ export function RecipesTab(props: RecipesTabProps) {
           <tr key={line.productId}>
             <td style={{ ...tdStyle, height: 44 }}>
               {localName(line.product?.name, locale)}
-              {line.product?.isSemiFinished && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--color-info-600)' }}>{semiFinishedLabel(locale)}</span>}
+              {line.product?.isSemiFinished && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--color-info-700)' }}>{semiFinishedLabel(locale)}</span>}
             </td>
             <td style={{ ...tdStyle, height: 44, textAlign: 'right' }} className="tabular-nums">{formatQuantity(Number(line.quantity))}</td>
             <td style={{ ...tdStyle, height: 44 }}>{lineUnit(line)}</td>
@@ -198,7 +198,7 @@ export function RecipesTab(props: RecipesTabProps) {
     <Card style={{ padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end', borderBottom: '1px solid var(--color-border-light)' }}>
         <div style={{ flex: '1 1 240px', minWidth: 200 }}>
-          <label htmlFor="recipe-search" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+          <label htmlFor="recipe-search" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
             {t('qidiruv')}
           </label>
           <div style={{ position: 'relative' }}>
@@ -238,6 +238,7 @@ export function RecipesTab(props: RecipesTabProps) {
         <EmptyState
           icon={<Layers3 size={26} />}
           text={source.length === 0 ? t('hozirchaRetsepturalarYoq') : t('filtrBoyichaRetsepturaTopilmadi')}
+          hint={source.length === 0 ? t('retsepturaBoshHolatIzohi') : undefined}
           action={
             source.length === 0 && props.canCreate ? (
               <Button onClick={props.onCreate}>

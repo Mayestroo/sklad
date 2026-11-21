@@ -53,7 +53,7 @@ export default function DashboardError({
             borderRadius: 'var(--radius-full)',
             backgroundColor: 'var(--color-danger-50)',
             border: '1px solid var(--color-danger-100)',
-            color: 'var(--color-danger-600)',
+            color: 'var(--color-danger-700)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -91,7 +91,7 @@ export default function DashboardError({
             style={{
               fontSize: 'var(--text-xs)',
               fontFamily: 'monospace',
-              color: 'var(--color-danger-600)',
+              color: 'var(--color-danger-700)',
               backgroundColor: 'var(--color-danger-50)',
               padding: '6px 12px',
               borderRadius: 'var(--radius-sm)',

@@ -13,6 +13,8 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Select } from '@/components/ui/Select';
 import { PurchaseReceipt } from '@shared/types';
 import { formatCurrency, formatUnitCost, errorMessage, type LocalizedName } from '@/lib/utils';
+import { localIsoDate } from '@/lib/date-range';
+import { toast } from '@/context/ToastContext';
 
 interface CreateReturnModalProps {
   isOpen: boolean;
@@ -31,7 +33,7 @@ export function CreateReturnModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnDate, setReturnDate] = useState(localIsoDate(new Date()));
   const [actNumber, setActNumber] = useState('');
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
@@ -141,6 +143,13 @@ export function CreateReturnModal({
         }),
       });
 
+      const label =
+        targetStatus === 'POSTED'
+          ? isRu ? 'Возврат поставщику проведён' : 'Yetkazib beruvchiga qaytarish tasdiqlandi'
+          : targetStatus === 'UNDER_REVIEW'
+            ? isRu ? 'Возврат отправлен на проверку' : 'Qaytarish tekshiruvga yuborildi'
+            : isRu ? 'Черновик возврата сохранён' : 'Qaytarish qoralamasi saqlandi';
+      toast.success(label);
       onSuccess();
       onClose();
     } catch (err) {
@@ -151,90 +160,87 @@ export function CreateReturnModal({
   };
 
   const returnTotal = calculateReturnTotal();
+  const anyQty = returnItems.some((i) => i.returnQty > 0);
+  const th: React.CSSProperties = { padding: '8px', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' };
+  const returnAll = () =>
+    setTyped((prev) => ({ ...prev, qty: Object.fromEntries(returnItems.map((item, i) => [i, item.maxQty])) }));
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`${isRu ? 'Возврат товара поставщику: Документ №' : 'Yetkazib Beruvchiga Tovarni Qaytarish:'} ${receipt.docNumber}`}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '700px', width: '100%' }}>
-        {error && (
-          <div
-            style={{
-              padding: 'var(--space-3)',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'var(--color-danger-50)',
-              color: 'var(--color-danger-700)',
-              fontSize: 'var(--text-sm)',
-            }}
-          >
-            {error}
+      size="lg"
+      title={isRu ? `Возврат поставщику по приходу ${receipt.docNumber}` : `${receipt.docNumber} kirim bo‘yicha yetkazib beruvchiga qaytarish`}
+      onSubmitShortcut={() => void handleSubmit('POSTED')}
+      footer={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap', width: '100%' }}>
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            {isRu ? 'К возврату: ' : 'Qaytariladi: '}
+            <strong className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>{formatCurrency(returnTotal, locale, receipt.currency)}</strong>
+          </span>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <Button variant="outline" onClick={onClose} disabled={loading}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button variant="secondary" onClick={() => void handleSubmit('DRAFT')} disabled={loading}>
+              {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+            </Button>
+            <Button variant="secondary" onClick={() => void handleSubmit('UNDER_REVIEW')} disabled={loading}>
+              {isRu ? 'На проверку' : 'Tekshiruvga yuborish'}
+            </Button>
+            <Button variant="primary" onClick={() => void handleSubmit('POSTED')} loading={loading} loadingText={isRu ? 'Оформление…' : 'Rasmiylashtirilmoqda…'}>
+              {isRu ? 'Провести возврат' : 'Qaytarishni tasdiqlash'}
+            </Button>
           </div>
+        </div>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {error && (
+          <div role="alert" className="doc-banner is-error">{error}</div>
         )}
 
-        <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
-          <div><strong>{isRu ? 'Поставщик:' : 'Yetkazib beruvchi:'}</strong> {receipt.counterparty?.name}</div>
-          <div><strong>{isRu ? 'Склад:' : 'Ombor:'}</strong> {getProductName(receipt.warehouse?.name)}</div>
-        </div>
+        <dl style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px' }}>
+          <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Поставщик' : 'Yetkazib beruvchi'}</dt>
+          <dd style={{ fontWeight: 'var(--font-medium)' }}>{receipt.counterparty?.name || '—'}</dd>
+          <dt style={{ color: 'var(--color-text-secondary)' }}>{isRu ? 'Со склада' : 'Ombordan'}</dt>
+          <dd>{getProductName(receipt.warehouse?.name)}</dd>
+        </dl>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
-          <DatePicker
-            label={isRu ? 'Дата возврата *' : 'Qaytarish Sanasi *'}
-            value={returnDate}
-            onChange={(val) => setReturnDate(val)}
-          />
-          <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
-              {isRu ? 'Номер акта возврата' : 'Qaytarish dalolatnoma №'}
-            </label>
-            <Input
-              value={actNumber}
-              onChange={(e) => setActNumber(e.target.value)}
-              placeholder={isRu ? 'Напр: АКТ-001' : 'Masalan: AKT-001'}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
-              {isRu ? 'Причина возврата' : 'Qaytarish Sababi'}
-            </label>
-            <Select
-              value={reason}
-              onChange={setReason}
-              style={{ width: '100%' }}
-              options={[
-                { value: '', label: isRu ? '-- Выберите причину --' : '-- Sababni tanlang --' },
-                ...REASON_PRESETS.map((preset) => ({ value: preset, label: preset })),
-              ]}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px', display: 'block' }}>
-            {isRu ? 'Примечание / Комментарий' : 'Izoh / Tavsif'}
-          </label>
-          <Input
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={isRu ? 'Дополнительные пояснения к возврату...' : 'Qaytarish bo\'yicha qo\'shimcha izoh...'}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: 'var(--space-3)' }}>
+          <DatePicker label={isRu ? 'Дата возврата *' : 'Qaytarish sanasi *'} value={returnDate} onChange={(val) => setReturnDate(val)} />
+          <Input label={isRu ? 'Номер акта возврата' : 'Qaytarish dalolatnomasi №'} value={actNumber} onChange={(e) => setActNumber(e.target.value)} placeholder={isRu ? 'напр. АКТ-001' : 'masalan, AKT-001'} />
+          <Select
+            label={isRu ? 'Причина' : 'Sabab'}
+            value={reason}
+            onChange={setReason}
+            style={{ width: '100%' }}
+            options={[{ value: '', label: isRu ? 'Не указана' : 'Ko‘rsatilmagan' }, ...REASON_PRESETS.map((preset) => ({ value: preset, label: preset }))]}
           />
         </div>
 
-        <div>
-          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: 'var(--space-2)', display: 'block' }}>
-            {isRu ? 'Возвращаемое количество' : 'Qaytariladigan Miqdorlar'}
-          </label>
-          <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
+        <Input label={isRu ? 'Комментарий' : 'Izoh'} value={comment} onChange={(e) => setComment(e.target.value)} placeholder={isRu ? 'что не так с товаром' : 'tovar bilan nima muammo'} />
+
+        <section aria-labelledby="preturn-lines">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 'var(--space-2)' }}>
+            <h3 id="preturn-lines" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Что возвращаем' : 'Nima qaytariladi'}</h3>
+            <Button variant="ghost" size="sm" onClick={returnAll}>{isRu ? 'Вернуть всё' : 'Hammasini qaytarish'}</Button>
+          </div>
+          {!anyQty && (
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-2)' }}>
+              {isRu ? 'Укажите количество у товаров, которые возвращаете.' : 'Qaytariladigan tovarlarning miqdorini kiriting.'}
+            </p>
+          )}
+          <div style={{ overflowX: 'auto' }}>
+            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
               <thead>
-                <tr style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th style={{ padding: '8px', textAlign: 'left' }}>{isRu ? 'ТОВАР' : 'TOVAR'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '90px' }}>{isRu ? 'ДОСТУПНО' : 'MUMKIN'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>{isRu ? 'ВОЗВРАТ' : 'MIQDOR'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '110px' }}>{isRu ? 'ЦЕНА' : 'NARX'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '75px' }}>{isRu ? 'НДС %' : 'QQS %'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right', width: '120px' }}>{isRu ? 'ИТОГО' : 'JAMI'}</th>
+                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <th scope="col" style={{ ...th, textAlign: 'left' }}>{isRu ? 'Товар' : 'Tovar'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Можно вернуть' : 'Qaytarish mumkin'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right', width: 130 }}>{isRu ? 'Возврат' : 'Qaytariladi'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Цена' : 'Narx'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right', width: 80 }}>{isRu ? 'НДС %' : 'QQS %'}</th>
+                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Сумма' : 'Summa'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,32 +248,37 @@ export function CreateReturnModal({
                   const lineTotal = item.returnQty * item.unitPrice;
                   const vat = lineTotal * ((item.vatRate || 0) / 100);
                   const totalWithVat = lineTotal + vat;
+                  const name = getProductName(item.productName);
                   return (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                      <td style={{ padding: '8px', fontWeight: 'var(--font-medium)' }}>
-                        <div>{getProductName(item.productName)}</div>
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--color-border-light)', opacity: item.maxQty === 0 ? 0.6 : 1 }}>
+                      <td data-primary style={{ padding: '8px', fontWeight: 'var(--font-medium)' }}>
+                        <div>{name}</div>
                         {item.landedCost > item.unitPrice && (
-                          <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)' }}>
                             {isRu ? `Себестоимость: ${formatUnitCost(item.landedCost, locale, receipt.currency)}` : `Tannarxi: ${formatUnitCost(item.landedCost, locale, receipt.currency)}`}
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-semibold)' }}>{quantityWithUnit(item.maxQty, item.unit, locale)}</td>
-                      <td style={{ padding: '6px' }}>
+                      <td data-label={isRu ? 'Можно вернуть' : 'Qaytarish mumkin'} style={{ padding: '8px', textAlign: 'right', color: 'var(--color-text-secondary)' }} className="tabular-nums">
+                        {item.maxQty > 0 ? quantityWithUnit(item.maxQty, item.unit, locale) : isRu ? 'уже возвращено' : 'qaytarilgan'}
+                      </td>
+                      <td data-label={isRu ? 'Возврат' : 'Qaytariladi'} style={{ padding: '6px' }}>
                         <QuantityInput
                           unit={item.unit}
                           value={item.returnQty || ''}
                           max={item.maxQty}
+                          disabled={item.maxQty === 0}
                           onValueChange={(value) => handleQtyChange(idx, Number(value) || 0)}
-                          aria-label={isRu ? 'Количество возврата' : 'Qaytarish miqdori'}
+                          aria-label={isRu ? `Количество возврата: ${name}` : `Qaytarish miqdori: ${name}`}
                         />
                       </td>
-                      <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice, locale, receipt.currency)}</td>
-                      <td style={{ padding: '6px', width: '75px' }}>
+                      <td data-label={isRu ? 'Цена' : 'Narx'} style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }} className="tabular-nums">{formatCurrency(item.unitPrice, locale, receipt.currency)}</td>
+                      <td data-label={isRu ? 'НДС %' : 'QQS %'} style={{ padding: '6px', width: 80 }}>
                         <Input
                           type="number"
                           min="0"
                           max="100"
+                          aria-label={isRu ? `НДС %: ${name}` : `QQS %: ${name}`}
                           value={item.vatRate}
                           onChange={(e) => {
                             const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
@@ -276,7 +287,7 @@ export function CreateReturnModal({
                           style={{ textAlign: 'right' }}
                         />
                       </td>
-                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-bold)' }}>
+                      <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ padding: '8px', textAlign: 'right', fontWeight: 'var(--font-semibold)', whiteSpace: 'nowrap' }} className="tabular-nums">
                         {formatCurrency(totalWithVat, locale, receipt.currency)}
                       </td>
                     </tr>
@@ -285,29 +296,7 @@ export function CreateReturnModal({
               </tbody>
             </table>
           </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', backgroundColor: 'var(--color-warning-50)', borderRadius: 'var(--radius-md)' }}>
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning-900)' }}>{isRu ? 'Общая сумма возврата (с НДС):' : 'Qaytariladigan Jami Summa (QQS bilan):'}</span>
-          <strong style={{ fontSize: 'var(--text-lg)', color: 'var(--color-warning-900)' }}>
-            {formatCurrency(returnTotal, locale, receipt.currency)}
-          </strong>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button variant="secondary" onClick={() => handleSubmit('DRAFT')} disabled={loading || returnTotal <= 0}>
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Черновик' : 'Qoralama')}
-          </Button>
-          <Button variant="secondary" onClick={() => handleSubmit('UNDER_REVIEW')} disabled={loading || returnTotal <= 0}>
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'На проверку' : 'Tekshiruvga')}
-          </Button>
-          <Button variant="danger" onClick={() => handleSubmit('POSTED')} disabled={loading || returnTotal <= 0}>
-            {loading ? (isRu ? 'Оформление...' : 'Rasmiylashtirilmoqda...') : (isRu ? 'Провести возврат' : 'Tasdiqlash va O\'tkazish')}
-          </Button>
-        </div>
+        </section>
       </div>
     </Modal>
   );

@@ -442,11 +442,13 @@ export function DatePicker({
         </label>
       )}
 
-      {/* Input Trigger Button */}
+      {/* Trigger and clear button are siblings: a button must not sit inside role=button (axe nested-interactive). */}
+      <div style={{ position: 'relative' }}>
       <div
         id={id}
         tabIndex={disabled ? -1 : 0}
         role="button"
+        aria-label={[label, value ? formatDisplayDate(value) : effectivePlaceholder].filter(Boolean).join(': ')}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={() => {
@@ -496,7 +498,7 @@ export function DatePicker({
           }
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', minWidth: 0, marginRight: value && !disabled ? 28 : 0 }}>
           <CalendarIcon size={16} style={{ color: isOpen ? 'var(--color-primary-600)' : 'var(--color-text-tertiary)', flexShrink: 0, transition: 'color var(--transition-fast)' }} />
           <span
             style={{
@@ -510,12 +512,18 @@ export function DatePicker({
           </span>
         </div>
 
+      </div>
         {value && !disabled ? (
           <button
             type="button"
             onClick={handleClear}
             title={isRu ? 'Очистить' : 'Tozalash'}
+            aria-label={isRu ? 'Очистить дату' : 'Sanani tozalash'}
             style={{
+              position: 'absolute',
+              right: 6,
+              top: '50%',
+              transform: 'translateY(-50%)',
               border: 'none',
               background: 'transparent',
               cursor: 'pointer',
@@ -855,7 +863,7 @@ export function DatePicker({
       )}
 
       {error && (
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', fontWeight: 500 }}>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 500 }}>
           {error}
         </span>
       )}

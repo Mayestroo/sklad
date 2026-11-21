@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select, SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { formatCurrency, formatPercent, errorMessage, type LocalizedName } from '@/lib/utils';
-import { SalesInvoice, SalesInvoiceItem } from '@shared/types';
+import { SalesInvoice } from '@shared/types';
 
 /** GET /sales/invoices/:id/returnable-items */
 interface ReturnableItemRow {
@@ -30,7 +30,9 @@ interface ReturnableItemRow {
   discount?: number | string | null;
   vatRate?: number | string | null;
 }
-import { RotateCcw, AlertCircle, Barcode, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { RotateCcw, AlertCircle, Barcode, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { toast } from '@/context/ToastContext';
+import { localIsoDate } from '@/lib/date-range';
 
 interface CreateSalesReturnModalProps {
   isOpen: boolean;
@@ -72,7 +74,7 @@ export function CreateSalesReturnModal({
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnDate, setReturnDate] = useState(localIsoDate(new Date()));
   const [reason, setReason] = useState('');
   const [returnItems, setReturnItems] = useState<ReturnableItemState[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
@@ -83,6 +85,8 @@ export function CreateSalesReturnModal({
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,11 +110,12 @@ export function CreateSalesReturnModal({
       .then((res) => {
         const list = res || [];
         setWarehouses(list);
-        const defectWh = list.find((w) => w.isDefect || (typeof w.name === 'string' && w.name.toLowerCase().includes('brak')));
+        // Only a warehouse marked as the defect one is preselected: defective goods
+        // must never land in sellable stock because it happened to be first.
+        const defectWh = list.find((w) => w.isDefect);
         if (defectWh) setDefectWarehouseId(defectWh.id);
-        else if (list.length > 0) setDefectWarehouseId(list[0].id);
       })
-      .catch(console.error);
+      .catch(() => setWarehouses([]));
   }, [token, company, locale]);
 
   useEffect(() => {
@@ -118,94 +123,52 @@ export function CreateSalesReturnModal({
 
     setFetchLoading(true);
     setError('');
+    setLoadError(null);
     apiFetch<ReturnableItemRow[]>(`/sales/invoices/${invoice.id}/returnable-items`, {
       token: token || undefined,
       tenantId: company.id,
       locale,
     })
       .then((items) => {
-        if (items && items.length > 0) {
-          setReturnItems(
-            items.map((i) => ({
-              productId: i.productId,
-              name: getProductName(i.productName),
-              sku: i.sku,
-              barcode: i.barcode,
-              unit: i.unit,
-              soldQty: Number(i.soldQuantity),
-              returnedQty: Number(i.returnedQuantity),
-              returnableQty: Number(i.returnableQuantity),
-              returnQty: 0,
-              unitPrice: Number(i.unitPrice),
-              unitVatAmount: Number(i.unitVatAmount || 0),
-              discount: Number(i.discount ?? 0),
-              vatRate: Number(i.vatRate || 0),
-              isDefective: false,
-            }))
-          );
-        } else if (invoice.items) {
-          setReturnItems(
-            invoice.items.map((i: SalesInvoiceItem & { name?: LocalizedName }) => ({
-              productId: i.productId,
-              name: getProductName(i.product?.name || i.name),
-              sku: i.product?.sku,
-              barcode: i.product?.barcode ?? undefined,
-              unit: i.product?.unitOfMeasure,
-              soldQty: Number(i.quantity),
-              returnedQty: 0,
-              returnableQty: Number(i.quantity),
-              returnQty: 0,
-              unitPrice: Number(i.totalPrice ?? i.unitPrice * i.quantity) / Number(i.quantity) - Number(i.vatAmount || 0) / Number(i.quantity),
-              unitVatAmount: Number(i.vatAmount || 0) / Number(i.quantity),
-              discount: Number(i.discount ?? 0),
-              vatRate: Number(i.vatRate || 0),
-              isDefective: false,
-            }))
-          );
-        }
+        setReturnItems(
+          (items ?? []).map((i) => ({
+            productId: i.productId,
+            name: getProductName(i.productName),
+            sku: i.sku,
+            barcode: i.barcode,
+            unit: i.unit,
+            soldQty: Number(i.soldQuantity),
+            returnedQty: Number(i.returnedQuantity),
+            returnableQty: Number(i.returnableQuantity),
+            returnQty: 0,
+            unitPrice: Number(i.unitPrice),
+            unitVatAmount: Number(i.unitVatAmount || 0),
+            discount: Number(i.discount ?? 0),
+            vatRate: Number(i.vatRate || 0),
+            isDefective: false,
+          })),
+        );
       })
-      .catch(() => {
-        if (invoice.items) {
-          setReturnItems(
-            invoice.items.map((i: SalesInvoiceItem & { name?: LocalizedName }) => ({
-              productId: i.productId,
-              name: getProductName(i.product?.name || i.name),
-              sku: i.product?.sku,
-              barcode: i.product?.barcode ?? undefined,
-              unit: i.product?.unitOfMeasure,
-              soldQty: Number(i.quantity),
-              returnedQty: 0,
-              returnableQty: Number(i.quantity),
-              returnQty: 0,
-              unitPrice: Number(i.totalPrice ?? i.unitPrice * i.quantity) / Number(i.quantity) - Number(i.vatAmount || 0) / Number(i.quantity),
-              unitVatAmount: Number(i.vatAmount || 0) / Number(i.quantity),
-              discount: Number(i.discount ?? 0),
-              vatRate: Number(i.vatRate || 0),
-              isDefective: false,
-            }))
-          );
-        }
+      .catch((err) => {
+        // Never fall back to the invoice lines: they ignore earlier returns and
+        // would offer quantities that can no longer be returned.
+        setReturnItems([]);
+        setLoadError(errorMessage(err) || (isRu ? 'Не удалось загрузить, что можно вернуть' : 'Qaytarish mumkin bo‘lgan miqdorlarni yuklab bo‘lmadi'));
       })
       .finally(() => setFetchLoading(false));
-  }, [invoice, isOpen, token, company, locale]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice, isOpen, token, company, locale, reloadKey]);
 
   if (!invoice) return null;
 
   const handleQtyChange = (index: number, qty: number) => {
-    setReturnItems((prev) => {
-      const updated = [...prev];
-      const max = updated[index].returnableQty;
-      updated[index].returnQty = Math.max(0, Math.min(max, qty));
-      return updated;
-    });
+    // Immutable update: React may run the updater twice (strict mode).
+    setReturnItems((prev) => prev.map((row, i) => (i === index ? { ...row, returnQty: Math.max(0, Math.min(row.returnableQty, qty)) } : row)));
   };
 
   const toggleDefective = (index: number) => {
-    setReturnItems((prev) => {
-      const updated = [...prev];
-      updated[index].isDefective = !updated[index].isDefective;
-      return updated;
-    });
+    // Immutable update: a mutated row toggled twice under strict mode and never changed.
+    setReturnItems((prev) => prev.map((row, i) => (i === index ? { ...row, isDefective: !row.isDefective } : row)));
   };
 
   const handleBarcodeScan = (e: React.FormEvent) => {
@@ -262,6 +225,11 @@ export function CreateSalesReturnModal({
       return;
     }
 
+    if (hasDefectiveItems && !defectWarehouseId) {
+      setError(isRu ? 'Выберите склад брака для бракованных товаров' : 'Brak tovarlar uchun brak omborini tanlang');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -283,10 +251,14 @@ export function CreateSalesReturnModal({
         }),
       });
 
+      toast.success(
+        submitStatus === 'POSTED'
+          ? isRu ? 'Возврат проведён: товар вернулся на склад, долг клиента уменьшен' : 'Qaytarish tasdiqlandi: tovar omborga qaytdi, mijoz qarzi kamaydi'
+          : isRu ? 'Черновик возврата сохранён' : 'Qaytarish qoralamasi saqlandi',
+      );
       onSuccess();
       onClose();
     } catch (err) {
-      console.error(err);
       setError(errorMessage(err) || (isRu ? 'Ошибка при оформлении возврата' : 'Qaytaruvni rasmiylashtirishda xatolik yuz berdi'));
     } finally {
       setLoading(false);
@@ -305,49 +277,49 @@ export function CreateSalesReturnModal({
       isOpen={isOpen}
       onClose={onClose}
       title={isRu ? `Возврат товара от покупателя — ${invoice.invoiceNumber || (invoice as { docNumber?: string } | null | undefined)?.docNumber || ''}` : `Mijozdan tovar qaytarish — ${invoice.invoiceNumber || (invoice as { docNumber?: string } | null | undefined)?.docNumber || ''}`}
-      description={isRu ? 'Оформление возврата по счет-фактуре с защитой от перерасхода' : 'Sotuv hujjati bo\'yicha tovar qaytarish (qoldiq chegarasi bilan)'}
+      description={isRu ? 'Вернуть можно не больше проданного минус уже возвращённое.' : 'Sotilgandan ortiq (oldin qaytarilganini ayirib) qaytarib bo‘lmaydi.'}
       icon={<RotateCcw size={20} />}
       size="lg"
+      onSubmitShortcut={() => void handleSubmit('POSTED')}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', flexWrap: 'wrap', width: '100%' }}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => void handleSubmit('DRAFT')} disabled={loading || fetchLoading || !!loadError}>
+            {isRu ? 'Сохранить черновик' : 'Qoralama saqlash'}
+          </Button>
+          <Button type="button" onClick={() => void handleSubmit('POSTED')} loading={loading} loadingText={isRu ? 'Оформление…' : 'Rasmiylashtirilmoqda…'} disabled={fetchLoading || !!loadError}>
+            <RotateCcw size={16} aria-hidden />
+            {isRu ? 'Провести возврат' : 'Qaytarishni tasdiqlash'}
+          </Button>
+        </div>
+      }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {error && (
-          <div
-            style={{
-              padding: '10px 14px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-error-600)',
-              fontSize: 'var(--text-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            <AlertCircle size={16} />
+          <div role="alert" className="doc-banner is-error" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={16} aria-hidden style={{ flexShrink: 0 }} />
             <span>{error}</span>
+          </div>
+        )}
+        {loadError && (
+          <div role="alert" className="doc-banner is-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <span>{loadError}</span>
+            <Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>{isRu ? 'Повторить' : 'Qayta urinish'}</Button>
           </div>
         )}
 
         {/* Top Info Bar */}
-        <div style={{ display: 'grid', gridTemplateColumns: hasDefectiveItems ? '1fr 1fr 1fr' : '1fr 1fr', gap: 'var(--space-3)' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-              {isRu ? 'Дата возврата' : 'Qaytarish sanasi'}
-            </label>
-            <DatePicker value={returnDate} onChange={(val) => setReturnDate(val)} />
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)' }}>
+          <DatePicker label={isRu ? 'Дата возврата *' : 'Qaytarish sanasi *'} value={returnDate} onChange={(val) => setReturnDate(val)} />
 
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-              {isRu ? 'Причина возврата' : 'Qaytarish sababi'}
-            </label>
-            <Input
-              placeholder={isRu ? 'Укажите причину...' : 'Sababni yozing...'}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
+          <Input
+            label={isRu ? 'Причина возврата' : 'Qaytarish sababi'}
+            placeholder={isRu ? 'или выберите ниже' : 'yoki quyidan tanlang'}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
 
           {hasDefectiveItems && (
             <div>
@@ -356,6 +328,7 @@ export function CreateSalesReturnModal({
                 label={isRu ? 'Склад брака *' : 'Brak ombori *'}
                 value={defectWarehouseId}
                 onChange={(val) => setDefectWarehouseId(val)}
+                placeholder={isRu ? 'Выберите склад брака' : 'Brak omborini tanlang'}
                 options={defectWhOptions}
               />
             </div>
@@ -368,12 +341,14 @@ export function CreateSalesReturnModal({
             <button
               key={preset}
               type="button"
+              aria-pressed={reason === preset}
               onClick={() => setReason(preset)}
               style={{
-                fontSize: '11px',
-                padding: '3px 8px',
+                fontSize: 'var(--text-xs)',
+                minHeight: 28,
+                padding: '4px 10px',
                 borderRadius: 'var(--radius-full)',
-                backgroundColor: reason === preset ? 'var(--color-primary-100)' : 'var(--color-bg-subtle)',
+                backgroundColor: reason === preset ? 'var(--color-primary-100)' : 'var(--color-bg-tertiary)',
                 color: reason === preset ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
                 border: '1px solid var(--color-border)',
                 cursor: 'pointer',
@@ -385,13 +360,14 @@ export function CreateSalesReturnModal({
         </div>
 
         {/* Barcode Scanner Fast Input */}
-        <form onSubmit={handleBarcodeScan} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--color-bg-subtle)', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-          <Barcode size={20} style={{ color: 'var(--color-text-secondary)' }} />
+        <form onSubmit={handleBarcodeScan} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--color-bg-tertiary)', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+          <Barcode size={20} aria-hidden style={{ color: 'var(--color-text-secondary)' }} />
           <input
             ref={barcodeInputRef}
             type="text"
             value={barcodeQuery}
             onChange={(e) => setBarcodeQuery(e.target.value)}
+            aria-label={isRu ? 'Штрихкод или артикул (+1 к возврату)' : 'Shtrix-kod yoki artikul (qaytarishga +1)'}
             placeholder={isRu ? 'Сканируйте штрих-код или введите артикул товара (+1)...' : 'Shtrix-kod skaner qiling yoki SKU kiriting (+1)...'}
             style={{
               flex: 1,
@@ -408,37 +384,37 @@ export function CreateSalesReturnModal({
         </form>
 
         {barcodeFeedback && (
-          <div style={{ fontSize: 'var(--text-xs)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', background: barcodeFeedback.includes('+1') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: barcodeFeedback.includes('+1') ? 'var(--color-success-500)' : 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            {barcodeFeedback.includes('+1') ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+          <div role="status" style={{ fontSize: 'var(--text-sm)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', background: barcodeFeedback.includes('+1') ? 'var(--color-success-50)' : 'var(--color-error-50)', color: barcodeFeedback.includes('+1') ? 'var(--color-success-700)' : 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {barcodeFeedback.includes('+1') ? <CheckCircle2 size={14} aria-hidden /> : <AlertTriangle size={14} aria-hidden />}
             <span>{barcodeFeedback}</span>
           </div>
         )}
 
         {/* Return Items Table */}
-        <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+        <div role="region" tabIndex={0} aria-label={isRu ? 'Товары накладной' : 'Hujjat tovarlari'} style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
+          <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-subtle)' }}>
+              <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-tertiary)' }}>
                 <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'ТОВАР' : 'TOVAR'}
+                  {isRu ? 'Товар' : 'Tovar'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'БРАК?' : 'BRAK?'}
+                  {isRu ? 'Брак' : 'Brak'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'ПРОДАНО / ДОСТУПНО' : 'SOTILGAN / QOLDIQ'}
+                  {isRu ? 'Продано / можно вернуть' : 'Sotilgan / qaytarish mumkin'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', width: '130px' }}>
-                  {isRu ? 'ВОЗВРАТ КОЛ-ВО' : 'QAYTARISH'}
+                  {isRu ? 'Возврат' : 'Qaytariladi'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'ЦЕНА' : 'NARX'}
+                  {isRu ? 'Цена' : 'Narx'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
                   {isRu ? 'НДС' : 'QQS'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'СУММА' : 'SUMMA'}
+                  {isRu ? 'Сумма' : 'Summa'}
                 </th>
               </tr>
             </thead>
@@ -452,7 +428,7 @@ export function CreateSalesReturnModal({
               ) : returnItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: 30, color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'В данной накладной нет товаров' : 'Ushbu fakturada tovarlar mavjud emas'}
+                    {loadError ? '—' : isRu ? 'В этой продаже нет товаров' : 'Bu sotuvda tovarlar yo‘q'}
                   </td>
                 </tr>
               ) : (
@@ -467,52 +443,57 @@ export function CreateSalesReturnModal({
                       style={{
                         borderBottom: '1px solid var(--color-border-light)',
                         opacity: isExhausted ? 0.6 : 1,
-                        backgroundColor: item.isDefective ? 'rgba(239, 68, 68, 0.04)' : undefined,
+                        backgroundColor: item.isDefective ? 'var(--color-error-50)' : undefined,
                       }}
                     >
-                      <td style={{ padding: '8px 12px' }}>
+                      <td data-primary style={{ padding: '8px 12px' }}>
                         <div style={{ fontWeight: 500 }}>{item.name}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                          {item.sku ? `SKU: ${item.sku}` : ''} {item.barcode ? `| ${item.barcode}` : ''}
-                        </div>
+                        {(item.sku || item.barcode) && (
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 400 }}>
+                            {[item.sku, item.barcode].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      <td data-label={isRu ? 'Брак' : 'Brak'} style={{ padding: '8px 12px', textAlign: 'center' }}>
                         <input
                           type="checkbox"
+                          aria-label={isRu ? `Брак: ${item.name}` : `Brak: ${item.name}`}
                           checked={item.isDefective}
                           onChange={() => toggleDefective(index)}
                           disabled={isExhausted}
                           style={{ cursor: 'pointer' }}
                         />
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                      <td data-label={isRu ? 'Продано / можно вернуть' : 'Sotilgan / qaytarish mumkin'} style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                         <div>{quantityWithUnit(item.soldQty, item.unit, locale)}</div>
-                        <div style={{ fontSize: '11px', color: item.returnableQty > 0 ? 'var(--color-success-600)' : 'var(--color-error-600)', fontWeight: 600 }}>
-                          max: {quantityWithUnit(item.returnableQty, item.unit, locale)}
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                          {item.returnableQty > 0
+                            ? (isRu ? 'можно: ' : 'mumkin: ') + quantityWithUnit(item.returnableQty, item.unit, locale)
+                            : isRu ? 'всё уже возвращено' : 'hammasi qaytarilgan'}
                         </div>
                       </td>
-                      <td style={{ padding: '6px 12px', textAlign: 'center' }}>
+                      <td data-label={isRu ? 'Возврат' : 'Qaytariladi'} style={{ padding: '6px 12px', textAlign: 'center' }}>
                         <QuantityInput
                           unit={item.unit}
                           value={item.returnQty || ''}
                           max={item.returnableQty}
                           disabled={isExhausted}
                           onValueChange={(value) => handleQtyChange(index, Number(value) || 0)}
-                          aria-label={isRu ? 'Количество возврата' : 'Qaytarish miqdori'}
+                          aria-label={isRu ? `Количество возврата: ${item.name}` : `Qaytarish miqdori: ${item.name}`}
                           invalid={item.returnQty > item.returnableQty}
                         />
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
+                      <td data-label={isRu ? 'Цена' : 'Narx'} style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                         {formatCurrency(item.unitPrice, locale, invoice.currency)}
                         {item.discount > 0 && (
-                          <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>-{formatPercent(item.discount)}</div>
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>-{formatPercent(item.discount)}</div>
                         )}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
+                      <td data-label={isRu ? 'НДС' : 'QQS'} style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                         <div>{formatCurrency(lineVat, locale, invoice.currency)}</div>
-                        <small style={{ color: 'var(--color-text-tertiary)' }}>{item.vatRate}%</small>
+                        <small style={{ color: 'var(--color-text-secondary)' }}>{item.vatRate}%</small>
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
+                      <td data-label={isRu ? 'Сумма' : 'Summa'} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }} className="tabular-nums">
                         {formatCurrency(lineTotal, locale, invoice.currency)}
                       </td>
                     </tr>
@@ -530,7 +511,7 @@ export function CreateSalesReturnModal({
             justifyContent: 'space-between',
             alignItems: 'center',
             padding: '12px 16px',
-            backgroundColor: 'var(--color-bg-subtle)',
+            backgroundColor: 'var(--color-bg-tertiary)',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-border)',
           }}
@@ -545,41 +526,17 @@ export function CreateSalesReturnModal({
               </div>
             )}
             {hasDefectiveItems && (
-              <div style={{ fontSize: '12px', color: 'var(--color-error-600)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <div style={{ fontSize: '12px', color: 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <AlertCircle size={13} />
                 <span>{isRu ? 'Бракованные товары будут направлены на склад брака' : 'Brak tovarlar alohida brak omboriga kirim qilinadi'}</span>
               </div>
             )}
           </div>
-          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-warning-600)' }} className="tabular-nums">
+          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }} className="tabular-nums">
             {formatCurrency(returnTotal, locale, invoice.currency)}
           </span>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => handleSubmit('DRAFT')}
-            disabled={loading || returnTotal <= 0}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <ShieldCheck size={16} />
-            {loading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить как черновик' : 'Qoralama sifatida saqlash')}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => handleSubmit('POSTED')}
-            disabled={loading || returnTotal <= 0}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <RotateCcw size={16} />
-            {loading ? (isRu ? 'Оформление...' : 'Rasmiylashtirilmoqda...') : (isRu ? 'Подтвердить и провести' : 'Tasdiqlash va kirim qilish')}
-          </Button>
-        </div>
       </div>
     </Drawer>
   );

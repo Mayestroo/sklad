@@ -262,7 +262,7 @@ export function RecipeFormModal({
   const td: React.CSSProperties = { padding: '6px 12px', verticalAlign: 'top', minHeight: 48 };
   const fieldError = (key: string) =>
     errors[key] ? (
-      <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-error-600)', marginTop: 4 }}>
+      <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', marginTop: 4 }}>
         <AlertTriangle size={12} aria-hidden /> {errors[key]}
       </div>
     ) : null;
@@ -313,7 +313,7 @@ export function RecipeFormModal({
           )}
 
           {/* 1. Finished product and output norm */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, alignItems: 'start' }}>
             <div data-invalid={Boolean(errors.product)} style={{ gridColumn: 'span 2' }}>
               <Select
                 label={`${t('tayyorMahsulot')} *`}
@@ -333,7 +333,7 @@ export function RecipeFormModal({
               />
             </div>
             <div>
-              <label htmlFor="recipe-output" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              <label htmlFor="recipe-output" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 {t('ishlabChiqarishNormasi')} *
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -417,7 +417,7 @@ export function RecipeFormModal({
                             error={errors[`material-${row.key}`] || undefined}
                           />
                           {material?.isSemiFinished && (
-                            <div style={{ fontSize: 11, color: 'var(--color-info-600)', marginTop: 4 }}>{semiFinishedLabel(locale)}</div>
+                            <div style={{ fontSize: 11, color: 'var(--color-info-700)', marginTop: 4 }}>{semiFinishedLabel(locale)}</div>
                           )}
                           {material && Number(material.stock_qty ?? 0) <= 0 && (
                             <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4 }}>
@@ -490,7 +490,7 @@ export function RecipeFormModal({
                               touch();
                               setRows((current) => current.filter((r) => r.key !== row.key));
                             }}
-                            style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 'var(--radius-md)', cursor: rows.length === 1 ? 'not-allowed' : 'pointer', color: 'var(--color-error-600)', opacity: rows.length === 1 ? 0.4 : 1 }}
+                            style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 'var(--radius-md)', cursor: rows.length === 1 ? 'not-allowed' : 'pointer', color: 'var(--color-error-700)', opacity: rows.length === 1 ? 0.4 : 1 }}
                           >
                             <Trash2 size={16} aria-hidden />
                           </button>
@@ -530,7 +530,7 @@ export function RecipeFormModal({
           </div>
 
           {/* 3. Summary (TZ 4.4) */}
-          <div data-testid="recipe-cost-summary" aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)' }}>
+          <div data-testid="recipe-cost-summary" aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)' }}>
             <div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Calculator size={13} aria-hidden /> {t('normaUchunXomashyo')} ({formatQuantity(parseDecimal(outputQuantity) ?? 0)} {finishedUnit})
@@ -556,7 +556,7 @@ export function RecipeFormModal({
           </div>
 
           <div>
-            <label htmlFor="recipe-note" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+            <label htmlFor="recipe-note" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
               {t('izoh')}
             </label>
             <textarea

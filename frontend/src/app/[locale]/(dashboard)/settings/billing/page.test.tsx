@@ -35,7 +35,7 @@ describe('Billing settings page', () => {
     apiFetch.mockImplementation(async (endpoint: string) => respond(endpoint));
     renderPage(<BillingSettingsPage />);
 
-    expect(await screen.findByText('Boshlang‘ich tarif')).toBeTruthy();
+    expect((await screen.findAllByText('Boshlang‘ich tarif')).length).toBeGreaterThan(0);
     expect(screen.getByText('PAY-0001')).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledTimes(3);
     expect(apiFetch.mock.calls.map((c) => c[0]).sort()).toEqual(['/billing/history', '/billing/plans', '/billing/status']);
@@ -54,7 +54,7 @@ describe('Billing settings page', () => {
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
 
-    expect(await screen.findByText('Boshlang‘ich tarif')).toBeTruthy();
+    expect((await screen.findAllByText('Boshlang‘ich tarif')).length).toBeGreaterThan(0);
     await waitFor(() =>
       expect(apiFetch.mock.calls.filter((c) => c[0] === '/billing/status')).toHaveLength(2),
     );
