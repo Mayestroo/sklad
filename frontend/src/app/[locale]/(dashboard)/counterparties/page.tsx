@@ -3,7 +3,12 @@
 import { activateOnKey } from '@/lib/a11y';
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { usePersistentState } from '@/lib/usePersistentState';
+import { ColumnChooser } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -26,19 +31,15 @@ import {
   Users,
   Plus,
   Search,
-  RefreshCw,
-  Eye,
   Folder,
   FolderPlus,
   FolderOpen,
   Edit2,
   Trash2,
-  MoveRight,
   Inbox,
   Tag,
   ArrowDownLeft,
   ArrowUpRight,
-  FileText,
 } from 'lucide-react';
 
 /** GET /sales/orders/by-counterparty/:id */
@@ -382,6 +383,86 @@ export default function CounterpartiesPage() {
     }
   };
 
+
+  const tl = useTranslations('rd.list');
+  const tc = useTranslations('rd.cp');
+  const [cpHidden, setCpHidden] = usePersistentState<string[]>('cp.hidden', ['inn', 'folder']);
+  const [cpSort, setCpSort] = usePersistentState<SortState | null>('cp.sort', { key: 'balance', dir: 'desc' });
+  const absBalance = (c: Counterparty) => (c.balancesByCurrency || []).reduce((m, b) => Math.max(m, Math.abs(Number(b.netBalance) || 0)), 0);
+  const cpColumns: Column<Counterparty>[] = [
+    {
+      key: 'name',
+      label: isRu ? 'Наименование' : 'Kontragent nomi',
+      primary: true,
+      locked: true,
+      sortValue: (c) => c.name,
+      render: (c) => (
+        <div>
+          <div className="rd-doc-no">{c.name}</div>
+          <div className="rd-sub" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>{getTypeBadge(c.type)}{c.phone ? <span>{c.phone}</span> : null}</div>
+        </div>
+      ),
+    },
+    { key: 'folder', label: isRu ? 'Папка' : 'Papka', sortValue: (c) => c.folder?.name ?? '', render: (c) => c.folder?.name ?? '—' },
+    { key: 'inn', label: isRu ? 'ИНН / STIR' : 'STIR / INN', sortValue: (c) => c.inn ?? '', render: (c) => <span className="tabular-nums">{c.inn || '—'}</span> },
+    {
+      key: 'balance',
+      label: isRu ? 'Баланс расчётов' : 'Qarz balansi',
+      numeric: true,
+      sortValue: absBalance,
+      render: (c) => {
+        const balances = (c.balancesByCurrency || []).filter((b) => Number(b.netBalance) !== 0);
+        if (balances.length === 0) return <span style={{ color: 'var(--color-text-tertiary)' }}>{isRu ? 'Расчёты закрыты' : 'Hisob yopiq'}</span>;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            {balances.map((b) => {
+              const net = Number(b.netBalance) || 0;
+              return (
+                <span key={b.currency} style={{ whiteSpace: 'nowrap' }}>
+                  <span className="rd-sub" style={{ marginRight: 6 }}>{net > 0 ? (isRu ? 'Нам должны' : 'Bizga qarz') : isRu ? 'Мы должны' : 'Bizning qarz'}</span>
+                  <strong className="tabular-nums" style={{ color: net > 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>{formatCurrency(Math.abs(net), locale, b.currency)}</strong>
+                </span>
+              );
+            })}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (c) => {
+        const owesUs = (c.balancesByCurrency || []).find((b) => b.customerDebt > 0);
+        const weOwe = (c.balancesByCurrency || []).find((b) => b.supplierDebt > 0);
+        return (
+          <div className="rd-row-actions">
+            {owesUs && (
+              <button type="button" className="rd-next-btn" onClick={() => openQuickPayment(c, 'CUSTOMER', owesUs.currency)}>
+                <ArrowDownLeft size={14} aria-hidden /> {tc('collect')}
+              </button>
+            )}
+            {weOwe && (
+              <button type="button" className="rd-next-btn" onClick={() => openQuickPayment(c, 'SUPPLIER', weOwe.currency)}>
+                <ArrowUpRight size={14} aria-hidden /> {tc('pay')}
+              </button>
+            )}
+            <ActionsMenu
+              label={tl('rowActions')}
+              actions={[
+                { label: isRu ? 'Акт сверки' : 'Akt sverka', onSelect: () => setStatementCounterpartyId(c.id) },
+                { label: isRu ? 'Карточка' : 'Kartochka', onSelect: () => setDetailItem(c) },
+                { label: tc('anyPayment'), onSelect: () => openQuickPayment(c) },
+                { label: isRu ? 'В папку' : 'Papkaga ko‘chirish', onSelect: () => { setMoveItem(c); setTargetFolderId(c.folderId || ''); } },
+                { label: tl('edit'), onSelect: () => setEditingCounterparty(c) },
+                { label: tl('delete'), onSelect: () => setDeletingCounterparty(c), danger: true },
+              ]}
+            />
+          </div>
+        );
+      },
+    },
+  ];
   const totalCustomers = items.filter((i) => i.type === 'CUSTOMER' || i.type === 'BOTH').length;
   const totalSuppliers = items.filter((i) => i.type === 'SUPPLIER' || i.type === 'BOTH').length;
   const openQuickPayment = (
@@ -409,16 +490,25 @@ export default function CounterpartiesPage() {
             {isRu ? 'Контрагенты' : 'Kontragentlar'}
           </h1>
         </div>
-        <Button onClick={handleOpenCreateModal} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Plus size={16} />
-          {isRu ? 'Новый контрагент' : 'Yangi kontragent'}
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          {folders.length === 0 && (
+            <Button variant="secondary" onClick={handleOpenCreateFolder}>
+              <FolderPlus size={16} aria-hidden /> {isRu ? 'Создать папку' : 'Papka yaratish'}
+            </Button>
+          )}
+          <ColumnChooser columns={cpColumns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={cpHidden} onChange={setCpHidden} />
+          <Button onClick={handleOpenCreateModal} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Plus size={16} />
+            {isRu ? 'Новый контрагент' : 'Yangi kontragent'}
+          </Button>
+        </div>
       </div>
 
       {/* Main Two-Column Content Layout */}
-      <div className="cp-layout">
+      <div className={folders.length > 0 ? 'cp-layout' : undefined}>
         
-        {/* Left Sidebar: Folders Panel */}
+        {/* Left Sidebar: Folders Panel (only once folders exist) */}
+        {folders.length > 0 && (
         <Card style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border-light)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)' }}>
@@ -577,6 +667,7 @@ export default function CounterpartiesPage() {
             )}
           </div>
         </Card>
+        )}
 
         {/* Right Main Panel: KPIs, Filters, Table */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 0 }}>
@@ -870,215 +961,26 @@ export default function CounterpartiesPage() {
             </div>
           </Card>
 
-          {/* Counterparties Table */}
-          <Card style={{ overflow: 'hidden' }}>
+          {/* Counterparties table: biggest balance first, one money action per side, the rest in ⋯ */}
+          <div className="rd-table-card">
             {listQuery.isError ? (
               <LoadError error={listQuery.error} onRetry={() => void listQuery.refetch()} retrying={listQuery.isFetching} />
-            ) : listQuery.isPending ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px', display: 'block' }} />
-                {isRu ? 'Загрузка...' : 'Yuklanmoqda...'}
-              </div>
-            ) : items.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                <Users size={40} style={{ margin: '0 auto 12px', opacity: 0.3, display: 'block' }} />
-                {isRu ? 'Контрагенты не найдены' : 'Kontragentlar topilmadi'}
-              </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-subtle)' }}>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>{isRu ? 'Наименование' : 'Kontragent nomi'}</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Тип' : 'Turi'}</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Папка' : 'Papka'}</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'ИНН / STIR' : 'STIR / INN'}</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Телефон' : 'Telefon'}</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Баланс расчётов' : 'Qarz balansi'}</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{isRu ? 'Amallar' : 'Amallar'}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item) => (
-                      <tr
-                        key={item.id}
-                        style={{ borderBottom: '1px solid var(--color-border-light)', transition: 'background 0.12s ease' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <td style={{ padding: '13px 16px', fontWeight: 600 }}>{item.name}</td>
-                        <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>{getTypeBadge(item.type)}</td>
-                        <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                          {item.folder ? (
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                padding: '3px 8px',
-                                borderRadius: 12,
-                                fontSize: 'var(--text-xs)',
-                                background: `${item.folder.color || '#3b82f6'}15`,
-                                color: item.folder.color || 'var(--color-info-700)',
-                                border: `1px solid ${item.folder.color || '#3b82f6'}40`,
-                                fontWeight: 600,
-                              }}
-                            >
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: item.folder.color || 'var(--color-info-500)' }} />
-                              {item.folder.name}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{item.inn || '—'}</td>
-                        <td style={{ padding: '12px 16px', color: 'var(--color-text-secondary)' }}>{item.phone || '—'}</td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          {(() => {
-                            const balances = item.balancesByCurrency || [];
-                            if (balances.length === 0) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
-                            return (
-                              <div
-                                onClick={() => setStatementCounterpartyId(item.id)}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={activateOnKey(() => setStatementCounterpartyId(item.id))}
-                                title={isRu ? 'Нажмите для просмотра акта сверки' : 'Akt sverkani ko‘rish uchun bosing'}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, cursor: 'pointer' }}
-                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
-                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                              >
-                                {balances.map((balance) => {
-                                  // One plain line per currency (ADR 0023: never summed across currencies);
-                                  // the customer/supplier split stays in the tooltip.
-                                  const net = Number(balance.netBalance) || 0;
-                                  const detail = `${isRu ? 'Как клиент' : 'Mijoz sifatida'}: ${formatCurrency(balance.customerDebt, locale, balance.currency)} · ${isRu ? 'Как поставщик' : 'Yetkazib beruvchi sifatida'}: ${formatCurrency(balance.supplierDebt, locale, balance.currency)}`;
-                                  return (
-                                    <div key={balance.currency} title={detail} style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 'var(--text-xs)', whiteSpace: 'nowrap' }}>
-                                      <span style={{ color: 'var(--color-text-secondary)' }}>
-                                        {net > 0 ? (isRu ? 'Нам должны' : 'Bizga qarz') : net < 0 ? (isRu ? 'Мы должны' : 'Bizning qarz') : (isRu ? 'Расчёты закрыты' : 'Hisob yopiq')}
-                                      </span>
-                                      {net !== 0 && (
-                                        <strong className="tabular-nums" style={{ fontSize: 'var(--text-sm)', color: net > 0 ? 'var(--color-success-700)' : 'var(--color-error-700)' }}>
-                                          {formatCurrency(Math.abs(net), locale, balance.currency)}
-                                        </strong>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                            {(item.balancesByCurrency || []).flatMap((balance) => {
-                              const actions: React.ReactNode[] = [];
-                              if (balance.customerDebt !== 0) {
-                                const isIncome = balance.customerDebt > 0;
-                                actions.push(
-                                  <Button
-                                    key={`${balance.currency}-CUSTOMER`}
-                                    size="sm"
-                                    onClick={() => openQuickPayment(item, 'CUSTOMER', balance.currency)}
-                                    title={isIncome
-                                      ? isRu ? 'Принять оплату по клиентскому балансу' : 'Mijoz balansidan to‘lov qabul qilish'
-                                      : isRu ? 'Вернуть клиентский аванс' : 'Mijoz avansini qaytarish'}
-                                    style={{
-                                      backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                      color: isIncome ? 'var(--color-success-700)' : 'var(--color-error-700)',
-                                      borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
-                                      padding: '0 8px',
-                                    }}
-                                  >
-                                    {isIncome ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                                    <span style={{ fontSize: '11px', fontWeight: 600, marginLeft: 4 }}>{balance.currency} · {isRu ? 'Клиент' : 'Mijoz'}</span>
-                                  </Button>,
-                                );
-                              }
-                              if (balance.supplierDebt !== 0) {
-                                const isIncome = balance.supplierDebt < 0;
-                                actions.push(
-                                  <Button
-                                    key={`${balance.currency}-SUPPLIER`}
-                                    size="sm"
-                                    onClick={() => openQuickPayment(item, 'SUPPLIER', balance.currency)}
-                                    title={isIncome
-                                      ? isRu ? 'Принять возврат поставщика' : 'Ta’minotchidan qaytarim qabul qilish'
-                                      : isRu ? 'Оплатить поставщику' : 'Ta’minotchiga to‘lash'}
-                                    style={{
-                                      backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                                      color: isIncome ? 'var(--color-success-700)' : 'var(--color-error-700)',
-                                      borderColor: isIncome ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)',
-                                      padding: '0 8px',
-                                    }}
-                                  >
-                                    {isIncome ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
-                                    <span style={{ fontSize: '11px', fontWeight: 600, marginLeft: 4 }}>{balance.currency} · {isRu ? 'Поставщик' : 'Ta’minotchi'}</span>
-                                  </Button>,
-                                );
-                              }
-                              return actions;
-                            })}
-
-                            {/* Akt Sverka Button */}
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => setStatementCounterpartyId(item.id)}
-                              title={isRu ? 'Акт сверки' : 'Akt sverka'}
-                            >
-                              <FileText size={14} />
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                setMoveItem(item);
-                                setTargetFolderId(item.folderId || 'unassigned');
-                              }}
-                              title={isRu ? 'Переместить в папку' : 'Papkaga ko\'chirish'}
-                            >
-                              <MoveRight size={14} />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                setEditingCounterparty(item);
-                                setIsCreateOpen(true);
-                              }}
-                              title={isRu ? 'Редактировать' : 'Tahrirlash'}
-                            >
-                              <Edit2 size={14} />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => setDetailItem(item)}
-                              title={isRu ? 'Просмотр' : 'Ko\'rish'}
-                            >
-                              <Eye size={14} />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              style={{ color: 'var(--color-error-700)' }}
-                              onClick={() => setDeletingCounterparty(item)}
-                              title={isRu ? 'Удалить' : 'O\'chirish'}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                rows={items}
+                columns={cpColumns}
+                rowKey={(c) => c.id}
+                hidden={cpHidden}
+                sort={cpSort}
+                onSortChange={setCpSort}
+                onRowClick={(c) => setStatementCounterpartyId(c.id)}
+                selectedKey={statementCounterpartyId}
+                loading={listQuery.isPending}
+                caption={tc('rowHint')}
+                empty={<EmptyState icon={Users} title={isRu ? 'Контрагенты не найдены' : 'Kontragentlar topilmadi'} description={tl('nothingFoundHint')} />}
+              />
             )}
-          </Card>
+          </div>
         </div>
       </div>
 

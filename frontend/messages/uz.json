@@ -799,7 +799,8 @@
       "withDebt": "Qarzi borlar",
       "rowHint": "Qatorni bosing — profil, qarz va tarix yon panelda ochiladi.",
       "lastSale": "Oxirgi sotuv",
-      "noSales": "Sotuv yo‘q"
+      "noSales": "Sotuv yo‘q",
+      "anyPayment": "To‘lov yozish"
     },
     "products": {
       "subtitle": "Katalog: narxlar, qoldiq va kam qolgan tovarlar bir joyda",
