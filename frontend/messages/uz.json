@@ -457,7 +457,11 @@
     "costSALARY": "Ish haqi",
     "costENERGY": "Energiya",
     "costDEPRECIATION": "Amortizatsiya",
-    "costOTHER": "Boshqa"
+    "costOTHER": "Boshqa",
+    "avvalOmborYarating": "Ishlab chiqarishni rasmiylashtirish uchun avval ombor yarating:",
+    "filiallarVaOmborlar": "Filiallar va omborlar",
+    "hujjatlarBoshHolatIzohi": "Hujjat qaysi mahsulotdan qancha ishlab chiqarilganini qayd etadi: xomashyo ombordan chiqadi, tayyor mahsulot tannarx bilan kirim bo‘ladi. Avval mahsulot uchun retseptura kerak.",
+    "retsepturaBoshHolatIzohi": "Retseptura bir birlik tayyor mahsulotga qancha xomashyo ketishini aytadi. Undan keyin ishlab chiqarish hujjatini rasmiylashtirish mumkin."
   },
   "ux": {
     "openMenu": "Menyuni ochish",

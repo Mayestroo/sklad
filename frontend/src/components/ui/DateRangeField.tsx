@@ -95,7 +95,7 @@ export function DateRangeField({ label, from, to, onChange, locale, style }: Dat
 
   return (
     <div ref={rootRef} style={{ position: 'relative', ...style }}>
-      <label htmlFor={id} style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+      <label htmlFor={id} style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
         {label}
       </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

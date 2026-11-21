@@ -199,7 +199,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
   };
 
   const label = (text: string, htmlFor?: string) => (
-    <label htmlFor={htmlFor} style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+    <label htmlFor={htmlFor} style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
       {text}
     </label>
   );

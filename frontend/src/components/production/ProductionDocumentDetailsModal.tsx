@@ -336,7 +336,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
 
           {running && (
             <div style={{ maxWidth: 320 }}>
-              <label htmlFor="produced-qty" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              <label htmlFor="produced-qty" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 {t('haqiqiyChiqqanMiqdor')} *
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -403,7 +403,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
                   : t('qoralamaBekorQilinadiOmborgaTasiri')}
             </div>
             <div>
-              <label htmlFor="cancel-reason" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              <label htmlFor="cancel-reason" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 {t('sabab')} *
               </label>
               <textarea

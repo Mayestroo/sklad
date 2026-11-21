@@ -93,9 +93,9 @@ export function DocumentsTab(props: DocumentsTabProps) {
           <Filter size={16} aria-hidden /> {t('filtrlar')}
           {chips.length > 0 && <Badge variant="info">{chips.length}</Badge>}
         </button>
-        <div className="prod-filters" data-open={filtersOpen} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 12, alignItems: 'end' }}>
+        <div className="prod-filters" data-open={filtersOpen} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 12, alignItems: 'end' }}>
           <div>
-            <label htmlFor="doc-search" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+            <label htmlFor="doc-search" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
               {t('hujjatRaqami')}
             </label>
             <div style={{ position: 'relative' }}>
@@ -128,7 +128,7 @@ export function DocumentsTab(props: DocumentsTabProps) {
             to={filters.dateTo}
             onChange={(dateFrom, dateTo) => props.onFilters({ dateFrom, dateTo })}
             locale={locale}
-            style={{ gridColumn: 'span 1', minWidth: 220 }}
+            style={{ minWidth: 0 }}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 32 }}>
@@ -161,6 +161,7 @@ export function DocumentsTab(props: DocumentsTabProps) {
         <EmptyState
           icon={<FileText size={26} />}
           text={chips.length ? t('filtrBoyichaHujjatTopilmadi') : t('hozirchaIshlabChiqarishHujjatlariYoq')}
+          hint={chips.length ? undefined : t('hujjatlarBoshHolatIzohi')}
           action={
             chips.length ? (
               <Button variant="outline" onClick={props.onClearFilters}>{t('filtrlarniTozalash')}</Button>

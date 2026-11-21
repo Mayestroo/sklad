@@ -11,7 +11,9 @@ import path from 'node:path';
 import { getAuth } from './auth.mjs';
 
 const args = Object.fromEntries(process.argv.slice(3).map((a) => {
-  const [k, v] = a.replace(/^--/, '').split('=');
+  const arg = a.replace(/^--/, '');
+  const eq = arg.indexOf('=');
+  const [k, v] = eq < 0 ? [arg, undefined] : [arg.slice(0, eq), arg.slice(eq + 1)];
   return [k, v ?? true];
 }));
 const label = process.argv[2] || 'run';
@@ -91,7 +93,7 @@ for (const locale of locales) {
         url: location.pathname,
         h1: [...document.querySelectorAll('h1')].map((h) => h.textContent?.trim()).slice(0, 3),
       }));
-      const name = (route === '/' ? 'dashboard' : route.slice(1).replace(/\//g, '_')) + `-${locale}-${width}.jpg`;
+      const name = (route === '/' ? 'dashboard' : route.slice(1).replace(/[/?=&]/g, '_')) + `-${locale}-${width}.jpg`;
       await page.screenshot({ path: path.join(outDir, name), fullPage: true, type: 'jpeg', quality: 60 });
       let axe;
       if (AxeBuilder && width === widths[0]) {

@@ -198,7 +198,7 @@ export function RecipesTab(props: RecipesTabProps) {
     <Card style={{ padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end', borderBottom: '1px solid var(--color-border-light)' }}>
         <div style={{ flex: '1 1 240px', minWidth: 200 }}>
-          <label htmlFor="recipe-search" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+          <label htmlFor="recipe-search" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
             {t('qidiruv')}
           </label>
           <div style={{ position: 'relative' }}>
@@ -238,6 +238,7 @@ export function RecipesTab(props: RecipesTabProps) {
         <EmptyState
           icon={<Layers3 size={26} />}
           text={source.length === 0 ? t('hozirchaRetsepturalarYoq') : t('filtrBoyichaRetsepturaTopilmadi')}
+          hint={source.length === 0 ? t('retsepturaBoshHolatIzohi') : undefined}
           action={
             source.length === 0 && props.canCreate ? (
               <Button onClick={props.onCreate}>

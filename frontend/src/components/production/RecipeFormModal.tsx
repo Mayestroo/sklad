@@ -333,7 +333,7 @@ export function RecipeFormModal({
               />
             </div>
             <div>
-              <label htmlFor="recipe-output" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              <label htmlFor="recipe-output" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
                 {t('ishlabChiqarishNormasi')} *
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -556,7 +556,7 @@ export function RecipeFormModal({
           </div>
 
           <div>
-            <label htmlFor="recipe-note" style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+            <label htmlFor="recipe-note" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
               {t('izoh')}
             </label>
             <textarea

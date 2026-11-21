@@ -13,6 +13,9 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { errorMessage, formatCurrency } from '@/lib/utils';
 import { LoadError } from '@/components/ui/LoadError';
 import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Link } from '@/i18n/navigation';
 import type { SelectOption } from '@/components/ui/Select';
 import type { MaterialCard } from '@/lib/production-recipe';
 import { RecipeFormModal, type RecipeProduct } from '@/components/production/RecipeFormModal';
@@ -104,6 +107,8 @@ export default function ProductionPage() {
   const staff = list<StaffOption>(staffQuery.data);
   const queries = [documentsQuery, recipesQuery, finishedQuery, materialsQuery, warehousesQuery, staffQuery];
   const failed = queries.find((q) => q.isError);
+  // Disabled only once the list has loaded and is really empty, and then explained.
+  const noWarehouse = !warehousesQuery.isPending && warehouses.length === 0;
 
   const productOptions: SelectOption[] = useMemo(() => finished.map((p) => ({ value: p.id, label: localName(p.name, locale) })), [finished, locale]);
   const warehouseOptions: SelectOption[] = useMemo(() => warehouses.map((w) => ({ value: w.id, label: localName(w.name, locale) })), [warehouses, locale]);
@@ -177,33 +182,44 @@ export default function ProductionPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: 0, color: 'var(--color-text-primary)', fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)' }}>{t('ishlabChiqarish')}</h1>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', margin: '4px 0 0' }}>
-            {t('retsepturaXomashyoSarfiVaTayyor')}
-          </p>
-        </div>
-        {tab === 'documents' && can.create && (
-          <Button onClick={() => setDocForm({ document: null })} disabled={warehouses.length === 0}>
-            <Plus size={16} aria-hidden /> {t('ishlabChiqarishHujjati')}
-          </Button>
-        )}
-        {tab === 'recipes' && can.create && (
-          <Button onClick={() => setRecipeForm('new')}>
-            <Plus size={16} aria-hidden /> {t('yangiRetseptura')}
-          </Button>
-        )}
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          title={t('ishlabChiqarish')}
+          subtitle={t('retsepturaXomashyoSarfiVaTayyor')}
+          actions={
+            <>
+              {tab === 'documents' && can.create && (
+                <Button onClick={() => setDocForm({ document: null })} disabled={noWarehouse} aria-describedby={noWarehouse ? 'production-no-warehouse' : undefined}>
+                  <Plus size={16} aria-hidden /> {t('ishlabChiqarishHujjati')}
+                </Button>
+              )}
+              {tab === 'recipes' && can.create && (
+                <Button onClick={() => setRecipeForm('new')}>
+                  <Plus size={16} aria-hidden /> {t('yangiRetseptura')}
+                </Button>
+              )}
+            </>
+          }
+        />
       </div>
 
-      {failed && <LoadError error={failed.error} onRetry={() => queries.forEach((q) => q.isError && void q.refetch())} />}
+      {tab === 'documents' && can.create && noWarehouse && (
+        <p id="production-no-warehouse" role="note" className="doc-banner is-info">
+          {t('avvalOmborYarating')} 
+          <Link href="/settings/branches" style={{ color: 'var(--color-primary-700)', fontWeight: 600 }}>
+            {t('filiallarVaOmborlar')}
+          </Link>
+        </p>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-4)' }}>
+      {failed && <LoadError error={failed.error} onRetry={() => queries.forEach((q) => q.isError && void q.refetch())} retrying={queries.some((q) => q.isFetching)} />}
+
+      <div className="ux-kpi-grid">
         {tab === 'documents' ? (
           <>
-            <Kpi icon={<Clock3 size={20} aria-hidden />} title={t('jarayonda')} value={stats ? String(stats.inProgress) : '…'} color="var(--color-warning-700)" active={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })} />
-            <Kpi icon={<CheckCircle2 size={20} aria-hidden />} title={t('yakunlangan')} value={stats ? String(stats.completed) : '…'} color="var(--color-success-700)" active={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })} />
-            <Kpi icon={<Factory size={20} aria-hidden />} title={t('ishlabChiqarishTannarxi')} hint={t('yakunlanganHujjatlarTanlanganDavrVa')} value={stats ? formatCurrency(stats.completedCost, locale, 'UZS') : '…'} color="var(--color-primary-600)" active={false} onClick={() => setDocFilter({ status: 'COMPLETED' })} />
+            <Kpi icon={<Clock3 size={20} aria-hidden />} title={t('jarayonda')} value={stats ? String(stats.inProgress) : null} color="var(--color-warning-700)" active={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })} />
+            <Kpi icon={<CheckCircle2 size={20} aria-hidden />} title={t('yakunlangan')} value={stats ? String(stats.completed) : null} color="var(--color-success-700)" active={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })} />
+            <Kpi icon={<Factory size={20} aria-hidden />} title={t('ishlabChiqarishTannarxi')} hint={t('yakunlanganHujjatlarTanlanganDavrVa')} value={stats ? formatCurrency(stats.completedCost, locale, 'UZS') : null} color="var(--color-primary-600)" active={false} onClick={() => setDocFilter({ status: 'COMPLETED' })} />
           </>
         ) : (
           <>
@@ -214,7 +230,18 @@ export default function ProductionPage() {
         )}
       </div>
 
-      <div role="tablist" aria-label={t('ishlabChiqarishBolimlari')} style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--color-border-light)' }}>
+      <div
+        role="tablist"
+        aria-label={t('ishlabChiqarishBolimlari')}
+        style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--color-border-light)' }}
+        onKeyDown={(e) => {
+          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return;
+          e.preventDefault();
+          const next: Tab = e.key === 'Home' ? 'documents' : e.key === 'End' ? 'recipes' : tab === 'documents' ? 'recipes' : 'documents';
+          setTab(next);
+          document.getElementById(next === 'documents' ? 'tab-documents' : 'tab-recipes')?.focus();
+        }}
+      >
         <TabButton id="tab-documents" controls="panel-documents" active={tab === 'documents'} onClick={() => setTab('documents')}>
           <FileText size={15} aria-hidden /> {t('hujjatlar')}
         </TabButton>
@@ -360,19 +387,19 @@ export default function ProductionPage() {
   );
 }
 
-function Kpi({ icon, title, value, color, active, onClick, hint }: { icon: React.ReactNode; title: string; value: string; color: string; active: boolean; onClick: () => void; hint?: string }) {
+function Kpi({ icon, title, value, color, active, onClick, hint }: { icon: React.ReactNode; title: string; value: string | null; color: string; active: boolean; onClick: () => void; hint?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      title={hint}
       style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 16, minHeight: 76, textAlign: 'left', cursor: 'pointer', borderRadius: 'var(--radius-lg)', border: `1px solid ${active ? 'var(--color-primary-500)' : 'var(--color-border-light)'}`, background: 'var(--color-bg-secondary)', boxShadow: 'var(--shadow-sm)' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 12, color, background: 'var(--color-bg-tertiary)', flexShrink: 0 }}>{icon}</div>
       <div style={{ minWidth: 0 }}>
         <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>{title}</div>
-        <div className="tabular-nums" style={{ color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 'var(--text-lg)' }}>{value}</div>
+        <div className="tabular-nums" style={{ color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 'var(--text-lg)' }}>{value ?? <Skeleton width={60} height={18} />}</div>
+        {hint && <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', marginTop: 2 }}>{hint}</div>}
       </div>
     </button>
   );
@@ -385,6 +412,7 @@ function TabButton({ id, controls, active, onClick, children }: { id: string; co
       type="button"
       role="tab"
       aria-selected={active}
+      tabIndex={active ? 0 : -1}
       aria-controls={controls}
       onClick={onClick}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 44, padding: '10px 14px', border: 0, borderBottom: active ? '2px solid var(--color-primary-600)' : '2px solid transparent', background: 'transparent', color: active ? 'var(--color-primary-700)' : 'var(--color-text-secondary)', fontWeight: active ? 600 : 500, cursor: 'pointer' }}
