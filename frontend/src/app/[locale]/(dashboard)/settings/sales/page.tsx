@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
@@ -65,6 +65,20 @@ function SalesSettingsForm({ initial }: { initial: CompanySettings | null | unde
     Boolean(initial?.sales?.allowSellerPriceOverride),
   );
 
+  const tset = useTranslations('rd.settings');
+  // What is saved on the server now; the bar compares the form with it.
+  const [baseline, setBaseline] = useState(() => ({ multi: Boolean(initial?.sales?.enableMultiTierPriceLists), override: Boolean(initial?.sales?.allowSellerPriceOverride) }));
+  const multiName = tset('f_multi');
+  const overrideName = tset('f_override');
+  const changes = [
+    ...(enableMultiTierPriceLists !== baseline.multi ? [tset(enableMultiTierPriceLists ? 'willTurnOn' : 'willTurnOff', { name: multiName })] : []),
+    ...(allowSellerPriceOverride !== baseline.override ? [tset(allowSellerPriceOverride ? 'willTurnOn' : 'willTurnOff', { name: overrideName })] : []),
+  ];
+  const discard = () => {
+    setEnableMultiTierPriceLists(baseline.multi);
+    setAllowSellerPriceOverride(baseline.override);
+  };
+
   const handleSave = async () => {
     if (!token || !company) return;
     setSaving(true);
@@ -88,6 +102,7 @@ function SalesSettingsForm({ initial }: { initial: CompanySettings | null | unde
       if (updated) {
         updateCompanySettings(updated);
       }
+      setBaseline({ multi: enableMultiTierPriceLists, override: allowSellerPriceOverride });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -282,6 +297,26 @@ function SalesSettingsForm({ initial }: { initial: CompanySettings | null | unde
           />
         </div>
       </Card>
+
+      {/* Changes are explained before they are saved */}
+      {changes.length > 0 && (
+        <div className="set-savebar" role="region" aria-label={tset('unsaved', { count: changes.length })}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <strong style={{ fontSize: 'var(--text-sm)' }}>{tset('unsaved', { count: changes.length })}</strong>
+            <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {changes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
+          <Button variant="ghost" onClick={discard} disabled={saving}>
+            {tset('discard')}
+          </Button>
+          <Button onClick={handleSave} loading={saving}>
+            <Save size={16} aria-hidden /> {isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

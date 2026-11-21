@@ -979,6 +979,33 @@
       "roleDesc_salesperson": "Buyurtma va sotuv yozish, mijozlar",
       "role_viewer": "Faqat ko‘rish",
       "roleDesc_viewer": "Hamma narsani ko‘radi, hech narsani o‘zgartira olmaydi"
+    },
+    "settings": {
+      "nav": "Sozlamalar bo‘limlari",
+      "searchPh": "Sozlamani qidirish: parol, ombor, tarif…",
+      "nothing": "Bunday sozlama topilmadi",
+      "name_branches": "Filial va omborlar",
+      "desc_branches": "Do‘konlar, omborlar, brak ombori",
+      "kw_branches": "filial ombor sklad do'kon brak",
+      "name_sales": "Savdo",
+      "desc_sales": "Narx jadvallari va sotuvchining narxni o‘zgartirishi",
+      "kw_sales": "narx chegirma sotuvchi price",
+      "name_production": "Tannarx",
+      "desc_production": "Ishlab chiqarishda tannarx qanday hisoblanadi",
+      "kw_production": "tannarx ishlab chiqarish retseptura",
+      "name_security": "Xavfsizlik",
+      "desc_security": "Kim nimani o‘zgartirgani, zaxira nusxalar",
+      "kw_security": "jurnal audit harakat zaxira parol kirish",
+      "name_billing": "Tarif va to‘lov",
+      "desc_billing": "Joriy tarif, muddat, to‘lovlar",
+      "kw_billing": "tarif to'lov obuna",
+      "unsaved": "{count, plural, other {# ta saqlanmagan o‘zgarish}}",
+      "willTurnOn": "Yoqiladi: {name}",
+      "willTurnOff": "O‘chiriladi: {name}",
+      "discard": "Bekor qilish",
+      "noChanges": "O‘zgarish yo‘q",
+      "f_multi": "ko‘p darajali narxlar va narx jadvallari",
+      "f_override": "sotuvchilarga narxni qo‘lda o‘zgartirish"
     }
   }
 }
