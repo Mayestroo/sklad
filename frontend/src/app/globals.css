@@ -1327,3 +1327,6 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .doc-lines td:has([data-testid="quantity-unit"]) { min-width: 124px; }
 .doc-lines input { min-width: 56px; }
 .doc-lines th:nth-child(2) { min-width: 200px !important; }
+
+.doc-aside dl { grid-template-columns: 1fr !important; row-gap: 2px !important; }
+.doc-aside dl dd { margin-bottom: 8px; }

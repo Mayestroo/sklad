@@ -14,16 +14,15 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DocumentLoadState } from '@/components/ui/DocumentLoadState';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
 import {
   CheckCircle2,
   XCircle,
   Clock,
   Printer,
-  Trash2,
   ExternalLink,
   AlertTriangle,
   TrendingDown,
-  RefreshCw,
 } from 'lucide-react';
 import { AdditionalExpense, PurchaseDocStatus, ExpenseType } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -252,7 +251,7 @@ export default function ExpenseDetailPage() {
     : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', width: '100%' }}>
       <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
         <PageHeader
           title={
@@ -265,22 +264,17 @@ export default function ExpenseDetailPage() {
           subtitle={`${isRu ? 'Доп. расход от' : 'Qo‘shimcha xarajat,'} ${formatDate(expense.docDate, locale)} · ${isRu ? 'распределяется на себестоимость прихода' : 'kirim tannarxiga taqsimlanadi'}`}
           actions={
             <>
-              <Button variant="ghost" disabled={actionLoading} onClick={() => void handleDeleteExpense()} style={{ color: 'var(--color-error-700)' }}>
-                <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
-              {expense.status === 'POSTED' && (
-                <Button variant="outline" disabled={actionLoading} onClick={() => void handleCancel()} style={{ color: 'var(--color-error-700)', borderColor: 'var(--color-error-200)' }}>
-                  <XCircle size={16} aria-hidden /> {isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish'}
-                </Button>
-              )}
+              <ActionsMenu
+                label={isRu ? 'Другие действия' : 'Boshqa amallar'}
+                actions={[
+                  { label: isRu ? 'Пересчитать и сохранить' : 'Qayta hisoblash va saqlash', onSelect: () => void handleResave(), hidden: expense.status !== 'DRAFT' },
+                  { label: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish', onSelect: () => void handleCancel(), hidden: expense.status !== 'POSTED', danger: true },
+                  { label: isRu ? 'Удалить' : 'O‘chirish', onSelect: () => void handleDeleteExpense(), danger: true },
+                ]}
+              />
               <Button variant="outline" onClick={() => window.print()} className="no-print">
                 <Printer size={16} aria-hidden /> {isRu ? 'Печать' : 'Chop etish'}
               </Button>
-              {expense.status === 'DRAFT' && (
-                <Button variant="outline" disabled={actionLoading} onClick={() => void handleResave()}>
-                  <RefreshCw size={16} aria-hidden /> {isRu ? 'Пересчитать и сохранить' : 'Qayta hisoblash va saqlash'}
-                </Button>
-              )}
               {expense.status === 'DRAFT' && (
                 <Button loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'} onClick={() => void handlePost()}>
                   <CheckCircle2 size={16} aria-hidden /> {isRu ? 'Провести' : 'Tasdiqlash'}
@@ -291,70 +285,8 @@ export default function ExpenseDetailPage() {
         />
       </div>
 
-      {/* Overview Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 'var(--space-4)' }}>
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <h2 style={cardTitle}>{isRu ? 'Исполнитель и приход' : 'Xizmat ko‘rsatuvchi va kirim'}</h2>
-          <dl style={dl}>
-            <dt style={dt}>{isRu ? 'Исполнитель' : 'Xizmat ko‘rsatuvchi'}</dt>
-            <dd>{expense.counterparty?.name || '—'}</dd>
-            <dt style={dt}>{isRu ? 'Приход' : 'Kirim hujjati'}</dt>
-            <dd>
-              <Link href={`/purchases/${expense.receiptId}`} style={{ color: 'var(--color-primary-700)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                {expense.receipt?.docNumber} <ExternalLink size={12} aria-hidden />
-              </Link>
-            </dd>
-            {expense.receipt?.counterparty?.name && expense.receipt.counterparty.name !== expense.counterparty?.name && (
-              <>
-                <dt style={dt}>{isRu ? 'Поставщик товара' : 'Tovar yetkazib beruvchi'}</dt>
-                <dd>{expense.receipt.counterparty.name}</dd>
-              </>
-            )}
-            <dt style={dt}>{isRu ? 'Склад' : 'Ombor'}</dt>
-            <dd>{getLocalizedName(expense.receipt?.warehouse?.name, locale)}</dd>
-          </dl>
-        </Card>
-
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <h2 style={cardTitle}>{isRu ? 'Сумма и оплата' : 'Summa va to‘lov'}</h2>
-          <dl style={dl}>
-            <dt style={dt}>{isRu ? 'Сумма расхода' : 'Xarajat summasi'}</dt>
-            <dd style={{ fontWeight: 'var(--font-semibold)' }} className="tabular-nums">{formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}</dd>
-            {receiptTotal != null && receiptCurrency && receiptCurrency !== expense.currency && (
-              <>
-                <dt style={dt}>{isRu ? 'В валюте прихода' : 'Kirim valyutasida'}</dt>
-                <dd className="tabular-nums">
-                  {formatCurrency(receiptTotal, locale, receiptCurrency)}
-                  {usdRate != null && <span style={{ color: 'var(--color-text-secondary)' }}> (1 USD = {formatCurrency(usdRate, locale, 'UZS')})</span>}
-                </dd>
-              </>
-            )}
-            <dt style={dt}>{isRu ? 'Оплата' : 'To‘lov'}</dt>
-            <dd>
-              {expense.isPaid ? (
-                <Badge variant="success">{isRu ? 'Оплачен из кассы' : 'Kassadan to‘langan'}</Badge>
-              ) : (
-                <Badge variant="warning">{isRu ? 'Долг поставщику' : 'Yetkazib beruvchiga qarz'}</Badge>
-              )}
-            </dd>
-            <dt style={dt}>{isRu ? 'Распределение' : 'Taqsimot'}</dt>
-            <dd>
-              {expense.allocationMethod === 'BY_AMOUNT'
-                ? isRu ? 'По стоимости товара' : 'Tovar qiymatiga mutanosib'
-                : expense.allocationMethod === 'BY_QUANTITY'
-                ? isRu ? 'По количеству' : 'Miqdoriga mutanosib'
-                : isRu ? 'По весу' : 'Vazniga mutanosib'}
-            </dd>
-            {expense.comment && (
-              <>
-                <dt style={dt}>{isRu ? 'Комментарий' : 'Izoh'}</dt>
-                <dd style={{ color: 'var(--color-text-secondary)' }}>{expense.comment}</dd>
-              </>
-            )}
-          </dl>
-        </Card>
-      </div>
-
+      <div className="doc-layout">
+      <div className="doc-main">
       {expense.status === 'DRAFT' && items.length > 0 && !hasSnapshot && (
         <div
           role="status"
@@ -504,6 +436,106 @@ export default function ExpenseDetailPage() {
         </Card>
       )}
 
+      </div>
+
+      {/* Side panel: the amount and status first, then facts, related documents and history */}
+      <aside className="doc-aside" aria-label={isRu ? 'Сводка документа' : 'Hujjat xulosasi'}>
+        <Card style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {getStatusBadge(expense.status)}
+            {getExpenseTypeBadge(expense.expenseType)}
+          </div>
+          <div className="rd-preview-amount">{formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}</div>
+          {expense.status === 'DRAFT' && (
+            <Button loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'} onClick={() => void handlePost()} style={{ width: '100%' }}>
+              <CheckCircle2 size={16} aria-hidden /> {isRu ? 'Провести' : 'Tasdiqlash'}
+            </Button>
+          )}
+        </Card>
+        {/* Facts (moved from the overview cards) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <h2 style={cardTitle}>{isRu ? 'Исполнитель и приход' : 'Xizmat ko‘rsatuvchi va kirim'}</h2>
+          <dl style={dl}>
+            <dt style={dt}>{isRu ? 'Исполнитель' : 'Xizmat ko‘rsatuvchi'}</dt>
+            <dd>{expense.counterparty?.name || '—'}</dd>
+            <dt style={dt}>{isRu ? 'Приход' : 'Kirim hujjati'}</dt>
+            <dd>
+              <Link href={`/purchases/${expense.receiptId}`} style={{ color: 'var(--color-primary-700)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                {expense.receipt?.docNumber} <ExternalLink size={12} aria-hidden />
+              </Link>
+            </dd>
+            {expense.receipt?.counterparty?.name && expense.receipt.counterparty.name !== expense.counterparty?.name && (
+              <>
+                <dt style={dt}>{isRu ? 'Поставщик товара' : 'Tovar yetkazib beruvchi'}</dt>
+                <dd>{expense.receipt.counterparty.name}</dd>
+              </>
+            )}
+            <dt style={dt}>{isRu ? 'Склад' : 'Ombor'}</dt>
+            <dd>{getLocalizedName(expense.receipt?.warehouse?.name, locale)}</dd>
+          </dl>
+        </Card>
+
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <h2 style={cardTitle}>{isRu ? 'Сумма и оплата' : 'Summa va to‘lov'}</h2>
+          <dl style={dl}>
+            <dt style={dt}>{isRu ? 'Сумма расхода' : 'Xarajat summasi'}</dt>
+            <dd style={{ fontWeight: 'var(--font-semibold)' }} className="tabular-nums">{formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}</dd>
+            {receiptTotal != null && receiptCurrency && receiptCurrency !== expense.currency && (
+              <>
+                <dt style={dt}>{isRu ? 'В валюте прихода' : 'Kirim valyutasida'}</dt>
+                <dd className="tabular-nums">
+                  {formatCurrency(receiptTotal, locale, receiptCurrency)}
+                  {usdRate != null && <span style={{ color: 'var(--color-text-secondary)' }}> (1 USD = {formatCurrency(usdRate, locale, 'UZS')})</span>}
+                </dd>
+              </>
+            )}
+            <dt style={dt}>{isRu ? 'Оплата' : 'To‘lov'}</dt>
+            <dd>
+              {expense.isPaid ? (
+                <Badge variant="success">{isRu ? 'Оплачен из кассы' : 'Kassadan to‘langan'}</Badge>
+              ) : (
+                <Badge variant="warning">{isRu ? 'Долг поставщику' : 'Yetkazib beruvchiga qarz'}</Badge>
+              )}
+            </dd>
+            <dt style={dt}>{isRu ? 'Распределение' : 'Taqsimot'}</dt>
+            <dd>
+              {expense.allocationMethod === 'BY_AMOUNT'
+                ? isRu ? 'По стоимости товара' : 'Tovar qiymatiga mutanosib'
+                : expense.allocationMethod === 'BY_QUANTITY'
+                ? isRu ? 'По количеству' : 'Miqdoriga mutanosib'
+                : isRu ? 'По весу' : 'Vazniga mutanosib'}
+            </dd>
+            {expense.comment && (
+              <>
+                <dt style={dt}>{isRu ? 'Комментарий' : 'Izoh'}</dt>
+                <dd style={{ color: 'var(--color-text-secondary)' }}>{expense.comment}</dd>
+              </>
+            )}
+          </dl>
+        </Card>
+      </div>
+
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <h2 style={cardTitle}>{isRu ? 'История' : 'Tarix'}</h2>
+          <ol className="rd-timeline" style={{ marginTop: 'var(--space-2)' }}>
+            <li>
+              <span>{isRu ? 'Создан' : 'Yaratildi'} · {formatDate(expense.createdAt, locale)}</span>
+            </li>
+            {expense.postedAt && (
+              <li style={{ ['--rd-dot' as string]: 'var(--color-success-600)' }}>
+                <span>{isRu ? 'Проведён и распределён' : 'Tasdiqlandi va taqsimlandi'} · {formatDate(expense.postedAt, locale)}</span>
+              </li>
+            )}
+            {expense.status === 'CANCELLED' && (
+              <li style={{ ['--rd-dot' as string]: 'var(--color-error-600)' }}>
+                <span>{isRu ? 'Проведение отменено' : 'Tasdiq bekor qilingan'}</span>
+              </li>
+            )}
+          </ol>
+        </Card>
+      </aside>
+      </div>
     </div>
   );
 }
