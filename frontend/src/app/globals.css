@@ -1330,3 +1330,16 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 
 .doc-aside dl { grid-template-columns: 1fr !important; row-gap: 2px !important; }
 .doc-aside dl dd { margin-bottom: 8px; }
+
+/* ─── Transfers board (ux/redesign) ─── */
+.tr-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.tr-col { border: 1px solid var(--color-border-light); border-top: 4px solid var(--rd-tone, var(--color-border)); border-radius: var(--radius-lg); background: var(--color-bg-tertiary); padding: var(--space-3); min-width: 0; }
+.tr-col header { padding: var(--space-1) var(--space-1) var(--space-3); }
+.tr-col h2 { font-size: var(--text-sm); font-weight: var(--font-semibold); display: flex; align-items: center; gap: 6px; }
+.tr-col header p { font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 2px; }
+.tr-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.tr-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border-light); border-radius: var(--radius-md); padding: var(--space-3); display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); }
+.tr-route { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: var(--font-medium); }
+.tr-actions { display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.tr-empty { font-size: var(--text-xs); color: var(--color-text-tertiary); padding: var(--space-3); text-align: center; }
+@media (max-width: 899px) { .tr-board { grid-template-columns: 1fr; } }

@@ -855,6 +855,23 @@
       "countHint": "Haqiqiy sanalgan miqdorni kiritish",
       "docsSoFar": "{count, plural, other {# ta hujjat}}",
       "enterAdds": "miqdor yoki narxda Enter — qatorni qo‘shadi"
+    },
+    "transfers": {
+      "subtitle": "Tovarni bir ombordan boshqasiga: yaratish → jo‘natish → qabul qilish",
+      "colDraft": "Yaratilgan",
+      "colDraftHint": "Hali jo‘natilmagan — tovar joyida",
+      "colTransit": "Yo‘lda",
+      "colTransitHint": "Jo‘natildi, qabul qilinishini kutmoqda",
+      "colReceived": "Qabul qilingan",
+      "colReceivedHint": "Tovar yangi omborda",
+      "none": "Bo‘sh",
+      "emptyHint": "Bir ombordan boshqasiga tovar o‘tkazish uchun yangi o‘tkazma yarating.",
+      "lines": "{count, plural, other {# ta qator}}",
+      "ship": "Jo‘natish",
+      "receive": "Qabul qilish",
+      "swap": "Omborlarni almashtirish",
+      "inSource": "Chiquvchi omborda hozir: {qty}",
+      "removeLine": "«{name}» qatorini olib tashlash"
     }
   }
 }
