@@ -2,23 +2,24 @@
 
 import { useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { ActionsMenu } from '@/components/production/ActionsMenu';
+import { QuickPaymentModal } from '@/components/counterparties/QuickPaymentModal';
+import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { SearchField, matchesSearch } from '@/components/ui/SearchField';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
-import { Users, Eye, Pencil, Trash2, Plus } from 'lucide-react';
+import { Users, Plus, CreditCard } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
@@ -121,125 +122,146 @@ export default function CustomersPage() {
   }, {});
   const customersWithDebt = customers.filter(hasDebt).length;
 
-  const iconBtn = (danger?: boolean): React.CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 32,
-    height: 32,
-    background: 'none',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)',
-    cursor: 'pointer',
-    color: danger ? 'var(--color-error-700)' : 'var(--color-text-primary)',
-  });
+  const tl = useTranslations('rd.list');
+  const tc = useTranslations('rd.cp');
   const th = { padding: '10px 14px', textAlign: 'left' as const, fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' };
+  const [collectFor, setCollectFor] = useState<Customer | null>(null);
+  const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('customers.hidden', []);
+  // Biggest debt first: "who owes us most?"
+  const [sort, setSort] = usePersistentState<SortState | null>('customers.sort', { key: 'debt', dir: 'desc' });
+  const debtValue = (c: Customer) => (c.balancesByCurrency || []).reduce((m, b) => Math.max(m, b.customerDebt), 0);
   const formatByCurrency = (items: Array<{ currency: string; amount: number }>) =>
     items.length > 0 ? items.map((item) => formatCurrency(item.amount, locale, item.currency)).join(' · ') : '—';
-
   const newButton = (
     <Button onClick={() => setIsCreateOpen(true)}>
       <Plus size={16} aria-hidden /> {isRu ? 'Новый клиент' : 'Yangi mijoz'}
     </Button>
   );
 
+  const columns: Column<Customer>[] = [
+    {
+      key: 'name',
+      label: isRu ? 'Клиент' : 'Mijoz',
+      primary: true,
+      locked: true,
+      sortValue: (c) => c.name,
+      render: (c) => (
+        <div>
+          <div className="rd-doc-no">{c.name}</div>
+          {c.type === 'BOTH' && <div className="rd-sub">{isRu ? 'Также поставщик' : 'Yetkazib beruvchi ham'}</div>}
+        </div>
+      ),
+    },
+    {
+      key: 'contact',
+      label: isRu ? 'Телефон и e-mail' : 'Telefon va e-pochta',
+      render: (c) => (
+        <div style={{ color: 'var(--color-text-secondary)' }}>
+          {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>{c.phone}</a> : '—'}
+          {c.email && <div className="rd-sub">{c.email}</div>}
+        </div>
+      ),
+    },
+    { key: 'debt', label: isRu ? 'Долг клиента' : 'Mijoz qarzi', numeric: true, sortValue: debtValue, render: (c) => <DebtLines balances={c.balancesByCurrency || []} locale={locale} /> },
+    {
+      key: 'actions',
+      label: isRu ? 'Действия' : 'Amallar',
+      locked: true,
+      render: (c) => (
+        <div className="rd-row-actions">
+          {hasDebt(c) && (
+            <button type="button" className="rd-next-btn" onClick={() => setCollectFor(c)}>
+              <CreditCard size={14} aria-hidden /> {tc('collect')}
+            </button>
+          )}
+          <ActionsMenu
+            label={tl('rowActions')}
+            actions={[
+              { label: tc('profile'), onSelect: () => setSelectedCustomer(c) },
+              { label: tl('edit'), onSelect: () => setEditingCustomer(c) },
+              { label: tl('delete'), onSelect: () => void handleDeleteCustomer(c), danger: true },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
-        <PageHeader
-          title={isRu ? 'Клиенты' : 'Mijozlar'}
-          subtitle={isRu ? 'Кому вы продаёте: контакты, долги и история покупок.' : 'Kimga sotasiz: kontaktlar, qarzlar va xaridlar tarixi.'}
-          actions={newButton}
+    <div className="rd-page">
+      <PageHeader
+        title={isRu ? 'Клиенты' : 'Mijozlar'}
+        subtitle={isRu ? 'Кому вы продаёте: контакты, долг и история покупок.' : 'Kimga sotasiz: aloqa, qarz va xaridlar tarixi.'}
+        actions={newButton}
+      />
+
+      <SignalStrip label={tl('summary')}>
+        <Signal
+          tone="warning"
+          label={isRu ? 'Нам должны' : 'Bizga qarz'}
+          value={Object.keys(receivablesByCurrency).length > 0 ? <MultiCurrencyValue items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} /> : '—'}
+          hint={tc('owesUsHint', { count: customersWithDebt })}
+          active={debtOnly}
+          onClick={() => setDebtOnly(!debtOnly)}
         />
+        <Signal tone="neutral" label={isRu ? 'Всего клиентов' : 'Jami mijozlar'} value={customers.length} />
+      </SignalStrip>
+
+      <div className="rd-toolbar">
+        <div className="rd-toolbar-row">
+          <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Имя, телефон или e-mail' : 'Ism, telefon yoki e-pochta'} label={tl('search')} />
+          <ChipGroup
+            label={tc('show')}
+            options={[
+              { value: 'all', label: tl('all') },
+              { value: 'debt', label: tc('withDebt'), count: customersWithDebt },
+            ]}
+            value={debtOnly ? 'debt' : 'all'}
+            onChange={(v) => setDebtOnly(v === 'debt')}
+          />
+          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
+        </div>
       </div>
 
-      <div className="ux-kpi-grid">
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Всего клиентов' : 'Jami mijozlar'}</div>
-          <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: 4 }} className="tabular-nums">{customers.length}</div>
-        </Card>
-        <Card style={{ padding: 'var(--space-4)' }}>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>{isRu ? 'Нам должны' : 'Bizga qarzdor'}</div>
-          <div style={{ marginTop: 4 }}>
-            <MultiCurrencyValue items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} color="var(--color-warning-700)" />
-          </div>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {isRu ? `Клиентов с долгом: ${customersWithDebt}` : `Qarzdor mijozlar: ${customersWithDebt}`}
-          </div>
-        </Card>
-      </div>
-
-      <Card>
-        {customers.length > 0 && (
-          <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
-            <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Имя, телефон или email' : 'Ism, telefon yoki email'} style={{ maxWidth: 400 }} />
-            <Checkbox checked={debtOnly} onChange={(e) => setDebtOnly(e.target.checked)} label={isRu ? 'Только должники' : 'Faqat qarzdorlar'} />
-          </div>
-        )}
-
+      <div className="rd-table-card">
         {customersQuery.isError ? (
           <LoadError error={customersQuery.error} onRetry={fetchCustomers} retrying={customersQuery.isFetching} />
-        ) : loading ? (
-          <SkeletonRows rows={6} columns={5} />
-        ) : customers.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title={isRu ? 'Клиентов пока нет' : 'Hozircha mijozlar yo‘q'}
-            description={isRu ? 'Добавьте клиента — его можно будет выбрать в продаже, а долг будет считаться сам.' : 'Mijoz qo‘shing — uni sotuvda tanlash mumkin bo‘ladi, qarz esa o‘zi hisoblanadi.'}
-            action={newButton}
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={debtOnly ? (isRu ? 'Измените поиск или снимите «Только должники».' : 'Qidiruvni o‘zgartiring yoki «Faqat qarzdorlar»ni olib tashlang.') : isRu ? 'Измените поиск.' : 'Qidiruvni o‘zgartiring.'} />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                  <th scope="col" style={th}>{isRu ? 'Клиент' : 'Mijoz'}</th>
-                  <th scope="col" style={th}>{isRu ? 'Телефон' : 'Telefon'}</th>
-                  <th scope="col" style={th}>Email</th>
-                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Долг' : 'Qarz'}</th>
-                  <th scope="col" style={{ ...th, textAlign: 'right' }}><span className="sr-only">{isRu ? 'Действия' : 'Amallar'}</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td data-primary style={{ padding: '12px 14px' }}>
-                      <button type="button" onClick={() => setSelectedCustomer(c)} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', cursor: 'pointer', textAlign: 'left' }}>
-                        {c.name}
-                      </button>
-                      {c.type === 'BOTH' && (
-                        <div style={{ marginTop: 2 }}><Badge variant="neutral">{isRu ? 'Также поставщик' : 'Yetkazib beruvchi ham'}</Badge></div>
-                      )}
-                    </td>
-                    <td data-label={isRu ? 'Телефон' : 'Telefon'} style={{ padding: '12px 14px', color: 'var(--color-text-secondary)' }}>
-                      {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>{c.phone}</a> : '—'}
-                    </td>
-                    <td data-label="Email" style={{ padding: '12px 14px', color: 'var(--color-text-secondary)' }}>{c.email || '—'}</td>
-                    <td data-label={isRu ? 'Долг' : 'Qarz'} style={{ padding: '12px 14px', textAlign: 'right' }}>
-                      <DebtLines balances={c.balancesByCurrency ?? []} locale={locale} />
-                    </td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                        <button type="button" onClick={() => setSelectedCustomer(c)} aria-label={isRu ? `Профиль: ${c.name}` : `Profil: ${c.name}`} title={isRu ? 'Профиль' : 'Profil'} style={iconBtn()}>
-                          <Eye size={14} aria-hidden />
-                        </button>
-                        <button type="button" onClick={() => setEditingCustomer(c)} aria-label={isRu ? `Изменить: ${c.name}` : `Tahrirlash: ${c.name}`} title={isRu ? 'Изменить' : 'Tahrirlash'} style={iconBtn()}>
-                          <Pencil size={14} aria-hidden />
-                        </button>
-                        <button type="button" onClick={() => void handleDeleteCustomer(c)} aria-label={isRu ? `Удалить: ${c.name}` : `O‘chirish: ${c.name}`} title={isRu ? 'Удалить' : 'O‘chirish'} style={iconBtn(true)}>
-                          <Trash2 size={14} aria-hidden />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rows={filtered}
+            columns={columns}
+            rowKey={(c) => c.id}
+            hidden={hiddenCols}
+            sort={sort}
+            onSortChange={setSort}
+            onRowClick={(c) => setSelectedCustomer(c)}
+            selectedKey={selectedCustomer?.id}
+            loading={loading}
+            caption={tc('rowHint')}
+            empty={
+              customers.length === 0 ? (
+                <EmptyState icon={Users} title={isRu ? 'Клиентов пока нет' : 'Hozircha mijozlar yo‘q'} description={isRu ? 'Добавьте клиента — его можно будет выбрать в продаже, а долг будет считаться сам.' : 'Mijoz qo‘shing — uni sotuvda tanlash mumkin, qarzi esa o‘zi hisoblanadi.'} action={newButton} />
+              ) : (
+                <EmptyState compact title={tl('nothingFound')} description={tl('nothingFoundHint')} />
+              )
+            }
+          />
         )}
-      </Card>
+      </div>
+
+      {collectFor && (
+        <QuickPaymentModal
+          isOpen
+          counterparty={collectFor as unknown as Parameters<typeof QuickPaymentModal>[0]['counterparty']}
+          initialSide="CUSTOMER"
+          initialCurrency={collectFor.balancesByCurrency?.find((b) => b.customerDebt > 0)?.currency}
+          onClose={() => setCollectFor(null)}
+          onSuccess={() => {
+            setCollectFor(null);
+            fetchCustomers();
+          }}
+        />
+      )}
 
       {selectedCustomer && (
         <Modal isOpen onClose={() => setSelectedCustomer(null)} title={selectedCustomer.name} size="xl">
