@@ -1406,3 +1406,18 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .adm-plan:hover { border-color: var(--color-primary-300, var(--color-primary-500)); }
 .adm-plan[aria-pressed="true"] { border: 2px solid var(--color-primary-600); background: var(--color-primary-50); }
 .adm-plan:focus-visible { outline: 2px solid var(--color-primary-600); outline-offset: 2px; }
+
+.tk-inbox { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.tk-list, .tk-thread { border: 1px solid var(--color-border-light); border-radius: var(--radius-lg); background: var(--color-bg-secondary); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); }
+.tk-thread { padding: var(--space-5); }
+.tk-list ul, .tk-msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tk-item { width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0; border-radius: var(--radius-md); padding: var(--space-3); display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.tk-item:hover { background: var(--color-bg-tertiary); }
+.tk-item[aria-current="true"] { background: var(--color-primary-50); }
+.tk-subj { font-size: var(--text-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tk-snippet { font-size: var(--text-xs); color: var(--color-text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tk-msgs { gap: var(--space-3); }
+.tk-msg { display: flex; flex-direction: column; gap: 4px; padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-bg-tertiary); font-size: var(--text-sm); max-width: 85%; }
+.tk-msg-admin { align-self: flex-end; background: var(--color-primary-50); }
+.tk-reply { width: 100%; padding: 10px 12px; background: var(--color-bg-input); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-primary); font: inherit; font-size: var(--text-sm); resize: vertical; box-sizing: border-box; }
+@media (max-width: 900px) { .tk-inbox { grid-template-columns: minmax(0, 1fr); } }

@@ -1039,6 +1039,17 @@
       "trialLeft": "{count, plural, one {остался # день} few {осталось # дня} other {осталось # дней}} ({date})",
       "trialEnded": "Закончился",
       "noneOnPlan": "На этом тарифе компаний нет"
+    },
+    "tickets": {
+      "show": "Показать",
+      "waiting": "Ждёт ответа",
+      "all": "Все",
+      "answered": "Отвечено",
+      "resolved": "Решено",
+      "allAnswered": "На все обращения ответили.",
+      "urgent": "важное",
+      "we": "Мы (Sklad)",
+      "replyNote": "После ответа обращение станет «Решено». Ctrl+Enter — отправить."
     }
   }
 }

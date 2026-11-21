@@ -1039,6 +1039,17 @@
       "trialLeft": "{count} kun qoldi ({date})",
       "trialEnded": "Tugagan",
       "noneOnPlan": "Bu tarifda korxona yo‘q"
+    },
+    "tickets": {
+      "show": "Ko‘rsatish",
+      "waiting": "Javob kutmoqda",
+      "all": "Hammasi",
+      "answered": "Javob berilgan",
+      "resolved": "Hal qilindi",
+      "allAnswered": "Hamma murojaatlarga javob berilgan.",
+      "urgent": "muhim",
+      "we": "Biz (Sklad)",
+      "replyNote": "Javob yuborilgach murojaat «Hal qilindi» bo‘ladi. Ctrl+Enter — yuborish."
     }
   }
 }

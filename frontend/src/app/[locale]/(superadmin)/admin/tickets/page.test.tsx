@@ -28,7 +28,7 @@ describe('Super-admin Tickets page', () => {
     apiFetch.mockResolvedValue(rows);
     renderPage(<SuperAdminTicketsPage />);
 
-    expect(await screen.findByText('Hisobot ochilmayapti')).toBeTruthy();
+    expect((await screen.findAllByText('Hisobot ochilmayapti')).length).toBeGreaterThan(0); // list item + open conversation
     expect(apiFetch).toHaveBeenCalledTimes(1);
     expect(apiFetch).toHaveBeenCalledWith(ENDPOINT, expect.objectContaining({ token: 'tok' }));
     expect(apiFetch.mock.calls[0][1].tenantId).toBeUndefined();
@@ -43,7 +43,7 @@ describe('Super-admin Tickets page', () => {
     apiFetch.mockResolvedValueOnce(rows);
     fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
 
-    expect(await screen.findByText('Hisobot ochilmayapti')).toBeTruthy();
+    expect((await screen.findAllByText('Hisobot ochilmayapti')).length).toBeGreaterThan(0); // list item + open conversation
     await waitFor(() => expect(callsTo(ENDPOINT)).toBe(2));
   });
 });
