@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useLocale } from 'next-intl';
-import { Link } from '@/i18n/navigation';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link, useRouter } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { LoadError } from '@/components/ui/LoadError';
@@ -17,7 +17,9 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { SearchField, matchesSearch } from '@/components/ui/SearchField';
 import { AccountTypeBadge } from '@/components/accounting/AccountTypeBadge';
 import { BookOpen, FileText, PieChart, Scale } from 'lucide-react';
-import { TrialBalanceReport } from '@shared/types';
+import { TrialBalanceReport, type TrialBalanceItem, type AccountType } from '@shared/types';
+import { Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 
 /** Debit and credit turnovers agree to the tiyin (floating sums can differ in the last digits). */
 function isBalanced(debit: number, credit: number): boolean {
@@ -32,17 +34,22 @@ export default function AccountingPage() {
   const osv = osvQuery.data ?? null;
   const [search, setSearch] = useState('');
   const [activeOnly, setActiveOnly] = usePersistentState('accounting.osv.activeOnly', true);
+  const [typeFilter, setTypeFilter] = useState<'' | AccountType>('');
+  const [sort, setSort] = usePersistentState<SortState | null>('accounting.osv.sort', null);
+  const router = useRouter();
+  const tl = useTranslations('rd.list');
+  const ta = useTranslations('rd.acc');
 
   const rows = useMemo(() => {
     if (!osv) return [];
     return osv.items.filter((item) => {
       if (activeOnly && !item.debitTurnover && !item.creditTurnover && !item.closingBalance) return false;
+      if (typeFilter && item.accountType !== typeFilter) return false;
       return matchesSearch(search, item.accountCode, item.accountName.uz, item.accountName.ru);
     });
-  }, [osv, search, activeOnly]);
+  }, [osv, search, activeOnly, typeFilter]);
 
   const balanced = osv ? isBalanced(osv.totalDebitTurnover, osv.totalCreditTurnover) : true;
-  const th = { padding: '12px', fontWeight: 'var(--font-medium)' } as const;
 
   return (
     <div>
@@ -67,6 +74,23 @@ export default function AccountingPage() {
           </>
         }
       />
+
+      {osv && osv.items.length > 0 && (
+        <SignalStrip label={tl('summary')}>
+          <Signal tone={balanced ? 'success' : 'error'} label={ta('check')} value={balanced ? (isRu ? 'Дебет = Кредит' : 'Debet = Kredit') : isRu ? 'Не сходится' : 'Teng emas'} hint={balanced ? ta('checkOk') : ta('checkBad')} />
+          {(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] as AccountType[]).map((type) => (
+            <Signal
+              key={type}
+              tone={type === 'ASSET' ? 'info' : type === 'LIABILITY' ? 'warning' : type === 'REVENUE' ? 'success' : type === 'EXPENSE' ? 'error' : 'neutral'}
+              label={ta(`type_${type}`)}
+              value={osv.items.filter((i) => i.accountType === type && (i.debitTurnover || i.creditTurnover || i.closingBalance)).length}
+              hint={ta('accountsWithMovement')}
+              active={typeFilter === type}
+              onClick={() => setTypeFilter(typeFilter === type ? '' : type)}
+            />
+          ))}
+        </SignalStrip>
+      )}
 
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
@@ -136,59 +160,23 @@ export default function AccountingPage() {
             }
           />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
-                  <th scope="col" style={th}>{isRu ? 'Счёт' : 'Hisob'}</th>
-                  <th scope="col" style={th}>{isRu ? 'Название' : 'Nomi'}</th>
-                  <th scope="col" style={th}>{isRu ? 'Тип' : 'Turi'}</th>
-                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Оборот по дебету' : 'Debet aylanmasi'}</th>
-                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Оборот по кредиту' : 'Kredit aylanmasi'}</th>
-                  <th scope="col" style={{ ...th, textAlign: 'right' }}>{isRu ? 'Сальдо' : 'Saldo'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((item) => (
-                  <tr key={item.accountCode} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                    <td data-primary style={{ padding: '12px', fontWeight: 'var(--font-semibold)', fontFamily: 'var(--font-mono)' }}>
-                      {item.accountCode}
-                    </td>
-                    <td data-label={isRu ? 'Название' : 'Nomi'} style={{ padding: '12px', fontWeight: 'var(--font-medium)' }}>
-                      {item.accountName[locale] || item.accountName.ru || item.accountName.uz}
-                    </td>
-                    <td data-label={isRu ? 'Тип' : 'Turi'} style={{ padding: '12px' }}>
-                      <AccountTypeBadge type={item.accountType} />
-                    </td>
-                    <td data-label={isRu ? 'Оборот по дебету' : 'Debet aylanmasi'} style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(item.debitTurnover, locale, osv.currency)}
-                    </td>
-                    <td data-label={isRu ? 'Оборот по кредиту' : 'Kredit aylanmasi'} style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                      {formatCurrency(item.creditTurnover, locale, osv.currency)}
-                    </td>
-                    <td
-                      data-label={isRu ? 'Сальдо' : 'Saldo'}
-                      style={{ padding: '12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: item.closingBalance >= 0 ? 'var(--color-text-primary)' : 'var(--color-error-700)' }}
-                      className="tabular-nums"
-                    >
-                      {formatCurrency(item.closingBalance, locale, osv.currency)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ backgroundColor: 'var(--color-bg-tertiary)', fontWeight: 'var(--font-semibold)', fontSize: 'var(--text-sm)' }}>
-                  <td colSpan={3} style={{ padding: '12px' }}>{isRu ? 'Итого обороты (все счета)' : 'Jami aylanma (barcha hisoblar)'}</td>
-                  <td data-label={isRu ? 'Дебет' : 'Debet'} style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                    {formatCurrency(osv.totalDebitTurnover, locale, osv.currency)}
-                  </td>
-                  <td data-label={isRu ? 'Кредит' : 'Kredit'} style={{ padding: '12px', textAlign: 'right' }} className="tabular-nums">
-                    {formatCurrency(osv.totalCreditTurnover, locale, osv.currency)}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+          <div className="rd-table-card" style={{ border: 'none' }}>
+            <DataTable
+              rows={rows}
+              columns={[
+                { key: 'code', label: isRu ? 'Счёт' : 'Hisob', primary: true, locked: true, sortValue: (i) => i.accountCode, render: (i) => <span className="rd-doc-no tabular-nums">{i.accountCode}</span>, footer: <span>{isRu ? 'Итого обороты' : 'Jami aylanma'}</span> },
+                { key: 'name', label: isRu ? 'Название' : 'Nomi', sortValue: (i) => i.accountName[locale] || '', render: (i) => <span style={{ fontWeight: 'var(--font-medium)' }}>{i.accountName[locale] || i.accountName.ru || i.accountName.uz}</span> },
+                { key: 'type', label: isRu ? 'Тип' : 'Turi', sortValue: (i) => i.accountType, render: (i) => <AccountTypeBadge type={i.accountType} /> },
+                { key: 'debit', label: isRu ? 'Оборот по дебету' : 'Debet aylanmasi', numeric: true, sortValue: (i) => i.debitTurnover, render: (i) => formatCurrency(i.debitTurnover, locale, osv.currency), footer: formatCurrency(osv.totalDebitTurnover, locale, osv.currency) },
+                { key: 'credit', label: isRu ? 'Оборот по кредиту' : 'Kredit aylanmasi', numeric: true, sortValue: (i) => i.creditTurnover, render: (i) => formatCurrency(i.creditTurnover, locale, osv.currency), footer: formatCurrency(osv.totalCreditTurnover, locale, osv.currency) },
+                { key: 'saldo', label: isRu ? 'Сальдо' : 'Saldo', numeric: true, sortValue: (i) => i.closingBalance, render: (i) => <strong style={{ color: i.closingBalance >= 0 ? undefined : 'var(--color-error-700)' }}>{formatCurrency(i.closingBalance, locale, osv.currency)}</strong> },
+              ] as Column<TrialBalanceItem>[]}
+              rowKey={(i) => i.accountCode}
+              sort={sort}
+              onSortChange={setSort}
+              onRowClick={(i) => router.push(`/accounting/journal?q=${encodeURIComponent(i.accountCode)}`)}
+              caption={ta('rowHint')}
+            />
           </div>
         )}
       </Card>
