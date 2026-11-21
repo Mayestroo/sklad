@@ -1386,9 +1386,9 @@ function TransactionsTable({
                     color: isCancelled
                       ? 'var(--color-text-tertiary)'
                       : isIncome
-                      ? 'var(--color-success-600)'
+                      ? 'var(--color-success-700)'
                       : isExpense
-                      ? 'var(--color-error-600)'
+                      ? 'var(--color-error-700)'
                       : 'var(--color-text-primary)',
                     textDecoration: isCancelled ? 'line-through' : 'none',
                   }}

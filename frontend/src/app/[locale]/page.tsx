@@ -105,8 +105,8 @@ function CashFlowChart({
                 cursor: 'pointer',
                 fontSize: 'var(--text-xs)',
                 fontWeight: activeCurrency === cur ? 600 : 400,
-                background: activeCurrency === cur ? 'var(--color-primary-600)' : 'var(--color-bg-secondary)',
-                color: activeCurrency === cur ? '#fff' : 'var(--color-text-secondary)',
+                background: activeCurrency === cur ? 'var(--color-btn-primary-bg, var(--color-primary-600))' : 'var(--color-bg-secondary)',
+                color: activeCurrency === cur ? 'var(--color-btn-primary-text, #fff)' : 'var(--color-text-secondary)',
                 transition: 'all 0.15s',
               }}
             >
