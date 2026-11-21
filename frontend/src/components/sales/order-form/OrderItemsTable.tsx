@@ -58,7 +58,7 @@ export function OrderItemsTable({
         </h3>
       </div>
 
-      <div style={{ overflowX: 'auto', minHeight: '280px', paddingBottom: '40px' }}>
+      <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto', minHeight: '280px', paddingBottom: '40px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>

@@ -1339,7 +1339,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         </div>
 
         {/* Table container */}
-        <div style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
+        <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto', minHeight: '320px', paddingBottom: '40px' }}>
           <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>

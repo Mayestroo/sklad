@@ -3,18 +3,18 @@
 import { quantityWithUnit, unitLabel } from '@/lib/units';
 import { useState } from 'react';
 import { useLocale } from 'next-intl';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery } from '@/lib/query/useApiQuery';
-import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatUnitCost, formatPercent, formatDate, errorMessage, getLocalizedName } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { DocumentLoadState } from '@/components/ui/DocumentLoadState';
 import {
-  ArrowLeft,
   CheckCircle2,
   XCircle,
   Clock,
@@ -45,9 +45,7 @@ export default function ExpenseDetailPage() {
 
   const expenseQuery = useApiQuery<ExpenseDetail>(id ? `/purchases/additional-expenses/${id}` : null);
   const expense = expenseQuery.data ?? null;
-  const loading = expenseQuery.isPending;
   const [actionLoading, setActionLoading] = useState(false);
-  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   const fetchExpense = () => void expenseQuery.refetch();
 
@@ -72,7 +70,7 @@ export default function ExpenseDetailPage() {
         method: 'POST',
         locale,
       });
-      toast.success(isRu ? 'Расход успешно проведен' : 'Xarajat muvaffaqiyatli tasdiqlandi');
+      toast.success(isRu ? 'Расход проведён, себестоимость обновлена' : 'Xarajat tasdiqlandi, tannarx yangilandi');
       fetchExpense();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при проведении' : 'Tasdiqlashda xatolik'));
@@ -110,6 +108,16 @@ export default function ExpenseDetailPage() {
   };
 
   const handleCancel = async () => {
+    const ok = await confirm({
+      title: isRu ? 'Отменить проведение расхода?' : 'Xarajat tasdig‘i bekor qilinsinmi?',
+      description: isRu
+        ? 'Себестоимость товаров на складе и пересчитанная себестоимость прошлых продаж вернутся к прежним значениям, долг поставщику будет снят.'
+        : 'Ombordagi tovarlar tannarxi va o‘tgan sotuvlar bo‘yicha qayta hisoblangan tannarx avvalgi holatiga qaytadi, yetkazib beruvchiga qarz olib tashlanadi.',
+      variant: 'warning',
+      confirmText: isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish',
+      cancelText: isRu ? 'Не отменять' : 'Bekor qilmaslik',
+    });
+    if (!ok) return;
     setActionLoading(true);
     try {
       await apiFetch(`/purchases/additional-expenses/${id}/cancel`, {
@@ -118,8 +126,7 @@ export default function ExpenseDetailPage() {
         method: 'POST',
         locale,
       });
-      setCancelModalOpen(false);
-      toast.success(isRu ? 'Расход успешно отменен' : 'Xarajat muvaffaqiyatli bekor qilindi');
+      toast.success(isRu ? 'Проведение расхода отменено' : 'Xarajat tasdig‘i bekor qilindi');
       fetchExpense();
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при отмене' : 'Bekor qilishda xatolik'));
@@ -163,8 +170,8 @@ export default function ExpenseDetailPage() {
         method: 'DELETE',
         locale,
       });
-      toast.success(isRu ? 'Расход успешно удален' : 'Xarajat muvaffaqiyatli o‘chirildi');
-      router.push(`/${locale}/purchases/expenses`);
+      toast.success(isRu ? 'Расход удалён' : 'Xarajat o‘chirildi');
+      router.push('/purchases/expenses');
     } catch (err) {
       toast.error(errorMessage(err) || (isRu ? 'Ошибка при удалении' : 'O‘chirishda xatolik'));
       setActionLoading(false);
@@ -214,32 +221,21 @@ export default function ExpenseDetailPage() {
     }
   };
 
-  if (expenseQuery.isError) {
-    return (
-      <Card>
-        <LoadError error={expenseQuery.error} onRetry={fetchExpense} retrying={expenseQuery.isFetching} />
-      </Card>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-        {isRu ? 'Загрузка расхода...' : 'Xarajat ma’lumotlari yuklanmoqda...'}
-      </div>
-    );
-  }
-
   if (!expense) {
     return (
-      <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
-        <h2>{isRu ? 'Расход не найден' : 'Xarajat hujjati topilmadi'}</h2>
-        <Button onClick={() => router.push(`/${locale}/purchases/expenses`)} style={{ marginTop: '12px' }}>
-          {isRu ? 'Назад к списку' : 'Ro‘yxatga qaytish'}
-        </Button>
-      </div>
+      <DocumentLoadState
+        query={expenseQuery}
+        missing
+        listHref="/purchases/expenses"
+        listLabel={{ uz: 'Qo‘shimcha xarajatlar ro‘yxatiga', ru: 'К списку доп. расходов' }}
+        notFound={{ uz: 'Xarajat hujjati topilmadi', ru: 'Расход не найден' }}
+      />
     );
   }
+
+  const cardTitle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-3)' };
+  const dl: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'minmax(120px, auto) 1fr', gap: '6px 12px', fontSize: 'var(--text-sm)' };
+  const dt: React.CSSProperties = { color: 'var(--color-text-secondary)' };
 
   // Landed costs are in the receipt's currency, expense shares in the
   // expense's, sales COGS in UZS: each is labelled with its own (ADR 0010/0023).
@@ -257,137 +253,105 @@ export default function ExpenseDetailPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-      {/* Header & Actions */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <Button aria-label={isRu ? 'Назад' : 'Orqaga'} title={isRu ? 'Назад' : 'Orqaga'} variant="ghost" size="sm" onClick={() => router.push(`/${locale}/purchases/expenses`)}>
-            <ArrowLeft size={16} />
-          </Button>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>
-                {expense.docNumber}
-              </h1>
+      <div style={{ marginBottom: 'calc(-1 * var(--space-5))' }}>
+        <PageHeader
+          title={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              <span style={{ whiteSpace: 'nowrap' }}>{expense.docNumber}</span>
               {getStatusBadge(expense.status)}
               {getExpenseTypeBadge(expense.expenseType)}
-            </div>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
-              {isRu ? 'Дата расхода:' : 'Xarajat sanasi:'} {formatDate(expense.docDate, locale)}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <Button variant="outline" onClick={() => window.print()}>
-            <Printer size={16} style={{ marginRight: '6px' }} />
-            {isRu ? 'Печать' : 'Chop etish'}
-          </Button>
-
-          {expense.status === 'DRAFT' && (
-            <Button variant="outline" disabled={actionLoading} onClick={handleResave}>
-              <RefreshCw size={16} style={{ marginRight: '6px' }} />
-              {isRu ? 'Пересчитать и сохранить' : 'Qayta hisoblash va saqlash'}
-            </Button>
-          )}
-
-          {expense.status === 'DRAFT' && (
-            <Button disabled={actionLoading} onClick={handlePost}>
-              <CheckCircle2 size={16} style={{ marginRight: '6px' }} />
-              {isRu ? 'Провести' : 'Tasdiqlash'}
-            </Button>
-          )}
-
-          {expense.status === 'POSTED' && (
-            <Button variant="outline" disabled={actionLoading} onClick={() => setCancelModalOpen(true)} style={{ color: 'var(--color-danger-700)', borderColor: 'var(--color-danger-200)' }}>
-              <XCircle size={16} style={{ marginRight: '6px' }} />
-              {isRu ? 'Отменить проведение' : 'Bekor qilish'}
-            </Button>
-          )}
-
-          <Button
-            variant="outline"
-            disabled={actionLoading}
-            onClick={handleDeleteExpense}
-            style={{ color: 'var(--color-danger-700)', borderColor: 'var(--color-danger-200)' }}
-          >
-            <Trash2 size={16} style={{ marginRight: '6px' }} />
-            {isRu ? 'Удалить' : 'O‘chirish'}
-          </Button>
-        </div>
+            </span>
+          }
+          subtitle={`${isRu ? 'Доп. расход от' : 'Qo‘shimcha xarajat,'} ${formatDate(expense.docDate, locale)} · ${isRu ? 'распределяется на себестоимость прихода' : 'kirim tannarxiga taqsimlanadi'}`}
+          actions={
+            <>
+              <Button variant="ghost" disabled={actionLoading} onClick={() => void handleDeleteExpense()} style={{ color: 'var(--color-error-700)' }}>
+                <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
+              {expense.status === 'POSTED' && (
+                <Button variant="outline" disabled={actionLoading} onClick={() => void handleCancel()} style={{ color: 'var(--color-error-700)', borderColor: 'var(--color-error-200)' }}>
+                  <XCircle size={16} aria-hidden /> {isRu ? 'Отменить проведение' : 'Tasdiqni bekor qilish'}
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => window.print()} className="no-print">
+                <Printer size={16} aria-hidden /> {isRu ? 'Печать' : 'Chop etish'}
+              </Button>
+              {expense.status === 'DRAFT' && (
+                <Button variant="outline" disabled={actionLoading} onClick={() => void handleResave()}>
+                  <RefreshCw size={16} aria-hidden /> {isRu ? 'Пересчитать и сохранить' : 'Qayta hisoblash va saqlash'}
+                </Button>
+              )}
+              {expense.status === 'DRAFT' && (
+                <Button loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'} onClick={() => void handlePost()}>
+                  <CheckCircle2 size={16} aria-hidden /> {isRu ? 'Провести' : 'Tasdiqlash'}
+                </Button>
+              )}
+            </>
+          }
+        />
       </div>
 
       {/* Overview Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 'var(--space-4)' }}>
-        {/* Card 1: Supplier & Receipt info */}
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>
-            {isRu ? 'Услугодатель и Закупка' : 'Xizmat ko‘rsatuvchi va Xarid'}
-          </div>
-          <div style={{ fontSize: 'var(--text-sm)' }}>
-            <div><strong>{isRu ? 'Перевозчик / Поставщик:' : 'Kontragent:'}</strong> {expense.counterparty?.name || '—'}</div>
-            <div style={{ marginTop: '4px' }}>
-              <strong>{isRu ? 'Связанная закупка:' : 'Bog‘langan xarid:'}</strong>{' '}
-              <a
-                href={`/${locale}/purchases/${expense.receiptId}`}
-                style={{ color: 'var(--color-primary-600)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-              >
-                {expense.receipt?.docNumber} <ExternalLink size={12} />
-              </a>
-            </div>
-            <div style={{ marginTop: '4px' }}>
-              <strong>{isRu ? 'Поставщик товара:' : 'Tovar yetkazib beruvchi:'}</strong> {expense.receipt?.counterparty?.name}
-            </div>
-            <div style={{ marginTop: '4px' }}>
-              <strong>{isRu ? 'Склад назначения:' : 'Qabul ombori:'}</strong> {getLocalizedName(expense.receipt?.warehouse?.name, 'uz')}
-            </div>
-          </div>
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <h2 style={cardTitle}>{isRu ? 'Исполнитель и приход' : 'Xizmat ko‘rsatuvchi va kirim'}</h2>
+          <dl style={dl}>
+            <dt style={dt}>{isRu ? 'Исполнитель' : 'Xizmat ko‘rsatuvchi'}</dt>
+            <dd>{expense.counterparty?.name || '—'}</dd>
+            <dt style={dt}>{isRu ? 'Приход' : 'Kirim hujjati'}</dt>
+            <dd>
+              <Link href={`/purchases/${expense.receiptId}`} style={{ color: 'var(--color-primary-700)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                {expense.receipt?.docNumber} <ExternalLink size={12} aria-hidden />
+              </Link>
+            </dd>
+            {expense.receipt?.counterparty?.name && expense.receipt.counterparty.name !== expense.counterparty?.name && (
+              <>
+                <dt style={dt}>{isRu ? 'Поставщик товара' : 'Tovar yetkazib beruvchi'}</dt>
+                <dd>{expense.receipt.counterparty.name}</dd>
+              </>
+            )}
+            <dt style={dt}>{isRu ? 'Склад' : 'Ombor'}</dt>
+            <dd>{getLocalizedName(expense.receipt?.warehouse?.name, locale)}</dd>
+          </dl>
         </Card>
 
-        {/* Card 2: Financial Details */}
-        <Card style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>
-            {isRu ? 'Финансовые расчеты' : 'Moliyaviy hisob-kitob'}
-          </div>
-          <div style={{ fontSize: 'var(--text-sm)' }}>
-            <div>
-              <strong>{isRu ? 'Сумма расхода:' : 'Xarajat summasi:'}</strong>{' '}
-              <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
-                {formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}
-              </span>
-            </div>
+        <Card style={{ padding: 'var(--space-4)' }}>
+          <h2 style={cardTitle}>{isRu ? 'Сумма и оплата' : 'Summa va to‘lov'}</h2>
+          <dl style={dl}>
+            <dt style={dt}>{isRu ? 'Сумма расхода' : 'Xarajat summasi'}</dt>
+            <dd style={{ fontWeight: 'var(--font-semibold)' }} className="tabular-nums">{formatCurrency(Number(expense.amount) || 0, locale, expense.currency)}</dd>
             {receiptTotal != null && receiptCurrency && receiptCurrency !== expense.currency && (
-              <div style={{ marginTop: '4px' }} className="tabular-nums">
-                <strong>{isRu ? 'В валюте закупки:' : 'Xarid valyutasida:'}</strong>{' '}
-                {formatCurrency(receiptTotal, locale, receiptCurrency)}
-                {usdRate != null && (
-                  <span style={{ color: 'var(--color-text-secondary)' }}>
-                    {' '}(1 USD = {formatCurrency(usdRate, locale, 'UZS')})
-                  </span>
-                )}
-              </div>
+              <>
+                <dt style={dt}>{isRu ? 'В валюте прихода' : 'Kirim valyutasida'}</dt>
+                <dd className="tabular-nums">
+                  {formatCurrency(receiptTotal, locale, receiptCurrency)}
+                  {usdRate != null && <span style={{ color: 'var(--color-text-secondary)' }}> (1 USD = {formatCurrency(usdRate, locale, 'UZS')})</span>}
+                </dd>
+              </>
             )}
-            <div style={{ marginTop: '4px' }}>
-              <strong>{isRu ? 'Статус оплаты:' : 'To‘lov holati:'}</strong>{' '}
+            <dt style={dt}>{isRu ? 'Оплата' : 'To‘lov'}</dt>
+            <dd>
               {expense.isPaid ? (
                 <Badge variant="success">{isRu ? 'Оплачен из кассы' : 'Kassadan to‘langan'}</Badge>
               ) : (
-                <Badge variant="warning">{isRu ? 'Задолженность перед поставщиком' : 'Yetkazib beruvchiga qarz'}</Badge>
+                <Badge variant="warning">{isRu ? 'Долг поставщику' : 'Yetkazib beruvchiga qarz'}</Badge>
               )}
-            </div>
-            <div style={{ marginTop: '4px' }}>
-              <strong>{isRu ? 'Метод распределения:' : 'Taqsimot usuli:'}</strong>{' '}
+            </dd>
+            <dt style={dt}>{isRu ? 'Распределение' : 'Taqsimot'}</dt>
+            <dd>
               {expense.allocationMethod === 'BY_AMOUNT'
-                ? isRu ? 'По стоимости' : 'Xarid qiymatiga mutanosib'
+                ? isRu ? 'По стоимости товара' : 'Tovar qiymatiga mutanosib'
                 : expense.allocationMethod === 'BY_QUANTITY'
                 ? isRu ? 'По количеству' : 'Miqdoriga mutanosib'
                 : isRu ? 'По весу' : 'Vazniga mutanosib'}
-            </div>
+            </dd>
             {expense.comment && (
-              <div style={{ marginTop: '4px', fontStyle: 'italic', color: 'var(--color-text-secondary)' }}>
-                {expense.comment}
-              </div>
+              <>
+                <dt style={dt}>{isRu ? 'Комментарий' : 'Izoh'}</dt>
+                <dd style={{ color: 'var(--color-text-secondary)' }}>{expense.comment}</dd>
+              </>
             )}
-          </div>
+          </dl>
         </Card>
       </div>
 
@@ -422,19 +386,19 @@ export default function ExpenseDetailPage() {
         </h2>
 
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
+          <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'left', color: 'var(--color-text-secondary)' }}>
+              <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
                 <th style={{ padding: '8px 12px', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Товар' : 'Tovar'}</th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Старая себестоимость' : 'Eski tannarx'}</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }}>
+                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>
                   {isRu ? 'Доп. расход' : 'Taqsimlangan xarajat'}
                 </th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }}>
+                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>
                   {isRu ? 'Новая себестоимость' : 'Yangi tannarx'}
                 </th>
                 <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Прирост' : 'Tannarx o‘sishi'}</th>
-                <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Склад / Продано' : 'Ombor / Sotilgan'}</th>
+                <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'На складе / продано' : 'Omborda / sotilgan'}</th>
               </tr>
             </thead>
             <tbody>
@@ -452,38 +416,38 @@ export default function ExpenseDetailPage() {
 
                 return (
                   <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td style={{ padding: '8px 12px', fontWeight: 'var(--font-medium)' }}>
+                    <td data-primary style={{ padding: '8px 12px', fontWeight: 'var(--font-medium)' }}>
                       {(item.product?.name ? getLocalizedName(item.product?.name, locale) : '—')}
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>{item.product?.sku}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)' }}>{item.product?.sku}</div>
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
+                    <td data-label={isRu ? 'Старая себестоимость' : 'Eski tannarx'} style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                       {unitCost(oldCost, receiptCurrency)}
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
+                    <td data-label={isRu ? 'Доп. расход' : 'Taqsimlangan xarajat'} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
                       {money(Number(item.allocatedAmount), expense.currency)}
                       {snapshot && receiptCurrency !== expense.currency && (
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)' }}>
                           = {money(Number(item.receiptAmount), receiptCurrency)}
                         </div>
                       )}
                       {perUnit != null && (
-                        <div style={{ fontSize: '11px', fontWeight: 'var(--font-medium)' }}>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)' }}>
                           +{unitCost(perUnit, receiptCurrency)} / {unit}
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-primary-600)' }} className="tabular-nums">
+                    <td data-label={isRu ? 'Новая себестоимость' : 'Yangi tannarx'} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }} className="tabular-nums">
                       {snapshot ? unitCost(Number(item.newLandedCost), receiptCurrency) : '—'}
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'var(--font-semibold)', color: 'var(--color-warning-700)' }} className="tabular-nums">
+                    <td data-label={isRu ? 'Прирост' : 'Tannarx o‘sishi'} style={{ padding: '8px 12px', textAlign: 'right' }} className="tabular-nums">
                       {percent != null ? `+${formatPercent(percent)}` : '—'}
                     </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                      <span style={{ color: 'var(--color-success-700)', fontWeight: 'var(--font-medium)' }}>
+                    <td data-label={isRu ? 'На складе / продано' : 'Omborda / sotilgan'} style={{ padding: '8px 12px', textAlign: 'right' }}>
+                      <span>
                         {quantityWithUnit(item.remainingQuantity, item.product?.unitOfMeasure, locale)} {isRu ? 'на складе' : 'omborda'}
                       </span>
                       {Number(item.soldQuantity) > 0 && (
-                        <span style={{ color: 'var(--color-warning-700)', marginLeft: '4px' }}>
+                        <span style={{ color: 'var(--color-text-secondary)', marginLeft: '4px' }}>
                           / {quantityWithUnit(item.soldQuantity, item.product?.unitOfMeasure, locale)} {isRu ? 'продано' : 'sotilgan'}
                         </span>
                       )}
@@ -501,11 +465,11 @@ export default function ExpenseDetailPage() {
         <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', borderColor: 'var(--color-warning-200)', backgroundColor: 'var(--color-warning-50)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <TrendingDown size={20} color="var(--color-warning-700)" />
-            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-900)' }}>
-              {isRu ? 'Ретроактивное влияние на себестоимость продаж (COGS Recalibration)' : 'O‘tgan sotuvlar tannarxiga (COGS) retroaktiv ta’siri'}
+            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-bold)', color: 'var(--color-warning-700)' }}>
+              {isRu ? 'Пересчитана себестоимость прошлых продаж' : 'O‘tgan sotuvlar tannarxi qayta hisoblandi'}
             </h2>
           </div>
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning-800)' }}>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
             {isRu
               ? 'Товары из этой закупки были частично проданы до внесения расхода. Себестоимость и валовая прибыль следующих счетов-фактур были автоматически пересчитаны:'
               : 'Ushbu xariddagi tovarlar xarajat kiritilishidan oldin sotilgan. Quyidagi sotuv hisob-fakturalarining tannarxi va yalpi foydasi avtomatik qayta hisoblandi:'}
@@ -514,22 +478,22 @@ export default function ExpenseDetailPage() {
           <div style={{ overflowX: 'auto', marginTop: '4px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-warning-200)', textAlign: 'left', color: 'var(--color-warning-900)' }}>
-                  <th style={{ padding: '6px 10px', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Счет-фактура' : 'Sotuv hujjati'}</th>
+                <tr style={{ borderBottom: '1px solid var(--color-warning-200)', textAlign: 'left', color: 'var(--color-warning-700)' }}>
+                  <th style={{ padding: '6px 10px', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Продажа' : 'Sotuv hujjati'}</th>
                   <th style={{ padding: '6px 10px', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Клиент' : 'Xaridor'}</th>
-                  <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Корректировка COGS' : 'Tannarx oshishi (COGS Delta)'}</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-semibold)' }}>{isRu ? 'Рост себестоимости' : 'Tannarx oshishi'}</th>
                 </tr>
               </thead>
               <tbody>
                 {expense.retroactiveSalesImpact.map((impact) => (
                   <tr key={impact.invoiceId} style={{ borderBottom: '1px solid var(--color-warning-200)' }}>
                     <td style={{ padding: '6px 10px', fontWeight: 'var(--font-medium)' }}>
-                      <a href={`/${locale}/sales/invoices/${impact.invoiceId}`} style={{ color: 'var(--color-primary-700)', textDecoration: 'none' }}>
+                      <Link href={`/sales/${impact.invoiceId}`} style={{ color: 'var(--color-primary-700)' }}>
                         {impact.invoiceNumber}
-                      </a>
+                      </Link>
                     </td>
                     <td style={{ padding: '6px 10px' }}>{impact.customerName || '—'}</td>
-                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-danger-700)' }} className="tabular-nums">
+                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 'var(--font-bold)', color: 'var(--color-error-700)' }} className="tabular-nums">
                       +{formatCurrency(Number(impact.totalDeltaCogs) || 0, locale, 'UZS')}
                     </td>
                   </tr>
@@ -540,32 +504,6 @@ export default function ExpenseDetailPage() {
         </Card>
       )}
 
-      {/* Safe Cancellation Modal */}
-      <Modal
-        isOpen={cancelModalOpen}
-        onClose={() => setCancelModalOpen(false)}
-        title={isRu ? 'Отмена проведения расхода' : 'Xarajatni bekor qilish (Unpost)'}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-            <AlertTriangle size={24} color="var(--color-danger-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? 'Вы действительно хотите отменить этот расход? Себестоимость складских остатков и ретроактивные корректировки счетов продаж будут возвращены в исходное состояние.'
-                : 'Ushbu xarajatni bekor qilmoqchimisiz? Ombordagi tovarlar tannarxi va o‘tgan sotuvlar bo‘yicha qilingan barcha hisob-kitoblar avvalgi holatiga qaytariladi.'}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-            <Button variant="outline" onClick={() => setCancelModalOpen(false)}>
-              {isRu ? 'Закрыть' : 'Bekor qilish'}
-            </Button>
-            <Button variant="danger" disabled={actionLoading} onClick={handleCancel}>
-              {isRu ? 'Подтвердить отмену' : 'Tasdiqlash va Qaytarish'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

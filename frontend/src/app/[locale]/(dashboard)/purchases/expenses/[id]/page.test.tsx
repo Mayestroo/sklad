@@ -124,7 +124,10 @@ describe('Additional expense detail page', () => {
     });
     renderPage(<ExpenseDetailPage />);
 
-    expect((await screen.findByRole('status')).textContent).toContain('Qayta hisoblash va saqlash');
+    // The draft warning (role=status) appears once the document has loaded.
+    await waitFor(() =>
+      expect(screen.getAllByRole('status').some((n) => n.textContent?.includes('Qayta hisoblash va saqlash'))).toBe(true),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Qayta hisoblash va saqlash' }));
 
     await waitFor(() =>

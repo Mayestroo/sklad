@@ -777,7 +777,7 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div role="region" tabIndex={0} aria-label={isRu ? 'Строки документа' : 'Hujjat qatorlari'} style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
