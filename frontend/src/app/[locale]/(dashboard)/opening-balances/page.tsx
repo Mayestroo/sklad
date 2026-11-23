@@ -1164,7 +1164,7 @@ export default function OpeningBalancesPage() {
             <Button variant="secondary" onClick={() => setShowUnpostModal(false)}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
-            <Button variant="primary" onClick={handleUnpost} disabled={actionLoading} style={{ backgroundColor: 'var(--color-error-600)', borderColor: 'var(--color-error-600)' }}>
+            <Button variant="danger" onClick={handleUnpost} disabled={actionLoading}>
               {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Переоткрыть' : 'Qayta ochish'}
             </Button>
           </div>
