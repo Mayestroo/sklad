@@ -1,18 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatDate, formatDateTime } from '@/lib/utils';
-import { usePersistentState } from '@/lib/usePersistentState';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { Button } from '@/components/ui/Button';
+import { matchesSearch } from '@/components/ui/SearchField';
 import { AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, labelOf, variantOf } from '@/lib/platform-labels';
 import { HardDrive, History } from 'lucide-react';
 import { BACKUPS_MANAGED_BY_NEON_MESSAGE, TenantCompanySummary } from '@shared/types';
@@ -29,6 +29,8 @@ interface AuditLogEntry {
   user?: { firstName: string; lastName: string; email: string };
 }
 
+const FILTER_DEFAULTS = { action: '', signIns: '' };
+
 export default function SuperAdminSecurityPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -41,10 +43,12 @@ export default function SuperAdminSecurityPage() {
     for (const t of tenantsQuery.data ?? []) map.set(t.id, typeof t.name === 'string' ? t.name : t.name?.[locale] || t.name?.uz || t.slug);
     return (id: string) => map.get(id) ?? '—';
   }, [tenantsQuery.data, locale]);
-  const [search, setSearch] = useState('');
-  const [action, setAction] = useState('ALL');
-  // Sign-ins are most of the log; by default show what was changed (same as the company security page).
-  const [changesOnly, setChangesOnly] = usePersistentState('admin.security.changesOnly', true);
+  // Filters live in the URL and are remembered per user. Sign-ins are most of the log; by default show
+  // what was changed (same as the company security page).
+  const lf = useFilterState('admin.audit', FILTER_DEFAULTS);
+  const search = lf.search;
+  const action = lf.values.action || 'ALL';
+  const changesOnly = lf.values.signIns !== '1';
   const tsec = useTranslations('rd.security');
   // Group by the local calendar day the time is shown in.
   const dayKey = (iso: string) => new Date(iso).toDateString();
@@ -57,6 +61,10 @@ export default function SuperAdminSecurityPage() {
       matchesSearch(search, userName(log), log.user?.email, companyName(log.tenantId), labelOf(AUDIT_ENTITY_LABELS, log.entityType, locale), log.ipAddress),
   );
   const th: React.CSSProperties = { padding: '12px 16px', fontWeight: 'var(--font-medium)' };
+  const filterDefs: FilterDef[] = [
+    { key: 'action', kind: 'select', label: isRu ? 'Действие' : 'Harakat', options: Object.keys(AUDIT_ACTION_LABELS).map((a) => ({ value: a, label: labelOf(AUDIT_ACTION_LABELS, a, locale), count: logs.filter((l) => l.action === a).length })) },
+    ...(action === 'ALL' ? [{ key: 'signIns', kind: 'toggle', label: tsec('withSignIns') } satisfies FilterDef] : []),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -82,21 +90,7 @@ export default function SuperAdminSecurityPage() {
             {isRu ? 'Последние 50 действий' : 'So‘nggi 50 ta harakat'}
           </h2>
           {logs.length > 0 && (
-            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Пользователь, компания, объект или IP' : 'Foydalanuvchi, korxona, obyekt yoki IP'} style={{ maxWidth: 380 }} />
-              <ChipGroup
-                label={isRu ? 'Действие' : 'Harakat'}
-                value={action === 'ALL' ? '' : action}
-                onChange={(v) => setAction(v || 'ALL')}
-                options={[{ value: '', label: isRu ? 'Все действия' : 'Barcha harakatlar' }, ...Object.keys(AUDIT_ACTION_LABELS).map((a) => ({ value: a, label: labelOf(AUDIT_ACTION_LABELS, a, locale), count: logs.filter((l) => l.action === a).length }))]}
-              />
-              {action === 'ALL' && (
-                <label className="auth-check">
-                  <input type="checkbox" checked={changesOnly} onChange={(e) => setChangesOnly(e.target.checked)} />
-                  {tsec('changesOnly')}
-                </label>
-              )}
-            </div>
+            <FilterBar state={lf} defs={filterDefs} searchPlaceholder={isRu ? 'Пользователь, компания, объект или IP' : 'Foydalanuvchi, korxona, obyekt yoki IP'} resultCount={rows.length} />
           )}
         </div>
 
@@ -107,7 +101,7 @@ export default function SuperAdminSecurityPage() {
         ) : logs.length === 0 ? (
           <EmptyState compact icon={History} title={isRu ? 'Действий пока нет' : 'Hozircha harakatlar yo‘q'} />
         ) : rows.length === 0 ? (
-          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или действие.' : 'Qidiruv yoki harakatni o‘zgartiring.'} />
+          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или действие.' : 'Qidiruv yoki harakatni o‘zgartiring.'} action={<Button variant="secondary" onClick={lf.reset}>{isRu ? 'Сбросить фильтры' : 'Filtrlarni tozalash'}</Button>} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
