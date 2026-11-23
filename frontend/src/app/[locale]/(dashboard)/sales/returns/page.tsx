@@ -11,7 +11,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { totalsByCurrency } from '@/lib/currency-totals';
-import { ALL_TIME, ChipGroup, ColumnChooser, CurrencyTotals, PeriodFilter, resolvePeriod, Signal, SignalStrip, type PeriodValue } from '@/components/ui/list/ListKit';
+import { CurrencyTotals } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, periodRange, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
@@ -107,6 +109,8 @@ interface ReturnableItemRow {
   isDefective: boolean;
 }
 
+const FILTER_DEFAULTS = { status: '', period: '' };
+
 export default function SalesReturnsPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
@@ -122,9 +126,10 @@ export default function SalesReturnsPage() {
   const invoicesQuery = useApiQuery<InvoiceItem[]>('/sales/invoices?status=POSTED');
   const invoices = useMemo(() => invoicesQuery.data ?? [], [invoicesQuery.data]);
 
-  // Search and filter
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  // Filters live in the URL and are remembered per user; the list is filtered here.
+  const lf = useFilterState('sreturns.list', FILTER_DEFAULTS);
+  const searchQuery = lf.search.trim();
+  const statusFilter = lf.values.status;
 
   // Create Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -427,7 +432,7 @@ export default function SalesReturnsPage() {
         ret.reason?.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchStatus =
-        statusFilter === 'ALL' || ret.status === statusFilter;
+        !statusFilter || ret.status === statusFilter;
 
       return matchSearch && matchStatus;
     });
@@ -461,11 +466,10 @@ export default function SalesReturnsPage() {
   const tl = useTranslations('rd.list');
   const td = useTranslations('rd.doc');
   const tr = useTranslations('rd.sreturns');
-  const [period, setPeriod] = usePersistentState<PeriodValue>('sreturns.period', ALL_TIME);
   const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('sreturns.hidden', []);
   const [sort, setSort] = usePersistentState<SortState | null>('sreturns.sort', null);
   const [quickSearch, setQuickSearch] = useState('');
-  const range = resolvePeriod(period);
+  const range = periodRange(lf.values.period);
   const shownReturns = filteredReturns.filter((r) => {
     const d = (r.returnDate || '').slice(0, 10);
     return (!range.from || d >= range.from) && (!range.to || d <= range.to);
@@ -561,12 +565,12 @@ export default function SalesReturnsPage() {
     { value: 'POSTED', label: tIn('tasdiqlangan') },
     { value: 'CANCELLED', label: tIn('bekor_qilingan') },
   ];
-  const anyFilter = Boolean(searchQuery || statusFilter !== 'ALL' || period.key !== 'all');
-  const clearAll = () => {
-    setSearchQuery('');
-    setStatusFilter('ALL');
-    setPeriod(ALL_TIME);
-  };
+  const filterDefs: FilterDef[] = [
+    { key: 'status', kind: 'segmented', label: tl('status'), options: statusChips },
+    { key: 'period', kind: 'period', label: tl('period') },
+  ];
+  const anyFilter = Boolean(searchQuery || lf.activeCount > 0);
+  const clearAll = lf.reset;
 
   return (
     <div className="rd-page">
@@ -616,24 +620,19 @@ export default function SalesReturnsPage() {
         )}
       </section>
 
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="warning" label={tr('sigDrafts')} value={draftCount} hint={tr('sigDraftsHint')} active={statusFilter === 'DRAFT'} onClick={() => setStatusFilter(statusFilter === 'DRAFT' ? 'ALL' : 'DRAFT')} />
-        <Signal tone="info" label={tr('sigMonth')} value={<CurrencyTotals totals={totalsByCurrency(monthPosted, (r) => r.currency, (r) => Number(r.totalAmount))} locale={locale} />} hint={tr('sigMonthHint')} />
-        <Signal tone="neutral" label={tr('sigAll')} value={returns.length} />
-      </SignalStrip>
+      <StatCardGrid label={tl('summary')} count={3}>
+        <StatCard label={tr('sigDrafts')} value={draftCount} secondary={tr('sigDraftsHint')} />
+        <StatCard label={tr('sigMonth')} value={<CurrencyTotals totals={totalsByCurrency(monthPosted, (r) => r.currency, (r) => Number(r.totalAmount))} locale={locale} />} secondary={tr('sigMonthHint')} />
+        <StatCard label={tr('sigAll')} value={returns.length} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={searchQuery} onChange={setSearchQuery} placeholder={tr('searchPh')} label={tl('search')} />
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={tl('status')} showLabel options={[{ value: '', label: tl('all') }, ...statusChips]} value={statusFilter === 'ALL' ? '' : statusFilter} onChange={(v) => setStatusFilter(v || 'ALL')} />
-        </div>
-        <div className="rd-toolbar-row">
-          <PeriodFilter value={period} onChange={setPeriod} locale={locale} />
-        </div>
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={tr('searchPh')}
+        resultCount={shownReturns.length}
+        columns={<ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {returnsQuery.isError ? (
