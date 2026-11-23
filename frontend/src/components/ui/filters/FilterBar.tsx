@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { SlidersHorizontal } from 'lucide-react';
 import { SearchField } from '@/components/ui/SearchField';
@@ -26,6 +26,10 @@ export interface FilterBarProps<F extends FilterValues> {
   label?: string;
 }
 
+/** Search keeps at least this width on the filters' row; below it the filters move to their own line. */
+const SEARCH_MIN = 240;
+const PHONE_MAX = 640;
+
 const isTyping = (el: EventTarget | null) => {
   const node = el as HTMLElement | null;
   return Boolean(node && (node.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(node.tagName)));
@@ -42,6 +46,8 @@ export function FilterBar<F extends FilterValues>({ state, defs, searchPlacehold
   const periodLabel = usePeriodLabel();
   const searchRef = useRef<HTMLInputElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [stacked, setStacked] = useState(false);
   const closeSheet = useCallback(() => setSheetOpen(false), []);
   const { values, defaults, set } = state;
 
@@ -57,6 +63,28 @@ export function FilterBar<F extends FilterValues>({ state, defs, searchPlacehold
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [searchPlaceholder]);
+
+  // One row when search (at least SEARCH_MIN), every filter and Columns fit; otherwise search + Columns on
+  // the first line and all filters together on the second. Filter widths are their natural widths, so the
+  // choice does not change them and cannot flip back and forth.
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    const controls = row?.querySelector<HTMLElement>('.fb-controls');
+    if (!row || !controls || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      if (window.innerWidth <= PHONE_MAX) return setStacked(false);
+      const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+      const kids = Array.from(controls.children) as HTMLElement[];
+      const filtersWidth = kids.reduce((w, k) => w + k.getBoundingClientRect().width, 0) + gap * Math.max(0, kids.length - 1);
+      const cols = row.querySelector<HTMLElement>('.fb-columns');
+      const need = (searchPlaceholder ? SEARCH_MIN + gap : 0) + filtersWidth + (cols ? cols.getBoundingClientRect().width + gap : 0);
+      setStacked(need > row.clientWidth + 0.5);
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    for (const k of Array.from(controls.children)) ro.observe(k);
+    return () => ro.disconnect();
+  }, [searchPlaceholder, defs.length]);
 
   const optionsOf = (d: FilterDef): FilterOption[] => {
     if (d.kind !== 'segmented' && d.kind !== 'select') return [];
@@ -76,8 +104,8 @@ export function FilterBar<F extends FilterValues>({ state, defs, searchPlacehold
   const filterDefs = defs;
 
   return (
-    <div className="fb" role="search" aria-label={label ?? t('filters')}>
-      <div className="fb-row">
+    <div className="fb" role="search" aria-label={label ?? t('filters')} data-stacked={stacked || undefined}>
+      <div className="fb-row" ref={rowRef}>
         {searchPlaceholder && (
           <SearchField inputRef={searchRef} value={state.search} onChange={state.setSearch} placeholder={searchPlaceholder} label={t('search')} shortcut="/" className="fb-search" />
         )}

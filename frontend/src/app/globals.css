@@ -1437,17 +1437,17 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .fb-search { flex: 1 1 220px !important; max-width: 340px; }
 .fb-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
 .fb-columns { margin-left: auto; }
-/* Tablet / narrow desktop: search on its own line, then all controls flow together with Columns ending the last line. */
-@media (min-width: 641px) and (max-width: 1399px) {
-  .fb-search { flex: 1 1 100% !important; max-width: none; }
-  .fb-controls { display: contents; }
-}
-/* Wide desktop: one row. Search gives way first (down to 180px); only if the controls still don't fit do they wrap inside their own group. */
-@media (min-width: 1400px) {
+/* Above phones: one row when everything fits (FilterBar measures it); otherwise data-stacked puts search
+   and Columns on the first line and all filters together on the second. */
+@media (min-width: 641px) {
   .fb-row { flex-wrap: nowrap; align-items: flex-start; }
-  .fb-search { flex: 1 1 200px !important; min-width: 180px !important; }
+  .fb-search { flex: 1 1 240px !important; min-width: 240px !important; }
   .fb-controls { flex: 0 1 auto; }
   .fb-columns { flex: none; }
+  .fb[data-stacked] .fb-row { flex-wrap: wrap; }
+  .fb[data-stacked] .fb-search { max-width: none; }
+  .fb[data-stacked] .fb-columns { order: 1; }
+  .fb[data-stacked] .fb-controls { order: 2; flex: 1 1 100%; }
 }
 .fb-btn {
   display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; max-width: 280px;
