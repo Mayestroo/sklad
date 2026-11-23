@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { StatCard } from '@/components/ui/stats/StatCard';
 import { useLocale } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
@@ -264,39 +265,36 @@ export function AktSverkaDrawer({
                         </div>
                       </div>
 
-                      {/* Sales Turnover Card */}
-                      <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-surface)' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                          {isRu ? 'Всего отгружено (Продажи)' : "Jami sotilgan mahsulotlar"}
-                        </div>
-                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
-                          {data.summary.salesInvoicedByCurrency.length > 0
-                            ? data.summary.salesInvoicedByCurrency.map((item) => (
-                                <div key={item.currency}>{formatCurrency(item.amount, locale, item.currency)}</div>
-                              ))
-                            : '—'}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
-                          {data.transactions.filter((t) => t.type === 'SALES_INVOICE').length} {isRu ? 'счетов-фактур' : 'ta invoys'}
-                        </div>
-                      </div>
-
-                      {/* Purchase Turnover Card */}
-                      <div style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-surface)' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-                          {isRu ? 'Всего получено (Закупки)' : "Jami qabul qilingan tovarlar"}
-                        </div>
-                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 6, color: 'var(--color-text-primary)' }}>
-                          {data.summary.purchasesInvoicedByCurrency.length > 0
-                            ? data.summary.purchasesInvoicedByCurrency.map((item) => (
-                                <div key={item.currency}>{formatCurrency(item.amount, locale, item.currency)}</div>
-                              ))
-                            : '—'}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 4 }}>
-                          {data.transactions.filter((t) => t.type === 'PURCHASE_RECEIPT').length} {isRu ? 'приходных документов' : 'ta kirim hujjati'}
-                        </div>
-                      </div>
+                      <StatCard
+                        label={isRu ? 'Всего отгружено (Продажи)' : 'Jami sotilgan mahsulotlar'}
+                        value={
+                          data.summary.salesInvoicedByCurrency.length > 0 ? (
+                            <span className="mcv">
+                              {data.summary.salesInvoicedByCurrency.map((item) => (
+                                <span key={item.currency} className="mcv-line">
+                                  {formatCurrency(item.amount, locale, item.currency)}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null
+                        }
+                        secondary={`${data.transactions.filter((t) => t.type === 'SALES_INVOICE').length} ${isRu ? 'счетов-фактур' : 'ta invoys'}`}
+                      />
+                      <StatCard
+                        label={isRu ? 'Всего получено (Закупки)' : 'Jami qabul qilingan tovarlar'}
+                        value={
+                          data.summary.purchasesInvoicedByCurrency.length > 0 ? (
+                            <span className="mcv">
+                              {data.summary.purchasesInvoicedByCurrency.map((item) => (
+                                <span key={item.currency} className="mcv-line">
+                                  {formatCurrency(item.amount, locale, item.currency)}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null
+                        }
+                        secondary={`${data.transactions.filter((t) => t.type === 'PURCHASE_RECEIPT').length} ${isRu ? 'приходных документов' : 'ta kirim hujjati'}`}
+                      />
                     </div>
                   </>
                 );
