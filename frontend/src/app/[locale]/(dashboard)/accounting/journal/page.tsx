@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { usePersistentState } from '@/lib/usePersistentState';
-import { ALL_TIME, ChipGroup, PeriodFilter, resolvePeriod, type PeriodValue } from '@/components/ui/list/ListKit';
+import { useMemo } from 'react';
+import { FilterBar, periodRange, useFilterState, type FilterDef } from '@/components/ui/filters';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
@@ -10,10 +9,10 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, LEDGER_CURRENCY } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { Button } from '@/components/ui/Button';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { matchesSearch } from '@/components/ui/SearchField';
 import { FileText } from 'lucide-react';
 import { JournalEntry } from '@shared/types';
 
@@ -39,17 +38,20 @@ const SOURCE_LABELS: Record<string, { uz: string; ru: string; href?: (id: string
   OpeningBalanceLine: { uz: 'Boshlang‘ich qoldiq', ru: 'Начальный остаток' },
 };
 
+const FILTER_DEFAULTS = { source: '', period: '' };
+
 export default function JournalPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
 
   const journalQuery = useApiQuery<JournalEntry[]>('/accounting/journal');
   const entries = useMemo(() => journalQuery.data ?? [], [journalQuery.data]);
-  // A link from the trial balance opens the journal on one account (?q=2910).
-  const [search, setSearch] = useState(() => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') ?? '' : ''));
-  const [period, setPeriod] = usePersistentState<PeriodValue>('journal.period', ALL_TIME);
-  const [sourceFilter, setSourceFilter] = useState('');
-  const { from, to } = resolvePeriod(period);
+  // Filters live in the URL and are remembered per user; a link from the trial balance opens the
+  // journal on one account (?q=2910).
+  const lf = useFilterState('journal.list', FILTER_DEFAULTS);
+  const search = lf.search;
+  const sourceFilter = lf.values.source;
+  const { from, to } = periodRange(lf.values.period);
   const tj = useTranslations('rd.journal');
   const tl = useTranslations('rd.list');
 
@@ -71,7 +73,6 @@ export default function JournalPage() {
     [entries, search, from, to, locale, sourceFilter],
   );
 
-  const filtered = Boolean(search || from || to || sourceFilter);
   const sourceTypes = [...new Set(entries.map((e) => e.sourceDocType).filter((x): x is NonNullable<typeof x> => Boolean(x)))];
   // Day book: entries grouped by date, each day with its count and turnover.
   const days: Array<{ day: string; items: typeof rows; total: number }> = [];
@@ -102,32 +103,24 @@ export default function JournalPage() {
 
       <Card>
         {entries.length > 0 && (
-          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 'var(--space-4)' }}>
-            <SearchField
-              value={search}
-              onChange={setSearch}
-              placeholder={isRu ? '№ проводки, описание или счёт' : 'Provodka №, izoh yoki hisob'}
-              style={{ maxWidth: 380 }}
-            />
-            <PeriodFilter value={period} onChange={setPeriod} locale={locale} />
-            {filtered && (
-              <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setPeriod(ALL_TIME); setSourceFilter(''); }}>
-                {isRu ? 'Сбросить' : 'Tozalash'}
-              </Button>
-            )}
-            <span aria-live="polite" style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-              {isRu ? `Проводок: ${rows.length}` : `Provodkalar: ${rows.length}`}
-            </span>
-          </div>
-        )}
-        {sourceTypes.length > 1 && (
           <div style={{ marginBottom: 'var(--space-4)' }}>
-            <ChipGroup
-              label={tj('source')}
-              showLabel
-              options={[{ value: '', label: tl('all') }, ...sourceTypes.map((st) => ({ value: st, label: SOURCE_LABELS[st] ? (isRu ? SOURCE_LABELS[st].ru : SOURCE_LABELS[st].uz) : st, count: entries.filter((e) => e.sourceDocType === st).length }))]}
-              value={sourceFilter}
-              onChange={setSourceFilter}
+            <FilterBar
+              state={lf}
+              defs={[
+                ...(sourceTypes.length > 1
+                  ? [
+                      {
+                        key: 'source',
+                        kind: 'select',
+                        label: tj('source'),
+                        options: sourceTypes.map((st) => ({ value: st, label: SOURCE_LABELS[st] ? (isRu ? SOURCE_LABELS[st].ru : SOURCE_LABELS[st].uz) : st, count: entries.filter((e) => e.sourceDocType === st).length })),
+                      } satisfies FilterDef,
+                    ]
+                  : []),
+                { key: 'period', kind: 'period', label: tl('period') },
+              ]}
+              searchPlaceholder={isRu ? '№ проводки, описание или счёт' : 'Provodka №, izoh yoki hisob'}
+              resultCount={rows.length}
             />
           </div>
         )}
@@ -148,7 +141,7 @@ export default function JournalPage() {
             }
           />
         ) : rows.length === 0 ? (
-          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или период.' : 'Qidiruv yoki davrni o‘zgartiring.'} />
+          <EmptyState compact title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'} description={isRu ? 'Измените поиск или период.' : 'Qidiruv yoki davrni o‘zgartiring.'} action={<Button variant="secondary" onClick={lf.reset}>{tl('clearFilters')}</Button>} />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
