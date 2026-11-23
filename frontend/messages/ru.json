@@ -1010,7 +1010,8 @@
     },
     "security": {
       "changesOnly": "Только изменения (без входов и выходов)",
-      "dayLine": "{count, plural, one {# действие} few {# действия} other {# действий}}{deleted, plural, =0 {} one {, из них # удаление} few {, из них # удаления} other {, из них # удалений}}"
+      "dayLine": "{count, plural, one {# действие} few {# действия} other {# действий}}{deleted, plural, =0 {} one {, из них # удаление} few {, из них # удаления} other {, из них # удалений}}",
+      "withSignIns": "Со входами и выходами"
     },
     "billing": {
       "daysLeft": "{count, plural, one {Остался # день} few {Осталось # дня} other {Осталось # дней}}",

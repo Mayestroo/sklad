@@ -1010,7 +1010,8 @@
     },
     "security": {
       "changesOnly": "Faqat o‘zgarishlar (kirish-chiqishlarsiz)",
-      "dayLine": "{count, plural, other {# ta harakat}}{deleted, plural, =0 {} other {, shundan # ta o‘chirish}}"
+      "dayLine": "{count, plural, other {# ta harakat}}{deleted, plural, =0 {} other {, shundan # ta o‘chirish}}",
+      "withSignIns": "Kirish-chiqishlar ham"
     },
     "billing": {
       "daysLeft": "Tugashiga {count} kun qoldi",

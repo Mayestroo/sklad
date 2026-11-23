@@ -5,15 +5,14 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatDate, formatDateTime } from '@/lib/utils';
-import { usePersistentState } from '@/lib/usePersistentState';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { matchesSearch } from '@/components/ui/SearchField';
 import { Database, History } from 'lucide-react';
 import { BACKUPS_MANAGED_BY_NEON_MESSAGE } from '@shared/types';
 import { AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS } from '@/lib/platform-labels';
@@ -35,16 +34,20 @@ const ENTITIES = AUDIT_ENTITY_LABELS;
 
 const PAGE = 50;
 
+const FILTER_DEFAULTS = { action: '', signIns: '' };
+
 export default function SecurityPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const [limit, setLimit] = useState(PAGE);
   const auditQuery = useApiQuery<AuditLogRow[]>(`/audit-logs?limit=${limit}`, { keepPrevious: true });
   const auditLogs = useMemo(() => auditQuery.data ?? [], [auditQuery.data]);
-  const [search, setSearch] = useState('');
-  const [action, setAction] = useState('');
+  // Filters live in the URL and are remembered per user.
+  const lf = useFilterState('security.audit', FILTER_DEFAULTS);
+  const search = lf.search;
+  const action = lf.values.action;
   // Sign-ins are most of the log; by default the list shows what was changed.
-  const [changesOnly, setChangesOnly] = usePersistentState('security.changesOnly', true);
+  const changesOnly = lf.values.signIns !== '1';
   const tsec = useTranslations('rd.security');
   // Group by the local calendar day the time is shown in (not the UTC date).
   const dayKey = (iso: string) => new Date(iso).toDateString();
@@ -63,6 +66,12 @@ export default function SecurityPage() {
   );
 
   const th = { padding: '12px', fontWeight: 'var(--font-medium)' } as const;
+
+  const filterDefs: FilterDef[] = [
+    { key: 'action', kind: 'select', label: isRu ? 'Действие' : 'Harakat', options: Object.keys(ACTIONS).map((a) => ({ value: a, label: actionLabel(a), count: auditLogs.filter((l) => l.action === a).length })) },
+    // Sign-ins are most of the log; by default the list shows what was changed.
+    ...(action ? [] : [{ key: 'signIns', kind: 'toggle', label: tsec('withSignIns') } satisfies FilterDef]),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -88,20 +97,8 @@ export default function SecurityPage() {
         </div>
 
         {auditLogs.length > 0 && (
-          <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 'var(--space-4)' }}>
-            <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Пользователь, объект или IP' : 'Foydalanuvchi, obyekt yoki IP'} style={{ maxWidth: 340 }} />
-            <ChipGroup
-              label={isRu ? 'Действие' : 'Harakat'}
-              options={[{ value: '', label: isRu ? 'Все действия' : 'Barcha harakatlar' }, ...Object.keys(ACTIONS).map((a) => ({ value: a, label: actionLabel(a), count: auditLogs.filter((l) => l.action === a).length }))]}
-              value={action}
-              onChange={setAction}
-            />
-            {!action && (
-              <label className="auth-check">
-                <input type="checkbox" checked={changesOnly} onChange={(e) => setChangesOnly(e.target.checked)} />
-                {tsec('changesOnly')}
-              </label>
-            )}
+          <div style={{ marginBottom: 'var(--space-4)' }}>
+            <FilterBar state={lf} defs={filterDefs} searchPlaceholder={isRu ? 'Пользователь, объект или IP' : 'Foydalanuvchi, obyekt yoki IP'} resultCount={rows.length} />
           </div>
         )}
 
