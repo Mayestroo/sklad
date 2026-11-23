@@ -42,6 +42,9 @@ const calls = () => apiFetch.mock.calls.map((c) => c[0] as string);
 
 describe('Inventory page', () => {
   beforeEach(() => {
+    // Filters live in the URL and localStorage: each test starts from a clean view.
+    window.history.replaceState(null, '', '/');
+    window.localStorage.clear();
     apiFetch.mockReset();
     window.localStorage.clear();
   });

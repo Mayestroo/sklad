@@ -4,13 +4,12 @@ import { productTypeLabel, productTypeOptions } from '@/lib/product-types';
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonStyle } from '@/components/ui/Button';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { usePersistentState } from '@/lib/usePersistentState';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
-import { ChipGroup, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -20,7 +19,6 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatPriceOrUnset, formatQuantity, errorMessage, type LocalizedName } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Select';
 import {
   Package,
   QrCode,
@@ -32,6 +30,8 @@ import type { Warehouse as WarehouseRow } from '@shared/types';
 import { unitLabel } from '@/lib/units';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 
+const FILTER_DEFAULTS = { stock: '', warehouseId: '', type: '', categoryId: '' };
+
 export default function InventoryPage() {
   const t = useTranslations('inventory');
   const locale = useLocale() as 'uz' | 'ru';
@@ -40,13 +40,12 @@ export default function InventoryPage() {
   // muammolar B10: the nomenclature list can open a product for editing.
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const [search, setSearch] = useState('');
-  // The typed search applies on Enter / the filter button, as before.
-  const appliedSearch = useDebouncedValue(search.trim(), 350);
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  // TZ "Ishlab chiqarish" 7: finished products are filtered apart from raw materials.
-  const [selectedType, setSelectedType] = useState<string>('');
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
+  // Filters live in the URL and are remembered per user. Search and category go to the API; the rest
+  // filter the loaded rows. TZ "Ishlab chiqarish" 7: finished products are filtered apart from raw materials.
+  const lf = useFilterState('inventory.list', FILTER_DEFAULTS);
+  const appliedSearch = lf.debouncedSearch;
+  const { categoryId: selectedCategory, type: selectedType, warehouseId: selectedWarehouse } = lf.values;
+  const stockFocus = lf.values.stock;
   const filterLowStockOnly = false;
 
   // Barcode scanner modal state
@@ -108,19 +107,8 @@ export default function InventoryPage() {
     return name[locale] || name.ru || name.uz || '';
   };
 
-  const warehouseOptions = [
-    { value: '', label: isRu ? 'Все склады' : 'Barcha Omborlar' },
-    ...safeWarehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) })),
-  ];
-
-  const categoryOptions = [
-    { value: '', label: isRu ? 'Все категории' : 'Barcha kategoriyalar' },
-    ...safeCategories.map((c) => ({ value: c.id, label: getLocalizedName(c.name) })),
-  ];
-
   const tl = useTranslations('rd.list');
   const ti = useTranslations('rd.inv');
-  const [stockFocus, setStockFocus] = useState<'' | 'low' | 'zero' | 'instock'>('');
   const [limit, setLimit] = useState(100);
   const [sort, setSort] = usePersistentState<SortState | null>('inventory.sort', null);
   const goods = filteredProducts.filter((p) => p.type !== 'SERVICE');
@@ -201,6 +189,22 @@ export default function InventoryPage() {
     },
   ];
 
+  const filterDefs: FilterDef[] = [
+    {
+      key: 'stock',
+      kind: 'segmented',
+      label: ti('stockFilter'),
+      options: [
+        { value: 'instock', label: ti('inStock') },
+        { value: 'low', label: ti('lowBadge') },
+        { value: 'zero', label: ti('out') },
+      ],
+    },
+    { key: 'warehouseId', kind: 'select', label: tl('warehouse'), options: safeWarehouses.map((w) => ({ value: w.id, label: getLocalizedName(w.name) })) },
+    { key: 'type', kind: 'select', label: tIn('turi'), options: productTypeOptions(locale).filter((o) => o.value !== 'SERVICE') },
+    { key: 'categoryId', kind: 'select', label: isRu ? 'Категория' : 'Kategoriya', searchable: true, options: safeCategories.map((cat) => ({ value: cat.id, label: getLocalizedName(cat.name) })) },
+  ];
+
   return (
     <div className="rd-page">
       <PageHeader
@@ -221,39 +225,14 @@ export default function InventoryPage() {
         }
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="error" label={ti('sigLow')} value={lowStockAlerts.length} hint={ti('sigLowHint')} active={stockFocus === 'low'} onClick={() => setStockFocus(stockFocus === 'low' ? '' : 'low')} />
-        <Signal tone="warning" label={ti('sigZero')} value={zeroCount} hint={ti('sigZeroHint')} active={stockFocus === 'zero'} onClick={() => setStockFocus(stockFocus === 'zero' ? '' : 'zero')} />
-        <Signal tone="info" label={ti('sigItems')} value={goods.length} hint={ti('sigItemsHint')} />
-        <Signal tone="neutral" label={ti('sigWarehouses')} value={safeWarehouses.length} hint={<Link href="/settings/branches">{tIn('filial_va_omborlar')}</Link>} />
-      </SignalStrip>
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard label={ti('sigLow')} value={lowStockAlerts.length} secondary={ti('sigLowHint')} />
+        <StatCard label={ti('sigZero')} value={zeroCount} secondary={ti('sigZeroHint')} />
+        <StatCard label={ti('sigItems')} value={goods.length} secondary={ti('sigItemsHint')} />
+        <StatCard label={ti('sigWarehouses')} value={safeWarehouses.length} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={ti('searchPh')} label={tl('search')} />
-          <div style={{ minWidth: 200 }}>
-            <Select options={categoryOptions} value={selectedCategory} onChange={setSelectedCategory} searchable />
-          </div>
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={tl('warehouse')} showLabel options={warehouseOptions} value={selectedWarehouse} onChange={setSelectedWarehouse} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup
-            label={ti('stockFilter')}
-            showLabel
-            options={[
-              { value: '', label: tl('all') },
-              { value: 'instock', label: ti('inStock') },
-              { value: 'low', label: ti('lowBadge') },
-              { value: 'zero', label: ti('out') },
-            ]}
-            value={stockFocus}
-            onChange={(v) => setStockFocus(v as typeof stockFocus)}
-          />
-          <ChipGroup label={tIn('turi')} showLabel options={productTypeOptions(locale, tl('all')).filter((o) => o.value !== 'SERVICE')} value={selectedType} onChange={setSelectedType} />
-        </div>
-      </div>
+      <FilterBar state={lf} defs={filterDefs} searchPlaceholder={ti('searchPh')} resultCount={shownRows.length} />
 
       <div className="rd-table-card">
         {failedQuery ? (
