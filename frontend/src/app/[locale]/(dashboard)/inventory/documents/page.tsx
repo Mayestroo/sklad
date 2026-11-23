@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { usePersistentState } from '@/lib/usePersistentState';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, SegmentedFilter, useFilterState } from '@/components/ui/filters';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import {
   FileText,
@@ -31,6 +31,8 @@ import { InventoryDocument, Product, Warehouse } from '@shared/types';
 
 /** Inventory documents have no currency: their prices are FIFO batch cost, kept in UZS. */
 const INVENTORY_COST_CURRENCY = 'UZS';
+
+const FILTER_DEFAULTS = { type: '' };
 
 export default function InventoryDocumentsPage() {
   const tCommon = useTranslations('common');
@@ -168,7 +170,9 @@ export default function InventoryDocumentsPage() {
   }));
 
   const tl = useTranslations('rd.list');
-  const [typeFilter, setTypeFilter] = useState('');
+  // The type filter lives in the URL and is remembered per user.
+  const lf = useFilterState('invdocs.list', FILTER_DEFAULTS);
+  const typeFilter = lf.values.type;
   const [sort, setSort] = usePersistentState<SortState | null>('invdocs.sort', null);
   const startDocument = (type: 'INBOUND' | 'OUTBOUND' | 'STOCKTAKING') => {
     setDocType(type);
@@ -178,9 +182,9 @@ export default function InventoryDocumentsPage() {
   const shownDocs = typeFilter ? documents.filter((d) => d.docType === typeFilter) : documents;
   const countOf = (type: string) => documents.filter((d) => d.docType === type).length;
   const tasks = [
-    { type: 'INBOUND' as const, Icon: PackagePlus, tone: 'success', title: tdoc('inTitle'), hint: tdoc('inHint') },
-    { type: 'OUTBOUND' as const, Icon: PackageMinus, tone: 'error', title: tdoc('outTitle'), hint: tdoc('outHint') },
-    { type: 'STOCKTAKING' as const, Icon: ClipboardCheck, tone: 'warning', title: tdoc('countTitle'), hint: tdoc('countHint') },
+    { type: 'INBOUND' as const, Icon: PackagePlus, title: tdoc('inTitle'), hint: tdoc('inHint') },
+    { type: 'OUTBOUND' as const, Icon: PackageMinus, title: tdoc('outTitle'), hint: tdoc('outHint') },
+    { type: 'STOCKTAKING' as const, Icon: ClipboardCheck, title: tdoc('countTitle'), hint: tdoc('countHint') },
   ];
 
   const columns: Column<InventoryDocument>[] = [
@@ -231,35 +235,35 @@ export default function InventoryDocumentsPage() {
       {/* Start from the task, not from a "document type" field */}
       <section aria-labelledby="invdocs-start">
         <h2 id="invdocs-start" className="dash-section-title">{tdoc('startTitle')}</h2>
-        <div className="rd-signals">
-          {tasks.map(({ type, Icon, tone, title, hint }) => (
-            <button key={type} type="button" className={`rd-signal rd-tone-${tone}`} onClick={() => startDocument(type)}>
-              <span className="rd-signal-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <div className="task-tiles">
+          {tasks.map(({ type, Icon, title, hint }) => (
+            <button key={type} type="button" className="task-tile" onClick={() => startDocument(type)}>
+              <span className="task-tile-title">
                 <Icon size={16} aria-hidden /> {title}
               </span>
-              <span className="rd-signal-hint" style={{ color: 'var(--color-text-secondary)' }}>{hint}</span>
-              <span className="rd-signal-hint">{tdoc('docsSoFar', { count: countOf(type) })}</span>
+              <span className="task-tile-hint">{hint}</span>
+              <span className="task-tile-meta">{tdoc('docsSoFar', { count: countOf(type) })}</span>
             </button>
           ))}
         </div>
       </section>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <ChipGroup
-            label={isRu ? 'Тип' : 'Turi'}
-            showLabel
-            options={[
-              { value: '', label: tl('all') },
+      <FilterBar
+        state={lf}
+        defs={[
+          {
+            key: 'type',
+            kind: 'segmented',
+            label: isRu ? 'Тип' : 'Turi',
+            options: [
               { value: 'INBOUND', label: tdoc('inTitle'), count: countOf('INBOUND') },
               { value: 'OUTBOUND', label: tdoc('outTitle'), count: countOf('OUTBOUND') },
               { value: 'STOCKTAKING', label: tdoc('countTitle'), count: countOf('STOCKTAKING') },
-            ]}
-            value={typeFilter}
-            onChange={setTypeFilter}
-          />
-        </div>
-      </div>
+            ],
+          },
+        ]}
+        resultCount={shownDocs.length}
+      />
 
       <div className="rd-table-card">
         {failedQuery ? (
@@ -302,11 +306,11 @@ export default function InventoryDocumentsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-3)' }}>
                 <div>
                   <span className="rd-field-label">{tIn('hujjat_turi')}</span>
-                  <ChipGroup
+                  <SegmentedFilter
                     label={tIn('hujjat_turi')}
                     options={tasks.map((t) => ({ value: t.type, label: t.title }))}
                     value={docType}
-                    onChange={(v) => v && setDocType(v as typeof docType)}
+                    onChange={(v: string) => v && setDocType(v as typeof docType)}
                   />
                 </div>
 
