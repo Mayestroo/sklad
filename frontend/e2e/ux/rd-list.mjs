@@ -37,7 +37,7 @@ if ((await rows()) > 0) {
   await page.locator('table.rd-table tbody tr').first().locator('td').first().click();
   await page.waitForTimeout(500);
   const dlg = page.locator('[role="dialog"]');
-  console.log('drawer open: ' + (await dlg.count()) + ' title=' + JSON.stringify(await page.locator('#drawer-title').innerText().catch(() => '')));
+  console.log('drawer open: ' + (await dlg.count()) + ' title=' + JSON.stringify(await page.locator('[role="dialog"] h2').first().innerText().catch(() => '')));
   await page.screenshot({ path: path.join(outDir, `${name}-drawer-${locale}-${width}.jpg`), type: 'jpeg', quality: 60 });
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
