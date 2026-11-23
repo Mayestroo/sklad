@@ -1,15 +1,23 @@
 'use client';
 
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode, Ref } from 'react';
 import { Loader2 } from 'lucide-react';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  /**
+   * primary: the one main action of a surface · secondary/outline: any other action ·
+   * ghost: quiet (toolbars, rows) · danger: confirms something destructive ·
+   * danger-outline / danger-ghost: a destructive action that is not the confirming one
+   * ("O‘chirish" that opens a confirmation), same rank as secondary / ghost.
+   */
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'danger-outline' | 'danger-ghost';
   size?: 'sm' | 'md' | 'lg';
   children: ReactNode;
   /** Request in flight: disables the button, shows a spinner and, if given, `loadingText`. */
   loading?: boolean;
   loadingText?: ReactNode;
+  /** React 19 passes ref as a prop; it lands on the <button>. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function Button({
@@ -77,6 +85,18 @@ export function buttonStyle(variant: NonNullable<ButtonProps['variant']> = 'prim
         return {
           backgroundColor: 'var(--color-error-600)',
           color: 'var(--color-text-inverse)',
+          border: 'none',
+        };
+      case 'danger-outline':
+        return {
+          backgroundColor: 'var(--color-bg-secondary)',
+          color: 'var(--color-error-700)',
+          border: '1px solid var(--color-border)',
+        };
+      case 'danger-ghost':
+        return {
+          backgroundColor: 'transparent',
+          color: 'var(--color-error-700)',
           border: 'none',
         };
     }

@@ -1019,10 +1019,10 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             <>
               {mode === 'edit' && invoiceId && (
                 <Button
-                  variant="ghost"
+                  variant="danger-ghost"
                   onClick={handleDeleteInvoice}
                   disabled={loading}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Trash2 size={16} aria-hidden /> {isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'}
                 </Button>

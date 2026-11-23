@@ -263,12 +263,11 @@ export default function StockTransfersPage() {
                               </Button>
                               <Button
                                 size="sm"
-                                variant="ghost"
+                                variant="danger-ghost"
                                 onClick={() => {
                                   setDeleteConfirmTransfer(tr);
                                   setDeleteError(null);
                                 }}
-                                style={{ color: 'var(--color-error-700)' }}
                                 aria-label={isRu ? 'Удалить перемещение' : "O'chirish"}
                                 title={isRu ? 'Удалить перемещение' : "O'chirish"}
                               >

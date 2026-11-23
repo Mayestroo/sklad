@@ -393,8 +393,8 @@ export default function PricesPage() {
                   {!selectedPL.isDefault && (
                     <Button
                       size="sm"
-                      variant="secondary"
-                      style={{ color: 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: 6 }}
+                      variant="danger-outline"
+                      style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                       onClick={() => void handleDeletePL(selectedPL)}
                     >
                       <Trash2 size={14} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}

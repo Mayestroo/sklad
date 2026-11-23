@@ -968,7 +968,7 @@ export default function SalesReturnsPage() {
                 </Button>
               )}
               {selectedReturn.status !== 'CANCELLED' && (
-                <Button variant="secondary" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }} style={{ color: 'var(--color-error-700)' }}>
+                <Button variant="danger-outline" onClick={() => { setShowDetailsModal(false); handleCancelReturn(selectedReturn); }}>
                   <XCircle size={16} /> {isRu ? 'Отменить документ' : 'Hujjatni bekor qilish'}
                 </Button>
               )}

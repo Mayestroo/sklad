@@ -1253,9 +1253,8 @@ function TransactionsTable({
                             </Button>
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="danger-outline"
                               onClick={() => onStorno(tx)}
-                              style={{ color: 'var(--color-error-700)' }}
                               aria-label={isRu ? 'Аннулировать операцию' : 'Operatsiyani bekor qilish'}
                             >
                               <XCircle size={14} />
@@ -1264,9 +1263,8 @@ function TransactionsTable({
                         )}
                         <Button
                           size="sm"
-                          variant="secondary"
+                          variant="danger-outline"
                           onClick={() => onDelete(tx)}
-                          style={{ color: 'var(--color-error-700)' }}
                           aria-label={isRu ? 'Переместить в корзину' : 'Savatga ko‘chirish'}
                         >
                           <Trash2 size={14} />

@@ -777,7 +777,7 @@ export default function OpeningBalancesPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                 {currentDoc && !isReadOnly && (
                   <>
-                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ color: 'var(--color-error-700)' }}>
+                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="danger-ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading}>
                       <Trash2 size={14} aria-hidden />
                     </Button>
                     <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading}>
@@ -791,7 +791,7 @@ export default function OpeningBalancesPage() {
                   </>
                 )}
                 {currentDoc && isPosted && (
-                  <Button variant="secondary" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}>
+                  <Button variant="danger-outline" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <RotateCcw size={14} />
                     <span>{isRu ? 'Переоткрыть' : 'Qayta ochish'}</span>
                   </Button>
