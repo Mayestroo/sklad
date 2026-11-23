@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
-import { Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, LEDGER_CURRENCY } from '@/lib/utils';
@@ -111,25 +111,22 @@ export default function FinancialReportsPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
         {/* The answer first: profit, the result line, and whether the books balance (with where to look if not) */}
-        <SignalStrip label={trp('summary')}>
-          <Signal tone={statements.profitLoss.netProfit < 0 ? 'error' : 'success'} label={statements.profitLoss.netProfit < 0 ? (isRu ? 'Чистый убыток' : 'Sof zarar') : isRu ? 'Чистая прибыль' : 'Sof foyda'} value={money(statements.profitLoss.netProfit)} hint={trp('allTime')} />
-          <Signal tone="info" label={isRu ? 'Доходы (выручка)' : 'Daromadlar (tushum)'} value={money(statements.profitLoss.totalRevenue)} hint={trp('costs', { amount: money(statements.profitLoss.totalCogs) })} />
-          <Signal
-            tone={statements.balanceSheet.isBalanced ? 'success' : 'error'}
+        <StatCardGrid label={trp('summary')} count={3}>
+          <StatCard label={statements.profitLoss.netProfit < 0 ? (isRu ? 'Чистый убыток' : 'Sof zarar') : isRu ? 'Чистая прибыль' : 'Sof foyda'} value={money(statements.profitLoss.netProfit)} negative={statements.profitLoss.netProfit < 0} secondary={trp('allTime')} />
+          <StatCard label={isRu ? 'Доходы (выручка)' : 'Daromadlar (tushum)'} value={money(statements.profitLoss.totalRevenue)} secondary={trp('costs', { amount: money(statements.profitLoss.totalCogs) })} />
+          <StatCard
             label={trp('balanceCheck')}
             value={statements.balanceSheet.isBalanced ? (isRu ? 'Актив = Пассив' : 'Aktiv = Passiv') : isRu ? 'Актив ≠ Пассив' : 'Aktiv ≠ Passiv'}
-            hint={
-              statements.balanceSheet.isBalanced ? (
-                trp('balanced')
-              ) : (
-                <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
-                  <Link href="/accounting" style={{ color: "var(--color-primary-700)", textDecoration: "underline" }}>{trp('openOsv')}</Link>
-                  <Link href="/opening-balances" style={{ color: "var(--color-primary-700)", textDecoration: "underline" }}>{trp('openOb')}</Link>
-                </span>
-              )
-            }
+            negative={!statements.balanceSheet.isBalanced}
+            secondary={statements.balanceSheet.isBalanced ? trp('balanced') : undefined}
           />
-        </SignalStrip>
+        </StatCardGrid>
+        {!statements.balanceSheet.isBalanced && (
+          <p className="rd-sub" style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', margin: 0 }}>
+            <Link href="/accounting" style={{ color: 'var(--color-primary-700)', textDecoration: 'underline' }}>{trp('openOsv')}</Link>
+            <Link href="/opening-balances" style={{ color: 'var(--color-primary-700)', textDecoration: 'underline' }}>{trp('openOb')}</Link>
+          </p>
+        )}
 
         {/* Where the money went: revenue split into costs and profit */}
         {Number(statements.profitLoss.totalRevenue) > 0 && (
