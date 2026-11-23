@@ -5,13 +5,13 @@ import { totalsByCurrency } from '@/lib/currency-totals';
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonStyle } from '@/components/ui/Button';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { usePersistentState } from '@/lib/usePersistentState';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
-import { ALL_TIME, ChipGroup, ColumnChooser, CurrencyTotals, PeriodFilter, resolvePeriod, Signal, SignalStrip, type PeriodValue } from '@/components/ui/list/ListKit';
+import { CurrencyTotals } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, periodRange, SegmentedFilter, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -34,6 +34,8 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import { localIsoDate } from '@/lib/date-range';
 
+const FILTER_DEFAULTS = { status: '', period: '' };
+
 export default function ReturnsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -41,18 +43,17 @@ export default function ReturnsPage() {
   const { token, company } = useAuth();
   const confirm = useConfirm();
 
-  // Filters state
-  const [searchTerm, setSearchTerm] = useState('');
-  // The typed search applies once typing pauses; the status at once.
-  const debouncedSearch = useDebouncedValue(searchTerm.trim(), 350);
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  // Filters live in the URL and are remembered per user. Search applies once typing pauses; status at once.
+  const lf = useFilterState('preturns.list', FILTER_DEFAULTS);
+  const debouncedSearch = lf.debouncedSearch;
+  const statusFilter = lf.values.status;
   const [startDate] = useState('');
   const [endDate] = useState('');
 
   const returnsEndpoint = useMemo(() => {
     const queryParams = new URLSearchParams();
     if (debouncedSearch) queryParams.set('search', debouncedSearch);
-    if (statusFilter !== 'ALL') queryParams.set('status', statusFilter);
+    if (statusFilter) queryParams.set('status', statusFilter);
     if (startDate) queryParams.set('startDate', startDate);
     if (endDate) queryParams.set('endDate', endDate);
     return `/purchases/returns${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
@@ -235,8 +236,7 @@ export default function ReturnsPage() {
   const router = useRouter();
   const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('preturns.hidden', []);
   const [sort, setSort] = usePersistentState<SortState | null>('preturns.sort', null);
-  const [period, setPeriod] = usePersistentState<PeriodValue>('preturns.period', ALL_TIME);
-  const range = resolvePeriod(period);
+  const range = periodRange(lf.values.period);
   const shown = returns.filter((r) => {
     const d = (r.returnDate || '').slice(0, 10);
     return (!range.from || d >= range.from) && (!range.to || d <= range.to);
@@ -308,12 +308,12 @@ export default function ReturnsPage() {
       ),
     },
   ];
-  const anyFilter = Boolean(debouncedSearch || statusFilter !== 'ALL' || period.key !== 'all');
-  const clearAll = () => {
-    setSearchTerm('');
-    setStatusFilter('ALL');
-    setPeriod(ALL_TIME);
-  };
+  const filterDefs: FilterDef[] = [
+    { key: 'status', kind: 'segmented', label: tl('status'), options: [{ value: 'DRAFT', label: td('draft') }, { value: 'POSTED', label: td('posted') }, { value: 'CANCELLED', label: td('cancelled') }] },
+    { key: 'period', kind: 'period', label: tl('period') },
+  ];
+  const anyFilter = Boolean(debouncedSearch || lf.activeCount > 0);
+  const clearAll = lf.reset;
 
   return (
     <div className="rd-page">
@@ -327,56 +327,37 @@ export default function ReturnsPage() {
         }
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="warning" label={tp('sigDrafts')} value={draftCount} hint={tp('sigDraftsHint')} active={statusFilter === 'DRAFT'} onClick={() => setStatusFilter(statusFilter === 'DRAFT' ? 'ALL' : 'DRAFT')} />
-        <Signal tone="info" label={tIn('jami_qaytarilgan_tasdiqlangan')} value={<MultiCurrencyValue items={totalReturnedByCurrency} locale={locale} />} hint={tp('postedCount', { count: postedCount })} />
-        <Signal tone="neutral" label={tp('sigAll')} value={returns.length} />
-      </SignalStrip>
+      <StatCardGrid label={tl('summary')} count={3}>
+        <StatCard label={tp('sigDrafts')} loading={loading} value={draftCount} secondary={tp('sigDraftsHint')} />
+        <StatCard label={tIn('jami_qaytarilgan_tasdiqlangan')} loading={loading} value={<MultiCurrencyValue inherit items={totalReturnedByCurrency} locale={locale} />} secondary={tp('postedCount', { count: postedCount })} />
+        <StatCard label={tp('sigAll')} loading={loading} value={returns.length} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField
-            value={searchTerm}
-            onChange={setSearchTerm}
-            placeholder={tp('searchPh')}
-            label={tl('search')}
-          />
-          <ChipGroup
-            label={tp('view')}
-            options={[
-              { value: 'LIST', label: isRu ? 'Документы' : 'Hujjatlar' },
-              { value: 'ANALYTICS', label: isRu ? 'Аналитика причин' : 'Sabablar tahlili' },
-            ]}
-            value={activeTab}
-            onChange={(v) => setActiveTab((v || 'LIST') as 'LIST' | 'ANALYTICS')}
-          />
-          {activeTab === 'LIST' && <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
-          <Button variant="ghost" size="sm" onClick={handleExportCsv} disabled={returns.length === 0}>
-            <Download size={14} aria-hidden /> CSV
-          </Button>
-        </div>
-        {activeTab === 'LIST' && (
-          <>
-            <div className="rd-toolbar-row">
-              <ChipGroup
-                label={tl('status')}
-                showLabel
-                options={[
-                  { value: '', label: tl('all') },
-                  { value: 'DRAFT', label: td('draft') },
-                  { value: 'POSTED', label: td('posted') },
-                  { value: 'CANCELLED', label: td('cancelled') },
-                ]}
-                value={statusFilter === 'ALL' ? '' : statusFilter}
-                onChange={(v) => setStatusFilter(v || 'ALL')}
-              />
-            </div>
-            <div className="rd-toolbar-row">
-              <PeriodFilter value={period} onChange={setPeriod} locale={locale} />
-            </div>
-          </>
-        )}
+      {/* View switch (not a filter) and export */}
+      <div className="rd-toolbar-row">
+        <SegmentedFilter
+          name="view"
+          label={tp('view')}
+          options={[
+            { value: 'LIST', label: isRu ? 'Документы' : 'Hujjatlar' },
+            { value: 'ANALYTICS', label: isRu ? 'Аналитика причин' : 'Sabablar tahlili' },
+          ]}
+          value={activeTab}
+          onChange={(v) => setActiveTab((v || 'LIST') as 'LIST' | 'ANALYTICS')}
+        />
+        <span className="rd-toolbar-spacer" />
+        <Button variant="ghost" size="sm" onClick={handleExportCsv} disabled={returns.length === 0}>
+          <Download size={14} aria-hidden /> CSV
+        </Button>
       </div>
+
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={tp('searchPh')}
+        resultCount={loading ? null : activeTab === 'LIST' ? shown.length : returns.length}
+        columns={activeTab === 'LIST' ? <ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} /> : undefined}
+      />
 
       {activeTab === 'LIST' ? (
         <div className="rd-table-card">

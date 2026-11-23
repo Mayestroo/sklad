@@ -781,7 +781,7 @@
       "receipt": "Kirim hujjati",
       "reason": "Sabab",
       "sigDrafts": "Tasdiqlanmagan",
-      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "sigDraftsHint": "Qoralamalar",
       "postedCount": "{count, plural, other {# ta tasdiqlangan}}",
       "sigAll": "Jami hujjatlar",
       "searchPh": "Qaytarish raqami, yetkazib beruvchi yoki sabab",

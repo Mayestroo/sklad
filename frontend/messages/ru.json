@@ -781,7 +781,7 @@
       "receipt": "Приход",
       "reason": "Причина",
       "sigDrafts": "Не проведены",
-      "sigDraftsHint": "Черновики — нажмите: показать",
+      "sigDraftsHint": "Черновики",
       "postedCount": "{count, plural, one {# проведён} few {# проведено} other {# проведено}}",
       "sigAll": "Всего документов",
       "searchPh": "Номер возврата, поставщик или причина",
