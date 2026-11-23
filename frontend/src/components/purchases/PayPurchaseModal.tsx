@@ -180,8 +180,26 @@ export function PayPurchaseModal({
           ? `Оплата по закупке № ${receipt.docNumber}`
           : `Xarid bo‘yicha to‘lov № ${receipt.docNumber}`
       }
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="pay-purchase-modal-form" disabled={loading || isCurrencyMismatch} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <CreditCard size={16} />
+            {loading
+              ? isRu
+                ? 'Проведение...'
+                : 'Bajarilmoqda...'
+              : isRu
+              ? 'Подтвердить оплату'
+              : 'To‘lovni tasdiqlash'}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('pay-purchase-modal-form') as HTMLFormElement | null)?.requestSubmit()}
     >
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <form id="pay-purchase-modal-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {error && (
           <div
             style={{
@@ -348,21 +366,6 @@ export function PayPurchaseModal({
         </div>
 
         {/* Submit action */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button type="submit" disabled={loading || isCurrencyMismatch} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <CreditCard size={16} />
-            {loading
-              ? isRu
-                ? 'Проведение...'
-                : 'Bajarilmoqda...'
-              : isRu
-              ? 'Подтвердить оплату'
-              : 'To‘lovni tasdiqlash'}
-          </Button>
-        </div>
       </form>
     </Modal>
   );

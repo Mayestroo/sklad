@@ -849,6 +849,16 @@ export default function FinancePage() {
           isOpen={true}
           title={isRu ? 'Редактировать операцию' : 'Operatsiyani tahrirlash'}
           onClose={() => setEditingTx(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setEditingTx(null)} disabled={savingEdit}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="primary" onClick={handleSaveEdit} disabled={savingEdit}>
+                {savingEdit ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <Select
@@ -879,14 +889,6 @@ export default function FinancePage() {
                 onChange={(e) => setEditComment(e.target.value)}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setEditingTx(null)} disabled={savingEdit}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="primary" onClick={handleSaveEdit} disabled={savingEdit}>
-                {savingEdit ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
@@ -897,6 +899,26 @@ export default function FinancePage() {
           isOpen={true}
           title={isRu ? 'Аннулирование операции (Сторно)' : 'Operatsiyani bekor qilish (Storno)'}
           onClose={() => setStornoTx(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setStornoTx(null)} disabled={stornoLoading}>
+                {isRu ? 'Назад' : 'Orqaga'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleStorno}
+                disabled={stornoLoading}
+              >
+                {stornoLoading
+                  ? isRu
+                    ? 'Аннулирование...'
+                    : 'Bekor qilinmoqda...'
+                  : isRu
+                  ? 'Подтвердить Сторно'
+                  : 'Bekor qilishni tasdiqlash'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div
@@ -940,25 +962,6 @@ export default function FinancePage() {
                 onChange={(e) => setStornoReason(e.target.value)}
               />
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setStornoTx(null)} disabled={stornoLoading}>
-                {isRu ? 'Назад' : 'Orqaga'}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleStorno}
-                disabled={stornoLoading}
-              >
-                {stornoLoading
-                  ? isRu
-                    ? 'Аннулирование...'
-                    : 'Bekor qilinmoqda...'
-                  : isRu
-                  ? 'Подтвердить Сторно'
-                  : 'Bekor qilishni tasdiqlash'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
@@ -971,6 +974,26 @@ export default function FinancePage() {
           onClose={() => {
             if (!deleteLoading) setDeletingTx(null);
           }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setDeletingTx(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger" onClick={handleDelete} disabled={deleteLoading}>
+                {deleteLoading
+                  ? isRu
+                    ? 'Перемещение...'
+                    : 'Ko‘chirilmoqda...'
+                  : isRu
+                    ? 'Переместить в корзину'
+                    : 'Savatga ko‘chirish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div
@@ -996,25 +1019,6 @@ export default function FinancePage() {
                     ? 'Операция будет только перемещена в корзину; финансовые проводки не изменятся.'
                     : 'Operatsiya faqat savatga ko‘chiriladi; moliyaviy harakatlar o‘zgarmaydi.'}
               </p>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button
-                variant="secondary"
-                onClick={() => setDeletingTx(null)}
-                disabled={deleteLoading}
-              >
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="danger" onClick={handleDelete} disabled={deleteLoading}>
-                {deleteLoading
-                  ? isRu
-                    ? 'Перемещение...'
-                    : 'Ko‘chirilmoqda...'
-                  : isRu
-                    ? 'Переместить в корзину'
-                    : 'Savatga ko‘chirish'}
-              </Button>
             </div>
           </div>
         </Modal>

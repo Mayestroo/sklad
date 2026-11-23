@@ -404,16 +404,20 @@ export default function NewProductPage() {
           </Card>
         </aside>
       </form>
-      <Modal isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={isRu ? 'Новая категория' : 'Yangi kategoriya'} size="sm">
-        <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <Modal isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={isRu ? 'Новая категория' : 'Yangi kategoriya'} size="sm"
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+          <Button type="submit" form="page-form" disabled={categoryLoading}>{isRu ? 'Создать' : 'Yaratish'}</Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+        <form id="page-form" onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <Input label={isRu ? 'Название на узбекском *' : 'O‘zbekcha nomi *'} value={categoryNameUz} onChange={(event) => setCategoryNameUz(event.target.value)} required autoFocus />
           <Input label={isRu ? 'Название на русском' : 'Ruscha nomi'} value={categoryNameRu} onChange={(event) => setCategoryNameRu(event.target.value)} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-            <Button type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" disabled={categoryLoading}>{isRu ? 'Создать' : 'Yaratish'}</Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
     </div>
   );
 }

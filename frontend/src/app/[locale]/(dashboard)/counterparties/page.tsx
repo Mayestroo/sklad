@@ -767,8 +767,19 @@ export default function CounterpartiesPage() {
           isOpen={true}
           onClose={() => setIsFolderModalOpen(false)}
           title={folderModalMode === 'create' ? (isRu ? 'Создание папки' : 'Yangi papka yaratish') : (isRu ? 'Редактирование папки' : 'Papkani tahrirlash')}
-        >
-          <form onSubmit={handleSaveFolder} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setIsFolderModalOpen(false)} disabled={folderSubmitting}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="page-form" disabled={folderSubmitting}>
+            {folderSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+          <form id="page-form" onSubmit={handleSaveFolder} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {folderError && (
               <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error-700)', fontSize: 'var(--text-sm)' }}>
                 {folderError}
@@ -805,36 +816,30 @@ export default function CounterpartiesPage() {
                 ))}
               </div>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="secondary" onClick={() => setIsFolderModalOpen(false)} disabled={folderSubmitting}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button type="submit" disabled={folderSubmitting}>
-                {folderSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      </form>
+    </Modal>
       )}
 
       {/* Delete Folder Modal */}
       {deleteFolderId && (
-        <Modal isOpen={true} onClose={() => setDeleteFolderId(null)} title={isRu ? 'Удаление папки' : 'Papkani o\'chirish'}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? 'Вы действительно хотите удалить эту папку? Контрагенты внутри нее НЕ будут удалены, а перейдут в раздел "Без папки".'
-                : 'Ushbu papkani o\'chirishni tasdiqlaysizmi? Ichidagi kontragentlar o\'chib ketmaydi, "Papkada bo\'lmaganlar" bo\'limiga o\'tadi.'}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+        <Modal isOpen={true} onClose={() => setDeleteFolderId(null)} title={isRu ? 'Удаление папки' : 'Papkani o\'chirish'}
+          footer={
+            <>
               <Button variant="secondary" onClick={() => setDeleteFolderId(null)} disabled={deleteSubmitting}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button variant="danger" onClick={handleDeleteFolder} disabled={deleteSubmitting}>
                 {deleteSubmitting ? (isRu ? 'Удаление...' : 'O\'chirilmoqda...') : (isRu ? 'Удалить папку' : 'Papkani o\'chirish')}
               </Button>
-            </div>
+            </>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? 'Вы действительно хотите удалить эту папку? Контрагенты внутри нее НЕ будут удалены, а перейдут в раздел "Без папки".'
+                : 'Ushbu papkani o\'chirishni tasdiqlaysizmi? Ichidagi kontragentlar o\'chib ketmaydi, "Papkada bo\'lmaganlar" bo\'limiga o\'tadi.'}
+            </p>
           </div>
         </Modal>
       )}
@@ -845,14 +850,8 @@ export default function CounterpartiesPage() {
           isOpen={true}
           onClose={() => setDeletingCounterparty(null)}
           title={isRu ? 'Удаление контрагента' : 'Kontragentni o\'chirish'}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы действительно хотите удалить контрагента "${deletingCounterparty.name}"? Если с этим контрагентом связаны документы или операции, система отклонит удаление.`
-                : `Haqiqatan ham "${deletingCounterparty.name}" kontragentini o'chirmoqchimisiz? Agar ushbu kontragent bo'yicha operatsiyalar yoki hujjatlar mavjud bo'lsa, tizim o'chirishga ruxsat bermaydi.`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+          footer={
+            <>
               <Button
                 variant="secondary"
                 onClick={() => setDeletingCounterparty(null)}
@@ -869,15 +868,35 @@ export default function CounterpartiesPage() {
                   ? (isRu ? 'Удаление...' : 'O\'chirilmoqda...')
                   : (isRu ? 'Удалить' : 'O\'chirish')}
               </Button>
-            </div>
+            </>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить контрагента "${deletingCounterparty.name}"? Если с этим контрагентом связаны документы или операции, система отклонит удаление.`
+                : `Haqiqatan ham "${deletingCounterparty.name}" kontragentini o'chirmoqchimisiz? Agar ushbu kontragent bo'yicha operatsiyalar yoki hujjatlar mavjud bo'lsa, tizim o'chirishga ruxsat bermaydi.`}
+            </p>
           </div>
         </Modal>
       )}
 
       {/* Move Counterparty Modal */}
       {moveItem && (
-        <Modal isOpen={true} onClose={() => setMoveItem(null)} title={`${isRu ? 'Переместить:' : 'Papkaga ko\'chirish:'} ${moveItem.name}`}>
-          <form onSubmit={handleMoveCounterparty} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <Modal isOpen={true} onClose={() => setMoveItem(null)} title={`${isRu ? 'Переместить:' : 'Papkaga ko\'chirish:'} ${moveItem.name}`}
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setMoveItem(null)} disabled={moveSubmitting}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="page-form-2" disabled={moveSubmitting}>
+            {moveSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Ko\'chirish' : 'Переместить')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form-2') as HTMLFormElement | null)?.requestSubmit()}
+    >
+          <form id="page-form-2" onSubmit={handleMoveCounterparty} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <Select
               label={isRu ? 'Выберите целевую папку' : 'Maqsaddagi papkani tanlang'}
               value={targetFolderId}
@@ -887,17 +906,8 @@ export default function CounterpartiesPage() {
                 ...folders.map((f) => ({ value: f.id, label: f.name })),
               ]}
             />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="secondary" onClick={() => setMoveItem(null)} disabled={moveSubmitting}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button type="submit" disabled={moveSubmitting}>
-                {moveSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Ko\'chirish' : 'Переместить')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      </form>
+    </Modal>
       )}
 
       {/* Detail Modal */}

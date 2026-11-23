@@ -294,7 +294,19 @@ export default function InventoryDocumentsPage() {
 
       {/* New Document dialog */}
       {showModal && (
-        <Modal isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg">
+        <Modal isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg"
+          footer={
+            <>
+              <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
+                {tCommon('cancel')}
+              </Button>
+              <Button type="submit" form="invdoc-form" variant="primary" disabled={createLoading || items.length === 0}>
+                {createLoading ? tCommon('loading') : (isRu ? 'Провести документ' : 'Rasmiylashtirish va o‘tkazish')}
+              </Button>
+            </>
+          }
+          onSubmitShortcut={() => (document.getElementById('invdoc-form') as HTMLFormElement | null)?.requestSubmit()}
+        >
           <div>
             {createError && (
               <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
@@ -302,7 +314,7 @@ export default function InventoryDocumentsPage() {
               </div>
             )}
 
-            <form onSubmit={handleCreateDocument} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <form id="invdoc-form" onSubmit={handleCreateDocument} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-3)' }}>
                 <div>
                   <span className="rd-field-label">{tIn('hujjat_turi')}</span>
@@ -411,15 +423,6 @@ export default function InventoryDocumentsPage() {
                   placeholder={isRu ? 'Дополнительные примечания к документу...' : 'Hujjat bo\'yicha qo\'shimcha izoh...'}
                   style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
                 />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button type="submit" variant="primary" disabled={createLoading || items.length === 0}>
-                  {createLoading ? tCommon('loading') : (isRu ? 'Провести документ' : 'Rasmiylashtirish va o‘tkazish')}
-                </Button>
               </div>
             </form>
           </div>

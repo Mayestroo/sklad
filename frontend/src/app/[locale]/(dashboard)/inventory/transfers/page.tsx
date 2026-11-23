@@ -293,8 +293,16 @@ export default function StockTransfersPage() {
       )}
 
       {/* New Transfer Modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isRu ? 'Новое перемещение между складами' : 'Yangi Omborlararo Transfer'}>
-        <form onSubmit={handleCreateTransfer} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isRu ? 'Новое перемещение между складами' : 'Yangi Omborlararo Transfer'}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+          <Button type="submit" form="page-form" variant="primary" disabled={createLoading}>{createLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать перемещение' : 'O‘tkazma yaratish'}</Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+        <form id="page-form" onSubmit={handleCreateTransfer} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: 'var(--space-2)', alignItems: 'end' }}>
             <Select
               label={isRu ? 'Склад отправитель *' : 'Chiquvchi Ombor *'}
@@ -379,13 +387,8 @@ export default function StockTransfersPage() {
               </div>
             )}
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" variant="primary" disabled={createLoading}>{createLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать перемещение' : 'O‘tkazma yaratish'}</Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmTransfer && (
@@ -393,6 +396,19 @@ export default function StockTransfersPage() {
           isOpen={Boolean(deleteConfirmTransfer)}
           onClose={() => setDeleteConfirmTransfer(null)}
           title={isRu ? 'Удалить перемещение?' : "O'tkazmani o'chirish?"}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeleteConfirmTransfer(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger"
+                onClick={handleDeleteTransfer}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {deleteError && (
@@ -406,18 +422,6 @@ export default function StockTransfersPage() {
                 ? `Вы уверены, что хотите удалить перемещение ${deleteConfirmTransfer.transferNumber}?`
                 : `Haqiqatan ham ${deleteConfirmTransfer.transferNumber} raqamli qoralama o'tkazmani o'chirmoqchimisiz?`}
             </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setDeleteConfirmTransfer(null)} disabled={deleteLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="danger"
-                onClick={handleDeleteTransfer}
-                disabled={deleteLoading}
-              >
-                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}

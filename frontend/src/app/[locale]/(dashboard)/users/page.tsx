@@ -318,7 +318,19 @@ export default function UsersPage() {
       </div>
 
       {/* Invite User Modal */}
-      <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md">
+      <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md"
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
+            {tCommon('cancel')}
+          </Button>
+          <Button type="submit" form="page-form" variant="primary" disabled={createLoading}>
+            {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
 
         {createError && (
           <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
@@ -326,7 +338,7 @@ export default function UsersPage() {
           </div>
         )}
 
-        <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <form id="page-form" onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
@@ -401,21 +413,24 @@ export default function UsersPage() {
               onChange={(val) => setPreferredLanguage(val as typeof preferredLanguage)}
             />
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-            <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button type="submit" variant="primary" disabled={createLoading}>
-              {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
 
       {/* Edit User Modal */}
       {editingUser && (
-      <Modal isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md">
+      <Modal isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md"
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
+            {tCommon('cancel')}
+          </Button>
+          <Button type="submit" form="page-form-2" variant="primary" disabled={editLoading}>
+            {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form-2') as HTMLFormElement | null)?.requestSubmit()}
+    >
 
         {editError && (
           <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
@@ -424,7 +439,7 @@ export default function UsersPage() {
           </div>
         )}
 
-        <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <form id="page-form-2" onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
@@ -480,17 +495,8 @@ export default function UsersPage() {
               onChange={(val) => setEditPreferredLanguage(val as typeof editPreferredLanguage)}
             />
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-            <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button type="submit" variant="primary" disabled={editLoading}>
-              {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
       )}
 
       {/* Delete Confirmation Modal */}

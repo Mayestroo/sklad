@@ -858,8 +858,19 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         onClose={() => setShowNewCategoryModal(false)}
         title={isRu ? 'Новая категория' : 'Yangi kategoriya'}
         size="sm"
-      >
-        <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setShowNewCategoryModal(false)}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="create-product-drawer-form" disabled={creatingCategory}>
+            {isRu ? 'Создать' : 'Yaratish'}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('create-product-drawer-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+        <form id="create-product-drawer-form" onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <Input
             label={isRu ? 'Название на узбекском *' : 'O‘zbekcha nomi *'}
             value={newCategoryNameUz}
@@ -872,16 +883,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             value={newCategoryNameRu}
             onChange={(event) => setNewCategoryNameRu(event.target.value)}
           />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-            <Button type="button" variant="secondary" onClick={() => setShowNewCategoryModal(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button type="submit" disabled={creatingCategory}>
-              {isRu ? 'Создать' : 'Yaratish'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
 
       <Modal
         isOpen={showNewUnitModal}
@@ -892,8 +895,28 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         }}
         title={isRu ? 'Новая единица измерения' : 'Yangi o‘lchov birligi'}
         size="sm"
-      >
-        <form onSubmit={handleAddCustomUnit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setShowNewUnitModal(false);
+              setNewUnitName('');
+              setNewUnitCode('');
+            }}
+          >
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="create-product-drawer-form-2" variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={16} />
+            {isRu ? 'Добавить' : 'Qo‘shish'}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('create-product-drawer-form-2') as HTMLFormElement | null)?.requestSubmit()}
+    >
+        <form id="create-product-drawer-form-2" onSubmit={handleAddCustomUnit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Название единицы * (напр. Грамм, Рулон)' : 'Birlik nomi * (masalan: Gramm, Rulon, Qop)'}
@@ -933,26 +956,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               onChange={(val) => setNewUnitBaseType(val)}
             />
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setShowNewUnitModal(false);
-                setNewUnitName('');
-                setNewUnitCode('');
-              }}
-            >
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button type="submit" variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={16} />
-              {isRu ? 'Добавить' : 'Qo‘shish'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
     </Drawer>
   );
 };

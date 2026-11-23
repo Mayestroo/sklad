@@ -424,6 +424,13 @@ export default function ProductsPage() {
           onClose={() => setSelectedProduct(null)}
           title={`${isRu ? 'Информация о товаре' : 'Tovar ma\'lumotlari'}: ${getProductName(selectedProduct)}`}
           size="md"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setSelectedProduct(null)}>
+                {isRu ? 'Закрыть' : 'Yopish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
@@ -476,12 +483,6 @@ export default function ProductsPage() {
                 </div>
               </div>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
-              <Button variant="secondary" onClick={() => setSelectedProduct(null)}>
-                {isRu ? 'Закрыть' : 'Yopish'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
@@ -493,14 +494,8 @@ export default function ProductsPage() {
           onClose={() => setDeletingProduct(null)}
           title={isRu ? 'Удалить товар?' : 'Tovarni o‘chirishni tasdiqlaysizmi?'}
           size="sm"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы действительно хотите удалить позицию «${getProductName(deletingProduct)}»? Если по ней уже есть складские партии или документы, она будет безопасно архивирована.`
-                : `Rostdan ham «${getProductName(deletingProduct)}» tovarini o‘chirmoqchimisiz? Agar tovar bo‘yicha partiyalar yoki hujjatlar bo‘lsa, u xavfsiz arxivlanadi.`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+          footer={
+            <>
               <Button variant="secondary" onClick={() => setDeletingProduct(null)} disabled={deleteLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
@@ -511,7 +506,15 @@ export default function ProductsPage() {
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>
-            </div>
+            </>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить позицию «${getProductName(deletingProduct)}»? Если по ней уже есть складские партии или документы, она будет безопасно архивирована.`
+                : `Rostdan ham «${getProductName(deletingProduct)}» tovarini o‘chirmoqchimisiz? Agar tovar bo‘yicha partiyalar yoki hujjatlar bo‘lsa, u xavfsiz arxivlanadi.`}
+            </p>
           </div>
         </Modal>
       )}
@@ -537,6 +540,13 @@ export default function ProductsPage() {
           isOpen={isCategoryModalOpen}
           onClose={() => setIsCategoryModalOpen(false)}
           title={isRu ? 'Управление категориями товаров' : 'Mahsulot kategoriyalarini boshqarish'}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
+                {isRu ? 'Закрыть' : 'Yopish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {/* Create category form */}
@@ -625,12 +635,6 @@ export default function ProductsPage() {
                 })
               )}
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-              <Button variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
-                {isRu ? 'Закрыть' : 'Yopish'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
@@ -642,8 +646,19 @@ export default function ProductsPage() {
           onClose={() => setEditingCategory(null)}
           title={isRu ? 'Редактировать категорию' : 'Kategoriyani tahrirlash'}
           size="sm"
-        >
-          <form onSubmit={handleSaveEditCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => setEditingCategory(null)}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="page-form" variant="primary" disabled={editCatLoading}>
+            {editCatLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+          <form id="page-form" onSubmit={handleSaveEditCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: '4px' }}>
                 {isRu ? 'Название категории (узбекский) *' : 'Kategoriya nomi (o‘zbekcha) *'}
@@ -667,16 +682,8 @@ export default function ProductsPage() {
                 style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="secondary" onClick={() => setEditingCategory(null)}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button type="submit" variant="primary" disabled={editCatLoading}>
-                {editCatLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      </form>
+    </Modal>
       )}
 
       {/* Delete Category Confirm Modal */}
@@ -686,14 +693,8 @@ export default function ProductsPage() {
           onClose={() => setDeletingCategory(null)}
           title={isRu ? 'Удалить категорию?' : 'Kategoriyani o‘chirishni tasdiqlaysizmi?'}
           size="sm"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы действительно хотите удалить категорию «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.ru || deletingCategory.name.uz) : deletingCategory.name}»? Товары в этой категории останутся без категории.`
-                : `Rostdan ham «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.uz || deletingCategory.name.ru) : deletingCategory.name}» kategoriyasini o‘chirmoqchimisiz? Ushbu kategoriyadagi tovarlar kategoriyasiz holatga o‘tadi.`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+          footer={
+            <>
               <Button variant="secondary" onClick={() => setDeletingCategory(null)} disabled={deleteCatLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
@@ -704,7 +705,15 @@ export default function ProductsPage() {
               >
                 {deleteCatLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
               </Button>
-            </div>
+            </>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить категорию «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.ru || deletingCategory.name.uz) : deletingCategory.name}»? Товары в этой категории останутся без категории.`
+                : `Rostdan ham «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.uz || deletingCategory.name.ru) : deletingCategory.name}» kategoriyasini o‘chirmoqchimisiz? Ushbu kategoriyadagi tovarlar kategoriyasiz holatga o‘tadi.`}
+            </p>
           </div>
         </Modal>
       )}

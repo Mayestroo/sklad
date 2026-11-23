@@ -227,8 +227,32 @@ export function QuickPaymentModal({
             : "Qarzni to'lash (Chiqim)"
       }
       size="md"
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button
+            type="submit" form="quick-payment-modal-form"
+            disabled={loading || !settlementSide || !currency || !selectedAccount?.id}
+          >
+            {loading
+              ? isRu
+                ? 'Проведение...'
+                : "O'tkazilmoqda..."
+              : isIncome
+                ? isRu
+                  ? 'Принять оплату'
+                  : "To'lovni qabul qilish"
+                : isRu
+                  ? 'Выплатить'
+                  : "To'lov qilish"}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('quick-payment-modal-form') as HTMLFormElement | null)?.requestSubmit()}
     >
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <form id="quick-payment-modal-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <Select
           label={isRu ? 'Сторона взаиморасчёта *' : 'Hisob-kitob tomoni *'}
           value={settlementSide}
@@ -363,27 +387,6 @@ export function QuickPaymentModal({
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button
-            type="submit"
-            disabled={loading || !settlementSide || !currency || !selectedAccount?.id}
-          >
-            {loading
-              ? isRu
-                ? 'Проведение...'
-                : "O'tkazilmoqda..."
-              : isIncome
-                ? isRu
-                  ? 'Принять оплату'
-                  : "To'lovni qabul qilish"
-                : isRu
-                  ? 'Выплатить'
-                  : "To'lov qilish"}
-          </Button>
-        </div>
       </form>
     </Modal>
   );

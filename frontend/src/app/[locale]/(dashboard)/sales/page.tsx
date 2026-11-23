@@ -449,6 +449,16 @@ export default function SalesPage() {
                   : 'Bekor qilingan hujjatni o‘chirish'
                 : ts('deleteTitleDraft')
           }
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger" onClick={handleDeleteInvoice} loading={deleteLoading} loadingText={isRu ? 'Удаление...' : 'O‘chirilmoqda...'}>
+                {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -456,14 +466,6 @@ export default function SalesPage() {
                 ? tIn('p0_raqamli_sotuv_hujjati_tasdiql', { p0: numberOf(deletingInvoice) })
                 : tIn('haqiqatan_ham_p0_raqamli_sotuv_h', { p0: numberOf(deletingInvoice) })}
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="danger" onClick={handleDeleteInvoice} loading={deleteLoading} loadingText={isRu ? 'Удаление...' : 'O‘chirilmoqda...'}>
-                {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}

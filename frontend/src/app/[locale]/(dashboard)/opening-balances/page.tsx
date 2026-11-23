@@ -1011,7 +1011,18 @@ export default function OpeningBalancesPage() {
       )}
 
       {/* New document */}
-      <Modal isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}>
+      <Modal isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowNewDocModal(false)}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
+              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать' : 'Yaratish'}
+            </Button>
+          </>
+        }
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
@@ -1028,19 +1039,30 @@ export default function OpeningBalancesPage() {
             </label>
             <Input type="text" value={newDocNotes} onChange={(e) => setNewDocNotes(e.target.value)} placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={() => setShowNewDocModal(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
-              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать' : 'Yaratish'}
-            </Button>
-          </div>
         </div>
       </Modal>
 
       {/* Excel import (template download included) */}
-      <Modal isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}>
+      <Modal isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeImportModal}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            {importSummary?.canCommit ? (
+              <Button variant="primary" onClick={handleCommitImport} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Save size={16} />
+                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={handlePreviewImport} disabled={!importFile || importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Upload size={16} />
+                <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
+              </Button>
+            )}
+          </>
+        }
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <li>
@@ -1118,28 +1140,22 @@ export default function OpeningBalancesPage() {
               )}
             </div>
           )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={closeImportModal}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            {importSummary?.canCommit ? (
-              <Button variant="primary" onClick={handleCommitImport} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Save size={16} />
-                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
-              </Button>
-            ) : (
-              <Button variant="primary" onClick={handlePreviewImport} disabled={!importFile || importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Upload size={16} />
-                <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
-              </Button>
-            )}
-          </div>
         </div>
       </Modal>
 
       {/* Unpost (rollback invariant) */}
-      <Modal isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}>
+      <Modal isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowUnpostModal(false)}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button variant="danger" onClick={handleUnpost} disabled={actionLoading}>
+              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Переоткрыть' : 'Qayta ochish'}
+            </Button>
+          </>
+        }
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', border: '1px solid var(--color-warning-100)', display: 'flex', gap: '10px' }}>
             <AlertTriangle size={20} color="var(--color-warning-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -1159,14 +1175,6 @@ export default function OpeningBalancesPage() {
               value={unpostReason}
               onChange={(e) => setUnpostReason(e.target.value)}
             />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={() => setShowUnpostModal(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button variant="danger" onClick={handleUnpost} disabled={actionLoading}>
-              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Переоткрыть' : 'Qayta ochish'}
-            </Button>
           </div>
         </div>
       </Modal>
@@ -1685,7 +1693,18 @@ function NewFixedAssetModal({
   };
 
   return (
-    <Modal isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}>
+    <Modal isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>
+            {saving ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Добавить' : 'Qo‘shish'}
+          </Button>
+        </>
+      }
+    >
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           {label(isRu ? 'Название' : 'Nomi')}
@@ -1736,14 +1755,6 @@ function NewFixedAssetModal({
               {isRu ? 'Рассчитать' : 'Hisoblash'}
             </Button>
           </div>
-        </div>
-        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-          <Button variant="secondary" onClick={onClose}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button variant="primary" onClick={submit} disabled={saving}>
-            {saving ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Добавить' : 'Qo‘shish'}
-          </Button>
         </div>
       </div>
     </Modal>
