@@ -45,6 +45,9 @@ const listCalls = () => apiFetch.mock.calls.filter(([u]) => String(u).startsWith
 
 describe('Counterparties page', () => {
   beforeEach(() => {
+    // Filters live in the URL and localStorage: each test starts from a clean view.
+    window.history.replaceState(null, '', '/');
+    window.localStorage.clear();
     apiFetch.mockReset();
   });
 
@@ -66,7 +69,7 @@ describe('Counterparties page', () => {
     renderPage(<CounterpartiesPage />);
     await screen.findByText('Mijoz MChJ');
 
-    const input = screen.getByPlaceholderText('Nomi, STIR, telefon...');
+    const input = screen.getByPlaceholderText('Nomi, STIR yoki telefon');
     fireEvent.change(input, { target: { value: 'Jav' } });
     fireEvent.change(input, { target: { value: 'Javox' } });
 
