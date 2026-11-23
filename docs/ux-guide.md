@@ -142,6 +142,34 @@ lives in `src/components/ui/filters/` (FilterBar), `src/components/ui/stats/` (S
 - Announcements and other publish-to-everyone actions: a live preview per interface
   language, and an explicit warning when one language is missing.
 
+### Dialogs and drawers
+
+-  (centre) and  (side) share : focus moves in and stays inside (Tab wraps), returns
+  to the opener, Esc closes, Ctrl+Enter submits, the page behind does not scroll, only the top surface reacts to keys.
+- **Typed input is never lost by accident.** Backdrop / Esc / ✕ after an edit show "Saqlamasdan yopilsinmi?" inside the
+  same surface (Davom etish / Yopish) — never a second dialog on top. Search boxes and comboboxes are not edits; picks in
+  Select / DatePicker / radios / checkboxes are.  for read-only or filter-only surfaces;
+   on a field that is not data.
+- A press inside released on the backdrop (selecting text) does not close.
+- Actions always go in  (pinned, visible however long the content). Forms:  in the body, the
+  submit button  in the footer,  → .
+- Order in the footer: Cancel (secondary) first, the action last (primary, or danger when it destroys).
+- Confirmations:  (ADR 0021). A destructive confirmation focuses Cancel first.
+- Title says the task ("Yangi mijoz", "To'lov qabul qilish — INV-…");  for one line on what changes.
+
+### Buttons
+
+| Variant | When |
+|---|---|
+|  | The one main action of a surface (Saqlash, Tasdiqlash, To'lov qabul qilish) |
+|  /  | Any other action (same neutral look) |
+|  | Quiet actions in toolbars and rows |
+|  | Confirms something destructive (O'chirish in a confirmation) |
+|  /  | A destructive action that is not the confirming one (Storno, Qayta ochish, remove line) |
+
+No inline colours on buttons: no green "income" or red "expense" buttons — status colours are for status (badges,
+amounts). The accent colour on a non-button control only marks a selection (tab, chosen option, selected day).
+
 ### Number input
 
 - `CurrencyInput` / `MoneyInput` / `QuantityInput` show the same text as the rest of the
