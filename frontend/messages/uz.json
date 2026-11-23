@@ -759,7 +759,6 @@
     },
     "expenses": {
       "subtitle": "Transport, bojxona va boshqa xarajatlar — kirim tannarxiga taqsimlanadi",
-      "clickToFilter": "Bosing: faqat shu tur",
       "allHint": "Barcha turlar bo‘yicha, valyutalar alohida",
       "type": "Turi",
       "provider": "Xizmat ko‘rsatuvchi",
@@ -793,8 +792,8 @@
       "pay": "To‘lash",
       "collect": "To‘lov olish",
       "profile": "Profil va tarix",
-      "owedHint": "{count, plural, other {# tasiga qarzmiz}} — bosing: faqat ular",
-      "owesUsHint": "{count, plural, other {# ta mijoz qarzdor}} — bosing: faqat ular",
+      "owedHint": "{count, plural, other {# tasiga qarzmiz}}",
+      "owesUsHint": "{count, plural, other {# ta mijoz qarzdor}}",
       "show": "Ko‘rsatish",
       "withDebt": "Qarzi borlar",
       "rowHint": "Qatorni bosing — profil, qarz va tarix yon panelda ochiladi.",

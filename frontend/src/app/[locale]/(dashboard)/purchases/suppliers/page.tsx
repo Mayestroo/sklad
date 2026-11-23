@@ -7,7 +7,8 @@ import { LoadError } from '@/components/ui/LoadError';
 import { useLocale, useTranslations } from 'next-intl';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { QuickPaymentModal } from '@/components/counterparties/QuickPaymentModal';
-import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -15,7 +16,7 @@ import { formatCurrency, errorMessage } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { matchesSearch } from '@/components/ui/SearchField';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Building2, CreditCard, Plus } from 'lucide-react';
 import { SupplierProfileDrawer } from '@/components/purchases/SupplierProfileDrawer';
@@ -34,6 +35,8 @@ interface Counterparty {
   balancesByCurrency?: Array<{ currency: string; customerDebt: number; supplierDebt: number; netBalance: number }>;
 }
 
+const FILTER_DEFAULTS = { show: '' };
+
 export default function SuppliersPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -46,8 +49,10 @@ export default function SuppliersPage() {
     [suppliersQuery.data],
   );
   const loading = suppliersQuery.isPending;
-  const [search, setSearch] = useState('');
-  const [debtOnly, setDebtOnly] = usePersistentState('suppliers.debtOnly', false);
+  // Filters live in the URL and are remembered per user; the list is filtered here.
+  const lf = useFilterState('suppliers.list', FILTER_DEFAULTS);
+  const search = lf.search;
+  const debtOnly = lf.values.show === 'debt';
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<Counterparty | null>(null);
@@ -169,6 +174,8 @@ export default function SuppliersPage() {
     },
   ];
 
+  const filterDefs: FilterDef[] = [{ key: 'show', kind: 'segmented', label: tc('show'), options: [{ value: 'debt', label: tc('withDebt'), count: owingCount }] }];
+
   return (
     <div className="rd-page">
       <PageHeader
@@ -177,33 +184,22 @@ export default function SuppliersPage() {
         actions={newButton}
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal
-          tone="error"
+      <StatCardGrid label={tl('summary')} count={2}>
+        <StatCard
           label={isRu ? 'Мы должны' : 'Bizning qarzimiz'}
-          value={Object.keys(payablesByCurrency).length > 0 ? <MultiCurrencyValue items={Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} /> : '—'}
-          hint={tc('owedHint', { count: owingCount })}
-          active={debtOnly}
-          onClick={() => setDebtOnly(!debtOnly)}
+          value={Object.keys(payablesByCurrency).length > 0 ? <MultiCurrencyValue inherit items={Object.entries(payablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} /> : '—'}
+          secondary={tc('owedHint', { count: owingCount })}
         />
-        <Signal tone="neutral" label={isRu ? 'Всего поставщиков' : 'Jami yetkazib beruvchilar'} value={suppliers.length} />
-      </SignalStrip>
+        <StatCard label={isRu ? 'Всего поставщиков' : 'Jami yetkazib beruvchilar'} value={suppliers.length} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Название, ИНН, телефон или адрес' : 'Nomi, STIR, telefon yoki manzil'} label={tl('search')} />
-          <ChipGroup
-            label={tc('show')}
-            options={[
-              { value: 'all', label: tl('all') },
-              { value: 'debt', label: tc('withDebt'), count: owingCount },
-            ]}
-            value={debtOnly ? 'debt' : 'all'}
-            onChange={(v) => setDebtOnly(v === 'debt')}
-          />
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={isRu ? 'Название, ИНН, телефон или адрес' : 'Nomi, STIR, telefon yoki manzil'}
+        resultCount={filteredSuppliers.length}
+        columns={<ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {suppliersQuery.isError ? (
