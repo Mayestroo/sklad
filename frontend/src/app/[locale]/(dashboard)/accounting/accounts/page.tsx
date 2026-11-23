@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { Card } from '@/components/ui/Card';
@@ -9,12 +9,14 @@ import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { matchesSearch } from '@/components/ui/SearchField';
 import { AccountTypeBadge, ACCOUNT_TYPES, accountTypeLabel } from '@/components/accounting/AccountTypeBadge';
 import { BookOpen } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, useFilterState } from '@/components/ui/filters';
 import { Account } from '@shared/types';
+
+const FILTER_DEFAULTS = { type: '' };
 
 export default function ChartOfAccountsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -22,8 +24,10 @@ export default function ChartOfAccountsPage() {
   const ta = useTranslations('rd.acc');
   const accountsQuery = useApiQuery<Account[]>('/accounting/accounts');
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
-  const [search, setSearch] = useState('');
-  const [type, setType] = useState<string>('');
+  // Filters live in the URL and are remembered per user.
+  const lf = useFilterState('accounts.list', FILTER_DEFAULTS);
+  const search = lf.search;
+  const type = lf.values.type;
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -53,15 +57,12 @@ export default function ChartOfAccountsPage() {
       <Card>
         {accounts.length > 0 && (
           <div className="rd-toolbar" style={{ marginBottom: 'var(--space-4)' }}>
-            <div className="rd-toolbar-row">
-              <SearchField value={search} onChange={setSearch} placeholder={isRu ? 'Код или название счёта' : 'Hisob kodi yoki nomi'} style={{ maxWidth: 360 }} />
-              <ChipGroup
-                label={isRu ? 'Тип счёта' : 'Hisob turi'}
-                options={[{ value: '', label: isRu ? 'Все' : 'Hammasi', count: accounts.length }, ...ACCOUNT_TYPES.filter((t) => counts[t]).map((t) => ({ value: t, label: accountTypeLabel(t, locale), count: counts[t] }))]}
-                value={type}
-                onChange={setType}
-              />
-            </div>
+            <FilterBar
+              state={lf}
+              defs={[{ key: 'type', kind: 'segmented', label: isRu ? 'Тип счёта' : 'Hisob turi', options: ACCOUNT_TYPES.filter((t) => counts[t]).map((t) => ({ value: t, label: accountTypeLabel(t, locale), count: counts[t] })) }]}
+              searchPlaceholder={isRu ? 'Код или название счёта' : 'Hisob kodi yoki nomi'}
+              resultCount={rows.length}
+            />
             <p className="rd-sub" style={{ marginTop: 0 }}>{ta('listHint')}</p>
           </div>
         )}
