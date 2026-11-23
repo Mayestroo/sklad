@@ -285,12 +285,12 @@ export default function UsersPage() {
           {ROLES.map((r) => {
             const count = users.filter((u) => u.roles.includes(r)).length;
             return (
-              <li key={r} className="rd-signal rd-tone-neutral" style={{ minHeight: 0 }}>
-                <span className="rd-signal-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+              <li key={r} className="stat-card">
+                <span className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
                   <Badge variant={getRoleBadgeVariant(r)}>{roleName(r)}</Badge>
                   <span className="tabular-nums">{tu('people', { count })}</span>
                 </span>
-                <span className="rd-signal-hint" style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>{tu(`roleDesc_${r}`)}</span>
+                <span className="stat-secondary" style={{ marginTop: 4 }}>{tu(`roleDesc_${r}`)}</span>
                 {hasPermission('users:create') && (
                   <button type="button" className="rd-linkbtn" style={{ paddingLeft: 0, marginTop: 4 }} onClick={() => inviteAs(r)}>
                     {tu('inviteAs')}

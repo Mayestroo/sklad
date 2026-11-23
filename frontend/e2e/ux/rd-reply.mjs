@@ -16,7 +16,7 @@ await page.goto(BASE + '/login');
 await applyAuth(page, b);
 await page.goto(BASE + '/uz/admin/tickets', { waitUntil: 'networkidle' });
 await page.waitForTimeout(600);
-const chips = async () => (await page.locator('.tk-list [role="group"] button, .tk-list .rd-chip').allInnerTexts()).join(' | ');
+const chips = async () => (await page.locator('.tk-list [role="radiogroup"] [role="radio"]').allInnerTexts()).join(' | ');
 console.log('chips before: ' + (await chips()));
 await page.locator('#sa-ticket-reply-text').fill('Rahmat, tekshirdik: brauzerda qalqib chiquvchi oynalarga ruxsat bering.');
 await page.keyboard.press('Control+Enter');
