@@ -77,13 +77,11 @@ export function FilterDropdown({
           }
         }}
       >
-        <span className="fb-btn-name">{label}</span>
-        {isSet && selected && (
-          <>
-            <span aria-hidden>:</span>
-            <span className="fb-btn-value">{selected.label}</span>
-          </>
-        )}
+        <span className="fb-btn-name">
+          {label}
+          {isSet && selected && <span aria-hidden>:</span>}
+        </span>
+        {isSet && selected && <span className="fb-btn-value">{selected.label}</span>}
         <ChevronDown size={14} aria-hidden className="fb-chev" />
       </button>
       {open && (

@@ -29,13 +29,11 @@ export function DateRangePicker({ label, value, onChange }: { label?: string; va
     <div className="fb-pop-wrap" ref={wrapRef}>
       <button ref={triggerRef} type="button" className="fb-btn" data-active={set || undefined} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
         <Calendar size={14} aria-hidden />
-        <span className="fb-btn-name">{name}</span>
-        {set && (
-          <>
-            <span aria-hidden>:</span>
-            <span className="fb-btn-value">{periodLabel(value)}</span>
-          </>
-        )}
+        <span className="fb-btn-name">
+          {name}
+          {set && <span aria-hidden>:</span>}
+        </span>
+        {set && <span className="fb-btn-value">{periodLabel(value)}</span>}
         <ChevronDown size={14} aria-hidden className="fb-chev" />
       </button>
       {open && (
