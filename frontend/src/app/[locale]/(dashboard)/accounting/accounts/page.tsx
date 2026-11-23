@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { LoadError } from '@/components/ui/LoadError';
 import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { AccountingNav } from '@/components/accounting/AccountingNav';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { matchesSearch } from '@/components/ui/SearchField';
@@ -53,6 +54,8 @@ export default function ChartOfAccountsPage() {
             : 'Hujjatlar avtomatik provodka qiladigan BHMS hisoblari. Ularni o‘zgartirish shart emas.'
         }
       />
+
+      <AccountingNav />
 
       <Card>
         {accounts.length > 0 && (

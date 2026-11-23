@@ -9,6 +9,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate, LEDGER_CURRENCY } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { AccountingNav } from '@/components/accounting/AccountingNav';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -100,6 +101,8 @@ export default function JournalPage() {
             : 'Har bir tasdiqlangan operatsiya: qaysi hisob debetlanadi, qaysi biri kreditlanadi va qancha (UZS da).'
         }
       />
+
+      <AccountingNav />
 
       <Card>
         {entries.length > 0 && (

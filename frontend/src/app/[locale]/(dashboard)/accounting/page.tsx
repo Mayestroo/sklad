@@ -2,20 +2,19 @@
 
 import { useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Link, useRouter } from '@/i18n/navigation';
+import { useRouter } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
-import { buttonStyle } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { matchesSearch } from '@/components/ui/SearchField';
 import { AccountTypeBadge } from '@/components/accounting/AccountTypeBadge';
-import { BookOpen, FileText, PieChart, Scale } from 'lucide-react';
+import { MousePointerClick, Scale } from 'lucide-react';
+import { AccountingNav } from '@/components/accounting/AccountingNav';
 import { TrialBalanceReport, type TrialBalanceItem, type AccountType } from '@shared/types';
 import { Button } from '@/components/ui/Button';
 import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
@@ -59,13 +58,22 @@ export default function AccountingPage() {
   const balanced = osv ? isBalanced(osv.totalDebitTurnover, osv.totalCreditTurnover) : true;
 
   const movementCount = (type: AccountType) => (osv?.items ?? []).filter((i) => i.accountType === type && (i.debitTurnover || i.creditTurnover || i.closingBalance)).length;
+  const activeAccounts = (osv?.items ?? []).filter((i) => i.debitTurnover || i.creditTurnover || i.closingBalance).length;
   const filterDefs: FilterDef[] = [
-    { key: 'type', kind: 'segmented', label: isRu ? 'Тип счёта' : 'Hisob turi', options: ACCOUNT_TYPES_SHOWN.map((type) => ({ value: type, label: ta(`type_${type}`) })) },
+    {
+      key: 'type',
+      kind: 'segmented',
+      label: isRu ? 'Тип счёта' : 'Hisob turi',
+      options: ACCOUNT_TYPES_SHOWN.filter((type) => movementCount(type) > 0 || typeFilter === type).map((type) => ({ value: type, label: ta(`type_${type}`), count: movementCount(type) })),
+    },
     { key: 'allAccounts', kind: 'toggle', label: isRu ? 'Все счета' : 'Barcha hisoblar' },
   ];
 
+  // A zero turnover is a quiet dash; screen readers still hear the amount.
+  const money = (v: number, currency: string) => (v === 0 ? <span className="acc-zero" aria-label={formatCurrency(0, locale, currency)}>—</span> : formatCurrency(v, locale, currency));
+
   return (
-    <div>
+    <div className="rd-page">
       <PageHeader
         title={isRu ? 'Бухгалтерия' : 'Buxgalteriya'}
         subtitle={
@@ -73,27 +81,25 @@ export default function AccountingPage() {
             ? 'Оборотно-сальдовая ведомость: обороты и остатки по каждому счёту. Проводки создаются документами автоматически.'
             : 'Aylanma-saldo qaydnomasi: har bir hisob bo‘yicha aylanma va qoldiq. Provodkalarni hujjatlar avtomatik yaratadi.'
         }
-        actions={
-          <>
-            <Link href="/accounting/accounts" style={buttonStyle('outline')}>
-              <BookOpen size={16} aria-hidden /> {isRu ? 'План счетов' : 'Hisoblar rejasi'}
-            </Link>
-            <Link href="/accounting/journal" style={buttonStyle('outline')}>
-              <FileText size={16} aria-hidden /> {isRu ? 'Журнал проводок' : 'Provodkalar jurnali'}
-            </Link>
-            <Link href="/accounting/reports" style={buttonStyle('primary')}>
-              <PieChart size={16} aria-hidden /> {isRu ? 'Финансовая отчётность' : 'Moliyaviy hisobotlar'}
-            </Link>
-          </>
-        }
       />
+
+      <AccountingNav />
 
       {osv && osv.items.length > 0 && (
         <StatCardGrid label={tl('summary')} count={3}>
           <StatCard label={ta('check')} value={balanced ? (isRu ? 'Дебет = Кредит' : 'Debet = Kredit') : tIn('teng_emas')} negative={!balanced} secondary={balanced ? ta('checkOk') : ta('checkBad')} />
-          {ACCOUNT_TYPES_SHOWN.map((type) => (
-            <StatCard key={type} label={ta(`type_${type}`)} value={movementCount(type)} secondary={ta('accountsWithMovement')} />
-          ))}
+          <StatCard
+            label={isRu ? 'Оборот за всё время' : 'Jami aylanma'}
+            value={formatCurrency(osv.totalDebitTurnover, locale, osv.currency)}
+            secondary={isRu ? 'Сумма всех проводок (дебет = кредит)' : 'Barcha provodkalar summasi (debet = kredit)'}
+          />
+          <StatCard
+            label={isRu ? 'Счета с движением' : 'Harakatli hisoblar'}
+            value={activeAccounts}
+            secondary={ACCOUNT_TYPES_SHOWN.filter((type) => movementCount(type) > 0)
+              .map((type) => `${ta(`type_${type}`)}: ${movementCount(type)}`)
+              .join(' · ')}
+          />
         </StatCardGrid>
       )}
 
@@ -114,12 +120,10 @@ export default function AccountingPage() {
             </p>
           </div>
           {osv && osv.items.length > 0 && (
-            <Badge variant={balanced ? 'success' : 'error'}>
-              <Scale size={12} aria-hidden style={{ marginRight: 4 }} />
-              {balanced
-                ? isRu ? 'Дебет = Кредит' : 'Debet = Kredit'
-                : isRu ? 'Дебет и кредит не сходятся' : 'Debet va kredit teng emas'}
-            </Badge>
+            <p className="acc-hint">
+              <MousePointerClick size={14} aria-hidden />
+              {ta('rowHint')}
+            </p>
           )}
         </div>
 
@@ -163,9 +167,9 @@ export default function AccountingPage() {
                 { key: 'code', label: isRu ? 'Счёт' : 'Hisob', primary: true, locked: true, sortValue: (i) => i.accountCode, render: (i) => <span className="rd-doc-no tabular-nums">{i.accountCode}</span>, footer: <span>{isRu ? 'Итого обороты' : 'Jami aylanma'}</span> },
                 { key: 'name', label: isRu ? 'Название' : 'Nomi', sortValue: (i) => i.accountName[locale] || '', render: (i) => <span style={{ fontWeight: 'var(--font-medium)' }}>{i.accountName[locale] || i.accountName.ru || i.accountName.uz}</span> },
                 { key: 'type', label: isRu ? 'Тип' : 'Turi', sortValue: (i) => i.accountType, render: (i) => <AccountTypeBadge type={i.accountType} /> },
-                { key: 'debit', label: isRu ? 'Оборот по дебету' : 'Debet aylanmasi', numeric: true, sortValue: (i) => i.debitTurnover, render: (i) => formatCurrency(i.debitTurnover, locale, osv.currency), footer: formatCurrency(osv.totalDebitTurnover, locale, osv.currency) },
-                { key: 'credit', label: isRu ? 'Оборот по кредиту' : 'Kredit aylanmasi', numeric: true, sortValue: (i) => i.creditTurnover, render: (i) => formatCurrency(i.creditTurnover, locale, osv.currency), footer: formatCurrency(osv.totalCreditTurnover, locale, osv.currency) },
-                { key: 'saldo', label: isRu ? 'Сальдо' : 'Saldo', numeric: true, sortValue: (i) => i.closingBalance, render: (i) => <strong style={{ color: i.closingBalance >= 0 ? undefined : 'var(--color-error-700)' }}>{formatCurrency(i.closingBalance, locale, osv.currency)}</strong> },
+                { key: 'debit', label: isRu ? 'Оборот по дебету' : 'Debet aylanmasi', numeric: true, sortValue: (i) => i.debitTurnover, render: (i) => money(i.debitTurnover, osv.currency), footer: formatCurrency(osv.totalDebitTurnover, locale, osv.currency) },
+                { key: 'credit', label: isRu ? 'Оборот по кредиту' : 'Kredit aylanmasi', numeric: true, sortValue: (i) => i.creditTurnover, render: (i) => money(i.creditTurnover, osv.currency), footer: formatCurrency(osv.totalCreditTurnover, locale, osv.currency) },
+                { key: 'saldo', label: isRu ? 'Сальдо' : 'Saldo', numeric: true, sortValue: (i) => i.closingBalance, render: (i) => (i.closingBalance === 0 ? money(0, osv.currency) : <strong style={{ color: i.closingBalance > 0 ? undefined : 'var(--color-error-700)' }}>{formatCurrency(i.closingBalance, locale, osv.currency)}</strong>) },
               ] as Column<TrialBalanceItem>[]}
               rowKey={(i) => i.accountCode}
               sort={sort}

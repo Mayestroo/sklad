@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { AccountingNav } from '@/components/accounting/AccountingNav';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PieChart, Printer } from 'lucide-react';
@@ -79,6 +80,8 @@ export default function FinancialReportsPage() {
           ) : undefined
         }
       />
+
+      <AccountingNav />
 
       {statementsQuery.isError ? (
         <Card>

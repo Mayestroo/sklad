@@ -1,18 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import { useState, useMemo, useSyncExternalStore } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useLocale, useTranslations } from 'next-intl';
 import { quickPeriodRange } from '@/lib/date-range';
+import { fillCashFlowSeries } from '@/lib/cash-flow-series';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Link } from '@/i18n/navigation';
@@ -31,11 +23,8 @@ import {
   ShoppingCart,
   Building2,
   ArrowRight,
-  ArrowUpRight,
-  ArrowDownRight,
   RefreshCw,
   Calendar,
-  Plus,
   PackagePlus,
   PackageX,
   Receipt,
@@ -53,23 +42,76 @@ import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 
 // ─── Cash Flow Chart (Recharts) ──────────────────────────────────
 
+/** True when the user asked the system for less motion. */
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+function usePrefersReducedMotion(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      if (typeof window.matchMedia !== 'function') return () => {};
+      const mq = window.matchMedia(REDUCED_MOTION);
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    },
+    () => typeof window.matchMedia === 'function' && window.matchMedia(REDUCED_MOTION).matches,
+    () => false,
+  );
+}
+
+/** "2026-11-21" → "21.11", "2026-11" → "11.2026"; anything else as is. */
+function periodTick(v: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v.slice(8, 10)}.${v.slice(5, 7)}`;
+  if (/^\d{4}-\d{2}$/.test(v)) return `${v.slice(5, 7)}.${v.slice(0, 4)}`;
+  return v;
+}
+
+function CashFlowTooltip({ active, payload, label, currency, locale, incomeLabel, expenseLabel }: {
+  active?: boolean;
+  payload?: ReadonlyArray<{ dataKey?: unknown; value?: unknown }>;
+  label?: unknown;
+  currency: string;
+  locale: string;
+  incomeLabel: string;
+  expenseLabel: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const val = (key: string) => Number(payload.find((p) => p.dataKey === key)?.value ?? 0);
+  return (
+    <div className="dash-chart-tip">
+      <div className="dash-chart-tip-date">{periodTick(String(label ?? ''))}</div>
+      <div className="dash-chart-tip-row">
+        <span className="dash-swatch is-income" aria-hidden />
+        {incomeLabel}
+        <b className="tabular-nums">{formatCurrency(val('income'), locale, currency)}</b>
+      </div>
+      <div className="dash-chart-tip-row">
+        <span className="dash-swatch is-expense" aria-hidden />
+        {expenseLabel}
+        <b className="tabular-nums">{formatCurrency(val('expense'), locale, currency)}</b>
+      </div>
+    </div>
+  );
+}
+
 function CashFlowChart({
   seriesByCurrency,
   isRu,
+  locale,
+  granularity,
+  range,
 }: {
   seriesByCurrency: { currency: string; series: CashFlowPoint[] }[];
   isRu: boolean;
+  locale: string;
+  granularity: 'day' | 'week' | 'month';
+  range: { from: string; to: string };
 }) {
   // The user's tab; until one is picked (or when it has no series), the UZS
   // series if there is one, else the first. Which tab is open, not a data value.
   const [chosenCurrency, setActiveCurrency] = useState<string | null>(null);
+  const reducedMotion = usePrefersReducedMotion();
 
   if (seriesByCurrency.length === 0) {
-    return (
-      <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-        {isRu ? 'Нет данных за выбранный период' : 'Tanlangan davr uchun ma\'lumot yo\'q'}
-      </div>
-    );
+    return <div className="dash-chart-empty">{isRu ? 'Нет данных за выбранный период' : 'Tanlangan davr uchun ma’lumot yo‘q'}</div>;
   }
 
   const currencies = seriesByCurrency.map((e) => e.currency);
@@ -78,112 +120,66 @@ function CashFlowChart({
     seriesByCurrency.find((e) => e.currency === 'UZS') ??
     seriesByCurrency[0];
   const activeCurrency = currentEntry.currency;
-  const series = currentEntry.series;
-
-
-  const incomeKey = isRu ? 'Приход' : 'Kirim';
-  const expenseKey = isRu ? 'Расход' : 'Chiqim';
-
-  const data = series.map((s) => ({
-    period: s.period,
-    [incomeKey]: s.income,
-    [expenseKey]: s.expense,
-  }));
+  const series = fillCashFlowSeries(currentEntry.series, granularity, range.from, range.to);
+  const incomeLabel = isRu ? 'Приход' : 'Kirim';
+  const expenseLabel = isRu ? 'Расход' : 'Chiqim';
+  const totalIncome = series.reduce((a, s) => a + s.income, 0);
+  const totalExpense = series.reduce((a, s) => a + s.expense, 0);
+  const net = totalIncome - totalExpense;
+  const data = series.map((s) => ({ period: s.period, income: s.income, expense: s.expense }));
 
   return (
     <div>
-      {/* Currency Tabs — always visible when multiple currencies exist */}
-      {currencies.length > 1 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          {currencies.map((cur) => (
-            <button
-              key={cur}
-              onClick={() => setActiveCurrency(cur)}
-              style={{
-                padding: '3px 12px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-border)',
-                cursor: 'pointer',
-                fontSize: 'var(--text-xs)',
-                fontWeight: activeCurrency === cur ? 600 : 400,
-                background: activeCurrency === cur ? 'var(--color-btn-primary-bg, var(--color-primary-600))' : 'var(--color-bg-secondary)',
-                color: activeCurrency === cur ? 'var(--color-btn-primary-text, #fff)' : 'var(--color-text-secondary)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {cur}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="dash-flow-head">
+        {/* The totals double as the legend: swatch, word and figure together */}
+        <dl className="dash-flow-totals">
+          <div>
+            <dt><span className="dash-swatch is-income" aria-hidden />{incomeLabel}</dt>
+            <dd className="tabular-nums">{formatCurrency(totalIncome, locale, activeCurrency)}</dd>
+          </div>
+          <div>
+            <dt><span className="dash-swatch is-expense" aria-hidden />{expenseLabel}</dt>
+            <dd className="tabular-nums">{formatCurrency(totalExpense, locale, activeCurrency)}</dd>
+          </div>
+          <div>
+            <dt>{isRu ? 'Чистый поток' : 'Sof oqim'}</dt>
+            <dd className="tabular-nums" style={{ color: net < 0 ? 'var(--color-error-700)' : undefined }}>
+              {net > 0 ? '+' : ''}
+              {formatCurrency(net, locale, activeCurrency)}
+            </dd>
+          </div>
+        </dl>
+        {currencies.length > 1 && (
+          <SegmentedFilter
+            name="cashflow-currency"
+            label={isRu ? 'Валюта' : 'Valyuta'}
+            value={activeCurrency}
+            onChange={(v) => v && setActiveCurrency(v)}
+            options={currencies.map((c) => ({ value: c, label: c }))}
+          />
+        )}
+      </div>
 
       {series.length === 0 ? (
-        <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)' }}>
-          {isRu ? `Нет операций в ${activeCurrency} за выбранный период` : `Tanlangan davr uchun ${activeCurrency} operatsiyalari yo'q`}
+        <div className="dash-chart-empty">
+          {isRu ? `Нет операций в ${activeCurrency} за выбранный период` : `Tanlangan davr uchun ${activeCurrency} operatsiyalari yo‘q`}
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`colorIncome-${activeCurrency}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-success-600)" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="var(--color-success-600)" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={`colorExpense-${activeCurrency}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-error-600)" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="var(--color-error-600)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" vertical={false} />
-            <XAxis
-              dataKey="period"
-              tick={{ fontSize: 11, fill: 'var(--color-text-tertiary)' }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v: string) => v.slice(5)}
-            />
-            <YAxis
-              tickFormatter={formatCompactNumber}
-              tick={{ fontSize: 11, fill: 'var(--color-text-tertiary)' }}
-              tickLine={false}
-              axisLine={false}
-              width={52}
-            />
-            <Tooltip
-              contentStyle={{
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 8,
-                fontSize: 12,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-              }}
-              formatter={(value: number | string | readonly (number | string)[] | undefined, name?: number | string) => [
-                formatMoney(typeof value === 'number' ? value : Number(value) || 0, activeCurrency),
-                name ? String(name) : '',
-              ]}
-              labelStyle={{ color: 'var(--color-text-secondary)', marginBottom: 4 }}
-            />
-            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-            <Area
-              type="monotone"
-              dataKey={incomeKey}
-              stroke="var(--color-success-600)"
-              strokeWidth={2}
-              fill={`url(#colorIncome-${activeCurrency})`}
-              dot={series.length <= 14 ? { r: 3, fill: 'var(--color-success-600)', strokeWidth: 0 } : false}
-              activeDot={{ r: 5 }}
-            />
-            <Area
-              type="monotone"
-              dataKey={expenseKey}
-              stroke="var(--color-error-600)"
-              strokeWidth={2}
-              fill={`url(#colorExpense-${activeCurrency})`}
-              dot={series.length <= 14 ? { r: 3, fill: 'var(--color-error-600)', strokeWidth: 0 } : false}
-              activeDot={{ r: 5 }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        <div role="img" aria-label={`${incomeLabel}: ${formatCurrency(totalIncome, locale, activeCurrency)}; ${expenseLabel}: ${formatCurrency(totalExpense, locale, activeCurrency)}`}>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart key={`${activeCurrency}-${series.length}`} data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barGap={1} barCategoryGap="16%">
+              <CartesianGrid stroke="var(--color-border-light)" vertical={false} />
+              <XAxis dataKey="period" tick={{ fontSize: 11, fill: 'var(--color-text-tertiary)' }} tickLine={false} axisLine={{ stroke: 'var(--color-border)' }} tickFormatter={periodTick} minTickGap={12} />
+              <YAxis tickFormatter={formatCompactNumber} tick={{ fontSize: 11, fill: 'var(--color-text-tertiary)' }} tickLine={false} axisLine={false} width={52} />
+              <Tooltip
+                cursor={{ fill: 'var(--color-bg-tertiary)', opacity: 0.6 }}
+                content={(props) => <CashFlowTooltip {...props} currency={activeCurrency} locale={locale} incomeLabel={incomeLabel} expenseLabel={expenseLabel} />}
+              />
+              <Bar dataKey="income" name={incomeLabel} fill="var(--color-chart-income)" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={!reducedMotion} animationDuration={700} animationEasing="ease-out" />
+              <Bar dataKey="expense" name={expenseLabel} fill="var(--color-chart-expense)" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={!reducedMotion} animationDuration={700} animationBegin={120} animationEasing="ease-out" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
@@ -228,10 +224,14 @@ export default function DashboardPage() {
   const [period, setPeriod] = usePersistentState<DashboardPeriod>('dashboard.period', 'this_month');
   const [cashFlowGranularity, setCashFlowGranularity] = usePersistentState<'day' | 'week' | 'month'>('dashboard.granularity', 'day');
 
-  const dashboardEndpoint = useMemo(() => {
+  const periodRange = useMemo(() => {
     const { date_from, date_to } = quickPeriodRange(period);
+    return { from: date_from, to: date_to };
+  }, [period]);
+  const dashboardEndpoint = useMemo(() => {
+    const { from: date_from, to: date_to } = periodRange;
     return `/dashboard?${new URLSearchParams({ date_from, date_to, granularity: cashFlowGranularity })}`;
-  }, [period, cashFlowGranularity]);
+  }, [periodRange, cashFlowGranularity]);
   // keepPrevious: switching the period keeps the current numbers until the
   // new ones arrive, as before.
   const dashboardQuery = useApiQuery<FullDashboard>(dashboardEndpoint, { keepPrevious: true });
@@ -268,8 +268,6 @@ export default function DashboardPage() {
   const deadlines = ordersQuery.data?.upcomingDeadlines?.length ?? 0;
   const receivable = data?.debts?.receivable;
   const payable = data?.debts?.payable;
-  const money = (items: { currency: string; amount: number }[] | undefined) =>
-    items && items.length > 0 ? <MultiCurrencyValue items={items} locale={locale} /> : undefined;
 
   const todo: React.ReactNode[] = [];
   if (draftSales > 0) todo.push(<AttentionRow key="ds" icon={ShoppingCart} tone="warning" title={td('draftSales', { count: draftSales })} hint={td('draftSalesHint')} href="/sales?status=DRAFT" action={td('actPost')} />);
@@ -278,8 +276,6 @@ export default function DashboardPage() {
   if (deadlines > 0) todo.push(<AttentionRow key="dl" icon={Clock} tone="error" title={td('deadlines', { count: deadlines })} href="/sales/orders" action={td('actView')} />);
   if (ordersAwaitingPayment > 0) todo.push(<AttentionRow key="op" icon={CreditCard} tone="warning" title={td('ordersAwaitingPayment', { count: ordersAwaitingPayment })} href="/sales/orders" action={td('actView')} />);
   if (lowStock > 0) todo.push(<AttentionRow key="ls" icon={PackageX} tone="error" title={td('lowStock', { count: lowStock })} hint={td('lowStockHint')} href="/products?stock=low" action={td('actRestock')} />);
-  if ((receivable?.count ?? 0) > 0) todo.push(<AttentionRow key="rc" icon={ArrowDownRight} tone="success" title={td('receivable', { count: receivable?.count ?? 0 })} amount={money(receivable?.byCurrency)} href="/counterparties" action={td('actCollect')} />);
-  if ((payable?.count ?? 0) > 0) todo.push(<AttentionRow key="pb" icon={ArrowUpRight} tone="error" title={td('payable', { count: payable?.count ?? 0 })} amount={money(payable?.byCurrency)} href="/counterparties" action={td('actPay')} />);
 
   const accountMovement = new Map((data?.finance.summaryByAccount ?? []).map((a) => [a.accountId, a]));
   const attentionLoading = dashboardQuery.isPending || draftSalesQuery.isPending || lowStockQuery.isPending;
@@ -315,7 +311,6 @@ export default function DashboardPage() {
           { href: '/purchases/new', label: t('qaNewReceipt'), Icon: PackagePlus },
           { href: '/finance', label: t('qaPayment'), Icon: CreditCard },
           { href: '/purchases/expenses/new', label: t('qaNewExpense'), Icon: Receipt },
-          { href: '/products/new', label: t('qaNewProduct'), Icon: Plus },
         ].map(({ href, label, Icon, primary }) => (
           <Link key={href} href={href} className={`dash-quick-action${primary ? ' is-primary' : ''}`}>
             <Icon size={18} aria-hidden />
@@ -452,7 +447,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Cash flow: one chart, one question */}
+      {/* Cash flow: one chart, one question; the latest operations beside it */}
+      <div className="dash-flow-grid">
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
           <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{td('cashFlowQ')}</h2>
@@ -468,7 +464,7 @@ export default function DashboardPage() {
             ]}
           />
         </div>
-        <CashFlowChart seriesByCurrency={data?.cashFlow?.seriesByCurrency ?? []} isRu={isRu} />
+        <CashFlowChart seriesByCurrency={data?.cashFlow?.seriesByCurrency ?? []} isRu={isRu} locale={locale} granularity={cashFlowGranularity} range={periodRange} />
       </Card>
 
       {/* Recent money operations */}
@@ -485,7 +481,7 @@ export default function DashboardPage() {
         ) : (
           <table className="rd-mini-table" style={{ marginTop: 'var(--space-2)' }}>
             <tbody>
-              {data.recentTransactions.slice(0, 7).map((tx) => (
+              {data.recentTransactions.slice(0, 6).map((tx) => (
                 <tr key={tx.id}>
                   <td style={{ width: 36 }}>
                     {tx.direction === 'INCOME' && <TrendingUp size={16} aria-hidden style={{ color: 'var(--color-success-700)' }} />}
@@ -494,7 +490,7 @@ export default function DashboardPage() {
                   </td>
                   <td>
                     <div style={{ fontWeight: 'var(--font-medium)' }}>{tx.counterparty?.name ?? tx.account?.name?.[locale] ?? (isRu ? 'Операция' : 'Operatsiya')}</div>
-                    <div className="rd-sub">{formatDate(tx.transactionDate, locale)} · {tx.account?.name?.[locale] ?? ''}</div>
+                    <div className="rd-sub">{formatDate(tx.transactionDate, locale)}{tx.counterparty?.name && tx.account?.name?.[locale] ? ` · ${tx.account.name[locale]}` : ''}</div>
                   </td>
                   <td
                     className="tabular-nums"
@@ -513,6 +509,7 @@ export default function DashboardPage() {
           </table>
         )}
       </Card>
+      </div>
     </div>
   );
 }
