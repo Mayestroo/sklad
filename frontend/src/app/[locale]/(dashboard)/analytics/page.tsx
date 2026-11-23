@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
@@ -12,7 +12,6 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { ArrowRight, BarChart3, Printer } from 'lucide-react';
 import {
   KpiSummary,
@@ -23,6 +22,8 @@ import {
   TopClientItem,
 } from '@shared/types';
 import { unitLabel } from '@/lib/units';
+import { SegmentedFilter } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 
 type Range = 'today' | 'week' | 'month' | 'quarter' | 'year';
 const RANGES: Range[] = ['today', 'week', 'month', 'quarter', 'year'];
@@ -44,15 +45,6 @@ function periodLabel(period: string, locale: 'uz' | 'ru'): string {
   return m ? `${MONTHS[locale][Number(m[2]) - 1]} ${m[1]}` : period;
 }
 
-function Kpi({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
-  return (
-    <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>{label}</div>
-      <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)' }} className="tabular-nums">{children}</div>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{hint}</div>
-    </Card>
-  );
-}
 
 function SectionTitle({ title, hint, action }: { title: string; hint?: string; action?: { href: string; label: string } }) {
   return (
@@ -171,44 +163,24 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      <div role="group" aria-label={isRu ? 'Период' : 'Davr'} className="no-print" style={{ display: 'flex', maxWidth: '100%', overflowX: 'auto', alignSelf: 'flex-start', backgroundColor: 'var(--color-segmented-bg)', padding: 2, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-segmented-border)' }}>
-        {RANGES.map((range) => {
-          const on = timeRange === range;
-          return (
-            <button
-              key={range}
-              type="button"
-              aria-pressed={on}
-              onClick={() => setTimeRange(range)}
-              style={{
-                minHeight: 32,
-                padding: '6px 14px',
-                fontSize: 'var(--text-sm)',
-                fontWeight: on ? 600 : 500,
-                whiteSpace: 'nowrap',
-                borderRadius: 'var(--radius-sm)',
-                border: on ? '1px solid var(--color-segmented-active-border)' : '1px solid transparent',
-                backgroundColor: on ? 'var(--color-segmented-active-bg)' : 'transparent',
-                color: on ? 'var(--color-primary-700)' : 'var(--color-text-secondary)',
-                cursor: 'pointer',
-                boxShadow: on ? 'var(--color-segmented-active-shadow)' : 'none',
-              }}
-            >
-              {isRu ? RANGE_LABEL[range].ru : RANGE_LABEL[range].uz}
-            </button>
-          );
-        })}
+      <div className="no-print" style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
+        <SegmentedFilter
+          name="range"
+          label={isRu ? 'Период' : 'Davr'}
+          options={RANGES.map((range) => ({ value: range, label: isRu ? RANGE_LABEL[range].ru : RANGE_LABEL[range].uz }))}
+          value={timeRange}
+          onChange={(v) => v && setTimeRange(v as Range)}
+        />
       </div>
 
       {failedQuery ? (
         <Card><LoadError error={failedQuery.error} onRetry={retryFailed} retrying={requiredQueries.some((q) => q.isFetching)} /></Card>
       ) : loading ? (
-        <div role="status" className="ux-kpi-grid">
-          <span className="sr-only">{isRu ? 'Загрузка…' : 'Yuklanmoqda…'}</span>
+        <StatCardGrid label={isRu ? 'Показатели' : 'Ko‘rsatkichlar'} count={4}>
           {[0, 1, 2, 3].map((i) => (
-            <Card key={i}><Skeleton height={12} width="60%" /><Skeleton height={24} width="80%" style={{ marginTop: 12 }} /></Card>
+            <StatCard key={i} label="" value={null} loading />
           ))}
-        </div>
+        </StatCardGrid>
       ) : (
         <>
           {kpi && (
@@ -239,27 +211,20 @@ export default function AnalyticsPage() {
             </section>
           )}
 
-          <div className="ux-kpi-grid">
-            <Kpi label={isRu ? 'Выручка' : 'Sotuv tushumi'} hint={isRu ? `Проведённые продажи, ${rangeName}` : `Tasdiqlangan sotuvlar, ${rangeName}`}>
-              <MultiCurrencyValue items={kpi?.totalRevenueByCurrency} locale={locale} />
-            </Kpi>
-            <Kpi
+          <StatCardGrid label={isRu ? 'Показатели' : 'Ko‘rsatkichlar'} count={4}>
+            <StatCard label={isRu ? 'Выручка' : 'Sotuv tushumi'} value={<MultiCurrencyValue inherit items={kpi?.totalRevenueByCurrency} locale={locale} />} secondary={isRu ? `Проведённые продажи, ${rangeName}` : `Tasdiqlangan sotuvlar, ${rangeName}`} />
+            <StatCard
               label={isRu ? 'Валовая прибыль' : 'Yalpi foyda'}
-              hint={
+              value={<MultiCurrencyValue inherit items={kpi?.grossProfitByCurrency} locale={locale} />}
+              secondary={
                 kpi && kpi.netProfitMargin
                   ? isRu ? `Маржа ${kpi.netProfitMargin}% · выручка без НДС минус себестоимость` : `Marja ${kpi.netProfitMargin}% · QQSsiz tushum minus tannarx`
                   : isRu ? 'Выручка без НДС минус себестоимость' : 'QQSsiz tushum minus tannarx'
               }
-            >
-              <MultiCurrencyValue items={kpi?.grossProfitByCurrency} locale={locale} />
-            </Kpi>
-            <Kpi label={isRu ? 'Нам должны клиенты' : 'Mijozlar qarzi'} hint={isRu ? 'Дебиторская задолженность сейчас' : 'Hozirgi debitorlik qarzi'}>
-              <MultiCurrencyValue items={kpi?.receivablesByCurrency} locale={locale} />
-            </Kpi>
-            <Kpi label={isRu ? 'Мы должны поставщикам' : 'Yetkazib beruvchilarga qarzimiz'} hint={isRu ? 'Кредиторская задолженность сейчас' : 'Hozirgi kreditorlik qarzi'}>
-              <MultiCurrencyValue items={kpi?.payablesByCurrency} locale={locale} />
-            </Kpi>
-          </div>
+            />
+            <StatCard label={isRu ? 'Нам должны клиенты' : 'Mijozlar qarzi'} value={<MultiCurrencyValue inherit items={kpi?.receivablesByCurrency} locale={locale} />} secondary={isRu ? 'Дебиторская задолженность сейчас' : 'Hozirgi debitorlik qarzi'} />
+            <StatCard label={isRu ? 'Мы должны поставщикам' : 'Yetkazib beruvchilarga qarzimiz'} value={<MultiCurrencyValue inherit items={kpi?.payablesByCurrency} locale={locale} />} secondary={isRu ? 'Кредиторская задолженность сейчас' : 'Hozirgi kreditorlik qarzi'} />
+          </StatCardGrid>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'var(--ux-split-2-1)', gap: 'var(--space-6)', alignItems: 'start' }}>
             <Card style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
