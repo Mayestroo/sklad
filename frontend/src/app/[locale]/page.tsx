@@ -46,7 +46,8 @@ import {
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Select } from '@/components/ui/Select';
-import { Signal } from '@/components/ui/list/ListKit';
+import { SegmentedFilter } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -390,29 +391,33 @@ export default function DashboardPage() {
         <h2 id="dash-results" className="dash-section-title">
           {td('resultsTitle')} <span className="dash-section-period">· {periodLabels[period]}</span>
         </h2>
-        <div className="rd-signals">
-          <Signal
-            tone="info"
+        <StatCardGrid label={td('resultsTitle')} count={3}>
+          <StatCard
             label={td('sales')}
-            value={
-              data?.sales.byCurrency?.length
-                ? <MultiCurrencyValue items={data.sales.byCurrency} locale={locale} />
-                : formatCurrency(data?.sales?.totalSales ?? 0, locale, 'UZS')
-            }
-            hint={td('salesDocs', { count: data?.sales?.invoiceCount ?? 0 })}
+            loading={!data && loading}
+            value={data?.sales.byCurrency?.length ? <MultiCurrencyValue inherit items={data.sales.byCurrency} locale={locale} /> : formatCurrency(data?.sales?.totalSales ?? 0, locale, 'UZS')}
+            secondary={td('salesDocs', { count: data?.sales?.invoiceCount ?? 0 })}
           />
-          <Signal tone="success" label={`${td('grossProfit')} (UZS)`} value={formatCurrency(data?.finance?.profit?.grossProfit ?? 0, locale, 'UZS')} hint={td('grossProfitHint')} />
-          <Signal
-            tone="error"
+          <StatCard
+            label={`${td('grossProfit')} (UZS)`}
+            loading={!data && loading}
+            value={formatCurrency(data?.finance?.profit?.grossProfit ?? 0, locale, 'UZS')}
+            negative={(data?.finance?.profit?.grossProfit ?? 0) < 0}
+            secondary={td('grossProfitHint')}
+          />
+          <StatCard
             label={td('expenses')}
+            loading={!data && loading}
             value={
-              (data?.finance?.summaryByCurrency ?? []).some((s) => s.totalExpense !== 0)
-                ? <MultiCurrencyValue items={(data?.finance?.summaryByCurrency ?? []).filter((s) => s.totalExpense !== 0).map((s) => ({ currency: s.currency, amount: s.totalExpense }))} locale={locale} />
-                : formatCurrency(0, locale, 'UZS')
+              (data?.finance?.summaryByCurrency ?? []).some((s) => s.totalExpense !== 0) ? (
+                <MultiCurrencyValue inherit items={(data?.finance?.summaryByCurrency ?? []).filter((s) => s.totalExpense !== 0).map((s) => ({ currency: s.currency, amount: s.totalExpense }))} locale={locale} />
+              ) : (
+                formatCurrency(0, locale, 'UZS')
+              )
             }
-            hint={td('expensesHint')}
+            secondary={td('expensesHint')}
           />
-        </div>
+        </StatCardGrid>
       </section>
 
       {/* Who owes whom */}
@@ -451,13 +456,17 @@ export default function DashboardPage() {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
           <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{td('cashFlowQ')}</h2>
-          <div className="rd-chips" role="group" aria-label={td('period')}>
-            {(['day', 'week', 'month'] as const).map((g) => (
-              <button key={g} type="button" className="rd-chip" aria-pressed={cashFlowGranularity === g} onClick={() => setCashFlowGranularity(g)}>
-                {g === 'day' ? (isRu ? 'День' : 'Kun') : g === 'week' ? (isRu ? 'Неделя' : 'Hafta') : (isRu ? 'Месяц' : 'Oy')}
-              </button>
-            ))}
-          </div>
+          <SegmentedFilter
+            name="granularity"
+            label={td('period')}
+            value={cashFlowGranularity}
+            onChange={(v) => v && setCashFlowGranularity(v as typeof cashFlowGranularity)}
+            options={[
+              { value: 'day', label: isRu ? 'День' : 'Kun' },
+              { value: 'week', label: isRu ? 'Неделя' : 'Hafta' },
+              { value: 'month', label: isRu ? 'Месяц' : 'Oy' },
+            ]}
+          />
         </div>
         <CashFlowChart seriesByCurrency={data?.cashFlow?.seriesByCurrency ?? []} isRu={isRu} />
       </Card>
