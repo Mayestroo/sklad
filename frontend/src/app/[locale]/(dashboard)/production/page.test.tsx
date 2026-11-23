@@ -56,7 +56,9 @@ const docCalls = () => apiFetch.mock.calls.map(([u]) => String(u)).filter((u) =>
 describe('Production page (TZ Ishlab chiqarish 6, 11)', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    // Filters live in the URL and localStorage: each test starts from a clean view.
     window.history.replaceState(null, '', '/uz/production');
+    window.localStorage.clear();
   });
 
   it('loads the documents and each reference list once; the cards show the document statistics', async () => {
@@ -67,8 +69,8 @@ describe('Production page (TZ Ishlab chiqarish 6, 11)', () => {
     await waitFor(() => expect(callsTo('/users/staff')).toBe(1));
     expect(docCalls()).toHaveLength(1);
     for (const url of REFERENCE) expect(callsTo(url)).toBe(1);
-    // The flow strip: step 2 (in work) and step 3 (finished) carry the document statistics.
-    const steps = screen.getByRole('list', { name: /bosqichlari/ });
+    // The flow cards: step 2 (in work) and step 3 (finished) carry the document statistics.
+    const steps = screen.getByRole('region', { name: /bosqichlari/ });
     expect(steps.textContent).toMatch(/Jarayonda\s*1/);
     expect(steps.textContent).toMatch(/Yakunlangan\s*3/);
   });
@@ -79,24 +81,26 @@ describe('Production page (TZ Ishlab chiqarish 6, 11)', () => {
     await screen.findAllByText('PR-0001');
     await waitFor(() => expect(callsTo('/users/staff')).toBe(1));
 
-    const search = screen.getByLabelText('Hujjatlarni qidirish');
+    const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'P' } });
     fireEvent.change(search, { target: { value: 'PR' } });
 
     await waitFor(() => expect(docCalls().some((u) => u.includes('search=PR'))).toBe(true));
     expect(docCalls().some((u) => /search=P(&|$)/.test(u))).toBe(false);
     for (const url of REFERENCE) expect(callsTo(url)).toBe(1);
-    // The active filter shows as a chip with a remove button.
-    expect(screen.getByRole('button', { name: /Filtrni olib tashlash: «PR»/ })).toBeTruthy();
+    // The active search shows as a chip with a remove button, and is kept in the URL.
+    expect(screen.getByRole('button', { name: /Qidiruv: «PR».*olib tashlash/ })).toBeTruthy();
+    expect(window.location.search).toContain('q=PR');
   });
 
-  it('"show in the list" on the finished step filters by that status', async () => {
+  it('the status filter shows finished documents (the cards are not buttons)', async () => {
     routes();
     renderPage(<ProductionPage />);
     await screen.findAllByText('PR-0001');
-    const showButtons = within(screen.getByRole('list', { name: /bosqichlari/ })).getAllByRole('button', { name: /Ro‘yxatda ko‘rsatish/ });
-    fireEvent.click(showButtons[showButtons.length - 1]);
+    expect(within(screen.getByRole('region', { name: /bosqichlari/ })).queryAllByRole('button')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('radio', { name: /^Yakunlangan/ }));
     await waitFor(() => expect(docCalls().some((u) => u.includes('status=COMPLETED'))).toBe(true));
+    expect(window.location.search).toContain('status=COMPLETED');
   });
 
   it('the recipes tab has its own cards and button, and remembers itself in the URL', async () => {
@@ -106,8 +110,9 @@ describe('Production page (TZ Ishlab chiqarish 6, 11)', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Retsepturalar/ }));
 
     expect(window.location.search).toBe('?tab=recipes');
-    expect(screen.getByRole('button', { name: /Jami retseptura\s*1/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Tannarxi hisoblanmagan\s*1/ })).toBeTruthy();
+    const cards = screen.getByRole('region', { name: /Retsepturalar/ });
+    expect(cards.textContent).toMatch(/Jami retseptura\s*1/);
+    expect(cards.textContent).toMatch(/Tannarxi hisoblanmagan\s*1/);
     expect(screen.getByRole('button', { name: /Yangi retseptura/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Ishlab chiqarish hujjati/ })).toBeNull();
     // Composition as chips, not one long text.

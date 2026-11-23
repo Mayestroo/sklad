@@ -3,31 +3,34 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, FileText, Layers3, ListChecks, Plus } from 'lucide-react';
+import { FileText, Layers3, Plus } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { errorMessage, formatCurrency } from '@/lib/utils';
 import { LoadError } from '@/components/ui/LoadError';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { FilterBar, periodRange, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { Link } from '@/i18n/navigation';
 import type { SelectOption } from '@/components/ui/Select';
 import type { MaterialCard } from '@/lib/production-recipe';
 import { RecipeFormModal, type RecipeProduct } from '@/components/production/RecipeFormModal';
 import { RecipesTab } from '@/components/production/RecipesTab';
-import { DocumentsTab, EMPTY_FILTERS, type DocumentFilters, type DocumentSortField } from '@/components/production/DocumentsTab';
+import { DocumentsTab, type DocumentSortField } from '@/components/production/DocumentsTab';
 import { ProductionDocumentFormModal } from '@/components/production/ProductionDocumentFormModal';
 import { ProductionDocumentDetailsModal } from '@/components/production/ProductionDocumentDetailsModal';
 import type { SortDir } from '@/components/production/TableParts';
-import { localName, personName, type DocumentsResponse, type Named, type ProductionDocument, type Recipe, type StaffOption } from '@/components/production/types';
+import { localName, personName, STATUS_FILTERS, type DocumentsResponse, type Named, type ProductionDocument, type Recipe, type StaffOption } from '@/components/production/types';
 
 type Tab = 'documents' | 'recipes';
 const PAGE_SIZE = 20;
+// Documents and recipes each keep their own filters in the URL (different keys, so both fit in one address).
+const DOC_FILTER_DEFAULTS = { status: '', productId: '', warehouseId: '', responsibleId: '', period: '' };
+const RECIPE_FILTER_DEFAULTS = { rstatus: '', uncosted: '' };
 
 
 export default function ProductionPage() {
@@ -63,11 +66,17 @@ export default function ProductionPage() {
   };
 
   // ── Documents: filters, sorting, paging (server side) ────────────────
-  const [filters, setFilters] = useState<DocumentFilters>(EMPTY_FILTERS);
-  const [page, setPage] = useState(1);
+  const docLf = useFilterState('production.docs', DOC_FILTER_DEFAULTS);
+  const filters = docLf.values;
+  const debouncedSearch = docLf.debouncedSearch;
+  const range = periodRange(filters.period);
   const [sortBy, setSortBy] = useState<DocumentSortField>('docDate');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const debouncedSearch = useDebouncedValue(filters.search.trim(), 300);
+  // A new filter or sort starts again at page 1.
+  const pageKey = `${debouncedSearch}|${filters.status}|${filters.productId}|${filters.warehouseId}|${filters.responsibleId}|${filters.period}|${sortBy}|${sortDir}`;
+  const [pageAt, setPageAt] = useState({ key: '', page: 1 });
+  const page = pageAt.key === pageKey ? pageAt.page : 1;
+  const setPage = (next: number) => setPageAt({ key: pageKey, page: next });
   const documentsEndpoint = useMemo(() => {
     const query = new URLSearchParams();
     if (debouncedSearch) query.set('search', debouncedSearch);
@@ -75,8 +84,8 @@ export default function ProductionPage() {
     if (filters.productId) query.set('productId', filters.productId);
     if (filters.warehouseId) query.set('warehouseId', filters.warehouseId);
     if (filters.responsibleId) query.set('responsibleId', filters.responsibleId);
-    if (filters.dateFrom) query.set('dateFrom', filters.dateFrom);
-    if (filters.dateTo) query.set('dateTo', filters.dateTo);
+    if (range.from) query.set('dateFrom', range.from);
+    if (range.to) query.set('dateTo', range.to);
     if (page > 1) query.set('page', String(page));
     if (sortBy !== 'docDate' || sortDir !== 'desc') {
       query.set('sortBy', sortBy);
@@ -84,12 +93,13 @@ export default function ProductionPage() {
     }
     query.set('pageSize', String(PAGE_SIZE));
     return `/production/documents?${query.toString()}`;
-  }, [debouncedSearch, filters.status, filters.productId, filters.warehouseId, filters.responsibleId, filters.dateFrom, filters.dateTo, page, sortBy, sortDir]);
+  }, [debouncedSearch, filters.status, filters.productId, filters.warehouseId, filters.responsibleId, range.from, range.to, page, sortBy, sortDir]);
   const documentsQuery = useApiQuery<DocumentsResponse>(documentsEndpoint, { keepPrevious: true });
 
   // ── Recipes and reference lists ──────────────────────────────────────
-  const [recipeStatus, setRecipeStatus] = useState('all');
-  const [uncostedOnly, setUncostedOnly] = useState(false);
+  const recLf = useFilterState('production.recipes', RECIPE_FILTER_DEFAULTS, { searchKey: 'rq' });
+  const recipeStatus = recLf.values.rstatus || 'all';
+  const uncostedOnly = recLf.values.uncosted === '1';
   const recipesQuery = useApiQuery<Recipe[]>('/production/recipes?status=all');
   const archivedQuery = useApiQuery<Recipe[]>(recipeStatus === 'archived' ? '/production/recipes?status=archived' : null);
   const finishedQuery = useApiQuery<RecipeProduct[]>('/production/finished-products');
@@ -176,10 +186,26 @@ export default function ProductionPage() {
     active: recipes.filter((r) => r.isActive).length,
     uncosted: recipes.filter((r) => r.estimate.missingPrice).length,
   };
-  const setDocFilter = (patch: Partial<DocumentFilters>) => {
-    setFilters((current) => ({ ...current, ...patch }));
-    setPage(1);
-  };
+  const docFilterDefs: FilterDef[] = [
+    { key: 'status', kind: 'segmented', label: t('holat'), options: STATUS_FILTERS.map((st) => ({ value: st.value, label: t(st.key) })) },
+    { key: 'productId', kind: 'select', label: t('mahsulot'), searchable: true, options: productOptions.map((o) => ({ value: o.value, label: String(o.label) })) },
+    { key: 'warehouseId', kind: 'select', label: t('ombor'), options: warehouseOptions.map((o) => ({ value: o.value, label: String(o.label) })) },
+    ...(canViewStaff ? [{ key: 'responsibleId', kind: 'select', label: t('masul'), searchable: true, options: staffOptions.map((o) => ({ value: o.value, label: String(o.label) })) } satisfies FilterDef] : []),
+    { key: 'period', kind: 'period', label: t('sanaOraligi') },
+  ];
+  const recipeFilterDefs: FilterDef[] = [
+    {
+      key: 'rstatus',
+      kind: 'segmented',
+      label: t('holat'),
+      options: [
+        { value: 'active', label: t('faol') },
+        { value: 'inactive', label: t('nofaol2') },
+        { value: 'archived', label: t('arxiv') },
+      ],
+    },
+    { key: 'uncosted', kind: 'toggle', label: t('tannarxiHisoblanmagan') },
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -220,55 +246,20 @@ export default function ProductionPage() {
 
       {failed && <LoadError error={failed.error} onRetry={() => queries.forEach((q) => q.isError && void q.refetch())} retrying={queries.some((q) => q.isFetching)} />}
 
-      {/* The production flow in three steps: what exists, what is in work, what is finished — each with its next action */}
-      {tab === 'documents' && (
-        <ol className="prod-steps" aria-label={tp('flow')}>
-          <li className={`rd-signal rd-tone-${recipeStats.active > 0 ? 'success' : 'warning'}`}>
-            <span className="rd-signal-label">1 · {tp('stepRecipe')}</span>
-            <span className="rd-signal-value">{recipeStats.active}</span>
-            <span className="rd-signal-hint">{recipeStats.active > 0 ? tp('stepRecipeOk', { uncosted: recipeStats.uncosted }) : tp('stepRecipeNone')}</span>
-            {can.create && (
-              <button type="button" className="rd-next-btn" style={{ marginTop: 6 }} onClick={() => (recipeStats.active > 0 ? setTab('recipes') : setRecipeForm('new'))}>
-                {recipeStats.active > 0 ? tp('openRecipes') : t('yangiRetseptura')}
-              </button>
-            )}
-          </li>
-          <li className="rd-signal rd-tone-warning">
-            <span className="rd-signal-label">2 · {t('jarayonda')}</span>
-            <span className="rd-signal-value">{stats ? String(stats.inProgress) : '—'}</span>
-            <span className="rd-signal-hint">{tp('stepWorkHint')}</span>
-            <span style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-              {can.create && recipeStats.active > 0 && (
-                <button type="button" className="rd-next-btn" disabled={noWarehouse} onClick={() => setDocForm({ document: null })}>
-                  <Plus size={13} aria-hidden /> {t('ishlabChiqarishHujjati')}
-                </button>
-              )}
-              <button type="button" className="rd-chip" aria-pressed={filters.status === 'IN_PROGRESS,READY'} onClick={() => setDocFilter({ status: filters.status === 'IN_PROGRESS,READY' ? '' : 'IN_PROGRESS,READY' })}>
-                {tp('showThese')}
-              </button>
-            </span>
-          </li>
-          <li className="rd-signal rd-tone-success">
-            <span className="rd-signal-label">3 · {t('yakunlangan')}</span>
-            <span className="rd-signal-value">{stats ? String(stats.completed) : '—'}</span>
-            <span className="rd-signal-hint">{t('ishlabChiqarishTannarxi')}: {stats ? formatCurrency(stats.completedCost, locale, 'UZS') : '—'}</span>
-            <span style={{ marginTop: 6 }}>
-              <button type="button" className="rd-chip" aria-pressed={filters.status === 'COMPLETED'} onClick={() => setDocFilter({ status: filters.status === 'COMPLETED' ? '' : 'COMPLETED' })}>
-                {tp('showThese')}
-              </button>
-            </span>
-          </li>
-        </ol>
+      {/* The production flow in three steps: what exists, what is in work, what is finished */}
+      {tab === 'documents' ? (
+        <StatCardGrid label={tp('flow')} count={3}>
+          <StatCard label={`1 · ${tp('stepRecipe')}`} loading={recipesQuery.isPending} value={recipeStats.active} secondary={recipeStats.active > 0 ? tp('stepRecipeOk', { uncosted: recipeStats.uncosted }) : tp('stepRecipeNone')} />
+          <StatCard label={`2 · ${t('jarayonda')}`} loading={!stats && documentsQuery.isPending} value={stats ? stats.inProgress : null} secondary={tp('stepWorkHint')} />
+          <StatCard label={`3 · ${t('yakunlangan')}`} loading={!stats && documentsQuery.isPending} value={stats ? stats.completed : null} secondary={`${t('ishlabChiqarishTannarxi')}: ${stats ? formatCurrency(stats.completedCost, locale, 'UZS') : '—'}`} />
+        </StatCardGrid>
+      ) : (
+        <StatCardGrid label={t('retsepturalar')} count={3}>
+          <StatCard label={t('jamiRetseptura')} loading={recipesQuery.isPending} value={recipeStats.total} />
+          <StatCard label={t('faol')} loading={recipesQuery.isPending} value={recipeStats.active} />
+          <StatCard label={t('tannarxiHisoblanmagan')} loading={recipesQuery.isPending} value={recipeStats.uncosted} secondary={t('narxsizXomashyoBor')} />
+        </StatCardGrid>
       )}
-      <div className="ux-kpi-grid" hidden={tab === 'documents'}>
-        {tab === 'documents' ? null : (
-          <>
-            <Kpi icon={<Layers3 size={20} aria-hidden />} title={t('jamiRetseptura')} value={String(recipeStats.total)} color="var(--color-primary-600)" active={recipeStatus === 'all' && !uncostedOnly} onClick={() => { setRecipeStatus('all'); setUncostedOnly(false); }} />
-            <Kpi icon={<ListChecks size={20} aria-hidden />} title={t('faol')} value={String(recipeStats.active)} color="var(--color-success-700)" active={recipeStatus === 'active'} onClick={() => setRecipeStatus(recipeStatus === 'active' ? 'all' : 'active')} />
-            <Kpi icon={<AlertTriangle size={20} aria-hidden />} title={t('tannarxiHisoblanmagan')} hint={t('narxsizXomashyoBor')} value={String(recipeStats.uncosted)} color="var(--color-warning-700)" active={uncostedOnly} onClick={() => setUncostedOnly(!uncostedOnly)} />
-          </>
-        )}
-      </div>
 
       <div
         role="tablist"
@@ -297,12 +288,9 @@ export default function ProductionPage() {
             documents={documents}
             total={documentsData?.total ?? 0}
             loading={documentsQuery.isPending || documentsQuery.isPlaceholderData}
-            filters={filters}
-            onFilters={setDocFilter}
-            onClearFilters={() => {
-              setFilters(EMPTY_FILTERS);
-              setPage(1);
-            }}
+            filterBar={<FilterBar state={docLf} defs={docFilterDefs} searchPlaceholder={t('hujjatRaqami')} label={t('hujjatlarniQidirish')} resultCount={documentsQuery.isPending ? null : (documentsData?.total ?? 0)} />}
+            filtered={Boolean(debouncedSearch || docLf.activeCount > 0)}
+            onClearFilters={docLf.reset}
             page={page}
             pageSize={PAGE_SIZE}
             onPage={setPage}
@@ -314,11 +302,7 @@ export default function ProductionPage() {
                 setSortBy(field);
                 setSortDir(field === 'docDate' || field === 'totalCost' ? 'desc' : 'asc');
               }
-              setPage(1);
             }}
-            productOptions={productOptions}
-            warehouseOptions={warehouseOptions}
-            staffOptions={canViewStaff ? staffOptions : null}
             canCreate={can.create && warehouses.length > 0}
             onCreate={() => setDocForm({ document: null })}
             onOpen={(doc) => void loadDocument(doc.id)}
@@ -338,9 +322,9 @@ export default function ProductionPage() {
             canDelete={can.delete}
             canCreateDocument={can.create}
             status={recipeStatus}
-            onStatusChange={setRecipeStatus}
             uncostedOnly={uncostedOnly}
-            onUncostedChange={setUncostedOnly}
+            search={recLf.search}
+            filterBar={<FilterBar state={recLf} defs={recipeFilterDefs} searchPlaceholder={t('mahsulotNomiYokiSku')} />}
             onCreate={() => setRecipeForm('new')}
             onEdit={(recipe) => setRecipeForm(recipe)}
             onCopy={async (recipe) => {
@@ -427,23 +411,6 @@ export default function ProductionPage() {
   );
 }
 
-function Kpi({ icon, title, value, color, active, onClick, hint }: { icon: React.ReactNode; title: string; value: string | null; color: string; active: boolean; onClick: () => void; hint?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 16, minHeight: 76, textAlign: 'left', cursor: 'pointer', borderRadius: 'var(--radius-lg)', border: `1px solid ${active ? 'var(--color-primary-500)' : 'var(--color-border-light)'}`, background: 'var(--color-bg-secondary)', boxShadow: 'var(--shadow-sm)' }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 12, color, background: 'var(--color-bg-tertiary)', flexShrink: 0 }}>{icon}</div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>{title}</div>
-        <div className="tabular-nums" style={{ color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 'var(--text-lg)' }}>{value ?? <Skeleton width={60} height={18} />}</div>
-        {hint && <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', marginTop: 2 }}>{hint}</div>}
-      </div>
-    </button>
-  );
-}
 
 function TabButton({ id, controls, active, onClick, children }: { id: string; controls: string; active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (

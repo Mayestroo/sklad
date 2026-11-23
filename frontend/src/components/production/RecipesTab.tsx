@@ -1,12 +1,11 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, Layers3, Pencil, Plus, Search } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AlertTriangle, ChevronDown, ChevronRight, Layers3, Pencil, Plus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { formatCurrency, formatDate, formatQuantity } from '@/lib/utils';
 import { unitLabel } from '@/lib/units';
 import { semiFinishedLabel } from '@/lib/product-types';
@@ -27,10 +26,12 @@ export interface RecipesTabProps {
   canEdit: boolean;
   canDelete: boolean;
   canCreateDocument: boolean;
+  /** 'all' | 'active' | 'inactive' | 'archived' (the page's FilterBar sets it). */
   status: string;
-  onStatusChange: (status: string) => void;
   uncostedOnly: boolean;
-  onUncostedChange: (value: boolean) => void;
+  search: string;
+  /** The shared FilterBar (the page owns the filters, kept in the URL). */
+  filterBar: ReactNode;
   onCreate: () => void;
   onEdit: (recipe: Recipe) => void;
   onCopy: (recipe: Recipe) => void;
@@ -42,9 +43,8 @@ export interface RecipesTabProps {
 
 /** Retsepturalar tabi (TZ "Ishlab chiqarish" 11.2). */
 export function RecipesTab(props: RecipesTabProps) {
-  const { recipes, archived, loading, locale, highlightId, status, uncostedOnly } = props;
+  const { recipes, archived, loading, locale, highlightId, status, uncostedOnly, search } = props;
   const t = useTranslations('production');
-  const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('updatedAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -196,43 +196,7 @@ export function RecipesTab(props: RecipesTabProps) {
 
   return (
     <Card style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end', borderBottom: '1px solid var(--color-border-light)' }}>
-        <div style={{ flex: '1 1 240px', minWidth: 200 }}>
-          <label htmlFor="recipe-search" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-            {t('qidiruv')}
-          </label>
-          <div style={{ position: 'relative' }}>
-            <Search size={15} aria-hidden style={{ position: 'absolute', left: 10, top: 12, color: 'var(--color-text-secondary)' }} />
-            <input
-              id="recipe-search"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('mahsulotNomiYokiSku')}
-              style={{ width: '100%', minHeight: 40, padding: '8px 10px 8px 32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
-            />
-          </div>
-        </div>
-        <Select
-          label={t('holat')}
-          value={status}
-          onChange={props.onStatusChange}
-          options={[
-            { value: 'all', label: t('barchasi') },
-            { value: 'active', label: t('faol') },
-            { value: 'inactive', label: t('nofaol2') },
-            { value: 'archived', label: t('arxiv') },
-          ]}
-          style={{ minWidth: 170 }}
-        />
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 40, fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', cursor: 'pointer' }}>
-          <input type="checkbox" checked={uncostedOnly} onChange={(e) => props.onUncostedChange(e.target.checked)} style={{ width: 18, height: 18 }} />
-          {t('tannarxiHisoblanmagan')}
-        </label>
-        <span aria-live="polite" style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-          {t('topildi', { v0: filtered.length })}
-        </span>
-      </div>
+      <div style={{ padding: 16, borderBottom: '1px solid var(--color-border-light)' }}>{props.filterBar}</div>
 
       {!loading && filtered.length === 0 ? (
         <EmptyState

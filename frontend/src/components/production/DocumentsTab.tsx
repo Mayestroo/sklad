@@ -1,40 +1,27 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
-import { FileText, Filter, Plus, Search, X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { FileText, Plus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select, type SelectOption } from '@/components/ui/Select';
-import { DateRangeField } from '@/components/ui/DateRangeField';
 import { formatCurrency, formatDate, formatQuantity } from '@/lib/utils';
-import { formatRange } from '@/lib/date-range';
 import { unitLabel } from '@/lib/units';
 import { EmptyState, Pagination, SkeletonRows, SortHeader, stickyRight, tdStyle, thStyle, type SortDir } from './TableParts';
-import { localName, personName, STATUS_FILTERS, STATUS_VARIANTS, type Locale, type ProductionDocument } from './types';
+import { localName, personName, STATUS_VARIANTS, type Locale, type ProductionDocument } from './types';
 
 export type DocumentSortField = 'docNumber' | 'docDate' | 'product' | 'plannedQuantity' | 'status' | 'warehouse' | 'responsible' | 'totalCost';
-
-export interface DocumentFilters {
-  search: string;
-  status: string;
-  productId: string;
-  warehouseId: string;
-  responsibleId: string;
-  dateFrom: string;
-  dateTo: string;
-}
-
-export const EMPTY_FILTERS: DocumentFilters = { search: '', status: '', productId: '', warehouseId: '', responsibleId: '', dateFrom: '', dateTo: '' };
 
 export interface DocumentsTabProps {
   locale: Locale;
   documents: ProductionDocument[];
   total: number;
   loading: boolean;
-  filters: DocumentFilters;
-  onFilters: (patch: Partial<DocumentFilters>) => void;
+  /** The shared FilterBar (the page owns the filters, kept in the URL). */
+  filterBar: ReactNode;
+  /** Any filter or search is set (the empty state then offers "clear"). */
+  filtered: boolean;
   onClearFilters: () => void;
   page: number;
   pageSize: number;
@@ -42,9 +29,6 @@ export interface DocumentsTabProps {
   sortBy: DocumentSortField;
   sortDir: SortDir;
   onSort: (field: DocumentSortField) => void;
-  productOptions: SelectOption[];
-  warehouseOptions: SelectOption[];
-  staffOptions: SelectOption[] | null;
   canCreate: boolean;
   onCreate: () => void;
   onOpen: (document: ProductionDocument) => void;
@@ -59,22 +43,8 @@ export function StatusBadge({ status, locale }: { status: ProductionDocument['st
 
 /** Hujjatlar tabi (TZ "Ishlab chiqarish" 6, 11.6). */
 export function DocumentsTab(props: DocumentsTabProps) {
-  const { locale, documents, filters, sortBy, sortDir, onSort } = props;
+  const { locale, documents, sortBy, sortDir, onSort } = props;
   const t = useTranslations('production');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
-  const labelOf = (options: SelectOption[] | null, value: string) => options?.find((o) => o.value === value)?.label ?? value;
-  const statusLabel = STATUS_FILTERS.find((s) => s.value === filters.status);
-  const chips: Array<{ key: keyof DocumentFilters | 'dates'; label: string }> = [
-    ...(filters.search ? [{ key: 'search' as const, label: `«${filters.search}»` }] : []),
-    ...(statusLabel ? [{ key: 'status' as const, label: t(statusLabel.key) }] : []),
-    ...(filters.productId ? [{ key: 'productId' as const, label: labelOf(props.productOptions, filters.productId) }] : []),
-    ...(filters.warehouseId ? [{ key: 'warehouseId' as const, label: labelOf(props.warehouseOptions, filters.warehouseId) }] : []),
-    ...(filters.responsibleId ? [{ key: 'responsibleId' as const, label: labelOf(props.staffOptions, filters.responsibleId) }] : []),
-    ...(filters.dateFrom || filters.dateTo ? [{ key: 'dates' as const, label: formatRange(filters.dateFrom, filters.dateTo) }] : []),
-  ];
-  const removeChip = (key: (typeof chips)[number]['key']) => (key === 'dates' ? props.onFilters({ dateFrom: '', dateTo: '' }) : props.onFilters({ [key]: '' }));
-
   const money = (value: number) => formatCurrency(value, locale, 'UZS');
   const quantity = (doc: ProductionDocument) => `${formatQuantity(Number(doc.producedQuantity ?? doc.plannedQuantity))} ${unitLabel(doc.productUnit || doc.product.unitOfMeasure, locale)}`;
   const warehouseText = (doc: ProductionDocument) =>
@@ -82,88 +52,15 @@ export function DocumentsTab(props: DocumentsTabProps) {
 
   return (
     <Card style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: 16, borderBottom: '1px solid var(--color-border-light)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <button
-          type="button"
-          className="prod-filter-toggle"
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((o) => !o)}
-          style={{ display: 'none', alignItems: 'center', gap: 8, minHeight: 44, padding: '8px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', cursor: 'pointer', alignSelf: 'flex-start' }}
-        >
-          <Filter size={16} aria-hidden /> {t('filtrlar')}
-          {chips.length > 0 && <Badge variant="info">{chips.length}</Badge>}
-        </button>
-        <div className="prod-filters" data-open={filtersOpen} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 12, alignItems: 'end' }}>
-          <div>
-            <label htmlFor="doc-search" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-              {t('hujjatRaqami')}
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Search size={15} aria-hidden style={{ position: 'absolute', left: 10, top: 12, color: 'var(--color-text-secondary)' }} />
-              <input
-                id="doc-search"
-                type="search"
-                aria-label={t('hujjatlarniQidirish')}
-                value={filters.search}
-                onChange={(e) => props.onFilters({ search: e.target.value })}
-                placeholder="PR-…"
-                style={{ width: '100%', minHeight: 40, padding: '8px 10px 8px 32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)' }}
-              />
-            </div>
-          </div>
-          <Select
-            label={t('holat')}
-            value={filters.status}
-            onChange={(value) => props.onFilters({ status: value })}
-            options={[{ value: '', label: t('barchaHolatlar') }, ...STATUS_FILTERS.map((s) => ({ value: s.value, label: t(s.key) }))]}
-          />
-          <Select label={t('mahsulot')} searchable value={filters.productId} onChange={(value) => props.onFilters({ productId: value })} options={[{ value: '', label: t('barchaMahsulotlar') }, ...props.productOptions]} />
-          <Select label={t('ombor')} value={filters.warehouseId} onChange={(value) => props.onFilters({ warehouseId: value })} options={[{ value: '', label: t('barchaOmborlar') }, ...props.warehouseOptions]} />
-          {props.staffOptions && (
-            <Select label={t('masul')} searchable value={filters.responsibleId} onChange={(value) => props.onFilters({ responsibleId: value })} options={[{ value: '', label: t('barchaXodimlar') }, ...props.staffOptions]} />
-          )}
-          <DateRangeField
-            label={t('sanaOraligi')}
-            from={filters.dateFrom}
-            to={filters.dateTo}
-            onChange={(dateFrom, dateTo) => props.onFilters({ dateFrom, dateTo })}
-            locale={locale}
-            style={{ minWidth: 0 }}
-          />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 32 }}>
-          {chips.map((chip) => (
-            <span key={chip.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 4px 2px 10px', borderRadius: 999, background: 'var(--color-primary-50)', color: 'var(--color-primary-700)', fontSize: 'var(--text-xs)' }}>
-              {chip.label}
-              <button
-                type="button"
-                aria-label={`${t('filtrniOlibTashlash')}: ${chip.label}`}
-                title={t('filtrniOlibTashlash')}
-                onClick={() => removeChip(chip.key)}
-                style={{ width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 999, background: 'transparent', color: 'inherit', cursor: 'pointer' }}
-              >
-                <X size={13} aria-hidden />
-              </button>
-            </span>
-          ))}
-          {chips.length > 0 && (
-            <Button size="sm" variant="outline" onClick={props.onClearFilters}>
-              {t('hammasiniTozalash')}
-            </Button>
-          )}
-          <span aria-live="polite" style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {t('topildi', { v0: props.total })}
-          </span>
-        </div>
-      </div>
+      <div style={{ padding: 16, borderBottom: '1px solid var(--color-border-light)' }}>{props.filterBar}</div>
 
       {!props.loading && documents.length === 0 ? (
         <EmptyState
           icon={<FileText size={26} />}
-          text={chips.length ? t('filtrBoyichaHujjatTopilmadi') : t('hozirchaIshlabChiqarishHujjatlariYoq')}
-          hint={chips.length ? undefined : t('hujjatlarBoshHolatIzohi')}
+          text={props.filtered ? t('filtrBoyichaHujjatTopilmadi') : t('hozirchaIshlabChiqarishHujjatlariYoq')}
+          hint={props.filtered ? undefined : t('hujjatlarBoshHolatIzohi')}
           action={
-            chips.length ? (
+            props.filtered ? (
               <Button variant="outline" onClick={props.onClearFilters}>{t('filtrlarniTozalash')}</Button>
             ) : props.canCreate ? (
               <Button onClick={props.onCreate}>
