@@ -709,36 +709,16 @@ export default function FinancePage() {
               paddingBottom: '8px',
             }}
           >
-            <button
-              onClick={() => setDebtsSubTab('receivables')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor:
-                  debtsSubTab === 'receivables' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                color: debtsSubTab === 'receivables' ? 'var(--color-success-700)' : 'var(--color-text-secondary)',
-                fontWeight: debtsSubTab === 'receivables' ? 600 : 500,
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {isRu ? 'Дебиторка (Нам должны)' : 'Mijozlarimiz qarzi (Debitorlik)'}
-            </button>
-            <button
-              onClick={() => setDebtsSubTab('payables')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor:
-                  debtsSubTab === 'payables' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                color: debtsSubTab === 'payables' ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
-                fontWeight: debtsSubTab === 'payables' ? 600 : 500,
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {isRu ? 'Кредиторка (Мы должны)' : 'Bizning qarzlarimiz (Kreditorlik)'}
-            </button>
+            <SegmentedFilter
+              name="debts"
+              label={isRu ? 'Чьи долги' : 'Kimning qarzi'}
+              value={debtsSubTab}
+              onChange={(v) => v && setDebtsSubTab(v as 'receivables' | 'payables')}
+              options={[
+                { value: 'receivables', label: isRu ? 'Дебиторка (Нам должны)' : 'Mijozlarimiz qarzi (Debitorlik)' },
+                { value: 'payables', label: isRu ? 'Кредиторка (Мы должны)' : 'Bizning qarzlarimiz (Kreditorlik)' },
+              ]}
+            />
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -1556,13 +1536,6 @@ function FinanceTransactionDrawer({
     exchange: isRu ? 'Конвертация валюты (USD ↔ UZS)' : 'Valyuta konvertatsiyasi',
   };
 
-  const colorMap = {
-    // -600 tones: white button text meets WCAG AA (the -500 tones were 2.3–3.8:1)
-    income: 'var(--color-success-600)',
-    expense: 'var(--color-error-600)',
-    transfer: 'var(--color-info-600)',
-    exchange: 'var(--color-primary-600)',
-  };
 
   return (
     <Drawer
@@ -1588,8 +1561,6 @@ function FinanceTransactionDrawer({
             disabled={loading}
             title="Ctrl+Enter"
             style={{
-              backgroundColor: colorMap[mode],
-              borderColor: colorMap[mode],
               display: 'flex',
               alignItems: 'center',
               gap: '6px',

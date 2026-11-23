@@ -257,9 +257,9 @@ export default function CrmKanbanPage() {
                           </button>
                         )}
                         {deal.stage === 'NEGOTIATION' && (
-                          <button type="button" className="rd-next-btn" style={{ background: 'var(--color-error-50)', color: 'var(--color-error-700)', borderColor: 'var(--color-error-200)' }} disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, 'LOST')}>
+                          <Button size="sm" variant="danger-outline" disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, 'LOST')}>
                             {stageName('LOST')}
-                          </button>
+                          </Button>
                         )}
                         <span style={{ marginLeft: 'auto' }}>
                           <ActionsMenu
