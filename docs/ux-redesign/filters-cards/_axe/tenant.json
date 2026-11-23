@@ -1,0 +1,382 @@
+[
+ {
+  "theme": "light",
+  "route": "/login",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/register",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales/new",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales/orders",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales/orders/new",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales/returns",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/purchases",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/purchases/new",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/purchases/expenses",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/purchases/expenses/new",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/purchases/returns",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/purchases/suppliers",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/products",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/products/new",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/inventory",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/inventory/documents",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/inventory/transfers",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/counterparties",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales/customers",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales/crm",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/sales/prices",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/finance",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/services",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/production",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/opening-balances",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/accounting",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/accounting/accounts",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/accounting/journal",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/accounting/reports",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/analytics",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/users",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/settings/branches",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/settings/sales",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/settings/production",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/settings/security",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/settings/billing",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/login",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/register",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales/new",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales/orders",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales/orders/new",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales/returns",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/purchases",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/purchases/new",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/purchases/expenses",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/purchases/expenses/new",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/purchases/returns",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/purchases/suppliers",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/products",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/products/new",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/inventory",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/inventory/documents",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/inventory/transfers",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/counterparties",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales/customers",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales/crm",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/sales/prices",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/finance",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/services",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/production",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/opening-balances",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/accounting",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/accounting/accounts",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/accounting/journal",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/accounting/reports",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/analytics",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/users",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/settings/branches",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/settings/sales",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/settings/production",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/settings/security",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/settings/billing",
+  "violations": []
+ }
+]

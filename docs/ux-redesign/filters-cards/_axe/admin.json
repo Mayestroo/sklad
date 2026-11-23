@@ -1,0 +1,52 @@
+[
+ {
+  "theme": "light",
+  "route": "/admin",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/admin/billing",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/admin/tickets",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/admin/announcements",
+  "violations": []
+ },
+ {
+  "theme": "light",
+  "route": "/admin/security",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/admin",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/admin/billing",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/admin/tickets",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/admin/announcements",
+  "violations": []
+ },
+ {
+  "theme": "dark",
+  "route": "/admin/security",
+  "violations": []
+ }
+]
