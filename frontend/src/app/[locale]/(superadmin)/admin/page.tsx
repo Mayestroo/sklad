@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { useLocale, useTranslations } from 'next-intl';
-import { Signal, SignalStrip, ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatCurrency, formatDate, errorMessage } from '@/lib/utils';
@@ -17,7 +18,6 @@ import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { SearchField } from '@/components/ui/SearchField';
 import { toast } from '@/context/ToastContext';
 import {
   Building2,
@@ -83,6 +83,8 @@ function MrrValue({ metrics, locale }: { metrics: GlobalMetrics | null; locale: 
   );
 }
 
+const FILTER_DEFAULTS = { status: '', plan: '' };
+
 export default function SuperAdminTenantsPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -99,9 +101,11 @@ export default function SuperAdminTenantsPage() {
   };
 
   // Search & Filter
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [planFilter, setPlanFilter] = useState('ALL');
+  // Filters live in the URL and are remembered per user; the list is filtered here.
+  const lf = useFilterState('admin.tenants', FILTER_DEFAULTS);
+  const searchQuery = lf.search.trim();
+  const statusFilter = lf.values.status || 'ALL';
+  const planFilter = lf.values.plan || 'ALL';
 
   // Create Tenant Modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -315,21 +319,13 @@ export default function SuperAdminTenantsPage() {
     BLOCKED: { uz: 'Bloklangan', ru: 'Заблокирована' },
   };
   const statusOptions = Object.keys(STATUS_NAMES).map((s) => ({ value: s, label: isRu ? STATUS_NAMES[s].ru : STATUS_NAMES[s].uz }));
-  const filtered = searchQuery || statusFilter !== 'ALL' || planFilter !== 'ALL';
+  const filtered = Boolean(searchQuery || lf.activeCount > 0);
+  const filterDefs: FilterDef[] = [
+    { key: 'status', kind: 'segmented', label: isRu ? 'Статус' : 'Holat', options: statusOptions.map((o) => ({ ...o, count: countBy(o.value) })) },
+    { key: 'plan', kind: 'select', label: isRu ? 'Тариф' : 'Tarif', options: planOptions },
+  ];
   const formGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 'var(--space-3)' };
   const th: React.CSSProperties = { padding: '12px 16px', fontWeight: 'var(--font-medium)' };
-
-  const kpi = (label: string, value: React.ReactNode, Icon: typeof Building2) => (
-    <Card>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)' }}>{label}</span>
-        <div aria-hidden style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={18} />
-        </div>
-      </div>
-      <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: 12 }} className="tabular-nums">{value}</div>
-    </Card>
-  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -347,22 +343,20 @@ export default function SuperAdminTenantsPage() {
       </div>
 
       {/* What needs the owner's attention, then the money in one line */}
-      <SignalStrip label={ta('attention')}>
-        <Signal label={ta('trialEnding')} value={trialEnding.length} hint={ta('trialEndingHint')} tone={trialEnding.length ? 'warning' : 'neutral'} onClick={() => { setStatusFilter('TRIAL'); setSearchQuery(''); }} active={statusFilter === 'TRIAL'} />
-        <Signal label={isRu ? 'Приостановлена' : 'To‘xtatilgan'} value={countBy('SUSPENDED')} tone={countBy('SUSPENDED') ? 'warning' : 'neutral'} onClick={() => setStatusFilter('SUSPENDED')} active={statusFilter === 'SUSPENDED'} />
-        <Signal label={isRu ? 'Заблокирована' : 'Bloklangan'} value={countBy('BLOCKED')} tone={countBy('BLOCKED') ? 'error' : 'neutral'} onClick={() => setStatusFilter('BLOCKED')} active={statusFilter === 'BLOCKED'} />
-        <Signal label={isRu ? 'Активные компании' : 'Faol korxonalar'} value={metrics?.activeTenantsCount ?? countBy('ACTIVE')} hint={ta('users', { count: metrics?.totalUsersCount ?? 0 })} tone="success" onClick={() => setStatusFilter('ACTIVE')} active={statusFilter === 'ACTIVE'} />
-      </SignalStrip>
+      <StatCardGrid label={ta('attention')} count={4}>
+        <StatCard label={ta('trialEnding')} loading={tenantsQuery.isPending} value={trialEnding.length} secondary={ta('trialEndingHint')} />
+        <StatCard label={isRu ? 'Приостановлена' : 'To‘xtatilgan'} loading={tenantsQuery.isPending} value={countBy('SUSPENDED')} />
+        <StatCard label={isRu ? 'Заблокирована' : 'Bloklangan'} loading={tenantsQuery.isPending} value={countBy('BLOCKED')} />
+        <StatCard label={isRu ? 'Активные компании' : 'Faol korxonalar'} loading={tenantsQuery.isPending} value={metrics?.activeTenantsCount ?? countBy('ACTIVE')} secondary={ta('users', { count: metrics?.totalUsersCount ?? 0 })} />
+      </StatCardGrid>
       <p data-mrr-card style={{ margin: 0, display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
         <span>{isRu ? 'Доход в месяц (MRR)' : 'Oylik daromad (MRR)'}</span>
         <strong style={{ color: 'var(--color-text-primary)' }}><MrrValue metrics={metrics} locale={locale} /></strong>
       </p>
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap', padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)' }}>
-          <SearchField value={searchQuery} onChange={setSearchQuery} placeholder={isRu ? 'Название или slug компании' : 'Korxona nomi yoki slug'} style={{ maxWidth: 380 }} />
-          <ChipGroup label={isRu ? 'Статус' : 'Holat'} value={statusFilter === 'ALL' ? '' : statusFilter} onChange={(v) => setStatusFilter(v || 'ALL')} options={[{ value: '', label: isRu ? 'Все' : 'Hammasi', count: tenants.length }, ...statusOptions.map((o) => ({ ...o, count: countBy(o.value) }))]} />
-          <Select label={isRu ? 'Тариф' : 'Tarif'} value={planFilter} onChange={setPlanFilter} style={{ width: 200 }} options={[{ value: 'ALL', label: isRu ? 'Все' : 'Hammasi' }, ...planOptions]} />
+        <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--color-border-light)' }}>
+          <FilterBar state={lf} defs={filterDefs} searchPlaceholder={isRu ? 'Название или slug компании' : 'Korxona nomi yoki slug'} resultCount={tenantsQuery.isPending ? null : filteredTenants.length} />
         </div>
 
         {tenantsQuery.isError ? (
