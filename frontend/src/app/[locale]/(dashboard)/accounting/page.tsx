@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
@@ -10,21 +10,25 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { buttonStyle } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { matchesSearch } from '@/components/ui/SearchField';
 import { AccountTypeBadge } from '@/components/accounting/AccountTypeBadge';
 import { BookOpen, FileText, PieChart, Scale } from 'lucide-react';
 import { TrialBalanceReport, type TrialBalanceItem, type AccountType } from '@shared/types';
-import { Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { Button } from '@/components/ui/Button';
+import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 
 /** Debit and credit turnovers agree to the tiyin (floating sums can differ in the last digits). */
 function isBalanced(debit: number, credit: number): boolean {
   return Math.abs(debit - credit) < 0.005;
 }
+
+const FILTER_DEFAULTS = { type: '', allAccounts: '' };
+const ACCOUNT_TYPES_SHOWN: AccountType[] = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'];
 
 export default function AccountingPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -33,9 +37,11 @@ export default function AccountingPage() {
 
   const osvQuery = useApiQuery<TrialBalanceReport>('/accounting/reports/osv');
   const osv = osvQuery.data ?? null;
-  const [search, setSearch] = useState('');
-  const [activeOnly, setActiveOnly] = usePersistentState('accounting.osv.activeOnly', true);
-  const [typeFilter, setTypeFilter] = useState<'' | AccountType>('');
+  // Filters live in the URL and are remembered per user. By default only accounts with movement are shown.
+  const lf = useFilterState('accounting.osv', FILTER_DEFAULTS);
+  const search = lf.search;
+  const activeOnly = lf.values.allAccounts !== '1';
+  const typeFilter = lf.values.type;
   const [sort, setSort] = usePersistentState<SortState | null>('accounting.osv.sort', null);
   const router = useRouter();
   const tl = useTranslations('rd.list');
@@ -51,6 +57,12 @@ export default function AccountingPage() {
   }, [osv, search, activeOnly, typeFilter]);
 
   const balanced = osv ? isBalanced(osv.totalDebitTurnover, osv.totalCreditTurnover) : true;
+
+  const movementCount = (type: AccountType) => (osv?.items ?? []).filter((i) => i.accountType === type && (i.debitTurnover || i.creditTurnover || i.closingBalance)).length;
+  const filterDefs: FilterDef[] = [
+    { key: 'type', kind: 'segmented', label: isRu ? 'Тип счёта' : 'Hisob turi', options: ACCOUNT_TYPES_SHOWN.map((type) => ({ value: type, label: ta(`type_${type}`) })) },
+    { key: 'allAccounts', kind: 'toggle', label: isRu ? 'Все счета' : 'Barcha hisoblar' },
+  ];
 
   return (
     <div>
@@ -77,20 +89,12 @@ export default function AccountingPage() {
       />
 
       {osv && osv.items.length > 0 && (
-        <SignalStrip label={tl('summary')}>
-          <Signal tone={balanced ? 'success' : 'error'} label={ta('check')} value={balanced ? (isRu ? 'Дебет = Кредит' : 'Debet = Kredit') : tIn('teng_emas')} hint={balanced ? ta('checkOk') : ta('checkBad')} />
-          {(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'] as AccountType[]).map((type) => (
-            <Signal
-              key={type}
-              tone={type === 'ASSET' ? 'info' : type === 'LIABILITY' ? 'warning' : type === 'REVENUE' ? 'success' : type === 'EXPENSE' ? 'error' : 'neutral'}
-              label={ta(`type_${type}`)}
-              value={osv.items.filter((i) => i.accountType === type && (i.debitTurnover || i.creditTurnover || i.closingBalance)).length}
-              hint={ta('accountsWithMovement')}
-              active={typeFilter === type}
-              onClick={() => setTypeFilter(typeFilter === type ? '' : type)}
-            />
+        <StatCardGrid label={tl('summary')} count={3}>
+          <StatCard label={ta('check')} value={balanced ? (isRu ? 'Дебет = Кредит' : 'Debet = Kredit') : tIn('teng_emas')} negative={!balanced} secondary={balanced ? ta('checkOk') : ta('checkBad')} />
+          {ACCOUNT_TYPES_SHOWN.map((type) => (
+            <StatCard key={type} label={ta(`type_${type}`)} value={movementCount(type)} secondary={ta('accountsWithMovement')} />
           ))}
-        </SignalStrip>
+        </StatCardGrid>
       )}
 
       <Card>
@@ -120,18 +124,8 @@ export default function AccountingPage() {
         </div>
 
         {osv && osv.items.length > 0 && (
-          <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
-            <SearchField
-              value={search}
-              onChange={setSearch}
-              placeholder={isRu ? 'Код или название счёта' : 'Hisob kodi yoki nomi'}
-              style={{ maxWidth: 360 }}
-            />
-            <Checkbox
-              checked={activeOnly}
-              onChange={(e) => setActiveOnly(e.target.checked)}
-              label={isRu ? 'Только счета с движением' : 'Faqat harakat bo‘lgan hisoblar'}
-            />
+          <div style={{ marginBottom: 'var(--space-4)' }}>
+            <FilterBar state={lf} defs={filterDefs} searchPlaceholder={isRu ? 'Код или название счёта' : 'Hisob kodi yoki nomi'} resultCount={rows.length} />
           </div>
         )}
 
@@ -156,9 +150,10 @@ export default function AccountingPage() {
             title={isRu ? 'Ничего не найдено' : 'Hech narsa topilmadi'}
             description={
               activeOnly
-                ? isRu ? 'Измените поиск или снимите флажок «Только счета с движением».' : 'Qidiruvni o‘zgartiring yoki «Faqat harakat bo‘lgan hisoblar» belgisini olib tashlang.'
+                ? isRu ? 'Измените поиск или включите «Все счета».' : 'Qidiruvni o‘zgartiring yoki «Barcha hisoblar»ni yoqing.'
                 : isRu ? 'Измените поиск.' : 'Qidiruvni o‘zgartiring.'
             }
+            action={<Button variant="secondary" onClick={lf.reset}>{tl('clearFilters')}</Button>}
           />
         ) : (
           <div className="rd-table-card" style={{ border: 'none' }}>

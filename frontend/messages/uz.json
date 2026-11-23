@@ -924,7 +924,7 @@
       "type_EQUITY": "Kapital",
       "type_REVENUE": "Daromadlar",
       "type_EXPENSE": "Xarajatlar",
-      "accountsWithMovement": "harakatli hisoblar — bosing: filtr",
+      "accountsWithMovement": "harakatli hisoblar",
       "rowHint": "Qatorni bosing — shu hisob provodkalari jurnalda ochiladi.",
       "listHint": "Hisobni bosing — uning provodkalari jurnalda ochiladi."
     },
