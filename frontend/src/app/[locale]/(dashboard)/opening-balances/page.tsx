@@ -29,6 +29,7 @@ import {
   type CounterpartyLineKind,
 } from '@/lib/opening-balance-lines';
 import { computeOpeningBalanceTotals } from '@shared/types/opening-balance-posting';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -53,10 +54,7 @@ import {
   Wallet,
   Package,
   Users,
-  Building2,
   Layers,
-  TrendingUp,
-  TrendingDown,
   Building,
   ArrowRight,
   Check,
@@ -817,33 +815,28 @@ export default function OpeningBalancesPage() {
           </Card>
 
           {/* Summary: assets, liabilities, capital (balances itself) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
-            <SummaryCard
-              color="var(--color-success-700)"
-              icon={<TrendingUp size={20} />}
-              title={isRu ? 'Активы' : 'Aktivlar'}
+          <StatCardGrid label={isRu ? 'Итоги баланса' : 'Balans yakunlari'} count={3}>
+            <StatCard
+              label={isRu ? 'Активы' : 'Aktivlar'}
               value={formatCurrency(totals.totalAssets, locale, docCurrency)}
-              hint={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
+              secondary={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
             />
-            <SummaryCard
-              color="var(--color-error-700)"
-              icon={<TrendingDown size={20} />}
-              title={isRu ? 'Обязательства' : 'Majburiyatlar'}
+            <StatCard
+              label={isRu ? 'Обязательства' : 'Majburiyatlar'}
               value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
-              hint={isRu ? 'Долги поставщикам, полученные авансы' : 'Yetkazib beruvchilarga qarz, olingan avanslar'}
+              secondary={isRu ? 'Долги поставщикам, полученные авансы' : 'Yetkazib beruvchilarga qarz, olingan avanslar'}
             />
-            <SummaryCard
-              color="#6366f1"
-              icon={<Building2 size={20} />}
-              title={isRu ? 'Капитал (рассчитан)' : 'Kapital (hisoblangan)'}
+            <StatCard
+              label={isRu ? 'Капитал (рассчитан)' : 'Kapital (hisoblangan)'}
               value={formatCurrency(totals.totalEquity, locale, docCurrency)}
-              hint={
+              negative={totals.totalEquity < 0}
+              secondary={
                 isRu
                   ? `Уставный: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Нераспр. прибыль: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
                   : `Ustav: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Taqsimlanmagan foyda: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
               }
             />
-          </div>
+          </StatCardGrid>
           {!totals.hasValidCurrencyRates && !isReadOnly && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
               <AlertTriangle size={16} />
@@ -1185,22 +1178,6 @@ export default function OpeningBalancesPage() {
 // Building blocks
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SummaryCard({ color, icon, title, value, hint }: { color: string; icon: React.ReactNode; title: string; value: string; hint: string }) {
-  return (
-    <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', borderLeft: `4px solid ${color}` }}>
-      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
-        {icon}
-      </div>
-      <div style={{ overflow: 'hidden' }}>
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
-        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }} className="tabular-nums">
-          {value}
-        </div>
-        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>{hint}</div>
-      </div>
-    </Card>
-  );
-}
 
 /** Where a posted opening balance can be seen in the rest of the system. */
 function PostedLinks({ isRu }: { isRu: boolean }) {
