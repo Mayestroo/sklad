@@ -753,7 +753,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               <Button
                 onClick={() => handleTransition('APPROVE')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <CheckCircle2 size={16} /> {isRu ? 'Согласовать' : 'Tasdiqlash'}
               </Button>
@@ -783,7 +783,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleStatusUpdate('ACCEPTED')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-primary-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <CheckCircle2 size={16} /> {isRu ? 'Принять на складе' : 'Omborga qabul qilish'}
             </Button>
@@ -793,7 +793,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleStatusUpdate('PROCESSING')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-500)', color: '#fff' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <PackageCheck size={16} /> {isRu ? 'В сборку' : 'Yig‘uvga olish'}
             </Button>
@@ -803,7 +803,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleStatusUpdate('READY_FOR_SHIPMENT')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <CheckCircle2 size={16} /> {isRu ? 'Готов к отгрузке' : 'Jo‘natishga tayyor'}
             </Button>
@@ -813,7 +813,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => setIsDispatchOpen(true)}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Truck size={16} /> {isRu ? (orderStatus === 'PARTIALLY_SHIPPED' ? 'Отгрузить еще' : 'Отгрузить') : (orderStatus === 'PARTIALLY_SHIPPED' ? 'Keyingi chiqim (jo‘natish)' : 'Ombordan chiqim (jo‘natish)')}
             </Button>
@@ -847,7 +847,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={handleComplete}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <CheckCheck size={16} /> {isRu ? 'Завершить' : 'Yakunlash'}
             </Button>

@@ -505,10 +505,9 @@ export default function ProductsPage() {
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button
-                variant="primary"
+                variant="danger"
                 onClick={handleDeleteProduct}
                 disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>
@@ -699,10 +698,9 @@ export default function ProductsPage() {
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button
-                variant="primary"
+                variant="danger"
                 onClick={handleDeleteCategory}
                 disabled={deleteCatLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
               >
                 {deleteCatLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
               </Button>

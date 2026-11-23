@@ -377,8 +377,6 @@ export default function FinancePage() {
             variant="primary"
             onClick={() => handleOpenDrawer('income')}
             style={{
-              backgroundColor: 'var(--color-success-600)',
-              borderColor: 'var(--color-success-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -389,11 +387,9 @@ export default function FinancePage() {
           </Button>
 
           <Button
-            variant="primary"
+            variant="secondary"
             onClick={() => handleOpenDrawer('expense')}
             style={{
-              backgroundColor: 'var(--color-error-600)',
-              borderColor: 'var(--color-error-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -950,10 +946,9 @@ export default function FinancePage() {
                 {isRu ? 'Назад' : 'Orqaga'}
               </Button>
               <Button
-                variant="primary"
+                variant="danger"
                 onClick={handleStorno}
                 disabled={stornoLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
               >
                 {stornoLoading
                   ? isRu

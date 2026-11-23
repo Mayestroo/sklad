@@ -358,7 +358,6 @@ export default function NewExpensePage() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: 'var(--color-success-600)',
             }}
           >
             {!submitting && <CheckCircle2 size={16} aria-hidden />}
@@ -1230,7 +1229,7 @@ export default function NewExpensePage() {
               { label: te('ckItems'), done: selectedItemIds.length > 0 },
             ]}
           />
-          <Button loading={submitting} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} onClick={() => handleSubmit(true)} style={{ width: '100%', backgroundColor: 'var(--color-success-600)' }}>
+          <Button loading={submitting} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} onClick={() => handleSubmit(true)} style={{ width: '100%' }}>
             {!submitting && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и распределить' : 'Tasdiqlash va taqsimlash'}
           </Button>
           <Button variant="secondary" loading={submitting} onClick={() => handleSubmit(false)} style={{ width: '100%' }}>

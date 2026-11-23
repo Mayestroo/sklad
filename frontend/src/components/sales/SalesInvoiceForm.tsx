@@ -1043,7 +1043,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
                 loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}
                 title="Ctrl+Enter"
                 aria-keyshortcuts="Control+Enter"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
               </Button>
@@ -1117,10 +1117,11 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
             </div>
           </div>
           <Button
+            variant="secondary"
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-600)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -1640,7 +1641,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
         {!isReadOnly ? (
           <Card style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <DocChecklist items={checklist} />
-            <Button onClick={handlePost} loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} style={{ width: '100%', backgroundColor: 'var(--color-success-600)' }}>
+            <Button onClick={handlePost} loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} style={{ width: '100%' }}>
               {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
             </Button>
             <Button variant="secondary" onClick={handleSaveDraft} loading={loading} style={{ width: '100%' }}>

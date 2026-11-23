@@ -406,8 +406,9 @@ export function Select({
                 placeholder={effectiveSearchPlaceholder}
                 style={{
                   width: '100%',
-                  padding: '6px 26px 6px 30px',
-                  fontSize: 'var(--text-xs)',
+                  height: 34,
+                  padding: '0 28px 0 32px',
+                  fontSize: 'var(--text-sm)',
                   borderRadius: 'var(--radius-sm)',
                   border: '1px solid var(--color-border)',
                   backgroundColor: 'var(--color-bg-tertiary)',

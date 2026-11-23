@@ -35,6 +35,13 @@
   --color-text-tertiary: #6f6762; /* WCAG AA (≥ 4.5:1) on every light surface */
   --color-text-inverse: #ffffff;
   --color-bg-input: #ffffff;
+  /* The one accent fill for primary actions (buttons, checked checkboxes, selected chips). */
+  --color-btn-primary-bg: #4f46e5;
+  --color-btn-primary-bg-hover: #4338ca;
+  --color-btn-primary-text: #ffffff;
+  /* Cash-flow chart: income / expense (teal / orange, distinguishable with colour blindness) */
+  --color-chart-income: #0d9488;
+  --color-chart-expense: #ea580c;
   /* Placeholders stay visibly lighter than typed values (an example rate must not look entered). */
   --color-text-placeholder: #a19b96;
 
@@ -158,7 +165,8 @@
   --color-bg-secondary: #1e1e1e;
   --color-bg-tertiary: #2a2a2a;
   --color-bg-hover: #333333;
-  --color-bg-subtle: rgba(255, 255, 255, 0.03);
+  /* Opaque: sticky table headers and totals use it, and content must not show through. */
+  --color-bg-subtle: #242424;
   --color-bg-sidebar: #1e1e1e;
   --color-bg-input: #242424;
   --color-surface: #27272a;
@@ -178,7 +186,10 @@
   --color-segmented-active-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   /* Primary Colors for Dark Mode */
   --color-btn-primary-bg: #5850ec;
+  --color-btn-primary-bg-hover: #6b63f0;
   --color-btn-primary-text: #ffffff;
+  --color-chart-income: #11a596;
+  --color-chart-expense: #e8641a;
 
   --color-primary-50: rgba(99, 102, 241, 0.15);
   --color-primary-100: rgba(99, 102, 241, 0.25);
@@ -243,7 +254,7 @@
 }
 
 /* ─── Global HTML Input & Select Modern Styling ─── */
-input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button']) {
+:where(input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button'])) {
   box-sizing: border-box;
   height: 38px;
   padding: 8px 12px;
@@ -257,11 +268,11 @@ input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type=
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button']):hover {
+:where(input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button'])):hover {
   border-color: var(--color-primary-400);
 }
 
-input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button']):focus {
+:where(input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button'])):focus {
   border-color: var(--color-primary-600);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
@@ -272,19 +283,47 @@ textarea::placeholder {
   opacity: 1;
 }
 
-/* ─── Global Native Checkbox & Radio Modern Styling ─── */
-input[type='checkbox'],
+/* ─── One checkbox look everywhere (native inputs and <Checkbox>): rounded box, accent fill, white tick ─── */
+input[type='checkbox'] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  border: 1.5px solid var(--color-text-placeholder);
+  border-radius: 6px;
+  background-color: var(--color-bg-input);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+input[type='checkbox']::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: var(--color-btn-primary-text);
+  clip-path: polygon(14% 44%, 0 59%, 40% 96%, 100% 22%, 85% 8%, 39% 66%);
+  transform: scale(0);
+  transition: transform 120ms ease;
+}
+input[type='checkbox']:hover:not(:disabled) { border-color: var(--color-btn-primary-bg); }
+input[type='checkbox']:checked,
+input[type='checkbox']:indeterminate {
+  background-color: var(--color-btn-primary-bg);
+  border-color: var(--color-btn-primary-bg);
+}
+input[type='checkbox']:checked::before { transform: scale(1); }
+input[type='checkbox']:indeterminate::before { transform: scale(1); clip-path: inset(40% 5% 40% 5% round 2px); }
+input[type='checkbox']:disabled { opacity: 0.5; cursor: not-allowed; }
+
 input[type='radio'] {
-  accent-color: var(--color-primary-600);
+  accent-color: var(--color-btn-primary-bg);
   cursor: pointer;
   width: 18px;
   height: 18px;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-}
-
-input[type='radio'] {
-  border-radius: var(--radius-full);
 }
 
 input[type='checkbox']:focus-visible,
@@ -292,6 +331,14 @@ input[type='radio']:focus-visible {
   outline: 2px solid var(--color-primary-600);
   outline-offset: 2px;
 }
+
+/* Buttons (<Button>): hover and press feedback on top of the inline variant style */
+.ui-btn:not(:disabled):hover { filter: brightness(0.96); }
+.ui-btn-primary:not(:disabled):hover { background-color: var(--color-btn-primary-bg-hover) !important; filter: none; }
+.ui-btn-secondary:not(:disabled):hover, .ui-btn-outline:not(:disabled):hover { background-color: var(--color-bg-tertiary) !important; border-color: var(--color-text-placeholder) !important; filter: none; }
+.ui-btn-ghost:not(:disabled):hover { background-color: var(--color-bg-tertiary) !important; color: var(--color-text-primary) !important; filter: none; }
+.ui-btn:not(:disabled):active { transform: translateY(1px); }
+[data-theme='dark'] .ui-btn-danger:not(:disabled):hover { filter: brightness(1.12); }
 
 select {
   box-sizing: border-box;
@@ -1273,6 +1320,22 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .dash-today-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-4); align-items: start; }
 .dash-debts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); }
 .dash-panel { padding: var(--space-5); }
+/* Cash flow chart (2/3) and the latest operations (1/3) */
+.dash-flow-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.dash-flow-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.dash-flow-totals { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0; }
+.dash-flow-totals dt { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--color-text-secondary); font-weight: var(--font-medium); }
+.dash-flow-totals dd { margin: 2px 0 0; font-size: var(--text-lg); font-weight: var(--font-bold); color: var(--color-text-primary); }
+.dash-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.dash-swatch.is-income { background: var(--color-chart-income); }
+.dash-swatch.is-expense { background: var(--color-chart-expense); }
+.dash-chart-empty { height: 200px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--color-text-tertiary); font-size: var(--text-sm); }
+.dash-chart-tip { min-width: 200px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-bg-secondary); box-shadow: var(--shadow-lg); font-size: var(--text-xs); color: var(--color-text-secondary); }
+.dash-chart-tip-date { margin-bottom: 6px; font-weight: var(--font-semibold); color: var(--color-text-primary); }
+.dash-chart-tip-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.dash-chart-tip-row b { margin-left: auto; padding-left: 12px; color: var(--color-text-primary); font-weight: var(--font-semibold); }
+.recharts-bar-rectangle path { transition: opacity var(--transition-fast); }
+@media (max-width: 1023px) { .dash-flow-grid { grid-template-columns: 1fr; } }
 .dash-panel-title { font-size: var(--text-base); font-weight: var(--font-semibold); color: var(--color-text-primary); }
 .dash-panel-hint { font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 2px; }
 .dash-section-title { font-size: var(--text-base); font-weight: var(--font-semibold); margin-bottom: var(--space-3); }
@@ -1476,7 +1539,11 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
 .fb-pop { position: absolute; left: 0; top: calc(100% + 4px); z-index: 60; min-width: 220px; max-width: min(360px, calc(100vw - 32px)); padding: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-secondary); box-shadow: var(--shadow-xl); }
 .fb-pop[data-align="right"] { left: auto; right: 0; }
 .fb-pop-search { display: flex; align-items: center; gap: 6px; padding: 0 8px; margin-bottom: 4px; border-bottom: 1px solid var(--color-border-light); color: var(--color-text-tertiary); }
-.fb-pop-search input { flex: 1; min-width: 0; height: 36px; border: none; background: transparent; color: var(--color-text-primary); font: inherit; font-size: var(--text-sm); }
+.fb-pop-search { border-radius: var(--radius-sm) var(--radius-sm) 0 0; transition: box-shadow var(--transition-fast); }
+.fb-pop-search input { flex: 1; min-width: 0; height: 36px; padding: 0 2px; border: none; border-radius: 0; background: transparent; color: var(--color-text-primary); font: inherit; font-size: var(--text-sm); box-shadow: none; }
+/* Icon and input read as one field: the focus mark sits on the whole row, not around the bare input. */
+.fb-pop-search input:focus-visible { outline: none !important; box-shadow: none; }
+.fb-pop-search:focus-within { color: var(--color-primary-600); box-shadow: inset 0 -2px 0 var(--color-primary-500); }
 .fb-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow: auto; }
 .fb-option { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-text-primary); cursor: pointer; }
 .fb-option:hover, .fb-option:focus-visible { background: var(--color-bg-tertiary); }
@@ -1582,3 +1649,23 @@ button.rd-signal:hover { border-color: var(--rd-tone, var(--color-border)); back
   .stat-card { padding: var(--space-3); }
   .stat-value { font-size: var(--text-base); }
 }
+
+/* Row "⋯" menu (ActionsMenu): trigger in the row, menu in a portal above everything */
+.ux-menu-trigger { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-secondary); color: var(--color-text-secondary); cursor: pointer; transition: background-color var(--transition-fast), color var(--transition-fast); }
+.ux-menu-trigger:hover, .ux-menu-trigger[aria-expanded='true'] { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+.ux-menu { position: fixed; z-index: 1000; min-width: 220px; max-width: calc(100vw - 16px); overflow-y: auto; padding: 4px; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-bg-secondary); box-shadow: var(--shadow-xl); }
+[data-theme='dark'] .ux-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55); }
+.ux-menu-item { display: block; width: 100%; min-height: 38px; padding: 8px 12px; text-align: left; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-primary); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.ux-menu-item:hover, .ux-menu-item:focus-visible { background: var(--color-bg-tertiary); outline: none; }
+.ux-menu-item[data-danger] { color: var(--color-error-700); }
+.ux-menu-item[data-danger]:hover, .ux-menu-item[data-danger]:focus-visible { background: var(--color-error-50); }
+
+/* Section tabs (AccountingNav): sibling pages of one section, one click apart */
+.sec-tabs { display: flex; gap: 4px; margin-bottom: var(--space-4); padding: 4px; border: 1px solid var(--color-border-light); border-radius: var(--radius-md); background: var(--color-bg-secondary); overflow-x: auto; scrollbar-width: none; }
+.sec-tabs::-webkit-scrollbar { display: none; }
+.sec-tab { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: var(--radius-sm); color: var(--color-text-secondary); font-size: var(--text-sm); font-weight: var(--font-medium); text-decoration: none; white-space: nowrap; transition: background-color var(--transition-fast), color var(--transition-fast); }
+.sec-tab:hover { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+.sec-tab[aria-current='page'] { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: var(--font-semibold); }
+.rd-page > .sec-tabs { margin-bottom: 0; }
+.acc-hint { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-xs); color: var(--color-text-tertiary); }
+.acc-zero { color: var(--color-text-tertiary); }

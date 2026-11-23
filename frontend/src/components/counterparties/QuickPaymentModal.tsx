@@ -370,11 +370,6 @@ export function QuickPaymentModal({
           <Button
             type="submit"
             disabled={loading || !settlementSide || !currency || !selectedAccount?.id}
-            style={{
-              backgroundColor: isIncome ? 'var(--color-success-500)' : 'var(--color-error-500)',
-              borderColor: isIncome ? 'var(--color-success-500)' : 'var(--color-error-500)',
-              color: '#fff',
-            }}
           >
             {loading
               ? isRu

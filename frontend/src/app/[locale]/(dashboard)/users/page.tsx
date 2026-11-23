@@ -541,11 +541,10 @@ export default function UsersPage() {
               <Button type="button" variant="secondary" onClick={() => setDeletingUser(null)} disabled={deleteLoading}>
                 {tCommon('cancel')}
               </Button>
-              <Button
+              <Button variant="danger"
                 type="button"
                 onClick={handleDeleteUser}
                 disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? tCommon('loading') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

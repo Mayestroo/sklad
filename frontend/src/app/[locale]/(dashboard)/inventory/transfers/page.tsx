@@ -277,7 +277,7 @@ export default function StockTransfersPage() {
                             </>
                           )}
                           {tr.status === 'IN_TRANSIT' && (
-                            <Button size="sm" onClick={() => handleReceive(tr.id)} style={{ backgroundColor: 'var(--color-success-600)' }}>
+                            <Button size="sm" onClick={() => handleReceive(tr.id)}>
                               <CheckCircle size={14} aria-hidden /> {tt('receive')}
                             </Button>
                           )}
@@ -412,10 +412,9 @@ export default function StockTransfersPage() {
               <Button variant="secondary" onClick={() => setDeleteConfirmTransfer(null)} disabled={deleteLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
-              <Button
+              <Button variant="danger"
                 onClick={handleDeleteTransfer}
                 disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

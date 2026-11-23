@@ -20,6 +20,7 @@ export function Button({
   disabled: disabledProp,
   loading = false,
   loadingText,
+  className,
   ...props
 }: ButtonProps) {
   const disabled = disabledProp || loading;
@@ -29,6 +30,7 @@ export function Button({
       disabled={disabled}
       aria-disabled={disabled}
       aria-busy={loading || undefined}
+      className={['ui-btn', `ui-btn-${variant}`, className].filter(Boolean).join(' ')}
       style={{
         ...buttonStyle(variant, size),
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -56,17 +58,14 @@ export function buttonStyle(variant: NonNullable<ButtonProps['variant']> = 'prim
           color: 'var(--color-btn-primary-text, #ffffff)',
           border: 'none',
         };
+      // Every non-primary action looks the same across the app: neutral, bordered.
+      // The accent colour is reserved for the one primary action of a surface.
       case 'secondary':
-        return {
-          backgroundColor: 'var(--color-bg-tertiary)',
-          color: 'var(--color-text-primary)',
-          border: '1px solid var(--color-border)',
-        };
       case 'outline':
         return {
-          backgroundColor: 'transparent',
-          color: 'var(--color-primary-600)',
-          border: '1px solid var(--color-primary-300)',
+          backgroundColor: 'var(--color-bg-secondary)',
+          color: 'var(--color-text-primary)',
+          border: '1px solid var(--color-border)',
         };
       case 'ghost':
         return {

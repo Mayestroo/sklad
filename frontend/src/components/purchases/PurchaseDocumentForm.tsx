@@ -899,7 +899,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}
                 title="Ctrl+Enter"
                 aria-keyshortcuts="Control+Enter"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
               </Button>
@@ -983,10 +983,11 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
             </div>
           </div>
           <Button
+            variant="secondary"
             size="sm"
             onClick={handleUnpostToEdit}
             disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-600)', color: 'var(--color-text-inverse)', fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <Pencil size={14} /> {isRu ? 'Разрешить редактирование' : 'Tahrirlashga ruxsat berish'}
           </Button>
@@ -1353,7 +1354,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)')}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-success-600)' }} />
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%' }} />
                         {isRu ? '+ Новое сырьё' : '+ Yangi Xomashyo'}
                       </button>
                       <button
@@ -1618,7 +1619,7 @@ export function PurchaseDocumentForm({ initialData, mode }: PurchaseDocumentForm
                 { label: tf('ckPrice'), done: items.some((i) => i.productId) && items.filter((i) => i.productId).every((i) => Number(i.unitPrice) > 0) },
               ]}
             />
-            <Button onClick={() => handlePost(true)} loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} style={{ width: '100%', backgroundColor: 'var(--color-success-600)' }}>
+            <Button onClick={() => handlePost(true)} loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'} style={{ width: '100%' }}>
               {!loading && <CheckCircle2 size={16} aria-hidden />} {isRu ? 'Провести и закрыть' : 'Tasdiqlash va yopish'}
             </Button>
             <Button variant="secondary" onClick={handleSaveDraft} loading={loading} style={{ width: '100%' }}>
