@@ -4,10 +4,10 @@ import { useState, useMemo } from 'react';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { useLocale, useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
-import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -17,7 +17,6 @@ import { formatCurrency, formatPercent, formatPriceOrUnset, errorMessage } from 
 import { catalogMarkupPercent } from '@/lib/inventory-cost';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import {
   Package,
@@ -40,6 +39,8 @@ function productName(p: Product, locale: 'uz' | 'ru'): string {
   if (typeof p.name === 'string') return p.name;
   return p.name[locale] || p.name.ru || p.name.uz || '—';
 }
+
+const FILTER_DEFAULTS = { type: '', categoryId: '', status: '', stock: '' };
 
 export default function ProductsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -70,12 +71,12 @@ export default function ProductsPage() {
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
   const [deleteCatLoading, setDeleteCatLoading] = useState(false);
 
-  // Filters
-  // Dropdown filters are remembered per browser; the search box starts empty.
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = usePersistentState<string>('products.category', '');
-  const [selectedType, setSelectedType] = usePersistentState<string>('products.type', '');
-  const [selectedStatus, setSelectedStatus] = usePersistentState<string>('products.status', '');
+  // Filters live in the URL and are remembered per user; the list is filtered here. A link may open
+  // the list pre-filtered (?stock=low from the dashboard).
+  const lf = useFilterState('products.list', FILTER_DEFAULTS);
+  const search = lf.search;
+  const { categoryId: selectedCategory, type: selectedType, status: selectedStatus } = lf.values;
+  const focus = lf.values.stock;
 
   // Selected product modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -222,27 +223,8 @@ export default function ProductsPage() {
   const servicesCount = products.filter((p) => p.type === 'SERVICE').length;
   const totalCategories = categories.length;
 
-  const categoryOptions = [
-    { value: '', label: isRu ? 'Все категории' : 'Hamma kategoriyalar' },
-    ...categories.map((c) => ({
-      value: c.id,
-      label: typeof c.name === 'object' ? c.name[locale] || c.name.ru || c.name.uz || '' : c.name,
-    })),
-  ];
-
-  // TZ "Ishlab chiqarish" 3.1: Tovar | Xomashyo | Tayyor mahsulot | Xizmat.
-  const typeOptions = productTypeOptions(locale, isRu ? 'Все типы' : 'Barcha turlar');
-
-  const statusOptions = [
-    { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
-    { value: 'ACTIVE', label: isRu ? 'Активный' : 'Faol' },
-    { value: 'INACTIVE', label: isRu ? 'Неактивный' : 'Nofaol' },
-  ];
-
   const tl = useTranslations('rd.list');
   const tp = useTranslations('rd.products');
-  // Quick focus: low stock / no sale price, from the tiles or a link (?stock=low).
-  const [focus, setFocus] = useState<'' | 'low' | 'noprice'>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stock') === 'low' ? 'low' : ''));
   const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('products.hidden', ['unit']);
   const [sort, setSort] = usePersistentState<SortState | null>('products.sort', null);
   const [limit, setLimit] = useState(100);
@@ -348,14 +330,20 @@ export default function ProductsPage() {
     },
   ];
 
-  const anyFilter = Boolean(search || selectedCategory || selectedType || selectedStatus || focus);
-  const clearAll = () => {
-    setSearch('');
-    setSelectedCategory('');
-    setSelectedType('');
-    setSelectedStatus('');
-    setFocus('');
-  };
+  const filterDefs: FilterDef[] = [
+    { key: 'type', kind: 'segmented', label: tIn('turi'), options: productTypeOptions(locale) },
+    {
+      key: 'categoryId',
+      kind: 'select',
+      label: isRu ? 'Категория' : 'Kategoriya',
+      searchable: true,
+      options: categories.map((c) => ({ value: c.id, label: typeof c.name === 'object' ? c.name[locale] || c.name.ru || c.name.uz || '' : c.name })),
+    },
+    { key: 'status', kind: 'select', label: isRu ? 'Статус' : 'Holat', options: [{ value: 'ACTIVE', label: isRu ? 'Активный' : 'Faol' }, { value: 'INACTIVE', label: isRu ? 'Неактивный' : 'Nofaol' }] },
+    { key: 'stock', kind: 'select', label: tp('attention'), options: [{ value: 'low', label: tp('sigLow'), count: lowCount }, { value: 'noprice', label: tp('sigNoPrice'), count: noPriceCount }] },
+  ];
+  const anyFilter = Boolean(search.trim() || lf.activeCount > 0);
+  const clearAll = lf.reset;
 
   return (
     <div className="rd-page animate-fade-in">
@@ -380,26 +368,20 @@ export default function ProductsPage() {
         }
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="error" label={tp('sigLow')} value={lowCount} hint={tp('sigLowHint')} active={focus === 'low'} onClick={() => setFocus(focus === 'low' ? '' : 'low')} />
-        <Signal tone="warning" label={tp('sigNoPrice')} value={noPriceCount} hint={tp('sigNoPriceHint')} active={focus === 'noprice'} onClick={() => setFocus(focus === 'noprice' ? '' : 'noprice')} />
-        <Signal tone="info" label={tIn('faol_pozitsiyalar')} value={`${activeProducts} / ${totalProducts}`} hint={tIn('xizmatlar_p0', { p0: servicesCount })} />
-        <Signal tone="neutral" label={isRu ? 'Категории' : 'Kategoriyalar'} value={totalCategories} />
-      </SignalStrip>
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard label={tp('sigLow')} loading={productsQuery.isPending} value={lowCount} secondary={tp('sigLowHint')} />
+        <StatCard label={tp('sigNoPrice')} loading={productsQuery.isPending} value={noPriceCount} secondary={tp('sigNoPriceHint')} />
+        <StatCard label={tIn('faol_pozitsiyalar')} loading={productsQuery.isPending} value={`${activeProducts} / ${totalProducts}`} secondary={tIn('xizmatlar_p0', { p0: servicesCount })} />
+        <StatCard label={isRu ? 'Категории' : 'Kategoriyalar'} value={totalCategories} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={tp('searchPh')} label={tl('search')} autoFocus />
-          <div style={{ minWidth: 200 }}>
-            <Select options={categoryOptions} value={selectedCategory} onChange={setSelectedCategory} searchable />
-          </div>
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={tIn('turi')} showLabel options={typeOptions} value={selectedType} onChange={setSelectedType} />
-          <ChipGroup label={isRu ? 'Статус' : 'Holat'} showLabel options={statusOptions} value={selectedStatus} onChange={setSelectedStatus} />
-        </div>
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={tp('searchPh')}
+        resultCount={productsQuery.isPending ? null : focused.length}
+        columns={<ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {productsQuery.isError ? (

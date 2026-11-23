@@ -807,9 +807,9 @@
       "low": "minimal {min} dan kam",
       "setPrice": "Narx qo‘yish",
       "sigLow": "Kam qolgan",
-      "sigLowHint": "Qoldiq minimaldan kam — bosing: ko‘rsatish",
+      "sigLowHint": "Qoldiq minimaldan kam",
       "sigNoPrice": "Sotuv narxi yo‘q",
-      "sigNoPriceHint": "Sotuvda narxni qo‘lda yozishga to‘g‘ri keladi — bosing",
+      "sigNoPriceHint": "Sotuvda narxni qo‘lda yozishga to‘g‘ri keladi",
       "searchPh": "Nomi, SKU yoki shtrix-kod (skaner ham ishlaydi)",
       "none": "Katalog hali bo‘sh",
       "noneHint": "Birinchi tovarni qo‘shing yoki boshlang‘ich qoldiqlardan import qiling.",
@@ -821,7 +821,8 @@
       "preview": "Sotuvda shunday ko‘rinadi",
       "noName": "Nomi hali yo‘q",
       "noPrice": "Narx belgilanmagan",
-      "barcode": "Shtrix-kod"
+      "barcode": "Shtrix-kod",
+      "attention": "Diqqat talab"
     },
     "inv": {
       "subtitle": "Har bir ombordagi qoldiq: nima tugayapti, nima umuman yo‘q",
