@@ -40,6 +40,9 @@ const response = (docNumber: string) => ({
 describe('Additional expenses page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    // Filters live in the URL and localStorage: each test starts from a clean view.
+    window.history.replaceState(null, '', '/');
+    window.localStorage.clear();
   });
 
   it('loads the first page once and again for a new search', async () => {
@@ -55,7 +58,7 @@ describe('Additional expenses page', () => {
       expect.objectContaining({ token: 'tok', tenantId: 'tenant-1' }),
     );
 
-    fireEvent.change(screen.getByPlaceholderText('Raqam, kontragent, izoh bo‘yicha qidiruv...'), {
+    fireEvent.change(screen.getByPlaceholderText('Raqam, kontragent yoki izoh'), {
       target: { value: 'AE-9' },
     });
     expect(await screen.findByText('AE-0009')).toBeTruthy();
