@@ -86,18 +86,20 @@ allows 5 logins per minute.
 ## Page patterns (2026-11 redesign, branch ux/redesign)
 
 Every page answers "what does the person come here to do?" first. The shared kit
-lives in `src/components/ui/list/`, `src/components/ui/DocChecklist.tsx` and the
+lives in `src/components/ui/filters/` (FilterBar), `src/components/ui/stats/` (StatCard),
+`src/components/ui/list/` (DataTable), `src/components/ui/DocChecklist.tsx` and the
 `rd-*` / `doc-*` classes at the end of `globals.css`. New strings: `rd.*` messages.
 
 ### Lists (sales, purchases, orders, returns, expenses, stock, products, counterparties…)
 
 | Piece | Rule |
 |---|---|
-| `SignalStrip` + `Signal` | 2–4 tiles that each **filter the list** ("Overdue 3", "Draft 2"). A tile that cannot be clicked into a list does not belong here. Tone only when there is something to do |
-| `ChipGroup` | Status / type filters with counts, instead of a select. "All" first |
-| `PeriodFilter` + `resolvePeriod` | Today / week / month / custom; `ALL_TIME` for history |
-| `MoreFiltersButton` + `ActiveFilters` | Rare filters fold away; what is active is always visible as removable chips |
-| `useListFilters(key, defaults, urlKeys)` | Filters remembered per browser; URL params (`?status=`, `?q=`) override, so dashboards and other pages can link into a filtered list |
+| `StatCardGrid` + `StatCard` | 2–4 key numbers above the list: label · value · optional secondary line · optional trend. **Not** buttons, links or filters — the same view is reached through the FilterBar. One neutral frame (no stripes, no tinted backgrounds); colour only for a negative value (`negative`) or a trend text. 4 columns, 2 below 1200 px |
+| `FilterBar` + `useFilterState(pageKey, DEFAULTS)` | The one toolbar of every list, in this order: search (`/` focuses it) · the main status as `segmented` · other filters as `select` dropdowns (`searchable` for long lists) · `toggle`s · `period` (always last) · `columns` (ColumnChooser). Under it: removable chips, "Tozalash", the result count. One row when everything fits; otherwise search + Columns on the first line and all filters together on the second (measured, not by breakpoint). Phones: "Filtrlar (n)" opens a bottom sheet |
+| Filter state | `DEFAULTS` is a module constant. Values live in the URL (`?status=DRAFT&q=…`, so links and Back work) and are remembered per user and page. The page maps values to its **existing** API parameters; `periodRange(value)` gives `{from, to}` in local dates. Two bars on one page (production) use different keys and `{ searchKey: 'rq' }` |
+| Paged lists | Derive the page from a key of the filters (`pageAt = { key, page }`) instead of calling `setPage(1)` in every handler |
+| View switches | A choice of *which list or view* (List / Analytics, Provided / Received, Operations: Income / Expenses…) is a `SegmentedFilter` above the FilterBar, not a filter inside it. Report periods that are named API ranges (analytics) are a `SegmentedFilter` too |
+| Task tiles | Tiles that **start** something ("Kirim qilish") are buttons with `.task-tile`, not stat cards |
 | `DataTable` | Sticky sortable header, `onRowClick` + Enter, `footer` totals row, phone card rows. Columns: `primary` (first, bold), `numeric`, `locked` (cannot be hidden via `ColumnChooser`) |
 | `CurrencyTotals` / `totalsByCurrency` | Footer and tile sums per currency (ADR 0023) |
 | Row actions | One `ActionsMenu` (⋯) per row; destructive items `danger: true`, hidden (not disabled) without permission |
@@ -131,7 +133,7 @@ lives in `src/components/ui/list/`, `src/components/ui/DocChecklist.tsx` and the
 - Section titles are questions ("What sells best?"), each with a link to the page where
   you act.
 - Logs (audit, journal): grouped by **local** day with a one-line summary; noisy rows
-  (sign-ins) hidden by default behind a remembered toggle.
+  (sign-ins) hidden by default; a FilterBar toggle ("with sign-ins") shows them.
 
 ### Inboxes and composers (platform admin)
 
@@ -174,8 +176,11 @@ npx vitest run <page folder>          # DOM tests
 npm test                              # node runner: source scans (money, i18n, wiring) — run it too
 bash ../.local/uxrun/lintbase.sh <file>   # no new ESLint errors vs HEAD
 MSYS_NO_PATHCONV=1 node e2e/ux/shot-one.mjs <outDir> <name> <route> 1 1440,390 uz,ru   # overflow 0
+MSYS_NO_PATHCONV=1 node e2e/ux/fc-verify.mjs <route> <outDir>   # FilterBar: search, /, segments, dropdown keys, period, URL, Back, remembered view, phone sheet
+MSYS_NO_PATHCONV=1 node e2e/ux/fb-shot.mjs <route> <out.jpg> [width] [locale]   # how many lines the bar takes
 node e2e/ux/axe-sweep.mjs out.json both    # WCAG 2.1 A/AA, light + dark
 ```
 Task flows used for verification: `e2e/ux/rd-*.mjs` (sale form, transfer, prices,
 inventory document, product, returns, ticket reply, announcement, branch attach,
-finance operations, money input). They write only to the local database.
+finance operations, money input). They write only to the local database. Platform-owner pages: `UX_EMAIL=superadmin@local.test UX_PASSWORD=…`
+(the local account; see the create-superadmin script for its default).
