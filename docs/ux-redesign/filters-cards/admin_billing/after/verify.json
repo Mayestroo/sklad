@@ -1,0 +1,212 @@
+[
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "toolbar present",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "stat cards (3) not clickable",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "segmented chooses",
+  "ok": true,
+  "note": "Boshlang‘ich1 ?plan=STARTER"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "segmented arrow key",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "result count shown",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "reload keeps view",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "Back keeps view",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "fresh visit restores remembered view",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "no page errors",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "no horizontal page scroll",
+  "ok": true,
+  "note": "0"
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "desktop filters hidden",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "sheet opens",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "apply → badge + chip",
+  "ok": true,
+  "note": "?plan=STARTER"
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "Esc closes sheet",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "sheet clear + apply",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "toolbar present",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "stat cards (3) not clickable",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "segmented chooses",
+  "ok": true,
+  "note": "Стартовый1 ?plan=STARTER"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "segmented arrow key",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "result count shown",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "reload keeps view",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "Back keeps view",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "fresh visit restores remembered view",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "no page errors",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "no horizontal page scroll",
+  "ok": true,
+  "note": "0"
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "desktop filters hidden",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "sheet opens",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "apply → badge + chip",
+  "ok": true,
+  "note": "?plan=STARTER"
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "Esc closes sheet",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "sheet clear + apply",
+  "ok": true,
+  "note": ""
+ }
+]
