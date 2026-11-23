@@ -5,6 +5,11 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Fields that only look something up (typing in them is not an edit to protect). */
+const IGNORED_FIELDS = 'input[type="search"], [role="combobox"]';
+/** Choices in the app's custom controls (Select options, segmented radios, checkboxes, calendar days). */
+const CHOICES = '[role="option"], [role="radio"], [role="checkbox"], [role="switch"], [role="gridcell"] button, [role="gridcell"][tabindex]';
+
 /** Dialogs and drawers open at the same time: only the top one handles keys. */
 const openStack: string[] = [];
 
@@ -63,11 +68,22 @@ export function useDialog({ isOpen, id, onClose, onSubmitShortcut, confirmDiscar
       (first ?? surface).focus();
     }, 0);
     // Typing or choosing in a field fires input/change; filling a field from code (React) does not.
-    const markDirty = () => {
+    // Search boxes and comboboxes only look things up — they are not data the person would lose.
+    const markDirty = (e: Event) => {
+      const el = e.target instanceof Element ? e.target : null;
+      if (el && (el.matches(IGNORED_FIELDS) || el.closest('[data-dialog-ignore]'))) return;
       dirtyRef.current = true;
+    };
+    // The app's own selects and date pickers open in a portal (outside the surface) and fire no
+    // input/change: a click on a choice while this surface is on top counts as an edit too.
+    const markChoice = (e: MouseEvent) => {
+      if (!isTop()) return;
+      const el = e.target instanceof Element ? e.target : null;
+      if (el?.closest(CHOICES) && !el.closest('[data-dialog-ignore]')) dirtyRef.current = true;
     };
     surface?.addEventListener('input', markDirty, true);
     surface?.addEventListener('change', markDirty, true);
+    document.addEventListener('click', markChoice, true);
 
     const onKey = (e: KeyboardEvent) => {
       if (!isTop()) return;
@@ -100,6 +116,7 @@ export function useDialog({ isOpen, id, onClose, onSubmitShortcut, confirmDiscar
       window.removeEventListener('keydown', onKey);
       surface?.removeEventListener('input', markDirty, true);
       surface?.removeEventListener('change', markDirty, true);
+      document.removeEventListener('click', markChoice, true);
       const at = openStack.lastIndexOf(id);
       if (at >= 0) openStack.splice(at, 1);
       document.body.style.overflow = previousOverflow;

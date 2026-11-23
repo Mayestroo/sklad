@@ -66,6 +66,38 @@ describe('Modal: closing without losing typed input', () => {
   });
 });
 
+describe('Modal: what counts as an edit', () => {
+  it('typing in a search box is not an edit (Esc closes at once)', () => {
+    const onClose = vi.fn();
+    render(
+      <Modal isOpen onClose={onClose} title="Sahifaga o‘tish">
+        <input type="search" aria-label="Qidiruv" />
+      </Modal>,
+    );
+    fireEvent.input(screen.getByLabelText('Qidiruv'), { target: { value: 'sotuv' } });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('picking a choice in a custom control (role=option, even in a portal) is an edit', () => {
+    const onClose = vi.fn();
+    render(
+      <>
+        <Modal isOpen onClose={onClose} title="Yangi hujjat">
+          <span>Ombor</span>
+        </Modal>
+        <ul role="listbox">
+          <li role="option" aria-selected="false">Asosiy ombor</li>
+        </ul>
+      </>,
+    );
+    fireEvent.click(screen.getByRole('option', { name: 'Asosiy ombor' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeTruthy();
+  });
+});
+
 describe('Drawer: same rules', () => {
   it('asks before closing after typing; the close button is named in the interface language', () => {
     const onClose = vi.fn();
