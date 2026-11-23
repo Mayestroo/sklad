@@ -897,7 +897,7 @@
     "services": {
       "newProvided": "Mijozga xizmat akti",
       "newReceived": "Olingan xizmat akti",
-      "debtHint": "Bosing: tasdiqlangan, lekin to‘lanmagan aktlar"
+      "debtHint": "Tasdiqlangan, lekin to‘lanmagan aktlar"
     },
     "production": {
       "flow": "Ishlab chiqarish bosqichlari",
