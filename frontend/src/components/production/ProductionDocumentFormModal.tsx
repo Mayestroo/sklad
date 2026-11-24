@@ -3,7 +3,7 @@
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, Plus, Save, Trash2, Factory } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { apiFetch } from '@/lib/api';
@@ -211,7 +211,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
     ) : null;
 
   return (
-    <Modal
+    <Modal icon={<Factory size={20} />}
       isOpen
       onClose={() => void requestClose()}
       onSubmitShortcut={() => void submit()}
@@ -220,11 +220,10 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
       footer={
         <>
           <Button type="button" variant="outline" onClick={() => void requestClose()} disabled={busy}>
-            {t('bekorQilish')} <kbd style={{ fontSize: 11, opacity: 0.7 }}>Esc</kbd>
+            {t('bekorQilish')}
           </Button>
           <Button type="button" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
-            <Save size={15} aria-hidden /> {busy ? t('saqlanmoqda') : doc ? t('saqlash') : t('qoralamaYaratish')}{' '}
-            <kbd style={{ fontSize: 11, opacity: 0.8 }}>Ctrl+Enter</kbd>
+            <Save size={15} aria-hidden /> {busy ? t('saqlanmoqda') : doc ? t('saqlash') : t('qoralamaYaratish')}
           </Button>
         </>
       }

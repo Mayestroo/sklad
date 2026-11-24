@@ -25,8 +25,7 @@ import { Modal } from '@/components/ui/Modal';
 import {
   RotateCcw,
   Plus,
-  Download,
-} from 'lucide-react';
+  Download, Trash2 } from 'lucide-react';
 import { PurchaseReturn } from '@shared/types';
 import { Link, useRouter } from '@/i18n/navigation';
 import { ReturnActModal } from '@/components/purchases/ReturnActModal';
@@ -435,7 +434,7 @@ export default function ReturnsPage() {
       )}
 
       {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
-      <Modal
+      <Modal icon={<Trash2 size={20} />} tone="error"
         isOpen={Boolean(deleteConfirmReturn)}
         onClose={() => { if (!deleteLoading) setDeleteConfirmReturn(null); }}
         title={isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}

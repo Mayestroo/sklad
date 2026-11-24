@@ -20,7 +20,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { matchesSearch } from '@/components/ui/SearchField';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
-import { Users, Plus, CreditCard } from 'lucide-react';
+import { Users, Plus, CreditCard, UserRound } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
@@ -261,7 +261,7 @@ export default function CustomersPage() {
       )}
 
       {selectedCustomer && (
-        <Modal isOpen onClose={() => setSelectedCustomer(null)} title={selectedCustomer.name} size="xl">
+        <Modal icon={<UserRound size={20} />} isOpen onClose={() => setSelectedCustomer(null)} title={selectedCustomer.name} size="xl">
           {profileQuery.isError ? (
             <LoadError error={profileQuery.error} onRetry={() => void profileQuery.refetch()} retrying={profileQuery.isFetching} />
           ) : profileQuery.isPending || !profile ? (

@@ -56,8 +56,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Trash2,
-  RotateCcw,
-} from 'lucide-react';
+  RotateCcw, Pencil, Undo2 } from 'lucide-react';
 
 
 /** One row per cash desk / account: today's and this month's in / out / net (per currency, never summed). */
@@ -825,7 +824,7 @@ export default function FinancePage() {
 
       {/* ─── Edit Transaction Modal ─────────────────────────────────── */}
       {editingTx && (
-        <Modal
+        <Modal icon={<Pencil size={20} />}
           isOpen={true}
           title={isRu ? 'Редактировать операцию' : 'Operatsiyani tahrirlash'}
           onClose={() => setEditingTx(null)}
@@ -875,9 +874,9 @@ export default function FinancePage() {
 
       {/* ─── Storno (Cancel) Confirmation Modal ─────────────────────── */}
       {stornoTx && (
-        <Modal
+        <Modal icon={<Undo2 size={20} />} tone="warning"
           isOpen={true}
-          title={isRu ? 'Аннулирование операции (Сторно)' : 'Operatsiyani bekor qilish (Storno)'}
+          title={isRu ? 'Сторнирование операции' : 'Operatsiyani stornolash'}
           onClose={() => setStornoTx(null)}
           footer={
             <>
@@ -948,7 +947,7 @@ export default function FinancePage() {
 
       {/* ─── Move Transaction to Trash Confirmation Modal ───────────── */}
       {deletingTx && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           title={isRu ? 'Переместить операцию в корзину?' : 'Operatsiyani savatga ko‘chirish?'}
           onClose={() => {
@@ -1553,7 +1552,7 @@ function FinanceTransactionDrawer({
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button
             variant="primary"

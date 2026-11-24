@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
-import { ClipboardList, Plus, CreditCard, ExternalLink, PackageCheck } from 'lucide-react';
+import { ClipboardList, Plus, CreditCard, ExternalLink, PackageCheck, FileText, Trash2 } from 'lucide-react';
 import { ORDER_STATUS_LABELS } from '@/components/sales/SalesOrderForm';
 import { PaySalesOrderModal } from '@/components/sales/PaySalesOrderModal';
 import { OrderPickListModal } from '@/components/sales/OrderPickListModal';
@@ -474,7 +474,7 @@ export default function SalesOrdersPage() {
       </div>
 
       {preview && (
-        <Drawer
+        <Drawer icon={<FileText size={20} />}
           isOpen
           onClose={() => setPreviewId(null)}
           title={to('previewTitle', { number: preview.orderNumber })}
@@ -546,7 +546,7 @@ export default function SalesOrdersPage() {
       )}
 
       {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
-      <Modal
+      <Modal icon={<Trash2 size={20} />} tone="error"
         isOpen={Boolean(deleteConfirmOrder)}
         onClose={() => {
           if (!deleteLoading) setDeleteConfirmOrder(null);

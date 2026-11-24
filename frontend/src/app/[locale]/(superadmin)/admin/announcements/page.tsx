@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { Plus, Bell, Calendar } from 'lucide-react';
+import { Plus, Bell, Calendar, Megaphone } from 'lucide-react';
 import { toast } from '@/context/ToastContext';
 
 interface SystemAnnouncement {
@@ -151,7 +151,7 @@ export default function SuperAdminAnnouncementsPage() {
         )}
       </div>
 
-      <Modal
+      <Modal icon={<Megaphone size={20} />}
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={isRu ? 'Новое объявление' : 'Yangi e’lon'}

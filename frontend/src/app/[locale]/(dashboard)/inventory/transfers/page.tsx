@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
-import { ArrowRight, ArrowRightLeft, Send, CheckCircle, Plus, Trash2, X } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, Send, CheckCircle, Plus, Trash2, X, ArrowLeftRight } from 'lucide-react';
 import { StockTransfer, Product } from '@shared/types';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
@@ -293,7 +293,7 @@ export default function StockTransfersPage() {
       )}
 
       {/* New Transfer Modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isRu ? 'Новое перемещение между складами' : 'Yangi Omborlararo Transfer'}
+      <Modal icon={<ArrowLeftRight size={20} />} description={isRu ? 'Товары переходят с одного склада на другой' : 'Tovarlar bir ombordan boshqasiga o‘tkaziladi'} isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isRu ? 'Новое перемещение между складами' : 'Yangi omborlararo o‘tkazma'}
       footer={
         <>
           <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
@@ -305,11 +305,11 @@ export default function StockTransfersPage() {
         <form id="page-form" onSubmit={handleCreateTransfer} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: 'var(--space-2)', alignItems: 'end' }}>
             <Select
-              label={isRu ? 'Склад отправитель *' : 'Chiquvchi Ombor *'}
+              label={isRu ? 'Склад отправитель *' : 'Chiquvchi ombor *'}
               options={warehouseOptions}
               value={sourceWarehouseId}
               onChange={(val) => setSourceWarehouseId(val)}
-              placeholder={isRu ? 'Выберите склад' : 'Chiquvchi omborni tanlang'}
+              placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
             />
             <Button
               type="button"
@@ -325,18 +325,19 @@ export default function StockTransfersPage() {
             </Button>
 
             <Select
-              label={isRu ? 'Склад получатель *' : 'Kiruvchi Ombor *'}
+              label={isRu ? 'Склад получатель *' : 'Kiruvchi ombor *'}
               options={warehouseOptions}
               value={targetWarehouseId}
               onChange={(val) => setTargetWarehouseId(val)}
-              placeholder={isRu ? 'Выберите склад' : 'Kiruvchi omborni tanlang'}
+              placeholder={isRu ? 'Выберите склад' : 'Omborni tanlang'}
             />
           </div>
 
-          <Input label={isRu ? 'Комментарий' : 'Izoh'} value={comment} onChange={(e) => setComment(e.target.value)} />
-
-          <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-semibold)', marginBottom: 'var(--space-2)' }}>{isRu ? 'Перемещаемые товары:' : 'Ko‘chiriladigan Tovarlar:'}</div>
+          <div>
+            <h3 className="dlg-section" style={{ marginBottom: 'var(--space-3)' }}>
+              {isRu ? 'Перемещаемые товары' : 'Ko‘chiriladigan tovarlar'}
+              {items.length > 0 && <span style={{ marginLeft: 6, color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)' }}>{items.length}</span>}
+            </h3>
             <div
               style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-1)', flexWrap: 'wrap' }}
               onKeyDown={(e) => {
@@ -371,6 +372,11 @@ export default function StockTransfersPage() {
               </div>
             )}
 
+            {items.length === 0 && (
+              <p style={{ margin: 0, padding: '12px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+                {isRu ? 'Товары ещё не добавлены: выберите товар и количество, затем «Добавить».' : 'Hali tovar qo‘shilmagan: mahsulot va miqdorni tanlab, «Qo‘shish»ni bosing.'}
+              </p>
+            )}
             {items.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {items.map((it, idx) => (
@@ -387,12 +393,14 @@ export default function StockTransfersPage() {
               </div>
             )}
           </div>
+
+          <Input label={isRu ? 'Комментарий' : 'Izoh'} value={comment} onChange={(e) => setComment(e.target.value)} />
       </form>
     </Modal>
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmTransfer && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={Boolean(deleteConfirmTransfer)}
           onClose={() => setDeleteConfirmTransfer(null)}
           title={isRu ? 'Удалить перемещение?' : "O'tkazmani o'chirish?"}

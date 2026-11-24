@@ -77,7 +77,10 @@ export function useDialog({ isOpen, id, onClose, onSubmitShortcut, confirmDiscar
     document.body.style.overflow = 'hidden';
     const timer = window.setTimeout(() => {
       if (!surface || surface.contains(document.activeElement)) return;
-      const first = surface.querySelector<HTMLElement>('[autofocus], input:not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])');
+      // A field marked autofocus, else the first control of the content (not the ✕ in the header).
+      const body = surface.querySelector<HTMLElement>('.dlg-body') ?? surface;
+      const controls = Array.from(body.querySelectorAll<HTMLElement>(FOCUSABLE));
+      const first = surface.querySelector<HTMLElement>('[autofocus]') ?? controls.find((el) => el.offsetParent !== null) ?? controls[0];
       (first ?? surface).focus();
     }, 0);
     // Typing or choosing in a field fires input/change; filling a field from code (React) does not.

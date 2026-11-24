@@ -17,7 +17,7 @@ import {
   isCashAccountCompatibleWithSalesPayment,
   isCashAccountCurrencyValid,
 } from '@shared/types/cash-account-policy';
-import { CreditCard, AlertCircle, Percent } from 'lucide-react';
+import { CreditCard, AlertCircle, Percent, Wallet } from 'lucide-react';
 
 type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'CLICK' | 'PAYME';
 type CashAccountListResponse = CashAccount[] | { data?: CashAccount[] };
@@ -186,7 +186,7 @@ export function PaySalesOrderModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Wallet size={20} />}
       isOpen={isOpen}
       onClose={handleClose}
       title={isRu ? `Оплата заказа — ${order.orderNumber}` : `Buyurtma to‘lovi — ${order.orderNumber}`}
@@ -378,7 +378,7 @@ export function PaySalesOrderModal({
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, paddingTop: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', paddingTop: '4px' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
       </form>

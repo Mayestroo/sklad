@@ -25,8 +25,7 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
-  Wallet,
-} from 'lucide-react';
+  Wallet, FileText } from 'lucide-react';
 import type { ServiceActDetail } from '@/lib/service-act';
 import type { CashAccount } from '@shared/types';
 import { unitLabel } from '@/lib/units';
@@ -369,7 +368,7 @@ export function ServiceActDetailsModal({
   );
 
   return (
-    <Modal
+    <Modal icon={<FileText size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={

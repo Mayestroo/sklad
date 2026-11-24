@@ -278,7 +278,7 @@ export default function ExpensesPage() {
         subtitle={te('subtitle')}
         actions={
           <Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}>
-            <Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi Xarajat'}
+            <Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi xarajat'}
           </Button>
         }
       />
@@ -331,7 +331,7 @@ export default function ExpensesPage() {
                 anyFilter ? (
                   <EmptyState icon={Receipt} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
                 ) : (
-                  <EmptyState icon={Receipt} title={te('none')} description={te('noneHint')} action={<Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}><Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi Xarajat'}</Button>} />
+                  <EmptyState icon={Receipt} title={te('none')} description={te('noneHint')} action={<Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}><Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi xarajat'}</Button>} />
                 )
               }
             />

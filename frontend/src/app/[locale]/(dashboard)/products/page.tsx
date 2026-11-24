@@ -25,8 +25,7 @@ import {
   Tag,
   Edit2,
   Trash2,
-  Zap,
-} from 'lucide-react';
+  Zap, Tags, Pencil } from 'lucide-react';
 import { Product, Category } from '@shared/types';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { toast } from '@/context/ToastContext';
@@ -419,7 +418,7 @@ export default function ProductsPage() {
 
       {/* Product Detail View Modal */}
       {selectedProduct && (
-        <Modal
+        <Modal icon={<Package size={20} />}
           isOpen={true}
           onClose={() => setSelectedProduct(null)}
           title={`${isRu ? 'Информация о товаре' : 'Tovar ma\'lumotlari'}: ${getProductName(selectedProduct)}`}
@@ -489,7 +488,7 @@ export default function ProductsPage() {
 
       {/* Delete Product Confirmation Modal */}
       {deletingProduct && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           onClose={() => setDeletingProduct(null)}
           title={isRu ? 'Удалить товар?' : 'Tovarni o‘chirishni tasdiqlaysizmi?'}
@@ -536,7 +535,7 @@ export default function ProductsPage() {
 
       {/* Category Management Modal */}
       {isCategoryModalOpen && (
-        <Modal
+        <Modal icon={<Tags size={20} />}
           isOpen={isCategoryModalOpen}
           onClose={() => setIsCategoryModalOpen(false)}
           title={isRu ? 'Управление категориями товаров' : 'Mahsulot kategoriyalarini boshqarish'}
@@ -641,7 +640,7 @@ export default function ProductsPage() {
 
       {/* Edit Category Modal */}
       {editingCategory && (
-        <Modal
+        <Modal icon={<Pencil size={20} />}
           isOpen={Boolean(editingCategory)}
           onClose={() => setEditingCategory(null)}
           title={isRu ? 'Редактировать категорию' : 'Kategoriyani tahrirlash'}
@@ -688,7 +687,7 @@ export default function ProductsPage() {
 
       {/* Delete Category Confirm Modal */}
       {deletingCategory && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={Boolean(deletingCategory)}
           onClose={() => setDeletingCategory(null)}
           title={isRu ? 'Удалить категорию?' : 'Kategoriyani o‘chirishni tasdiqlaysizmi?'}

@@ -27,8 +27,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  XCircle,
-} from 'lucide-react';
+  XCircle, KeyRound } from 'lucide-react';
 import { CreatedTenantSummary, GlobalMetrics, TenantCompanySummary } from '@shared/types';
 import type { AuthResponse } from '@shared/types';
 
@@ -438,7 +437,7 @@ export default function SuperAdminTenantsPage() {
         )}
       </Card>
 
-      <Modal
+      <Modal icon={<Building2 size={20} />}
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         title={isRu ? 'Новая компания' : 'Yangi korxona'}
@@ -491,7 +490,7 @@ export default function SuperAdminTenantsPage() {
         </form>
       </Modal>
 
-      <Modal
+      <Modal icon={<KeyRound size={20} />}
         isOpen={!!createdCredentials}
         onClose={() => setCreatedCredentials(null)}
         title={isRu ? 'Пароль администратора' : 'Administrator paroli'}
@@ -535,7 +534,7 @@ export default function SuperAdminTenantsPage() {
         )}
       </Modal>
 
-      <Modal
+      <Modal icon={<Building2 size={20} />}
         isOpen={editModalOpen && !!selectedTenant}
         onClose={() => setEditModalOpen(false)}
         title={selectedTenant ? (typeof selectedTenant.name === 'string' ? selectedTenant.name : selectedTenant.name?.[locale] || selectedTenant.name?.uz || selectedTenant.slug) : isRu ? 'Компания' : 'Korxona'}

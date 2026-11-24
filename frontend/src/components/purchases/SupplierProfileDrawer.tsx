@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { DOCUMENT_STATUS_LABELS, statusLabel } from '@/lib/constants/statuses';
 import { PurchaseReceipt, PurchaseReturn } from '@shared/types';
 import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
+import { Truck } from 'lucide-react';
 
 interface SupplierProfileData {
   supplier: {
@@ -69,7 +70,7 @@ export function SupplierProfileDrawer({
   if (!supplierId) return null;
 
   return (
-    <Modal
+    <Modal icon={<Truck size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={data?.supplier.name || (isRu ? 'Профиль поставщика' : 'Yetkazib beruvchi profili')}
@@ -157,7 +158,7 @@ export function SupplierProfileDrawer({
                   transition: 'all 0.15s ease',
                 }}
               >
-                {isRu ? 'История закупок' : 'Xaridlar Tarixi'} ({data.receipts.length})
+                {isRu ? 'История закупок' : 'Xaridlar tarixi'} ({data.receipts.length})
               </button>
               <button
                 type="button"
@@ -218,7 +219,7 @@ export function SupplierProfileDrawer({
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>MFO: {data.supplier.mfo || '—'} {data.supplier.bankName ? `(${data.supplier.bankName})` : ''}</div>
                 </div>
                 <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>{isRu ? 'Юридический адрес' : 'Yuridik Manzil'}</div>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>{isRu ? 'Юридический адрес' : 'Yuridik manzil'}</div>
                   <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{data.supplier.address || '—'}</strong>
                 </div>
               </div>

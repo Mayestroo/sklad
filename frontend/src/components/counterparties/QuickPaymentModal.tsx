@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Wallet } from 'lucide-react';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 
 interface CashAccount {
@@ -214,17 +214,17 @@ export function QuickPaymentModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Wallet size={20} />} description={isIncome ? (isRu ? 'Деньги поступят в кассу, долг контрагента уменьшится' : 'Pul kassaga tushadi, kontragent qarzi kamayadi') : isRu ? 'Деньги уйдут из кассы, наш долг контрагенту уменьшится' : 'Pul kassadan chiqadi, kontragentga qarzimiz kamayadi'}
       isOpen={isOpen}
       onClose={onClose}
       title={
         isIncome
           ? isRu
-            ? 'Принять оплату (Приход)'
-            : "To'lov qabul qilish (Kirim)"
+            ? 'Принять оплату'
+            : 'To‘lov qabul qilish'
           : isRu
-            ? 'Выплатить долг (Расход)'
-            : "Qarzni to'lash (Chiqim)"
+            ? 'Выплатить долг'
+            : 'Qarzni to‘lash'
       }
       size="md"
       footer={

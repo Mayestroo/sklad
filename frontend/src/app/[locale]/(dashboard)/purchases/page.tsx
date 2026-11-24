@@ -24,7 +24,7 @@ import { ColumnChooser, FilterBar, periodRange, useFilterState, type FilterDef }
 import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Facts, PaidProgress, PreviewHead, SectionTitle } from '@/components/ui/list/Preview';
-import { CreditCard, Plus, RotateCcw, Truck, ExternalLink } from 'lucide-react';
+import { CreditCard, Plus, RotateCcw, Truck, ExternalLink, FileText, Trash2 } from 'lucide-react';
 import { PurchaseReceipt, PurchaseSummaryStats } from '@shared/types';
 import { PayPurchaseModal } from '@/components/purchases/PayPurchaseModal';
 import { CreateReturnModal } from '@/components/purchases/CreateReturnModal';
@@ -319,7 +319,7 @@ export default function PurchasesPage() {
 
       {/* Row preview: check a sale without leaving the list */}
       {preview && (
-        <Drawer
+        <Drawer icon={<FileText size={20} />}
           isOpen
           onClose={() => setPreviewId(null)}
           title={ts('previewTitle', { number: numberOf(preview) })}
@@ -441,7 +441,7 @@ export default function PurchasesPage() {
 
       {/* Delete confirmation (posted documents are unposted first) */}
       {deletingInvoice && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           onClose={() => setDeletingInvoice(null)}
           title={

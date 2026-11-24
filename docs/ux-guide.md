@@ -155,7 +155,15 @@ lives in `src/components/ui/filters/` (FilterBar), `src/components/ui/stats/` (S
   submit button `type="submit" form="<id>"` in the footer, `onSubmitShortcut` → `requestSubmit()`.
 - Order in the footer: Cancel (secondary) first, the action last (primary, or danger when it destroys).
 - Confirmations: `useConfirm` (ADR 0021). A destructive confirmation focuses Cancel first.
-- Title says the task ("Yangi mijoz", "To'lov qabul qilish — INV-…"); `description` for one line on what changes.
+- Title says the task ("Yangi mijoz", "To'lov qabul qilish — INV-…") in sentence case (not "Yangi Tovar Qo'shish"),
+  without "(Kirim)"-style tags; `description` for one line on what changes.
+- Look (shared `DialogParts`, classes `dlg-*` in globals.css): header = `icon` in a tinted tile + title + description
+  + ✕; body scrolls; footer is tinted, pinned, actions right. `tone="error"` on the icon for delete dialogs,
+  `warning` for reversals (storno, reopen); other dialogs keep the primary tint.
+- Do not write shortcuts in button labels ("Saqlash (Ctrl+Enter)"): with `onSubmitShortcut` the footer shows
+  `Ctrl + Enter — saqlash` itself (desktop only).
+- Focus on open: a field with `autoFocus`, else the first control of the body. Long forms: group fields under
+  `<h3 className="dlg-section">`; lists inside a dialog show an empty-state line, the free-text note goes last.
 
 ### Buttons
 

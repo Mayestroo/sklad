@@ -65,9 +65,9 @@ export function Header({ onOpenMenu, onOpenGoTo }: HeaderProps) {
   const getRoleName = (roleSlug?: string) => {
     switch (roleSlug) {
       case 'super_admin':
-        return isRu ? 'Суперадминистратор' : 'Super Administrator';
+        return isRu ? 'Суперадминистратор' : 'Super administrator';
       case 'company_admin':
-        return isRu ? 'Главный администратор' : 'Bosh Administrator';
+        return isRu ? 'Главный администратор' : 'Bosh administrator';
       case 'accountant':
         return isRu ? 'Бухгалтер' : 'Buxgalter';
       case 'cashier':

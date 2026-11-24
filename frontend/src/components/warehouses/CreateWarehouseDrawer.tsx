@@ -120,7 +120,7 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
         resetForm();
         onClose();
       }}
-      title={isRu ? 'Новый склад' : 'Yangi Omborxona'}
+      title={isRu ? 'Новый склад' : 'Yangi ombor'}
       description={
         isRu
           ? 'Создание нового склада или места хранения товаров'
@@ -140,7 +140,7 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
             }}
             disabled={loading}
           >
-            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button
             type="button"
@@ -154,7 +154,7 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
             ) : (
               <>
                 <CheckCircle2 size={16} />
-                {isRu ? 'Сохранить склад (Ctrl+Enter)' : 'Omborni saqlash (Ctrl+Enter)'}
+                {isRu ? 'Сохранить склад' : 'Omborni saqlash'}
               </>
             )}
           </Button>
@@ -247,7 +247,7 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, paddingTop: '8px', borderTop: '1px solid var(--color-border-light)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', paddingTop: '8px', borderTop: '1px solid var(--color-border-light)' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
       </form>

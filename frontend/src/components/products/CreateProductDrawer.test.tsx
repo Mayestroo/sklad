@@ -90,7 +90,7 @@ describe('CreateProductDrawer cost-price currency (F8, ADR 0022)', () => {
   it('refuses to save a nonzero cost price until a currency is chosen', async () => {
     renderPage(<CreateProductDrawer isOpen onClose={vi.fn()} initialSkuOrBarcode="Shampun" />);
     fireEvent.change(costPriceInput(), { target: { value: '5000' } });
-    fireEvent.click(screen.getByText('Tovarni saqlash (Ctrl+Enter)'));
+    fireEvent.click(screen.getByText('Tovarni saqlash'));
     await waitFor(() => expect(screen.getByText('Xarid tannarxi valyutasini tanlang')).toBeTruthy());
     expect(postedProductBodies()).toEqual([]);
   });
@@ -100,7 +100,7 @@ describe('CreateProductDrawer cost-price currency (F8, ADR 0022)', () => {
     fireEvent.change(costPriceInput(), { target: { value: '5000' } });
     fireEvent.click(costPriceCurrencyTrigger());
     fireEvent.click(await screen.findByRole('option', { name: 'UZS' }));
-    fireEvent.click(screen.getByText('Tovarni saqlash (Ctrl+Enter)'));
+    fireEvent.click(screen.getByText('Tovarni saqlash'));
     await waitFor(() => expect(postedProductBodies()).toHaveLength(1));
     expect(postedProductBodies()[0]).toMatchObject({ costPrice: 5000, costPriceCurrency: 'UZS', costPriceExchangeRate: 1 });
   });
@@ -123,7 +123,7 @@ describe("CreateProductDrawer finished product (TZ Ishlab chiqarish 3.2, 3.3)", 
     expect(screen.getByText("Retseptura va ishlab chiqarishdan avtomatik hisoblanadi")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Yarim tayyor mahsulot"));
-    fireEvent.click(screen.getByText("Mahsulotni saqlash (Ctrl+Enter)"));
+    fireEvent.click(screen.getByText("Mahsulotni saqlash"));
     await waitFor(() => expect(postedProductBodies()).toHaveLength(1));
     const body = postedProductBodies()[0];
     expect(body).toMatchObject({ type: "FINISHED_PRODUCT", isSemiFinished: true });

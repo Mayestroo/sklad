@@ -1607,3 +1607,183 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
 .rd-page > .sec-tabs { margin-bottom: 0; }
 .acc-hint { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-xs); color: var(--color-text-tertiary); }
 .acc-zero { color: var(--color-text-tertiary); }
+
+/* ── Dialogs (Modal, Drawer): one look for header, body and footer ─────────────────────────── */
+.dlg-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(3px);
+  animation: dlgFade 160ms ease-out;
+}
+[data-theme='dark'] .dlg-backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.dlg-surface {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  outline: none;
+  display: flex;
+  flex-direction: column;
+}
+.app-modal.dlg-surface {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.28), 0 2px 6px rgba(15, 23, 42, 0.08);
+  animation: dlgIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.app-drawer.dlg-surface {
+  border-left: 1px solid var(--color-border);
+  box-shadow: -16px 0 40px -12px rgba(15, 23, 42, 0.25);
+  animation: dlgSlide 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-theme='dark'] .app-modal.dlg-surface,
+[data-theme='dark'] .app-drawer.dlg-surface {
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+}
+.dlg-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 20px 20px 16px 24px;
+  border-bottom: 1px solid var(--color-border-light);
+  flex-shrink: 0;
+}
+.dlg-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.dlg-icon[data-tone='success'] { background: var(--color-success-50); color: var(--color-success-700); }
+.dlg-icon[data-tone='warning'] { background: var(--color-warning-50); color: var(--color-warning-700); }
+.dlg-icon[data-tone='error'] { background: var(--color-error-50); color: var(--color-error-700); }
+.dlg-icon[data-tone='info'] { background: var(--color-info-50); color: var(--color-info-700); }
+.dlg-heading {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.dlg-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.dlg-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+.dlg-desc {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+.dlg-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin: 2px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.dlg-close:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+.dlg-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+.app-drawer .dlg-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.dlg-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px 24px;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-subtle);
+}
+.dlg-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.dlg-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.dlg-hint .app-kbd {
+  padding: 0 5px;
+}
+.app-dialog-discard {
+  animation: dlgFade 140ms ease-out;
+}
+/* Section heading inside a dialog form ("Bank rekvizitlari"). */
+.dlg-section {
+  margin: 4px 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+@keyframes dlgFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dlgIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dlgSlide {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dlg-backdrop, .app-modal.dlg-surface, .app-drawer.dlg-surface, .app-dialog-discard { animation: none; }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .dlg-hint { display: none; }
+}
+@media (max-width: 767px) {
+  .dlg-header { padding: 16px 12px 12px 16px; }
+  .dlg-body { padding: 16px; }
+  .dlg-footer { padding: 12px 16px; }
+  .app-modal.dlg-surface { border: none; }
+}

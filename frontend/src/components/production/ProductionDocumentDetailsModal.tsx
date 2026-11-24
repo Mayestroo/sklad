@@ -3,7 +3,7 @@
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Factory, Pencil, Plus, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Factory, Pencil, Plus, Trash2, XCircle, Ban } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { apiFetch } from '@/lib/api';
@@ -159,7 +159,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
 
   return (
     <>
-      <Modal
+      <Modal icon={<Factory size={20} />}
         isOpen
         onClose={props.onClose}
         title={`${doc.docNumber} · ${localName(doc.product.name, locale)}`}
@@ -197,7 +197,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
               )}
               {running && props.canComplete && (
                 <Button onClick={() => void complete()} disabled={busy} aria-busy={busy}>
-                  <CheckCircle2 size={15} aria-hidden /> {busy ? t('bajarilmoqda') : t('yakunlash')} <kbd style={{ fontSize: 11, opacity: 0.8 }}>Ctrl+Enter</kbd>
+                  <CheckCircle2 size={15} aria-hidden /> {busy ? t('bajarilmoqda') : t('yakunlash')}
                 </Button>
               )}
             </div>
@@ -370,7 +370,7 @@ export function ProductionDocumentDetailsModal(props: ProductionDocumentDetailsM
       </Modal>
 
       {cancelOpen && (
-        <Modal
+        <Modal icon={<Ban size={20} />} tone="warning"
           isOpen
           size="sm"
           title={t('hujjatniBekorQilish')}

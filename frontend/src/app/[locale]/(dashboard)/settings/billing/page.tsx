@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton, SkeletonRows } from '@/components/ui/Skeleton';
 import { toast } from '@/context/ToastContext';
-import { CheckCircle, ExternalLink, Receipt, Sparkles } from 'lucide-react';
+import { CheckCircle, ExternalLink, Receipt, Sparkles, CreditCard } from 'lucide-react';
 import { PricingPlan, SubscriptionPayment } from '@shared/types';
 import { COMPANY_STATUS_LABELS } from '@/lib/platform-labels';
 
@@ -239,7 +239,7 @@ export default function BillingSettingsPage() {
         </>
       )}
 
-      <Modal
+      <Modal icon={<CreditCard size={20} />}
         isOpen={checkoutModalOpen}
         onClose={() => setCheckoutModalOpen(false)}
         title={isRu ? 'Оплата подписки' : 'Obuna uchun to‘lov'}

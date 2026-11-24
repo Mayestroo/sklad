@@ -37,8 +37,7 @@ import {
   Trash2,
   Inbox,
   ArrowDownLeft,
-  ArrowUpRight,
-} from 'lucide-react';
+  ArrowUpRight, FolderInput, UserRound } from 'lucide-react';
 
 /** GET /sales/orders/by-counterparty/:id */
 interface CustomerOrdersData {
@@ -763,7 +762,7 @@ export default function CounterpartiesPage() {
 
       {/* Create / Edit Folder Modal */}
       {isFolderModalOpen && (
-        <Modal
+        <Modal icon={<FolderPlus size={20} />} description={isRu ? 'Для группировки контрагентов' : 'Kontragentlarni guruhlarga ajratish uchun'}
           isOpen={true}
           onClose={() => setIsFolderModalOpen(false)}
           title={folderModalMode === 'create' ? (isRu ? 'Создание папки' : 'Yangi papka yaratish') : (isRu ? 'Редактирование папки' : 'Papkani tahrirlash')}
@@ -787,7 +786,7 @@ export default function CounterpartiesPage() {
             )}
 
             <Input
-              label={isRu ? 'Название папки *' : 'Papka Nomi *'}
+              label={isRu ? 'Название папки *' : 'Papka nomi *'}
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
               placeholder={isRu ? 'Например: VIP Клиенты' : 'Mas: VIP Mijozlar'}
@@ -796,7 +795,7 @@ export default function CounterpartiesPage() {
 
             <div>
               <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 8 }}>
-                {isRu ? 'Цветовая метка' : 'Papka Rangi'}
+                {isRu ? 'Цветовая метка' : 'Papka rangi'}
               </label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {PRESET_COLORS.map((c) => (
@@ -822,7 +821,7 @@ export default function CounterpartiesPage() {
 
       {/* Delete Folder Modal */}
       {deleteFolderId && (
-        <Modal isOpen={true} onClose={() => setDeleteFolderId(null)} title={isRu ? 'Удаление папки' : 'Papkani o\'chirish'}
+        <Modal icon={<Trash2 size={20} />} tone="error" isOpen={true} onClose={() => setDeleteFolderId(null)} title={isRu ? 'Удаление папки' : 'Papkani o\'chirish'}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDeleteFolderId(null)} disabled={deleteSubmitting}>
@@ -846,7 +845,7 @@ export default function CounterpartiesPage() {
 
       {/* Delete Counterparty Modal */}
       {deletingCounterparty && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           onClose={() => setDeletingCounterparty(null)}
           title={isRu ? 'Удаление контрагента' : 'Kontragentni o\'chirish'}
@@ -883,7 +882,7 @@ export default function CounterpartiesPage() {
 
       {/* Move Counterparty Modal */}
       {moveItem && (
-        <Modal isOpen={true} onClose={() => setMoveItem(null)} title={`${isRu ? 'Переместить:' : 'Papkaga ko\'chirish:'} ${moveItem.name}`}
+        <Modal icon={<FolderInput size={20} />} isOpen={true} onClose={() => setMoveItem(null)} title={`${isRu ? 'Переместить:' : 'Papkaga ko\'chirish:'} ${moveItem.name}`}
       footer={
         <>
           <Button type="button" variant="secondary" onClick={() => setMoveItem(null)} disabled={moveSubmitting}>
@@ -912,7 +911,7 @@ export default function CounterpartiesPage() {
 
       {/* Detail Modal */}
       {detailItem && (
-        <Modal isOpen={true} onClose={() => setDetailItem(null)} title={`${isRu ? 'Профиль:' : 'Kontragent Profili:'} ${detailItem.name}`} size="lg">
+        <Modal icon={<UserRound size={20} />} isOpen={true} onClose={() => setDetailItem(null)} title={`${isRu ? 'Профиль:' : 'Kontragent profili:'} ${detailItem.name}`} size="lg">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 'var(--space-4)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-subtle)' }}>
               <div>
@@ -975,7 +974,7 @@ export default function CounterpartiesPage() {
             {(detailItem.bankName || detailItem.bankAccount || detailItem.mfo) && (
               <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
                 <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                  {isRu ? 'Банковские реквизиты' : 'Bank Rekvizitlari'}
+                  {isRu ? 'Банковские реквизиты' : 'Bank rekvizitlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div><strong>{isRu ? 'Банк:' : 'Bank:'}</strong> {detailItem.bankName || '—'}</div>

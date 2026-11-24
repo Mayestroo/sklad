@@ -43,7 +43,7 @@ export function OrderTotalsSummary({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <Card style={{ padding: 'var(--space-5)', width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }} aria-live="polite">
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-light)', paddingBottom: 'var(--space-2)' }}>
-          {isRu ? 'Финансовый итог' : 'Buyurtma Hisobi'}
+          {isRu ? 'Финансовый итог' : 'Buyurtma hisobi'}
         </h3>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>

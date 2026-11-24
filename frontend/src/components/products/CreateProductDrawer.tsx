@@ -14,7 +14,7 @@ import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage, formatCurrency } from '@/lib/utils';
 import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { toast } from '@/context/ToastContext';
-import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import { PackagePlus, AlertCircle, CheckCircle2, Plus, Tag, Ruler } from 'lucide-react';
 import type { Category } from '@shared/types';
 import { editedProductName } from '@/lib/product-name';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -445,10 +445,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
   const getDrawerTitle = () => {
     if (isEdit) return isRu ? 'Редактировать позицию' : 'Pozitsiyani tahrirlash';
-    if (itemType === 'RAW_MATERIAL') return isRu ? 'Новое сырьё / материал' : 'Yangi Xomashyo Qo‘shish';
-    if (itemType === 'SERVICE') return isRu ? 'Новая услуга' : 'Yangi Xizmat Qo‘shish';
-    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Новый готовый продукт' : 'Yangi Tayyor mahsulot qo‘shish';
-    return isRu ? 'Новый товар' : 'Yangi Tovar Qo‘shish';
+    if (itemType === 'RAW_MATERIAL') return isRu ? 'Новое сырьё / материал' : 'Yangi xomashyo qo‘shish';
+    if (itemType === 'SERVICE') return isRu ? 'Новая услуга' : 'Yangi xizmat qo‘shish';
+    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Новый готовый продукт' : 'Yangi tayyor mahsulot qo‘shish';
+    return isRu ? 'Новый товар' : 'Yangi tovar qo‘shish';
   };
 
   const getDrawerDescription = () => {
@@ -478,11 +478,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   };
 
   const getSubmitLabel = () => {
-    if (isEdit) return isRu ? 'Сохранить изменения (Ctrl+Enter)' : 'O‘zgarishlarni saqlash (Ctrl+Enter)';
-    if (itemType === 'RAW_MATERIAL') return isRu ? 'Сохранить сырьё (Ctrl+Enter)' : 'Xomashyoni saqlash (Ctrl+Enter)';
-    if (itemType === 'SERVICE') return isRu ? 'Сохранить услугу (Ctrl+Enter)' : 'Xizmatni saqlash (Ctrl+Enter)';
-    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Сохранить продукт (Ctrl+Enter)' : 'Mahsulotni saqlash (Ctrl+Enter)';
-    return isRu ? 'Сохранить товар (Ctrl+Enter)' : 'Tovarni saqlash (Ctrl+Enter)';
+    if (isEdit) return isRu ? 'Сохранить изменения' : 'O‘zgarishlarni saqlash';
+    if (itemType === 'RAW_MATERIAL') return isRu ? 'Сохранить сырьё' : 'Xomashyoni saqlash';
+    if (itemType === 'SERVICE') return isRu ? 'Сохранить услугу' : 'Xizmatni saqlash';
+    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Сохранить продукт' : 'Mahsulotni saqlash';
+    return isRu ? 'Сохранить товар' : 'Tovarni saqlash';
   };
 
   return (
@@ -502,7 +502,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             onClick={() => void requestClose()}
             disabled={loading}
           >
-            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button
             type="button"
@@ -853,7 +853,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         )}
         </form>
 
-      <Modal
+      <Modal icon={<Tag size={20} />}
         isOpen={showNewCategoryModal}
         onClose={() => setShowNewCategoryModal(false)}
         title={isRu ? 'Новая категория' : 'Yangi kategoriya'}
@@ -886,7 +886,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       </form>
     </Modal>
 
-      <Modal
+      <Modal icon={<Ruler size={20} />}
         isOpen={showNewUnitModal}
         onClose={() => {
           setShowNewUnitModal(false);

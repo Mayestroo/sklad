@@ -190,7 +190,7 @@ export function PartialDispatchModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Truck size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={

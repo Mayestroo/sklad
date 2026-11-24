@@ -1222,7 +1222,7 @@ export function SalesInvoiceForm({ initialData, mode }: SalesInvoiceFormProps) {
           {/* Document Date */}
           <div style={{ minWidth: '140px', flex: '1 1 150px' }}>
             <DatePicker
-              label={isRu ? 'Дата документа *' : 'Hujjat Sanasi *'}
+              label={isRu ? 'Дата документа *' : 'Hujjat sanasi *'}
               value={docDate}
               onChange={(val) => { markDirty(); setDocDate(val); }}
               disabled={isReadOnly}

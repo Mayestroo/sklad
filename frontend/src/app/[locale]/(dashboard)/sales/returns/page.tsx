@@ -35,8 +35,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   XCircle,
-  PackageCheck,
-} from 'lucide-react';
+  PackageCheck, Trash2 } from 'lucide-react';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
 import { localIsoDate } from '@/lib/date-range';
@@ -978,7 +977,7 @@ export default function SalesReturnsPage() {
       )}
 
       {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
-      <Modal
+      <Modal icon={<Trash2 size={20} />} tone="error"
         isOpen={Boolean(deleteConfirmReturn)}
         onClose={() => { if (!deleteLoading) setDeleteConfirmReturn(null); }}
         title={isRu ? 'Удалить документ возврата?' : 'Qaytarish hujjatini o‘chirish?'}

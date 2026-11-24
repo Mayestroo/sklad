@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Plus, Building2, ArrowRight } from 'lucide-react';
+import { Plus, Building2, ArrowRight, Handshake } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -281,7 +281,7 @@ export default function CrmKanbanPage() {
         </div>
       )}
 
-      <Modal
+      <Modal icon={<Handshake size={20} />}
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         title={editingId ? (isRu ? 'Изменить сделку' : 'Bitimni tahrirlash') : isRu ? 'Новая сделка' : 'Yangi bitim'}

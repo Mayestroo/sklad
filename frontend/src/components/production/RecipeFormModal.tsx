@@ -3,7 +3,7 @@
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { useTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Calculator, Info, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, Calculator, Info, Plus, Save, Trash2, ListChecks } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { apiFetch } from '@/lib/api';
@@ -280,7 +280,7 @@ export function RecipeFormModal({
 
   return (
     <>
-      <Modal
+      <Modal icon={<ListChecks size={20} />}
         isOpen={isOpen}
         onClose={() => void requestClose()}
         onSubmitShortcut={() => void submit()}
@@ -289,10 +289,10 @@ export function RecipeFormModal({
         footer={
           <>
             <Button type="button" variant="outline" onClick={() => void requestClose()} disabled={busy}>
-              {t('bekorQilish')} <kbd style={{ fontSize: 11, opacity: 0.7 }}>Esc</kbd>
+              {t('bekorQilish')}
             </Button>
             <Button type="button" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
-              <Save size={15} aria-hidden /> {busy ? t('saqlanmoqda') : t('saqlash')} <kbd style={{ fontSize: 11, opacity: 0.8 }}>Ctrl+Enter</kbd>
+              <Save size={15} aria-hidden /> {busy ? t('saqlanmoqda') : t('saqlash')}
             </Button>
           </>
         }

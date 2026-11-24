@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
-import { GitBranch, Warehouse, Building2, MapPin, Phone, Edit2, Trash2, Plus } from 'lucide-react';
+import { GitBranch, Warehouse, Building2, MapPin, Phone, Edit2, Trash2, Plus, Pencil } from 'lucide-react';
 import { useConfirm } from '@/context/ConfirmContext';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -528,7 +528,7 @@ export default function BranchesPage() {
         </div>
       )}
 
-      <Modal isOpen={branchModalOpen} onClose={() => setBranchModalOpen(false)} title={isRu ? 'Новый филиал' : 'Yangi filial'} footer={formFooter('branch-create-form', () => setBranchModalOpen(false), createBranchLoading)}>
+      <Modal icon={<Building2 size={20} />} isOpen={branchModalOpen} onClose={() => setBranchModalOpen(false)} title={isRu ? 'Новый филиал' : 'Yangi filial'} footer={formFooter('branch-create-form', () => setBranchModalOpen(false), createBranchLoading)}>
         <form id="branch-create-form" onSubmit={handleCreateBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {branchFields(
             { uz: branchNameUz, ru: branchNameRu, address: branchAddress, isMain: branchIsMain },
@@ -538,7 +538,7 @@ export default function BranchesPage() {
       </Modal>
 
       {editingBranch && (
-        <Modal isOpen onClose={() => setEditingBranch(null)} title={isRu ? 'Изменить филиал' : 'Filialni tahrirlash'} footer={formFooter('branch-edit-form', () => setEditingBranch(null), editBranchLoading)}>
+        <Modal icon={<Pencil size={20} />} isOpen onClose={() => setEditingBranch(null)} title={isRu ? 'Изменить филиал' : 'Filialni tahrirlash'} footer={formFooter('branch-edit-form', () => setEditingBranch(null), editBranchLoading)}>
           <form id="branch-edit-form" onSubmit={handleSaveEditBranch} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {branchFields(
               { uz: editBranchNameUz, ru: editBranchNameRu, address: editBranchAddress, isMain: editBranchIsMain },
@@ -548,7 +548,7 @@ export default function BranchesPage() {
         </Modal>
       )}
 
-      <Modal isOpen={warehouseModalOpen} onClose={() => setWarehouseModalOpen(false)} title={isRu ? 'Новый склад' : 'Yangi ombor'} footer={formFooter('warehouse-create-form', () => setWarehouseModalOpen(false), createWarehouseLoading)}>
+      <Modal icon={<Warehouse size={20} />} isOpen={warehouseModalOpen} onClose={() => setWarehouseModalOpen(false)} title={isRu ? 'Новый склад' : 'Yangi ombor'} footer={formFooter('warehouse-create-form', () => setWarehouseModalOpen(false), createWarehouseLoading)}>
         <form id="warehouse-create-form" onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {warehouseFields(
             { branchId: selectedBranchId, uz: warehouseNameUz, ru: warehouseNameRu, address: warehouseAddress, phone: warehousePhone },
@@ -558,7 +558,7 @@ export default function BranchesPage() {
       </Modal>
 
       {editingWarehouse && (
-        <Modal isOpen onClose={() => setEditingWarehouse(null)} title={isRu ? 'Изменить склад' : 'Omborni tahrirlash'} footer={formFooter('warehouse-edit-form', () => setEditingWarehouse(null), editWarehouseLoading)}>
+        <Modal icon={<Pencil size={20} />} isOpen onClose={() => setEditingWarehouse(null)} title={isRu ? 'Изменить склад' : 'Omborni tahrirlash'} footer={formFooter('warehouse-edit-form', () => setEditingWarehouse(null), editWarehouseLoading)}>
           <form id="warehouse-edit-form" onSubmit={handleSaveEditWarehouse} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {warehouseFields(
               { branchId: editWarehouseBranchId, uz: editWarehouseNameUz, ru: editWarehouseNameRu, address: editWarehouseAddress, phone: editWarehousePhone },

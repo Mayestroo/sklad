@@ -54,7 +54,7 @@ export function OrderItemsTable({
     <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-          {isRu ? 'Товары в заказе' : 'Buyurtmadagi Tovarlar'} ({items.length})
+          {isRu ? 'Товары в заказе' : 'Buyurtmadagi tovarlar'} ({items.length})
         </h3>
       </div>
 
@@ -84,7 +84,7 @@ export function OrderItemsTable({
                 {isRu ? 'НДС %' : 'QQS %'}
               </th>
               <th scope="col" style={{ padding: '10px 12px', textAlign: 'right', width: '160px' }}>
-                {isRu ? 'Итого' : 'Jami Summa'}
+                {isRu ? 'Итого' : 'Jami summa'}
               </th>
               {!isLocked && (
                 <th scope="col" style={{ padding: '10px 12px', textAlign: 'center', width: '50px' }}>

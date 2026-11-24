@@ -58,8 +58,7 @@ import {
   Building,
   ArrowRight,
   Check,
-  Calculator,
-} from 'lucide-react';
+  Calculator, FilePlus2, LockOpen, Building2 } from 'lucide-react';
 import type {
   OpeningBalanceDocument,
   OpeningBalanceLine,
@@ -1011,7 +1010,7 @@ export default function OpeningBalancesPage() {
       )}
 
       {/* New document */}
-      <Modal isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}
+      <Modal icon={<FilePlus2 size={20} />} isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowNewDocModal(false)}>
@@ -1043,7 +1042,7 @@ export default function OpeningBalancesPage() {
       </Modal>
 
       {/* Excel import (template download included) */}
-      <Modal isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}
+      <Modal icon={<FileSpreadsheet size={20} />} isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}
         footer={
           <>
             <Button variant="secondary" onClick={closeImportModal}>
@@ -1144,7 +1143,7 @@ export default function OpeningBalancesPage() {
       </Modal>
 
       {/* Unpost (rollback invariant) */}
-      <Modal isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}
+      <Modal icon={<LockOpen size={20} />} tone="warning" isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowUnpostModal(false)}>
@@ -1693,7 +1692,7 @@ function NewFixedAssetModal({
   };
 
   return (
-    <Modal isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}
+    <Modal icon={<Building2 size={20} />} isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

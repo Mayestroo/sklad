@@ -13,7 +13,7 @@ import { formatCurrency, errorMessage } from '@/lib/utils';
 import { CASH_ACCOUNT_TYPE_LABELS } from '@/lib/constants/statuses';
 import { PurchaseReceipt, CashAccount } from '@shared/types';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, Wallet } from 'lucide-react';
 import { localIsoDate } from '@/lib/date-range';
 
 interface PayPurchaseModalProps {
@@ -172,7 +172,7 @@ export function PayPurchaseModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Wallet size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={

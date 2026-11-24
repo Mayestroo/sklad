@@ -58,7 +58,7 @@ async function checkDialog(page, tag, opener, { field, isRu }) {
   // background does not scroll
   log(await page.evaluate(() => getComputedStyle(document.body).overflow === 'hidden' || getComputedStyle(document.documentElement).overflow === 'hidden'), `${tag} page scroll locked`);
   // footer pinned and visible
-  const footer = dlg.locator('.app-modal-footer, .app-drawer-footer');
+  const footer = dlg.locator('.dlg-footer');
   if (await footer.count()) {
     const fb = await footer.first().boundingBox();
     const vh = page.viewportSize().height;

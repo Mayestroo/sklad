@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 import { useLocale } from 'next-intl';
-import { X } from 'lucide-react';
 import { DiscardPrompt, useDialog } from './useDialog';
+import { DialogFooter, DialogHeader, type DialogTone } from './DialogParts';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -9,6 +9,12 @@ export interface ModalProps {
   title: string;
   /** One line under the title: what this dialog does or changes. */
   description?: React.ReactNode;
+  /** Icon in a tinted tile before the title (lucide icon, size 20). */
+  icon?: React.ReactNode;
+  /** Tint of the icon tile; status tones only for status (a payment in, a write-off). */
+  tone?: DialogTone;
+  /** Small element after the title (a status badge). */
+  badge?: React.ReactNode;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
   /** Action bar pinned to the bottom, visible however long the content is. */
@@ -38,7 +44,7 @@ const sizeMap: Record<string, string> = {
  * close by backdrop / Esc / ✕ after typing asks first — inside this dialog, never a second one on top.
  * The footer stays pinned; on phones (< 768 px) the dialog fills the screen.
  */
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, description, children, size = 'md', footer, onSubmitShortcut, confirmDiscard = true }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, description, icon, tone, badge, children, size = 'md', footer, onSubmitShortcut, confirmDiscard = true }) => {
   const titleId = useId();
   const descId = useId();
   const isRu = useLocale() === 'ru';
@@ -49,52 +55,28 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, descriptio
 
   return (
     <div
-      className="app-modal-backdrop"
-      style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px', overflowY: 'auto' }}
+      className="app-modal-backdrop dlg-backdrop"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}
       {...backdropProps}
     >
       <div
         ref={surfaceRef}
-        className="app-modal"
+        className="app-modal dlg-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        style={{ position: 'relative', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: sizeMap[size] || '560px', boxShadow: 'var(--shadow-xl)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflowY: 'auto', margin: 'auto', border: '1px solid var(--color-border)', outline: 'none' }}
+        style={{ position: 'relative', width: '100%', maxWidth: sizeMap[size] || '560px', maxHeight: 'min(90vh, 900px)' }}
       >
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)', position: 'sticky', top: 0, background: 'var(--color-bg-secondary)', zIndex: 2 }}>
-          <div style={{ minWidth: 0, paddingTop: 8 }}>
-            <h2 id={titleId} style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
-              {title}
-            </h2>
-            {description && (
-              <p id={descId} style={{ margin: '2px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-                {description}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            className="ui-btn ui-btn-ghost"
-            onClick={requestClose}
-            aria-label={closeLabel}
-            title={`${closeLabel} (Esc)`}
-            style={{ flexShrink: 0, width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', borderRadius: 'var(--radius-md)' }}
-          >
-            <X size={18} aria-hidden />
-          </button>
-        </div>
-        <div style={{ padding: '20px', flex: 1 }}>{children}</div>
+        <DialogHeader titleId={titleId} descId={descId} title={title} description={description} icon={icon} tone={tone} badge={badge} closeLabel={closeLabel} onClose={requestClose} />
+        <div className="dlg-body">{children}</div>
         {footer && !asking && (
-          <div
-            className="app-modal-footer"
-            style={{ position: 'sticky', bottom: 0, zIndex: 2, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '12px 20px', borderTop: '1px solid var(--color-border-light)', background: 'var(--color-bg-secondary)' }}
-          >
+          <DialogFooter shortcut={Boolean(onSubmitShortcut)} isRu={isRu}>
             {footer}
-          </div>
+          </DialogFooter>
         )}
-        {asking && <DiscardPrompt isRu={isRu} keepRef={keepRef} onKeep={keepEditing} onDiscard={discard} />}
+        {asking && <DiscardPrompt isRu={isRu} keepRef={keepRef} onKeep={keepEditing} onDiscard={discard} padding="14px 24px" />}
       </div>
     </div>
   );

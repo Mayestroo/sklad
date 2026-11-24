@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, FileText } from 'lucide-react';
 import type { ServiceActDetail } from '@/lib/service-act';
 import type { Counterparty, Product } from '@shared/types';
 import { localIsoDate } from '@/lib/date-range';
@@ -282,7 +282,7 @@ export function ServiceActDrawer({
   const money = (n: number) => (currency ? formatCurrency(n, locale, currency) : '—');
 
   return (
-    <Drawer
+    <Drawer icon={<FileText size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={

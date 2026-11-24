@@ -18,7 +18,7 @@ import {
   isCashAccountCompatibleWithSalesPayment,
   isCashAccountCurrencyValid,
 } from '@shared/types/cash-account-policy';
-import { CreditCard, AlertCircle } from 'lucide-react';
+import { CreditCard, AlertCircle, Wallet } from 'lucide-react';
 
 type CashAccountListResponse = CashAccount[] | { data?: CashAccount[] };
 
@@ -165,7 +165,7 @@ export function PaySalesInvoiceModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Wallet size={20} />}
       isOpen={isOpen}
       onClose={handleClose}
       title={isRu ? `Принять оплату — ${invoice.invoiceNumber}` : `To‘lov qabul qilish — ${invoice.invoiceNumber}`}
@@ -327,7 +327,7 @@ export function PaySalesInvoiceModal({
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, paddingTop: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', paddingTop: '4px' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
       </form>

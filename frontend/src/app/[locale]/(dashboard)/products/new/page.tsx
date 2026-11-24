@@ -16,7 +16,7 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage, formatCurrency } from '@/lib/utils';
 import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
-import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Tag } from 'lucide-react';
 import { Category } from '@shared/types';
 
 export default function NewProductPage() {
@@ -404,7 +404,7 @@ export default function NewProductPage() {
           </Card>
         </aside>
       </form>
-      <Modal isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={isRu ? 'Новая категория' : 'Yangi kategoriya'} size="sm"
+      <Modal icon={<Tag size={20} />} isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={isRu ? 'Новая категория' : 'Yangi kategoriya'} size="sm"
       footer={
         <>
           <Button type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>

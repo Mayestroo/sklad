@@ -18,8 +18,7 @@ import { toast } from '@/context/ToastContext';
 import {
   UserPlus,
   AlertCircle,
-  Trash2,
-} from 'lucide-react';
+  Trash2, UserCog } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
 
 interface StaffUser {
@@ -318,7 +317,7 @@ export default function UsersPage() {
       </div>
 
       {/* Invite User Modal */}
-      <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md"
+      <Modal icon={<UserPlus size={20} />} description={isRu ? 'Сотрудник войдёт по этому email и временному паролю' : 'Xodim shu e-pochta va vaqtinchalik parol bilan kiradi'} isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md"
       footer={
         <>
           <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
@@ -382,7 +381,7 @@ export default function UsersPage() {
 
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-              {isRu ? 'Временный пароль' : 'Vaqtinchalik Parol'}
+              {isRu ? 'Временный пароль' : 'Vaqtinchalik parol'}
             </label>
             <input
               type="password"
@@ -397,14 +396,14 @@ export default function UsersPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <Select
-              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              label={isRu ? 'Системная роль' : 'Tizim roli'}
               options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
               value={roleSlug}
               onChange={(val) => setRoleSlug(val)}
             />
 
             <Select
-              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal til'}
               options={[
                 { value: 'uz', label: 'O\'zbekcha (UZ)' },
                 { value: 'ru', label: 'Русский (RU)' },
@@ -418,7 +417,7 @@ export default function UsersPage() {
 
       {/* Edit User Modal */}
       {editingUser && (
-      <Modal isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md"
+      <Modal icon={<UserCog size={20} />} isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md"
       footer={
         <>
           <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
@@ -479,14 +478,14 @@ export default function UsersPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <Select
-              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              label={isRu ? 'Системная роль' : 'Tizim roli'}
               options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
               value={editRoleSlug}
               onChange={(val) => setEditRoleSlug(val)}
             />
 
             <Select
-              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal til'}
               options={[
                 { value: 'uz', label: 'O\'zbekcha (UZ)' },
                 { value: 'ru', label: 'Русский (RU)' },

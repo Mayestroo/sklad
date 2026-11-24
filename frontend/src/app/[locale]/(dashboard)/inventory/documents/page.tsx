@@ -25,8 +25,7 @@ import {
   PackageMinus,
   ClipboardCheck,
   Plus,
-  Printer,
-} from 'lucide-react';
+  Printer, ClipboardList } from 'lucide-react';
 import { InventoryDocument, Product, Warehouse } from '@shared/types';
 
 /** Inventory documents have no currency: their prices are FIFO batch cost, kept in UZS. */
@@ -294,7 +293,7 @@ export default function InventoryDocumentsPage() {
 
       {/* New Document dialog */}
       {showModal && (
-        <Modal isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg"
+        <Modal icon={<ClipboardList size={20} />} description={isRu ? 'После оформления документ проводится и остаток склада меняется' : 'Rasmiylashtirilgach hujjat o‘tkaziladi va ombor qoldig‘i o‘zgaradi'} isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg"
           footer={
             <>
               <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
@@ -369,7 +368,7 @@ export default function InventoryDocumentsPage() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</label>
+                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена за ед.' : 'Birlik narxi'}</label>
                     <MoneyInput
                       aria-label={isRu ? 'Цена за ед.' : 'Birlik narxi'}
                       value={unitPrice || ''}
@@ -467,7 +466,7 @@ export default function InventoryDocumentsPage() {
                   <th style={{ padding: '8px', textAlign: 'left' }}>{isRu ? 'Товар' : 'Mahsulot'}</th>
                   <th style={{ padding: '8px', textAlign: 'left' }}>SKU</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Кол-во' : 'Miqdori'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Цена за ед.' : 'Birlik narxi'}</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Итого' : 'Jami'}</th>
                 </tr>
               </thead>
